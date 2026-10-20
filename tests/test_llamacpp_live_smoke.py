@@ -1,6 +1,6 @@
 """Live smoke test for the pinned Qwen3-0.6B artifact on llama-server.
 
-Spec section 6: non-thinking is the default, configured through the
+RM18, spec section 6: non-thinking is the default, configured through the
 pinned runtime's chat-template settings and verified by a smoke test;
 thinking mode is an operator option, and reasoning output must not
 appear as answer content in either mode. Model, template, parser,
@@ -72,16 +72,23 @@ def _free_port() -> int:
 
 
 @pytest.fixture(scope="module")
-def adapter_settings(manifest) -> tuple[int, dict]:
+def adapter_settings(manifest) -> tuple[int, dict[str, object]]:
     # Context limit and base template kwargs, derived once per module.
     return launch_adapter_settings(manifest.launch_settings)
 
 
 @pytest.fixture(scope="module")
 def server(tmp_path_factory, manifest, adapter_settings):
+    # adapter_settings is unused here; requesting it derives the adapter
+    # settings before the server starts, so unusable settings fail
+    # without a model load.
     override = os.environ.get(MODEL_ENV)
     model_path = Path(override) if override else MODELS_DIR / manifest.file_name
     if not model_path.is_file():
+        # Only the default location may be absent (no local artifact);
+        # an explicit override that does not exist is a mistake.
+        if override:
+            pytest.fail(f"{MODEL_ENV} points to a missing file: {model_path}")
         pytest.skip(f"model artifact not found: {model_path}")
     # models/README.md: verify against the manifest before use. A
     # mismatched artifact is a failure, never a silent substitution.
@@ -93,7 +100,7 @@ def server(tmp_path_factory, manifest, adapter_settings):
                 f"{MODEL_ENV} must point to the pinned artifact {manifest.file_name} "
                 f"(byte-identical to the manifest); {exc}"
             )
-        raise
+        pytest.fail(f"pinned artifact {model_path} failed verification: {exc}")
     server_args = launch_settings_argv(manifest.launch_settings)
     port = _free_port()
     # Keep server logs on disk so a startup failure (port conflict,

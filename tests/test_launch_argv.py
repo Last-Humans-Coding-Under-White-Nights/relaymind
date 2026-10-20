@@ -90,6 +90,27 @@ def test_mapping_values_that_are_not_json_are_rejected():
         "mu",
         "docker_repo",
         "dr",
+        # Other weights llama-server loads beside the pinned artifact.
+        "spec_draft_model",
+        "model_draft",
+        "md",
+        "spec_draft_hf",
+        "hf_repo_draft",
+        "hfd",
+        "hfrd",
+        "mmproj",
+        "mm",
+        "mmproj_url",
+        "mmu",
+        "lora",
+        "lora_scaled",
+        "control_vector",
+        "control_vector_scaled",
+        "models_dir",
+        "models_preset",
+        # A replacement for the chat template the manifest hashed.
+        "chat_template",
+        "chat_template_file",
     ],
 )
 def test_harness_owned_keys_are_rejected(key):
@@ -123,6 +144,14 @@ def test_non_finite_numbers_are_rejected(value):
         launch_settings_argv({"temp": value})
     with pytest.raises(ManifestError, match="chat_template_kwargs"):
         launch_settings_argv({"chat_template_kwargs": {"t": value}})
+
+
+@pytest.mark.parametrize("value", ["enable_thinking=false", 123, True])
+def test_chat_template_kwargs_must_be_an_object(value):
+    # RM18: the adapter reads these kwargs as a mapping, so any other
+    # value fails when the manifest is made, not when the suite runs.
+    with pytest.raises(ManifestError, match="chat_template_kwargs"):
+        launch_settings_argv({"chat_template_kwargs": value})
 
 
 def test_pinned_manifest_produces_the_qualified_argv():

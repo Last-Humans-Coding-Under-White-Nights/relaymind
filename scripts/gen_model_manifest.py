@@ -24,7 +24,7 @@ from pathlib import Path
 from relaymind.adapters.manifest import ManifestError, build_manifest
 
 
-def _json_object(text: str) -> dict:
+def _json_object(text: str) -> dict[str, object]:
     try:
         value = json.loads(text)
     except ValueError as exc:

@@ -113,7 +113,10 @@ def build_manifest(
     artifact_path = Path(artifact_path)
     if not artifact_path.is_file():
         raise ManifestError(f"artifact file not found: {artifact_path}")
-    tokenizer_hash, chat_template_hash = artifact_hashes(artifact_path)
+    try:
+        tokenizer_hash, chat_template_hash = artifact_hashes(artifact_path)
+    except GGUFError as exc:
+        raise ManifestError(f"cannot read GGUF metadata from {artifact_path.name}: {exc}") from exc
     return ArtifactManifest(
         schema_version=SUPPORTED_SCHEMA_VERSION,
         model_id=model_id,
@@ -163,8 +166,11 @@ def verify_artifact(manifest: ArtifactManifest, artifact_path: Path) -> None:
 
 
 # The harness owns the bind address and the artifact path; launch
-# settings must not override them or load a model other than the
-# pinned artifact (llama-server's -hf, -hff, -mu and -dr all pick one).
+# settings must not override them, load weights other than the pinned
+# artifact (another model, a draft model, a multimodal projector, LoRA
+# adapters, control vectors, a router models directory), or replace the
+# chat template whose hash the manifest pins. Spellings follow
+# llama-server 0.7.0 --help.
 _RESERVED_LAUNCH_FLAGS = frozenset(
     {
         "host",
@@ -180,6 +186,25 @@ _RESERVED_LAUNCH_FLAGS = frozenset(
         "mu",
         "docker-repo",
         "dr",
+        "spec-draft-model",
+        "model-draft",
+        "md",
+        "spec-draft-hf",
+        "hf-repo-draft",
+        "hfd",
+        "hfrd",
+        "mmproj",
+        "mm",
+        "mmproj-url",
+        "mmu",
+        "lora",
+        "lora-scaled",
+        "control-vector",
+        "control-vector-scaled",
+        "models-dir",
+        "models-preset",
+        "chat-template",
+        "chat-template-file",
     }
 )
 
@@ -216,13 +241,19 @@ def launch_settings_argv(launch_settings: Mapping[str, object]) -> list[str]:
     null, NaN, infinity) has no defined rendering and raises
     ManifestError, as do keys reserved for the harness (the bind address
     and anything that selects the model) or keys that are not valid
-    snake_case long flags. Launch settings are manifest data (spec section 6): tests and
+    snake_case long flags. chat_template_kwargs must be a mapping, since
+    the adapter reads it as one. Launch settings are manifest data (spec section 6): tests and
     tooling derive their command line here instead of hand-copying the
     qualified settings.
     """
     argv: list[str] = []
     for key, value in launch_settings.items():
         flag = _launch_flag(key)
+        if key == "chat_template_kwargs" and not isinstance(value, Mapping):
+            raise ManifestError(
+                "launch_settings.chat_template_kwargs must be an object, "
+                f"got {type(value).__name__}"
+            )
         if isinstance(value, bool):
             argv.append(flag if value else f"--no-{flag[2:]}")
         elif isinstance(value, Mapping):
@@ -243,7 +274,9 @@ def launch_settings_argv(launch_settings: Mapping[str, object]) -> list[str]:
     return argv
 
 
-def launch_adapter_settings(launch_settings: Mapping[str, object]) -> tuple[int, dict]:
+def launch_adapter_settings(
+    launch_settings: Mapping[str, object],
+) -> tuple[int, dict[str, object]]:
     """Adapter context limit and base template kwargs from launch settings.
 
     The adapter must run with the same context size and chat-template
@@ -258,10 +291,6 @@ def launch_adapter_settings(launch_settings: Mapping[str, object]) -> tuple[int,
         raise ManifestError(
             f"launch_settings.ctx_size must be a positive integer, got {ctx_size!r}"
         )
+    # launch_settings_argv has checked that this is a mapping.
     template_kwargs = launch_settings.get("chat_template_kwargs", {})
-    if not isinstance(template_kwargs, Mapping):
-        raise ManifestError(
-            "launch_settings.chat_template_kwargs must be an object, "
-            f"got {type(template_kwargs).__name__}"
-        )
     return ctx_size, dict(template_kwargs)
