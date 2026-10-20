@@ -6,8 +6,10 @@ runtime commit, launch settings, and license metadata. Missing or
 mismatched hashes cause an explicit failure. Issue #2.
 """
 
+import dataclasses
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -37,7 +39,7 @@ VALID = {
 
 def write_manifest(tmp_path, data):
     path = tmp_path / "manifest.json"
-    path.write_text(json.dumps(data))
+    path.write_text(json.dumps(data), encoding="utf-8")
     return path
 
 
@@ -45,6 +47,7 @@ def test_load_round_trip(tmp_path):
     path = write_manifest(tmp_path, VALID)
     manifest = load_manifest(path)
     assert manifest == ArtifactManifest(**VALID)
+    assert dataclasses.asdict(manifest) == VALID
     assert manifest.quantization == "Q8_0"
 
 
@@ -74,6 +77,36 @@ def test_load_rejects_unsupported_schema_version(tmp_path):
     path = write_manifest(tmp_path, VALID | {"schema_version": 2})
     with pytest.raises(ManifestError):
         load_manifest(path)
+
+
+def test_load_rejects_boolean_schema_version(tmp_path):
+    # bool is a subclass of int and True == 1; it must not pass as 1.
+    path = write_manifest(tmp_path, VALID | {"schema_version": True})
+    with pytest.raises(ManifestError):
+        load_manifest(path)
+
+
+def test_load_rejects_non_string_hash_with_manifest_error(tmp_path):
+    for bad in (None, 123, ["a" * 64]):
+        path = write_manifest(tmp_path, VALID | {"file_sha256": bad})
+        with pytest.raises(ManifestError):
+            load_manifest(path)
+
+
+def test_load_rejects_wrongly_typed_fields(tmp_path):
+    path = write_manifest(tmp_path, VALID | {"launch_settings": "not a dict"})
+    with pytest.raises(ManifestError):
+        load_manifest(path)
+    path = write_manifest(tmp_path, VALID | {"model_id": 7})
+    with pytest.raises(ManifestError):
+        load_manifest(path)
+
+
+def test_the_checked_in_candidate_manifest_is_valid():
+    manifest = load_manifest(Path(__file__).parent.parent / "models/qwen3-0.6b-q8_0.manifest.json")
+    assert manifest.schema_version == 1
+    assert manifest.model_id == "qwen3-0.6b"
+    assert manifest.launch_settings["chat_template_kwargs"] == {"enable_thinking": False}
 
 
 def test_verify_accepts_matching_artifact(tmp_path):

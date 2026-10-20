@@ -36,6 +36,50 @@ def test_build_manifest_computes_all_hashes_from_the_artifact(tmp_path):
     verify_artifact(manifest, artifact)
 
 
+def test_build_manifest_rejects_a_missing_artifact(tmp_path):
+    import pytest
+
+    from relaymind.adapters.manifest import ManifestError
+
+    with pytest.raises(ManifestError):
+        build_manifest(tmp_path / "absent.gguf", **SOURCE)
+
+
+def test_verify_artifact_detects_tampered_metadata_hashes(tmp_path):
+    import dataclasses
+
+    import pytest
+
+    from relaymind.adapters.manifest import ManifestError
+
+    artifact = write_gguf(tmp_path / "model.gguf", sample_kvs())
+    manifest = build_manifest(artifact, **SOURCE)
+    tampered = dataclasses.replace(manifest, tokenizer_hash="0" * 64)
+    with pytest.raises(ManifestError):
+        verify_artifact(tampered, artifact)
+
+
+def test_gen_manifest_script_rejects_non_object_launch_settings(tmp_path):
+    artifact = write_gguf(tmp_path / "model.gguf", sample_kvs())
+    out = tmp_path / "manifest.json"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/gen_model_manifest.py",
+            str(artifact),
+            "--out",
+            str(out),
+            *[f"--{k.replace('_', '-')}={v}" for k, v in SOURCE.items() if k != "launch_settings"],
+            "--launch-settings=[1, 2]",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "launch-settings" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_gen_manifest_script_writes_a_loadable_manifest(tmp_path):
     artifact = write_gguf(tmp_path / "model.gguf", sample_kvs())
     out = tmp_path / "manifest.json"

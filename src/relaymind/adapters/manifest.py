@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from pathlib import Path
 
-from relaymind.adapters.gguf import artifact_hashes
+from relaymind.adapters.gguf import GGUFError, artifact_hashes
 
 SUPPORTED_SCHEMA_VERSION = 1
 
@@ -45,21 +45,27 @@ class ArtifactManifest:
     license: str
 
     def __post_init__(self) -> None:
-        if self.schema_version != SUPPORTED_SCHEMA_VERSION:
+        # bool is a subclass of int and True == 1, so check the exact type.
+        if type(self.schema_version) is not int or self.schema_version != SUPPORTED_SCHEMA_VERSION:
             raise ManifestError(
-                f"unsupported schema_version {self.schema_version}; "
+                f"unsupported schema_version {self.schema_version!r}; "
                 f"supported: {SUPPORTED_SCHEMA_VERSION}"
             )
+        for f in fields(self):
+            if f.type is str and not isinstance(getattr(self, f.name), str):
+                raise ManifestError(f"{f.name} must be a string")
+        if not isinstance(self.launch_settings, Mapping):
+            raise ManifestError("launch_settings must be an object")
+        object.__setattr__(self, "launch_settings", dict(self.launch_settings))
         for name in _HASH_FIELDS:
-            value = getattr(self, name)
-            if not _SHA256_RE.fullmatch(value):
+            if not _SHA256_RE.fullmatch(getattr(self, name)):
                 raise ManifestError(f"{name} must be 64 lowercase hex characters")
 
 
 def load_manifest(path: Path) -> ArtifactManifest:
     """Load and validate a manifest file."""
     try:
-        data = json.loads(Path(path).read_text())
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise ManifestError(f"cannot read manifest {path}: {exc}") from exc
     if not isinstance(data, dict):
@@ -101,6 +107,8 @@ def build_manifest(
     Every hash is computed from the artifact, never copied by hand.
     """
     artifact_path = Path(artifact_path)
+    if not artifact_path.is_file():
+        raise ManifestError(f"artifact file not found: {artifact_path}")
     tokenizer_hash, chat_template_hash = artifact_hashes(artifact_path)
     return ArtifactManifest(
         schema_version=SUPPORTED_SCHEMA_VERSION,
@@ -120,7 +128,12 @@ def build_manifest(
 
 
 def verify_artifact(manifest: ArtifactManifest, artifact_path: Path) -> None:
-    """Raise unless the artifact file matches the manifest hash."""
+    """Raise unless the artifact file matches the manifest hashes.
+
+    The file hash always applies. When the file is a GGUF artifact, the
+    tokenizer and chat-template hashes are recomputed too, so a manifest
+    whose metadata hashes were edited by hand is also rejected.
+    """
     artifact_path = Path(artifact_path)
     if not artifact_path.is_file():
         raise ManifestError(f"artifact file not found: {artifact_path}")
@@ -130,3 +143,16 @@ def verify_artifact(manifest: ArtifactManifest, artifact_path: Path) -> None:
             f"artifact sha256 mismatch for {artifact_path.name}: "
             f"manifest {manifest.file_sha256}, actual {actual}"
         )
+    with open(artifact_path, "rb") as handle:
+        is_gguf = handle.read(4) == b"GGUF"
+    if is_gguf:
+        try:
+            tokenizer_hash, template_hash = artifact_hashes(artifact_path)
+        except GGUFError as exc:
+            raise ManifestError(
+                f"cannot read GGUF metadata from {artifact_path.name}: {exc}"
+            ) from exc
+        if tokenizer_hash != manifest.tokenizer_hash:
+            raise ManifestError(f"tokenizer hash mismatch for {artifact_path.name}")
+        if template_hash != manifest.chat_template_hash:
+            raise ManifestError(f"chat template hash mismatch for {artifact_path.name}")

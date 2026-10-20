@@ -33,7 +33,10 @@ def _read_exact(handle: BufferedReader, size: int) -> bytes:
 
 def _read_string(handle: BufferedReader) -> str:
     (length,) = struct.unpack("<Q", _read_exact(handle, 8))
-    return _read_exact(handle, length).decode()
+    try:
+        return _read_exact(handle, length).decode()
+    except UnicodeDecodeError as exc:
+        raise GGUFError(f"invalid UTF-8 in GGUF metadata: {exc}") from exc
 
 
 _SCALAR_FORMATS = {
@@ -102,7 +105,12 @@ def artifact_hashes(path: Path) -> tuple[str, str]:
         for key, value in metadata.items()
         if key.startswith(TOKENIZER_PREFIX) and key != CHAT_TEMPLATE_KEY
     }
-    canonical = json.dumps(tokenizer_meta, sort_keys=True, ensure_ascii=False)
+    if not tokenizer_meta:
+        raise GGUFError(f"no tokenizer metadata in {path}")
+    # Canonical JSON: sorted keys, compact separators (RFC 8785 style).
+    canonical = json.dumps(
+        tokenizer_meta, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+    )
     tokenizer_hash = hashlib.sha256(canonical.encode()).hexdigest()
     template_hash = hashlib.sha256(template.encode()).hexdigest()
     return tokenizer_hash, template_hash
