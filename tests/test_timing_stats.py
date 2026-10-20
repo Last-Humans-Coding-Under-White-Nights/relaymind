@@ -10,10 +10,14 @@ import asyncio
 import json
 from datetime import datetime, timedelta
 
+import pytest
+
 from helpers import ScriptedAdapter, collect_events, make_capabilities, make_request
 from relaymind.adapters import (
     Completed,
     GenerationFailed,
+    Message,
+    Role,
     TextDelta,
     ToolCall,
     Usage,
@@ -102,6 +106,42 @@ def test_failed_generation_records_the_code_not_a_completion():
     assert record.failure_code == "provider_timeout"
     assert record.completion_seconds is None
     assert record.finish_reason is None
+    # Nothing came over the wire: the adapter synthesized the failure,
+    # so there is no transport latency to report (spec 12.1, RM16).
+    assert record.first_transport_event_seconds is None
+
+
+def test_prompt_is_the_current_turn_in_a_multi_turn_request():
+    adapter = ScriptedAdapter([TextDelta(text="hi"), Completed(finish_reason="stop")])
+    request = make_request(
+        messages=(
+            Message(role=Role.USER, content="first question"),
+            Message(role=Role.ASSISTANT, content="first answer"),
+            Message(role=Role.USER, content="follow-up"),
+        )
+    )
+    collector, _ = collect_with_stats(adapter, scripted_clock(0.0, 1.0, 2.0), request)
+    assert collector.records[0].prompt == "follow-up"
+
+
+class ClosableAdapter(ScriptedAdapter):
+    def __init__(self, events):
+        super().__init__(events)
+        self.closed = False
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+def test_collector_closes_the_wrapped_adapter():
+    adapter = ClosableAdapter([])
+    collector = TimingCollector(adapter)
+    asyncio.run(collector.aclose())
+    assert adapter.closed
+
+
+def test_collector_close_tolerates_an_adapter_without_aclose():
+    asyncio.run(TimingCollector(ScriptedAdapter([])).aclose())
 
 
 def test_events_pass_through_unchanged_and_records_accumulate():
@@ -155,6 +195,16 @@ def test_export_writes_identity_metrics_and_per_call_usage(tmp_path):
     assert "total" not in json.dumps(document)
 
 
+def test_export_creates_missing_parent_directories(tmp_path):
+    out = tmp_path / "nested" / "exports" / "local.json"
+    export_stats(
+        str(out),
+        identity=AdapterIdentity(adapter="llamacpp", model_id="qwen3-0.6b"),
+        records=[],
+    )
+    assert json.loads(out.read_text(encoding="utf-8"))["generations"] == []
+
+
 def test_run_comparison_writes_one_export_per_adapter_config(tmp_path):
     # Issue #37: the same prompt list runs against every configured
     # adapter, and each config gets its own machine-readable export.
@@ -180,9 +230,26 @@ def test_run_comparison_writes_one_export_per_adapter_config(tmp_path):
         generations = document["generations"]
         # One record per prompt, in prompt order, aligned across
         # configs by the shared generation id scheme.
-        assert [g["generation_id"] for g in generations] == [f"{name}_000", f"{name}_001"]
+        assert [g["generation_id"] for g in generations] == ["gen_000", "gen_001"]
         assert [g["prompt"] for g in generations] == prompts
         assert all(g["finish_reason"] == "stop" for g in generations)
+
+
+def test_run_comparison_uses_the_injected_clock(tmp_path):
+    adapters = {
+        "local": (
+            ScriptedAdapter([TextDelta(text="a"), Completed(finish_reason="stop")]),
+            AdapterIdentity(adapter="llamacpp", model_id="qwen3-0.6b"),
+        ),
+    }
+    # One generation: start, then one tick per event.
+    clock = scripted_clock(0.0, 0.25, 1.5)
+    paths = asyncio.run(run_comparison(adapters, ["ping"], tmp_path, clock=clock))
+
+    (generation,) = json.loads(paths["local"].read_text(encoding="utf-8"))["generations"]
+    assert generation["first_transport_event_seconds"] == 0.25
+    assert generation["first_answer_token_seconds"] == 0.25
+    assert generation["completion_seconds"] == 1.5
 
 
 def test_collector_delegates_the_rest_of_the_adapter_contract():
@@ -192,3 +259,89 @@ def test_collector_delegates_the_rest_of_the_adapter_contract():
     assert asyncio.run(collector.health()).detail == "scripted"
     asyncio.run(collector.cancel("gen_9"))
     assert adapter.cancelled == ["gen_9"]
+
+
+@pytest.mark.parametrize("finish_reason", ["tool_calls", "length", "end_of_stream"])
+def test_completion_latency_only_counts_a_successful_final_answer(finish_reason):
+    # Spec 12.1: completion latency is request to successful final
+    # answer. A tool proposal, a truncation, or a finish-less end is
+    # recorded as the finish reason but is not a completion.
+    adapter = ScriptedAdapter([TextDelta(text="hi"), Completed(finish_reason=finish_reason)])
+    collector, _ = collect_with_stats(adapter, scripted_clock(0.0, 0.5, 1.0))
+    record = collector.records[0]
+    assert record.finish_reason == finish_reason
+    assert record.completion_seconds is None
+
+
+def test_cached_tokens_are_recorded_per_call():
+    # Spec 7.3: provider cache counts are retained per call.
+    adapter = ScriptedAdapter(
+        [Usage(input_tokens=1000, output_tokens=4, cached_tokens=900), Completed("stop")]
+    )
+    collector, _ = collect_with_stats(adapter, scripted_clock(0.0, 1.0, 2.0))
+    assert collector.records[0].cached_tokens == 900
+
+
+def test_each_generation_records_a_utc_start_timestamp():
+    # RM25: event timestamps are UTC.
+    adapter = ScriptedAdapter([Completed(finish_reason="stop")])
+    collector, _ = collect_with_stats(adapter, scripted_clock(0.0, 1.0))
+    started_at = datetime.fromisoformat(collector.records[0].started_at_utc)
+    assert started_at.utcoffset() == timedelta(0)
+
+
+class RaisingAdapter(ScriptedAdapter):
+    async def generate(self, request):
+        yield TextDelta(text="partial")
+        raise RuntimeError("boom")
+
+
+def test_an_adapter_exception_is_recorded_as_a_failure():
+    collector = TimingCollector(RaisingAdapter([]), clock=scripted_clock(0.0, 1.0, 2.0))
+    with pytest.raises(RuntimeError):
+        collect_events(collector, make_request())
+    record = collector.records[0]
+    assert record.failure_code == "adapter_error"
+    assert record.completion_seconds is None
+
+
+def test_an_abandoned_generation_is_recorded_as_such():
+    adapter = ScriptedAdapter([TextDelta(text="a"), TextDelta(text="b"), Completed("stop")])
+    collector = TimingCollector(adapter, clock=scripted_clock(0.0, 1.0, 2.0))
+
+    async def take_one():
+        stream = collector.generate(make_request())
+        await anext(stream)
+        await stream.aclose()
+
+    asyncio.run(take_one())
+    assert collector.records[0].failure_code == "abandoned"
+
+
+def test_run_comparison_keeps_going_after_an_adapter_exception(tmp_path):
+    # One broken generation must not lose the other configs' exports.
+    adapters = {
+        "broken": (RaisingAdapter([]), AdapterIdentity(adapter="x", model_id="x")),
+        "local": (
+            ScriptedAdapter([TextDelta(text="a"), Completed(finish_reason="stop")]),
+            AdapterIdentity(adapter="llamacpp", model_id="qwen3-0.6b"),
+        ),
+    }
+    paths = asyncio.run(run_comparison(adapters, ["p1", "p2"], tmp_path))
+    broken = json.loads(paths["broken"].read_text(encoding="utf-8"))["generations"]
+    assert [g["failure_code"] for g in broken] == ["adapter_error", "adapter_error"]
+    local = json.loads(paths["local"].read_text(encoding="utf-8"))["generations"]
+    assert [g["finish_reason"] for g in local] == ["stop", "stop"]
+
+
+@pytest.mark.parametrize(
+    "names",
+    [["../results", "local"], ["a/b", "local"], ["", "local"], ["Local", "local"]],
+)
+def test_run_comparison_rejects_unsafe_or_colliding_config_names(tmp_path, names):
+    adapters = {
+        name: (ScriptedAdapter([]), AdapterIdentity(adapter="x", model_id="x")) for name in names
+    }
+    with pytest.raises(ValueError):
+        asyncio.run(run_comparison(adapters, ["p"], tmp_path / "out"))
+    assert not (tmp_path / "out").exists()

@@ -37,6 +37,7 @@ from its model manifest (models/*.manifest.json).
 import argparse
 import asyncio
 import json
+from contextlib import AsyncExitStack
 from pathlib import Path
 
 from relaymind.adapters.base import ModelAdapter
@@ -45,10 +46,14 @@ from relaymind.adapters.chat_completions import (
     ChatCompletionsConfig,
 )
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
-from relaymind.stats import AdapterIdentity, run_comparison
+from relaymind.stats import AdapterIdentity, check_export_names, run_comparison
+
+DEFAULT_API_KEY_ENV = "RELAYMIND_EXTERNAL_API_KEY"
 
 
 def _build_adapter(name: str, spec: dict) -> tuple[ModelAdapter, AdapterIdentity]:
+    if not isinstance(spec, dict):
+        raise ValueError(f"adapter {name!r} must be a JSON object")
     kind = spec.get("kind")
     identity = AdapterIdentity(
         adapter=str(kind),
@@ -67,7 +72,7 @@ def _build_adapter(name: str, spec: dict) -> tuple[ModelAdapter, AdapterIdentity
             base_url=spec["base_url"],
             model=str(spec["model_id"]),
             context_limit=int(spec["context_limit"]),
-            api_key_env=spec.get("api_key_env", "RELAYMIND_EXTERNAL_API_KEY"),
+            api_key_env=spec.get("api_key_env") or DEFAULT_API_KEY_ENV,
         )
         return ChatCompletionsAdapter(config), identity
     raise ValueError(f"adapter {name!r}: unknown kind {kind!r}")
@@ -77,8 +82,15 @@ async def _run(adapters, prompts, out_dir: Path) -> dict[str, Path]:
     try:
         return await run_comparison(adapters, prompts, out_dir)
     finally:
-        for adapter, _identity in adapters.values():
-            await adapter.aclose()
+        await _close_all(adapter for adapter, _identity in adapters.values())
+
+
+async def _close_all(adapters) -> None:
+    async with AsyncExitStack() as stack:
+        for adapter in adapters:
+            aclose = getattr(adapter, "aclose", None)
+            if aclose is not None:
+                stack.push_async_callback(aclose)
 
 
 def main() -> None:
@@ -91,15 +103,29 @@ def main() -> None:
         config = json.loads(args.config.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         parser.error(f"cannot read config: {exc}")
+    if not isinstance(config, dict):
+        parser.error("config must be a JSON object")
     prompts = config.get("prompts")
     adapter_specs = config.get("adapters")
-    if not prompts:
-        parser.error("config has no prompts")
-    if len(adapter_specs) < 2:
-        parser.error("config needs at least two adapters to compare")
+    if (
+        not isinstance(prompts, list)
+        or not prompts
+        or not all(isinstance(prompt, str) for prompt in prompts)
+    ):
+        parser.error("config 'prompts' must be a non-empty list of strings")
+    if not isinstance(adapter_specs, dict) or len(adapter_specs) < 2:
+        parser.error("config needs an 'adapters' object with at least two adapters to compare")
     try:
-        adapters = {name: _build_adapter(name, spec) for name, spec in adapter_specs.items()}
+        check_export_names(list(adapter_specs))
+    except ValueError as exc:
+        parser.error(f"invalid adapter config: {exc}")
+    adapters: dict[str, tuple[ModelAdapter, AdapterIdentity]] = {}
+    try:
+        for name, spec in adapter_specs.items():
+            adapters[name] = _build_adapter(name, spec)
     except (KeyError, TypeError, ValueError) as exc:
+        # Close the adapters already built before exiting.
+        asyncio.run(_close_all(adapter for adapter, _identity in adapters.values()))
         parser.error(f"invalid adapter config: {exc}")
 
     paths = asyncio.run(_run(adapters, prompts, args.out_dir))
