@@ -17,8 +17,8 @@ ruff format --check .
 ```
 
 The live suite needs `llama-server` on PATH and the pinned model
-artifact (see `models/README.md`). It starts and stops its own server;
-nothing below is required for it.
+artifact (see [`models/README.md`](../models/README.md)). It starts and
+stops its own server; nothing below is required for it.
 
 ## Manual JSON testing from a terminal
 
@@ -45,8 +45,18 @@ llama-server -m models/Qwen3-0.6B-Q8_0.gguf `
 ```
 
 On older PowerShell versions, native-argument quoting mangles the JSON;
-pass the tail verbatim with the stop-parsing token instead:
-`llama-server --% -m models/Qwen3-0.6B-Q8_0.gguf --host 127.0.0.1 --port 8033 --ctx-size 8192 --jinja --chat-template-kwargs {"enable_thinking": false}`.
+use the stop-parsing token and escape the inner quotes by hand, since
+the Windows C runtime both splits on the unquoted space and strips
+unescaped double quotes:
+
+```powershell
+llama-server --% -m models/Qwen3-0.6B-Q8_0.gguf --host 127.0.0.1 --port 8033 --ctx-size 8192 --jinja --chat-template-kwargs "{\"enable_thinking\": false}"
+```
+
+Note for all Windows steps below: in Windows PowerShell 5.1, `curl` is
+a built-in alias for `Invoke-WebRequest`, so the macOS curl commands
+fail if pasted as-is. Type `curl.exe` explicitly (or
+`Remove-Item alias:curl`) to use real curl.
 
 ### 2. Health check
 
@@ -59,14 +69,17 @@ macOS / Linux:
 curl -s http://127.0.0.1:8033/health
 ```
 
-Windows:
+Windows (PowerShell 7+):
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8033/health
+Invoke-RestMethod http://127.0.0.1:8033/health -SkipHttpErrorCheck
 ```
 
 Expect `{"status": "ok"}` once the model is loaded (HTTP 503 means
-still loading).
+still loading). Without `-SkipHttpErrorCheck`, PowerShell turns the
+503 into a thrown error instead of showing the loading status; on
+Windows PowerShell 5.1, which has no such switch, wrap the call in
+`try/catch` to inspect the response status.
 
 ### 3. Send a chat completion
 
@@ -96,9 +109,17 @@ $body = @{
     )
 } | ConvertTo-Json -Depth 5
 
-Invoke-RestMethod -Uri http://127.0.0.1:8033/v1/chat/completions `
-    -Method Post -ContentType "application/json" -Body $body
+(Invoke-RestMethod -Uri http://127.0.0.1:8033/v1/chat/completions `
+    -Method Post -ContentType "application/json; charset=utf-8" `
+    -Body $body).choices[0].message.content
 ```
+
+Selecting `.choices[0].message.content` matters: PowerShell's default
+formatting truncates nested objects, which would hide the content you
+are checking for a leaked `<think>` block. The `charset=utf-8` matters
+too — Windows PowerShell 5.1 otherwise encodes the body as Latin-1,
+which mangles the Chinese prompts the bilingual tests use (spec
+section 12.2).
 
 (`curl.exe` also ships with Windows 10+; the macOS command works there
 too if you keep the JSON in a file and pass `-d @body.json`.)
@@ -152,7 +173,9 @@ $body = @{
                 description = "Return current health for a service."
                 parameters  = @{
                     type                 = "object"
-                    properties           = @{ service = @{ enum = @("staging-api", "payments-api") } }
+                    # 'enum' is quoted: it is a reserved keyword in
+                    # PowerShell 5.0+ and can confuse the parser unquoted.
+                    properties           = @{ service = @{ 'enum' = @("staging-api", "payments-api") } }
                     required             = @("service")
                     additionalProperties = $false
                 }
@@ -162,12 +185,16 @@ $body = @{
 } | ConvertTo-Json -Depth 10
 
 Invoke-RestMethod -Uri http://127.0.0.1:8033/v1/chat/completions `
-    -Method Post -ContentType "application/json" -Body $body |
+    -Method Post -ContentType "application/json; charset=utf-8" -Body $body |
     ConvertTo-Json -Depth 10
 ```
 
 Expect `finish_reason` `"tool_calls"` and a `tool_calls` entry naming
-`get_service_health` with arguments `{"service": "staging-api"}`.
+`get_service_health` with arguments `{"service": "staging-api"}`. Note
+that on the wire `function.arguments` is a JSON-encoded **string**
+(`"{\"service\": \"staging-api\"}"`), not a nested object — that is
+the Chat Completions protocol, not a bug. RelayMind's adapters parse
+it before any tool call exists (RM09).
 
 ## What manual checks do not replace
 
