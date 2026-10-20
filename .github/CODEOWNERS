@@ -1,2 +1,4 @@
 # Code Owners for RelayMind project
-* @devnullexile
+# Every pull request automatically requests review from the owners below.
+# One approval is enough to merge (enforced by branch protection).
+* @devnullexile @ArcsinX @Sanek1710
