@@ -4,14 +4,9 @@
 tasks with skills and tools. Complex work is transferred to an external model.
 Every routing decision, tool call, and model call is visible in a trace.
 
-Status: **M1 (adapter and protocol qualification) in progress.** Merged so
-far: the model adapter contract, the llama.cpp adapter for Qwen3-0.6B
-(non-thinking mode verified by a live smoke test), the pinned model
-artifact manifest machinery, and the manual testing guide
-([`docs/TESTING.md`](docs/TESTING.md)). In review: the external Chat
-Completions adapter, per-generation timing export, and the AC08 model
-substitution test. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the
-milestone plan.
+Status: **M1 (adapter and protocol qualification) in progress.** See
+[`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan and
+[`CHANGELOG.md`](CHANGELOG.md) for what has landed so far.
 
 ## How this project works
 
@@ -48,7 +43,7 @@ See [`AGENTS.md`](AGENTS.md) for the full contributor workflow.
 | `models/` | Pinned model artifact manifests; the GGUF files are downloaded, not checked in. |
 | `skills/` | Demo skill packages (SKILL.md format). |
 | `tests/` | Test suite and sandbox fixtures. |
-| `scripts/` | Evaluation and benchmark scripts. |
+| `scripts/` | Developer scripts (currently the model manifest generator); see `scripts/README.md`. |
 
 ## Development setup
 

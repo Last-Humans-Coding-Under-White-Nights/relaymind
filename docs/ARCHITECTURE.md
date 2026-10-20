@@ -17,7 +17,9 @@ spec is the source of truth; this page only explains where things live.
 | Demo UI | `src/relaymind/ui/` | Display model decisions and execution evidence; collect clarification and confirmation. |
 
 Demo skill packages (SKILL.md format, spec section 9) live in `skills/` at
-the repository root, one directory per skill.
+the repository root, one directory per skill. Pinned model artifact
+manifests (RM18, spec section 6) live in `models/`; the GGUF files they
+describe are downloaded per `models/README.md`, never checked in.
 
 ## Runtime shape
 

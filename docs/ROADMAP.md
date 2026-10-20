@@ -13,7 +13,8 @@ Pin the local model artifact and runtime, and prove both adapters work.
 including manual JSON requests from a macOS or Windows terminal.
 
 - Model artifact manifest: source, revision, SHA-256, quantization,
-  template hashes, runtime commit, launch settings (RM18, spec section 6).
+  template hashes, runtime version and commit, launch settings (RM18,
+  spec section 6).
 - llama.cpp adapter with Qwen3-0.6B in non-thinking mode, verified by a
   smoke test.
 - External Chat Completions adapter with operator-configured endpoint.
