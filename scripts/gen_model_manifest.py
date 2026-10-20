@@ -21,10 +21,10 @@ import json
 from pathlib import Path
 
 # Needs the package installed (pip install -e ".[dev]"), like everything else.
-from relaymind.adapters.manifest import build_manifest
+from relaymind.adapters.manifest import ManifestError, build_manifest
 
 
-def _json_object(text: str) -> dict:
+def _json_object(text: str) -> dict[str, object]:
     try:
         value = json.loads(text)
     except ValueError as exc:
@@ -48,17 +48,20 @@ def main() -> None:
     parser.add_argument("--license", required=True)
     args = parser.parse_args()
 
-    manifest = build_manifest(
-        args.artifact,
-        model_id=args.model_id,
-        source_url=args.source_url,
-        source_revision=args.source_revision,
-        quantization=args.quantization,
-        runtime=args.runtime,
-        runtime_version=args.runtime_version,
-        launch_settings=args.launch_settings,
-        license=args.license,
-    )
+    try:
+        manifest = build_manifest(
+            args.artifact,
+            model_id=args.model_id,
+            source_url=args.source_url,
+            source_revision=args.source_revision,
+            quantization=args.quantization,
+            runtime=args.runtime,
+            runtime_version=args.runtime_version,
+            launch_settings=args.launch_settings,
+            license=args.license,
+        )
+    except ManifestError as exc:
+        parser.error(str(exc))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(dataclasses.asdict(manifest), indent=2) + "\n", encoding="utf-8")
     print(f"wrote {args.out}")

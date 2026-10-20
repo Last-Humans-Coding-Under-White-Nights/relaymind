@@ -8,6 +8,7 @@ an explicit failure, never a silent substitution.
 
 import hashlib
 import json
+import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
@@ -57,6 +58,9 @@ class ArtifactManifest:
         if not isinstance(self.launch_settings, Mapping):
             raise ManifestError("launch_settings must be an object")
         object.__setattr__(self, "launch_settings", dict(self.launch_settings))
+        # Settings the renderer rejects fail here, when the manifest is
+        # built or loaded, not later when a server is launched.
+        launch_settings_argv(self.launch_settings)
         for name in _HASH_FIELDS:
             if not _SHA256_RE.fullmatch(getattr(self, name)):
                 raise ManifestError(f"{name} must be 64 lowercase hex characters")
@@ -109,7 +113,10 @@ def build_manifest(
     artifact_path = Path(artifact_path)
     if not artifact_path.is_file():
         raise ManifestError(f"artifact file not found: {artifact_path}")
-    tokenizer_hash, chat_template_hash = artifact_hashes(artifact_path)
+    try:
+        tokenizer_hash, chat_template_hash = artifact_hashes(artifact_path)
+    except GGUFError as exc:
+        raise ManifestError(f"cannot read GGUF metadata from {artifact_path.name}: {exc}") from exc
     return ArtifactManifest(
         schema_version=SUPPORTED_SCHEMA_VERSION,
         model_id=model_id,
@@ -156,3 +163,134 @@ def verify_artifact(manifest: ArtifactManifest, artifact_path: Path) -> None:
             raise ManifestError(f"tokenizer hash mismatch for {artifact_path.name}")
         if template_hash != manifest.chat_template_hash:
             raise ManifestError(f"chat template hash mismatch for {artifact_path.name}")
+
+
+# The harness owns the bind address and the artifact path; launch
+# settings must not override them, load weights other than the pinned
+# artifact (another model, a draft model, a multimodal projector, LoRA
+# adapters, control vectors, a router models directory), or replace the
+# chat template whose hash the manifest pins. Spellings follow
+# llama-server 0.7.0 --help.
+_RESERVED_LAUNCH_FLAGS = frozenset(
+    {
+        "host",
+        "port",
+        "model",
+        "m",
+        "hf-repo",
+        "hf",
+        "hfr",
+        "hf-file",
+        "hff",
+        "model-url",
+        "mu",
+        "docker-repo",
+        "dr",
+        "spec-draft-model",
+        "model-draft",
+        "md",
+        "spec-draft-hf",
+        "hf-repo-draft",
+        "hfd",
+        "hfrd",
+        "mmproj",
+        "mm",
+        "mmproj-url",
+        "mmu",
+        "lora",
+        "lora-scaled",
+        "control-vector",
+        "control-vector-scaled",
+        "models-dir",
+        "models-preset",
+        "chat-template",
+        "chat-template-file",
+    }
+)
+
+# A lowercase multi-character snake_case key, so it renders as one valid
+# --long-flag. One spelling per flag: "ctx-size" is rejected, so it can
+# never sit next to "ctx_size" with a different value.
+_LAUNCH_KEY_RE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+
+
+def _launch_flag(key: object) -> str:
+    if not isinstance(key, str):
+        raise ManifestError(f"launch setting key must be a string, got {key!r}")
+    name = key.replace("_", "-")
+    if name in _RESERVED_LAUNCH_FLAGS:
+        raise ManifestError(f"launch setting {key!r} is reserved for the harness")
+    if len(name) < 2 or not _LAUNCH_KEY_RE.fullmatch(key):
+        raise ManifestError(
+            f"launch setting {key!r} does not render as a valid --long-flag; "
+            "use a lowercase snake_case key"
+        )
+    if name.startswith("no-"):
+        raise ManifestError(
+            f"launch setting {key!r}: use the positive name with false instead of a no- prefix"
+        )
+    return f"--{name}"
+
+
+def launch_settings_argv(launch_settings: Mapping[str, object]) -> list[str]:
+    """Render manifest launch settings as llama-server arguments.
+
+    Snake_case keys become kebab-case flags; true is a bare flag and
+    false its --no- form, a mapping is passed as compact JSON, and a
+    string or finite number is passed as text. Any other value (a list,
+    null, NaN, infinity) has no defined rendering and raises
+    ManifestError, as do keys reserved for the harness (the bind address
+    and anything that selects the model) or keys that are not valid
+    snake_case long flags. chat_template_kwargs must be a mapping, since
+    the adapter reads it as one. Launch settings are manifest data (spec section 6): tests and
+    tooling derive their command line here instead of hand-copying the
+    qualified settings.
+    """
+    argv: list[str] = []
+    for key, value in launch_settings.items():
+        flag = _launch_flag(key)
+        if key == "chat_template_kwargs" and not isinstance(value, Mapping):
+            raise ManifestError(
+                "launch_settings.chat_template_kwargs must be an object, "
+                f"got {type(value).__name__}"
+            )
+        if isinstance(value, bool):
+            argv.append(flag if value else f"--no-{flag[2:]}")
+        elif isinstance(value, Mapping):
+            try:
+                rendered = json.dumps(dict(value), separators=(",", ":"), allow_nan=False)
+            except (TypeError, ValueError) as exc:
+                raise ManifestError(f"launch setting {key!r} is not JSON: {exc}") from exc
+            argv.extend([flag, rendered])
+        elif isinstance(value, float) and not math.isfinite(value):
+            raise ManifestError(f"launch setting {key!r} must be a finite number, got {value!r}")
+        elif isinstance(value, (int, float, str)):
+            argv.extend([flag, str(value)])
+        else:
+            raise ManifestError(
+                f"launch setting {key!r} has unsupported type {type(value).__name__}; "
+                "use a string, number, boolean, or object"
+            )
+    return argv
+
+
+def launch_adapter_settings(
+    launch_settings: Mapping[str, object],
+) -> tuple[int, dict[str, object]]:
+    """Adapter context limit and base template kwargs from launch settings.
+
+    The adapter must run with the same context size and chat-template
+    kwargs the server was launched with (spec section 6), so both are
+    read from the same validated launch settings that
+    launch_settings_argv renders. Settings the adapter cannot use raise
+    ManifestError.
+    """
+    launch_settings_argv(launch_settings)
+    ctx_size = launch_settings.get("ctx_size")
+    if type(ctx_size) is not int or ctx_size <= 0:
+        raise ManifestError(
+            f"launch_settings.ctx_size must be a positive integer, got {ctx_size!r}"
+        )
+    # launch_settings_argv has checked that this is a mapping.
+    template_kwargs = launch_settings.get("chat_template_kwargs", {})
+    return ctx_size, dict(template_kwargs)

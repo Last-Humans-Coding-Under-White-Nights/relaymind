@@ -55,6 +55,37 @@ def test_build_manifest_rejects_a_missing_artifact(tmp_path):
         build_manifest(tmp_path / "absent.gguf", **SOURCE)
 
 
+def test_build_manifest_rejects_a_file_that_is_not_gguf(tmp_path):
+    # RM18: an unreadable artifact is a ManifestError, as in verify_artifact.
+    artifact = tmp_path / "model.gguf"
+    artifact.write_bytes(b"not a gguf file")
+    with pytest.raises(ManifestError, match="model.gguf"):
+        build_manifest(artifact, **SOURCE)
+
+
+def test_gen_manifest_script_rejects_a_file_that_is_not_gguf(tmp_path):
+    artifact = tmp_path / "model.gguf"
+    artifact.write_bytes(b"not a gguf file")
+    out = tmp_path / "manifest.json"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            str(artifact),
+            "--out",
+            str(out),
+            *[f"--{k.replace('_', '-')}={v}" for k, v in SOURCE.items() if k != "launch_settings"],
+            f"--launch-settings={json.dumps(SOURCE['launch_settings'])}",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "model.gguf" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not out.exists()
+
+
 def test_verify_artifact_detects_tampered_metadata_hashes(tmp_path):
     artifact = write_gguf(tmp_path / "model.gguf", sample_kvs())
     manifest = build_manifest(artifact, **SOURCE)
@@ -82,6 +113,29 @@ def test_gen_manifest_script_rejects_non_object_launch_settings(tmp_path):
     assert result.returncode != 0
     assert "launch-settings" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_gen_manifest_script_rejects_launch_settings_that_do_not_render(tmp_path):
+    # RM18: the generator never writes a manifest the renderer rejects.
+    artifact = write_gguf(tmp_path / "model.gguf", sample_kvs())
+    out = tmp_path / "manifest.json"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            str(artifact),
+            "--out",
+            str(out),
+            *[f"--{k.replace('_', '-')}={v}" for k, v in SOURCE.items() if k != "launch_settings"],
+            '--launch-settings={"model": "x", "no_mmap": true}',
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "model" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not out.exists()
 
 
 def test_gen_manifest_script_writes_a_loadable_manifest(tmp_path):
