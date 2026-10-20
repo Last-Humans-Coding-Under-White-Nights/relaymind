@@ -7,6 +7,7 @@ and never appear in traces or error messages.
 """
 
 import asyncio
+import dataclasses
 import os
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
@@ -23,6 +24,13 @@ from relaymind.adapters.base import (
     UnsupportedCapabilityError,
 )
 from relaymind.adapters.openai_compat import base_chat_body, stream_chat_events
+
+# GenerationOptions field -> chat-completions body key.
+_OPTION_BODY_KEYS = {
+    "max_output_tokens": "max_tokens",
+    "temperature": "temperature",
+    "top_p": "top_p",
+}
 
 
 def _require_supported(option_name: str, supported_options: Sequence[str]) -> None:
@@ -46,16 +54,17 @@ def build_chat_request(
     """
     body = base_chat_body(request)
     body["model"] = model
-    options = request.options
-    if options.max_output_tokens is not None:
-        _require_supported("max_output_tokens", supported_options)
-        body["max_tokens"] = options.max_output_tokens
-    if options.temperature is not None:
-        _require_supported("temperature", supported_options)
-        body["temperature"] = options.temperature
-    if options.top_p is not None:
-        _require_supported("top_p", supported_options)
-        body["top_p"] = options.top_p
+    for option in dataclasses.fields(request.options):
+        value = getattr(request.options, option.name)
+        if value is None:
+            continue
+        _require_supported(option.name, supported_options)
+        body_key = _OPTION_BODY_KEYS.get(option.name)
+        if body_key is None:
+            # An option this adapter cannot translate must fail loudly,
+            # never silently not reach the provider.
+            raise UnsupportedCapabilityError(f"adapter cannot translate option: {option.name}")
+        body[body_key] = value
     return body
 
 
@@ -73,7 +82,8 @@ class ChatCompletionsConfig:
     context_limit: int
     api_key_env: str = "RELAYMIND_EXTERNAL_API_KEY"
     supported_options: tuple[str, ...] = ("max_output_tokens", "temperature", "top_p")
-    request_timeout_seconds: float = 60.0
+    # Spec section 11.2: external generation is at most 30 seconds.
+    request_timeout_seconds: float = 30.0
 
 
 class ChatCompletionsAdapter(ModelAdapter):
@@ -96,8 +106,16 @@ class ChatCompletionsAdapter(ModelAdapter):
         self._cancel_events: dict[str, asyncio.Event] = {}
 
     def _api_key(self) -> str | None:
-        """The credential, read fresh from the environment per call."""
-        return os.environ.get(self._config.api_key_env) or None
+        """The credential, read fresh from the environment per call.
+
+        A blank or whitespace value counts as missing: it would only
+        produce a malformed Authorization header and make redaction
+        rewrite every run of spaces.
+        """
+        value = os.environ.get(self._config.api_key_env)
+        if value is None:
+            return None
+        return value.strip() or None
 
     @staticmethod
     def _redact(text: str, api_key: str | None) -> str:
@@ -146,6 +164,9 @@ class ChatCompletionsAdapter(ModelAdapter):
                 body,
                 headers={"Authorization": f"Bearer {api_key}"},
                 cancel_event=cancel_event,
+                # Scrub error bodies before the pump truncates them, so
+                # a key crossing the cut cannot leak as a fragment.
+                scrub=lambda text: self._redact(text, api_key),
             ):
                 # The one chokepoint where failures leave this adapter:
                 # providers and proxies can echo the Authorization

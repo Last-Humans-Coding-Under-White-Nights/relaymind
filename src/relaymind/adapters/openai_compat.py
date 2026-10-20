@@ -8,7 +8,7 @@ request shaping and lifecycle stay in each adapter.
 
 import asyncio
 import json
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 import httpx
@@ -96,21 +96,28 @@ class StreamAccumulator:
     """Turn streamed chat-completion chunks into normalized events.
 
     Tool-call argument fragments are buffered; a ToolCall event exists
-    only after the stream finishes and the full argument JSON parses
-    (RM09: partial streamed argument JSON must never execute).
+    only after the finish chunk arrives and the full argument JSON
+    parses (RM09: partial streamed argument JSON must never execute).
+    Completed is the terminal event: it is deferred to flush() at the
+    end of the stream, because with include_usage the usage chunk
+    arrives after the finish chunk and must still be emitted first.
     """
 
     _tool_calls: dict[int, _PartialToolCall] = field(default_factory=dict)
-    # True once the stream outcome is settled (finish, failure, or
-    # provider error chunk); the end-of-stream flush then adds nothing.
-    _closed: bool = False
+    # The finish reason seen on the wire; Completed waits for flush().
+    _finish_reason: str | None = None
+    # True once a terminal event went out (failure or flush); nothing
+    # may be emitted after it.
+    _terminal: bool = False
 
     def feed(self, chunk: Mapping[str, object]) -> list[AdapterEvent]:
+        if self._terminal:
+            return []
         error = chunk.get("error")
         if error is not None:
             # Providers stream runtime errors (context exhausted, busy
             # slots) as an error chunk without choices or usage.
-            self._closed = True
+            self._terminal = True
             self._tool_calls.clear()
             message = error.get("message") if isinstance(error, Mapping) else None
             return [GenerationFailed(code="provider_error", message=str(message or error))]
@@ -125,25 +132,34 @@ class StreamAccumulator:
             )
         for choice in chunk.get("choices") or []:
             delta = choice.get("delta") or {}
-            content = delta.get("content")
-            if content:
-                events.append(TextDelta(text=content))
-            for fragment in delta.get("tool_calls") or []:
-                self._absorb_tool_fragment(fragment)
-            finish_reason = choice.get("finish_reason")
-            if finish_reason:
-                events.extend(self._finish(finish_reason))
+            if self._finish_reason is None:
+                content = delta.get("content")
+                if content:
+                    events.append(TextDelta(text=content))
+                for fragment in delta.get("tool_calls") or []:
+                    self._absorb_tool_fragment(fragment)
+                finish_reason = choice.get("finish_reason")
+                if finish_reason:
+                    self._finish_reason = str(finish_reason)
+                    events.extend(self._settle_tool_calls())
+            # Content or finish reasons after the finish chunk are
+            # protocol junk and stay out of the answer.
         return events
 
     def flush(self) -> list[AdapterEvent]:
-        """Settle a stream that ended without an explicit finish chunk.
+        """Settle the end of the stream ([DONE] or EOF).
 
-        [DONE] or EOF can arrive before any finish_reason; buffered tool
-        calls and the Completed event must still come out.
+        Emits any tool calls still buffered (a stream may end without a
+        finish chunk) and then the terminal Completed, exactly once.
         """
-        if self._closed:
+        if self._terminal:
             return []
-        return self._finish("end_of_stream")
+        self._terminal = True
+        events = self._settle_tool_calls()
+        if any(isinstance(event, GenerationFailed) for event in events):
+            return events
+        events.append(Completed(finish_reason=self._finish_reason or "end_of_stream"))
+        return events
 
     def _absorb_tool_fragment(self, fragment: Mapping[str, object]) -> None:
         partial = self._tool_calls.setdefault(int(fragment.get("index") or 0), _PartialToolCall())
@@ -155,7 +171,7 @@ class StreamAccumulator:
             partial.tool_name += str(function["name"])
         partial.arguments_json += str(function.get("arguments") or "")
 
-    def _finish(self, finish_reason: str) -> list[AdapterEvent]:
+    def _settle_tool_calls(self) -> list[AdapterEvent]:
         try:
             events: list[AdapterEvent] = []
             for index in sorted(self._tool_calls):
@@ -178,6 +194,7 @@ class StreamAccumulator:
                         )
                     )
                 except ValueError as exc:
+                    self._terminal = True
                     return [
                         GenerationFailed(
                             code="invalid_tool_arguments",
@@ -187,11 +204,9 @@ class StreamAccumulator:
                             ),
                         )
                     ]
-            events.append(Completed(finish_reason=finish_reason))
             return events
         finally:
             self._tool_calls.clear()
-            self._closed = True
 
 
 def parse_sse_line(line: str) -> Mapping[str, object] | None:
@@ -217,14 +232,18 @@ async def stream_chat_events(
     cancel_event: asyncio.Event,
     headers: Mapping[str, str] | None = None,
     provider_label: str = "provider",
+    scrub: Callable[[str], str] | None = None,
 ) -> AsyncIterator[AdapterEvent]:
     """Drive one streamed chat completion into normalized events.
 
     The shared pump for every OpenAI-compatible endpoint, so its
     invariants live in exactly one place: a cancelled generation ends
-    without Completed; a stream that ends without a finish chunk is
-    settled by flush(); timeouts and transport errors map to the stable
-    provider_timeout and provider_unreachable codes.
+    without Completed; [DONE] or EOF settles the stream through
+    flush(), with Completed as the terminal event; timeouts and
+    transport errors map to the stable provider_timeout and
+    provider_unreachable codes. scrub, when given, runs over error
+    response bodies before they are truncated, so a secret crossing the
+    truncation boundary can never leak as an unmatchable fragment.
     """
     accumulator = StreamAccumulator()
     # One long-lived wait on the cancel event per generation; each
@@ -234,6 +253,8 @@ async def stream_chat_events(
         async with client.stream("POST", path, json=dict(body), headers=headers) as response:
             if response.status_code != 200:
                 detail = (await response.aread()).decode(errors="replace")
+                if scrub is not None:
+                    detail = scrub(detail)
                 yield GenerationFailed(
                     code="provider_error",
                     message=f"{provider_label} returned {response.status_code}: {detail[:200]}",
@@ -243,18 +264,21 @@ async def stream_chat_events(
             while True:
                 line = await _next_line_or_cancel(lines, cancel_wait, cancel_event)
                 if line is None:
-                    # A cancelled generation ends without Completed; a
-                    # naturally ended stream settles buffered state even
-                    # when no finish chunk arrived.
-                    if not cancel_event.is_set():
-                        for event in accumulator.flush():
-                            yield event
-                    return
+                    # A cancelled generation ends without Completed.
+                    if cancel_event.is_set():
+                        return
+                    break  # EOF without [DONE]: settle what arrived.
+                if line.strip() == "data: [DONE]":
+                    # The protocol's termination marker; never wait for
+                    # EOF on a kept-open connection.
+                    break
                 chunk = parse_sse_line(line)
                 if chunk is None:
                     continue
                 for event in accumulator.feed(chunk):
                     yield event
+            for event in accumulator.flush():
+                yield event
     except httpx.TimeoutException as exc:
         yield GenerationFailed(code="provider_timeout", message=str(exc))
     except httpx.HTTPError as exc:
