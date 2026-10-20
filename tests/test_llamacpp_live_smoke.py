@@ -10,6 +10,9 @@ Issue #3.
 Run explicitly with: pytest -m live
 Requires llama-server on PATH and the model file from
 models/qwen3-0.6b-q8_0.manifest.json (see models/README.md).
+RELAYMIND_SMOKE_MODEL may point to the artifact elsewhere on disk, but
+it must be the pinned artifact itself (byte-identical, same SHA-256 as
+the manifest); any other file fails verification.
 """
 
 import os
@@ -22,21 +25,36 @@ from pathlib import Path
 import httpx
 import pytest
 
-from helpers import HEALTH_TOOL, collect_events, make_request
+from helpers import (
+    HEALTH_TOOL,
+    PINNED_MANIFEST_PATH,
+    REPO_ROOT,
+    collect_events,
+    make_request,
+    smoke_adapter_settings,
+)
 from relaymind.adapters import Completed, Message, Role, TextDelta, ToolCall
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
-from relaymind.adapters.manifest import launch_settings_argv, load_manifest, verify_artifact
+from relaymind.adapters.manifest import (
+    ArtifactManifest,
+    ManifestError,
+    launch_settings_argv,
+    load_manifest,
+    verify_artifact,
+)
 
 pytestmark = pytest.mark.live
 
-# The manifest owns the pinned launch settings (spec section 6); the
-# server argv and the adapter config below derive from it.
-REPO_ROOT = Path(__file__).resolve().parent.parent
-MANIFEST_PATH = REPO_ROOT / "models" / "qwen3-0.6b-q8_0.manifest.json"
-MANIFEST = load_manifest(MANIFEST_PATH)
-MODEL_PATH = Path(
-    os.environ.get("RELAYMIND_SMOKE_MODEL", str(REPO_ROOT / "models" / MANIFEST.file_name))
-)
+MODEL_ENV = "RELAYMIND_SMOKE_MODEL"
+
+
+@pytest.fixture(scope="module")
+def manifest() -> ArtifactManifest:
+    # The manifest owns the pinned launch settings (spec section 6); the
+    # server argv and the adapter config derive from it. Loaded here, not
+    # at import, so a broken manifest never breaks collection of the
+    # default (non-live) suite.
+    return load_manifest(PINNED_MANIFEST_PATH)
 
 
 def _free_port() -> int:
@@ -46,14 +64,31 @@ def _free_port() -> int:
 
 
 @pytest.fixture(scope="module")
-def server(tmp_path_factory):
+def adapter_settings(manifest) -> tuple[int, dict]:
+    # Context limit and base template kwargs, derived once per module.
+    return smoke_adapter_settings(manifest.launch_settings)
+
+
+@pytest.fixture(scope="module")
+def server(tmp_path_factory, manifest, adapter_settings):
     if shutil.which("llama-server") is None:
         pytest.skip("llama-server not on PATH")
-    if not MODEL_PATH.is_file():
-        pytest.skip(f"model artifact not found: {MODEL_PATH}")
+    override = os.environ.get(MODEL_ENV)
+    model_path = Path(override) if override else REPO_ROOT / "models" / manifest.file_name
+    if not model_path.is_file():
+        pytest.skip(f"model artifact not found: {model_path}")
     # models/README.md: verify against the manifest before use. A
     # mismatched artifact is a failure, never a silent substitution.
-    verify_artifact(MANIFEST, MODEL_PATH)
+    try:
+        verify_artifact(manifest, model_path)
+    except ManifestError as exc:
+        if override:
+            pytest.fail(
+                f"{MODEL_ENV} must point to the pinned artifact {manifest.file_name} "
+                f"(byte-identical to the manifest); {exc}"
+            )
+        raise
+    server_args = launch_settings_argv(manifest.launch_settings)
     port = _free_port()
     # Keep server logs on disk so a startup failure (port conflict,
     # bad parameter, missing backend) is diagnosable from the test
@@ -71,12 +106,12 @@ def server(tmp_path_factory):
             [
                 "llama-server",
                 "-m",
-                str(MODEL_PATH),
+                str(model_path),
                 "--host",
                 "127.0.0.1",
                 "--port",
                 str(port),
-                *launch_settings_argv(MANIFEST.launch_settings),
+                *server_args,
             ],
             stdout=log_file,
             stderr=subprocess.STDOUT,
@@ -107,14 +142,14 @@ def server(tmp_path_factory):
 
 
 @pytest.fixture()
-def make_adapter(server):
+def make_adapter(server, adapter_settings):
+    ctx_size, template_kwargs = adapter_settings
+
     def factory(enable_thinking: bool) -> LlamaCppAdapter:
-        settings = MANIFEST.launch_settings
-        template_kwargs = settings.get("chat_template_kwargs") or {}
         return LlamaCppAdapter(
             LlamaCppConfig(
                 base_url=server,
-                context_limit=int(settings["ctx_size"]),
+                context_limit=ctx_size,
                 # The manifest's qualified settings, with the thinking
                 # switch as the operator option under test (spec
                 # section 6).

@@ -158,23 +158,58 @@ def verify_artifact(manifest: ArtifactManifest, artifact_path: Path) -> None:
             raise ManifestError(f"chat template hash mismatch for {artifact_path.name}")
 
 
+# The harness owns the bind address and the artifact path; launch
+# settings must not override them.
+_RESERVED_LAUNCH_FLAGS = frozenset({"host", "port", "model", "m"})
+
+# A lowercase multi-character key with single "_" or "-" separators,
+# so it renders as one valid --long-flag.
+_LAUNCH_KEY_RE = re.compile(r"^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$")
+
+
+def _launch_flag(key: object) -> str:
+    if not isinstance(key, str):
+        raise ManifestError(f"launch setting key must be a string, got {key!r}")
+    name = key.replace("_", "-")
+    if name in _RESERVED_LAUNCH_FLAGS:
+        raise ManifestError(f"launch setting {key!r} is reserved for the harness")
+    if len(name) < 2 or not _LAUNCH_KEY_RE.fullmatch(key):
+        raise ManifestError(f"launch setting {key!r} does not render as a valid --long-flag")
+    if name.startswith("no-"):
+        raise ManifestError(
+            f"launch setting {key!r}: use the positive name with false instead of a no- prefix"
+        )
+    return f"--{name}"
+
+
 def launch_settings_argv(launch_settings: Mapping[str, object]) -> list[str]:
     """Render manifest launch settings as llama-server arguments.
 
-    Keys become kebab-case flags; a true boolean is a bare flag, a
-    false one is omitted, a mapping is passed as compact JSON, and any
-    other value is passed as text. Launch settings are manifest data
-    (spec section 6): tests and tooling derive their command line here
-    instead of hand-copying the qualified settings.
+    Keys become kebab-case flags; true is a bare flag and false its
+    --no- form, a mapping is passed as compact JSON, and a string or
+    number is passed as text. Any other value (a list, null) has no
+    defined rendering and raises ManifestError, as do keys reserved for
+    the harness (host, port, model, m) or keys that are not valid long
+    flags. Launch settings are manifest data (spec section 6): tests and
+    tooling derive their command line here instead of hand-copying the
+    qualified settings.
     """
     argv: list[str] = []
     for key, value in launch_settings.items():
-        flag = f"--{key.replace('_', '-')}"
+        flag = _launch_flag(key)
         if isinstance(value, bool):
-            if value:
-                argv.append(flag)
+            argv.append(flag if value else f"--no-{flag[2:]}")
         elif isinstance(value, Mapping):
-            argv.extend([flag, json.dumps(value)])
-        else:
+            try:
+                rendered = json.dumps(dict(value), separators=(",", ":"))
+            except (TypeError, ValueError) as exc:
+                raise ManifestError(f"launch setting {key!r} is not JSON: {exc}") from exc
+            argv.extend([flag, rendered])
+        elif isinstance(value, (int, float, str)):
             argv.extend([flag, str(value)])
+        else:
+            raise ManifestError(
+                f"launch setting {key!r} has unsupported type {type(value).__name__}; "
+                "use a string, number, boolean, or object"
+            )
     return argv

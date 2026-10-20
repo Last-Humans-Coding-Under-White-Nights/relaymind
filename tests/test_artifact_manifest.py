@@ -9,10 +9,10 @@ mismatched hashes cause an explicit failure. Issue #2.
 import dataclasses
 import hashlib
 import json
-from pathlib import Path
 
 import pytest
 
+from helpers import PINNED_MANIFEST_PATH
 from relaymind.adapters.manifest import (
     ArtifactManifest,
     ManifestError,
@@ -103,7 +103,7 @@ def test_load_rejects_wrongly_typed_fields(tmp_path):
 
 
 def test_the_checked_in_candidate_manifest_is_valid():
-    manifest = load_manifest(Path(__file__).parent.parent / "models/qwen3-0.6b-q8_0.manifest.json")
+    manifest = load_manifest(PINNED_MANIFEST_PATH)
     assert manifest.schema_version == 1
     assert manifest.model_id == "qwen3-0.6b"
     assert manifest.launch_settings["chat_template_kwargs"] == {"enable_thinking": False}
