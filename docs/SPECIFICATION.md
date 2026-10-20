@@ -1,0 +1,391 @@
+# RelayMind Specification for Spec Driven Development
+
+Version 0.1 | 20 October 2026 | Proposed implementation baseline
+
+RelayMind is a local AI gateway that lets a small model complete bounded tasks with skills and tools, and transfers complex work to an external model. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
+
+SDD means Spec-Driven Development here. MUST and MUST NOT identify acceptance requirements; SHOULD identifies a preferred implementation. Numerical budgets and evaluation thresholds below are proposed product decisions, not measured model capabilities. No prototype benchmarks have been run for this specification.
+
+## 1 Product objective and scope
+
+The prototype MUST demonstrate that the local model can select a skill, choose tools and arguments, consume actual execution results, and finish a simple task without an external model call. It MUST also demonstrate transfer of completed work to an external model, with visible attribution of skill selection, tool proposals, execution, and final output.
+
+The agreed requirements are English and Chinese interaction, macOS and Windows execution, replaceable models, an OpenAI-compatible entry point, shared skills and tools, and observable routing. Qwen3-0.6B is the initial local candidate; the earlier approximate 300M size is no longer a constraint. The 500 ms first-response objective remains an experimental target.
+
+The implementation baseline adds these decisions: a single-user local service, Python with FastAPI, a separate llama.cpp server process, SQLite execution records, trusted local skill packages, and a small deterministic demo tool service. The external provider and model are operator configuration, not hard-coded product dependencies.
+
+| Priority | Included behavior |
+| --- | --- |
+| P0 | Local skill selection and tool loop; clarification; escalation; external completion; model adapters; trace UI; cancellation; simulated destructive action with confirmation; API conformance; bilingual evaluation |
+| P1 | One bounded parallel workflow with independent read-only branches; exact routing cache experiments |
+| Outside this prototype | Token-level speculative decoding; replacing already streamed answer text; universal agent compatibility; arbitrary shell execution; production database deletion; production multi-tenancy; native desktop installers; general PDF ingestion; automatic skill installation; MCP connector marketplace |
+
+The complete demo includes P0 and the bounded parallel workflow. Routing-cache experiments may follow the uncached baseline. General PDF processing is excluded because the earlier PDF example illustrated latency, while the agreed prototype now centers on skills and tools.
+
+## 2 Verified foundations and limits
+
+The following statements are externally grounded. Other implementation behavior in this document is a RelayMind design decision.
+
+| Evidence | Established fact | Consequence for RelayMind |
+| --- | --- | --- |
+| S1 | The Qwen3-0.6B card documents non-thinking mode and an agentic example using this model identifier. | Use it as a candidate. This does not establish reliable bilingual skill execution or a 500 ms response on our hardware. |
+| S2 and S3 | Tool calling requires model output formatting and application-side parsing and execution. llama.cpp documents tool-calling configuration. | Pin and test the model, chat template, parser, quantization, and runtime together. |
+| S4 | llama.cpp documents Windows builds and a Metal backend for macOS. | Use a common runtime family, with separate platform qualification. |
+| S5 and S6 | Chat Completions defines streamed deltas and function-call messages; the application executes custom functions and returns results. | Distinguish gateway-owned tools from client-owned tools. The supported contract is explicitly bounded below. |
+| S7 | Agent Skills defines a SKILL.md package and progressive loading. Its allowed-tools field is experimental. | Reuse the document shape; enforce permissions in RelayMind configuration, not merely in skill prose. |
+| S8 | Provider prompt caching can reuse matching prompt prefixes under provider-specific rules. | A local instruction cache is a different mechanism and cannot guarantee faster remote inference. |
+| S9 | Speculative decoding uses draft proposals and target-model verification during decoding. | Model handoff over Chat Completions is not token-level speculative decoding. |
+
+Selecting a skill means selecting and loading instructions into model context. It does not mean that the model executes a skill file as a program. A skill can suggest actions; only the gateway or a client tool executor performs them.
+
+No universal speedup, cost saving, minimum RAM figure, or accuracy level is asserted. The selected GGUF file, actual hardware, provider location, context length, and tool latency materially affect results.
+
+## 3 Components and ownership
+
+| Component | Responsibility |
+| --- | --- |
+| API layer | Validate requests; expose the supported chat contract and native run API; authenticate callers. |
+| Orchestrator | Own state transitions, budgets, routing, handoff, cancellation, and the final-answer owner. |
+| Model adapter | Translate normalized messages, tools, and generation options into provider-specific requests and events. |
+| Skill registry | Validate packages; expose descriptions; load selected instructions and approved resources. |
+| Tool registry and executor | Validate arguments and permissions; execute registered functions; record outcomes. |
+| Run store | Persist ordered events, tool outcomes, pending approvals, and versioned execution state in SQLite. |
+| Demo UI | Display model decisions and execution evidence; collect clarification and confirmation; compare modes. |
+
+The model produces proposals. The orchestrator decides whether a proposal is admissible. The executor owns side effects. The UI renders evidence; it does not infer hidden model reasoning. Before external dispatch, operator-configured policy MUST permit sending the effective prompt and selected tool data to that endpoint. Credentials and fields classified local-only MUST never be included; if required evidence cannot be shared, return needs_external with the disclosure restriction.
+
+The local gateway binds to loopback by default and requires a generated application token. Local inference also binds to loopback. External credentials remain server-side in environment variables or an OS credential store. Native Windows operation MUST NOT require WSL or Docker. The initial platform matrix is Apple Silicon macOS and x86-64 Windows; other architectures are optional qualification targets.
+
+## 4 Execution requirements
+
+### 4.1 Routing and local autonomy
+
+**RM01** The default policy MUST be local-first. A request successfully handled locally MUST cause zero external inference calls, including routing or validation calls. The trace MUST make this verifiable.
+
+**RM02** In managed execution, the local model MUST select among an advertised skill catalog and produce a normalized routing decision. Supported decisions are local, external, clarify, and parallel. Parallel is admissible only for an enabled fixed workflow. Unknown skills, invalid fields, or unavailable capabilities MUST NOT trigger tool execution. Client-owned tool mode uses capability and context checks without claiming managed skill selection.
+
+**RM03** Local execution MUST be bounded. Initial defaults are one routing generation, up to three subsequent local generations, two executed tool calls, one format-repair generation within those limits, and a four-second active local budget including routing and tools. A model generation can return a tool proposal or a final answer. The limits are configuration values and MUST be recorded in each run.
+
+**RM04** Before answer output is committed, escalation MUST occur on exhausted local budget, unrepaired output format, a skill marked external-required, unavailable local capability, oversized context, or an explicit valid escalation proposal, provided external dispatch is permitted. Otherwise return needs_external. After output is committed, failure terminates the stream as specified in section 7.3. The trace MUST use a reason code. A model's self-reported confidence MUST NOT be treated as a calibrated probability or the sole routing safeguard.
+
+**RM05** A task with missing required identifiers MUST request clarification. Resource names such as database IDs MUST come from the request, established conversation context, or tool results. The system MUST NOT invent an object identifier to make a tool call possible.
+
+The router receives caller instructions, relevant conversation context, and compact skill descriptions. The 500 ms experiment limits this complete input to 2,048 tokens measured by the local tokenizer. Longer inputs bypass the fast experiment and go to the external path if permitted; they MUST NOT be silently truncated or counted as short-context successes. No full document or full tool history is loaded into the fast router by default.
+
+### 4.2 Skills and instruction loading
+
+**RM06** A skill MUST have a stable name, description, version, content hash, and an instruction body. The model selects the skill by name. The gateway then loads its body and the permitted tool schemas. Every load MUST emit a skill.loaded event containing the name, version, and hash.
+
+The package uses SKILL.md with Agent Skills name and description frontmatter. RelayMind-specific settings live in a separate registry manifest: version, supported languages, local eligibility, allowed tool IDs, resource paths, completion predicate ID, and optional parallel-workflow ID. Completion predicates are registered gateway validators, not executable text supplied by the model. This is a documented RelayMind extension, not a claim of complete compatibility with every skill host. [S7]
+
+The MVP uses at most eight short skill descriptions per router prompt and one selected skill body at a time. Resource reads are restricted to the selected package directory. Skills cannot install dependencies, execute bundled scripts, change permissions, or alter model configuration. Any required executable operation must be an explicitly registered tool.
+
+**RM07** Updating a skill or its tool schema MUST change its version or content hash and invalidate dependent routing-cache entries. Existing runs retain their original version snapshot; a required missing version causes an explicit failure rather than silent substitution.
+
+### 4.3 Tools and execution boundaries
+
+**RM08** Registered tools MUST declare a name, input schema, output schema, execution timeout, side-effect classification, handler, and authorization rule. Tool availability is the intersection of the skill allowlist, operator policy, and caller permissions. Names in a client-supplied tools array do not register executable handlers.
+
+**RM09** The gateway MUST validate the full tool name and arguments before execution, reject undeclared fields where the schema disallows them, and validate returned data. Partial streamed argument JSON MUST never execute. Internal control actions such as skill selection and escalation MUST NOT be exposed as ordinary application tools.
+
+**RM10** The executor MUST persist a logical operation ID before a side effect. Replays use the recorded result for that operation. A changed argument set is a new proposal and requires revalidation. A timed-out write with an unknown outcome MUST be marked unknown_outcome and MUST NOT be retried automatically. This provides controlled deduplication; it does not claim universal exactly-once delivery to external services.
+
+**RM11** Mutating demo actions MUST require confirmation tied to the run, tool, canonical arguments, target, and current state version. Confirmation expires after five minutes and is single-use. Changing the target or arguments invalidates it. A textual yes in unrelated chat history is insufficient authorization.
+
+**RM12** Tool output is data and MUST NOT override gateway rules or grant new tool permissions. The prototype MUST test malicious instructions embedded in tool output. Logs and traces MUST redact configured secret fields.
+
+### 4.4 Handoff and parallel operation
+
+**RM13** Handoff MUST preserve the original user request, applicable caller instructions, selected skill version, structured tool results, completed operation IDs, pending work, permitted tools, language, and remaining budget. Both models use the same logical tool registry. Local hidden reasoning, KV cache, and model-specific token IDs are not transferred.
+
+Handoff creates a new external request using normalized messages and evidence. Local assumptions are identified as proposals, never recast as tool facts. If evidence exceeds the external context budget, the run fails with context_limit_exceeded unless a skill defines a tested bounded evidence-selection method. The MVP does not silently summarize away evidence or permissions.
+
+**RM14** Only one actor may dispatch a given logical tool operation or publish the final answer. Escalation revokes the local actor's dispatch authority. Late results may be retained as evidence, but cannot trigger additional local side effects. In-flight writes with uncertain outcomes block automatic continuation that could repeat them.
+
+**RM15** Parallel mode MUST initially support one trusted workflow with independent read-only branches. For example, the local branch collects current health while the external branch drafts a diagnostic checklist from the user request. The external draft is provisional; after both branches finish, a new external call combines the observations and checklist. The extra call and its latency MUST be measured.
+
+A running Chat Completions generation is not assumed to accept injected tool results. The implementation either waits for dependencies before starting it or makes a subsequent request. The default local-first route does not launch an external model merely to hide latency.
+
+**RM16** A completed run MUST identify the final-answer model and every actual model call. Data provenance MUST be preserved: an unavailable health service cannot be reported as healthy, and a drafted checklist cannot be reported as a diagnosis supported by logs.
+
+## 5 State and persistence contract
+
+| State | Allowed next behavior |
+| --- | --- |
+| accepted | Validate configuration and request, then route or fail. |
+| routing | Select local, external, clarification, or an approved parallel workflow. |
+| local_running | Propose or execute permitted tools, finish, ask, or escalate. |
+| external_running | Continue with evidence and remaining permissions, then finish or ask. |
+| parallel_running | Execute approved read-only branches, join, and transfer final ownership. |
+| waiting_input | Suspend inference and tools; resume on explicit new input. |
+| waiting_confirmation | Suspend the proposed mutation; resume only with a valid approval. |
+| completed | Terminal success; immutable answer and trace. |
+| failed | Terminal failure; retain partial evidence and an error code. |
+| cancelled | Terminal cancellation; retain any actual side-effect outcomes. |
+
+**RM17** Each transition MUST be atomic against a run state version. Resume and cancel operations MUST reject stale versions with HTTP 409. No transition from a terminal state may restart execution. A new attempt creates a new run linked to the previous one.
+
+SQLite stores runs, events, tool_operations, approvals, and artifact_refs. Event sequence numbers increase within a run. Approval records retain a token hash, not the plaintext token. The default retention is seven days for traces and demo evidence, with explicit deletion available. Secrets are excluded. Local storage is not claimed to be encrypted by the application.
+
+After a process restart, unfinished runs MUST become failed with interrupted. In-flight mutating operations are reconciled or marked unknown_outcome. The MVP MUST NOT automatically resume interrupted model loops or replay writes. Pending approvals expire on restart.
+
+A denied confirmation ends the run as cancelled with user_denied and performs no mutation. An expired waiting state ends as failed with input_expired or approval_expired. Waiting releases the active execution slot; a resume must reacquire it and may return 429 without consuming the approval.
+
+## 6 Model adapter contract
+
+**RM18** Model identity and provider configuration MUST be independent of orchestration logic. Swapping between two already supported adapters requires configuration changes and restart, not routing-code changes. Adding a new protocol may require a new adapter.
+
+Every adapter exposes capabilities, generate, cancel, and health. Its capability record includes text streaming, tool calling, structured routing output, context limit, supported reasoning controls, usage reporting, and tokenizer availability. The orchestrator requests capabilities explicitly and rejects unsupported combinations.
+
+Normalized generation outputs are text_delta, tool_call, usage, completed, and error. A tool_call is emitted to the executor only after complete argument parsing. An adapter may use native function calling or a validated structured envelope for internal local control; the selected mechanism is visible in configuration and tests. Syntactically valid JSON is not evidence that the selected action is correct.
+
+For Qwen3, non-thinking mode MUST be configured through the pinned runtime's supported chat-template settings and verified by a smoke test. A /no_think string alone is not the qualification criterion. Exact runtime switches MUST come from the selected build's documentation. Model-specific templates and parsing remain inside the adapter. [S1, S3, S10]
+
+The artifact manifest MUST record model source, revision, file SHA-256, quantization, tokenizer and template hashes, runtime commit, launch settings, and license metadata. Q4 and Q8 are comparison candidates, not prequalified defaults. The selected artifact becomes the default only after the bilingual tool tests. External configuration similarly records endpoint, model identifier, supported parameters, and provider-returned version information when available.
+
+## 7 Public API contract
+
+### 7.1 Compatibility boundary
+
+**RM19** The service MUST expose GET /v1/models and POST /v1/chat/completions. The compatibility claim is limited to the subset below. It does not include Responses, Realtime, file upload, vision, audio, or all provider extensions.
+
+| Request element | MVP behavior |
+| --- | --- |
+| model | Required virtual alias: relaymind or relaymind-client-tools. Actual providers appear in the native trace. |
+| messages | Text system, developer, user, assistant, and tool messages; validate supported ordering and tool-call references. |
+| stream | Boolean; streaming and non-streaming supported. |
+| n | Only 1. |
+| max_completion_tokens | Positive final-response budget; internal routing and tool-loop budgets are separate. |
+| max_tokens | Legacy alias for that budget; reject if supplied together with max_completion_tokens. |
+| temperature and top_p | Applied to final generation if supported; routing settings remain controlled. Reject unsupported nondefault values. |
+| tools and tool_choice | Client-owned mode only; function tools; auto, none, required, or a named supplied function. |
+| parallel_tool_calls | Client-owned mode accepts false or omission; true is rejected in MVP. |
+| response_format | Omitted or text only. Structured final-output modes are explicitly deferred. |
+| Other behavior-changing fields | Reject with a named unsupported_parameter error; never silently ignore them. |
+
+The standard response uses one assistant choice with a stable request ID and virtual model alias. Streaming uses chat.completion.chunk content or tool-call deltas and the appropriate terminal finish_reason followed by [DONE]. Already emitted answer text is append-only. The schema foundation is Chat Completions; this table defines RelayMind's narrower supported surface. [S5]
+
+### 7.2 Managed and client owned tools
+
+The relaymind alias selects managed execution. It uses the installed skills and tool handlers. Supplying a nonempty tools array, tool_choice, or client tool-result messages is rejected to prevent ambiguous ownership. Managed tool activity is visible through native events, not through client-executed tool_calls. The chat response contains the answer, clarification, or an explanation that confirmation is pending.
+
+The relaymind-client-tools alias returns tool_calls to the caller. The caller executes them and includes matching tool messages in the next request. The hub MUST NOT execute those tools or certify that caller-reported results are trustworthy. Gateway-installed business tools are disabled for this alias. A caller may supply procedural instructions; managed skill execution is demonstrated through the managed alias. Local routing may fall back to external generation before output is committed, but external fallback is not permitted after partial client tool calls have been exposed. [S6]
+
+The client-owned alias MUST honor tool_choice, preserve tool call IDs, and reject tool results without matching calls. No global tool-execution authorization guarantee is claimed for tools executed by third-party clients.
+
+### 7.3 Streaming and early feedback
+
+**RM20** The compatible stream MUST contain only answer content or client-owned tool-call deltas, with protocol framing. Internal progress and a generic acknowledgment MUST NOT be injected into it to improve reported latency. The demo's early model-selected status is delivered through the native event stream. A standard chat client without RelayMind event support may therefore wait until a valid answer or tool call is ready.
+
+Once answer streaming begins, final-answer ownership is fixed. A subsequent provider error fails the stream; the gateway MUST NOT silently append another model's replacement answer. A later correction is a distinct message or run.
+
+In managed mode, tool-planning output is buffered and validated. After the skill's explicit completion predicate is met, or a validated finalize proposal is accepted, the orchestrator starts a final generation with tools disabled. This final generation counts against the model-call budget. Its text can be streamed without risking a later tool call in the same generation. A skill whose evidence predicate is unmet cannot finalize merely because the model requests it.
+
+Usage is optional in the compatible response when a truthful unified count is unavailable. The native trace MUST retain usage per model and call, including cache counts when the provider returns them. Counts across different tokenizers MUST NOT be presented as if they belonged to one model.
+
+### 7.4 Native run API
+
+**RM21** The demo MUST use the following RelayMind-specific endpoints, backed by the same orchestration service as chat:
+
+| Endpoint | Contract |
+| --- | --- |
+| POST /relay/v1/runs | Accept messages and execution_mode; return 202 with run_id, state_version, and events_url. Modes: auto, local_only, external_only, parallel_demo. |
+| GET /relay/v1/runs/{id} | Return current state, output, pending question or approval, metrics, and version. |
+| GET /relay/v1/runs/{id}/events | SSE events with increasing sequence IDs; Last-Event-ID replays retained later events without rerunning work. |
+| POST /relay/v1/runs/{id}/resume | Accept expected_version and either input text or approval_id plus token and approve boolean, matching the waiting state. Return 202. |
+| POST /relay/v1/runs/{id}/cancel | Accept expected_version; request cancellation; return current state. |
+| GET /healthz and GET /readyz | Process liveness and readiness of the configured execution mode; model warm state is explicit. |
+
+Execution mode is constrained by operator policy. local_only never calls externally and returns needs_external when the task cannot complete locally. external_only bypasses local inference while using the same managed tools, skill catalog, and permissions. parallel_demo fails explicitly when its configured workflow is unavailable.
+
+Chat responses include X-RelayMind-Run-ID for trace correlation. Confirmations for managed writes require the native resume endpoint or demo UI. Ordinary clients can read the pending-confirmation message but cannot approve it solely by sending a free-form yes. Clarification can be resumed natively, or submitted as a new chat request with complete context.
+
+All execution-creating POSTs accept an Idempotency-Key. Reusing it with the same authenticated caller and request hash never creates new work; a changed payload returns 409. Native creation returns the existing run reference. Chat returns a stored completed response, replayed as compatible chunks if streaming; an unfinished duplicate returns 409 with its run ID. Keys remain valid for the seven-day run retention window. The key does not authorize repeating a completed side effect. Native SSE disconnects leave the run available for reconnection; a compatible chat disconnect requests cancellation. Cancellation is best-effort for in-flight external work and cannot undo an already committed action.
+
+## 8 Internal data and event contract
+
+The following objects define required fields. Implementations MUST publish equivalent versioned JSON Schemas and validate them at boundaries; examples are illustrative data, not execution evidence.
+
+| Object | Required fields and constraints |
+| --- | --- |
+| RouteDecision | schema_version=1; route enum; skill_id or null; language en or zh; reason_code; clarification or null. Unknown fields rejected. |
+| ToolProposal | proposal_id; actor local or external; tool_name; arguments object; skill_version; run_state_version. |
+| ToolResult | operation_id; tool_name; status succeeded, failed, or unknown_outcome; validated data or null; error or null; observed_at; duration_ms; source_ref; truncated boolean. |
+| HandoffEnvelope | schema_version; run_id; original messages; skill snapshot; completed operations; evidence references; pending work; allowed tools; reason_code; remaining budgets; language. |
+| TraceEvent | schema_version=1; run_id; seq; timestamp; elapsed_ms; event_type; actor; payload. |
+
+Reason codes include simple_skill, complex_skill, missing_input, local_budget, invalid_output, tool_failure, context_limit, capability_missing, and parallel_workflow. They are operational labels, not generated chains of thought.
+
+**RM22** Required events are run.accepted, route.selected, skill.loaded, model.started, model.finished, tool.proposed, tool.started, tool.finished, clarification.required, confirmation.required, handoff.started, answer.delta, run.completed, run.failed, and run.cancelled. Cached routes, when enabled, emit cache.hit with the originating version. Every tool event includes its operation or proposal ID and originating model.
+
+Example event:
+
+```json
+{
+  "schema_version": 1,
+  "run_id": "run_demo_001",
+  "seq": 7,
+  "timestamp": "2026-10-20T03:00:00Z",
+  "elapsed_ms": 420,
+  "event_type": "tool.proposed",
+  "actor": "local",
+  "payload": {
+    "proposal_id": "proposal_01",
+    "tool_name": "get_service_health",
+    "arguments": {"service": "staging-api"},
+    "skill_id": "check-service-health"
+  }
+}
+```
+
+The 420 ms example is a schema illustration, not a measured latency. Events containing tool results MUST be redacted before persistence and rendering. Large results use artifact references with explicit size and truncation metadata; a truncated result cannot silently satisfy a skill that requires the complete result.
+
+## 9 Demo skills and tools
+
+**RM23** The demo MUST expose real gateway function executions against a clearly labeled sandbox data service. Model decisions must be live in live mode. Recorded replay and deterministic model doubles are separate modes with persistent visible labels.
+
+| Skill | Tools | Expected route |
+| --- | --- | --- |
+| check-service-health | get_service_health(service) | Local completion from status and observation time. |
+| lookup-latest-deployment | get_latest_deployment(service) | Local completion from deployment ID and timestamp. |
+| summarize-incident-counts | get_incident_counts(service, window_minutes) | Local summary of returned counts, without inferred causes. |
+| investigate-performance | get_latest_deployment, get_metrics, get_recent_logs | Local preparation or immediate escalation; external evidence-based assessment. |
+| delete-demo-database | list_demo_databases, delete_demo_database(database_id) | Resolve target, require confirmation, mutate only the sandbox fixture. |
+| health-and-diagnostic-checklist | get_service_health | Explicit parallel-demo workflow, followed by external synthesis. |
+
+Tool schemas MUST use explicit service or resource IDs. Time windows, log limits, and service values are bounded. get_recent_logs returns a capped list with timestamp and source. Tool outputs carry fixture scenario and observation metadata. delete_demo_database only modifies a disposable local fixture; it never accepts a production connection string.
+
+The initial tool contract uses service IDs staging-api and payments-api, windows of 15, 60, or 1440 minutes, UTC timestamps, and additionalProperties=false for input objects. These are synthetic demo identifiers. The following tool-specific payloads sit inside the common ToolResult envelope from section 8.
+
+| Tool | Input fields | Output data |
+| --- | --- | --- |
+| get_service_health | service, required enum | service; status enum healthy, degraded, unavailable; checked_at |
+| get_latest_deployment | service, required enum | service; deployment_id and deployed_at, nullable together; revision, nullable when no deployment exists |
+| get_incident_counts | service; window_minutes | service; window_minutes; total, critical, warning, info as nonnegative integers; category sum equals total |
+| get_metrics | service; window_minutes | service; samples array containing timestamp, p95_latency_ms, error_rate from 0 to 1, and nonnegative request_count |
+| get_recent_logs | service; limit integer from 1 to 100 | service; entries with timestamp, level, and message; truncated flag |
+| list_demo_databases | Empty object | databases array with database_id, display_name, and integer revision |
+| delete_demo_database | database_id from lookup; expected_revision | database_id; deleted boolean; resulting fixture revision |
+
+All listed input fields are required unless explicitly described otherwise. A health tool's unavailable status is a successful observation of the service state; failure to contact the tool itself produces a failed ToolResult. The deletion handler compares expected_revision atomically and returns a conflict without mutation if the fixture changed. The pending approval binds that revision as well as the database ID.
+
+Each skill includes paired English and Chinese examples and completion criteria. For health checks, the final response must preserve the exact returned health state and time. For diagnostics, it must distinguish observations from hypotheses and may report insufficient evidence. Native Chinese review is required for the evaluation corpus; family-level multilingual claims do not replace task evaluation.
+
+The UI shows the original prompt, selected mode, active model, loaded skill, tool name and arguments, execution result, escalation reason, final answer, and timing. The comparison view runs equivalent inputs in auto and external_only modes against reset fixtures. A user can cancel a run and inspect failed operations.
+
+## 10 Caching policy
+
+**RM24** Skill parsing and template loading MAY be cached immediately by content hash. Routing-result caching MUST be disabled for the first model benchmark. If enabled later, it uses exact request and context matching, a five-minute TTL, and a maximum of 256 entries.
+
+The routing cache key includes the effective messages, language, caller permissions, skill and tool hashes, model revision, routing prompt version, and policy version. Only local read-only route choices are eligible. No semantic cache, authorization cache, mutation route cache, or cross-user reuse is included. A cached route still performs current authorization and executes required fresh tools; it is not a cached answer.
+
+Prefix or KV caching is controlled by the inference runtime or provider and is recorded separately. Reusing a prompt string in SQLite does not imply reuse of inference computation. Cache-on results MUST be labeled and reported separately from the uncached baseline. [S8]
+
+## 11 Budgets and failure behavior
+
+Initial engineering defaults are listed below. They are configurable limits, not predicted timings.
+
+| Budget | Default |
+| --- | --- |
+| Routing input for fast experiment | At most 2,048 local tokens |
+| Routing output | At most 128 tokens |
+| Local execution | Four seconds active time; routing plus three further generations; at most two tool executions |
+| Entire run | 60 seconds active time; at most eight model generations including routing and repair; at most six executed business tools |
+| Tool timeout | Two seconds unless a tool declares a shorter timeout |
+| External generation | At most 30 seconds, also bounded by the remaining run budget |
+| Simultaneous requests | One active run in the baseline; reject additional work with 429 rather than hide queue time |
+| Waiting state | Five minutes, excluded from active execution time |
+
+The two model branches in parallel_demo are allowed within a single active run. The local-first per-stage limits do not constrain external-only baseline routing, but the total run limits apply to every mode. A skill that requires more local work is escalated instead of quietly increasing budgets.
+
+Validation failures return 400; unauthenticated requests 401; denied access 403; missing runs 404; stale state or idempotency conflict 409; overload 429; unavailable required model 503; exhausted deadlines 504 before streaming starts. Errors use a stable code, message, and run reference where available. Internal errors must omit credentials.
+
+After streaming starts, an unrecoverable failure is signaled as an error and connection termination, and recorded as run.failed. It MUST NOT produce a successful finish marker. The compatible client behavior for this failure is part of integration tests because SDK handling may vary.
+
+An unavailable local model may route directly to external only when policy permits; the trace records degraded mode. An unavailable external model does not make a complex request locally solvable. If external use is disabled, return needs_external with partial results. Read-only retries are limited to one for a transient failure within all budgets; model repair also counts toward generation limits.
+
+## 12 Performance and quality evaluation
+
+### 12.1 Metrics
+
+**RM25** Timings MUST use a monotonic clock for elapsed durations and UTC for event timestamps. Record both server arrival and UI submission; never subtract timestamps from unsynchronized hosts.
+
+| Metric | Definition |
+| --- | --- |
+| First transport event | First received byte or status event; reported as transport latency only. |
+| First model action | First validated model-produced route, clarification, or tool proposal available to the client. |
+| First useful content | First displayed result supported by task evidence, or the first necessary clarification question. Generic acknowledgments do not qualify. |
+| First answer token | First nonempty answer-content delta in the compatible stream. |
+| Completion latency | Request to successful final answer; active time and human waiting time reported separately. |
+| Local completion rate | Simple-task cases successfully completed with zero external inference calls, divided by all simple-task cases. |
+| Tool correctness | Correct tool and semantically correct arguments against fixture expectations; schema validity reported separately. |
+| Escalation quality | Missed necessary escalations and unnecessary escalations, reported separately by class and language. |
+| External usage | Actual requests and per-model input and output tokens, including abandoned parallel calls. |
+
+The 500 ms hypothesis is p95 first model action at or below 500 ms for the warmed, short-context, concurrency-one experiment with routing-result caching disabled. The UI displays this as model action latency, never as completed-answer latency. Report whether it is met on each tested machine; do not average a slow Windows result into a fast Mac result. A missed target is a finding, not grounds to fabricate an early response.
+
+### 12.2 Reproducible experiment
+
+The correctness corpus contains 40 scenario pairs, each written in English and Simplified Chinese: 12 simple, 10 complex, 6 ambiguous, 6 requiring mutation confirmation, and 6 adversarial or fault scenarios. This yields 80 language-specific cases. Each case includes fixture state, acceptable tools and arguments, required evidence, expected permissions, and a grading rubric. Freeze the corpus before comparing candidates and keep development examples separate.
+
+Run auto, external_only, and local_only against the same fixture snapshots. Baselines use the same skills, tool descriptions, execution rules, and output criteria. Select identical relevant external data where the route permits it. Count provider calls; do not infer cost savings from latency. Monetary estimates require actual provider rates and a dated rate source and are optional.
+
+For the latency experiment, use 12 short prompts, six per language, including routing, clarification, and simple tool tasks. Perform three warm-up requests per model configuration, then ten measured runs per prompt in randomized order. Record errors and timeouts rather than dropping them. Report p50, p95, sample count, and timeout fraction. Report cold startup separately, including model load time. Exact-route caching stays off; runtime prefix-cache behavior is explicitly recorded.
+
+Record OS version, CPU, GPU, RAM, backend, thread settings, model hashes, quantization, context settings, sampling parameters, runtime and application revisions, external endpoint region if known, and test time. Shared provider load remains a potential source of variability. Actual hardware is filled into the benchmark report after execution; no reference machine performance is assumed here.
+
+### 12.3 Gates and experimental targets
+
+Hard acceptance gates are all deterministic contract and authorization tests passing, successful live local skill-and-tool traces for all three simple demo skills in both languages, correct handoff without duplicate completed operations, a working model substitution test, and a reproducible benchmark report from both target platforms.
+
+Proposed model-quality targets are at least 80 percent successful local completion on the simple subset in each language, at least 95 percent correct tool-and-argument proposals on that subset, and no missed mandatory confirmation in the bounded test corpus. Report exact numerators and denominators. Passing a small corpus does not establish a production reliability guarantee.
+
+The 500 ms target and quality percentages are experimental outcomes, not pre-existing facts. If a target fails, retain the evidence, qualify the candidate as unsuitable for that claim, and compare another model or narrower skill scope. Do not silently substitute a larger model while continuing to label results Qwen3-0.6B.
+
+## 13 Acceptance scenarios and traceability
+
+The following scenarios define the implementation acceptance suite. Model doubles verify orchestration deterministically; real models verify capability separately. Passing doubles alone does not satisfy the live-demo requirements.
+
+| Test | Given and when | Required result | Requirements |
+| --- | --- | --- | --- |
+| AC01 | A simple health request with a valid service in each language | Local skill selection, real sandbox tool call, correct final status, zero external calls | RM01 to RM03, RM06, RM16, RM23 |
+| AC02 | A complex diagnostic request after local metrics collection | External request contains the original task and completed evidence; completed calls are not replayed | RM04, RM13, RM14 |
+| AC03 | A request omits the target service | Clarification identifies missing input; no guessed target or mutation | RM05 |
+| AC04 | The model proposes an unknown tool or invalid arguments | No execution; bounded repair or explicit escalation; recorded reason | RM02, RM08, RM09 |
+| AC05 | Delete a sandbox database, then approve, deny, replay, expire, or alter arguments | Only a matching fresh approval executes once; other cases do not mutate | RM10, RM11, RM17 |
+| AC06 | A tool result contains instructions to expose credentials or invoke an unallowed tool | Tool permissions stay unchanged and secrets are not exposed | RM08, RM12 |
+| AC07 | Local generation exceeds its budget or external generation fails | Bounded escalation or explicit failure; no invented result | RM03, RM04, RM16 |
+| AC08 | Switch to a second qualified local model and a second compatible external endpoint | Same orchestrator and skill packages; configuration changes only for supported adapters | RM18 |
+| AC09 | Standard SDK sends text with stream true and false | Valid supported responses, stable IDs, correct final markers, no internal progress in content | RM19, RM20 |
+| AC10 | A client-owned function call is followed by its tool result | Valid call IDs and finish reason; caller executes; gateway does not execute the function | RM08, RM19 |
+| AC11 | Native client reconnects to events or resubmits an idempotency key | Events replay in order; no duplicate inference or side effect | RM17, RM21, RM22 |
+| AC12 | Cancel during generation and restart during a write | Dispatch stops; actual or unknown outcomes remain recorded; no automatic write replay | RM10, RM14, RM17 |
+| AC13 | Change a skill or permission with caching enabled | Cache invalidates; current permissions apply; baseline remains cache-off | RM07, RM24 |
+| AC14 | Execute the fixed parallel workflow | Independent read-only branches are attributable; synthesis uses results in a later call | RM14, RM15, RM22 |
+| AC15 | Repeat the benchmark on both platforms | Reproducible manifest and separate language and platform results, including failures | RM18, RM25 |
+| AC16 | Unsupported parameters, oversized context, or stale resume version | Explicit documented error; no silent feature downgrade or lost context | RM17 to RM21 |
+
+## 14 Delivery and SDD change control
+
+Implementation deliverables are the gateway source, pinned dependencies, setup instructions for both platforms, model artifact manifest, skill packages, registered demo tools, native demo UI, versioned schemas, API examples, deterministic acceptance suite, bilingual evaluation corpus, and benchmark report. Platform verification must use actual target machines; this specification does not claim those checks have already happened.
+
+An implementation plan should proceed through adapter and protocol qualification, the local skill-and-tool loop, handoff and confirmation, observability and UI, the bounded parallel workflow, and evaluation. This ordering is dependency guidance, not a substitute for a reviewed task plan.
+
+Every implementation task and acceptance test MUST reference requirement IDs from this document. Changes to tool ownership, approval rules, API behavior, supported platforms, or evaluation definitions require a specification revision before implementation changes. Implementation-only refactoring may preserve the specification when observable behavior is unchanged.
+
+The release record MUST distinguish implemented behavior, passing deterministic tests, measured live-model results, and unmet experimental targets. A demo with prerecorded decisions must not be presented as autonomous live model execution.
+
+## 15 Sources
+
+Primary sources checked on 20 October 2026. These references support platform and protocol facts; they do not validate RelayMind performance. Mutable upstream branches must be pinned in the implementation manifest.
+
+- S1 Qwen3-0.6B model card: https://huggingface.co/Qwen/Qwen3-0.6B
+- S2 Qwen function calling documentation: https://qwen.readthedocs.io/en/latest/framework/function_call.html
+- S3 llama.cpp function calling documentation: https://github.com/ggml-org/llama.cpp/blob/master/docs/function-calling.md
+- S4 llama.cpp build documentation: https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md
+- S5 OpenAI Chat Completions API reference: https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
+- S6 OpenAI function calling guide: https://developers.openai.com/api/docs/guides/function-calling
+- S7 Agent Skills specification: https://agentskills.io/specification
+- S8 OpenAI prompt caching guide: https://developers.openai.com/api/docs/guides/prompt-caching
+- S9 Leviathan et al, Fast Inference from Transformers via Speculative Decoding: https://arxiv.org/abs/2211.17192
+- S10 llama.cpp server documentation: https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md

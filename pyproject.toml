@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "relaymind"
+version = "0.1.0"
+description = "Local AI gateway: a small local model completes bounded tasks with skills and tools, and transfers complex work to an external model."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+
+# Runtime dependencies are added together with the code that needs them
+# (TDD: no dependency without a test that uses it). Planned stack:
+# fastapi, uvicorn, pydantic, httpx, sse-starlette — see docs/SPECIFICATION.md.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/relaymind"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
