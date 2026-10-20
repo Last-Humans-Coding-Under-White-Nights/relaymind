@@ -120,7 +120,11 @@ class StreamAccumulator:
             self._terminal = True
             self._tool_calls.clear()
             message = error.get("message") if isinstance(error, Mapping) else None
-            return [GenerationFailed(code="provider_error", message=str(message or error))]
+            return [
+                GenerationFailed(
+                    code="provider_error", message=str(message or error), received=True
+                )
+            ]
         events: list[AdapterEvent] = []
         usage = chunk.get("usage")
         if isinstance(usage, Mapping):
@@ -202,6 +206,7 @@ class StreamAccumulator:
                                 f"tool call {partial.call_id or index} for "
                                 f"{partial.tool_name or 'unknown tool'}: {exc}"
                             ),
+                            received=True,
                         )
                     ]
             return events
@@ -258,6 +263,7 @@ async def stream_chat_events(
                 yield GenerationFailed(
                     code="provider_error",
                     message=f"{provider_label} returned {response.status_code}: {detail[:200]}",
+                    received=True,
                 )
                 return
             lines = aiter(response.aiter_lines())

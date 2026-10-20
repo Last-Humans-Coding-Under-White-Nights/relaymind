@@ -25,6 +25,7 @@ codebase.
 | `src/relaymind/skills/` | Skill registry: package validation, instruction loading (RM06, RM07) |
 | `src/relaymind/tools/` | Tool registry and executor: argument validation, permissions, side effects (RM08–RM12) |
 | `src/relaymind/store/` | Run store: SQLite events, tool outcomes, approvals, versioned state (RM17, RM22) |
+| `src/relaymind/stats.py` | Per-generation timing metrics and JSON export for adapter comparisons (RM25, section 12.1) |
 | `src/relaymind/ui/` | Demo UI: decisions and execution evidence (RM23) |
 | `skills/` | Demo skill packages, one directory per skill, SKILL.md format |
 | `tests/` | Test suite; `tests/fixtures/` holds sandbox demo data |
