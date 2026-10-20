@@ -16,6 +16,11 @@ Pin the local model artifact and runtime, and prove both adapters work.
   smoke test.
 - External Chat Completions adapter with operator-configured endpoint.
 - Capabilities, generate, cancel, and health on both adapters.
+- Basic timing and statistics export: per-generation timings using the
+  section 12.1 metric definitions (monotonic clock, RM25) and a JSON
+  export, so small and large models can be compared on the same
+  prompts from day one. The visual dashboard comes in M4; the formal
+  benchmark report in M6.
 - Closes: AC08 groundwork.
 
 ## M2 — Local skill-and-tool loop
@@ -45,7 +50,8 @@ budgets.
 - `/v1/models` and `/v1/chat/completions` with the supported subset
   (RM19, RM20).
 - Native run API: runs, events SSE, resume, cancel, idempotency (RM21).
-- Required trace events (RM22) and the demo trace UI (RM23).
+- Required trace events (RM22) and the demo trace UI (RM23), including
+  the visual timing view over the statistics collected since M1.
 - Closes: AC09, AC10, AC11, AC12, AC16.
 
 ## M5 — Parallel workflow and caching

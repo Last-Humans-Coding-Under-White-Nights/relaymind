@@ -20,11 +20,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
+        # One REST call with the full list: `gh pr edit --add-reviewer`
+        # can replace existing requests instead of adding to them.
         run: |
           args=""
           for u in devnullexile ArcsinX Sanek1710; do
             if [ "$u" != "$AUTHOR" ]; then
-              args="$args --add-reviewer $u"
+              args="$args -f reviewers[]=$u"
             fi
           done
-          gh pr edit "$PR" -R "${{ github.repository }}" $args
+          gh api -X POST \
+            "repos/${{ github.repository }}/pulls/$PR/requested_reviewers" \
+            $args

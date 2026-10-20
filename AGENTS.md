@@ -91,6 +91,7 @@ ruff format --check .
 | Run all tests | `pytest` |
 | Run one test file | `pytest tests/test_<name>.py` |
 | Run one test | `pytest tests/test_<name>.py::test_case` |
+| Run live model tests | `pytest -m live` (needs `llama-server` on PATH and the model artifact; see `models/README.md`) |
 | Lint | `ruff check .` |
 | Format | `ruff format .` |
 
@@ -100,8 +101,9 @@ ruff format --check .
   authorization, and API contract tests must not depend on live model
   output (spec section 13).
 - **Live model tests are separate.** Capability tests with real models are
-  marked and run apart from the deterministic suite. Passing doubles alone
-  does not satisfy live-demo requirements.
+  marked `live` and excluded from the default run and CI (`pytest -m live`
+  runs them). Passing doubles alone does not satisfy live-demo
+  requirements.
 - **Fixtures are sandboxes.** `tests/fixtures/` holds disposable demo data
   only. Nothing in tests may touch a production resource.
 - **Bilingual coverage.** Demo skills carry paired English and Chinese

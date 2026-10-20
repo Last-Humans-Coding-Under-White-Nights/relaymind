@@ -22,6 +22,7 @@ pip install -e ".[dev]"
 | Run full test suite | `pytest` |
 | Run a single test file | `pytest tests/test_<name>.py` |
 | Run a specific test | `pytest tests/test_<name>.py::test_case` |
+| Run live model tests | `pytest -m live` (needs `llama-server` and the model; see `models/README.md`) |
 | Lint | `ruff check .` |
 | Check formatting | `ruff format --check .` |
 | Format | `ruff format .` |
