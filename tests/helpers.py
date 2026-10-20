@@ -51,10 +51,15 @@ def make_request(**overrides) -> GenerationRequest:
 
 
 def collect_events(adapter: ModelAdapter, request: GenerationRequest) -> list:
-    """Run a generation to completion and return its events."""
+    """Run a generation to completion, close the adapter, return events."""
 
     async def run():
-        return [event async for event in adapter.generate(request)]
+        try:
+            return [event async for event in adapter.generate(request)]
+        finally:
+            aclose = getattr(adapter, "aclose", None)
+            if aclose is not None:
+                await aclose()
 
     return asyncio.run(run())
 

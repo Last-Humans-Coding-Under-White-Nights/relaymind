@@ -11,7 +11,7 @@ import json
 import httpx
 
 from helpers import collect_events, delta_chunk, make_request, sse_body
-from relaymind.adapters import Completed, TextDelta
+from relaymind.adapters import Completed, GenerationFailed, TextDelta, ToolCall
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 
 CONFIG = LlamaCppConfig(
@@ -55,6 +55,124 @@ def test_generate_streams_normalized_events():
     # Non-thinking mode rides on every request via chat template settings.
     assert seen["body"]["chat_template_kwargs"] == {"enable_thinking": False}
     assert events == [TextDelta(text="hi"), Completed(finish_reason="stop")]
+
+
+def test_config_defaults_to_non_thinking_mode():
+    # Spec section 6: non-thinking is the default; an operator may
+    # enable thinking through the same chat-template settings.
+    config = LlamaCppConfig(base_url="http://127.0.0.1:8033", context_limit=8192)
+    assert dict(config.chat_template_kwargs) == {"enable_thinking": False}
+
+
+def test_capabilities_do_not_claim_an_unexposed_tokenizer():
+    # Honest evidence (RM16): the adapter has no tokenizer interface
+    # yet, so it must not advertise one.
+    adapter = make_adapter(lambda request: httpx.Response(200))
+    caps = asyncio.run(adapter.capabilities())
+    assert caps.tokenizer_available is False
+
+
+def test_generate_streams_tool_call_over_http():
+    chunks = [
+        delta_chunk(
+            {
+                "tool_calls": [
+                    {
+                        "index": 0,
+                        "id": "call_1",
+                        "function": {"name": "get_service_health", "arguments": '{"serv'},
+                    }
+                ]
+            }
+        ),
+        delta_chunk({"tool_calls": [{"index": 0, "function": {"arguments": 'ice": "s"}'}}]}),
+        delta_chunk({}, finish_reason="tool_calls"),
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=sse_body(chunks),
+        )
+
+    events = collect_events(make_adapter(handler), make_request())
+    assert events == [
+        ToolCall(call_id="call_1", tool_name="get_service_health", arguments={"service": "s"}),
+        Completed(finish_reason="tool_calls"),
+    ]
+
+
+def test_stream_ending_without_finish_reason_still_completes():
+    # Finding: EOF / [DONE] without a finish_reason chunk dropped
+    # buffered tool calls and never yielded Completed.
+    chunks = [
+        delta_chunk(
+            {
+                "tool_calls": [
+                    {
+                        "index": 0,
+                        "id": "call_1",
+                        "function": {"name": "get_service_health", "arguments": "{}"},
+                    }
+                ]
+            }
+        ),
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=sse_body(chunks),
+        )
+
+    events = collect_events(make_adapter(handler), make_request())
+    assert events == [
+        ToolCall(call_id="call_1", tool_name="get_service_health", arguments={}),
+        Completed(finish_reason="end_of_stream"),
+    ]
+
+
+def test_non_200_response_fails_with_provider_error():
+    adapter = make_adapter(lambda request: httpx.Response(500, text="boom"))
+    events = collect_events(adapter, make_request())
+    assert len(events) == 1
+    assert isinstance(events[0], GenerationFailed)
+    assert events[0].code == "provider_error"
+
+
+def test_unreachable_server_fails_with_provider_unreachable():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    events = collect_events(make_adapter(handler), make_request())
+    assert len(events) == 1
+    assert isinstance(events[0], GenerationFailed)
+    assert events[0].code == "provider_unreachable"
+
+
+def test_timeout_fails_with_provider_timeout():
+    # Finding: timeouts were reported as provider_unreachable; they
+    # carry the stable provider_timeout code instead.
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("read timed out")
+
+    events = collect_events(make_adapter(handler), make_request())
+    assert len(events) == 1
+    assert isinstance(events[0], GenerationFailed)
+    assert events[0].code == "provider_timeout"
+
+
+def test_adapter_is_an_async_context_manager():
+    adapter = make_adapter(lambda request: httpx.Response(200))
+
+    async def run():
+        async with adapter as entered:
+            assert entered is adapter
+
+    asyncio.run(run())
+    assert adapter._client.is_closed
 
 
 def test_health_maps_ready_loading_and_unreachable():

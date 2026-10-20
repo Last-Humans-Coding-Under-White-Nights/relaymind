@@ -234,6 +234,163 @@ def test_failed_finish_clears_accumulated_state():
     assert again == [Completed(finish_reason="stop")]
 
 
+def test_developer_role_maps_to_system():
+    # Finding: standard llama.cpp / Qwen chat templates only know
+    # system, user, and assistant; a verbatim "developer" role is
+    # silently dropped during templating.
+    body = build_chat_request(
+        make_request(
+            messages=(
+                Message(role=Role.DEVELOPER, content="always use tools"),
+                Message(role=Role.USER, content="is staging-api healthy?"),
+            )
+        ),
+        chat_template_kwargs=None,
+    )
+    assert body["messages"][0] == {"role": "system", "content": "always use tools"}
+
+
+def test_stream_options_request_usage_chunks():
+    # Finding: streaming responses carry no usage unless
+    # stream_options.include_usage is requested; without it the
+    # advertised usage_reporting capability is never honored live.
+    body = build_chat_request(make_request(), chat_template_kwargs=None)
+    assert body["stream_options"] == {"include_usage": True}
+
+
+def test_none_usage_counts_default_to_zero():
+    # Finding: "prompt_tokens": None made int(None) raise TypeError.
+    acc = StreamAccumulator()
+    events = acc.feed({"choices": [], "usage": {"prompt_tokens": None, "completion_tokens": None}})
+    assert events == [Usage(input_tokens=0, output_tokens=0)]
+
+
+def test_none_chunk_fields_are_tolerated():
+    # Finding: explicit null delta / tool_calls / function / index
+    # values (seen in terminal chunks of some compatible servers)
+    # raised AttributeError or TypeError.
+    acc = StreamAccumulator()
+    assert acc.feed({"choices": [{"index": 0, "delta": None, "finish_reason": None}]}) == []
+    assert acc.feed(delta_chunk({"content": None, "tool_calls": None})) == []
+    acc.feed(
+        delta_chunk(
+            {
+                "tool_calls": [
+                    {"index": None, "id": "call_9", "function": None},
+                    {"index": None, "function": {"name": "t", "arguments": "{}"}},
+                ]
+            }
+        )
+    )
+    events = acc.feed(delta_chunk({}, finish_reason="tool_calls"))
+    assert events == [
+        ToolCall(call_id="call_9", tool_name="t", arguments={}),
+        Completed(finish_reason="tool_calls"),
+    ]
+
+
+def test_streamed_tool_name_fragments_are_concatenated():
+    # Finding: a name split across deltas was overwritten, keeping
+    # only the last fragment.
+    acc = StreamAccumulator()
+    acc.feed(delta_chunk({"tool_calls": [{"index": 0, "function": {"name": "get_"}}]}))
+    acc.feed(
+        delta_chunk(
+            {
+                "tool_calls": [
+                    {"index": 0, "function": {"name": "service_health", "arguments": "{}"}}
+                ]
+            }
+        )
+    )
+    events = acc.feed(delta_chunk({}, finish_reason="tool_calls"))
+    calls = [event for event in events if isinstance(event, ToolCall)]
+    assert calls and calls[0].tool_name == "get_service_health"
+
+
+def test_empty_arguments_parse_as_empty_object():
+    # Finding: a tool without arguments left arguments_json as "",
+    # and json.loads("") failed a valid call.
+    acc = StreamAccumulator()
+    acc.feed(
+        delta_chunk(
+            {"tool_calls": [{"index": 0, "id": "call_5", "function": {"name": "list_services"}}]}
+        )
+    )
+    events = acc.feed(delta_chunk({}, finish_reason="tool_calls"))
+    assert events == [
+        ToolCall(call_id="call_5", tool_name="list_services", arguments={}),
+        Completed(finish_reason="tool_calls"),
+    ]
+
+
+def test_non_object_argument_json_fails_as_invalid_tool_arguments():
+    # Valid JSON that is not an object must not become a tool call (RM09).
+    for raw in ("[1, 2]", "42", '"hello"'):
+        acc = StreamAccumulator()
+        acc.feed(
+            delta_chunk(
+                {
+                    "tool_calls": [
+                        {"index": 0, "id": "call_6", "function": {"name": "t", "arguments": raw}}
+                    ]
+                }
+            )
+        )
+        events = acc.feed(delta_chunk({}, finish_reason="tool_calls"))
+        assert len(events) == 1, raw
+        assert isinstance(events[0], GenerationFailed)
+        assert events[0].code == "invalid_tool_arguments"
+
+
+def test_streamed_error_chunk_becomes_generation_failed():
+    # Finding: {"error": ...} chunks (context exhausted, server error)
+    # were silently dropped because they carry no choices or usage.
+    acc = StreamAccumulator()
+    events = acc.feed({"error": {"message": "KV slot exhausted", "code": 500}})
+    assert events == [GenerationFailed(code="provider_error", message="KV slot exhausted")]
+    # The stream is over; the end-of-stream flush must not add events.
+    assert acc.flush() == []
+
+
+def test_flush_emits_buffered_tool_calls_at_end_of_stream():
+    # Finding: a stream ending at [DONE] / EOF without a finish_reason
+    # chunk silently dropped accumulated tool calls and never completed.
+    acc = StreamAccumulator()
+    acc.feed(
+        delta_chunk(
+            {
+                "tool_calls": [
+                    {
+                        "index": 0,
+                        "id": "call_7",
+                        "function": {
+                            "name": "get_service_health",
+                            "arguments": '{"service": "staging-api"}',
+                        },
+                    }
+                ]
+            }
+        )
+    )
+    events = acc.flush()
+    assert events == [
+        ToolCall(
+            call_id="call_7",
+            tool_name="get_service_health",
+            arguments={"service": "staging-api"},
+        ),
+        Completed(finish_reason="end_of_stream"),
+    ]
+
+
+def test_flush_after_explicit_finish_adds_nothing():
+    acc = StreamAccumulator()
+    acc.feed(delta_chunk({"content": "hi"}))
+    acc.feed(delta_chunk({}, finish_reason="stop"))
+    assert acc.flush() == []
+
+
 def test_request_body_with_tools_is_json_serializable():
     # input_schema is a MappingProxyType on the frozen ToolSchema; the
     # wire body must still serialize (the live smoke caught this).

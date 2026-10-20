@@ -44,36 +44,48 @@ def _free_port() -> int:
 
 
 @pytest.fixture(scope="module")
-def server():
+def server(tmp_path_factory):
     if shutil.which("llama-server") is None:
         pytest.skip("llama-server not on PATH")
     if not MODEL_PATH.is_file():
         pytest.skip(f"model artifact not found: {MODEL_PATH}")
     port = _free_port()
-    process = subprocess.Popen(
-        [
-            "llama-server",
-            "-m",
-            str(MODEL_PATH),
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-            "--ctx-size",
-            str(CTX_SIZE),
-            "--jinja",
-            "--chat-template-kwargs",
-            '{"enable_thinking": false}',
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    # Keep server logs on disk so a startup failure (port conflict,
+    # bad parameter, missing backend) is diagnosable from the test
+    # failure message.
+    log_path = tmp_path_factory.mktemp("llama-server") / "server.log"
+
+    def log_tail() -> str:
+        try:
+            return log_path.read_text(errors="replace")[-2000:]
+        except OSError:
+            return "<no server log captured>"
+
+    with log_path.open("wb") as log_file:
+        process = subprocess.Popen(
+            [
+                "llama-server",
+                "-m",
+                str(MODEL_PATH),
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(port),
+                "--ctx-size",
+                str(CTX_SIZE),
+                "--jinja",
+                "--chat-template-kwargs",
+                '{"enable_thinking": false}',
+            ],
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+        )
     base_url = f"http://127.0.0.1:{port}"
     try:
         deadline = time.monotonic() + 120
         while time.monotonic() < deadline:
             if process.poll() is not None:
-                pytest.fail(f"llama-server exited early with {process.returncode}")
+                pytest.fail(f"llama-server exited early with {process.returncode}\n{log_tail()}")
             try:
                 if httpx.get(f"{base_url}/health", timeout=2).status_code == 200:
                     break
@@ -81,11 +93,16 @@ def server():
                 pass
             time.sleep(1)
         else:
-            pytest.fail("llama-server did not become healthy in 120s")
+            pytest.fail(f"llama-server did not become healthy in 120s\n{log_tail()}")
         yield base_url
     finally:
         process.terminate()
-        process.wait(timeout=10)
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            # Never leave an orphaned server holding the model file.
+            process.kill()
+            process.wait()
 
 
 @pytest.fixture()

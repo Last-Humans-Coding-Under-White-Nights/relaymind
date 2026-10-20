@@ -14,6 +14,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 import httpx
 
@@ -26,19 +27,27 @@ from relaymind.adapters.base import (
     GenerationRequest,
     Message,
     ModelAdapter,
+    Role,
     TextDelta,
     ToolCall,
     Usage,
 )
+
+# Spec section 6: non-thinking is the default; an operator may enable
+# thinking mode through the same chat-template settings.
+NON_THINKING: Mapping[str, object] = MappingProxyType({"enable_thinking": False})
 
 
 def _encode_message(message: Message) -> dict[str, object]:
     """Encode one normalized message in OpenAI chat format.
 
     Tool turns carry their references: a tool message names the call it
-    answers, an assistant message carries the calls it proposed.
+    answers, an assistant message carries the calls it proposed. The
+    developer role maps to system: standard llama.cpp / Qwen chat
+    templates drop roles they do not know.
     """
-    encoded: dict[str, object] = {"role": message.role.value, "content": message.content}
+    role = "system" if message.role is Role.DEVELOPER else message.role.value
+    encoded: dict[str, object] = {"role": role, "content": message.content}
     if message.tool_call_id is not None:
         encoded["tool_call_id"] = message.tool_call_id
     if message.tool_calls:
@@ -64,6 +73,8 @@ def build_chat_request(
     """Map a normalized request onto a llama-server chat completion body."""
     body: dict[str, object] = {
         "stream": True,
+        # Streaming responses carry no usage unless explicitly asked.
+        "stream_options": {"include_usage": True},
         "messages": [_encode_message(message) for message in request.messages],
     }
     if request.tool_schemas:
@@ -109,36 +120,58 @@ class StreamAccumulator:
     """
 
     _tool_calls: dict[int, _PartialToolCall] = field(default_factory=dict)
+    # True once the stream outcome is settled (finish, failure, or
+    # provider error chunk); the end-of-stream flush then adds nothing.
+    _closed: bool = False
 
     def feed(self, chunk: Mapping[str, object]) -> list[AdapterEvent]:
+        error = chunk.get("error")
+        if error is not None:
+            # llama-server streams runtime errors (context exhausted,
+            # busy slots) as an error chunk without choices or usage.
+            self._closed = True
+            self._tool_calls.clear()
+            message = error.get("message") if isinstance(error, Mapping) else None
+            return [GenerationFailed(code="provider_error", message=str(message or error))]
         events: list[AdapterEvent] = []
         usage = chunk.get("usage")
         if isinstance(usage, Mapping):
             events.append(
                 Usage(
-                    input_tokens=int(usage.get("prompt_tokens", 0)),
-                    output_tokens=int(usage.get("completion_tokens", 0)),
+                    input_tokens=int(usage.get("prompt_tokens") or 0),
+                    output_tokens=int(usage.get("completion_tokens") or 0),
                 )
             )
-        for choice in chunk.get("choices", []):
-            delta = choice.get("delta", {})
+        for choice in chunk.get("choices") or []:
+            delta = choice.get("delta") or {}
             content = delta.get("content")
             if content:
                 events.append(TextDelta(text=content))
-            for fragment in delta.get("tool_calls", []):
+            for fragment in delta.get("tool_calls") or []:
                 self._absorb_tool_fragment(fragment)
             finish_reason = choice.get("finish_reason")
             if finish_reason:
                 events.extend(self._finish(finish_reason))
         return events
 
+    def flush(self) -> list[AdapterEvent]:
+        """Settle a stream that ended without an explicit finish chunk.
+
+        [DONE] or EOF can arrive before any finish_reason; buffered tool
+        calls and the Completed event must still come out.
+        """
+        if self._closed:
+            return []
+        return self._finish("end_of_stream")
+
     def _absorb_tool_fragment(self, fragment: Mapping[str, object]) -> None:
-        partial = self._tool_calls.setdefault(int(fragment.get("index", 0)), _PartialToolCall())
+        partial = self._tool_calls.setdefault(int(fragment.get("index") or 0), _PartialToolCall())
         if fragment.get("id"):
             partial.call_id = str(fragment["id"])
-        function = fragment.get("function", {})
+        function = fragment.get("function") or {}
         if function.get("name"):
-            partial.tool_name = str(function["name"])
+            # Names can be streamed in fragments, like arguments.
+            partial.tool_name += str(function["name"])
         partial.arguments_json += str(function.get("arguments") or "")
 
     def _finish(self, finish_reason: str) -> list[AdapterEvent]:
@@ -147,7 +180,11 @@ class StreamAccumulator:
             for index in sorted(self._tool_calls):
                 partial = self._tool_calls[index]
                 try:
-                    arguments = json.loads(partial.arguments_json)
+                    # A tool without parameters may stream no argument
+                    # fragments at all; that is an empty object, not an
+                    # error.
+                    raw_arguments = partial.arguments_json.strip()
+                    arguments = json.loads(raw_arguments) if raw_arguments else {}
                     if not isinstance(arguments, dict):
                         raise ValueError("arguments are not a JSON object")
                     events.append(
@@ -173,6 +210,7 @@ class StreamAccumulator:
             return events
         finally:
             self._tool_calls.clear()
+            self._closed = True
 
 
 @dataclass(frozen=True)
@@ -181,7 +219,9 @@ class LlamaCppConfig:
 
     base_url: str
     context_limit: int
-    chat_template_kwargs: Mapping[str, object] | None = None
+    # Non-thinking by default (spec section 6); an operator overrides
+    # this to enable thinking mode.
+    chat_template_kwargs: Mapping[str, object] | None = NON_THINKING
     request_timeout_seconds: float = 30.0
 
 
@@ -212,7 +252,10 @@ class LlamaCppAdapter(ModelAdapter):
             context_limit=self._config.context_limit,
             reasoning_controls=("enable_thinking",),
             usage_reporting=True,
-            tokenizer_available=True,
+            # llama-server has /tokenize, but the adapter exposes no
+            # tokenizer interface yet; advertising one would be
+            # dishonest (RM16). Flip when that interface lands.
+            tokenizer_available=False,
         )
 
     async def generate(self, request: GenerationRequest) -> AsyncIterator[AdapterEvent]:
@@ -232,12 +275,20 @@ class LlamaCppAdapter(ModelAdapter):
                 while True:
                     line = await self._next_line_or_cancel(lines, cancel_event)
                     if line is None:
+                        # A cancelled generation ends without Completed;
+                        # a naturally ended stream settles buffered
+                        # state even when no finish chunk arrived.
+                        if not cancel_event.is_set():
+                            for event in accumulator.flush():
+                                yield event
                         return
                     chunk = _parse_sse_line(line)
                     if chunk is None:
                         continue
                     for event in accumulator.feed(chunk):
                         yield event
+        except httpx.TimeoutException as exc:
+            yield GenerationFailed(code="provider_timeout", message=str(exc))
         except httpx.HTTPError as exc:
             yield GenerationFailed(code="provider_unreachable", message=str(exc))
         finally:
@@ -283,6 +334,12 @@ class LlamaCppAdapter(ModelAdapter):
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+    async def __aenter__(self) -> "LlamaCppAdapter":
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+        await self.aclose()
 
 
 def _parse_sse_line(line: str) -> Mapping[str, object] | None:
