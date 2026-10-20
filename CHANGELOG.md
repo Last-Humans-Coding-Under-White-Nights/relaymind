@@ -14,9 +14,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   non-thinking mode configured through chat-template settings and
   exercised by an opt-in live smoke test (`pytest -m live`, spec
   section 6).
+- External Chat Completions adapter for an operator-configured
+  OpenAI-compatible endpoint, sharing the stream and request handling
+  with the llama.cpp adapter (`relaymind.adapters.chat_completions`,
+  RM18).
 - Model artifact manifest machinery: GGUF metadata hashing,
   `load_manifest`/`verify_artifact`, the manifest generator script, and
-  the pinned Qwen3-0.6B Q8_0 manifest (`models/`).
+  the hash-pinned Qwen3-0.6B Q8_0 manifest (`models/`). The model is a
+  candidate; it becomes the default only after the bilingual tool tests
+  (spec section 6).
 - Manual testing guide for the M1 deliverable on macOS and Windows
   (`docs/TESTING.md`).
 - Project scaffold: repository layout, CI, and contributor guides.

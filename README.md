@@ -43,7 +43,7 @@ See [`AGENTS.md`](AGENTS.md) for the full contributor workflow.
 | `models/` | Pinned model artifact manifests; the GGUF files are downloaded, not checked in. |
 | `skills/` | Demo skill packages (SKILL.md format). |
 | `tests/` | Test suite and sandbox fixtures. |
-| `scripts/` | Developer scripts (currently the model manifest generator); see `scripts/README.md`. |
+| `scripts/` | Developer scripts; see `scripts/README.md` for what each one does. |
 
 ## Development setup
 
