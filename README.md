@@ -69,6 +69,54 @@ and see `models/README.md` for fetching and verifying the model).
 [`docs/TESTING.md`](docs/TESTING.md) covers manual testing from a
 terminal on macOS and Windows.
 
+## Send a message
+
+The gateway API (`/v1/chat/completions`, `/relay/v1/runs`) arrives in
+M4. Until then, talk to the local model through the adapter. Start the
+pinned runtime first:
+
+```bash
+llama-server -m models/Qwen3-0.6B-Q8_0.gguf \
+  --host 127.0.0.1 --port 8033 --ctx-size 8192 \
+  --jinja --chat-template-kwargs '{"enable_thinking": false}'
+```
+
+Then send a message and print the answer as it streams:
+
+```python
+import asyncio
+
+from relaymind.adapters import GenerationRequest, Message, Role, TextDelta
+from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
+
+
+async def main() -> None:
+    config = LlamaCppConfig(base_url="http://127.0.0.1:8033", context_limit=8192)
+    request = GenerationRequest(
+        generation_id="hello_1",
+        messages=(Message(role=Role.USER, content="Reply with exactly one word: pong"),),
+    )
+    async with LlamaCppAdapter(config) as adapter:
+        async for event in adapter.generate(request):
+            if isinstance(event, TextDelta):
+                print(event.text, end="", flush=True)
+    print()
+
+
+asyncio.run(main())  # prints: pong
+```
+
+Or skip Python and ask llama-server directly:
+
+```bash
+curl -s http://127.0.0.1:8033/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Reply with exactly one word: pong"}]}'
+```
+
+The answer is in `choices[0].message.content`. Windows commands and
+tool-call requests are in [`docs/TESTING.md`](docs/TESTING.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
