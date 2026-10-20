@@ -27,9 +27,10 @@ codebase.
 | `src/relaymind/store/` | Run store: SQLite events, tool outcomes, approvals, versioned state (RM17, RM22) |
 | `src/relaymind/stats.py` | Per-generation timing metrics and JSON export for adapter comparisons (RM25, section 12.1) |
 | `src/relaymind/ui/` | Demo UI: decisions and execution evidence (RM23) |
+| `models/` | Pinned model artifact manifests (RM18, spec section 6); GGUF files are downloaded per `models/README.md`, never checked in |
 | `skills/` | Demo skill packages, one directory per skill, SKILL.md format |
 | `tests/` | Test suite; `tests/fixtures/` holds sandbox demo data |
-| `scripts/` | Evaluation corpus runner and benchmark scripts (RM25) |
+| `scripts/` | Developer scripts: model manifest generation (RM18), evaluation and benchmarks (RM25); `scripts/README.md` lists what exists |
 | `docs/` | Spec, architecture, roadmap |
 
 ## Ownership boundaries (do not blur these)

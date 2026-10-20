@@ -18,7 +18,9 @@ spec is the source of truth; this page only explains where things live.
 | Timing instrumentation | `src/relaymind/stats.py` | Record spec 12.1 metrics per generation around any adapter; export JSON for adapter comparisons (M1 working data, not benchmark evidence). |
 
 Demo skill packages (SKILL.md format, spec section 9) live in `skills/` at
-the repository root, one directory per skill.
+the repository root, one directory per skill. Pinned model artifact
+manifests (RM18, spec section 6) live in `models/`; the GGUF files they
+describe are downloaded per `models/README.md`, never checked in.
 
 ## Runtime shape
 
