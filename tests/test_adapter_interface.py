@@ -141,3 +141,15 @@ def test_request_is_immutable_and_carries_tool_schemas():
     assert request.tool_schemas[0].name == "get_service_health"
     with pytest.raises(dataclasses.FrozenInstanceError):
         request.generation_id = "other"
+
+
+def test_sequence_fields_reject_strings():
+    # A string is iterable; tuple("abc") silently decomposes it.
+    with pytest.raises(TypeError):
+        GenerationRequest(generation_id="gen_1", messages="not a sequence")
+
+
+def test_assistant_tool_call_message_needs_no_explicit_content():
+    call = ToolCall(call_id="call_1", tool_name="get_service_health", arguments={"service": "s"})
+    message = Message(role=Role.ASSISTANT, tool_calls=(call,))
+    assert message.content is None

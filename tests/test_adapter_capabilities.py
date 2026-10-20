@@ -73,3 +73,8 @@ def test_require_context_rejects_negative_token_count():
 def test_context_limit_must_be_positive():
     with pytest.raises(ValueError):
         make_capabilities(context_limit=0)
+
+
+def test_reasoning_controls_reject_a_bare_string():
+    with pytest.raises(TypeError):
+        make_capabilities(reasoning_controls="enable_thinking")
