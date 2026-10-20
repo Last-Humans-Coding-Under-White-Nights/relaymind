@@ -8,13 +8,16 @@ request shaping and lifecycle stay in each adapter.
 
 import asyncio
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
+
+import httpx
 
 from relaymind.adapters.base import (
     AdapterEvent,
     Completed,
     GenerationFailed,
+    GenerationRequest,
     Message,
     Role,
     TextDelta,
@@ -66,6 +69,19 @@ def encode_tools(tool_schemas: Sequence[ToolSchema]) -> list[dict[str, object]]:
         }
         for schema in tool_schemas
     ]
+
+
+def base_chat_body(request: GenerationRequest) -> dict[str, object]:
+    """The chat-completion body every compatible endpoint shares."""
+    body: dict[str, object] = {
+        "stream": True,
+        # Streaming responses carry no usage unless explicitly asked.
+        "stream_options": {"include_usage": True},
+        "messages": [encode_message(message) for message in request.messages],
+    }
+    if request.tool_schemas:
+        body["tools"] = encode_tools(request.tool_schemas)
+    return body
 
 
 @dataclass
@@ -193,14 +209,70 @@ def parse_sse_line(line: str) -> Mapping[str, object] | None:
     return chunk if isinstance(chunk, Mapping) else None
 
 
-async def next_line_or_cancel(lines, cancel_event: asyncio.Event) -> str | None:
+async def stream_chat_events(
+    client: httpx.AsyncClient,
+    path: str,
+    body: Mapping[str, object],
+    *,
+    cancel_event: asyncio.Event,
+    headers: Mapping[str, str] | None = None,
+    provider_label: str = "provider",
+) -> AsyncIterator[AdapterEvent]:
+    """Drive one streamed chat completion into normalized events.
+
+    The shared pump for every OpenAI-compatible endpoint, so its
+    invariants live in exactly one place: a cancelled generation ends
+    without Completed; a stream that ends without a finish chunk is
+    settled by flush(); timeouts and transport errors map to the stable
+    provider_timeout and provider_unreachable codes.
+    """
+    accumulator = StreamAccumulator()
+    # One long-lived wait on the cancel event per generation; each
+    # streamed line then costs a single anext future.
+    cancel_wait = asyncio.ensure_future(cancel_event.wait())
+    try:
+        async with client.stream("POST", path, json=dict(body), headers=headers) as response:
+            if response.status_code != 200:
+                detail = (await response.aread()).decode(errors="replace")
+                yield GenerationFailed(
+                    code="provider_error",
+                    message=f"{provider_label} returned {response.status_code}: {detail[:200]}",
+                )
+                return
+            lines = aiter(response.aiter_lines())
+            while True:
+                line = await _next_line_or_cancel(lines, cancel_wait, cancel_event)
+                if line is None:
+                    # A cancelled generation ends without Completed; a
+                    # naturally ended stream settles buffered state even
+                    # when no finish chunk arrived.
+                    if not cancel_event.is_set():
+                        for event in accumulator.flush():
+                            yield event
+                    return
+                chunk = parse_sse_line(line)
+                if chunk is None:
+                    continue
+                for event in accumulator.feed(chunk):
+                    yield event
+    except httpx.TimeoutException as exc:
+        yield GenerationFailed(code="provider_timeout", message=str(exc))
+    except httpx.HTTPError as exc:
+        yield GenerationFailed(code="provider_unreachable", message=str(exc))
+    finally:
+        cancel_wait.cancel()
+        await asyncio.gather(cancel_wait, return_exceptions=True)
+
+
+async def _next_line_or_cancel(
+    lines,
+    cancel_wait: "asyncio.Future[bool]",
+    cancel_event: asyncio.Event,
+) -> str | None:
     """The next stream line, or None on end of stream or cancellation."""
     next_line = asyncio.ensure_future(anext(lines))
-    cancelled = asyncio.ensure_future(cancel_event.wait())
     try:
-        done, _pending = await asyncio.wait(
-            {next_line, cancelled}, return_when=asyncio.FIRST_COMPLETED
-        )
+        await asyncio.wait({next_line, cancel_wait}, return_when=asyncio.FIRST_COMPLETED)
         if cancel_event.is_set():
             return None
         try:
@@ -208,6 +280,6 @@ async def next_line_or_cancel(lines, cancel_event: asyncio.Event) -> str | None:
         except StopAsyncIteration:
             return None
     finally:
-        for task in (next_line, cancelled):
-            task.cancel()
-        await asyncio.gather(next_line, cancelled, return_exceptions=True)
+        if not next_line.done():
+            next_line.cancel()
+            await asyncio.gather(next_line, return_exceptions=True)
