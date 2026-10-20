@@ -13,6 +13,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from pathlib import Path
 
+from relaymind.adapters.gguf import artifact_hashes
+
 SUPPORTED_SCHEMA_VERSION = 1
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -98,8 +100,6 @@ def build_manifest(
 
     Every hash is computed from the artifact, never copied by hand.
     """
-    from relaymind.adapters.gguf import artifact_hashes
-
     artifact_path = Path(artifact_path)
     tokenizer_hash, chat_template_hash = artifact_hashes(artifact_path)
     return ArtifactManifest(

@@ -8,10 +8,9 @@ import json
 import subprocess
 import sys
 
+from gguf_builder import sample_kvs, write_gguf
 from relaymind.adapters.gguf import artifact_hashes
 from relaymind.adapters.manifest import build_manifest, load_manifest, sha256_file, verify_artifact
-
-from .test_gguf_reader import sample_kvs, write_gguf
 
 SOURCE = dict(
     model_id="qwen3-0.6b",

@@ -17,12 +17,10 @@ Example:
 import argparse
 import dataclasses
 import json
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-
-from relaymind.adapters.manifest import build_manifest  # noqa: E402
+# Needs the package installed (pip install -e ".[dev]"), like everything else.
+from relaymind.adapters.manifest import build_manifest
 
 
 def main() -> None:

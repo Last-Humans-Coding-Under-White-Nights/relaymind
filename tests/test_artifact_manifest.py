@@ -44,7 +44,7 @@ def write_manifest(tmp_path, data):
 def test_load_round_trip(tmp_path):
     path = write_manifest(tmp_path, VALID)
     manifest = load_manifest(path)
-    assert manifest == ArtifactManifest(**VALID | {"launch_settings": VALID["launch_settings"]})
+    assert manifest == ArtifactManifest(**VALID)
     assert manifest.quantization == "Q8_0"
 
 
