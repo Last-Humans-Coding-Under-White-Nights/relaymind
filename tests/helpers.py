@@ -1,6 +1,7 @@
 """Shared test helpers for the adapter test suite."""
 
 import asyncio
+import json
 
 from relaymind.adapters import (
     AdapterCapabilities,
@@ -56,3 +57,14 @@ def collect_events(adapter: ModelAdapter, request: GenerationRequest) -> list:
         return [event async for event in adapter.generate(request)]
 
     return asyncio.run(run())
+
+
+def delta_chunk(delta: dict, finish_reason: str | None = None) -> dict:
+    """One streamed chat-completion chunk in the shape llama-server emits."""
+    return {"choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}]}
+
+
+def sse_body(chunks: list[dict]) -> str:
+    """Encode chunks as a server-sent-events response body."""
+    lines = [f"data: {json.dumps(chunk)}\n\n" for chunk in chunks]
+    return "".join(lines) + "data: [DONE]\n\n"

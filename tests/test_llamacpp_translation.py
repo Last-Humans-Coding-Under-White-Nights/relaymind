@@ -6,41 +6,26 @@ complete argument parsing; partial streamed JSON never executes).
 Deterministic, no server. Issue #3.
 """
 
+from helpers import HEALTH_TOOL, delta_chunk
+from helpers import make_request as make_plain_request
 from relaymind.adapters import (
     Completed,
     GenerationFailed,
     GenerationOptions,
-    GenerationRequest,
-    Message,
-    Role,
     TextDelta,
     ToolCall,
-    ToolSchema,
     Usage,
 )
 from relaymind.adapters.llamacpp import StreamAccumulator, build_chat_request
 
-HEALTH_TOOL = ToolSchema(
-    name="get_service_health",
-    description="Return current health for a service.",
-    input_schema={
-        "type": "object",
-        "properties": {"service": {"enum": ["staging-api", "payments-api"]}},
-        "required": ["service"],
-        "additionalProperties": False,
-    },
-)
-
 
 def make_request(**overrides):
     base = dict(
-        generation_id="gen_1",
-        messages=(Message(role=Role.USER, content="is staging-api healthy?"),),
         tool_schemas=(HEALTH_TOOL,),
         options=GenerationOptions(max_output_tokens=128, temperature=0.2),
     )
     base.update(overrides)
-    return GenerationRequest(**base)
+    return make_plain_request(**base)
 
 
 def test_build_chat_request_maps_messages_tools_and_options():
@@ -72,10 +57,6 @@ def test_build_chat_request_omits_unset_options_and_empty_tools():
     assert "max_tokens" not in body
     assert "temperature" not in body
     assert "chat_template_kwargs" not in body
-
-
-def delta_chunk(delta, finish_reason=None):
-    return {"choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}]}
 
 
 def test_text_deltas_stream_through():

@@ -10,7 +10,6 @@ chat-template settings (``chat_template_kwargs.enable_thinking``), not
 through prompt strings, and is verified by the live smoke test.
 """
 
-import asyncio
 import json
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
@@ -122,22 +121,16 @@ class StreamAccumulator:
             partial = self._tool_calls[index]
             try:
                 arguments = json.loads(partial.arguments_json)
-            except ValueError:
+                if not isinstance(arguments, dict):
+                    raise ValueError("arguments are not a JSON object")
+            except ValueError as exc:
                 return [
                     GenerationFailed(
                         code="invalid_tool_arguments",
                         message=(
                             f"tool call {partial.call_id or index} for "
-                            f"{partial.tool_name or 'unknown tool'} did not produce "
-                            "parseable argument JSON"
+                            f"{partial.tool_name or 'unknown tool'}: {exc}"
                         ),
-                    )
-                ]
-            if not isinstance(arguments, dict):
-                return [
-                    GenerationFailed(
-                        code="invalid_tool_arguments",
-                        message=f"tool call {partial.call_id or index} arguments are not an object",
                     )
                 ]
             events.append(
@@ -177,7 +170,8 @@ class LlamaCppAdapter(ModelAdapter):
             timeout=config.request_timeout_seconds,
             transport=transport,
         )
-        self._cancelled: dict[str, asyncio.Event] = {}
+        # Generation ids whose streams should stop at the next chunk.
+        self._cancelled: set[str] = set()
 
     async def capabilities(self) -> AdapterCapabilities:
         return AdapterCapabilities(
@@ -192,7 +186,6 @@ class LlamaCppAdapter(ModelAdapter):
 
     async def generate(self, request: GenerationRequest) -> AsyncIterator[AdapterEvent]:
         body = build_chat_request(request, chat_template_kwargs=self._config.chat_template_kwargs)
-        cancelled = self._cancelled.setdefault(request.generation_id, asyncio.Event())
         accumulator = StreamAccumulator()
         try:
             async with self._client.stream("POST", "/v1/chat/completions", json=body) as response:
@@ -204,7 +197,7 @@ class LlamaCppAdapter(ModelAdapter):
                     )
                     return
                 async for line in response.aiter_lines():
-                    if cancelled.is_set():
+                    if request.generation_id in self._cancelled:
                         return
                     chunk = _parse_sse_line(line)
                     if chunk is None:
@@ -214,12 +207,10 @@ class LlamaCppAdapter(ModelAdapter):
         except httpx.HTTPError as exc:
             yield GenerationFailed(code="provider_unreachable", message=str(exc))
         finally:
-            self._cancelled.pop(request.generation_id, None)
+            self._cancelled.discard(request.generation_id)
 
     async def cancel(self, generation_id: str) -> None:
-        event = self._cancelled.get(generation_id)
-        if event is not None:
-            event.set()
+        self._cancelled.add(generation_id)
 
     async def health(self) -> AdapterHealth:
         try:

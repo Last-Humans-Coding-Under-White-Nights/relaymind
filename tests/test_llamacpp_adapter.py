@@ -10,7 +10,8 @@ import json
 
 import httpx
 
-from relaymind.adapters import Completed, GenerationRequest, Message, Role, TextDelta
+from helpers import collect_events, delta_chunk, make_request, sse_body
+from relaymind.adapters import Completed, TextDelta
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 
 CONFIG = LlamaCppConfig(
@@ -20,20 +21,8 @@ CONFIG = LlamaCppConfig(
 )
 
 
-def sse_body(chunks: list[dict]) -> str:
-    lines = [f"data: {json.dumps(chunk)}\n\n" for chunk in chunks]
-    return "".join(lines) + "data: [DONE]\n\n"
-
-
 def make_adapter(handler) -> LlamaCppAdapter:
     return LlamaCppAdapter(CONFIG, transport=httpx.MockTransport(handler))
-
-
-def simple_request() -> GenerationRequest:
-    return GenerationRequest(
-        generation_id="gen_1",
-        messages=(Message(role=Role.USER, content="hello"),),
-    )
 
 
 def test_capabilities_come_from_config():
@@ -51,8 +40,8 @@ def test_generate_streams_normalized_events():
         seen["path"] = request.url.path
         seen["body"] = json.loads(request.content)
         chunks = [
-            {"choices": [{"index": 0, "delta": {"content": "hi"}, "finish_reason": None}]},
-            {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
+            delta_chunk({"content": "hi"}),
+            delta_chunk({}, finish_reason="stop"),
         ]
         return httpx.Response(
             200,
@@ -61,11 +50,7 @@ def test_generate_streams_normalized_events():
         )
 
     adapter = make_adapter(handler)
-
-    async def run():
-        return [event async for event in adapter.generate(simple_request())]
-
-    events = asyncio.run(run())
+    events = collect_events(adapter, make_request())
     assert seen["path"] == "/v1/chat/completions"
     # Non-thinking mode rides on every request via chat template settings.
     assert seen["body"]["chat_template_kwargs"] == {"enable_thinking": False}
@@ -92,10 +77,8 @@ def test_health_maps_ready_loading_and_unreachable():
 
 
 def test_cancel_stops_an_active_generation_early():
-    chunks = [
-        {"choices": [{"index": 0, "delta": {"content": f"part {i}"}, "finish_reason": None}]}
-        for i in range(50)
-    ] + [{"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}]
+    chunks = [delta_chunk({"content": f"part {i}"}) for i in range(50)]
+    chunks.append(delta_chunk({}, finish_reason="stop"))
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -108,7 +91,7 @@ def test_cancel_stops_an_active_generation_early():
 
     async def run():
         events = []
-        async for event in adapter.generate(simple_request()):
+        async for event in adapter.generate(make_request()):
             events.append(event)
             if len(events) == 2:
                 await adapter.cancel("gen_1")
