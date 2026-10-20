@@ -11,7 +11,7 @@ import json
 
 import httpx
 
-from helpers import collect_events, delta_chunk, make_request, sse_response
+from helpers import collect_events, delta_chunk, make_request, run_closing, sse_response
 from relaymind.adapters import Completed, GenerationFailed, TextDelta, ToolCall, Usage
 from relaymind.adapters.chat_completions import (
     ChatCompletionsAdapter,
@@ -30,16 +30,6 @@ CONFIG = ChatCompletionsConfig(
 
 def make_adapter(handler) -> ChatCompletionsAdapter:
     return ChatCompletionsAdapter(CONFIG, transport=httpx.MockTransport(handler))
-
-
-def run_closing(adapter, action):
-    """Run one adapter call and close the underlying client."""
-
-    async def go():
-        async with adapter:
-            return await action(adapter)
-
-    return asyncio.run(go())
 
 
 def test_config_defaults_to_the_spec_external_budget():
