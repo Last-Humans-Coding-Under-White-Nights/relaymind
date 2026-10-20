@@ -8,60 +8,32 @@ llama-server is an operator action.
 """
 
 import asyncio
-import importlib.util
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-from helpers import make_capabilities
-from relaymind.adapters import (
-    AdapterCapabilities,
-    AdapterHealth,
-    Completed,
-    GenerationRequest,
-    ModelAdapter,
-    TextDelta,
-    ToolCall,
-    Usage,
+from helpers import (
+    HEALTH_TOOL,
+    PINNED_MANIFEST_PATH,
+    SCRIPTS_DIR,
+    ScriptedAdapter,
+    load_script_module,
+    run_script,
 )
+from relaymind.adapters import Completed, GenerationRequest, TextDelta, ToolCall, Usage
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT_PATH = REPO_ROOT / "scripts" / "probe_timing.py"
-MANIFEST_PATH = REPO_ROOT / "models" / "qwen3-0.6b-q8_0.manifest.json"
-CHECKED_IN_PROBE = REPO_ROOT / "scripts" / "probes" / "m1_timing.json"
+CHECKED_IN_PROBE = SCRIPTS_DIR / "probes" / "m1_timing.json"
 
-
-def load_script_module():
-    spec = importlib.util.spec_from_file_location("probe_timing", SCRIPT_PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def run_script(*args):
-    return subprocess.run(
-        [sys.executable, str(SCRIPT_PATH), *map(str, args)],
-        capture_output=True,
-        text=True,
-    )
-
-
+# The canonical demo tool in the JSON shape a probe config carries.
 TOOL = {
-    "name": "get_service_health",
-    "description": "Return current health for a service.",
-    "input_schema": {
-        "type": "object",
-        "properties": {"service": {"enum": ["staging-api", "payments-api"]}},
-        "required": ["service"],
-        "additionalProperties": False,
-    },
+    "name": HEALTH_TOOL.name,
+    "description": HEALTH_TOOL.description,
+    "input_schema": dict(HEALTH_TOOL.input_schema),
 }
 
 GOOD_CONFIG = {
-    "manifest": str(MANIFEST_PATH),
+    "manifest": str(PINNED_MANIFEST_PATH),
     "warmups": 2,
     "system_prompt": "You check service health.",
     "tool": TOOL,
@@ -70,64 +42,83 @@ GOOD_CONFIG = {
 }
 
 
-class RoutingDouble(ModelAdapter):
+class RoutingDouble(ScriptedAdapter):
     """Proposes a tool call when tools are offered, answers text otherwise."""
 
     def __init__(self):
+        super().__init__([])
         self.requests: list[GenerationRequest] = []
-
-    async def capabilities(self) -> AdapterCapabilities:
-        return make_capabilities()
 
     async def generate(self, request: GenerationRequest):
         self.requests.append(request)
         yield Usage(input_tokens=10, output_tokens=2)
         if request.tool_schemas:
-            service = "staging-api"
             yield ToolCall(
-                call_id="call_1", tool_name="get_service_health", arguments={"service": service}
+                call_id="call_1",
+                tool_name="get_service_health",
+                arguments={"service": "staging-api"},
             )
             yield Completed(finish_reason="tool_calls")
         else:
             yield TextDelta(text="pong")
             yield Completed(finish_reason="stop")
 
-    async def cancel(self, generation_id: str) -> None:
-        pass
 
-    async def health(self) -> AdapterHealth:
-        return AdapterHealth(available=True, warm=True, detail="double")
-
-
-def test_the_checked_in_probe_config_loads():
-    # The config that produced the EVIDENCE.md entry stays loadable.
-    module = load_script_module()
-    config = module.load_probe_config(CHECKED_IN_PROBE)
-    assert config.warmups >= 1
-    assert config.text_prompts and config.tool_prompts
-    assert config.tool.name == "get_service_health"
+@pytest.fixture()
+def probe():
+    return load_script_module("probe_timing")
 
 
-def test_warmups_are_labelled_and_measured_generations_follow(tmp_path):
-    module = load_script_module()
+@pytest.fixture()
+def good_config(probe, tmp_path):
     config_path = tmp_path / "probe.json"
     config_path.write_text(json.dumps(GOOD_CONFIG), encoding="utf-8")
-    config = module.load_probe_config(config_path)
-    adapter = RoutingDouble()
+    return probe.load_probe_config(config_path)
 
-    records, outcomes = asyncio.run(module.run_probe(adapter, config))
 
-    ids = [record.generation_id for record in records]
+def test_the_checked_in_probe_config_loads(probe):
+    # The config that produced the EVIDENCE.md entry stays loadable and
+    # offers the canonical demo tool.
+    config = probe.load_probe_config(CHECKED_IN_PROBE)
+    assert config.warmups >= 1
+    assert config.text_prompts and config.tool_prompts
+    assert config.tool == HEALTH_TOOL
+
+
+def test_warmups_are_split_from_the_measured_pass(probe, good_config):
+    warmups, measured = probe.probe_requests(good_config)
     # Warm-ups cover both prompt kinds, so the first measured tool call
     # is not the first request that ever carried the tool schema.
-    assert ids[:4] == ["warmup_text_0", "warmup_tool_0", "warmup_text_1", "warmup_tool_1"]
-    assert ids[4:] == ["text_00", "text_01", "tool_00", "tool_01"]
-    assert module.warmup_ids(records) == ids[:4]
+    assert [r.generation_id for r in warmups] == [
+        "warmup_text_0",
+        "warmup_tool_0",
+        "warmup_text_1",
+        "warmup_tool_1",
+    ]
+    assert [r.generation_id for r in measured] == ["text_00", "text_01", "tool_00", "tool_01"]
+
+
+def test_run_probe_sends_warmups_first_and_records_outcomes(probe, good_config):
+    adapter = RoutingDouble()
+
+    records, outcomes = asyncio.run(probe.run_probe(adapter, good_config))
+
+    ids = [record.generation_id for record in records]
+    assert ids == [
+        "warmup_text_0",
+        "warmup_tool_0",
+        "warmup_text_1",
+        "warmup_tool_1",
+        "text_00",
+        "text_01",
+        "tool_00",
+        "tool_01",
+    ]
     # Tool prompts carry the system prompt and the one tool schema;
     # plain prompts carry neither.
     by_id = {request.generation_id: request for request in adapter.requests}
     assert by_id["tool_00"].messages[0].content == "You check service health."
-    assert [schema.name for schema in by_id["tool_00"].tool_schemas] == ["get_service_health"]
+    assert by_id["tool_00"].tool_schemas == (HEALTH_TOOL,)
     assert by_id["text_00"].tool_schemas == ()
     assert len(by_id["text_00"].messages) == 1
     # Outcomes back the Proposal and Answer columns of an entry.
@@ -140,14 +131,9 @@ def test_warmups_are_labelled_and_measured_generations_follow(tmp_path):
     assert outcomes["text_00"] == {"answer": "pong", "tool_calls": []}
 
 
-def test_run_info_names_what_produced_the_numbers(tmp_path):
-    module = load_script_module()
-    config_path = tmp_path / "probe.json"
-    config_path.write_text(json.dumps(GOOD_CONFIG), encoding="utf-8")
-    config = module.load_probe_config(config_path)
-
-    info = module.build_run_info(
-        config,
+def test_run_info_names_what_produced_the_numbers(probe, good_config):
+    info = probe.build_run_info(
+        good_config,
         command=["python", "scripts/probe_timing.py", "probe.json"],
         cold_start_seconds=1.25,
         server_argv=["--ctx-size", "8192"],
@@ -190,17 +176,17 @@ def test_run_info_names_what_produced_the_numbers(tmp_path):
         ({**GOOD_CONFIG, "tool": {**TOOL, "input_schema": "object"}}, "tool"),
     ],
 )
-def test_probe_script_rejects_malformed_configs_without_a_traceback(tmp_path, config, expected):
+def test_malformed_configs_are_rejected_naming_the_field(probe, tmp_path, config, expected):
     config_path = tmp_path / "probe.json"
     config_path.write_text(json.dumps(config), encoding="utf-8")
-    result = run_script(config_path, "--out", tmp_path / "out.json")
-    assert result.returncode != 0
-    assert expected in result.stderr
-    assert "Traceback" not in result.stderr
+    with pytest.raises(ValueError, match=expected):
+        probe.load_probe_config(config_path)
 
 
-def test_probe_script_reports_an_unreadable_config(tmp_path):
-    result = run_script(tmp_path / "nope.json", "--out", tmp_path / "out.json")
+def test_probe_script_reports_a_config_error_without_a_traceback(tmp_path):
+    # One subprocess case proves the CLI turns a ValueError into a clean
+    # exit; the field-level checks above run in-process.
+    result = run_script("probe_timing", tmp_path / "nope.json", "--out", tmp_path / "out.json")
     assert result.returncode != 0
     assert "cannot read config" in result.stderr
     assert "Traceback" not in result.stderr

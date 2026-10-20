@@ -38,7 +38,7 @@ import socket
 import subprocess
 import sys
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -64,8 +64,8 @@ from relaymind.adapters.manifest import (
 )
 from relaymind.stats import AdapterIdentity, GenerationStats, TimingCollector, export_stats
 
-WARMUP_PREFIX = "warmup_"
 STARTUP_TIMEOUT_SECONDS = 120
+HEALTH_POLL_SECONDS = 0.05
 
 
 @dataclass(frozen=True)
@@ -109,7 +109,7 @@ def _tool_schema(raw: object) -> ToolSchema:
 def load_probe_config(path: Path) -> ProbeConfig:
     """Read and validate a probe config; ValueError names the bad field."""
     try:
-        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise ValueError(f"cannot read config: {exc}") from exc
     if not isinstance(raw, dict):
@@ -117,7 +117,7 @@ def load_probe_config(path: Path) -> ProbeConfig:
     manifest = raw.get("manifest")
     if not isinstance(manifest, str) or not manifest:
         raise ValueError("'manifest' must be a path to a model manifest")
-    manifest_path = (Path(path).parent / manifest).resolve()
+    manifest_path = (path.parent / manifest).resolve()
     if not manifest_path.is_file():
         raise ValueError(f"manifest not found: {manifest}")
     warmups = raw.get("warmups", 0)
@@ -154,35 +154,30 @@ def _tool_request(generation_id: str, prompt: str, config: ProbeConfig) -> Gener
     )
 
 
-def probe_requests(config: ProbeConfig) -> list[GenerationRequest]:
-    """Warm-ups of both kinds first, then the measured pass.
+def probe_requests(config: ProbeConfig) -> tuple[list[GenerationRequest], list[GenerationRequest]]:
+    """The warm-up requests and the measured pass, in send order.
 
     Each warm-up round sends the first plain prompt and the first tool
     prompt, so the first measured tool call is not the first request
     that ever carried the system prompt and tool schema.
     """
-    requests: list[GenerationRequest] = []
+    warmups: list[GenerationRequest] = []
     for index in range(config.warmups):
-        requests.append(_text_request(f"{WARMUP_PREFIX}text_{index}", config.text_prompts[0]))
-        requests.append(
-            _tool_request(f"{WARMUP_PREFIX}tool_{index}", config.tool_prompts[0], config)
-        )
-    for index, prompt in enumerate(config.text_prompts):
-        requests.append(_text_request(f"text_{index:02d}", prompt))
-    for index, prompt in enumerate(config.tool_prompts):
-        requests.append(_tool_request(f"tool_{index:02d}", prompt, config))
-    return requests
-
-
-def warmup_ids(records: Sequence[GenerationStats]) -> list[str]:
-    return [r.generation_id for r in records if r.generation_id.startswith(WARMUP_PREFIX)]
+        warmups.append(_text_request(f"warmup_text_{index}", config.text_prompts[0]))
+        warmups.append(_tool_request(f"warmup_tool_{index}", config.tool_prompts[0], config))
+    measured = [
+        _text_request(f"text_{index:02d}", prompt)
+        for index, prompt in enumerate(config.text_prompts)
+    ]
+    measured += [
+        _tool_request(f"tool_{index:02d}", prompt, config)
+        for index, prompt in enumerate(config.tool_prompts)
+    ]
+    return warmups, measured
 
 
 async def run_probe(
-    adapter: ModelAdapter,
-    config: ProbeConfig,
-    *,
-    clock: Callable[[], float] = time.monotonic,
+    adapter: ModelAdapter, config: ProbeConfig
 ) -> tuple[list[GenerationStats], dict[str, dict[str, object]]]:
     """Run every probe request sequentially; return stats and outcomes.
 
@@ -192,9 +187,10 @@ async def run_probe(
     An adapter exception is recorded by the collector as adapter_error
     and the pass continues.
     """
-    collector = TimingCollector(adapter, clock=clock)
+    collector = TimingCollector(adapter)
     outcomes: dict[str, dict[str, object]] = {}
-    for request in probe_requests(config):
+    warmups, measured = probe_requests(config)
+    for request in warmups + measured:
         text_parts: list[str] = []
         tool_calls: list[dict[str, object]] = []
         try:
@@ -217,12 +213,12 @@ async def run_probe(
 def build_run_info(
     config: ProbeConfig,
     *,
-    command: Sequence[str],
-    cold_start_seconds: float | None,
-    server_argv: Sequence[str],
+    command: list[str],
+    cold_start_seconds: float,
+    server_argv: list[str],
     model_path: Path,
-    warmup_generation_ids: Sequence[str],
-    outcomes: Mapping[str, Mapping[str, object]],
+    warmup_generation_ids: list[str],
+    outcomes: dict[str, dict[str, object]],
     runtime_banner: str | None,
 ) -> dict[str, object]:
     """Everything that produced the numbers, for the export's "run" block."""
@@ -230,12 +226,16 @@ def build_run_info(
         "command": " ".join(command),
         "passes": 1,
         "cold_start_seconds": cold_start_seconds,
-        "cold_start_definition": "llama-server process launch to the first /health 200",
+        "cold_start_definition": (
+            "llama-server process launch to the first /health 200; the artifact was "
+            "read in full for SHA-256 verification just before launch, so its pages "
+            "were warm in the OS file cache"
+        ),
         "warmups": config.warmups,
-        "warmup_generation_ids": list(warmup_generation_ids),
-        "manifest": str(config.manifest_path.name),
+        "warmup_generation_ids": warmup_generation_ids,
+        "manifest": config.manifest_path.name,
         "model_file": model_path.name,
-        "server_argv": list(server_argv),
+        "server_argv": server_argv,
         "runtime_banner": runtime_banner,
         "system_prompt": config.system_prompt,
         "tool": {
@@ -245,7 +245,7 @@ def build_run_info(
         },
         "text_prompts": list(config.text_prompts),
         "tool_prompts": list(config.tool_prompts),
-        "outcomes": {key: dict(value) for key, value in outcomes.items()},
+        "outcomes": outcomes,
         "platform": platform.platform(),
         "machine": platform.machine(),
         "python": platform.python_version(),
@@ -270,38 +270,38 @@ def _runtime_banner() -> str | None:
 
 
 def _launch_server(
-    manifest: ArtifactManifest, model_path: Path, log_path: Path
-) -> tuple[subprocess.Popen, str, list[str], float]:
-    """Start llama-server from the manifest; return process, URL, argv, cold start."""
-    server_argv = launch_settings_argv(manifest.launch_settings)
+    model_path: Path, server_argv: list[str], log_path: Path
+) -> tuple[subprocess.Popen, str, float]:
+    """Start llama-server; return the process, its URL, and the cold start.
+
+    The HTTP client is built before the clock starts so only the server
+    is inside the measured window.
+    """
     port = _free_port()
     base_url = f"http://127.0.0.1:{port}"
     argv = ["llama-server", "-m", str(model_path), "--host", "127.0.0.1", "--port", str(port)]
     argv += server_argv
-    log_file = log_path.open("wb")
-    started = time.monotonic()
-    process = subprocess.Popen(argv, stdout=log_file, stderr=subprocess.STDOUT)
-    try:
-        deadline = started + STARTUP_TIMEOUT_SECONDS
-        while time.monotonic() < deadline:
-            if process.poll() is not None:
-                raise RuntimeError(
-                    f"llama-server exited early with {process.returncode}; see {log_path}"
-                )
-            try:
-                if httpx.get(f"{base_url}/health", timeout=2).status_code == 200:
-                    return process, base_url, server_argv, time.monotonic() - started
-            except httpx.HTTPError:
-                pass
-            time.sleep(0.05)
-        raise RuntimeError(
-            f"llama-server not healthy in {STARTUP_TIMEOUT_SECONDS}s; see {log_path}"
-        )
-    except BaseException:
-        _stop(process)
-        raise
-    finally:
-        log_file.close()
+    with httpx.Client(base_url=base_url, timeout=2) as client:
+        with log_path.open("wb") as log_file:
+            started = time.monotonic()
+            process = subprocess.Popen(argv, stdout=log_file, stderr=subprocess.STDOUT)
+        try:
+            while time.monotonic() - started < STARTUP_TIMEOUT_SECONDS:
+                if process.poll() is not None:
+                    raise RuntimeError(
+                        f"llama-server exited early with {process.returncode}; see {log_path}"
+                    )
+                try:
+                    if client.get("/health").status_code == 200:
+                        return process, base_url, time.monotonic() - started
+                except httpx.HTTPError:
+                    pass
+                time.sleep(HEALTH_POLL_SECONDS)
+        except BaseException:
+            _stop(process)
+            raise
+    _stop(process)
+    raise RuntimeError(f"llama-server not healthy in {STARTUP_TIMEOUT_SECONDS}s; see {log_path}")
 
 
 def _stop(process: subprocess.Popen) -> None:
@@ -353,10 +353,11 @@ def main() -> None:
     except ManifestError as exc:
         parser.error(f"artifact failed verification: {exc}")
 
+    server_argv = launch_settings_argv(manifest.launch_settings)
     log_path = args.out.with_suffix(".server.log")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     try:
-        process, base_url, server_argv, cold_start = _launch_server(manifest, model_path, log_path)
+        process, base_url, cold_start = _launch_server(model_path, server_argv, log_path)
     except RuntimeError as exc:
         parser.error(str(exc))
     try:
@@ -371,20 +372,25 @@ def main() -> None:
         quantization=manifest.quantization,
         runtime_version=manifest.runtime_version,
     )
+    warmups, _measured = probe_requests(config)
+    warmup_generation_ids = [request.generation_id for request in warmups]
     run_info = build_run_info(
         config,
-        command=[Path(sys.argv[0]).name, *sys.argv[1:]],
+        # The script path as typed, so the recorded command runs from
+        # the same working directory it was recorded in.
+        command=["python", *sys.argv],
         cold_start_seconds=cold_start,
         server_argv=server_argv,
         model_path=model_path,
-        warmup_generation_ids=warmup_ids(records),
+        warmup_generation_ids=warmup_generation_ids,
         outcomes=outcomes,
         runtime_banner=_runtime_banner(),
     )
     export_stats(args.out, identity=identity, records=records, run_info=run_info)
     print(f"cold start: {cold_start:.2f} s")
+    skip = set(warmup_generation_ids)
     for record in records:
-        if record.generation_id.startswith(WARMUP_PREFIX):
+        if record.generation_id in skip:
             continue
         outcome = outcomes[record.generation_id]
         action = record.first_model_action_seconds

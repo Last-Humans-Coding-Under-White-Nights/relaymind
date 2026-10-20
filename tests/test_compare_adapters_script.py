@@ -6,38 +6,19 @@ against live servers is an operator action, not a CI test.
 """
 
 import asyncio
-import importlib.util
 import json
-import subprocess
-import sys
-from pathlib import Path
 
 import pytest
 
-from helpers import ScriptedAdapter
+from helpers import PINNED_MANIFEST_PATH, ScriptedAdapter, load_script_module, run_script
 from relaymind.adapters import Completed
 from relaymind.stats import AdapterIdentity
 
-# Resolved from this file, not the current working directory, so the
-# suite passes no matter where pytest is invoked from.
-REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT_PATH = REPO_ROOT / "scripts" / "compare_adapters.py"
-MANIFEST_PATH = REPO_ROOT / "models" / "qwen3-0.6b-q8_0.manifest.json"
+MANIFEST_PATH = PINNED_MANIFEST_PATH
 
 
-def load_script_module():
-    spec = importlib.util.spec_from_file_location("compare_adapters", SCRIPT_PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def run_script(config_path, out_dir):
-    return subprocess.run(
-        [sys.executable, str(SCRIPT_PATH), str(config_path), "--out-dir", str(out_dir)],
-        capture_output=True,
-        text=True,
-    )
+def run_compare(config_path, out_dir):
+    return run_script("compare_adapters", config_path, "--out-dir", out_dir)
 
 
 def test_compare_script_rejects_an_unknown_adapter_kind(tmp_path):
@@ -59,7 +40,7 @@ def test_compare_script_rejects_an_unknown_adapter_kind(tmp_path):
         ),
         encoding="utf-8",
     )
-    result = run_script(config, tmp_path / "out")
+    result = run_compare(config, tmp_path / "out")
     assert result.returncode != 0
     assert "carrier-pigeon" in result.stderr
     assert "Traceback" not in result.stderr
@@ -68,7 +49,7 @@ def test_compare_script_rejects_an_unknown_adapter_kind(tmp_path):
 def test_compare_script_rejects_a_config_without_prompts(tmp_path):
     config = tmp_path / "config.json"
     config.write_text(json.dumps({"prompts": [], "adapters": {}}), encoding="utf-8")
-    result = run_script(config, tmp_path / "out")
+    result = run_compare(config, tmp_path / "out")
     assert result.returncode != 0
     assert "prompts" in result.stderr
     assert "Traceback" not in result.stderr
@@ -112,14 +93,14 @@ LOCAL_SPEC = {
 def test_compare_script_rejects_malformed_configs_without_a_traceback(tmp_path, config, expected):
     config_path = tmp_path / "config.json"
     config_path.write_text(json.dumps(config), encoding="utf-8")
-    result = run_script(config_path, tmp_path / "out")
+    result = run_compare(config_path, tmp_path / "out")
     assert result.returncode != 0
     assert expected in result.stderr
     assert "Traceback" not in result.stderr
 
 
 def test_a_null_api_key_env_falls_back_to_the_default():
-    module = load_script_module()
+    module = load_script_module("compare_adapters")
     adapter, _identity = module._build_adapter(
         "external",
         {
@@ -151,7 +132,7 @@ class TrackingAdapter(ScriptedAdapter):
 def test_run_closes_every_adapter_even_when_one_close_fails(tmp_path, capsys):
     # A close failure after every export is written must not turn a
     # successful run into a crash that hides the export paths.
-    module = load_script_module()
+    module = load_script_module("compare_adapters")
     tracked = TrackingAdapter([Completed(finish_reason="stop")])
     identity = AdapterIdentity(adapter="x", model_id="x")
     adapters = {
@@ -169,7 +150,7 @@ def test_run_closes_every_adapter_even_when_one_close_fails(tmp_path, capsys):
 def test_a_local_adapter_identity_comes_from_its_model_manifest(tmp_path):
     # Honest evidence (RM16, spec 12.2): the export names what was
     # measured from the pinned manifest, never from hand-typed fields.
-    module = load_script_module()
+    module = load_script_module("compare_adapters")
     adapter, identity = module._build_adapter("local", LOCAL_SPEC)
     try:
         assert identity == AdapterIdentity(
@@ -183,7 +164,7 @@ def test_a_local_adapter_identity_comes_from_its_model_manifest(tmp_path):
 
 
 def test_a_relative_manifest_path_resolves_against_the_config_directory():
-    module = load_script_module()
+    module = load_script_module("compare_adapters")
     spec = {**LOCAL_SPEC, "manifest": MANIFEST_PATH.name}
     adapter, identity = module._build_adapter("local", spec, base_dir=MANIFEST_PATH.parent)
     try:
@@ -201,6 +182,6 @@ def test_a_relative_manifest_path_resolves_against_the_config_directory():
     ],
 )
 def test_a_local_adapter_needs_a_manifest_and_no_hand_typed_identity(spec):
-    module = load_script_module()
+    module = load_script_module("compare_adapters")
     with pytest.raises(ValueError):
         module._build_adapter("local", spec)

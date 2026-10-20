@@ -38,36 +38,36 @@ Same machine, runtime, artifact, and launch as above.
 | Command | `python scripts/probe_timing.py scripts/probes/m1_timing.json --out docs/evidence/2026-10-20-m1-timing-apple-m1.json` on this branch |
 | Probe definition | [`scripts/probes/m1_timing.json`](../scripts/probes/m1_timing.json): the system prompt, one `get_service_health` schema, six plain prompts and six tool-call prompts (three English and three Simplified Chinese each) |
 | Procedure | `scripts/probe_timing.py` verifies the artifact against the manifest, launches llama-server from the manifest's launch settings, waits for `/health` 200, sends three warm-up rounds (one plain and one tool-call request each), then one pass over all twelve prompts through `LlamaCppAdapter` in `relaymind.stats.TimingCollector`, sequentially, with no other load |
-| Raw export | [`evidence/2026-10-20-m1-timing-apple-m1.json`](evidence/2026-10-20-m1-timing-apple-m1.json): spec 12.1 metrics per generation, including the warm-ups under `warmup_*` ids, plus a `run` block with the command, cold start, server argv, runtime banner, system prompt, tool schema, prompts, and each generation's answer or proposal |
-| Cold start | 1.19 s from llama-server process launch to the first `/health` 200 (`run.cold_start_seconds`) |
+| Raw export | [`evidence/2026-10-20-m1-timing-apple-m1.json`](evidence/2026-10-20-m1-timing-apple-m1.json): spec 12.1 metrics per generation, warm-ups included (their ids are listed in `run.warmup_generation_ids`), plus a `run` block with the command, cold start, server argv, runtime banner, system prompt, tool schema, prompts, and each generation's answer or proposal |
+| Cold start | 1.06 s from llama-server process launch to the first `/health` 200 (`run.cold_start_seconds`). The artifact was read in full for SHA-256 verification just before launch, so its pages were warm in the OS file cache; this is not a cold-disk start |
 
 Tool-call prompts, measured pass (first model action is the parsed tool
 call, spec section 12.1):
 
 | Prompt | First model action | Proposal |
 |--------|-------------------:|----------|
-| Is staging-api healthy right now? | 421 ms | `get_service_health` `{"service": "staging-api"}` |
-| Check the health of payments-api. | 418 ms | `get_service_health` `{"service": "payments-api"}` |
-| Is payments-api up? | 419 ms | `get_service_health` `{"service": "payments-api"}` |
-| staging-api 现在健康吗？ | 451 ms | `get_service_health` `{"service": "staging-api"}` |
-| 检查 payments-api 的健康状况。 | 420 ms | `get_service_health` `{"service": "payments-api"}` |
-| payments-api 正常运行吗？ | 440 ms | `get_service_health` `{"service": "payments-api"}` |
+| Is staging-api healthy right now? | 382 ms | `get_service_health` `{"service": "staging-api"}` |
+| Check the health of payments-api. | 386 ms | `get_service_health` `{"service": "payments-api"}` |
+| Is payments-api up? | 385 ms | `get_service_health` `{"service": "payments-api"}` |
+| staging-api 现在健康吗？ | 426 ms | `get_service_health` `{"service": "staging-api"}` |
+| 检查 payments-api 的健康状况。 | 379 ms | `get_service_health` `{"service": "payments-api"}` |
+| payments-api 正常运行吗？ | 390 ms | `get_service_health` `{"service": "payments-api"}` |
 
 Plain prompts, measured pass (no tools; first answer token and
 completion):
 
 | Prompt | First answer token | Completion | Answer |
 |--------|-------------------:|-----------:|--------|
-| Reply with exactly one word: pong | 27 ms | 42 ms | pong |
-| What is the capital of France? Answer in one word. | 43 ms | 62 ms | Paris |
-| Say hello in one short sentence. | 54 ms | 139 ms | Hello! 🌟 |
-| 只用一个词回答：pong | 55 ms | 80 ms | 乒乓球 |
-| 法国的首都是哪里？用一个词回答。 | 48 ms | 86 ms | 巴黎。 |
-| 用一句话打个招呼。 | 50 ms | 191 ms | 你好！有什么我可以帮助你的吗？ |
+| Reply with exactly one word: pong | 28 ms | 44 ms | pong |
+| What is the capital of France? Answer in one word. | 43 ms | 63 ms | Paris |
+| Say hello in one short sentence. | 72 ms | 198 ms | Hello! How can I assist you? |
+| 只用一个词回答：pong | 44 ms | 63 ms | 乒乓球 |
+| 法国的首都是哪里？用一个词回答。 | 42 ms | 61 ms | 巴黎 |
+| 用一句话打个招呼。 | 47 ms | 175 ms | 你好！有什么我可以帮你的吗？ |
 
 Warm-up requests, not part of the measured pass: the first tool-call
-request after launch took 508 ms to the parsed tool call, the next two
-354 ms and 369 ms; the three plain warm-ups took 94, 30, and 26 ms to
+request after launch took 475 ms to the parsed tool call, the next two
+381 ms and 379 ms; the three plain warm-ups took 92, 30, and 29 ms to
 the first token.
 
 Observations, not conclusions:
@@ -76,7 +76,7 @@ Observations, not conclusions:
   in both languages, with one tool offered. This is the first Chinese
   tool-call evidence for the candidate. It says nothing yet about
   selecting among several skills (#48).
-- First model action for a tool call sat between 418 and 451 ms on this
+- First model action for a tool call sat between 379 and 426 ms on this
   machine, single pass, after three tool-call warm-ups. The 500 ms
   hypothesis (p95, warmed, concurrency one) is neither met nor missed by
   this: it needs the section 12.2 protocol in M6.

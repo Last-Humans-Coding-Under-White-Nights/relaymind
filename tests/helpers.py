@@ -1,7 +1,10 @@
 """Shared test helpers for the adapter test suite."""
 
 import asyncio
+import importlib.util
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import httpx
@@ -16,7 +19,9 @@ from relaymind.adapters import (
     ToolSchema,
 )
 
-MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+MODELS_DIR = REPO_ROOT / "models"
+SCRIPTS_DIR = REPO_ROOT / "scripts"
 
 # The checked-in candidate manifest (RM18, spec section 6).
 PINNED_MANIFEST_PATH = MODELS_DIR / "qwen3-0.6b-q8_0.manifest.json"
@@ -126,3 +131,21 @@ class ScriptedAdapter(ModelAdapter):
 
     async def health(self) -> AdapterHealth:
         return AdapterHealth(available=True, warm=True, detail="scripted")
+
+
+def load_script_module(name: str):
+    """Import scripts/<name>.py as a module so its functions can be tested."""
+    path = SCRIPTS_DIR / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def run_script(name: str, *args) -> subprocess.CompletedProcess:
+    """Run scripts/<name>.py as a subprocess and capture its output."""
+    return subprocess.run(
+        [sys.executable, str(SCRIPTS_DIR / f"{name}.py"), *map(str, args)],
+        capture_output=True,
+        text=True,
+    )
