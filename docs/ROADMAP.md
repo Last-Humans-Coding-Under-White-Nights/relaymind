@@ -9,6 +9,8 @@ recorded.
 ## M1 — Adapter and protocol qualification
 
 Pin the local model artifact and runtime, and prove both adapters work.
+[`TESTING.md`](TESTING.md) describes how to exercise the M1 deliverable,
+including manual JSON requests from a macOS or Windows terminal.
 
 - Model artifact manifest: source, revision, SHA-256, quantization,
   template hashes, runtime commit, launch settings (RM18, spec section 6).
