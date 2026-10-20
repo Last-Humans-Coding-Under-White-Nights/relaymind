@@ -1,0 +1,30 @@
+name: Request reviewers
+
+# The org plan does not support branch protection or CODEOWNERS
+# auto-requests on private repositories, so this workflow requests the
+# reviewers on every pull request instead. One approval is enough to merge.
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request reviews from the team
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          args=""
+          for u in devnullexile ArcsinX Sanek1710; do
+            if [ "$u" != "$AUTHOR" ]; then
+              args="$args --add-reviewer $u"
+            fi
+          done
+          gh pr edit "$PR" -R "${{ github.repository }}" $args
