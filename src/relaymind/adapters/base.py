@@ -7,7 +7,7 @@ and rejects unsupported combinations.
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from enum import StrEnum
 from types import MappingProxyType
 
@@ -16,15 +16,20 @@ class UnsupportedCapabilityError(Exception):
     """The adapter does not support a capability the caller requires."""
 
 
-_FLAG_CAPABILITIES = frozenset(
-    {
-        "text_streaming",
-        "tool_calling",
-        "structured_routing_output",
-        "usage_reporting",
-        "tokenizer_available",
-    }
-)
+def _freeze_tuple(obj: object, *field_names: str) -> None:
+    """Coerce sequence fields of a frozen dataclass to tuples."""
+    for name in field_names:
+        object.__setattr__(obj, name, tuple(getattr(obj, name)))
+
+
+def _freeze_mapping(obj: object, field_name: str) -> None:
+    """Validate and freeze a mapping field of a frozen dataclass."""
+    value = getattr(obj, field_name)
+    if not isinstance(value, Mapping):
+        raise TypeError(
+            f"{type(obj).__name__}.{field_name} must be a mapping, got {type(value).__name__}"
+        )
+    object.__setattr__(obj, field_name, MappingProxyType(dict(value)))
 
 
 @dataclass(frozen=True)
@@ -42,7 +47,7 @@ class AdapterCapabilities:
     def __post_init__(self) -> None:
         if self.context_limit <= 0:
             raise ValueError("context_limit must be positive")
-        object.__setattr__(self, "reasoning_controls", tuple(self.reasoning_controls))
+        _freeze_tuple(self, "reasoning_controls")
 
     def require(self, *capability_names: str) -> None:
         """Raise unless every named boolean capability is supported.
@@ -76,6 +81,11 @@ class AdapterCapabilities:
             )
 
 
+# The boolean capability flags, derived from the record itself so a new
+# flag never needs a second edit here.
+_FLAG_CAPABILITIES = frozenset(f.name for f in fields(AdapterCapabilities) if f.type is bool)
+
+
 @dataclass(frozen=True)
 class TextDelta:
     """A piece of answer text."""
@@ -101,14 +111,10 @@ class ToolCall:
             raise ValueError("ToolCall.call_id must be a non-empty string")
         if not isinstance(self.tool_name, str) or not self.tool_name:
             raise ValueError("ToolCall.tool_name must be a non-empty string")
-        if not isinstance(self.arguments, Mapping):
-            raise TypeError(
-                "ToolCall.arguments must be a fully parsed mapping, "
-                f"got {type(self.arguments).__name__}"
-            )
         # A confirmation binds to canonical arguments (RM11): freeze them
-        # against in-place mutation after emission.
-        object.__setattr__(self, "arguments", MappingProxyType(dict(self.arguments)))
+        # against in-place mutation after emission. A partial streamed
+        # JSON string is not a mapping and is rejected here (RM09).
+        _freeze_mapping(self, "arguments")
 
 
 @dataclass(frozen=True)
@@ -171,7 +177,7 @@ class Message:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "role", Role(self.role))
-        object.__setattr__(self, "tool_calls", tuple(self.tool_calls))
+        _freeze_tuple(self, "tool_calls")
         if self.role is Role.TOOL:
             if not self.tool_call_id:
                 raise ValueError("a tool message must reference its tool_call_id")
@@ -192,11 +198,7 @@ class ToolSchema:
     input_schema: Mapping[str, object]
 
     def __post_init__(self) -> None:
-        if not isinstance(self.input_schema, Mapping):
-            raise ValueError(
-                f"ToolSchema.input_schema must be a mapping, got {type(self.input_schema).__name__}"
-            )
-        object.__setattr__(self, "input_schema", MappingProxyType(dict(self.input_schema)))
+        _freeze_mapping(self, "input_schema")
 
 
 @dataclass(frozen=True)
@@ -226,8 +228,7 @@ class GenerationRequest:
     options: GenerationOptions = field(default_factory=GenerationOptions)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "messages", tuple(self.messages))
-        object.__setattr__(self, "tool_schemas", tuple(self.tool_schemas))
+        _freeze_tuple(self, "messages", "tool_schemas")
 
 
 @dataclass(frozen=True)

@@ -9,6 +9,7 @@ import dataclasses
 
 import pytest
 
+from helpers import HEALTH_TOOL, collect_events, make_capabilities, make_request
 from relaymind.adapters import (
     AdapterCapabilities,
     AdapterHealth,
@@ -23,15 +24,7 @@ from relaymind.adapters import (
     ToolSchema,
 )
 
-CAPS = AdapterCapabilities(
-    text_streaming=True,
-    tool_calling=True,
-    structured_routing_output=True,
-    context_limit=32768,
-    reasoning_controls=(),
-    usage_reporting=True,
-    tokenizer_available=True,
-)
+CAPS = make_capabilities()
 
 
 class ScriptedAdapter(ModelAdapter):
@@ -55,22 +48,6 @@ class ScriptedAdapter(ModelAdapter):
         return AdapterHealth(available=True, warm=True, detail="scripted")
 
 
-def collect(adapter: ModelAdapter, request: GenerationRequest):
-    async def run():
-        return [event async for event in adapter.generate(request)]
-
-    return asyncio.run(run())
-
-
-def make_request(**overrides):
-    base = dict(
-        generation_id="gen_1",
-        messages=(Message(role=Role.USER, content="is staging-api healthy?"),),
-    )
-    base.update(overrides)
-    return GenerationRequest(**base)
-
-
 def test_adapter_with_missing_methods_cannot_be_instantiated():
     class Incomplete(ModelAdapter):
         async def capabilities(self):
@@ -91,7 +68,7 @@ def test_double_streams_normalized_events_in_order():
         Completed(finish_reason="stop"),
     ]
     adapter = ScriptedAdapter(scripted)
-    events = collect(adapter, make_request())
+    events = collect_events(adapter, make_request())
     assert events == scripted
 
 
@@ -155,22 +132,12 @@ def test_tool_schema_input_schema_is_a_frozen_mapping():
     schema = ToolSchema(name="t", description="d", input_schema={"type": "object"})
     with pytest.raises(TypeError):
         schema.input_schema["type"] = "array"
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         ToolSchema(name="t", description="d", input_schema="not-a-mapping")
 
 
 def test_request_is_immutable_and_carries_tool_schemas():
-    schema = ToolSchema(
-        name="get_service_health",
-        description="Return current health for a service.",
-        input_schema={
-            "type": "object",
-            "properties": {"service": {"enum": ["staging-api", "payments-api"]}},
-            "required": ["service"],
-            "additionalProperties": False,
-        },
-    )
-    request = make_request(tool_schemas=(schema,))
+    request = make_request(tool_schemas=(HEALTH_TOOL,))
     assert request.tool_schemas[0].name == "get_service_health"
     with pytest.raises(dataclasses.FrozenInstanceError):
         request.generation_id = "other"

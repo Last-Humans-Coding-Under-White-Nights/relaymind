@@ -9,21 +9,8 @@ import dataclasses
 
 import pytest
 
-from relaymind.adapters import AdapterCapabilities, UnsupportedCapabilityError
-
-
-def make_capabilities(**overrides):
-    base = dict(
-        text_streaming=True,
-        tool_calling=True,
-        structured_routing_output=True,
-        context_limit=32768,
-        reasoning_controls=("enable_thinking",),
-        usage_reporting=True,
-        tokenizer_available=True,
-    )
-    base.update(overrides)
-    return AdapterCapabilities(**base)
+from helpers import make_capabilities
+from relaymind.adapters import UnsupportedCapabilityError
 
 
 def test_capability_record_is_immutable():
