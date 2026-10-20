@@ -25,16 +25,18 @@ import pytest
 from helpers import HEALTH_TOOL, collect_events, make_request
 from relaymind.adapters import Completed, Message, Role, TextDelta, ToolCall
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
+from relaymind.adapters.manifest import launch_settings_argv, load_manifest, verify_artifact
 
 pytestmark = pytest.mark.live
 
-MODEL_PATH = Path(os.environ.get("RELAYMIND_SMOKE_MODEL", "models/Qwen3-0.6B-Q8_0.gguf"))
-
-# Pinned launch settings; one copy for the server and the adapters.
-# TODO(#38): derive these from models/qwen3-0.6b-q8_0.manifest.json once
-# the manifest machinery (PR #35) is on the same branch.
-CTX_SIZE = 8192
-NON_THINKING = {"enable_thinking": False}
+# The manifest owns the pinned launch settings (spec section 6); the
+# server argv and the adapter config below derive from it.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+MANIFEST_PATH = REPO_ROOT / "models" / "qwen3-0.6b-q8_0.manifest.json"
+MANIFEST = load_manifest(MANIFEST_PATH)
+MODEL_PATH = Path(
+    os.environ.get("RELAYMIND_SMOKE_MODEL", str(REPO_ROOT / "models" / MANIFEST.file_name))
+)
 
 
 def _free_port() -> int:
@@ -49,6 +51,9 @@ def server(tmp_path_factory):
         pytest.skip("llama-server not on PATH")
     if not MODEL_PATH.is_file():
         pytest.skip(f"model artifact not found: {MODEL_PATH}")
+    # models/README.md: verify against the manifest before use. A
+    # mismatched artifact is a failure, never a silent substitution.
+    verify_artifact(MANIFEST, MODEL_PATH)
     port = _free_port()
     # Keep server logs on disk so a startup failure (port conflict,
     # bad parameter, missing backend) is diagnosable from the test
@@ -71,11 +76,7 @@ def server(tmp_path_factory):
                 "127.0.0.1",
                 "--port",
                 str(port),
-                "--ctx-size",
-                str(CTX_SIZE),
-                "--jinja",
-                "--chat-template-kwargs",
-                '{"enable_thinking": false}',
+                *launch_settings_argv(MANIFEST.launch_settings),
             ],
             stdout=log_file,
             stderr=subprocess.STDOUT,
@@ -108,11 +109,16 @@ def server(tmp_path_factory):
 @pytest.fixture()
 def make_adapter(server):
     def factory(enable_thinking: bool) -> LlamaCppAdapter:
+        settings = MANIFEST.launch_settings
+        template_kwargs = settings.get("chat_template_kwargs") or {}
         return LlamaCppAdapter(
             LlamaCppConfig(
                 base_url=server,
-                context_limit=CTX_SIZE,
-                chat_template_kwargs={"enable_thinking": enable_thinking},
+                context_limit=int(settings["ctx_size"]),
+                # The manifest's qualified settings, with the thinking
+                # switch as the operator option under test (spec
+                # section 6).
+                chat_template_kwargs={**template_kwargs, "enable_thinking": enable_thinking},
             )
         )
 

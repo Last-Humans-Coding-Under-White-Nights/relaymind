@@ -156,3 +156,25 @@ def verify_artifact(manifest: ArtifactManifest, artifact_path: Path) -> None:
             raise ManifestError(f"tokenizer hash mismatch for {artifact_path.name}")
         if template_hash != manifest.chat_template_hash:
             raise ManifestError(f"chat template hash mismatch for {artifact_path.name}")
+
+
+def launch_settings_argv(launch_settings: Mapping[str, object]) -> list[str]:
+    """Render manifest launch settings as llama-server arguments.
+
+    Keys become kebab-case flags; a true boolean is a bare flag, a
+    false one is omitted, a mapping is passed as compact JSON, and any
+    other value is passed as text. Launch settings are manifest data
+    (spec section 6): tests and tooling derive their command line here
+    instead of hand-copying the qualified settings.
+    """
+    argv: list[str] = []
+    for key, value in launch_settings.items():
+        flag = f"--{key.replace('_', '-')}"
+        if isinstance(value, bool):
+            if value:
+                argv.append(flag)
+        elif isinstance(value, Mapping):
+            argv.extend([flag, json.dumps(value)])
+        else:
+            argv.extend([flag, str(value)])
+    return argv
