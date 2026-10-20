@@ -20,7 +20,8 @@ from relaymind.adapters import (
     ToolCall,
     Usage,
 )
-from relaymind.adapters.llamacpp import StreamAccumulator, build_chat_request
+from relaymind.adapters.llamacpp import build_chat_request
+from relaymind.adapters.openai_compat import StreamAccumulator
 
 
 def make_request(**overrides):
