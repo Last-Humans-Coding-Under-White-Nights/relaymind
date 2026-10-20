@@ -1,4 +1,5 @@
-# Code Owners for RelayMind project
-# Every pull request automatically requests review from the owners below.
-# One approval is enough to merge (enforced by branch protection).
+# Code owners for RelayMind.
+# GitHub requests a review from the owners below on every pull request.
+# The master ruleset requires one approving review from a code owner
+# before a merge; authors cannot approve their own pull requests.
 * @devnullexile @ArcsinX @Sanek1710
