@@ -12,7 +12,7 @@ import json
 import httpx
 
 from helpers import collect_events, delta_chunk, make_request, sse_response
-from relaymind.adapters import Completed, GenerationFailed, TextDelta, ToolCall
+from relaymind.adapters import Completed, GenerationFailed, TextDelta, ToolCall, Usage
 from relaymind.adapters.chat_completions import (
     ChatCompletionsAdapter,
     ChatCompletionsConfig,
@@ -32,9 +32,25 @@ def make_adapter(handler) -> ChatCompletionsAdapter:
     return ChatCompletionsAdapter(CONFIG, transport=httpx.MockTransport(handler))
 
 
+def run_closing(adapter, action):
+    """Run one adapter call and close the underlying client."""
+
+    async def go():
+        async with adapter:
+            return await action(adapter)
+
+    return asyncio.run(go())
+
+
+def test_config_defaults_to_the_spec_external_budget():
+    # Spec section 11.2: external generation is at most 30 seconds.
+    config = ChatCompletionsConfig(base_url="https://x.example/v1", model="m", context_limit=1024)
+    assert config.request_timeout_seconds == 30.0
+
+
 def test_capabilities_come_from_config():
     adapter = make_adapter(lambda request: httpx.Response(200))
-    caps = asyncio.run(adapter.capabilities())
+    caps = run_closing(adapter, lambda a: a.capabilities())
     assert caps.text_streaming is True
     assert caps.tool_calling is True
     assert caps.context_limit == 128000
@@ -83,6 +99,58 @@ def test_provider_error_detail_never_contains_the_credential(monkeypatch):
     assert "[redacted]" in failure.message
 
 
+def test_credential_straddling_the_truncation_boundary_never_leaks(monkeypatch):
+    # Redaction must run before the error detail is truncated: a key
+    # crossing the cut would otherwise leave an unmatchable fragment.
+    monkeypatch.setenv(KEY_ENV, "sk-secret-123456")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, text="e" * 195 + "sk-secret-123456 rejected")
+
+    events = collect_events(make_adapter(handler), make_request())
+    failure = events[0]
+    assert isinstance(failure, GenerationFailed)
+    # No fragment of the key may survive, from either end of the cut.
+    assert "sk-sec" not in failure.message
+    assert "123456" not in failure.message
+
+
+def test_whitespace_credential_counts_as_missing(monkeypatch):
+    # A blank value would send "Bearer   " and make redaction replace
+    # every run of spaces; it must be treated as no credential at all.
+    monkeypatch.setenv(KEY_ENV, "   \n")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("no request may leave the adapter without credentials")
+
+    events = collect_events(make_adapter(handler), make_request())
+    assert len(events) == 1
+    assert isinstance(events[0], GenerationFailed)
+    assert events[0].code == "missing_credentials"
+
+
+def test_usage_events_stream_over_http(monkeypatch):
+    # usage_reporting is claimed and include_usage requested; the usage
+    # chunk trails finish_reason on the wire, and Completed stays the
+    # terminal event.
+    monkeypatch.setenv(KEY_ENV, "sk-test-123")
+    chunks = [
+        delta_chunk({"content": "hi"}),
+        delta_chunk({}, finish_reason="stop"),
+        {"choices": [], "usage": {"prompt_tokens": 21, "completion_tokens": 4}},
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return sse_response(chunks)
+
+    events = collect_events(make_adapter(handler), make_request())
+    assert events == [
+        TextDelta(text="hi"),
+        Usage(input_tokens=21, output_tokens=4),
+        Completed(finish_reason="stop"),
+    ]
+
+
 def test_transport_error_message_never_contains_the_credential(monkeypatch):
     monkeypatch.setenv(KEY_ENV, "sk-leak-me")
 
@@ -102,7 +170,7 @@ def test_health_detail_never_contains_the_credential(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError(f"proxy rejected Bearer sk-leak-me for {request.url}")
 
-    health = asyncio.run(make_adapter(handler).health())
+    health = run_closing(make_adapter(handler), lambda a: a.health())
     assert health.available is False
     assert "sk-leak-me" not in health.detail
 
@@ -187,10 +255,11 @@ def test_cancel_stops_an_active_generation_early(monkeypatch):
 
     async def run():
         events = []
-        async for event in adapter.generate(make_request()):
-            events.append(event)
-            if len(events) == 2:
-                await adapter.cancel("gen_1")
+        async with adapter:
+            async for event in adapter.generate(make_request()):
+                events.append(event)
+                if len(events) == 2:
+                    await adapter.cancel("gen_1")
         return events
 
     events = asyncio.run(run())
@@ -207,18 +276,18 @@ def test_health_maps_ready_auth_rejected_and_missing_credentials(monkeypatch):
         seen["authorization"] = request.headers.get("authorization")
         return httpx.Response(200, json={"data": []})
 
-    health = asyncio.run(make_adapter(ready).health())
+    health = run_closing(make_adapter(ready), lambda a: a.health())
     assert (health.available, health.warm) == (True, True)
     assert seen["path"] == "/v1/models"
     assert seen["authorization"] == "Bearer sk-test-123"
 
     rejected = make_adapter(lambda request: httpx.Response(401, text="bad key"))
-    health = asyncio.run(rejected.health())
+    health = run_closing(rejected, lambda a: a.health())
     assert health.available is False
     assert "sk-test-123" not in health.detail
 
     monkeypatch.delenv(KEY_ENV, raising=False)
     no_key = make_adapter(lambda request: httpx.Response(200))
-    health = asyncio.run(no_key.health())
+    health = run_closing(no_key, lambda a: a.health())
     assert health.available is False
     assert KEY_ENV in health.detail
