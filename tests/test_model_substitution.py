@@ -87,21 +87,22 @@ def scripted_endpoint(served: dict):
 def test_local_model_swap_is_configuration_only():
     # First qualified local model, then a second one on its own
     # llama-server endpoint: only LlamaCppConfig values change.
-    results = {}
-    for name, config in {
-        "first": LlamaCppConfig(base_url="http://127.0.0.1:8033", context_limit=8192),
-        "second": LlamaCppConfig(base_url="http://127.0.0.1:9044", context_limit=32768),
-    }.items():
-        served: dict = {}
-        adapter = LlamaCppAdapter(config, transport=httpx.MockTransport(scripted_endpoint(served)))
-        events = run_scenario(adapter)
-        results[name] = (served, events)
+    first_served: dict = {}
+    first = LlamaCppAdapter(
+        LlamaCppConfig(base_url="http://127.0.0.1:8033", context_limit=8192),
+        transport=httpx.MockTransport(scripted_endpoint(first_served)),
+    )
+    second_served: dict = {}
+    second = LlamaCppAdapter(
+        LlamaCppConfig(base_url="http://127.0.0.1:9044", context_limit=32768),
+        transport=httpx.MockTransport(scripted_endpoint(second_served)),
+    )
 
-    assert results["first"][0]["port"] == 8033
-    assert results["second"][0]["port"] == 9044
     # Same scenario, same normalized outcome, from both configurations.
-    assert results["first"][1] == EXPECTED_EVENTS
-    assert results["second"][1] == EXPECTED_EVENTS
+    assert run_scenario(first) == EXPECTED_EVENTS
+    assert run_scenario(second) == EXPECTED_EVENTS
+    assert first_served["port"] == 8033
+    assert second_served["port"] == 9044
 
 
 def test_external_endpoint_swap_is_configuration_only(monkeypatch):
@@ -110,34 +111,33 @@ def test_external_endpoint_swap_is_configuration_only(monkeypatch):
     # ChatCompletionsConfig values change.
     monkeypatch.setenv("SUBST_KEY_A", "sk-a")
     monkeypatch.setenv("SUBST_KEY_B", "sk-b")
-    results = {}
-    for name, config in {
-        "first": ChatCompletionsConfig(
+    first_served: dict = {}
+    first = ChatCompletionsAdapter(
+        ChatCompletionsConfig(
             base_url="https://api.provider-one.example/v1",
             model="provider-one-large",
             context_limit=128000,
             api_key_env="SUBST_KEY_A",
         ),
-        "second": ChatCompletionsConfig(
+        transport=httpx.MockTransport(scripted_endpoint(first_served)),
+    )
+    second_served: dict = {}
+    second = ChatCompletionsAdapter(
+        ChatCompletionsConfig(
             base_url="https://api.provider-two.example/v1",
             model="provider-two-medium",
             context_limit=64000,
             api_key_env="SUBST_KEY_B",
         ),
-    }.items():
-        served: dict = {}
-        adapter = ChatCompletionsAdapter(
-            config, transport=httpx.MockTransport(scripted_endpoint(served))
-        )
-        events = run_scenario(adapter)
-        results[name] = (served, events)
+        transport=httpx.MockTransport(scripted_endpoint(second_served)),
+    )
 
-    assert results["first"][0]["host"] == "api.provider-one.example"
-    assert results["first"][0]["model"] == "provider-one-large"
-    assert results["second"][0]["host"] == "api.provider-two.example"
-    assert results["second"][0]["model"] == "provider-two-medium"
-    assert results["first"][1] == EXPECTED_EVENTS
-    assert results["second"][1] == EXPECTED_EVENTS
+    assert run_scenario(first) == EXPECTED_EVENTS
+    assert run_scenario(second) == EXPECTED_EVENTS
+    assert first_served["host"] == "api.provider-one.example"
+    assert first_served["model"] == "provider-one-large"
+    assert second_served["host"] == "api.provider-two.example"
+    assert second_served["model"] == "provider-two-medium"
 
 
 def test_local_to_external_swap_keeps_the_same_scenario_code(monkeypatch):
