@@ -1,6 +1,15 @@
 # Scripts
 
-Evaluation and benchmark scripts live here. Planned (spec section 12):
+## Current
+
+- `gen_model_manifest.py` — generate a model artifact manifest from a
+  GGUF file (RM18, spec section 6). Hashes are computed from the
+  artifact, never written by hand. Manifests live in `models/`; the
+  GGUF files themselves are not checked in (`*.gguf` is ignored).
+
+## Planned
+
+Evaluation and benchmark scripts (spec section 12):
 
 - Correctness corpus runner: 40 bilingual scenario pairs against frozen
   fixture snapshots, in auto, external_only, and local_only modes.
