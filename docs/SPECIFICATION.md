@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.1 | 20 October 2026 | Proposed implementation baseline
+Version 0.2 | 20 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that lets a small model complete bounded tasks with skills and tools, and transfers complex work to an external model. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -139,7 +139,7 @@ Every adapter exposes capabilities, generate, cancel, and health. Its capability
 
 Normalized generation outputs are text_delta, tool_call, usage, completed, and error. A tool_call is emitted to the executor only after complete argument parsing. An adapter may use native function calling or a validated structured envelope for internal local control; the selected mechanism is visible in configuration and tests. Syntactically valid JSON is not evidence that the selected action is correct.
 
-For Qwen3, non-thinking mode MUST be configured through the pinned runtime's supported chat-template settings and verified by a smoke test. A /no_think string alone is not the qualification criterion. Exact runtime switches MUST come from the selected build's documentation. Model-specific templates and parsing remain inside the adapter. [S1, S3, S10]
+For Qwen3, non-thinking mode MUST be configured through the pinned runtime's supported chat-template settings and verified by a smoke test. A /no_think string alone is not the qualification criterion. Exact runtime switches MUST come from the selected build's documentation. Model-specific templates and parsing remain inside the adapter. Non-thinking is the default and the configuration used for the latency experiment; an operator MAY enable thinking mode through the same chat-template settings. Reasoning output MUST NOT appear as answer content in either mode, and latency results from the two modes MUST NOT be mixed. [S1, S3, S10]
 
 The artifact manifest MUST record model source, revision, file SHA-256, quantization, tokenizer and template hashes, runtime commit, launch settings, and license metadata. Q4 and Q8 are comparison candidates, not prequalified defaults. The selected artifact becomes the default only after the bilingual tool tests. External configuration similarly records endpoint, model identifier, supported parameters, and provider-returned version information when available.
 

@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Specification 0.1 → 0.2: section 6 now allows an operator option to
+  enable Qwen3 thinking mode through the same chat-template settings.
+  Non-thinking stays the default and the latency-experiment
+  configuration; reasoning output never appears as answer content, and
+  results from the two modes are never mixed.
+
 ### Added
 
 - Project scaffold: repository layout, CI, and contributor guides.

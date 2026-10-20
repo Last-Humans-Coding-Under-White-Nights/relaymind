@@ -4,8 +4,9 @@ on:
   push:
     branches: [master]
     tags: ['v*']
+  # No base-branch filter: stacked PRs (feature branch onto feature
+  # branch) must get CI too.
   pull_request:
-    branches: [master]
 
 jobs:
   check:
