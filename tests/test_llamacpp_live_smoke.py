@@ -27,8 +27,8 @@ import pytest
 
 from helpers import (
     HEALTH_TOOL,
+    MODELS_DIR,
     PINNED_MANIFEST_PATH,
-    REPO_ROOT,
     collect_events,
     make_request,
     smoke_adapter_settings,
@@ -74,7 +74,7 @@ def server(tmp_path_factory, manifest, adapter_settings):
     if shutil.which("llama-server") is None:
         pytest.skip("llama-server not on PATH")
     override = os.environ.get(MODEL_ENV)
-    model_path = Path(override) if override else REPO_ROOT / "models" / manifest.file_name
+    model_path = Path(override) if override else MODELS_DIR / manifest.file_name
     if not model_path.is_file():
         pytest.skip(f"model artifact not found: {model_path}")
     # models/README.md: verify against the manifest before use. A

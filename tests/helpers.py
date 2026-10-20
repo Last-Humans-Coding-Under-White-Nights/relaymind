@@ -15,10 +15,10 @@ from relaymind.adapters import (
 )
 from relaymind.adapters.manifest import ManifestError
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 
 # The checked-in candidate manifest (RM18, spec section 6).
-PINNED_MANIFEST_PATH = REPO_ROOT / "models" / "qwen3-0.6b-q8_0.manifest.json"
+PINNED_MANIFEST_PATH = MODELS_DIR / "qwen3-0.6b-q8_0.manifest.json"
 
 # The canonical demo tool (spec section 9), shared across test files.
 HEALTH_TOOL = ToolSchema(
