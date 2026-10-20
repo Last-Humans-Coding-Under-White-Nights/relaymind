@@ -4,8 +4,14 @@
 tasks with skills and tools. Complex work is transferred to an external model.
 Every routing decision, tool call, and model call is visible in a trace.
 
-Status: **specification stage**. The spec is written; implementation has not
-started yet.
+Status: **M1 (adapter and protocol qualification) in progress.** Merged so
+far: the model adapter contract, the llama.cpp adapter for Qwen3-0.6B
+(non-thinking mode verified by a live smoke test), the pinned model
+artifact manifest machinery, and the manual testing guide
+([`docs/TESTING.md`](docs/TESTING.md)). In review: the external Chat
+Completions adapter, per-generation timing export, and the AC08 model
+substitution test. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the
+milestone plan.
 
 ## How this project works
 
@@ -39,6 +45,7 @@ See [`AGENTS.md`](AGENTS.md) for the full contributor workflow.
 | `docs/ARCHITECTURE.md` | How components map to the code layout. |
 | `docs/ROADMAP.md` | Implementation milestones with requirement IDs. |
 | `src/relaymind/` | Gateway source (Python, FastAPI). |
+| `models/` | Pinned model artifact manifests; the GGUF files are downloaded, not checked in. |
 | `skills/` | Demo skill packages (SKILL.md format). |
 | `tests/` | Test suite and sandbox fixtures. |
 | `scripts/` | Evaluation and benchmark scripts. |

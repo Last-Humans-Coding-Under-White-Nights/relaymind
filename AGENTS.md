@@ -26,6 +26,7 @@ codebase.
 | `src/relaymind/tools/` | Tool registry and executor: argument validation, permissions, side effects (RM08–RM12) |
 | `src/relaymind/store/` | Run store: SQLite events, tool outcomes, approvals, versioned state (RM17, RM22) |
 | `src/relaymind/ui/` | Demo UI: decisions and execution evidence (RM23) |
+| `models/` | Pinned model artifact manifests (RM18, spec section 6); GGUF files are downloaded per `models/README.md`, never checked in |
 | `skills/` | Demo skill packages, one directory per skill, SKILL.md format |
 | `tests/` | Test suite; `tests/fixtures/` holds sandbox demo data |
 | `scripts/` | Evaluation corpus runner and benchmark scripts (RM25) |

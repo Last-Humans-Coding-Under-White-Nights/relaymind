@@ -20,6 +20,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Model adapter contract (RM18): capabilities, generate, cancel, and
+  health with normalized messages and events (`relaymind.adapters`).
+- llama.cpp adapter for Qwen3-0.6B over a llama-server endpoint, with
+  non-thinking mode configured through chat-template settings and
+  verified by a live smoke test (spec section 6).
+- Model artifact manifest machinery: GGUF metadata hashing,
+  `load_manifest`/`verify_artifact`, the manifest generator script, and
+  the pinned Qwen3-0.6B Q8_0 manifest (`models/`).
+- Manual testing guide for the M1 deliverable on macOS and Windows
+  (`docs/TESTING.md`).
 - Project scaffold: repository layout, CI, and contributor guides.
 - Specification v0.1 (`docs/SPECIFICATION.md`) as the single source of
   truth for the prototype.
