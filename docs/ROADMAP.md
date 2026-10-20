@@ -48,12 +48,14 @@ infrastructure around it is built.
 
 ### Stage A — Routing probe and vertical slice
 
-- Live routing probe (#48): a throwaway spike that feeds the six skill
-  descriptions and bilingual prompts to the pinned model through the M1
-  adapter and timing collector, tries the mechanisms spec section 6
-  allows (native function calling, validated JSON envelope,
-  grammar-constrained output), and records the result. Its outcome
-  selects the routing mechanism for #14 and is written here.
+- Live routing probe (#48; RM02): a throwaway spike that feeds the six
+  skill descriptions and bilingual prompts to the pinned model through
+  the M1 adapter and timing collector, tries the two mechanisms spec
+  section 6 allows for local control (native function calling and a
+  validated structured envelope; the envelope is tried with and without
+  grammar-constrained decoding), and records the result in
+  `EVIDENCE.md`. Its outcome selects the routing mechanism for #14 and
+  is documented here.
 - Local tokenizer (#47): router input is capped at 2,048 local tokens
   (spec section 4.1); the adapter needs a token count for it.
 - Run states and SQLite store, first increment (#6, #7; RM17,
@@ -63,8 +65,9 @@ infrastructure around it is built.
   events cannot wait for M4. SSE exposure and the UI stay in M4.
 - One skill end to end: check-service-health with get_service_health
   against the sandbox data service, the first increment of #9, #10,
-  #11, #12, #13.
-- Router (#14) and local generation loop with recorded budgets (#15).
+  #11, #12, #13 (RM06, RM08–RM10, RM23).
+- Router (#14) and local generation loop with recorded budgets (#15;
+  RM01–RM03).
 - Exit: AC01 passes with doubles, and the live trace for
   check-service-health is recorded in both languages.
 
@@ -72,9 +75,10 @@ infrastructure around it is built.
 
 - Remaining skill packages and tools (#12, #13): lookup-latest-deployment,
   summarize-incident-counts, investigate-performance, and the read-only
-  tools behind them. delete-demo-database and the parallel skill are
-  registered but exercised in M3 and M5.
-- Full skill and tool registries (#9, #10): registry manifest,
+  tools behind them. delete-demo-database and
+  health-and-diagnostic-checklist are registered but exercised in M3
+  and M5.
+- Full skill and tool registries (#9, #10; RM06–RM08): registry manifest,
   permission intersection, resource-path restriction, version and hash
   invalidation.
 - Clarification for missing identifiers (#16; RM05).
@@ -85,16 +89,17 @@ infrastructure around it is built.
 ## M3 — Handoff and confirmation
 
 - Handoff envelope and escalation to the external model (#18; RM13,
-  RM14).
-- Single dispatch authority; no duplicate completed operations.
+  RM14): single dispatch authority, revoked on escalation; no duplicate
+  completed operations.
 - Confirmation flow for the mutating demo tool (#19; RM11), including
   deny, replay, expiry, and altered-arguments cases.
-- Restart recovery: interrupted runs and unknown outcomes (#8), moved
-  here from M2 because it only matters once mutations exist.
+- Restart recovery: interrupted runs and unknown outcomes (#8; RM10,
+  RM17, section 5), moved here from M2 because it only matters once
+  mutations exist. Part of AC12, which closes in M4 together with #29.
 - Prompt-injection test for tool output and secret redaction (#20;
   RM12).
-- Failure behavior and error codes (#21; section 11).
-- AC08, orchestrator and skill half (#49): the same orchestrator and
+- Failure behavior and error codes (#21; RM04, section 11).
+- AC08, orchestrator and skill half (#49; RM18): the same orchestrator and
   skill packages across a local and an external swap.
 - Closes: AC02, AC05, AC06, AC07, AC08.
 
@@ -104,7 +109,8 @@ infrastructure around it is built.
   (#22, #23, #24; RM19, RM20).
 - Native run API: runs, events SSE, resume, cancel, idempotency (#25,
   #26; RM21). SSE exposes the events recorded since M2.
-- Cancellation during generation and in-flight writes (#29).
+- Cancellation during generation and in-flight writes (#29; RM10, RM14,
+  RM17); closes AC12 together with #8.
 - Demo trace UI (#28; RM23), including the visual timing view over the
   statistics collected since M1.
 - Closes: AC09, AC10, AC11, AC12, AC16.

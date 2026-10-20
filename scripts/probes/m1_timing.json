@@ -1,0 +1,31 @@
+{
+  "manifest": "../../models/qwen3-0.6b-q8_0.manifest.json",
+  "warmups": 3,
+  "system_prompt": "You check service health. Use the get_service_health tool to answer health questions.",
+  "tool": {
+    "name": "get_service_health",
+    "description": "Return current health for a service.",
+    "input_schema": {
+      "type": "object",
+      "properties": {"service": {"enum": ["staging-api", "payments-api"]}},
+      "required": ["service"],
+      "additionalProperties": false
+    }
+  },
+  "text_prompts": [
+    "Reply with exactly one word: pong",
+    "What is the capital of France? Answer in one word.",
+    "Say hello in one short sentence.",
+    "只用一个词回答：pong",
+    "法国的首都是哪里？用一个词回答。",
+    "用一句话打个招呼。"
+  ],
+  "tool_prompts": [
+    "Is staging-api healthy right now?",
+    "Check the health of payments-api.",
+    "Is payments-api up?",
+    "staging-api 现在健康吗？",
+    "检查 payments-api 的健康状况。",
+    "payments-api 正常运行吗？"
+  ]
+}

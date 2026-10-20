@@ -41,9 +41,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Manual testing guide for the M1 deliverable on macOS and Windows
   (`docs/TESTING.md`).
 - Live evidence record (`docs/EVIDENCE.md`, raw exports in
-  `docs/evidence/`): the M1 live smoke run and a first timing probe on
-  Apple Silicon macOS, with machine, runtime build, manifest, and result.
-  Single-pass observations, not benchmark results (spec section 12.3).
+  `docs/evidence/`): the M1 live smoke run and a timing probe on Apple
+  Silicon macOS, with machine, runtime build, manifest, exact command,
+  and result. Single-pass observations, not benchmark results (spec
+  section 12.3).
+- Reproducible timing probe (`scripts/probe_timing.py` with probe
+  definitions in `scripts/probes/`): launches llama-server from the
+  manifest, records cold start, warm-ups of both prompt kinds, and one
+  measured pass, and writes an export whose `run` block names the
+  command, prompts, system prompt, tool schema, and each generation's
+  outcome (RM16, RM25). `export_stats` accepts that block as `run_info`.
 - Project scaffold: repository layout, CI, and contributor guides.
 - Specification v0.1 (`docs/SPECIFICATION.md`) as the single source of
   truth for the prototype.
