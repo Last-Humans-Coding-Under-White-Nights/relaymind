@@ -97,6 +97,8 @@ def test_provider_error_detail_never_contains_the_credential(monkeypatch):
     assert failure.code == "provider_error"
     assert "sk-leak-me" not in failure.message
     assert "[redacted]" in failure.message
+    # Redaction keeps the provider-sent marker (RM25, spec 12.1).
+    assert failure.received is True
 
 
 def test_credential_straddling_the_truncation_boundary_never_leaks(monkeypatch):

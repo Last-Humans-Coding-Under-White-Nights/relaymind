@@ -350,6 +350,8 @@ def test_non_object_argument_json_fails_as_invalid_tool_arguments():
         assert len(events) == 1, raw
         assert isinstance(events[0], GenerationFailed)
         assert events[0].code == "invalid_tool_arguments"
+        # Built from received content: a transport event (RM25, 12.1).
+        assert events[0].received is True
 
 
 def test_streamed_error_chunk_becomes_generation_failed():
@@ -357,7 +359,10 @@ def test_streamed_error_chunk_becomes_generation_failed():
     # were silently dropped because they carry no choices or usage.
     acc = StreamAccumulator()
     events = acc.feed({"error": {"message": "KV slot exhausted", "code": 500}})
-    assert events == [GenerationFailed(code="provider_error", message="KV slot exhausted")]
+    # The provider sent this failure: a transport event (RM25, 12.1).
+    assert events == [
+        GenerationFailed(code="provider_error", message="KV slot exhausted", received=True)
+    ]
     # The stream is over; the end-of-stream flush must not add events.
     assert acc.flush() == []
 

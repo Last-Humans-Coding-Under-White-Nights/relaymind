@@ -7,10 +7,12 @@ numbers from here are never published as measured results (spec
 section 12.3).
 """
 
+import asyncio
 import json
 import re
 import time
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from contextlib import aclosing
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -82,9 +84,12 @@ class TimingCollector(ModelAdapter):
 
     Events pass through unchanged (RM18: the rest of the gateway sees
     the same normalized stream); one GenerationStats record is appended
-    per generate() call. A transport event is anything the provider
-    sent; a GenerationFailed the adapter synthesized (timeout,
-    unreachable, missing credentials) is not one.
+    per generate() call, and drain() hands them over so a long-lived
+    collector does not hold them forever. A transport event is anything
+    the provider sent; a GenerationFailed the adapter synthesized
+    (received is False: timeout, unreachable, missing credentials) is
+    not one. A generation that ends without a terminal event records
+    why: cancelled, abandoned, adapter_error, or no_terminal_event.
     """
 
     def __init__(
@@ -96,6 +101,7 @@ class TimingCollector(ModelAdapter):
         self._adapter = adapter
         self._clock = clock
         self.records: list[GenerationStats] = []
+        self._cancel_requested: set[str] = set()
 
     async def capabilities(self) -> AdapterCapabilities:
         return await self._adapter.capabilities()
@@ -116,41 +122,68 @@ class TimingCollector(ModelAdapter):
         self.records.append(record)
         started = self._clock()
         try:
-            async for event in self._adapter.generate(request):
-                elapsed = self._clock() - started
-                if (
-                    not isinstance(event, GenerationFailed)
-                    and record.first_transport_event_seconds is None
-                ):
-                    record.first_transport_event_seconds = elapsed
-                # Event types are mutually exclusive; at most one branch runs.
-                if isinstance(event, TextDelta):
-                    if event.text and record.first_answer_token_seconds is None:
-                        record.first_answer_token_seconds = elapsed
-                elif isinstance(event, ToolCall):
-                    if record.first_model_action_seconds is None:
-                        record.first_model_action_seconds = elapsed
-                elif isinstance(event, Usage):
-                    record.input_tokens = event.input_tokens
-                    record.output_tokens = event.output_tokens
-                    record.cached_tokens = event.cached_tokens
-                elif isinstance(event, Completed):
-                    record.finish_reason = event.finish_reason
-                    if event.finish_reason == _ANSWER_FINISH_REASON:
-                        record.completion_seconds = elapsed
-                elif isinstance(event, GenerationFailed):
-                    record.failure_code = event.code
-                yield event
+            # aclosing: an abandoned or failed stream closes the inner
+            # one at once, releasing its provider connection.
+            async with aclosing(self._adapter.generate(request)) as events:
+                while True:
+                    try:
+                        event = await anext(events)
+                    except StopAsyncIteration:
+                        break
+                    except Exception:
+                        # Keep a failure code the adapter already sent.
+                        if record.failure_code is None:
+                            record.failure_code = "adapter_error"
+                        raise
+                    self._observe(record, event, self._clock() - started)
+                    yield event
+            if record.finish_reason is None and record.failure_code is None:
+                cancelled = request.generation_id in self._cancel_requested
+                record.failure_code = "cancelled" if cancelled else "no_terminal_event"
         except GeneratorExit:
             # The consumer walked away before a terminal event.
             if record.finish_reason is None and record.failure_code is None:
                 record.failure_code = "abandoned"
             raise
-        except Exception:
-            record.failure_code = "adapter_error"
+        except asyncio.CancelledError:
+            # An interrupt (Ctrl-C under asyncio.run) is not an Exception.
+            if record.finish_reason is None and record.failure_code is None:
+                record.failure_code = "cancelled"
             raise
+        finally:
+            self._cancel_requested.discard(request.generation_id)
+
+    @staticmethod
+    def _observe(record: GenerationStats, event: AdapterEvent, elapsed: float) -> None:
+        if record.first_transport_event_seconds is None and (
+            not isinstance(event, GenerationFailed) or event.received
+        ):
+            record.first_transport_event_seconds = elapsed
+        # Event types are mutually exclusive; at most one branch runs.
+        if isinstance(event, TextDelta):
+            if event.text and record.first_answer_token_seconds is None:
+                record.first_answer_token_seconds = elapsed
+        elif isinstance(event, ToolCall):
+            if record.first_model_action_seconds is None:
+                record.first_model_action_seconds = elapsed
+        elif isinstance(event, Usage):
+            record.input_tokens = event.input_tokens
+            record.output_tokens = event.output_tokens
+            record.cached_tokens = event.cached_tokens
+        elif isinstance(event, Completed):
+            record.finish_reason = event.finish_reason
+            if event.finish_reason == _ANSWER_FINISH_REASON:
+                record.completion_seconds = elapsed
+        elif isinstance(event, GenerationFailed):
+            record.failure_code = event.code
+
+    def drain(self) -> list[GenerationStats]:
+        """Hand over the records gathered so far and stop holding them."""
+        records, self.records = self.records, []
+        return records
 
     async def cancel(self, generation_id: str) -> None:
+        self._cancel_requested.add(generation_id)
         await self._adapter.cancel(generation_id)
 
     async def health(self) -> AdapterHealth:
@@ -224,25 +257,28 @@ async def run_comparison(
     Generation ids are shared across configs (gen_000, gen_001, ...)
     so exports join row by row. An adapter that raises is recorded as
     a failed generation and the run continues, so one broken config
-    never costs the others their exports. Returns the export path per
+    never costs the others their exports. An interrupted config still
+    exports the generations it measured. Returns the export path per
     config name.
     """
     check_export_names(list(adapters))
-    out_dir.mkdir(parents=True, exist_ok=True)
     paths: dict[str, Path] = {}
     for name, (adapter, identity) in adapters.items():
         collector = TimingCollector(adapter, clock=clock)
-        for index, prompt in enumerate(prompts):
-            request = GenerationRequest(
-                generation_id=f"gen_{index:03d}",
-                messages=(Message(role=Role.USER, content=prompt),),
-            )
-            try:
-                async for _event in collector.generate(request):
-                    pass
-            except Exception:  # noqa: BLE001 - recorded as adapter_error by the collector
-                continue
         path = out_dir / f"{name}.json"
-        export_stats(path, identity=identity, records=collector.records)
+        try:
+            for index, prompt in enumerate(prompts):
+                request = GenerationRequest(
+                    generation_id=f"gen_{index:03d}",
+                    messages=(Message(role=Role.USER, content=prompt),),
+                )
+                try:
+                    async for _event in collector.generate(request):
+                        pass
+                except Exception:  # noqa: BLE001 - recorded as adapter_error by the collector
+                    continue
+        finally:
+            # Written even when interrupted, so what was measured survives.
+            export_stats(path, identity=identity, records=collector.drain())
         paths[name] = path
     return paths

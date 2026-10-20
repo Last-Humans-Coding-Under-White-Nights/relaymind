@@ -20,7 +20,9 @@ from relaymind.stats import AdapterIdentity
 
 # Resolved from this file, not the current working directory, so the
 # suite passes no matter where pytest is invoked from.
-SCRIPT_PATH = Path(__file__).resolve().parent.parent / "scripts" / "compare_adapters.py"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SCRIPT_PATH = REPO_ROOT / "scripts" / "compare_adapters.py"
+MANIFEST_PATH = REPO_ROOT / "models" / "qwen3-0.6b-q8_0.manifest.json"
 
 
 def load_script_module():
@@ -49,7 +51,7 @@ def test_compare_script_rejects_an_unknown_adapter_kind(tmp_path):
                         "kind": "llamacpp",
                         "base_url": "http://127.0.0.1:8033",
                         "context_limit": 8192,
-                        "model_id": "qwen3-0.6b",
+                        "manifest": str(MANIFEST_PATH),
                     },
                     "weird": {"kind": "carrier-pigeon", "model_id": "x", "context_limit": 1},
                 },
@@ -76,7 +78,7 @@ LOCAL_SPEC = {
     "kind": "llamacpp",
     "base_url": "http://127.0.0.1:8033",
     "context_limit": 8192,
-    "model_id": "qwen3-0.6b",
+    "manifest": str(MANIFEST_PATH),
 }
 
 
@@ -91,6 +93,20 @@ LOCAL_SPEC = {
         ({"prompts": [42], "adapters": {}}, "prompts"),
         ({"prompts": ["hi"], "adapters": {"local": LOCAL_SPEC, "b": "llamacpp"}}, "'b'"),
         ({"prompts": ["hi"], "adapters": {"local": LOCAL_SPEC, "../x": LOCAL_SPEC}}, "../x"),
+        (
+            {
+                "prompts": ["hi"],
+                "adapters": {"local": LOCAL_SPEC, "b": {**LOCAL_SPEC, "context_limit": 8192.9}},
+            },
+            "context_limit",
+        ),
+        (
+            {
+                "prompts": ["hi"],
+                "adapters": {"local": LOCAL_SPEC, "b": {**LOCAL_SPEC, "manifest": "missing.json"}},
+            },
+            "missing.json",
+        ),
     ],
 )
 def test_compare_script_rejects_malformed_configs_without_a_traceback(tmp_path, config, expected):
@@ -132,7 +148,9 @@ class TrackingAdapter(ScriptedAdapter):
         self.closed = True
 
 
-def test_run_closes_every_adapter_even_when_one_close_fails(tmp_path):
+def test_run_closes_every_adapter_even_when_one_close_fails(tmp_path, capsys):
+    # A close failure after every export is written must not turn a
+    # successful run into a crash that hides the export paths.
     module = load_script_module()
     tracked = TrackingAdapter([Completed(finish_reason="stop")])
     identity = AdapterIdentity(adapter="x", model_id="x")
@@ -141,6 +159,48 @@ def test_run_closes_every_adapter_even_when_one_close_fails(tmp_path):
         "failing": (FailingCloseAdapter([Completed(finish_reason="stop")]), identity),
         "tracked": (tracked, identity),
     }
-    with pytest.raises(RuntimeError, match="close failed"):
-        asyncio.run(module._run(adapters, ["p"], tmp_path))
+    paths = asyncio.run(module._run(adapters, ["p"], tmp_path))
+    assert set(paths) == {"plain", "failing", "tracked"}
+    assert all(path.exists() for path in paths.values())
     assert tracked.closed
+    assert "failing" in capsys.readouterr().err
+
+
+def test_a_local_adapter_identity_comes_from_its_model_manifest(tmp_path):
+    # Honest evidence (RM16, spec 12.2): the export names what was
+    # measured from the pinned manifest, never from hand-typed fields.
+    module = load_script_module()
+    adapter, identity = module._build_adapter("local", LOCAL_SPEC)
+    try:
+        assert identity == AdapterIdentity(
+            adapter="llamacpp",
+            model_id="qwen3-0.6b",
+            quantization="Q8_0",
+            runtime_version="0.7.0 (build 11669, commit 620d2225c)",
+        )
+    finally:
+        asyncio.run(adapter.aclose())
+
+
+def test_a_relative_manifest_path_resolves_against_the_config_directory():
+    module = load_script_module()
+    spec = {**LOCAL_SPEC, "manifest": MANIFEST_PATH.name}
+    adapter, identity = module._build_adapter("local", spec, base_dir=MANIFEST_PATH.parent)
+    try:
+        assert identity.model_id == "qwen3-0.6b"
+    finally:
+        asyncio.run(adapter.aclose())
+
+
+@pytest.mark.parametrize(
+    "spec",
+    [
+        {key: value for key, value in LOCAL_SPEC.items() if key != "manifest"},
+        {**LOCAL_SPEC, "quantization": "Q4_K_M"},
+        {**LOCAL_SPEC, "model_id": "qwen3-0.6b"},
+    ],
+)
+def test_a_local_adapter_needs_a_manifest_and_no_hand_typed_identity(spec):
+    module = load_script_module()
+    with pytest.raises(ValueError):
+        module._build_adapter("local", spec)

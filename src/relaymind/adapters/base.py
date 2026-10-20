@@ -148,10 +148,17 @@ class Completed:
 
 @dataclass(frozen=True)
 class GenerationFailed:
-    """The generation failed, with a stable error code."""
+    """The generation failed, with a stable error code.
+
+    received is True when the provider sent the failure (an error
+    status, an error chunk, or malformed streamed content), so it is a
+    transport event (spec 12.1); False when the adapter synthesized it
+    without a provider response (timeout, unreachable, no credentials).
+    """
 
     code: str
     message: str
+    received: bool = False
 
 
 AdapterEvent = TextDelta | ToolCall | Usage | Completed | GenerationFailed

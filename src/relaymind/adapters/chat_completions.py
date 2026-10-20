@@ -173,9 +173,7 @@ class ChatCompletionsAdapter(ModelAdapter):
                 # header in any error message, so every failure is
                 # scrubbed here (issue #4).
                 if isinstance(event, GenerationFailed):
-                    event = GenerationFailed(
-                        code=event.code, message=self._redact(event.message, api_key)
-                    )
+                    event = dataclasses.replace(event, message=self._redact(event.message, api_key))
                 yield event
         finally:
             self._cancel_events.pop(request.generation_id, None)

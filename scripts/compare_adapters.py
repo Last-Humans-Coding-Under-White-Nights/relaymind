@@ -16,9 +16,7 @@ Config format:
           "kind": "llamacpp",
           "base_url": "http://127.0.0.1:8033",
           "context_limit": 8192,
-          "model_id": "qwen3-0.6b",
-          "quantization": "Q8_0",
-          "runtime_version": "build 11669 commit 620d2225c"
+          "manifest": "models/qwen3-0.6b-q8_0.manifest.json"
         },
         "external": {
           "kind": "chat_completions",
@@ -30,14 +28,16 @@ Config format:
       }
     }
 
-model_id, quantization, and runtime_version for a local artifact come
-from its model manifest (models/*.manifest.json).
+A llamacpp config names the model manifest of the artifact it serves
+(models/*.manifest.json; a relative path resolves against the config
+file's directory). Its model_id, quantization, and runtime_version are
+read from that manifest and may not be typed into the config.
 """
 
 import argparse
 import asyncio
 import json
-from contextlib import AsyncExitStack
+import sys
 from pathlib import Path
 
 from relaymind.adapters.base import ModelAdapter
@@ -46,32 +46,60 @@ from relaymind.adapters.chat_completions import (
     ChatCompletionsConfig,
 )
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
+from relaymind.adapters.manifest import ManifestError, load_manifest
 from relaymind.stats import AdapterIdentity, check_export_names, run_comparison
 
 DEFAULT_API_KEY_ENV = "RELAYMIND_EXTERNAL_API_KEY"
 
+# Identity fields a llamacpp config reads from its manifest.
+_MANIFEST_FIELDS = ("model_id", "quantization", "runtime_version")
 
-def _build_adapter(name: str, spec: dict) -> tuple[ModelAdapter, AdapterIdentity]:
+
+def _context_limit(name: str, spec: dict) -> int:
+    value = spec["context_limit"]
+    # bool is an int subclass; a float would be silently truncated.
+    if type(value) is not int:
+        raise ValueError(f"adapter {name!r}: context_limit must be an integer, got {value!r}")
+    return value
+
+
+def _build_adapter(
+    name: str, spec: dict, *, base_dir: Path = Path()
+) -> tuple[ModelAdapter, AdapterIdentity]:
     if not isinstance(spec, dict):
         raise ValueError(f"adapter {name!r} must be a JSON object")
     kind = spec.get("kind")
-    identity = AdapterIdentity(
-        adapter=str(kind),
-        model_id=str(spec.get("model_id", "")),
-        quantization=spec.get("quantization"),
-        runtime_version=spec.get("runtime_version"),
-    )
     if kind == "llamacpp":
+        typed = [field for field in _MANIFEST_FIELDS if field in spec]
+        if typed:
+            raise ValueError(
+                f"adapter {name!r}: {', '.join(typed)} come from the manifest; remove them"
+            )
+        if not isinstance(spec.get("manifest"), str):
+            raise ValueError(f"adapter {name!r}: a llamacpp config needs a 'manifest' path")
+        manifest = load_manifest(base_dir / spec["manifest"])
+        identity = AdapterIdentity(
+            adapter=kind,
+            model_id=manifest.model_id,
+            quantization=manifest.quantization,
+            runtime_version=manifest.runtime_version,
+        )
         config = LlamaCppConfig(
             base_url=spec["base_url"],
-            context_limit=int(spec["context_limit"]),
+            context_limit=_context_limit(name, spec),
         )
         return LlamaCppAdapter(config), identity
     if kind == "chat_completions":
+        identity = AdapterIdentity(
+            adapter=kind,
+            model_id=str(spec["model_id"]),
+            quantization=spec.get("quantization"),
+            runtime_version=spec.get("runtime_version"),
+        )
         config = ChatCompletionsConfig(
             base_url=spec["base_url"],
-            model=str(spec["model_id"]),
-            context_limit=int(spec["context_limit"]),
+            model=identity.model_id,
+            context_limit=_context_limit(name, spec),
             api_key_env=spec.get("api_key_env") or DEFAULT_API_KEY_ENV,
         )
         return ChatCompletionsAdapter(config), identity
@@ -86,11 +114,19 @@ async def _run(adapters, prompts, out_dir: Path) -> dict[str, Path]:
 
 
 async def _close_all(adapters) -> None:
-    async with AsyncExitStack() as stack:
-        for adapter, _identity in adapters.values():
-            aclose = getattr(adapter, "aclose", None)
-            if aclose is not None:
-                stack.push_async_callback(aclose)
+    """Close every adapter; a close failure is reported, never raised.
+
+    By the time adapters close, the exports are written, so a failing
+    close must not hide the paths or another error behind a traceback.
+    """
+    for name, (adapter, _identity) in adapters.items():
+        aclose = getattr(adapter, "aclose", None)
+        if aclose is None:
+            continue
+        try:
+            await aclose()
+        except Exception as exc:  # noqa: BLE001 - reported, never raised
+            print(f"warning: closing adapter {name!r} failed: {exc}", file=sys.stderr)
 
 
 def main() -> None:
@@ -122,8 +158,8 @@ def main() -> None:
     adapters: dict[str, tuple[ModelAdapter, AdapterIdentity]] = {}
     try:
         for name, spec in adapter_specs.items():
-            adapters[name] = _build_adapter(name, spec)
-    except (KeyError, TypeError, ValueError) as exc:
+            adapters[name] = _build_adapter(name, spec, base_dir=args.config.parent)
+    except (KeyError, TypeError, ValueError, ManifestError) as exc:
         # Close the adapters already built before exiting.
         asyncio.run(_close_all(adapters))
         parser.error(f"invalid adapter config: {exc}")

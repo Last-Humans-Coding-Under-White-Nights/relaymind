@@ -10,8 +10,9 @@
   adapter configurations and write one JSON export per config: spec
   12.1 metrics per generation (first transport event, first model
   action, first answer token, completion latency, finish reason) plus
-  per-call token usage, with the adapter identity (model id,
-  quantization, runtime version from the model manifest) attached.
+  per-call token usage, with the adapter identity attached. A llamacpp
+  config names its model manifest; model id, quantization, and runtime
+  version are read from it, never typed into the config.
 
   ```bash
   python scripts/compare_adapters.py config.json --out-dir exports/

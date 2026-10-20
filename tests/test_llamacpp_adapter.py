@@ -128,6 +128,9 @@ def test_non_200_response_fails_with_provider_error():
     assert len(events) == 1
     assert isinstance(events[0], GenerationFailed)
     assert events[0].code == "provider_error"
+    # RM25 / spec 12.1: the error status came over the wire, so it is a
+    # transport event; a synthesized failure is not.
+    assert events[0].received is True
 
 
 def test_unreachable_server_fails_with_provider_unreachable():
@@ -138,6 +141,8 @@ def test_unreachable_server_fails_with_provider_unreachable():
     assert len(events) == 1
     assert isinstance(events[0], GenerationFailed)
     assert events[0].code == "provider_unreachable"
+    # Nothing came over the wire (RM25, spec 12.1).
+    assert events[0].received is False
 
 
 def test_timeout_fails_with_provider_timeout():
