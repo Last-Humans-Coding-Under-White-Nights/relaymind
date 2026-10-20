@@ -4,13 +4,27 @@ Covers RM18 / spec section 6: hashes in the manifest come from the
 artifact itself, computed, not copied by hand. Issue #2.
 """
 
+import dataclasses
 import json
 import subprocess
 import sys
+from pathlib import Path
+
+import pytest
 
 from gguf_builder import sample_kvs, write_gguf
 from relaymind.adapters.gguf import artifact_hashes
-from relaymind.adapters.manifest import build_manifest, load_manifest, sha256_file, verify_artifact
+from relaymind.adapters.manifest import (
+    ManifestError,
+    build_manifest,
+    load_manifest,
+    sha256_file,
+    verify_artifact,
+)
+
+# Resolved from this file, not the current working directory, so the
+# suite passes no matter where pytest is invoked from.
+SCRIPT_PATH = Path(__file__).resolve().parent.parent / "scripts" / "gen_model_manifest.py"
 
 SOURCE = dict(
     model_id="qwen3-0.6b",
@@ -37,21 +51,11 @@ def test_build_manifest_computes_all_hashes_from_the_artifact(tmp_path):
 
 
 def test_build_manifest_rejects_a_missing_artifact(tmp_path):
-    import pytest
-
-    from relaymind.adapters.manifest import ManifestError
-
     with pytest.raises(ManifestError):
         build_manifest(tmp_path / "absent.gguf", **SOURCE)
 
 
 def test_verify_artifact_detects_tampered_metadata_hashes(tmp_path):
-    import dataclasses
-
-    import pytest
-
-    from relaymind.adapters.manifest import ManifestError
-
     artifact = write_gguf(tmp_path / "model.gguf", sample_kvs())
     manifest = build_manifest(artifact, **SOURCE)
     tampered = dataclasses.replace(manifest, tokenizer_hash="0" * 64)
@@ -65,7 +69,7 @@ def test_gen_manifest_script_rejects_non_object_launch_settings(tmp_path):
     result = subprocess.run(
         [
             sys.executable,
-            "scripts/gen_model_manifest.py",
+            str(SCRIPT_PATH),
             str(artifact),
             "--out",
             str(out),
@@ -86,7 +90,7 @@ def test_gen_manifest_script_writes_a_loadable_manifest(tmp_path):
     subprocess.run(
         [
             sys.executable,
-            "scripts/gen_model_manifest.py",
+            str(SCRIPT_PATH),
             str(artifact),
             "--out",
             str(out),
