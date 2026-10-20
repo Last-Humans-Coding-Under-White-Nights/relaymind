@@ -115,17 +115,18 @@ def scripted_endpoint(served: list[dict]):
     return handler
 
 
+def scripted_adapter(adapter_cls, config):
+    """Build an adapter on a scripted endpoint; return it and its record list."""
+    served: list[dict] = []
+    adapter = adapter_cls(config, transport=httpx.MockTransport(scripted_endpoint(served)))
+    return adapter, served
+
+
 def test_local_model_swap_is_configuration_only():
     # First qualified local model, then a second one on its own
     # llama-server endpoint: only LlamaCppConfig values change.
-    first_served: list[dict] = []
-    first = LlamaCppAdapter(
-        LOCAL_ONE, transport=httpx.MockTransport(scripted_endpoint(first_served))
-    )
-    second_served: list[dict] = []
-    second = LlamaCppAdapter(
-        LOCAL_TWO, transport=httpx.MockTransport(scripted_endpoint(second_served))
-    )
+    first, first_served = scripted_adapter(LlamaCppAdapter, LOCAL_ONE)
+    second, second_served = scripted_adapter(LlamaCppAdapter, LOCAL_TWO)
 
     assert context_limit(first) == 8192
     assert context_limit(second) == 32768
@@ -146,14 +147,8 @@ def test_external_endpoint_swap_is_configuration_only(monkeypatch):
     # ChatCompletionsConfig values change.
     monkeypatch.setenv("SUBST_KEY_A", "sk-a")
     monkeypatch.setenv("SUBST_KEY_B", "sk-b")
-    first_served: list[dict] = []
-    first = ChatCompletionsAdapter(
-        PROVIDER_ONE, transport=httpx.MockTransport(scripted_endpoint(first_served))
-    )
-    second_served: list[dict] = []
-    second = ChatCompletionsAdapter(
-        PROVIDER_TWO, transport=httpx.MockTransport(scripted_endpoint(second_served))
-    )
+    first, first_served = scripted_adapter(ChatCompletionsAdapter, PROVIDER_ONE)
+    second, second_served = scripted_adapter(ChatCompletionsAdapter, PROVIDER_TWO)
 
     assert context_limit(first) == 128000
     assert context_limit(second) == 64000
@@ -179,14 +174,8 @@ def test_local_to_external_swap_keeps_the_same_scenario_code(monkeypatch):
     # external credential is configured in the environment, and the
     # external request carries both.
     monkeypatch.setenv("SUBST_KEY_A", "sk-a")
-    local_served: list[dict] = []
-    external_served: list[dict] = []
-    local = LlamaCppAdapter(
-        LOCAL_ONE, transport=httpx.MockTransport(scripted_endpoint(local_served))
-    )
-    external = ChatCompletionsAdapter(
-        PROVIDER_ONE, transport=httpx.MockTransport(scripted_endpoint(external_served))
-    )
+    local, local_served = scripted_adapter(LlamaCppAdapter, LOCAL_ONE)
+    external, external_served = scripted_adapter(ChatCompletionsAdapter, PROVIDER_ONE)
 
     assert run_scenario(local) == EXPECTED_EVENTS
     assert run_scenario(external) == EXPECTED_EVENTS
