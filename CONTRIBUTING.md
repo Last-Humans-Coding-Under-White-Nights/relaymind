@@ -27,6 +27,9 @@ pip install -e ".[dev]"
 | Check formatting | `ruff format --check .` |
 | Format | `ruff format .` |
 
+Manual testing from a terminal (JSON requests on macOS and Windows) is
+described in [`docs/TESTING.md`](docs/TESTING.md).
+
 ## How we work: SDD and TDD
 
 This project uses Spec-Driven Development and Test-Driven Development.

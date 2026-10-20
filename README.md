@@ -64,6 +64,8 @@ ruff format --check .
 Live model tests are separate: `pytest -m live` runs them against a
 local llama-server with the pinned model artifact (install llama.cpp
 and see `models/README.md` for fetching and verifying the model).
+[`docs/TESTING.md`](docs/TESTING.md) covers manual testing from a
+terminal on macOS and Windows.
 
 ## License
 
