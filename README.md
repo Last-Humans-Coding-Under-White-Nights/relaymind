@@ -56,10 +56,14 @@ pip install -e ".[dev]"
 Run checks:
 
 ```bash
-pytest           # test suite
+pytest           # deterministic test suite (model doubles, runs in CI)
 ruff check .     # lint
 ruff format --check .
 ```
+
+Live model tests are separate: `pytest -m live` runs them against a
+local llama-server with the pinned model artifact (install llama.cpp
+and see `models/README.md` for fetching and verifying the model).
 
 ## License
 
