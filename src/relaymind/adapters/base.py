@@ -19,7 +19,11 @@ class UnsupportedCapabilityError(Exception):
 def _freeze_tuple(obj: object, *field_names: str) -> None:
     """Coerce sequence fields of a frozen dataclass to tuples."""
     for name in field_names:
-        object.__setattr__(obj, name, tuple(getattr(obj, name)))
+        value = getattr(obj, name)
+        if isinstance(value, str | bytes):
+            # tuple("abc") silently decomposes a string into characters.
+            raise TypeError(f"{type(obj).__name__}.{name} must be a sequence, not a string")
+        object.__setattr__(obj, name, tuple(value))
 
 
 def _freeze_mapping(obj: object, field_name: str) -> None:
@@ -82,8 +86,11 @@ class AdapterCapabilities:
 
 
 # The boolean capability flags, derived from the record itself so a new
-# flag never needs a second edit here.
-_FLAG_CAPABILITIES = frozenset(f.name for f in fields(AdapterCapabilities) if f.type is bool)
+# flag never needs a second edit here. Annotations may be objects or
+# strings depending on annotation semantics, so match both.
+_FLAG_CAPABILITIES = frozenset(
+    f.name for f in fields(AdapterCapabilities) if f.type in (bool, "bool")
+)
 
 
 @dataclass(frozen=True)
@@ -107,10 +114,10 @@ class ToolCall:
     arguments: Mapping[str, object]
 
     def __post_init__(self) -> None:
-        if not isinstance(self.call_id, str) or not self.call_id:
-            raise ValueError("ToolCall.call_id must be a non-empty string")
-        if not isinstance(self.tool_name, str) or not self.tool_name:
-            raise ValueError("ToolCall.tool_name must be a non-empty string")
+        if not isinstance(self.call_id, str) or not self.call_id.strip():
+            raise ValueError("ToolCall.call_id must be a non-blank string")
+        if not isinstance(self.tool_name, str) or not self.tool_name.strip():
+            raise ValueError("ToolCall.tool_name must be a non-blank string")
         # A confirmation binds to canonical arguments (RM11): freeze them
         # against in-place mutation after emission. A partial streamed
         # JSON string is not a mapping and is rejected here (RM09).
@@ -171,7 +178,7 @@ class Message:
     """
 
     role: Role
-    content: str | None
+    content: str | None = None
     tool_call_id: str | None = None
     tool_calls: tuple[ToolCall, ...] = ()
 

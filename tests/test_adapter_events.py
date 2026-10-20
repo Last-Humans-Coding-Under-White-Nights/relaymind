@@ -89,3 +89,10 @@ def test_generation_failed_carries_stable_code_and_message():
     err = GenerationFailed(code="provider_timeout", message="upstream timed out")
     assert err.code == "provider_timeout"
     assert err.message == "upstream timed out"
+
+
+def test_tool_call_rejects_whitespace_identifiers():
+    with pytest.raises(ValueError):
+        ToolCall(call_id="   ", tool_name="get_service_health", arguments={})
+    with pytest.raises(ValueError):
+        ToolCall(call_id="call_1", tool_name=" \t", arguments={})
