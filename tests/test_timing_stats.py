@@ -10,9 +10,8 @@ import asyncio
 import json
 from datetime import datetime, timedelta
 
-from helpers import make_capabilities, make_request
+from helpers import ScriptedAdapter, collect_events, make_capabilities, make_request
 from relaymind.adapters import (
-    AdapterHealth,
     Completed,
     GenerationFailed,
     TextDelta,
@@ -20,27 +19,6 @@ from relaymind.adapters import (
     Usage,
 )
 from relaymind.stats import AdapterIdentity, TimingCollector, export_stats, run_comparison
-
-
-class ScriptedAdapter:
-    """A ModelAdapter double that replays a fixed event script."""
-
-    def __init__(self, events):
-        self._events = list(events)
-        self.cancelled = []
-
-    async def capabilities(self):
-        return make_capabilities()
-
-    async def generate(self, request):
-        for event in self._events:
-            yield event
-
-    async def cancel(self, generation_id):
-        self.cancelled.append(generation_id)
-
-    async def health(self):
-        return AdapterHealth(available=True, warm=True, detail="double")
 
 
 def scripted_clock(*ticks):
@@ -51,11 +29,7 @@ def scripted_clock(*ticks):
 
 def collect_with_stats(adapter, clock, request=None):
     collector = TimingCollector(adapter, clock=clock)
-
-    async def run():
-        return [event async for event in collector.generate(request or make_request())]
-
-    events = asyncio.run(run())
+    events = collect_events(collector, request or make_request())
     return collector, events
 
 
@@ -135,12 +109,8 @@ def test_events_pass_through_unchanged_and_records_accumulate():
     adapter = ScriptedAdapter(events_in)
     collector = TimingCollector(adapter, clock=scripted_clock(0.0, 1.0, 2.0, 3.0, 4.0, 5.0))
 
-    async def run(generation_id):
-        request = make_request(generation_id=generation_id)
-        return [event async for event in collector.generate(request)]
-
-    assert asyncio.run(run("gen_a")) == events_in
-    assert asyncio.run(run("gen_b")) == events_in
+    assert collect_events(collector, make_request(generation_id="gen_a")) == events_in
+    assert collect_events(collector, make_request(generation_id="gen_b")) == events_in
     assert [record.generation_id for record in collector.records] == ["gen_a", "gen_b"]
 
 
@@ -219,6 +189,6 @@ def test_collector_delegates_the_rest_of_the_adapter_contract():
     adapter = ScriptedAdapter([])
     collector = TimingCollector(adapter, clock=scripted_clock(0.0, 1.0))
     assert asyncio.run(collector.capabilities()) == make_capabilities()
-    assert asyncio.run(collector.health()).detail == "double"
+    assert asyncio.run(collector.health()).detail == "scripted"
     asyncio.run(collector.cancel("gen_9"))
     assert adapter.cancelled == ["gen_9"]

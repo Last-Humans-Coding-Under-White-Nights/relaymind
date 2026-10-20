@@ -37,18 +37,15 @@ from its model manifest (models/*.manifest.json).
 import argparse
 import asyncio
 import json
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-
-from relaymind.adapters.base import ModelAdapter  # noqa: E402
-from relaymind.adapters.chat_completions import (  # noqa: E402
+from relaymind.adapters.base import ModelAdapter
+from relaymind.adapters.chat_completions import (
     ChatCompletionsAdapter,
     ChatCompletionsConfig,
 )
-from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig  # noqa: E402
-from relaymind.stats import AdapterIdentity, run_comparison  # noqa: E402
+from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
+from relaymind.stats import AdapterIdentity, run_comparison
 
 
 def _build_adapter(name: str, spec: dict) -> tuple[ModelAdapter, AdapterIdentity]:
@@ -94,8 +91,8 @@ def main() -> None:
         config = json.loads(args.config.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         parser.error(f"cannot read config: {exc}")
-    prompts = config.get("prompts") or []
-    adapter_specs = config.get("adapters") or {}
+    prompts = config.get("prompts")
+    adapter_specs = config.get("adapters")
     if not prompts:
         parser.error("config has no prompts")
     if len(adapter_specs) < 2:

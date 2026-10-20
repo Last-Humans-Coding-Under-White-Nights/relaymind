@@ -55,8 +55,8 @@ class GenerationStats:
     """
 
     generation_id: str
-    # The prompt text, filled by the comparison runner so exports from
-    # different configs align row by row.
+    # The first user message, so exports from different adapter
+    # configs align row by row.
     prompt: str | None = None
     first_transport_event_seconds: float | None = None
     first_model_action_seconds: float | None = None
@@ -90,28 +90,33 @@ class TimingCollector(ModelAdapter):
         return await self._adapter.capabilities()
 
     async def generate(self, request: GenerationRequest) -> AsyncIterator[AdapterEvent]:
-        record = GenerationStats(generation_id=request.generation_id)
+        record = GenerationStats(
+            generation_id=request.generation_id,
+            prompt=next(
+                (m.content for m in request.messages if m.role is Role.USER and m.content),
+                None,
+            ),
+        )
         self.records.append(record)
         started = self._clock()
         async for event in self._adapter.generate(request):
             elapsed = self._clock() - started
             if record.first_transport_event_seconds is None:
                 record.first_transport_event_seconds = elapsed
-            if isinstance(event, ToolCall) and record.first_model_action_seconds is None:
-                record.first_model_action_seconds = elapsed
-            if (
-                isinstance(event, TextDelta)
-                and event.text
-                and record.first_answer_token_seconds is None
-            ):
-                record.first_answer_token_seconds = elapsed
-            if isinstance(event, Usage):
+            # Event types are mutually exclusive; at most one branch runs.
+            if isinstance(event, TextDelta):
+                if event.text and record.first_answer_token_seconds is None:
+                    record.first_answer_token_seconds = elapsed
+            elif isinstance(event, ToolCall):
+                if record.first_model_action_seconds is None:
+                    record.first_model_action_seconds = elapsed
+            elif isinstance(event, Usage):
                 record.input_tokens = event.input_tokens
                 record.output_tokens = event.output_tokens
-            if isinstance(event, Completed):
+            elif isinstance(event, Completed):
                 record.completion_seconds = elapsed
                 record.finish_reason = event.finish_reason
-            if isinstance(event, GenerationFailed):
+            elif isinstance(event, GenerationFailed):
                 record.failure_code = event.code
             yield event
 
@@ -166,7 +171,6 @@ async def run_comparison(
             )
             async for _event in collector.generate(request):
                 pass
-            collector.records[-1].prompt = prompt
         path = out_dir / f"{name}.json"
         export_stats(path, identity=identity, records=collector.records)
         paths[name] = path
