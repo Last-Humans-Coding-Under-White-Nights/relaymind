@@ -31,13 +31,13 @@ from helpers import (
     PINNED_MANIFEST_PATH,
     collect_events,
     make_request,
-    smoke_adapter_settings,
 )
 from relaymind.adapters import Completed, Message, Role, TextDelta, ToolCall
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 from relaymind.adapters.manifest import (
     ArtifactManifest,
     ManifestError,
+    launch_adapter_settings,
     launch_settings_argv,
     load_manifest,
     verify_artifact,
@@ -46,6 +46,14 @@ from relaymind.adapters.manifest import (
 pytestmark = pytest.mark.live
 
 MODEL_ENV = "RELAYMIND_SMOKE_MODEL"
+
+
+@pytest.fixture(scope="module", autouse=True)
+def require_llama_server() -> None:
+    # Autouse, so it runs before the manifest fixtures: on a machine
+    # without llama-server the suite skips, even with a broken manifest.
+    if shutil.which("llama-server") is None:
+        pytest.skip("llama-server not on PATH")
 
 
 @pytest.fixture(scope="module")
@@ -66,13 +74,11 @@ def _free_port() -> int:
 @pytest.fixture(scope="module")
 def adapter_settings(manifest) -> tuple[int, dict]:
     # Context limit and base template kwargs, derived once per module.
-    return smoke_adapter_settings(manifest.launch_settings)
+    return launch_adapter_settings(manifest.launch_settings)
 
 
 @pytest.fixture(scope="module")
 def server(tmp_path_factory, manifest, adapter_settings):
-    if shutil.which("llama-server") is None:
-        pytest.skip("llama-server not on PATH")
     override = os.environ.get(MODEL_ENV)
     model_path = Path(override) if override else MODELS_DIR / manifest.file_name
     if not model_path.is_file():

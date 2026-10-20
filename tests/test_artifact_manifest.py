@@ -102,6 +102,20 @@ def test_load_rejects_wrongly_typed_fields(tmp_path):
         load_manifest(path)
 
 
+@pytest.mark.parametrize("bad", [{"model": "x"}, {"no_mmap": True}, {"temp": float("nan")}])
+def test_launch_settings_that_do_not_render_fail_at_creation(bad):
+    # RM18: an unusable manifest fails when it is created or loaded, not
+    # later when the live suite renders its server argv.
+    with pytest.raises(ManifestError):
+        ArtifactManifest(**VALID | {"launch_settings": bad})
+
+
+def test_load_rejects_launch_settings_that_do_not_render(tmp_path):
+    path = write_manifest(tmp_path, VALID | {"launch_settings": {"hf_repo": "x/y"}})
+    with pytest.raises(ManifestError, match="hf_repo"):
+        load_manifest(path)
+
+
 def test_the_checked_in_candidate_manifest_is_valid():
     manifest = load_manifest(PINNED_MANIFEST_PATH)
     assert manifest.schema_version == 1

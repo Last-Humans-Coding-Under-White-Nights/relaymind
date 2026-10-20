@@ -84,6 +84,29 @@ def test_gen_manifest_script_rejects_non_object_launch_settings(tmp_path):
     assert "Traceback" not in result.stderr
 
 
+def test_gen_manifest_script_rejects_launch_settings_that_do_not_render(tmp_path):
+    # RM18: the generator never writes a manifest the renderer rejects.
+    artifact = write_gguf(tmp_path / "model.gguf", sample_kvs())
+    out = tmp_path / "manifest.json"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            str(artifact),
+            "--out",
+            str(out),
+            *[f"--{k.replace('_', '-')}={v}" for k, v in SOURCE.items() if k != "launch_settings"],
+            '--launch-settings={"model": "x", "no_mmap": true}',
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "model" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not out.exists()
+
+
 def test_gen_manifest_script_writes_a_loadable_manifest(tmp_path):
     artifact = write_gguf(tmp_path / "model.gguf", sample_kvs())
     out = tmp_path / "manifest.json"
