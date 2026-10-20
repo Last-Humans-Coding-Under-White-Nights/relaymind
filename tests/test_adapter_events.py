@@ -49,6 +49,32 @@ def test_events_are_immutable():
         delta.text = "changed"
 
 
+def test_tool_call_arguments_cannot_be_mutated_after_emission():
+    # A confirmation binds to canonical arguments (RM11); the emitted
+    # mapping must not be changeable in place.
+    source = {"service": "staging-api"}
+    call = ToolCall(call_id="call_1", tool_name="get_service_health", arguments=source)
+    with pytest.raises(TypeError):
+        call.arguments["service"] = "payments-api"
+    source["service"] = "payments-api"
+    assert call.arguments["service"] == "staging-api"
+
+
+def test_tool_call_requires_nonempty_identifiers():
+    with pytest.raises(ValueError):
+        ToolCall(call_id="", tool_name="get_service_health", arguments={})
+    with pytest.raises(ValueError):
+        ToolCall(call_id="call_1", tool_name="", arguments={})
+
+
+def test_usage_records_cached_tokens_when_provided():
+    usage = Usage(input_tokens=100, output_tokens=5, cached_tokens=80)
+    assert usage.cached_tokens == 80
+    assert Usage(input_tokens=1, output_tokens=1).cached_tokens == 0
+    with pytest.raises(ValueError):
+        Usage(input_tokens=1, output_tokens=1, cached_tokens=-1)
+
+
 def test_completed_carries_finish_reason():
     done = Completed(finish_reason="stop")
     assert done.finish_reason == "stop"

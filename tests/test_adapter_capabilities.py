@@ -52,8 +52,37 @@ def test_require_rejects_unknown_capability_name():
         caps.require("warp_speed")
 
 
+def test_require_rejects_non_boolean_field_names():
+    # context_limit and reasoning_controls are not flags; naming them in
+    # require() must be an error, never a silent pass.
+    caps = make_capabilities()
+    with pytest.raises(ValueError):
+        caps.require("context_limit")
+    with pytest.raises(ValueError):
+        caps.require("reasoning_controls")
+
+
+def test_require_reasoning_control_checks_the_supported_list():
+    caps = make_capabilities(reasoning_controls=("enable_thinking",))
+    caps.require_reasoning_control("enable_thinking")
+    with pytest.raises(UnsupportedCapabilityError) as exc:
+        caps.require_reasoning_control("reasoning_effort")
+    assert "reasoning_effort" in str(exc.value)
+
+
 def test_require_context_rejects_oversized_input():
     caps = make_capabilities(context_limit=2048)
     caps.require_context(2048)
     with pytest.raises(UnsupportedCapabilityError):
         caps.require_context(2049)
+
+
+def test_require_context_rejects_negative_token_count():
+    caps = make_capabilities()
+    with pytest.raises(ValueError):
+        caps.require_context(-1)
+
+
+def test_context_limit_must_be_positive():
+    with pytest.raises(ValueError):
+        make_capabilities(context_limit=0)

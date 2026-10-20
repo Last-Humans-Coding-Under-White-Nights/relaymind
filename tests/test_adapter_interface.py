@@ -13,6 +13,7 @@ from relaymind.adapters import (
     AdapterCapabilities,
     AdapterHealth,
     Completed,
+    GenerationOptions,
     GenerationRequest,
     Message,
     ModelAdapter,
@@ -110,6 +111,52 @@ def test_health_reports_availability_and_warm_state():
 def test_request_messages_use_supported_roles_only():
     with pytest.raises(ValueError):
         Message(role="moderator", content="hi")
+
+
+def test_tool_message_carries_its_originating_call_id():
+    message = Message(role=Role.TOOL, content='{"status": "healthy"}', tool_call_id="call_1")
+    assert message.tool_call_id == "call_1"
+    with pytest.raises(ValueError):
+        Message(role=Role.TOOL, content='{"status": "healthy"}')
+    with pytest.raises(ValueError):
+        Message(role=Role.USER, content="hi", tool_call_id="call_1")
+
+
+def test_assistant_message_can_record_prior_tool_calls_without_text():
+    call = ToolCall(call_id="call_1", tool_name="get_service_health", arguments={"service": "s"})
+    message = Message(role=Role.ASSISTANT, content=None, tool_calls=(call,))
+    assert message.tool_calls == (call,)
+    with pytest.raises(ValueError):
+        Message(role=Role.ASSISTANT, content=None)  # no text and no tool calls
+    with pytest.raises(ValueError):
+        Message(role=Role.USER, content="hi", tool_calls=(call,))
+
+
+def test_generation_options_reject_invalid_values():
+    with pytest.raises(ValueError):
+        GenerationOptions(max_output_tokens=0)
+    with pytest.raises(ValueError):
+        GenerationOptions(temperature=-0.1)
+    with pytest.raises(ValueError):
+        GenerationOptions(top_p=1.5)
+
+
+def test_request_sequences_are_stored_as_tuples():
+    request = GenerationRequest(
+        generation_id="gen_1",
+        messages=[Message(role=Role.USER, content="hi")],
+        tool_schemas=[],
+    )
+    assert isinstance(request.messages, tuple)
+    assert isinstance(request.tool_schemas, tuple)
+
+
+def test_tool_schema_input_schema_is_a_frozen_mapping():
+    schema = ToolSchema(name="t", description="d", input_schema={"type": "object"})
+    with pytest.raises(TypeError):
+        schema.input_schema["type"] = "array"
+    with pytest.raises(ValueError):
+        ToolSchema(name="t", description="d", input_schema="not-a-mapping")
 
 
 def test_request_is_immutable_and_carries_tool_schemas():

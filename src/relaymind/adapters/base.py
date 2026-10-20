@@ -7,8 +7,9 @@ and rejects unsupported combinations.
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Mapping
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from enum import StrEnum
+from types import MappingProxyType
 
 
 class UnsupportedCapabilityError(Exception):
@@ -38,22 +39,37 @@ class AdapterCapabilities:
     usage_reporting: bool
     tokenizer_available: bool
 
+    def __post_init__(self) -> None:
+        if self.context_limit <= 0:
+            raise ValueError("context_limit must be positive")
+        object.__setattr__(self, "reasoning_controls", tuple(self.reasoning_controls))
+
     def require(self, *capability_names: str) -> None:
-        """Raise unless every named boolean capability is supported."""
-        known = {f.name for f in fields(self)}
-        unknown = [name for name in capability_names if name not in known]
+        """Raise unless every named boolean capability is supported.
+
+        Only flag capabilities are accepted here; naming a non-boolean
+        field is an error, never a silent pass. Use require_context for
+        the context limit and require_reasoning_control for reasoning
+        controls.
+        """
+        unknown = [name for name in capability_names if name not in _FLAG_CAPABILITIES]
         if unknown:
-            raise ValueError(f"unknown capabilities: {', '.join(unknown)}")
-        missing = [
-            name
-            for name in capability_names
-            if name in _FLAG_CAPABILITIES and not getattr(self, name)
-        ]
+            raise ValueError(f"not boolean capabilities: {', '.join(unknown)}")
+        missing = [name for name in capability_names if not getattr(self, name)]
         if missing:
             raise UnsupportedCapabilityError(f"adapter does not support: {', '.join(missing)}")
 
+    def require_reasoning_control(self, control_name: str) -> None:
+        """Raise unless the adapter supports the named reasoning control."""
+        if control_name not in self.reasoning_controls:
+            raise UnsupportedCapabilityError(
+                f"adapter does not support reasoning control: {control_name}"
+            )
+
     def require_context(self, tokens: int) -> None:
         """Raise when the input does not fit the adapter's context limit."""
+        if tokens < 0:
+            raise ValueError("token count must be nonnegative")
         if tokens > self.context_limit:
             raise UnsupportedCapabilityError(
                 f"input of {tokens} tokens exceeds context limit {self.context_limit}"
@@ -81,11 +97,18 @@ class ToolCall:
     arguments: Mapping[str, object]
 
     def __post_init__(self) -> None:
+        if not isinstance(self.call_id, str) or not self.call_id:
+            raise ValueError("ToolCall.call_id must be a non-empty string")
+        if not isinstance(self.tool_name, str) or not self.tool_name:
+            raise ValueError("ToolCall.tool_name must be a non-empty string")
         if not isinstance(self.arguments, Mapping):
             raise TypeError(
                 "ToolCall.arguments must be a fully parsed mapping, "
                 f"got {type(self.arguments).__name__}"
             )
+        # A confirmation binds to canonical arguments (RM11): freeze them
+        # against in-place mutation after emission.
+        object.__setattr__(self, "arguments", MappingProxyType(dict(self.arguments)))
 
 
 @dataclass(frozen=True)
@@ -94,9 +117,12 @@ class Usage:
 
     input_tokens: int
     output_tokens: int
+    # Provider-reported cache counts, retained per call in the trace
+    # (spec section 7.3); zero when the provider reports none.
+    cached_tokens: int = 0
 
     def __post_init__(self) -> None:
-        if self.input_tokens < 0 or self.output_tokens < 0:
+        if self.input_tokens < 0 or self.output_tokens < 0 or self.cached_tokens < 0:
             raise ValueError("token counts must be nonnegative")
 
 
@@ -130,13 +156,31 @@ class Role(StrEnum):
 
 @dataclass(frozen=True)
 class Message:
-    """One normalized text message."""
+    """One normalized message.
+
+    A tool message carries the tool_call_id it answers (spec section
+    7.1: validate tool-call references). An assistant message may carry
+    the tool calls it proposed in an earlier turn, with content None
+    when it produced no text.
+    """
 
     role: Role
-    content: str
+    content: str | None
+    tool_call_id: str | None = None
+    tool_calls: tuple[ToolCall, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "role", Role(self.role))
+        object.__setattr__(self, "tool_calls", tuple(self.tool_calls))
+        if self.role is Role.TOOL:
+            if not self.tool_call_id:
+                raise ValueError("a tool message must reference its tool_call_id")
+        elif self.tool_call_id is not None:
+            raise ValueError("tool_call_id is only valid on tool messages")
+        if self.tool_calls and self.role is not Role.ASSISTANT:
+            raise ValueError("tool_calls are only valid on assistant messages")
+        if self.content is None and not self.tool_calls:
+            raise ValueError("a message needs content or tool_calls")
 
 
 @dataclass(frozen=True)
@@ -147,14 +191,29 @@ class ToolSchema:
     description: str
     input_schema: Mapping[str, object]
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.input_schema, Mapping):
+            raise ValueError(
+                f"ToolSchema.input_schema must be a mapping, got {type(self.input_schema).__name__}"
+            )
+        object.__setattr__(self, "input_schema", MappingProxyType(dict(self.input_schema)))
+
 
 @dataclass(frozen=True)
 class GenerationOptions:
-    """Sampling and budget options for the final generation."""
+    """Sampling and budget options for one generation."""
 
     max_output_tokens: int | None = None
     temperature: float | None = None
     top_p: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.max_output_tokens is not None and self.max_output_tokens <= 0:
+            raise ValueError("max_output_tokens must be positive")
+        if self.temperature is not None and self.temperature < 0:
+            raise ValueError("temperature must be nonnegative")
+        if self.top_p is not None and not 0 < self.top_p <= 1:
+            raise ValueError("top_p must be in (0, 1]")
 
 
 @dataclass(frozen=True)
@@ -165,6 +224,10 @@ class GenerationRequest:
     messages: tuple[Message, ...]
     tool_schemas: tuple[ToolSchema, ...] = ()
     options: GenerationOptions = field(default_factory=GenerationOptions)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "messages", tuple(self.messages))
+        object.__setattr__(self, "tool_schemas", tuple(self.tool_schemas))
 
 
 @dataclass(frozen=True)
@@ -186,7 +249,14 @@ class ModelAdapter(ABC):
 
     @abstractmethod
     async def capabilities(self) -> AdapterCapabilities:
-        """Return the static capability record for this adapter."""
+        """Return the capability record for this adapter.
+
+        Async because some adapters discover capabilities from their
+        runtime (a llama-server /props call, a provider model listing).
+        The orchestrator fetches this once at startup and caches the
+        record; routing decisions read the cached copy and make no
+        network calls (RM01).
+        """
 
     @abstractmethod
     def generate(self, request: GenerationRequest) -> AsyncIterator[AdapterEvent]:
