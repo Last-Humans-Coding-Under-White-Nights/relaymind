@@ -82,12 +82,12 @@ async def _run(adapters, prompts, out_dir: Path) -> dict[str, Path]:
     try:
         return await run_comparison(adapters, prompts, out_dir)
     finally:
-        await _close_all(adapter for adapter, _identity in adapters.values())
+        await _close_all(adapters)
 
 
 async def _close_all(adapters) -> None:
     async with AsyncExitStack() as stack:
-        for adapter in adapters:
+        for adapter, _identity in adapters.values():
             aclose = getattr(adapter, "aclose", None)
             if aclose is not None:
                 stack.push_async_callback(aclose)
@@ -125,7 +125,7 @@ def main() -> None:
             adapters[name] = _build_adapter(name, spec)
     except (KeyError, TypeError, ValueError) as exc:
         # Close the adapters already built before exiting.
-        asyncio.run(_close_all(adapter for adapter, _identity in adapters.values()))
+        asyncio.run(_close_all(adapters))
         parser.error(f"invalid adapter config: {exc}")
 
     paths = asyncio.run(_run(adapters, prompts, args.out_dir))
