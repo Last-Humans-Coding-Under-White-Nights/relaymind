@@ -247,3 +247,35 @@ def test_cancel_interrupts_an_idle_stream():
 
     events = asyncio.run(run())
     assert events == [TextDelta(text="hi")]
+
+
+def test_done_marker_ends_the_stream_without_waiting_for_eof():
+    # data: [DONE] is the protocol's termination marker; on a kept-open
+    # connection the generator must not wait for EOF or a read timeout.
+    body = (
+        b'data: {"choices": [{"index": 0, "delta": {"content": "hi"},'
+        b' "finish_reason": "stop"}]}\n\n'
+        b"data: [DONE]\n\n"
+    )
+
+    class KeptOpenStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield body
+            await asyncio.Event().wait()  # connection stays open
+
+        async def aclose(self):
+            pass
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, headers={"content-type": "text/event-stream"}, stream=KeptOpenStream()
+        )
+
+    adapter = make_adapter(handler)
+
+    async def run():
+        async with adapter:
+            return [event async for event in adapter.generate(make_request())]
+
+    events = asyncio.run(asyncio.wait_for(run(), timeout=2))
+    assert events == [TextDelta(text="hi"), Completed(finish_reason="stop")]

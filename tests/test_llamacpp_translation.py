@@ -69,6 +69,7 @@ def test_text_deltas_stream_through():
     events = acc.feed(delta_chunk({"content": "staging-api "}))
     events += acc.feed(delta_chunk({"content": "is healthy"}))
     events += acc.feed(delta_chunk({}, finish_reason="stop"))
+    events += acc.flush()
     assert events == [
         TextDelta(text="staging-api "),
         TextDelta(text="is healthy"),
@@ -100,14 +101,16 @@ def test_tool_call_is_emitted_only_after_complete_argument_parsing():
     )
     assert second == []
     final = acc.feed(delta_chunk({}, finish_reason="tool_calls"))
+    # The tool call settles at the finish chunk (RM09); Completed is
+    # terminal and only comes out when the stream itself ends.
     assert final == [
         ToolCall(
             call_id="call_7",
             tool_name="get_service_health",
             arguments={"service": "staging-api"},
         ),
-        Completed(finish_reason="tool_calls"),
     ]
+    assert acc.flush() == [Completed(finish_reason="tool_calls")]
 
 
 def test_unparseable_tool_arguments_fail_instead_of_executing():
@@ -153,6 +156,7 @@ def test_reasoning_content_never_becomes_answer_text():
     events = acc.feed(delta_chunk({"reasoning_content": "thinking about services..."}))
     events += acc.feed(delta_chunk({"content": "staging-api is healthy"}))
     events += acc.feed(delta_chunk({}, finish_reason="stop"))
+    events += acc.flush()
     assert events == [
         TextDelta(text="staging-api is healthy"),
         Completed(finish_reason="stop"),
@@ -218,7 +222,7 @@ def test_missing_tool_name_fails_as_event_not_exception():
     assert isinstance(events[0], GenerationFailed)
 
 
-def test_failed_finish_clears_accumulated_state():
+def test_failure_is_terminal_and_clears_accumulated_state():
     acc = StreamAccumulator()
     acc.feed(
         delta_chunk(
@@ -231,8 +235,10 @@ def test_failed_finish_clears_accumulated_state():
     )
     first = acc.feed(delta_chunk({}, finish_reason="tool_calls"))
     assert isinstance(first[0], GenerationFailed)
-    again = acc.feed(delta_chunk({}, finish_reason="stop"))
-    assert again == [Completed(finish_reason="stop")]
+    # A failure ends the stream: later chunks and the end-of-stream
+    # flush must add nothing after the terminal event.
+    assert acc.feed(delta_chunk({"content": "late"}, finish_reason="stop")) == []
+    assert acc.flush() == []
 
 
 def test_developer_role_maps_to_system():
@@ -284,6 +290,7 @@ def test_none_chunk_fields_are_tolerated():
         )
     )
     events = acc.feed(delta_chunk({}, finish_reason="tool_calls"))
+    events += acc.flush()
     assert events == [
         ToolCall(call_id="call_9", tool_name="t", arguments={}),
         Completed(finish_reason="tool_calls"),
@@ -319,6 +326,7 @@ def test_empty_arguments_parse_as_empty_object():
         )
     )
     events = acc.feed(delta_chunk({}, finish_reason="tool_calls"))
+    events += acc.flush()
     assert events == [
         ToolCall(call_id="call_5", tool_name="list_services", arguments={}),
         Completed(finish_reason="tool_calls"),
@@ -385,11 +393,41 @@ def test_flush_emits_buffered_tool_calls_at_end_of_stream():
     ]
 
 
-def test_flush_after_explicit_finish_adds_nothing():
+def test_flush_emits_the_terminal_completed_exactly_once():
     acc = StreamAccumulator()
     acc.feed(delta_chunk({"content": "hi"}))
     acc.feed(delta_chunk({}, finish_reason="stop"))
+    assert acc.flush() == [Completed(finish_reason="stop")]
     assert acc.flush() == []
+
+
+def test_usage_after_finish_is_emitted_before_completed():
+    # OpenAI streaming with include_usage sends the usage chunk after
+    # the finish_reason chunk; Completed stays the terminal event.
+    acc = StreamAccumulator()
+    events = acc.feed(delta_chunk({"content": "hi"}))
+    events += acc.feed(delta_chunk({}, finish_reason="stop"))
+    events += acc.feed({"choices": [], "usage": {"prompt_tokens": 21, "completion_tokens": 4}})
+    events += acc.flush()
+    assert events == [
+        TextDelta(text="hi"),
+        Usage(input_tokens=21, output_tokens=4),
+        Completed(finish_reason="stop"),
+    ]
+
+
+def test_content_after_finish_is_ignored():
+    acc = StreamAccumulator()
+    acc.feed(delta_chunk({"content": "answer"}, finish_reason="stop"))
+    assert acc.feed(delta_chunk({"content": "stray"})) == []
+    assert acc.flush() == [Completed(finish_reason="stop")]
+
+
+def test_duplicate_finish_reasons_yield_one_completed():
+    acc = StreamAccumulator()
+    acc.feed(delta_chunk({}, finish_reason="stop"))
+    assert acc.feed(delta_chunk({}, finish_reason="length")) == []
+    assert acc.flush() == [Completed(finish_reason="stop")]
 
 
 def test_request_body_with_tools_is_json_serializable():
