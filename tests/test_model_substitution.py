@@ -19,6 +19,7 @@ skill registry, which do not exist yet, and is tracked in issue #5.
 """
 
 import json
+from collections.abc import Callable
 
 import httpx
 
@@ -29,7 +30,16 @@ from helpers import (
     run_closing,
     sse_response,
 )
-from relaymind.adapters import Completed, Message, ModelAdapter, Role, ToolCall
+from relaymind.adapters import (
+    AdapterCapabilities,
+    AdapterEvent,
+    AdapterHealth,
+    Completed,
+    Message,
+    ModelAdapter,
+    Role,
+    ToolCall,
+)
 from relaymind.adapters.chat_completions import (
     ChatCompletionsAdapter,
     ChatCompletionsConfig,
@@ -96,7 +106,11 @@ PROVIDER_TWO = ChatCompletionsConfig(
 )
 
 
-async def run_scenario(adapter: ModelAdapter) -> list:
+# One record per request the scripted endpoint served.
+Served = list[dict[str, object]]
+
+
+async def run_scenario(adapter: ModelAdapter) -> list[AdapterEvent]:
     """Drive one adapter through the scenario.
 
     Takes the adapter contract only; it must never need to know what
@@ -106,20 +120,7 @@ async def run_scenario(adapter: ModelAdapter) -> list:
     return [event async for event in adapter.generate(SCENARIO_REQUEST)]
 
 
-def exercise(adapter: ModelAdapter):
-    """Capabilities, health, and the scenario, in one loop, then close.
-
-    Uses the adapter contract only, so health() and capabilities() are
-    swapped along with generate().
-    """
-
-    async def probe(a: ModelAdapter):
-        return await a.capabilities(), await a.health(), await run_scenario(a)
-
-    return run_closing(adapter, probe)
-
-
-def scripted_endpoint(served: list[dict]):
+def scripted_endpoint(served: Served) -> Callable[[httpx.Request], httpx.Response]:
     """A mock endpoint that answers health checks and replays the scenario.
 
     Appends one record per request (method, host, port, path, model
@@ -148,35 +149,47 @@ def scripted_endpoint(served: list[dict]):
     return handler
 
 
-def scripted_adapter(adapter_cls, config):
-    """Build an adapter on a scripted endpoint; return it and its record list."""
-    served: list[dict] = []
+def exercise(
+    adapter_cls: type[LlamaCppAdapter] | type[ChatCompletionsAdapter],
+    config: LlamaCppConfig | ChatCompletionsConfig,
+) -> tuple[AdapterCapabilities, AdapterHealth, list[AdapterEvent], Served]:
+    """Build an adapter on a scripted endpoint, then probe it and close it.
+
+    Capabilities, health, and the scenario run in one loop through the
+    adapter contract only, so health() and capabilities() are swapped
+    along with generate(). The adapter is built and closed in this one
+    call, so no client is left open when an earlier step fails. Returns
+    the probe results and the endpoint's request records.
+    """
+    served: Served = []
     adapter = adapter_cls(config, transport=httpx.MockTransport(scripted_endpoint(served)))
-    return adapter, served
+
+    async def probe(a: ModelAdapter):
+        return await a.capabilities(), await a.health(), await run_scenario(a)
+
+    caps, health, events = run_closing(adapter, probe)
+    return caps, health, events, served
 
 
-def requests_by_method(served: list[dict], method: str) -> list[dict]:
+def requests_by_method(served: Served, method: str) -> Served:
     return [record for record in served if record["method"] == method]
 
 
-def scenario_body(record: dict, *, drop: tuple[str, ...] = MODEL_KEYS) -> dict:
+def scenario_body(record: dict[str, object], *, drop: tuple[str, ...] = MODEL_KEYS) -> dict:
     """The generation body minus the configuration-specific keys."""
     return {key: value for key, value in record["body"].items() if key not in drop}
 
 
-def assert_carries_scenario(body: dict) -> None:
+def assert_carries_scenario(body: dict[str, object]) -> None:
     assert [m["content"] for m in body["messages"]] == [QUESTION]
     assert [t["function"]["name"] for t in body["tools"]] == ["get_service_health"]
 
 
 def test_local_model_swap_is_configuration_only():
-    # First local llama-server endpoint, then a second one: only
-    # LlamaCppConfig values change.
-    first, first_served = scripted_adapter(LlamaCppAdapter, LOCAL_ONE)
-    second, second_served = scripted_adapter(LlamaCppAdapter, LOCAL_TWO)
-
-    first_caps, first_health, first_events = exercise(first)
-    second_caps, second_health, second_events = exercise(second)
+    # RM18, AC08 (local half): first local llama-server endpoint, then
+    # a second one; only LlamaCppConfig values change.
+    first_caps, first_health, first_events, first_served = exercise(LlamaCppAdapter, LOCAL_ONE)
+    second_caps, second_health, second_events, second_served = exercise(LlamaCppAdapter, LOCAL_TWO)
 
     assert first_caps.context_limit == 8192
     assert second_caps.context_limit == 32768
@@ -191,8 +204,13 @@ def test_local_model_swap_is_configuration_only():
     assert len(second_post) == 1
     assert first_post[0]["port"] == 8033
     assert second_post[0]["port"] == 9044
-    assert first_post[0]["path"] == "/v1/chat/completions"
-    assert second_post[0]["path"] == "/v1/chat/completions"
+    for post in (first_post[0], second_post[0]):
+        assert post["path"] == "/v1/chat/completions"
+        # Local requests stay on loopback and carry no external model
+        # identifier or credential (RM01).
+        assert post["host"] == "127.0.0.1"
+        assert post["model"] is None
+        assert post["authorization"] is None
     # The swapped adapter sent the same scenario, including non-thinking
     # mode (spec section 6), not just any request.
     assert scenario_body(first_post[0]) == scenario_body(second_post[0])
@@ -208,16 +226,17 @@ def test_local_model_swap_is_configuration_only():
 
 
 def test_external_endpoint_swap_is_configuration_only(monkeypatch):
-    # First compatible external endpoint, then a second provider with
-    # its own model identifier and credential variable: only
-    # ChatCompletionsConfig values change.
+    # RM18, AC08 (external half): first compatible external endpoint,
+    # then a second provider with its own model identifier and
+    # credential variable; only ChatCompletionsConfig values change.
     monkeypatch.setenv("SUBST_KEY_A", "sk-a")
     monkeypatch.setenv("SUBST_KEY_B", "sk-b")
-    first, first_served = scripted_adapter(ChatCompletionsAdapter, PROVIDER_ONE)
-    second, second_served = scripted_adapter(ChatCompletionsAdapter, PROVIDER_TWO)
-
-    first_caps, first_health, first_events = exercise(first)
-    second_caps, second_health, second_events = exercise(second)
+    first_caps, first_health, first_events, first_served = exercise(
+        ChatCompletionsAdapter, PROVIDER_ONE
+    )
+    second_caps, second_health, second_events, second_served = exercise(
+        ChatCompletionsAdapter, PROVIDER_TWO
+    )
 
     assert first_caps.context_limit == 128000
     assert second_caps.context_limit == 64000
@@ -252,7 +271,7 @@ def test_external_endpoint_swap_is_configuration_only(monkeypatch):
 
 
 def test_local_to_external_swap_keeps_the_same_scenario_code(monkeypatch):
-    # RM18: swapping between two supported adapters is a configuration
+    # RM18, AC08: swapping between two supported adapters is a configuration
     # and construction concern; the scenario runner never changes. What
     # is specific to crossing the boundary: the local request stays on
     # loopback with no model identifier and no credential, even while
@@ -261,11 +280,10 @@ def test_local_to_external_swap_keeps_the_same_scenario_code(monkeypatch):
     # carries both.
     monkeypatch.setenv("SUBST_KEY_A", "sk-a")
     monkeypatch.setenv("RELAYMIND_EXTERNAL_API_KEY", "sk-default")
-    local, local_served = scripted_adapter(LlamaCppAdapter, LOCAL_ONE)
-    external, external_served = scripted_adapter(ChatCompletionsAdapter, PROVIDER_ONE)
-
-    local_caps, local_health, local_events = exercise(local)
-    external_caps, external_health, external_events = exercise(external)
+    local_caps, local_health, local_events, local_served = exercise(LlamaCppAdapter, LOCAL_ONE)
+    external_caps, external_health, external_events, external_served = exercise(
+        ChatCompletionsAdapter, PROVIDER_ONE
+    )
 
     assert local_events == EXPECTED_EVENTS
     assert external_events == EXPECTED_EVENTS
@@ -277,9 +295,11 @@ def test_local_to_external_swap_keeps_the_same_scenario_code(monkeypatch):
     assert len(external_post) == 1
     assert local_post[0]["host"] == "127.0.0.1"
     assert local_post[0]["port"] == 8033
+    assert local_post[0]["path"] == "/v1/chat/completions"
     assert local_post[0]["model"] is None
     assert local_post[0]["authorization"] is None
     assert external_post[0]["host"] == "api.provider-one.example"
+    assert external_post[0]["path"] == "/v1/chat/completions"
     assert external_post[0]["model"] == "provider-one-large"
     assert external_post[0]["authorization"] == "Bearer sk-a"
     # Same scenario on both sides; only the model identifier and the
