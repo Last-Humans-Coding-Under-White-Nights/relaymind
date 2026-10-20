@@ -23,6 +23,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the hash-pinned Qwen3-0.6B Q8_0 manifest (`models/`). The model is a
   candidate; it becomes the default only after the bilingual tool tests
   (spec section 6).
+- Launch settings are manifest data (RM18, spec section 6): the live
+  smoke test verifies the artifact against its manifest and derives the
+  llama-server arguments and adapter config from `launch_settings`
+  (`launch_settings_argv`, `launch_adapter_settings`). Manifests with
+  unusable settings, or settings that would load other weights or
+  replace the pinned chat template, are rejected when built or loaded.
+- Timing and statistics export for adapter comparisons (RM25, spec
+  section 12.1): `relaymind.stats` records per-generation metrics around
+  any adapter, and `scripts/compare_adapters.py` runs the same prompts
+  against several configurations and writes one JSON export each. This
+  is engineering instrumentation, not benchmark evidence (spec 12.3).
+- AC08 model substitution test at the adapter layer (RM18): the same
+  caller code drives a swapped local model, a swapped external endpoint,
+  and the local/external boundary with the same normalized outcome. The
+  orchestrator and skill half of AC08 remains open.
 - Manual testing guide for the M1 deliverable on macOS and Windows
   (`docs/TESTING.md`).
 - Project scaffold: repository layout, CI, and contributor guides.
