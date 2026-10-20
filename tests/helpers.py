@@ -67,6 +67,20 @@ def collect_events(adapter: ModelAdapter, request: GenerationRequest) -> list:
     return asyncio.run(run())
 
 
+def run_closing(adapter, action):
+    """Run one async action on an adapter in one event loop, then close it.
+
+    The adapter is closed even when the action raises, so a failing
+    assertion inside the action never leaks the HTTP client.
+    """
+
+    async def go():
+        async with adapter:
+            return await action(adapter)
+
+    return asyncio.run(go())
+
+
 def delta_chunk(delta: dict, finish_reason: str | None = None) -> dict:
     """One streamed chat-completion chunk in the shape llama-server emits."""
     return {"choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}]}
