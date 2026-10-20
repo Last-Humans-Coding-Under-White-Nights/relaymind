@@ -21,17 +21,10 @@ from relaymind.adapters.base import (
     AdapterCapabilities,
     AdapterEvent,
     AdapterHealth,
-    GenerationFailed,
     GenerationRequest,
     ModelAdapter,
 )
-from relaymind.adapters.openai_compat import (
-    StreamAccumulator,
-    encode_message,
-    encode_tools,
-    next_line_or_cancel,
-    parse_sse_line,
-)
+from relaymind.adapters.openai_compat import base_chat_body, stream_chat_events
 
 # Spec section 6: non-thinking is the default; an operator may enable
 # thinking mode through the same chat-template settings.
@@ -44,14 +37,7 @@ def build_chat_request(
     chat_template_kwargs: Mapping[str, object] | None,
 ) -> dict[str, object]:
     """Map a normalized request onto a llama-server chat completion body."""
-    body: dict[str, object] = {
-        "stream": True,
-        # Streaming responses carry no usage unless explicitly asked.
-        "stream_options": {"include_usage": True},
-        "messages": [encode_message(message) for message in request.messages],
-    }
-    if request.tool_schemas:
-        body["tools"] = encode_tools(request.tool_schemas)
+    body = base_chat_body(request)
     options = request.options
     if options.max_output_tokens is not None:
         body["max_tokens"] = options.max_output_tokens
@@ -111,37 +97,16 @@ class LlamaCppAdapter(ModelAdapter):
 
     async def generate(self, request: GenerationRequest) -> AsyncIterator[AdapterEvent]:
         body = build_chat_request(request, chat_template_kwargs=self._config.chat_template_kwargs)
-        accumulator = StreamAccumulator()
         cancel_event = self._cancel_events.setdefault(request.generation_id, asyncio.Event())
         try:
-            async with self._client.stream("POST", "/v1/chat/completions", json=body) as response:
-                if response.status_code != 200:
-                    detail = (await response.aread()).decode(errors="replace")
-                    yield GenerationFailed(
-                        code="provider_error",
-                        message=f"llama-server returned {response.status_code}: {detail[:200]}",
-                    )
-                    return
-                lines = aiter(response.aiter_lines())
-                while True:
-                    line = await next_line_or_cancel(lines, cancel_event)
-                    if line is None:
-                        # A cancelled generation ends without Completed;
-                        # a naturally ended stream settles buffered
-                        # state even when no finish chunk arrived.
-                        if not cancel_event.is_set():
-                            for event in accumulator.flush():
-                                yield event
-                        return
-                    chunk = parse_sse_line(line)
-                    if chunk is None:
-                        continue
-                    for event in accumulator.feed(chunk):
-                        yield event
-        except httpx.TimeoutException as exc:
-            yield GenerationFailed(code="provider_timeout", message=str(exc))
-        except httpx.HTTPError as exc:
-            yield GenerationFailed(code="provider_unreachable", message=str(exc))
+            async for event in stream_chat_events(
+                self._client,
+                "/v1/chat/completions",
+                body,
+                cancel_event=cancel_event,
+                provider_label="llama-server",
+            ):
+                yield event
         finally:
             self._cancel_events.pop(request.generation_id, None)
 

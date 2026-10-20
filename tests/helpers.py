@@ -3,8 +3,11 @@
 import asyncio
 import json
 
+import httpx
+
 from relaymind.adapters import (
     AdapterCapabilities,
+    AdapterHealth,
     GenerationRequest,
     Message,
     ModelAdapter,
@@ -73,3 +76,33 @@ def sse_body(chunks: list[dict]) -> str:
     """Encode chunks as a server-sent-events response body."""
     lines = [f"data: {json.dumps(chunk)}\n\n" for chunk in chunks]
     return "".join(lines) + "data: [DONE]\n\n"
+
+
+def sse_response(chunks: list[dict]) -> httpx.Response:
+    """A streamed chat-completion response for a mock transport."""
+    return httpx.Response(
+        200,
+        headers={"content-type": "text/event-stream"},
+        content=sse_body(chunks),
+    )
+
+
+class ScriptedAdapter(ModelAdapter):
+    """Model double that replays a scripted event sequence."""
+
+    def __init__(self, events):
+        self._events = events
+        self.cancelled: list[str] = []
+
+    async def capabilities(self) -> AdapterCapabilities:
+        return make_capabilities()
+
+    async def generate(self, request: GenerationRequest):
+        for event in self._events:
+            yield event
+
+    async def cancel(self, generation_id: str) -> None:
+        self.cancelled.append(generation_id)
+
+    async def health(self) -> AdapterHealth:
+        return AdapterHealth(available=True, warm=True, detail="scripted")
