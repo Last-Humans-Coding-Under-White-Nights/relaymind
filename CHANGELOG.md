@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.2 → 0.3: the artifact manifest records the "runtime
+  version and commit" (one composite field) instead of only a "runtime
+  commit", matching the implemented `runtime_version` field.
+
 - Specification 0.1 → 0.2: section 6 now allows an operator option to
   enable Qwen3 thinking mode through the same chat-template settings.
   Non-thinking stays the default and the latency-experiment
