@@ -10,7 +10,7 @@ import json
 
 import httpx
 
-from helpers import collect_events, delta_chunk, make_request, sse_body
+from helpers import collect_events, delta_chunk, make_request, sse_response
 from relaymind.adapters import Completed, GenerationFailed, TextDelta, ToolCall
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 
@@ -43,11 +43,7 @@ def test_generate_streams_normalized_events():
             delta_chunk({"content": "hi"}),
             delta_chunk({}, finish_reason="stop"),
         ]
-        return httpx.Response(
-            200,
-            headers={"content-type": "text/event-stream"},
-            content=sse_body(chunks),
-        )
+        return sse_response(chunks)
 
     adapter = make_adapter(handler)
     events = collect_events(adapter, make_request())
@@ -90,11 +86,7 @@ def test_generate_streams_tool_call_over_http():
     ]
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200,
-            headers={"content-type": "text/event-stream"},
-            content=sse_body(chunks),
-        )
+        return sse_response(chunks)
 
     events = collect_events(make_adapter(handler), make_request())
     assert events == [
@@ -121,11 +113,7 @@ def test_stream_ending_without_finish_reason_still_completes():
     ]
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200,
-            headers={"content-type": "text/event-stream"},
-            content=sse_body(chunks),
-        )
+        return sse_response(chunks)
 
     events = collect_events(make_adapter(handler), make_request())
     assert events == [
@@ -199,11 +187,7 @@ def test_cancel_stops_an_active_generation_early():
     chunks.append(delta_chunk({}, finish_reason="stop"))
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200,
-            headers={"content-type": "text/event-stream"},
-            content=sse_body(chunks),
-        )
+        return sse_response(chunks)
 
     adapter = make_adapter(handler)
 

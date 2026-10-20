@@ -9,10 +9,8 @@ import dataclasses
 
 import pytest
 
-from helpers import HEALTH_TOOL, collect_events, make_capabilities, make_request
+from helpers import HEALTH_TOOL, ScriptedAdapter, collect_events, make_capabilities, make_request
 from relaymind.adapters import (
-    AdapterCapabilities,
-    AdapterHealth,
     Completed,
     GenerationOptions,
     GenerationRequest,
@@ -25,27 +23,6 @@ from relaymind.adapters import (
 )
 
 CAPS = make_capabilities()
-
-
-class ScriptedAdapter(ModelAdapter):
-    """Model double that replays a scripted event sequence."""
-
-    def __init__(self, events):
-        self._events = events
-        self.cancelled: list[str] = []
-
-    async def capabilities(self) -> AdapterCapabilities:
-        return CAPS
-
-    async def generate(self, request: GenerationRequest):
-        for event in self._events:
-            yield event
-
-    async def cancel(self, generation_id: str) -> None:
-        self.cancelled.append(generation_id)
-
-    async def health(self) -> AdapterHealth:
-        return AdapterHealth(available=True, warm=True, detail="scripted")
 
 
 def test_adapter_with_missing_methods_cannot_be_instantiated():

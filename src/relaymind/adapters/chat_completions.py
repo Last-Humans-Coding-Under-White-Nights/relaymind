@@ -22,20 +22,14 @@ from relaymind.adapters.base import (
     ModelAdapter,
     UnsupportedCapabilityError,
 )
-from relaymind.adapters.openai_compat import (
-    StreamAccumulator,
-    encode_message,
-    encode_tools,
-    next_line_or_cancel,
-    parse_sse_line,
-)
+from relaymind.adapters.openai_compat import base_chat_body, stream_chat_events
 
-# GenerationOptions field -> chat-completions body key.
-_OPTION_BODY_KEYS = {
-    "max_output_tokens": "max_tokens",
-    "temperature": "temperature",
-    "top_p": "top_p",
-}
+
+def _require_supported(option_name: str, supported_options: Sequence[str]) -> None:
+    if option_name not in supported_options:
+        raise UnsupportedCapabilityError(
+            f"provider configuration does not support option: {option_name}"
+        )
 
 
 def build_chat_request(
@@ -50,24 +44,18 @@ def build_chat_request(
     option the provider does not support is an error, never a silent
     drop (the trace must reflect what the provider actually ran).
     """
-    body: dict[str, object] = {
-        "model": model,
-        "stream": True,
-        # Streaming responses carry no usage unless explicitly asked.
-        "stream_options": {"include_usage": True},
-        "messages": [encode_message(message) for message in request.messages],
-    }
-    if request.tool_schemas:
-        body["tools"] = encode_tools(request.tool_schemas)
-    for option_name, body_key in _OPTION_BODY_KEYS.items():
-        value = getattr(request.options, option_name)
-        if value is None:
-            continue
-        if option_name not in supported_options:
-            raise UnsupportedCapabilityError(
-                f"provider configuration does not support option: {option_name}"
-            )
-        body[body_key] = value
+    body = base_chat_body(request)
+    body["model"] = model
+    options = request.options
+    if options.max_output_tokens is not None:
+        _require_supported("max_output_tokens", supported_options)
+        body["max_tokens"] = options.max_output_tokens
+    if options.temperature is not None:
+        _require_supported("temperature", supported_options)
+        body["temperature"] = options.temperature
+    if options.top_p is not None:
+        _require_supported("top_p", supported_options)
+        body["top_p"] = options.top_p
     return body
 
 
@@ -111,14 +99,14 @@ class ChatCompletionsAdapter(ModelAdapter):
         """The credential, read fresh from the environment per call."""
         return os.environ.get(self._config.api_key_env) or None
 
-    def _redact(self, text: str) -> str:
+    @staticmethod
+    def _redact(text: str, api_key: str | None) -> str:
         """Strip the credential from text bound for events or traces.
 
         Providers and proxies sometimes echo the Authorization header
         in error bodies; the credential must never leave the adapter
         (issue #4, spec section 3).
         """
-        api_key = self._api_key()
         if api_key:
             return text.replace(api_key, "[redacted]")
         return text
@@ -150,49 +138,24 @@ class ChatCompletionsAdapter(ModelAdapter):
             model=self._config.model,
             supported_options=self._config.supported_options,
         )
-        accumulator = StreamAccumulator()
         cancel_event = self._cancel_events.setdefault(request.generation_id, asyncio.Event())
         try:
-            async with self._client.stream(
-                "POST",
+            async for event in stream_chat_events(
+                self._client,
                 "/chat/completions",
-                json=body,
+                body,
                 headers={"Authorization": f"Bearer {api_key}"},
-            ) as response:
-                if response.status_code != 200:
-                    detail = (await response.aread()).decode(errors="replace")
-                    detail = f"provider returned {response.status_code}: {detail[:200]}"
-                    yield GenerationFailed(
-                        code="provider_error",
-                        message=self._redact(detail),
+                cancel_event=cancel_event,
+            ):
+                # The one chokepoint where failures leave this adapter:
+                # providers and proxies can echo the Authorization
+                # header in any error message, so every failure is
+                # scrubbed here (issue #4).
+                if isinstance(event, GenerationFailed):
+                    event = GenerationFailed(
+                        code=event.code, message=self._redact(event.message, api_key)
                     )
-                    return
-                lines = aiter(response.aiter_lines())
-                while True:
-                    line = await next_line_or_cancel(lines, cancel_event)
-                    if line is None:
-                        # A cancelled generation ends without Completed;
-                        # a naturally ended stream settles buffered
-                        # state even when no finish chunk arrived.
-                        if not cancel_event.is_set():
-                            for event in accumulator.flush():
-                                yield event
-                        return
-                    chunk = parse_sse_line(line)
-                    if chunk is None:
-                        continue
-                    for event in accumulator.feed(chunk):
-                        # Streamed provider error messages can echo the
-                        # Authorization header; scrub before emitting.
-                        if isinstance(event, GenerationFailed):
-                            event = GenerationFailed(
-                                code=event.code, message=self._redact(event.message)
-                            )
-                        yield event
-        except httpx.TimeoutException as exc:
-            yield GenerationFailed(code="provider_timeout", message=self._redact(str(exc)))
-        except httpx.HTTPError as exc:
-            yield GenerationFailed(code="provider_unreachable", message=self._redact(str(exc)))
+                yield event
         finally:
             self._cancel_events.pop(request.generation_id, None)
 
@@ -214,7 +177,9 @@ class ChatCompletionsAdapter(ModelAdapter):
                 "/models", headers={"Authorization": f"Bearer {api_key}"}
             )
         except httpx.HTTPError as exc:
-            return AdapterHealth(available=False, warm=False, detail=self._redact(str(exc)))
+            return AdapterHealth(
+                available=False, warm=False, detail=self._redact(str(exc), api_key)
+            )
         if response.status_code == 200:
             # An external provider has no local warm-up phase to report.
             return AdapterHealth(available=True, warm=True, detail="ready")
