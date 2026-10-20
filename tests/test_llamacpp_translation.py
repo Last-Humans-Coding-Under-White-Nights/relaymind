@@ -150,3 +150,24 @@ def test_usage_chunk_maps_to_usage_event():
     acc = StreamAccumulator()
     events = acc.feed({"choices": [], "usage": {"prompt_tokens": 21, "completion_tokens": 4}})
     assert events == [Usage(input_tokens=21, output_tokens=4)]
+
+
+def test_thinking_mode_can_be_enabled_through_chat_template_kwargs():
+    # Spec 0.2, section 6: an operator MAY enable thinking mode through
+    # the same chat-template settings; non-thinking stays the default.
+    body = build_chat_request(make_request(), chat_template_kwargs={"enable_thinking": True})
+    assert body["chat_template_kwargs"] == {"enable_thinking": True}
+
+
+def test_reasoning_content_never_becomes_answer_text():
+    # Spec 0.2, section 6: reasoning output MUST NOT appear as answer
+    # content in either mode. llama-server streams it as
+    # reasoning_content; only content becomes TextDelta.
+    acc = StreamAccumulator()
+    events = acc.feed(delta_chunk({"reasoning_content": "thinking about services..."}))
+    events += acc.feed(delta_chunk({"content": "staging-api is healthy"}))
+    events += acc.feed(delta_chunk({}, finish_reason="stop"))
+    assert events == [
+        TextDelta(text="staging-api is healthy"),
+        Completed(finish_reason="stop"),
+    ]

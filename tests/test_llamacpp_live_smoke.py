@@ -120,6 +120,29 @@ def test_non_thinking_mode_produces_no_think_block(adapter):
     assert any(isinstance(event, Completed) for event in events)
 
 
+def test_thinking_mode_keeps_reasoning_out_of_answer_content(server):
+    # Spec 0.2, section 6: thinking mode is an operator option; reasoning
+    # output must not appear as answer content in either mode.
+    thinking_adapter = LlamaCppAdapter(
+        LlamaCppConfig(
+            base_url=server,
+            context_limit=8192,
+            chat_template_kwargs={"enable_thinking": True},
+        )
+    )
+    events = generate(
+        thinking_adapter,
+        GenerationRequest(
+            generation_id="smoke_thinking",
+            messages=(Message(role=Role.USER, content="Reply with exactly one word: pong"),),
+        ),
+    )
+    text = "".join(event.text for event in events if isinstance(event, TextDelta))
+    assert text.strip(), f"no answer text in events: {events}"
+    assert "<think>" not in text, f"thinking block leaked into answer: {text!r}"
+    assert any(isinstance(event, Completed) for event in events)
+
+
 def test_model_proposes_a_valid_tool_call(adapter):
     from relaymind.adapters import ToolSchema
 
