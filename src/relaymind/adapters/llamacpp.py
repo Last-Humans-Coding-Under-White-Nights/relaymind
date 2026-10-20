@@ -10,6 +10,7 @@ chat-template settings (``chat_template_kwargs.enable_thinking``), not
 through prompt strings, and is verified by the live smoke test.
 """
 
+import asyncio
 import json
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
@@ -23,11 +24,36 @@ from relaymind.adapters.base import (
     Completed,
     GenerationFailed,
     GenerationRequest,
+    Message,
     ModelAdapter,
     TextDelta,
     ToolCall,
     Usage,
 )
+
+
+def _encode_message(message: Message) -> dict[str, object]:
+    """Encode one normalized message in OpenAI chat format.
+
+    Tool turns carry their references: a tool message names the call it
+    answers, an assistant message carries the calls it proposed.
+    """
+    encoded: dict[str, object] = {"role": message.role.value, "content": message.content}
+    if message.tool_call_id is not None:
+        encoded["tool_call_id"] = message.tool_call_id
+    if message.tool_calls:
+        encoded["tool_calls"] = [
+            {
+                "id": call.call_id,
+                "type": "function",
+                "function": {
+                    "name": call.tool_name,
+                    "arguments": json.dumps(dict(call.arguments)),
+                },
+            }
+            for call in message.tool_calls
+        ]
+    return encoded
 
 
 def build_chat_request(
@@ -38,9 +64,7 @@ def build_chat_request(
     """Map a normalized request onto a llama-server chat completion body."""
     body: dict[str, object] = {
         "stream": True,
-        "messages": [
-            {"role": message.role.value, "content": message.content} for message in request.messages
-        ],
+        "messages": [_encode_message(message) for message in request.messages],
     }
     if request.tool_schemas:
         body["tools"] = [
@@ -49,7 +73,9 @@ def build_chat_request(
                 "function": {
                     "name": schema.name,
                     "description": schema.description,
-                    "parameters": schema.input_schema,
+                    # input_schema is a MappingProxyType; the wire body
+                    # must be plain-JSON serializable.
+                    "parameters": dict(schema.input_schema),
                 },
             }
             for schema in request.tool_schemas
@@ -116,33 +142,37 @@ class StreamAccumulator:
         partial.arguments_json += str(function.get("arguments") or "")
 
     def _finish(self, finish_reason: str) -> list[AdapterEvent]:
-        events: list[AdapterEvent] = []
-        for index in sorted(self._tool_calls):
-            partial = self._tool_calls[index]
-            try:
-                arguments = json.loads(partial.arguments_json)
-                if not isinstance(arguments, dict):
-                    raise ValueError("arguments are not a JSON object")
-            except ValueError as exc:
-                return [
-                    GenerationFailed(
-                        code="invalid_tool_arguments",
-                        message=(
-                            f"tool call {partial.call_id or index} for "
-                            f"{partial.tool_name or 'unknown tool'}: {exc}"
-                        ),
+        try:
+            events: list[AdapterEvent] = []
+            for index in sorted(self._tool_calls):
+                partial = self._tool_calls[index]
+                try:
+                    arguments = json.loads(partial.arguments_json)
+                    if not isinstance(arguments, dict):
+                        raise ValueError("arguments are not a JSON object")
+                    events.append(
+                        ToolCall(
+                            # A provider may omit the id; synthesize one
+                            # rather than emit an invalid call.
+                            call_id=partial.call_id or f"call_{index}",
+                            tool_name=partial.tool_name,
+                            arguments=arguments,
+                        )
                     )
-                ]
-            events.append(
-                ToolCall(
-                    call_id=partial.call_id,
-                    tool_name=partial.tool_name,
-                    arguments=arguments,
-                )
-            )
-        self._tool_calls.clear()
-        events.append(Completed(finish_reason=finish_reason))
-        return events
+                except ValueError as exc:
+                    return [
+                        GenerationFailed(
+                            code="invalid_tool_arguments",
+                            message=(
+                                f"tool call {partial.call_id or index} for "
+                                f"{partial.tool_name or 'unknown tool'}: {exc}"
+                            ),
+                        )
+                    ]
+            events.append(Completed(finish_reason=finish_reason))
+            return events
+        finally:
+            self._tool_calls.clear()
 
 
 @dataclass(frozen=True)
@@ -170,8 +200,9 @@ class LlamaCppAdapter(ModelAdapter):
             timeout=config.request_timeout_seconds,
             transport=transport,
         )
-        # Generation ids whose streams should stop at the next chunk.
-        self._cancelled: set[str] = set()
+        # One awaited event per running generation; cancel() sets it to
+        # interrupt the stream even while it is idle between chunks.
+        self._cancel_events: dict[str, asyncio.Event] = {}
 
     async def capabilities(self) -> AdapterCapabilities:
         return AdapterCapabilities(
@@ -187,6 +218,7 @@ class LlamaCppAdapter(ModelAdapter):
     async def generate(self, request: GenerationRequest) -> AsyncIterator[AdapterEvent]:
         body = build_chat_request(request, chat_template_kwargs=self._config.chat_template_kwargs)
         accumulator = StreamAccumulator()
+        cancel_event = self._cancel_events.setdefault(request.generation_id, asyncio.Event())
         try:
             async with self._client.stream("POST", "/v1/chat/completions", json=body) as response:
                 if response.status_code != 200:
@@ -196,8 +228,10 @@ class LlamaCppAdapter(ModelAdapter):
                         message=f"llama-server returned {response.status_code}: {detail[:200]}",
                     )
                     return
-                async for line in response.aiter_lines():
-                    if request.generation_id in self._cancelled:
+                lines = aiter(response.aiter_lines())
+                while True:
+                    line = await self._next_line_or_cancel(lines, cancel_event)
+                    if line is None:
                         return
                     chunk = _parse_sse_line(line)
                     if chunk is None:
@@ -207,10 +241,32 @@ class LlamaCppAdapter(ModelAdapter):
         except httpx.HTTPError as exc:
             yield GenerationFailed(code="provider_unreachable", message=str(exc))
         finally:
-            self._cancelled.discard(request.generation_id)
+            self._cancel_events.pop(request.generation_id, None)
+
+    @staticmethod
+    async def _next_line_or_cancel(lines, cancel_event: asyncio.Event) -> str | None:
+        """The next stream line, or None on end of stream or cancellation."""
+        next_line = asyncio.ensure_future(anext(lines))
+        cancelled = asyncio.ensure_future(cancel_event.wait())
+        try:
+            done, _pending = await asyncio.wait(
+                {next_line, cancelled}, return_when=asyncio.FIRST_COMPLETED
+            )
+            if cancel_event.is_set():
+                return None
+            try:
+                return next_line.result()
+            except StopAsyncIteration:
+                return None
+        finally:
+            for task in (next_line, cancelled):
+                task.cancel()
+            await asyncio.gather(next_line, cancelled, return_exceptions=True)
 
     async def cancel(self, generation_id: str) -> None:
-        self._cancelled.add(generation_id)
+        event = self._cancel_events.get(generation_id)
+        if event is not None:
+            event.set()
 
     async def health(self) -> AdapterHealth:
         try:

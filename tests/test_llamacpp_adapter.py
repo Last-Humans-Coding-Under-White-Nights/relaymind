@@ -105,3 +105,43 @@ def test_cancel_stops_an_active_generation_early():
 def test_cancel_of_unknown_generation_is_a_no_op():
     adapter = make_adapter(lambda request: httpx.Response(200))
     asyncio.run(adapter.cancel("nope"))
+
+
+def test_cancel_interrupts_an_idle_stream():
+    # Finding: a flag checked at the next chunk never fires when the
+    # stream is idle; cancel must interrupt the wait itself.
+    first_chunk = (
+        b'data: {"choices": [{"index": 0, "delta": {"content": "hi"}, "finish_reason": null}]}\n\n'
+    )
+
+    class HangingStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield first_chunk
+            await asyncio.Event().wait()  # never set: stream goes idle
+
+        async def aclose(self):
+            pass
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, headers={"content-type": "text/event-stream"}, stream=HangingStream()
+        )
+
+    adapter = make_adapter(handler)
+
+    async def run():
+        events = []
+
+        async def consume():
+            async for event in adapter.generate(make_request()):
+                events.append(event)
+
+        task = asyncio.create_task(consume())
+        while not events and not task.done():
+            await asyncio.sleep(0.01)
+        await adapter.cancel("gen_1")
+        await asyncio.wait_for(task, timeout=2)
+        return events
+
+    events = asyncio.run(run())
+    assert events == [TextDelta(text="hi")]

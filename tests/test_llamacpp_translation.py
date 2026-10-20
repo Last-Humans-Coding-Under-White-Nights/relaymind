@@ -6,12 +6,16 @@ complete argument parsing; partial streamed JSON never executes).
 Deterministic, no server. Issue #3.
 """
 
+import json
+
 from helpers import HEALTH_TOOL, delta_chunk
 from helpers import make_request as make_plain_request
 from relaymind.adapters import (
     Completed,
     GenerationFailed,
     GenerationOptions,
+    Message,
+    Role,
     TextDelta,
     ToolCall,
     Usage,
@@ -152,3 +156,86 @@ def test_reasoning_content_never_becomes_answer_text():
         TextDelta(text="staging-api is healthy"),
         Completed(finish_reason="stop"),
     ]
+
+
+def test_tool_turn_messages_map_to_openai_format():
+    # Finding: tool_call_id and tool_calls were dropped, breaking
+    # multi-turn tool conversations (RM13: evidence goes back to the model).
+    call = ToolCall(call_id="call_1", tool_name="get_service_health", arguments={"service": "s"})
+    body = build_chat_request(
+        make_request(
+            messages=(
+                Message(role=Role.USER, content="is s healthy?"),
+                Message(role=Role.ASSISTANT, tool_calls=(call,)),
+                Message(role=Role.TOOL, content='{"status": "ok"}', tool_call_id="call_1"),
+            )
+        ),
+        chat_template_kwargs=None,
+    )
+    assert body["messages"][1] == {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {
+                    "name": "get_service_health",
+                    "arguments": '{"service": "s"}',
+                },
+            }
+        ],
+    }
+    assert body["messages"][2] == {
+        "role": "tool",
+        "content": '{"status": "ok"}',
+        "tool_call_id": "call_1",
+    }
+
+
+def test_missing_stream_call_id_is_synthesized_not_crashing():
+    acc = StreamAccumulator()
+    acc.feed(
+        delta_chunk(
+            {
+                "tool_calls": [
+                    {"index": 0, "function": {"name": "get_service_health", "arguments": "{}"}}
+                ]
+            }
+        )
+    )
+    events = acc.feed(delta_chunk({}, finish_reason="tool_calls"))
+    calls = [event for event in events if isinstance(event, ToolCall)]
+    assert calls and calls[0].call_id  # synthesized, never blank
+
+
+def test_missing_tool_name_fails_as_event_not_exception():
+    acc = StreamAccumulator()
+    acc.feed(delta_chunk({"tool_calls": [{"index": 0, "function": {"arguments": "{}"}}]}))
+    events = acc.feed(delta_chunk({}, finish_reason="tool_calls"))
+    assert len(events) == 1
+    assert isinstance(events[0], GenerationFailed)
+
+
+def test_failed_finish_clears_accumulated_state():
+    acc = StreamAccumulator()
+    acc.feed(
+        delta_chunk(
+            {
+                "tool_calls": [
+                    {"index": 0, "id": "c1", "function": {"name": "t", "arguments": "{bad"}}
+                ]
+            }
+        )
+    )
+    first = acc.feed(delta_chunk({}, finish_reason="tool_calls"))
+    assert isinstance(first[0], GenerationFailed)
+    again = acc.feed(delta_chunk({}, finish_reason="stop"))
+    assert again == [Completed(finish_reason="stop")]
+
+
+def test_request_body_with_tools_is_json_serializable():
+    # input_schema is a MappingProxyType on the frozen ToolSchema; the
+    # wire body must still serialize (the live smoke caught this).
+    body = build_chat_request(make_request(), chat_template_kwargs=None)
+    json.dumps(body)
