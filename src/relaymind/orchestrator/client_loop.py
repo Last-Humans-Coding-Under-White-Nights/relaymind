@@ -30,6 +30,7 @@ from jsonschema.exceptions import SchemaError
 from relaymind.adapters import (
     GenerationOptions,
     Message,
+    ModelAdapter,
     Role,
     TokenCountError,
     ToolCall,
@@ -37,7 +38,7 @@ from relaymind.adapters import (
     UnsupportedCapabilityError,
 )
 from relaymind.orchestrator.budgets import BudgetExceededError
-from relaymind.orchestrator.handoff import EXTERNAL_ACTOR, LOCAL_ACTOR, measure_request
+from relaymind.orchestrator.handoff import RequestSize, measure_request
 from relaymind.orchestrator.local_loop import (
     EXTERNAL_FAILED,
     EXTERNAL_OPTIONS,
@@ -52,7 +53,6 @@ from relaymind.orchestrator.local_loop import (
 )
 from relaymind.orchestrator.route_decision import (
     ExecutionMode,
-    Language,
     Route,
     RouteDecision,
     RoutingContext,
@@ -210,7 +210,7 @@ class _ClientRun(_Run):
             RouteDecision(
                 route=route,
                 skill_id=None,
-                language=self.language or Language.EN,
+                language=self.language,
                 reason_code=reason_code,
                 clarification=None,
             ).to_json_object(),
@@ -226,14 +226,22 @@ class _ClientRun(_Run):
 
     # -- the local stage -------------------------------------------------------------
 
-    async def _local_stage(self) -> _Reply:
-        adapter = self.o.model.adapter
+    async def _measure(self, adapter: ModelAdapter) -> RequestSize:
+        """Measure the request against a model's context limit (RM13).
+
+        Offered functions need tool calling; raises
+        UnsupportedCapabilityError or TokenCountError when the model
+        cannot take the request.
+        """
         schemas = self.offer.offered
+        capabilities = await adapter.capabilities()
+        if schemas:
+            capabilities.require("tool_calling")
+        return await measure_request(adapter, capabilities, self.messages, schemas)
+
+    async def _local_stage(self) -> _Reply:
         try:
-            capabilities = await adapter.capabilities()
-            if schemas:
-                capabilities.require("tool_calling")
-            size = await measure_request(adapter, capabilities, self.messages, schemas)
+            size = await self._measure(self.o.model.adapter)
         except (UnsupportedCapabilityError, TokenCountError) as exc:
             raise self._local_unavailable(
                 f"the local model cannot take the request: {exc}"
@@ -309,14 +317,10 @@ class _ClientRun(_Run):
                     stop.reason_code, stop.detail, **{**stop.extra, "dispatch_blocked": room.budget}
                 )
             )
-        if stop.degraded:
-            self._record_degraded_route()
-        schemas = self.offer.offered
+        # The gateway's decision is recorded before the local stage, so a
+        # degraded handoff needs no further route.selected (section 11).
         try:
-            capabilities = await external.adapter.capabilities()
-            if schemas:
-                capabilities.require("tool_calling")
-            size = await measure_request(external.adapter, capabilities, self.messages, schemas)
+            size = await self._measure(external.adapter)
         except (UnsupportedCapabilityError, TokenCountError) as exc:
             return self._fail(
                 EXTERNAL_FAILED,
@@ -335,7 +339,7 @@ class _ClientRun(_Run):
                     "model": external.model_id,
                     "skill": None,
                     "operation_ids": [],
-                    "allowed_tools": [s.name for s in schemas],
+                    "allowed_tools": [s.name for s in self.offer.offered],
                     "request": size.to_json_object(),
                     **(
                         {"degraded_mode": True, "local_failure": self.scrub(stop.detail)}
@@ -379,7 +383,6 @@ class _ClientRun(_Run):
     def _complete(self, reply: _Reply) -> RunOutcome:
         """End the run with the reply: an answer, or the calls the caller executes."""
         model = self.active_model
-        role = EXTERNAL_ACTOR if model is self.o.external else LOCAL_ACTOR
         answer: str | None = None
         if reply.calls:
             for call in reply.calls:
@@ -395,7 +398,7 @@ class _ClientRun(_Run):
                     },
                 )
         else:
-            answer = self._publish(reply.generation, role)
+            answer = self._publish(reply.generation, self.authority.holder)
         self.move(
             RunState.COMPLETED,
             event=(
