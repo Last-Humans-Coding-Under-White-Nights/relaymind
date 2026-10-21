@@ -234,7 +234,7 @@ async def stream_chunks(alias: str, result: ChatResult, created: int) -> AsyncIt
                     if piece:
                         yield chunk({"content": piece})
             except Exception as exc:
-                yield _failure_event(result, exc)
+                yield _failure_event(result.run_id, result.live, exc)
                 raise StreamAborted from None
         else:
             for piece in result.stream_pieces:
@@ -243,23 +243,16 @@ async def stream_chunks(alias: str, result: ChatResult, created: int) -> AsyncIt
     yield "data: [DONE]\n\n"
 
 
-def _failure_event(result: ChatResult, exc: Exception) -> str:
+def _failure_event(run_id: str, live: LiveAnswer, exc: Exception) -> str:
     """Record the failed run and build the one error event of an aborted stream.
 
     The event text is fixed: provider text never reaches the client
     (RM12). The operator log names the failure type only.
     """
-    assert result.live is not None
-    logger.error("answer stream of %s failed: %s", result.run_id, type(exc).__name__)
+    logger.error("answer stream of %s failed: %s", run_id, type(exc).__name__)
     try:
-        result.live.fail()
+        live.fail()
     except Exception as recorder:
-        logger.error(
-            "could not record run.failed for %s: %s", result.run_id, type(recorder).__name__
-        )
-    error = {
-        "code": STREAM_FAILED_CODE,
-        "message": STREAM_FAILED_MESSAGE,
-        "run_id": result.run_id,
-    }
+        logger.error("could not record run.failed for %s: %s", run_id, type(recorder).__name__)
+    error = {"code": STREAM_FAILED_CODE, "message": STREAM_FAILED_MESSAGE, "run_id": run_id}
     return f"data: {json.dumps({'error': error})}\n\n"

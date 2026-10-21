@@ -34,15 +34,29 @@ def token_of(app):
     return app.state.application_token
 
 
-def call(app, method, path, *, json_body=None, content=None, headers=None, auth=True):
-    """One request to the app; returns the httpx response."""
+def call(
+    app,
+    method,
+    path,
+    *,
+    json_body=None,
+    content=None,
+    headers=None,
+    auth=True,
+    raise_app_exceptions=True,
+):
+    """One request to the app; returns the httpx response.
+
+    With raise_app_exceptions false, the bytes sent before the app
+    failed are returned instead of the exception.
+    """
     own = {"Authorization": f"Bearer {token_of(app)}"} if auth is True else {}
     merged = {**own, **(headers or {})}
     if isinstance(auth, str):
         merged["Authorization"] = auth
 
     async def go():
-        transport = httpx.ASGITransport(app=app, raise_app_exceptions=True)
+        transport = httpx.ASGITransport(app=app, raise_app_exceptions=raise_app_exceptions)
         async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1") as client:
             return await client.request(
                 method, path, json=json_body, content=content, headers=merged
@@ -51,10 +65,23 @@ def call(app, method, path, *, json_body=None, content=None, headers=None, auth=
     return asyncio.run(go())
 
 
-def chat(app, model="relaymind", prompt="Is staging-api healthy right now?", **fields):
+def chat(
+    app,
+    model="relaymind",
+    prompt="Is staging-api healthy right now?",
+    raise_app_exceptions=True,
+    **fields,
+):
     headers = fields.pop("headers", None)
     body = {"model": model, "messages": [{"role": "user", "content": prompt}], **fields}
-    return call(app, "POST", "/v1/chat/completions", json_body=body, headers=headers)
+    return call(
+        app,
+        "POST",
+        "/v1/chat/completions",
+        json_body=body,
+        headers=headers,
+        raise_app_exceptions=raise_app_exceptions,
+    )
 
 
 def sse_events(response):

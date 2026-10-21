@@ -8,9 +8,6 @@ replacement answer. A skill whose evidence predicate is unmet cannot
 finalize. Deterministic: the orchestrator runs over model doubles.
 """
 
-import asyncio
-import json
-
 import httpx
 import openai
 import pytest
@@ -45,6 +42,7 @@ TOOLS = [
 ]
 PROVIDER_TEXT = "upstream said: key sk-live-123 is rejected"
 PIECES = ("staging-api is ", "healthy ", "(checked at 2026-10-20T02:58:00Z).")
+MESSAGES = [{"role": "user", "content": "Is staging-api healthy right now?"}]
 
 
 class FixedBackend:
@@ -61,13 +59,15 @@ class LiveBackend:
     """A client-owned backend double that forwards provider text as it arrives.
 
     The provider yields the given pieces and then, when fail_with is
-    set, raises. fail() stands for the backend recording run.failed.
+    set, raises. fail stands for the backend recording run.failed; by
+    default it notes the run id in failed.
     """
 
-    def __init__(self, pieces, *, fail_with=None):
+    def __init__(self, pieces, *, fail_with=None, fail=None):
         self.pieces = pieces
         self.fail_with = fail_with
         self.failed: list[str] = []
+        self.fail = fail or (lambda: self.failed.append("run_live"))
         self.delivered: list[str] = []
 
     async def complete(self, request, mode):
@@ -81,7 +81,7 @@ class LiveBackend:
         return ChatResult(
             run_id="run_live",
             content=None,
-            live=LiveAnswer(pieces=provider(), fail=lambda: self.failed.append("run_live")),
+            live=LiveAnswer(pieces=provider(), fail=self.fail),
         )
 
 
@@ -96,32 +96,14 @@ def tool_call_result():
     )
 
 
-def stream_body(model, **fields):
-    return {
-        "model": model,
-        "messages": [{"role": "user", "content": "Is staging-api healthy right now?"}],
-        "stream": True,
-        **fields,
-    }
+def live_stream(app):
+    """The events sent for a client-owned stream, even when the app fails after they start."""
+    return sse_events(chat(app, model=CLIENT_TOOLS, stream=True, raise_app_exceptions=False))
 
 
-def raw_stream(app, body):
-    """The bytes sent for a streaming request, even when the app fails after they start."""
-
-    async def go():
-        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
-        async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1") as client:
-            return await client.post(
-                "/v1/chat/completions",
-                json=body,
-                headers={"Authorization": f"Bearer {token_of(app)}"},
-            )
-
-    return asyncio.run(go())
-
-
-def data_lines(response):
-    return [b[len("data: ") :] for b in response.text.split("\n\n") if b.strip()]
+def contents(chunks):
+    """The content delta of each chunk."""
+    return [c["choices"][0]["delta"].get("content") for c in chunks]
 
 
 # -- framing: both aliases, both terminal paths -------------------------------------------
@@ -178,8 +160,7 @@ def test_managed_content_chunks_are_exactly_the_published_answer_deltas(tmp_path
     gateway = build_gateway(tmp_path, turns, external_turns=[])
     response = chat(make_app(gateway), stream=True)
     run_id = response.headers[RUN_ID_HEADER]
-    chunks = sse_events(response)[:-1]
-    sent = [c["choices"][0]["delta"].get("content") for c in chunks[1:-1]]
+    sent = contents(sse_events(response)[1:-2])
     published = [e.payload["text"] for e in of_type(gateway.store.events(run_id), "answer.delta")]
     assert published == list(PIECES)
     assert sent == published
@@ -209,10 +190,10 @@ def test_the_final_generation_runs_with_tools_disabled(tmp_path):
 def test_a_live_stream_forwards_pieces_in_order_and_finishes_once(tmp_path):
     backend = LiveBackend(PIECES)
     app = make_app(healthy_gateway(tmp_path), client_tools=backend)
-    events = sse_events(raw_stream(app, stream_body(CLIENT_TOOLS)))
+    events = live_stream(app)
     chunks = events[:-1]
     assert events[-1] == "[DONE]"
-    assert [c["choices"][0]["delta"].get("content") for c in chunks[1:-1]] == list(PIECES)
+    assert contents(chunks[1:-1]) == list(PIECES)
     assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
     assert backend.failed == []
 
@@ -220,8 +201,7 @@ def test_a_live_stream_forwards_pieces_in_order_and_finishes_once(tmp_path):
 def test_a_live_stream_skips_empty_pieces(tmp_path):
     backend = LiveBackend(("a", "", "b"))
     app = make_app(healthy_gateway(tmp_path), client_tools=backend)
-    chunks = sse_events(raw_stream(app, stream_body(CLIENT_TOOLS)))[:-1]
-    assert [c["choices"][0]["delta"].get("content") for c in chunks[1:-1]] == ["a", "b"]
+    assert contents(live_stream(app)[1:-2]) == ["a", "b"]
 
 
 # -- a provider failure after the stream started ------------------------------------------------
@@ -231,12 +211,11 @@ def test_a_mid_stream_failure_ends_without_a_finish_chunk_or_done(tmp_path):
     """RM20, section 11: an error event, run recorded as failed, no success marker."""
     backend = LiveBackend(PIECES[:2], fail_with=RuntimeError(PROVIDER_TEXT))
     app = make_app(healthy_gateway(tmp_path), client_tools=backend)
-    response = raw_stream(app, stream_body(CLIENT_TOOLS))
-    lines = data_lines(response)
-    assert "[DONE]" not in lines
-    events = [json.loads(line) for line in lines]
+    response = chat(app, model=CLIENT_TOOLS, stream=True, raise_app_exceptions=False)
+    events = sse_events(response)
+    assert "[DONE]" not in events
     chunks, error = events[:-1], events[-1]
-    assert [c["choices"][0]["delta"].get("content") for c in chunks[1:]] == list(PIECES[:2])
+    assert contents(chunks[1:]) == list(PIECES[:2])
     assert all(c["choices"][0]["finish_reason"] is None for c in chunks)
     assert error == {
         "error": {
@@ -255,33 +234,21 @@ def test_no_replacement_answer_follows_a_mid_stream_failure(tmp_path):
     gateway = healthy_gateway(tmp_path)
     backend = LiveBackend(PIECES[:1], fail_with=RuntimeError("down"))
     app = make_app(gateway, client_tools=backend)
-    response = raw_stream(app, stream_body(CLIENT_TOOLS))
-    text = "".join(
-        c["choices"][0]["delta"].get("content", "")
-        for c in map(json.loads, data_lines(response)[:-1])
-    )
+    text = "".join(piece or "" for piece in contents(live_stream(app)[:-1]))
     assert text == PIECES[0]
     assert gateway.adapter.requests == [] and gateway.external.requests == []
 
 
 def test_a_failing_recorder_still_ends_the_stream_without_a_success_marker(tmp_path):
-    backend = LiveBackend(PIECES[:1], fail_with=RuntimeError("down"))
 
-    async def complete(request, mode):
-        result = await LiveBackend.complete(backend, request, mode)
+    def broken():
+        raise RuntimeError("store is closed")
 
-        def broken():
-            raise RuntimeError("store is closed")
-
-        return ChatResult(result.run_id, None, live=LiveAnswer(result.live.pieces, broken))
-
-    backend.complete = complete
+    backend = LiveBackend(PIECES[:1], fail_with=RuntimeError("down"), fail=broken)
     app = make_app(healthy_gateway(tmp_path), client_tools=backend)
-    lines = data_lines(raw_stream(app, stream_body(CLIENT_TOOLS)))
-    assert "[DONE]" not in lines
-    assert all(
-        json.loads(line).get("choices", [{}])[0].get("finish_reason") is None for line in lines
-    )
+    events = live_stream(app)
+    assert "[DONE]" not in events
+    assert all(e.get("choices", [{}])[0].get("finish_reason") is None for e in events)
 
 
 def test_a_failure_before_the_first_chunk_is_a_normal_error_response(tmp_path):
@@ -292,7 +259,7 @@ def test_a_failure_before_the_first_chunk_is_a_normal_error_response(tmp_path):
             raise RuntimeError(PROVIDER_TEXT)
 
     app = make_app(healthy_gateway(tmp_path), client_tools=Failing())
-    response = raw_stream(app, stream_body(CLIENT_TOOLS))
+    response = chat(app, model=CLIENT_TOOLS, stream=True, raise_app_exceptions=False)
     assert response.status_code == 500
     assert response.json()["error"]["code"] == "internal_error"
     assert PROVIDER_TEXT not in response.text
@@ -310,9 +277,7 @@ def test_the_sdk_sees_a_mid_stream_failure_as_an_error_over_a_socket(tmp_path):
             http_client=httpx.Client(trust_env=False),
             max_retries=0,
         )
-        stream = client.chat.completions.create(
-            model=CLIENT_TOOLS, messages=stream_body(CLIENT_TOOLS)["messages"], stream=True
-        )
+        stream = client.chat.completions.create(model=CLIENT_TOOLS, messages=MESSAGES, stream=True)
         with pytest.raises(openai.APIError) as caught:
             for chunk in stream:
                 received.append(chunk)
