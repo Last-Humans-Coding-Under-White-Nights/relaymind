@@ -248,10 +248,15 @@ class RunStateMachine:
         """Cancel an unfinished run (RM17: stale is 409, terminal never changes).
 
         event is the run.cancelled event (RM22). Without one, the gateway
-        records run.cancelled itself, with the reason, if any, as its payload.
+        records run.cancelled with measured active/waiting time and the optional reason.
         """
         if event is None:
-            event = (EventType.RUN_CANCELLED, GATEWAY_ACTOR, {"reason": reason} if reason else {})
+            # Check the caller's version before doing any timing work (RM17).
+            self._current(run_id, expected_version)
+            payload = self.store.state_timings(run_id)
+            if reason:
+                payload = {**payload, "reason": reason}
+            event = (EventType.RUN_CANCELLED, GATEWAY_ACTOR, payload)
         return self.transition(
             run_id, expected_version, S.CANCELLED, error_code=reason, event=event
         )

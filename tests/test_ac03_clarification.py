@@ -678,7 +678,6 @@ def test_a_waiting_run_cancelled_elsewhere_is_not_expired(tmp_path):
         cancelled.run_id,
         record.version,
         reason="user_cancelled",
-        event=("run.cancelled", "gateway", {}),
     )
 
     gateway.clock.advance(301)

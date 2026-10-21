@@ -86,10 +86,17 @@ _COUNT_NUMBER = re.compile(r"(?<![A-Za-z0-9_.-])-?\d+(?![A-Za-z0-9_]|\.\d)")
 _EVIDENCE_TOOLS = ("get_latest_deployment", "get_metrics", "get_recent_logs")
 
 
-def _latest(results: Sequence[ToolResult], tool_name: str) -> dict[str, Any] | None:
+def _latest(
+    results: Sequence[ToolResult], tool_name: str, *, require_complete: bool = True
+) -> dict[str, Any] | None:
+    """Use the latest outcome; complete-result skills cannot fall back to stale data (RM22)."""
     for result in reversed(results):
         if result.tool_name == tool_name:
-            if result.status is ToolStatus.SUCCEEDED and result.data is not None:
+            if (
+                result.status is ToolStatus.SUCCEEDED
+                and result.data is not None
+                and (not require_complete or not result.truncated)
+            ):
                 return result.data
             return None
     return None
@@ -335,7 +342,10 @@ def performance_evidence_separated(answer: str, results: Sequence[ToolResult]) -
     its own line and each with content. Label words inside prose do not
     count.
     """
-    if not any(_latest(results, tool) is not None for tool in _EVIDENCE_TOOLS):
+    # This skill explicitly accepts partial observations, including truncated logs.
+    if not any(
+        _latest(results, tool, require_complete=False) is not None for tool in _EVIDENCE_TOOLS
+    ):
         return False
     filled = _filled_sections(answer)
     return "observation" in filled and bool(filled & {"hypothesis", "insufficient"})

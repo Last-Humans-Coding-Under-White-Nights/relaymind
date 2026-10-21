@@ -35,7 +35,7 @@ import time
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import TracebackType
@@ -48,6 +48,8 @@ from relaymind.store.trace_event import (
     TraceEvent,
     validate_trace_event,
 )
+
+DEFAULT_MAX_INLINE_RESULT_BYTES = 16 * 1024
 
 DEFAULT_RETENTION = timedelta(days=7)
 # RM11: confirmation expires after five minutes.
@@ -126,6 +128,23 @@ MIGRATIONS: tuple[str, ...] = (
     CREATE INDEX tool_operations_run_id ON tool_operations(run_id);
     CREATE INDEX approvals_run_id ON approvals(run_id);
     CREATE INDEX artifact_refs_run_id ON artifact_refs(run_id);
+    """,
+    """
+    CREATE TABLE state_intervals (
+        run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+        version INTEGER NOT NULL,
+        state TEXT NOT NULL,
+        elapsed_ms INTEGER NOT NULL,
+        PRIMARY KEY (run_id, version)
+    );
+    INSERT INTO state_intervals (run_id, version, state, elapsed_ms)
+        SELECT run_id, version, state,
+            COALESCE((SELECT MAX(elapsed_ms) FROM events WHERE events.run_id = runs.run_id), 0)
+        FROM runs;
+    CREATE TABLE artifact_contents (
+        artifact_id TEXT PRIMARY KEY REFERENCES artifact_refs(artifact_id) ON DELETE CASCADE,
+        content TEXT NOT NULL
+    );
     """,
 )
 
@@ -268,9 +287,13 @@ class RunStore:
         clock: TraceClock | None = None,
         retention: timedelta = DEFAULT_RETENTION,
         approval_ttl: timedelta = DEFAULT_APPROVAL_TTL,
+        max_inline_result_bytes: int = DEFAULT_MAX_INLINE_RESULT_BYTES,
     ) -> None:
         if approval_ttl <= timedelta(0):
             raise ValueError("approval_ttl must be positive (RM11)")
+        if type(max_inline_result_bytes) is not int or max_inline_result_bytes < 1:
+            raise ValueError("max_inline_result_bytes must be a positive integer")
+        self.max_inline_result_bytes = max_inline_result_bytes
         self.clock = clock or TraceClock()
         self.retention = retention
         self.approval_ttl = approval_ttl
@@ -421,6 +444,11 @@ class RunStore:
                 " updated_at) VALUES (?, ?, 1, ?, ?, ?)",
                 (run_id, initial_state, previous_run_id, now, now),
             )
+            self._conn.execute(
+                "INSERT INTO state_intervals (run_id, version, state, elapsed_ms)"
+                " VALUES (?, 1, ?, 0)",
+                (run_id, initial_state),
+            )
             if accepted is not None:
                 # RM25: the run clock starts with the run, before seq 1.
                 self.start_run_clock(run_id)
@@ -456,9 +484,59 @@ class RunStore:
                 return
             self._check_open()
             (offset,) = self._conn.execute(
-                "SELECT COALESCE(MAX(elapsed_ms), 0) FROM events WHERE run_id = ?", (run_id,)
+                "SELECT MAX(elapsed_ms) FROM ("
+                " SELECT COALESCE(MAX(elapsed_ms), 0) AS elapsed_ms FROM events WHERE run_id = ?"
+                " UNION ALL SELECT COALESCE(MAX(elapsed_ms), 0) FROM state_intervals"
+                " WHERE run_id = ?)",
+                (run_id, run_id),
             ).fetchone()
             self._run_started[run_id] = (self.clock.monotonic(), offset)
+
+    def elapsed_ms(self, run_id: str) -> int:
+        """Measured elapsed time, never inferred from wall time (RM25)."""
+        with self._lock:
+            self._check_open()
+            baseline = self._run_started.get(run_id)
+            if baseline is None:
+                raise RunStoreError(f"run {run_id} has no monotonic baseline in this process")
+            started, offset = baseline
+            (last,) = self._conn.execute(
+                "SELECT MAX(elapsed_ms) FROM ("
+                " SELECT COALESCE(MAX(elapsed_ms), 0) AS elapsed_ms FROM events WHERE run_id = ?"
+                " UNION ALL SELECT COALESCE(MAX(elapsed_ms), 0) FROM state_intervals"
+                " WHERE run_id = ?)",
+                (run_id, run_id),
+            ).fetchone()
+            return max(last, offset + round((self.clock.monotonic() - started) * 1000))
+
+    def state_timings(self, run_id: str) -> dict[str, int]:
+        """Sum measured state intervals, excluding waits from active time (RM25).
+
+        A reopened store continues from its recorded baseline; downtime
+        and pre-migration intervals are not reconstructed from UTC.
+        """
+        with self._lock:
+            self._check_open()
+            self._require_run(run_id)
+            self.start_run_clock(run_id)
+            intervals = self._conn.execute(
+                "SELECT state, elapsed_ms FROM state_intervals WHERE run_id = ? ORDER BY version",
+                (run_id,),
+            ).fetchall()
+            end = self.elapsed_ms(run_id)
+            totals = {"active_ms": 0, "waiting_ms": 0}
+            for index, interval in enumerate(intervals):
+                state, start = interval
+                stop = intervals[index + 1]["elapsed_ms"] if index + 1 < len(intervals) else end
+                if state in ("completed", "failed", "cancelled"):
+                    continue
+                key = (
+                    "waiting_ms"
+                    if state in ("waiting_input", "waiting_confirmation")
+                    else "active_ms"
+                )
+                totals[key] += max(0, stop - start)
+            return totals
 
     def get_run(self, run_id: str) -> RunRecord:
         with self._lock:
@@ -536,6 +614,12 @@ class RunStore:
                 raise SlotUnavailableError(
                     f"another run holds the execution slot; {run_id} is unchanged"
                 )
+            self.start_run_clock(run_id)
+            self._conn.execute(
+                "INSERT INTO state_intervals (run_id, version, state, elapsed_ms)"
+                " VALUES (?, ?, ?, ?)",
+                (run_id, expected_version + 1, to_state, self.elapsed_ms(run_id)),
+            )
             if event is not None:
                 self._insert_events(run_id, [event])
         return _run_record(rows[0])
@@ -604,7 +688,6 @@ class RunStore:
                 f"run {run_id} has no monotonic baseline in this process; "
                 "elapsed_ms is never derived from wall-clock time"
             )
-        started, offset_ms = baseline
         last, last_elapsed = self._conn.execute(
             "SELECT COALESCE(MAX(seq), 0), COALESCE(MAX(elapsed_ms), 0)"
             " FROM events WHERE run_id = ?",
@@ -613,7 +696,7 @@ class RunStore:
         events: list[TraceEvent] = []
         rows: list[dict[str, Any]] = []
         for seq, (event_type, actor, payload) in enumerate(drafts, start=last + 1):
-            measured = offset_ms + round((self.clock.monotonic() - started) * 1000)
+            measured = self.elapsed_ms(run_id)
             last_elapsed = max(last_elapsed, measured)
             event = validate_trace_event(
                 {
@@ -627,6 +710,9 @@ class RunStore:
                     "payload": dict(payload),
                 }
             )
+            event = self._reference_large_result(event)
+            # Validate the persisted representation too, including artifact metadata.
+            event = validate_trace_event(event.to_json_object())
             row = event.to_json_object()
             row["payload"] = json.dumps(row["payload"], ensure_ascii=False, sort_keys=True)
             events.append(event)
@@ -745,6 +831,49 @@ class RunStore:
                 "SELECT * FROM tool_operations WHERE run_id = ? ORDER BY rowid", (run_id,)
             ).fetchall()
         return [_tool_operation_record(row) for row in rows]
+
+    def _reference_large_result(self, event: TraceEvent) -> TraceEvent:
+        """Store large tool evidence atomically with its event (RM22, section 8).
+
+        The producer supplies redacted results (RM12). This changes only
+        trace storage: the executor and model still receive the complete
+        result, and the source's truncation flag remains explicit.
+        """
+        if event.event_type is not EventType.TOOL_FINISHED or "result" not in event.payload:
+            return event
+        result = event.payload["result"]
+        content = canonical_json(result)
+        size = len(content.encode("utf-8"))
+        if size <= self.max_inline_result_bytes:
+            return event
+        digest = hashlib.sha256((event.run_id + "\n" + content).encode("utf-8")).hexdigest()
+        artifact_id = f"artifact_{digest}"
+        ref = {
+            "artifact_id": artifact_id,
+            "uri": f"sqlite:artifact/{artifact_id}",
+            "size_bytes": size,
+            "truncated": result["truncated"],
+        }
+        self._conn.execute(
+            "INSERT OR IGNORE INTO artifact_refs"
+            " (artifact_id, run_id, uri, size_bytes, truncated) VALUES (?, ?, ?, ?, ?)",
+            (artifact_id, event.run_id, ref["uri"], size, int(ref["truncated"])),
+        )
+        self._conn.execute(
+            "INSERT OR IGNORE INTO artifact_contents (artifact_id, content) VALUES (?, ?)",
+            (artifact_id, content),
+        )
+        payload = {key: value for key, value in event.payload.items() if key != "result"}
+        return replace(event, payload={**payload, "result_ref": ref})
+
+    def read_artifact(self, artifact_id: str) -> Any | None:
+        """Read retained JSON evidence by its opaque ID, or None after deletion."""
+        with self._lock:
+            self._check_open()
+            row = self._conn.execute(
+                "SELECT content FROM artifact_contents WHERE artifact_id = ?", (artifact_id,)
+            ).fetchone()
+        return None if row is None else json.loads(row["content"])
 
     def add_artifact_ref(
         self,

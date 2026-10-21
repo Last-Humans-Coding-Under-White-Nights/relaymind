@@ -17,7 +17,7 @@ from datetime import timedelta, timezone
 
 import pytest
 
-from helpers import ACCEPTED_PAYLOAD, T0, FakeClock
+from helpers import ACCEPTED_PAYLOAD, T0, TERMINAL_EVIDENCE, FakeClock
 from relaymind.store import (
     DEFAULT_APPROVAL_TTL,
     MIGRATIONS,
@@ -276,7 +276,11 @@ def test_set_state_appends_its_event_in_the_same_transaction(store):
         from_state="accepted",
         to_state="failed",
         error_code="invalid_request",
-        event=(EventType.RUN_FAILED, "gateway", {"error_code": "invalid_request"}),
+        event=(
+            EventType.RUN_FAILED,
+            "gateway",
+            {"error_code": "invalid_request", **TERMINAL_EVIDENCE},
+        ),
     )
     assert [e.event_type for e in store.events(run.run_id)] == [
         EventType.RUN_ACCEPTED,
