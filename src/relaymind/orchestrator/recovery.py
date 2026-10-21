@@ -18,7 +18,7 @@ is safe: terminal runs are never touched.
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from relaymind.orchestrator.handoff import EXTERNAL_ACTOR
@@ -104,9 +104,7 @@ def _recover(
                     "error_code": INTERRUPTED,
                     "detail": f"the gateway restarted while the run was {record.state}",
                     "interrupted_state": record.state,
-                    "settled_operations": [
-                        {"operation_id": op.operation_id, "status": op.status} for op in settled
-                    ],
+                    "settled_operations": [asdict(op) for op in settled],
                     "model_calls": calls,
                     "external_calls": sum(1 for call in calls if call["actor"] == EXTERNAL_ACTOR),
                     **timings,
