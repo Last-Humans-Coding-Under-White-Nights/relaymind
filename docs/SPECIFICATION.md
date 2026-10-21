@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.11 | 22 October 2026 | Proposed implementation baseline
+Version 0.12 | 22 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that lets a small model complete bounded tasks with skills and tools, and transfers complex work to an external model. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -297,7 +297,7 @@ Example event:
 }
 ```
 
-The 420 ms example is a schema illustration, not a measured latency. Events containing tool results MUST be redacted before persistence and rendering. Large results use artifact references with explicit size and truncation metadata; a truncated result cannot silently satisfy a skill that requires the complete result.
+The 420 ms example is a schema illustration, not a measured latency. Events containing tool results MUST be redacted before persistence and rendering. Redaction is by configured secret field name, at any depth. A value found under a secret field is also replaced wherever the same whole token is repeated in the free text of that result (for example a log message) and in later model text and resume input of the run, so a secret that sits in a log line next to its field is not stored or shown. Redaction runs before the first write, and the model sees only the redacted result. Tool output stays data: text in it, such as an instruction to call another tool or to print a credential, never changes the allowed tools, the caller permissions, or an approval (RM08, RM11, RM12, AC06). Large results use artifact references with explicit size and truncation metadata; a truncated result cannot silently satisfy a skill that requires the complete result.
 
 ## 9 Demo skills and tools
 
