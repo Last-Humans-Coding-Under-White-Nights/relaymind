@@ -41,7 +41,7 @@ See [`AGENTS.md`](AGENTS.md) for the full contributor workflow.
 | `docs/SPECIFICATION.md` | The spec. Single source of truth. |
 | `docs/ARCHITECTURE.md` | How components map to the code layout. |
 | `docs/ROADMAP.md` | Implementation milestones with requirement IDs. |
-| `src/relaymind/` | Gateway source (Python, FastAPI). |
+| `src/relaymind/` | Gateway source (Python; FastAPI API layer planned for M4). |
 | `models/` | Pinned model artifact manifests; the GGUF files are downloaded, not checked in. |
 | `skills/` | Demo skill packages (SKILL.md format). |
 | `tests/` | Test suite and sandbox fixtures. |
@@ -127,8 +127,8 @@ OpenAI client works once pointed at it. Every request carries the
 application token the gateway generates at start (spec section 3);
 the examples below keep it in `RELAYMIND_TOKEN`. You do not pick a
 model: the alias `relaymind` means "route it for me". The local model
-selects a skill, runs the tool, and escalates to the external model
-only if it cannot finish.
+selects a skill and proposes the tool call; the gateway runs it and
+escalates to the external model only if the local run cannot finish.
 
 ```bash
 curl -s http://127.0.0.1:8080/v1/chat/completions \
@@ -142,8 +142,8 @@ To force where inference runs, add one header with `auto`,
 `local_only`, `external_only`, or `parallel_demo`. Operator policy
 decides which values a caller may use; the trace always shows which
 model answered. `parallel_demo` runs the one fixed parallel workflow
-(spec section 4.4, planned for M5) and works only with the `relaymind`
-alias. `local_only` answers with HTTP 422 and code `needs_external`
+(spec section 4.4, planned for M5), works only with the `relaymind`
+alias, and only when operator configuration enables the workflow. `local_only` answers with HTTP 422 and code `needs_external`
 when the local model cannot finish.
 
 ```bash
