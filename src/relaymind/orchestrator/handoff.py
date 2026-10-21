@@ -132,7 +132,7 @@ def parse_handoff_envelope(data: object) -> HandoffEnvelope:
             validate_tool_result(entry["result"])
         except ValueError as exc:
             raise HandoffEnvelopeError(str(exc)) from exc
-    return HandoffEnvelope(freeze_json(copy.deepcopy(dict(data))))
+    return HandoffEnvelope(freeze_json(data))
 
 
 def unsettled_operations(operations: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
@@ -226,11 +226,11 @@ def external_messages(
         "run_id": data["run_id"],
         "reason_code": data["reason_code"],
         "skill": data["skill"],
-        "completed_operation_ids": list(envelope.operation_ids),
-        "pending_work": copy.deepcopy(data["pending_work"]),
-        "allowed_tools": list(data["allowed_tools"]),
-        "local_proposals": copy.deepcopy(data["local_proposals"]),
-        "remaining_budgets": dict(data["remaining_budgets"]),
+        "completed_operation_ids": envelope.operation_ids,
+        "pending_work": data["pending_work"],
+        "allowed_tools": data["allowed_tools"],
+        "local_proposals": data["local_proposals"],
+        "remaining_budgets": data["remaining_budgets"],
         "language": data["language"],
     }
     lines = [*RULES, "Handoff (JSON):", json.dumps(handoff, ensure_ascii=False, sort_keys=True)]

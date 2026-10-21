@@ -611,7 +611,7 @@ def test_a_local_dispatch_after_the_handoff_is_refused(tmp_path, local_prep_skil
     from relaymind.orchestrator.handoff import DispatchRevokedError
     from relaymind.orchestrator.local_loop import _Run
 
-    async def stray_local_dispatch(self, conversation, schemas, available, skill, size):
+    async def stray_local_dispatch(self, conversation, schemas, available, skill):
         call = self.o.executor.validate(
             self.run_id,
             "get_recent_logs",

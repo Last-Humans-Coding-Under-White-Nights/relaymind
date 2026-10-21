@@ -898,7 +898,7 @@ class _Run:
         self.authority.hand_off_to_external()
         self.meter.start_external()
         try:
-            answer = await self._external(conversation, schemas, available, skill, size)
+            answer = await self._external(conversation, schemas, available, skill)
         except ContextLimitExceeded as exceeded:
             return self._fail_context(exceeded.size)
         except ExternalFailure as failure:
@@ -941,29 +941,19 @@ class _Run:
         schemas: tuple[ToolSchema, ...],
         available: frozenset[str],
         skill: Skill | None,
-        first_size: RequestSize,
     ) -> str:
         """The external model's bounded loop: propose tools, then answer (RM13, RM14).
 
-        Tool proposals take the local path's checks and the same
-        executor. A proposal that repeats a completed operation is
-        answered from the record and runs no handler (RM10). The answer
-        is buffered, checked against the skill's completion predicate,
-        and published once (RM20).
+        The caller measured the first request. Tool proposals take the
+        local path's checks and the same executor. A proposal that
+        repeats a completed operation is answered from the record and
+        runs no handler (RM10). The answer is buffered, checked against
+        the skill's completion predicate, and published once (RM20).
         """
-        external = self.o.external
-        assert external is not None
         predicate = None if skill is None else COMPLETION_PREDICATES[skill.completion_predicate]
-        size: RequestSize | None = first_size
         while True:
-            if size is None:
-                # Tool results accumulate, so the request is measured again (RM13).
-                size = await measure_request(external.adapter, conversation, schemas)
-            if not size.fits:
-                raise ContextLimitExceeded(size)
-            size = None
             _, generation = await self._generate(
-                "external", conversation, schemas, EXTERNAL_OPTIONS, external
+                "external", conversation, schemas, EXTERNAL_OPTIONS
             )
             if generation.calls:
                 call = generation.calls[0]
@@ -973,20 +963,24 @@ class _Run:
                     self._propose(extra, skill, rejection)
                 if rejection is not None:
                     conversation += _tool_exchange(call, {"error": rejection})
-                    continue
-                assert admitted is not None
-                result = await self._dispatch(admitted, proposal_id, EXTERNAL_ACTOR)
-                self.results.append(result)
-                conversation += _tool_exchange(call, result.to_json_object())
-                continue
-            if generation.text.strip() and (
+                else:
+                    assert admitted is not None
+                    result = await self._dispatch(admitted, proposal_id, EXTERNAL_ACTOR)
+                    self.results.append(result)
+                    conversation += _tool_exchange(call, result.to_json_object())
+            elif generation.text.strip() and (
                 predicate is None or predicate(generation.text, self.results)
             ):
-                return self._publish(generation, external, EXTERNAL_ACTOR)
-            conversation += [
-                Message(role=Role.ASSISTANT, content=generation.text or "(no answer)"),
-                Message(role=Role.USER, content=CORRECTION),
-            ]
+                return self._publish(generation, EXTERNAL_ACTOR)
+            else:
+                conversation += [
+                    Message(role=Role.ASSISTANT, content=generation.text or "(no answer)"),
+                    Message(role=Role.USER, content=CORRECTION),
+                ]
+            # Tool results accumulate, so the request is measured again (RM13).
+            size = await measure_request(self.active_model.adapter, conversation, schemas)
+            if not size.fits:
+                raise ContextLimitExceeded(size)
 
     # -- routing ---------------------------------------------------------------
 
@@ -1062,14 +1056,13 @@ class _Run:
         messages: Sequence[Message],
         tool_schemas: Sequence[ToolSchema],
         options: GenerationOptions = LOCAL_OPTIONS,
-        model: ConfiguredModel | None = None,
     ) -> tuple[str, _Generation]:
         """Charge, run, and trace one model call (RM03, RM16); the only budget path.
 
-        model is the local model unless the external stage passes the
-        external one. Returns the call ID and what the model produced.
+        The model is the one that holds dispatch authority (RM14).
+        Returns the call ID and what the model produced.
         """
-        model = model or self.o.model
+        model = self.active_model
         self.meter.charge_generation(purpose)
         self._calls += 1
         call_id = f"{self.run_id}_gen{self._calls}_{purpose}"
@@ -1415,15 +1408,16 @@ class _Run:
             raise Escalation(
                 "invalid_output", "the final answer does not meet the completion criteria"
             )
-        return self._publish(generation, self.o.model, LOCAL_ACTOR)
+        return self._publish(generation, LOCAL_ACTOR)
 
-    def _publish(self, generation: _Generation, model: ConfiguredModel, role: str) -> str:
+    def _publish(self, generation: _Generation, role: str) -> str:
         """Publish a validated answer as answer.delta events, once (RM14, RM20).
 
         role is the dispatch role of the model, local or external; the
         events are labeled with the locality its adapter declares.
         """
         self.authority.claim_final_answer(role)
+        model = self.active_model
         answer = generation.text
         published = self.scrub(answer)
         # A secret may span pieces; then the scrubbed answer is one delta.

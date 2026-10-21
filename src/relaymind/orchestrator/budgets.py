@@ -54,6 +54,9 @@ GENERATION_CHARGES: Mapping[str, tuple[str, ...]] = {
     "external": (),
 }
 
+# The time limits, kept as floats in the recorded budgets.
+_SECONDS_LIMITS = ("active_seconds", "run_active_seconds", "waiting_seconds", "external_seconds")
+
 # Entire-run limits (section 11) and what each one sums.
 _RUN_LIMITS: Mapping[str, str] = {
     "generations": "run_generations",
@@ -123,7 +126,7 @@ class LocalBudgets:
             _check_limit(name, getattr(self, name), allow_zero=True, integer=True)
         for name in ("routing_input_tokens", "routing_output_tokens"):
             _check_limit(name, getattr(self, name), allow_zero=False, integer=True)
-        for name in ("active_seconds", "run_active_seconds", "waiting_seconds", "external_seconds"):
+        for name in _SECONDS_LIMITS:
             _check_limit(name, getattr(self, name), allow_zero=False, integer=False)
         if self.repair_generations > self.local_generations:
             raise ValueError("repair generations happen within the local generation limit")
@@ -131,7 +134,7 @@ class LocalBudgets:
     def to_json_object(self) -> dict[str, int | float]:
         """The limits as recorded in the run (RM03)."""
         data = asdict(self)
-        for name in ("active_seconds", "run_active_seconds", "waiting_seconds", "external_seconds"):
+        for name in _SECONDS_LIMITS:
             data[name] = float(data[name])
         return data
 
