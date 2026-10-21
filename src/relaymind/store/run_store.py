@@ -188,6 +188,14 @@ class TraceClock:
 
 
 @dataclass(frozen=True)
+class IssuedApproval:
+    """A new pending approval: its ID and when it expires (RM11)."""
+
+    approval_id: str
+    expires_at: datetime
+
+
+@dataclass(frozen=True)
 class RunRecord:
     """The persisted state of one run."""
 
@@ -204,11 +212,18 @@ class RunRecord:
 EventDraft = tuple[EventType, str, Mapping[str, Any]]
 
 
-def _iso(moment: datetime) -> str:
-    """A UTC timestamp; naive or non-UTC times are refused (RM25)."""
+def utc_iso(moment: datetime) -> str:
+    """The store's UTC timestamp text; naive or non-UTC times are refused (RM25).
+
+    Events that name a stored time, such as the expires_at of
+    confirmation.required, use this form too (section 8).
+    """
     if moment.tzinfo is None or moment.utcoffset() != timedelta(0):
         raise ValueError(f"store times must be timezone-aware UTC, not {moment!r}")
     return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+_iso = utc_iso
 
 
 def _parse(text: str) -> datetime:
@@ -304,6 +319,8 @@ class RunStore:
         # lock keeps each transaction and read whole (RM17: a racing
         # writer gets 409, never a nested-transaction error).
         self._lock = threading.RLock()
+        # Nesting depth of the open write transaction; see transaction().
+        self._depth = 0
         self._path = str(path)
         self._in_memory = self._path in (":memory:", "")
         self._closed = False
@@ -409,13 +426,37 @@ class RunStore:
         """
         with self._lock:
             self._check_open()
+            if self._depth:
+                # Inside transaction(): the outermost write commits or
+                # rolls back everything, so an inner one only joins it.
+                self._depth += 1
+                try:
+                    yield
+                finally:
+                    self._depth -= 1
+                return
             self._conn.execute("BEGIN IMMEDIATE")
+            self._depth = 1
             try:
                 yield
                 self._conn.execute("COMMIT")
             except BaseException:
                 self._rollback()
                 raise
+            finally:
+                self._depth = 0
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """Run several store writes as one transaction (RM11, RM17).
+
+        Every write inside it joins one BEGIN IMMEDIATE ... COMMIT, under
+        the store lock; an exception that leaves the block rolls all of
+        them back. Consuming an approval and moving the run use it, so an
+        approval is never spent on a resume or cancel that did not happen.
+        """
+        with self._write():
+            yield
 
     # -- runs ------------------------------------------------------------
 
@@ -924,13 +965,13 @@ class RunStore:
         arguments: Mapping[str, Any],
         target: str,
         state_version: int,
-    ) -> str:
+    ) -> IssuedApproval:
         """Store a pending approval for the run's current state version (RM11).
 
         Only the token's SHA-256 hash is kept. The approval expires
-        approval_ttl after it is issued (five minutes by default). A
-        state_version the run is not at is refused with
-        StaleVersionError (409).
+        approval_ttl after it is issued (five minutes by default); the
+        result carries its ID and that expiry. A state_version the run is
+        not at is refused with StaleVersionError (409).
         """
         approval_id = f"approval_{uuid.uuid4().hex}"
         now = self.clock.utc_now()
@@ -954,7 +995,7 @@ class RunStore:
                     _iso(now + self.approval_ttl),
                 ),
             )
-        return approval_id
+        return IssuedApproval(approval_id, _parse(_iso(now + self.approval_ttl)))
 
     def get_pending_approval(self, run_id: str) -> dict[str, Any] | None:
         """The run's latest unconsumed approval, or None (RM11, RM21).
@@ -964,7 +1005,9 @@ class RunStore:
         and creation and expiry times. The token hash is never returned.
         An expired approval is still returned, so the caller can tell it
         apart from a mismatch and fail the run with approval_expired
-        (section 5). A missing run raises RunNotFoundError.
+        (section 5). An approval whose run moved past its state version is
+        void, as consume_approval treats it, so it is not pending. A
+        missing run raises RunNotFoundError.
         """
         with self._lock:
             self._check_open()
@@ -973,6 +1016,8 @@ class RunStore:
                 "SELECT approval_id, run_id, tool_name, arguments, target, state_version,"
                 " created_at, expires_at FROM approvals"
                 " WHERE run_id = ? AND consumed_at IS NULL"
+                " AND EXISTS (SELECT 1 FROM runs WHERE runs.run_id = approvals.run_id"
+                " AND runs.version = approvals.state_version)"
                 " ORDER BY created_at DESC, rowid DESC LIMIT 1",
                 (run_id,),
             ).fetchone()

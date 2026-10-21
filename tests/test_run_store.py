@@ -986,7 +986,9 @@ def test_the_pending_approval_of_a_run_can_be_read_without_its_token(store, cloc
     not pending."""
     run_id = store.create_run("waiting_confirmation").run_id
     assert store.get_pending_approval(run_id) is None
-    approval_id = store.create_approval(run_id, token="tok-1", **BINDING)
+    issued = store.create_approval(run_id, token="tok-1", **BINDING)
+    approval_id = issued.approval_id
+    assert issued.expires_at == clock.now + store.approval_ttl
     pending = store.get_pending_approval(run_id)
     assert pending == {
         "approval_id": approval_id,
@@ -1003,6 +1005,35 @@ def test_the_pending_approval_of_a_run_can_be_read_without_its_token(store, cloc
     assert store.get_pending_approval(run_id)["approval_id"] == approval_id
     clock.now -= store.approval_ttl
     assert store.consume_approval(run_id, token="tok-1", **BINDING)
+    assert store.get_pending_approval(run_id) is None
+
+
+def test_an_approval_is_not_pending_once_its_run_moved_on(store):
+    """RM11, RM21: a run that left the approval's version voids it, so it is not pending."""
+    run = store.create_run("waiting_confirmation")
+    accept(store, run.run_id)
+    store.create_approval(run.run_id, token="tok-1", **BINDING)
+    store.set_state(
+        run.run_id,
+        expected_version=run.version,
+        from_state="waiting_confirmation",
+        to_state="cancelled",
+        error_code="cancelled",
+        event=(EventType.RUN_CANCELLED, "gateway", dict(TERMINAL_EVIDENCE)),
+    )
+    assert store.get_pending_approval(run.run_id) is None
+
+
+def test_a_transaction_rolls_back_every_write_inside_it(store):
+    """RM11, RM17: consuming an approval and moving the run happen together or not at all."""
+    run_id = store.create_run("waiting_confirmation").run_id
+    store.create_approval(run_id, token="tok-1", **BINDING)
+    with pytest.raises(RuntimeError), store.transaction():
+        assert store.consume_approval(run_id, token="tok-1", **BINDING)
+        raise RuntimeError("the resume failed")
+    assert store.get_pending_approval(run_id) is not None
+    with store.transaction():
+        assert store.consume_approval(run_id, token="tok-1", **BINDING)
     assert store.get_pending_approval(run_id) is None
 
 

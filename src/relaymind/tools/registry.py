@@ -321,14 +321,19 @@ def _check_declaration(declaration: ToolDeclaration) -> None:
         raise ToolRegistrationError("'required_permission' must be a non-blank string")
     target = declaration.confirmation_target
     if target is not None:
-        properties = (
-            declaration.input_schema.get("properties", {})
-            if isinstance(declaration.input_schema, Mapping)
-            else {}
-        )
-        if not isinstance(target, str) or not target.strip() or target not in properties:
+        schema = declaration.input_schema
+        properties = schema.get("properties", {}) if isinstance(schema, Mapping) else {}
+        required = schema.get("required", []) if isinstance(schema, Mapping) else []
+        # The gateway reads the target from every admitted call, so a call
+        # that validates must always carry it.
+        if (
+            not isinstance(target, str)
+            or not target.strip()
+            or target not in properties
+            or target not in required
+        ):
             raise ToolRegistrationError(
-                "'confirmation_target' must name a property of 'input_schema' (RM11)"
+                "'confirmation_target' must name a required property of 'input_schema' (RM11)"
             )
 
 

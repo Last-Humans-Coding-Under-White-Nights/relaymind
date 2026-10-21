@@ -678,3 +678,15 @@ def test_the_confirmation_target_is_part_of_the_schema_hash():
     plain = registry_with(make_tool_declaration()).get("echo_service").schema_hash
     named = registry_with(make_tool_declaration(confirmation_target="service"))
     assert named.get("echo_service").schema_hash != plain
+
+
+def test_a_confirmation_target_must_be_a_required_input_field():
+    """RM11: the gateway reads the target from every admitted call, so it cannot be optional."""
+    schema = {
+        "type": "object",
+        "properties": {"service": {"type": "string"}, "region": {"type": "string"}},
+        "required": ["service"],
+        "additionalProperties": False,
+    }
+    with pytest.raises(ToolRegistrationError, match="confirmation_target"):
+        registry_with(make_tool_declaration(input_schema=schema, confirmation_target="region"))

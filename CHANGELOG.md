@@ -45,7 +45,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `invalid_resume_input`, and a busy execution slot is 429 with the
   approval kept. A call that already has a recorded operation is a
   replay and asks for nothing. A mutating tool without a confirmation
-  target is rejected back to the model and never runs. A textual yes in
+  target is rejected back to the model and never runs; the target must
+  be a required input field. The approval ID and token are checked
+  before expiry and the slot, the approval is consumed in one store
+  transaction with the resume or cancel (`RunStore.transaction`), a
+  secret target is redacted, and secret argument values are bound by an
+  in-memory digest. An approval whose run moved on is no longer
+  pending. A textual yes in
   chat is not an approval. Deterministic coverage is
   `tests/test_ac05_confirmation.py`; no live model was run.
 

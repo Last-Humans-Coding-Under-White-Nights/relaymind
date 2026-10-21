@@ -105,12 +105,14 @@ secret fields before they are persisted (RM12, section 8).
 """
 
 import asyncio
+import hashlib
+import hmac
 import json
 import secrets
 import uuid
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from relaymind.adapters import (
@@ -129,6 +131,7 @@ from relaymind.adapters import (
     UnsupportedCapabilityError,
     Usage,
 )
+from relaymind.canonical import canonical_json
 from relaymind.orchestrator import identifiers
 from relaymind.orchestrator.budgets import BudgetExceededError, BudgetMeter, LocalBudgets
 from relaymind.orchestrator.handoff import (
@@ -163,7 +166,7 @@ from relaymind.redaction import Redactor, redact_text
 from relaymind.skills import Skill, SkillRegistry
 from relaymind.skills.predicates import COMPLETION_PREDICATES, Predicate
 from relaymind.store import RunRecord, RunStore, StaleVersionError, TraceClock
-from relaymind.store.run_store import EventDraft
+from relaymind.store.run_store import EventDraft, utc_iso
 from relaymind.store.trace_event import EventType
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry, ToolRejectedError
 from relaymind.tools.executor import Execution, OperationInFlightError, ToolExecutor, ValidatedCall
@@ -361,6 +364,8 @@ class _Loop:
     capabilities: AdapterCapabilities | None = None
     # The purpose of the next local generation (RM03).
     purpose: str = "skill"
+    # The actor this loop dispatches as; RM14 checks it on every call.
+    actor: str = LOCAL_ACTOR
 
 
 @dataclass(frozen=True)
@@ -380,6 +385,11 @@ class _Confirmation:
     state_version: int
     expires_at: datetime
     stop: Escalation | None
+    # SHA-256 digests, kept only in memory: of the token, so a resume
+    # without it is refused before anything else (section 5), and of the
+    # unredacted canonical arguments, so secret fields are bound too (RM11).
+    token_digest: str
+    arguments_digest: str
 
 
 class _ConfirmationNeeded(Exception):
@@ -533,7 +543,9 @@ class LocalOrchestrator:
         try:
             outcome = await run.decide(approval_id, token, approve)
         finally:
-            if not self._still_waiting(run_id):
+            # A store that cannot be read keeps the run tracked, as in
+            # expire_waiting, so a later resume or sweep can still end it.
+            if not self._still_waiting(run_id, default=True):
                 self._waiting.pop(run_id, None)
         return self._keep_if_waiting(run, outcome)
 
@@ -1131,7 +1143,9 @@ class _Run:
         self.authority.hand_off_to_external()
         self.meter.start_external()
         predicate = None if skill is None else COMPLETION_PREDICATES[skill.completion_predicate]
-        loop = _Loop(conversation, schemas, available, skill, predicate, capabilities)
+        loop = _Loop(
+            conversation, schemas, available, skill, predicate, capabilities, actor=EXTERNAL_ACTOR
+        )
         return await self._run_external(loop, stop)
 
     async def _run_external(
@@ -1519,8 +1533,8 @@ class _Run:
     async def _execute_step(
         self, loop: _Loop, call: ToolCall, admitted: ValidatedCall, proposal_id: str
     ) -> None:
-        """Dispatch an admitted call and give its outcome to the next generation."""
-        actor = self.authority.holder
+        """Dispatch an admitted call as the loop's actor (RM14) and give its outcome on."""
+        actor = loop.actor
         result = await self._run_admitted(admitted, proposal_id, actor)
         if actor == LOCAL_ACTOR and result.status is not ToolStatus.SUCCEEDED:
             raise Escalation(
@@ -1546,14 +1560,16 @@ class _Run:
         target_argument = admitted.tool.confirmation_target
         assert target_argument is not None  # _admit rejects a tool without one
         arguments = self.o.redactor.redact(dict(admitted.arguments))
-        target = str(admitted.arguments[target_argument])
+        # Read from the redacted arguments, so a secret target is never
+        # written in plaintext (RM12); the digest still binds its value.
+        target = str(arguments[target_argument])
         # Section 11: the stage ends; waiting is not active time.
         self.meter.end_stage()
         self.move(RunState.WAITING_CONFIRMATION)
         version = self.record.version
         token = secrets.token_urlsafe(32)
         store = self.o.store
-        approval_id = store.create_approval(
+        issued = store.create_approval(
             self.run_id,
             token=token,
             tool_name=admitted.tool_name,
@@ -1561,9 +1577,7 @@ class _Run:
             target=target,
             state_version=version,
         )
-        issued = store.get_pending_approval(self.run_id)
-        assert issued is not None and issued["approval_id"] == approval_id
-        expires_at = issued["expires_at"]
+        approval_id, expires_at = issued.approval_id, issued.expires_at
         self.emit(
             EventType.CONFIRMATION_REQUIRED,
             GATEWAY_ACTOR,
@@ -1574,7 +1588,7 @@ class _Run:
                 "arguments": arguments,
                 "target": target,
                 "state_version": version,
-                "expires_at": expires_at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                "expires_at": utc_iso(expires_at),
                 "model": self.active_model.model_id,
             },
         )
@@ -1588,6 +1602,8 @@ class _Run:
             state_version=version,
             expires_at=expires_at,
             stop=stop,
+            token_digest=_digest(token),
+            arguments_digest=_arguments_digest(admitted),
         )
         self.waiting_since = self.o.clock.monotonic()
         return RunOutcome(
@@ -1608,38 +1624,52 @@ class _Run:
     async def decide(self, approval_id: str, token: str, approve: bool) -> RunOutcome:
         """Answer the pending confirmation (RM11, section 5).
 
-        Nothing here awaits before the approval is consumed and the run
-        resumes, so in one process no other task can take the execution
-        slot between the slot check and the resume. Another process
-        sharing the store could; then the approval is already consumed,
-        the 429 is raised, and the wait ends by expiry.
+        The approval ID and the token are checked first, so a caller
+        without the token gets 403 and changes nothing: it cannot expire
+        the run or learn about the slot. Then an expired approval fails
+        the run, and an approval checks the execution slot (429). The
+        approval is consumed in the same store transaction as the resume
+        or the cancel, so a resume that fails, for example because another
+        process took the slot, keeps the approval (section 5).
         """
         pending = self.confirmation
         assert pending is not None
-        if approval_id != pending.approval_id:
+        if approval_id != pending.approval_id or not hmac.compare_digest(
+            _digest(token), pending.token_digest
+        ):
             raise ApprovalRejectedError("the approval does not match the pending confirmation")
+        if not hmac.compare_digest(_arguments_digest(pending.admitted), pending.arguments_digest):
+            # A held call that drifted from the approval is refused, not executed.
+            raise ApprovalRejectedError("the held call does not match the approval")
         if self.wait_expired():
             return self.expire()
         if approve and self.o.machine.active_run_id() is not None:
             raise SlotUnavailableError("another run holds the execution slot (section 11)")
-        consumed = self.o.store.consume_approval(
-            self.run_id,
-            token=token,
-            tool_name=pending.admitted.tool_name,
-            # Derived from the call that will run, so a held call that
-            # drifted from the approval is refused, not executed.
-            arguments=self.o.redactor.redact(dict(pending.admitted.arguments)),
-            target=pending.target,
-            state_version=pending.state_version,
-        )
-        if not consumed:
-            raise ApprovalRejectedError("the token does not match the pending confirmation")
-        if not approve:
-            return self._deny(pending)
-        self.record = self.o.machine.resume(self.run_id, pending.state_version)
-        self.waiting_ms += self._waited_ms()
+        waited_ms = self._waited_ms()
+        store = self.o.store
+        with store.transaction():
+            consumed = store.consume_approval(
+                self.run_id,
+                token=token,
+                tool_name=pending.admitted.tool_name,
+                arguments=self.o.redactor.redact(dict(pending.admitted.arguments)),
+                target=pending.target,
+                state_version=pending.state_version,
+            )
+            if not consumed:
+                raise ApprovalRejectedError("the token does not match the pending confirmation")
+            if approve:
+                record = self.o.machine.resume(self.run_id, pending.state_version)
+            else:
+                record = self._deny(pending, waited_ms)
+        self.record = record
+        self.waiting_ms += waited_ms
         self.waiting_since = None
         self.confirmation = None
+        if not approve:
+            return RunOutcome(
+                self.run_id, RunState.CANCELLED, error_code=USER_DENIED, decision=self.decision
+            )
         self._approvals[pending.proposal_id] = pending.approval_id
         # Like a clarification resume: a new stage with the full per-stage
         # limits, inside the entire-run limits (spec 0.10 section 5).
@@ -1649,23 +1679,19 @@ class _Run:
         stop = pending.stop
         return await self._protected(lambda: self._run_external(pending.loop, stop, pending))
 
-    def _deny(self, pending: _Confirmation) -> RunOutcome:
+    def _deny(self, pending: _Confirmation, waited_ms: int) -> RunRecord:
         """A denied confirmation ends the run as cancelled with user_denied (section 5)."""
-        self.waiting_ms += self._waited_ms()
-        self.record = self.o.machine.cancel(
+        summary = self._summary()
+        summary["waiting_ms"] += waited_ms
+        return self.o.machine.cancel(
             self.run_id,
             pending.state_version,
             reason=USER_DENIED,
             event=(
                 EventType.RUN_CANCELLED,
                 GATEWAY_ACTOR,
-                {"reason": USER_DENIED, "approval_id": pending.approval_id, **self._summary()},
+                {"reason": USER_DENIED, "approval_id": pending.approval_id, **summary},
             ),
-        )
-        self.waiting_since = None
-        self.confirmation = None
-        return RunOutcome(
-            self.run_id, RunState.CANCELLED, error_code=USER_DENIED, decision=self.decision
         )
 
     def _keep_draft(self, text: str) -> None:
@@ -1904,6 +1930,15 @@ def _correction_exchange(text: str) -> list[Message]:
         Message(role=Role.ASSISTANT, content=text or "(no answer)"),
         Message(role=Role.USER, content=CORRECTION),
     ]
+
+
+def _digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _arguments_digest(call: ValidatedCall) -> str:
+    """The digest of a call's unredacted canonical arguments (RM11)."""
+    return _digest(canonical_json(dict(call.arguments)))
 
 
 def _tool_exchange(call: ToolCall, content: Mapping[str, Any]) -> list[Message]:

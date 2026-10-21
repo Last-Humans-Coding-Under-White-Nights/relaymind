@@ -15,6 +15,7 @@ chat is not an approval. All model output comes from scripted doubles
 import asyncio
 import dataclasses
 import json
+import sqlite3
 
 import pytest
 
@@ -29,13 +30,16 @@ from gateway_helpers import (
 )
 from helpers import of_type
 from relaymind.adapters import Message, Role
+from relaymind.orchestrator.handoff import DispatchRevokedError
 from relaymind.orchestrator.local_loop import ApprovalRejectedError, ResumeInputError
 from relaymind.orchestrator.run_state import (
     RunState,
     SlotUnavailableError,
     TerminalStateError,
 )
+from relaymind.redaction import REDACTED, Redactor
 from relaymind.store import StaleVersionError
+from relaymind.store.run_store import utc_iso
 from relaymind.store.trace_event import validate_trace_event
 from relaymind.tools import CallerContext
 from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
@@ -581,3 +585,166 @@ def test_a_denial_in_the_external_stage_cancels_the_run(tmp_path):
     assert outcome.state is RunState.CANCELLED
     assert gateway.store.get_run(waiting.run_id).error_code == "user_denied"
     assert "demo-orders-db" in database_ids(gateway)
+
+
+# --- review findings (round 1) ------------------------------------------------------
+
+
+def test_a_resume_that_loses_the_slot_after_the_check_keeps_the_approval(tmp_path, monkeypatch):
+    """RM11, RM17, section 5: consume and resume are one transaction; a 429 keeps the approval."""
+    gateway, waiting, _ = waiting_gateway(tmp_path, *APPROVED_TAIL)
+    machine = gateway.orchestrator.machine
+    real_resume = machine.resume
+
+    def taken(run_id, version):
+        raise SlotUnavailableError("another process took the slot")
+
+    monkeypatch.setattr(machine, "resume", taken)
+    with pytest.raises(SlotUnavailableError):
+        decide(gateway, waiting)
+    monkeypatch.setattr(machine, "resume", real_resume)
+
+    assert gateway.store.get_run(waiting.run_id).state == "waiting_confirmation"
+    assert gateway.store.get_pending_approval(waiting.run_id) is not None
+    assert "demo-orders-db" in database_ids(gateway)
+    assert decide(gateway, waiting).state is RunState.COMPLETED
+
+
+def test_a_denial_whose_cancel_fails_keeps_the_approval(tmp_path, monkeypatch):
+    """RM11, section 5: a denial consumes the approval only together with the cancel."""
+    gateway, waiting, _ = waiting_gateway(tmp_path)
+    machine = gateway.orchestrator.machine
+    real_cancel = machine.cancel
+
+    def locked(*args, **kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(machine, "cancel", locked)
+    gateway.clock.advance(2)
+    with pytest.raises(sqlite3.OperationalError):
+        decide(gateway, waiting, approve=False)
+    monkeypatch.setattr(machine, "cancel", real_cancel)
+
+    assert gateway.store.get_pending_approval(waiting.run_id) is not None
+    assert decide(gateway, waiting, approve=False).state is RunState.CANCELLED
+    (cancelled,) = of_type(gateway.store.events(waiting.run_id), "run.cancelled")
+    assert cancelled.payload["waiting_ms"] == 2000
+
+
+def test_a_store_error_during_a_confirmation_resume_keeps_the_run_tracked(tmp_path, monkeypatch):
+    """Section 5: a run the store cannot read stays tracked, as in the expiry sweep."""
+    gateway, waiting, _ = waiting_gateway(tmp_path, *APPROVED_TAIL)
+    store = gateway.store
+    real_get_run = store.get_run
+    real_consume = store.consume_approval
+
+    def unreadable(*args, **kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    def locked(*args, **kwargs):
+        monkeypatch.setattr(store, "get_run", unreadable)
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(store, "consume_approval", locked)
+    with pytest.raises(sqlite3.OperationalError):
+        decide(gateway, waiting)
+    monkeypatch.setattr(store, "get_run", real_get_run)
+    monkeypatch.setattr(store, "consume_approval", real_consume)
+
+    assert waiting.run_id in gateway.orchestrator._waiting
+    assert decide(gateway, waiting).state is RunState.COMPLETED
+
+
+def test_a_wrong_token_after_expiry_is_403_and_does_not_end_the_run(tmp_path):
+    """RM11, section 5: only the token holder can use the approval, even to expire it."""
+    gateway, waiting, _ = waiting_gateway(tmp_path)
+    gateway.clock.advance(301)
+
+    with pytest.raises(ApprovalRejectedError):
+        decide(gateway, waiting, token="guess")
+
+    assert gateway.store.get_run(waiting.run_id).state == "waiting_confirmation"
+    (expired,) = gateway.orchestrator.expire_waiting()
+    assert expired.error_code == "approval_expired"
+
+
+def test_a_wrong_token_while_another_run_is_active_is_403_not_429(tmp_path):
+    """RM11, section 5: only a matching resume checks the execution slot."""
+    gateway, waiting, _ = waiting_gateway(tmp_path)
+    machine = gateway.orchestrator.machine
+    other = machine.create()
+    machine.transition(other.run_id, other.version, RunState.ROUTING)
+
+    with pytest.raises(ApprovalRejectedError):
+        decide(gateway, waiting, token="guess")
+
+
+def test_a_held_local_call_never_runs_as_the_external_actor(tmp_path):
+    """RM14: each loop dispatches as its own actor, so a revoked local actor runs nothing."""
+    gateway, waiting, _ = waiting_gateway(tmp_path, *APPROVED_TAIL, external_turns=[])
+    gateway.orchestrator._waiting[waiting.run_id].authority.hand_off_to_external()
+
+    with pytest.raises(DispatchRevokedError):
+        decide(gateway, waiting)
+
+    record = gateway.store.get_run(waiting.run_id)
+    assert (record.state, record.error_code) == ("failed", "internal_error")
+    assert "demo-orders-db" in database_ids(gateway)
+    events = gateway.store.events(waiting.run_id)
+    assert "delete_demo_database" not in executed_tools(events)
+
+
+def test_a_secret_confirmation_target_is_redacted_everywhere(tmp_path):
+    """RM12, RM11: a target under a configured secret field is never written in plaintext."""
+    redactor = Redactor(secret_fields={"database_id"})
+    gateway, waiting, events = waiting_gateway(tmp_path, *APPROVED_TAIL, redactor=redactor)
+
+    (required,) = of_type(events, "confirmation.required")
+    assert required.payload["target"] == REDACTED
+    assert waiting.confirmation.target == REDACTED
+    assert gateway.store.get_pending_approval(waiting.run_id)["target"] == REDACTED
+    # The approval still binds and executes the held call (the answer
+    # names the secret database, so it is scrubbed and the run then stops).
+    decide(gateway, waiting)
+    assert "demo-orders-db" not in database_ids(gateway)
+    events = gateway.store.events(waiting.run_id)
+    assert "demo-orders-db" not in json.dumps([e.to_json_object() for e in events])
+
+
+def test_a_drifted_secret_argument_voids_the_approval(tmp_path):
+    """RM11: the approval binds the canonical arguments, secret fields included."""
+    redactor = Redactor(secret_fields={"expected_revision"})
+    gateway, waiting, _ = waiting_gateway(tmp_path, *APPROVED_TAIL, redactor=redactor)
+    run = gateway.orchestrator._waiting[waiting.run_id]
+    pending = run.confirmation
+    altered = dataclasses.replace(pending.admitted, arguments={**DELETE, "expected_revision": 4})
+    run.confirmation = dataclasses.replace(pending, admitted=altered)
+
+    with pytest.raises(ApprovalRejectedError):
+        decide(gateway, waiting)
+
+    assert gateway.store.get_run(waiting.run_id).state == "waiting_confirmation"
+    assert "demo-orders-db" in database_ids(gateway)
+
+
+@pytest.mark.parametrize("ending", ["expire", "cancel"])
+def test_a_run_that_stopped_waiting_has_no_pending_approval(tmp_path, ending):
+    """RM11, RM21: an approval is void once its run moved on, so GET run shows none."""
+    gateway, waiting, _ = waiting_gateway(tmp_path)
+    if ending == "expire":
+        gateway.clock.advance(301)
+        gateway.orchestrator.expire_waiting()
+    else:
+        version = gateway.store.get_run(waiting.run_id).version
+        gateway.orchestrator.machine.cancel(waiting.run_id, version)
+
+    assert gateway.store.get_pending_approval(waiting.run_id) is None
+
+
+def test_confirmation_required_expires_at_is_the_stored_expiry(tmp_path):
+    """Section 8: the event's expires_at is the approval record's expiry, in the store's form."""
+    gateway, waiting, events = waiting_gateway(tmp_path)
+    (required,) = of_type(events, "confirmation.required")
+    pending = gateway.store.get_pending_approval(waiting.run_id)
+    assert required.payload["expires_at"] == utc_iso(pending["expires_at"])
+    assert waiting.confirmation.expires_at == pending["expires_at"]
