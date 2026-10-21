@@ -184,6 +184,13 @@ APPROVAL_INVALID = "approval_invalid"
 USER_DENIED = "user_denied"
 ROUTING_MECHANISM = "native_function_calling"
 RESUME_MECHANISM = "clarification_resume"
+# Section 5: each waiting state resumes with its own body shape.
+_RESUME_MISMATCH = {
+    RunState.WAITING_INPUT: "a run waiting for input resumes with input text, not an approval",
+    RunState.WAITING_CONFIRMATION: (
+        "a run waiting for confirmation resumes with an approval, not input text"
+    ),
+}
 
 # Skill-stage layout. In development runs against the pinned model, it
 # often wrote its tool call as plain JSON text instead of a native call
@@ -477,24 +484,7 @@ class LocalOrchestrator:
         input_expired. If another run holds the execution slot, the resume
         is 429 and the run keeps waiting (section 5).
         """
-        record = self.store.get_run(run_id)
-        state = RunState(record.state)
-        if state in TERMINAL_STATES:
-            self._waiting.pop(run_id, None)
-            raise TerminalStateError(f"run {run_id} is {state}; terminal runs never restart")
-        if record.version != expected_version:
-            raise StaleVersionError(run_id, expected_version, record.version)
-        if state is RunState.WAITING_CONFIRMATION:
-            raise ResumeInputError(
-                "a run waiting for confirmation resumes with an approval, not input text"
-            )
-        if state is not RunState.WAITING_INPUT:
-            raise InvalidTransitionError(f"run {run_id} is {state}, not waiting for input")
-        run = self._waiting.get(run_id)
-        if run is None:
-            raise InvalidTransitionError(
-                f"run {run_id} is waiting_input but is not tracked by this gateway process"
-            )
+        run = self._waiting_run(run_id, expected_version, RunState.WAITING_INPUT)
         if not isinstance(text, str) or not text.strip():
             raise ResumeInputError("a resume in waiting_input needs non-blank input text")
         if run.wait_expired():
@@ -529,22 +519,7 @@ class LocalOrchestrator:
         approval (section 5). A denial cancels the run with user_denied.
         An approval executes the held call once and continues the run.
         """
-        record = self.store.get_run(run_id)
-        state = RunState(record.state)
-        if state in TERMINAL_STATES:
-            self._waiting.pop(run_id, None)
-            raise TerminalStateError(f"run {run_id} is {state}; terminal runs never restart")
-        if record.version != expected_version:
-            raise StaleVersionError(run_id, expected_version, record.version)
-        if state is RunState.WAITING_INPUT:
-            raise ResumeInputError("a run waiting for input resumes with input text, not approval")
-        if state is not RunState.WAITING_CONFIRMATION:
-            raise InvalidTransitionError(f"run {run_id} is {state}, not waiting for confirmation")
-        run = self._waiting.get(run_id)
-        if run is None:
-            raise InvalidTransitionError(
-                f"run {run_id} is waiting_confirmation but is not tracked by this gateway process"
-            )
+        run = self._waiting_run(run_id, expected_version, RunState.WAITING_CONFIRMATION)
         if not (
             isinstance(approval_id, str)
             and approval_id.strip()
@@ -561,6 +536,33 @@ class LocalOrchestrator:
             if not self._still_waiting(run_id):
                 self._waiting.pop(run_id, None)
         return self._keep_if_waiting(run, outcome)
+
+    def _waiting_run(self, run_id: str, expected_version: int, wanted: RunState) -> "_Run":
+        """The tracked run in the waiting state a resume expects (RM17, section 5).
+
+        A terminal run never restarts (TerminalStateError), a stale
+        version is 409 (StaleVersionError), a run in the other waiting
+        state is 400 invalid_resume_input (ResumeInputError), and any
+        other state, or a run this process does not track, is
+        InvalidTransitionError.
+        """
+        record = self.store.get_run(run_id)
+        state = RunState(record.state)
+        if state in TERMINAL_STATES:
+            self._waiting.pop(run_id, None)
+            raise TerminalStateError(f"run {run_id} is {state}; terminal runs never restart")
+        if record.version != expected_version:
+            raise StaleVersionError(run_id, expected_version, record.version)
+        if state is not wanted:
+            if state in WAITING_STATES:
+                raise ResumeInputError(_RESUME_MISMATCH[state])
+            raise InvalidTransitionError(f"run {run_id} is {state}, not {wanted.value}")
+        run = self._waiting.get(run_id)
+        if run is None:
+            raise InvalidTransitionError(
+                f"run {run_id} is {state.value} but is not tracked by this gateway process"
+            )
+        return run
 
     def expire_waiting(self) -> list[RunOutcome]:
         """Fail every expired wait with input_expired or approval_expired (section 5).
@@ -1548,6 +1550,7 @@ class _Run:
         # Section 11: the stage ends; waiting is not active time.
         self.meter.end_stage()
         self.move(RunState.WAITING_CONFIRMATION)
+        version = self.record.version
         token = secrets.token_urlsafe(32)
         store = self.o.store
         approval_id = store.create_approval(
@@ -1556,7 +1559,7 @@ class _Run:
             tool_name=admitted.tool_name,
             arguments=arguments,
             target=target,
-            state_version=self.record.version,
+            state_version=version,
         )
         issued = store.get_pending_approval(self.run_id)
         assert issued is not None and issued["approval_id"] == approval_id
@@ -1570,7 +1573,7 @@ class _Run:
                 "proposal_id": needed.proposal_id,
                 "arguments": arguments,
                 "target": target,
-                "state_version": self.record.version,
+                "state_version": version,
                 "expires_at": expires_at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                 "model": self.active_model.model_id,
             },
@@ -1582,7 +1585,7 @@ class _Run:
             proposal_id=needed.proposal_id,
             approval_id=approval_id,
             target=target,
-            state_version=self.record.version,
+            state_version=version,
             expires_at=expires_at,
             stop=stop,
         )
@@ -1596,7 +1599,7 @@ class _Run:
                 tool_name=admitted.tool_name,
                 arguments=arguments,
                 target=target,
-                state_version=self.record.version,
+                state_version=version,
                 expires_at=expires_at,
             ),
             decision=self.decision,
@@ -1623,6 +1626,8 @@ class _Run:
             self.run_id,
             token=token,
             tool_name=pending.admitted.tool_name,
+            # Derived from the call that will run, so a held call that
+            # drifted from the approval is refused, not executed.
             arguments=self.o.redactor.redact(dict(pending.admitted.arguments)),
             target=pending.target,
             state_version=pending.state_version,
@@ -1791,9 +1796,10 @@ class _Run:
 
     async def _execute(self, call: ValidatedCall, proposal_id: str, *, attempt: int) -> Execution:
         common = {"proposal_id": proposal_id, "tool_name": call.tool_name, "attempt": attempt}
-        if proposal_id in self._approvals:
+        approval_id = self._approvals.get(proposal_id)
+        if approval_id is not None:
             # RM11: a confirmed call names the approval that authorized it.
-            common["approval_id"] = self._approvals[proposal_id]
+            common["approval_id"] = approval_id
         model_id = self.active_model.model_id
 
         def before_run(operation_id: str) -> None:
