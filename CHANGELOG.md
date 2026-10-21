@@ -550,6 +550,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   from answer content. Non-thinking remains the default; operator-enabled
   thinking remains supported. Record both live runs separately from the
   historical runtime evidence and add a Windows runtime smoke workflow.
+- Specification 0.13 → 0.14: section 7.1 defines request validation for the
+  compatible chat endpoint (RM19, AC16, #22): the order of the checks, which
+  fields and message shapes are supported, the named `unsupported_parameter`
+  and `invalid_request` cases, message ordering and tool-call references,
+  how sampling and token budgets are applied, the rejection of
+  `Idempotency-Key` until it is implemented, the response and stream shape,
+  and the loopback bind and generated token rules.
 - Specification 0.12 → 0.13: section 11 defines the error contract (RM04,
   AC07, AC16, #21): the error body with a stable code, message, and run
   reference, the status for every code, and the mapping of failed runs
