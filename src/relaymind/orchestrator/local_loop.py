@@ -85,9 +85,10 @@ active budget, whichever is shorter.
    the RM04 reason code; partial evidence stays in the trace (section 5).
    Some stops never hand off (section 4.4): an admitted parallel route,
    because the parallel workflow (RM15) is not wired yet; an unavailable
-   local model, because degraded mode needs an operator policy that does
-   not exist yet (section 11); and a selected skill with no permitted
-   tool (RM08).
+   local model unless the operator policy permits degraded mode (section
+   11), which records route.selected with mechanism degraded_mode when no
+   decision exists yet, and degraded_mode and local_failure in
+   handoff.started; and a selected skill with no permitted tool (RM08).
 
 Any other exception, in the first stage or after a resume, fails the
 run with error code internal_error and its run.failed event, which
@@ -276,6 +277,8 @@ class RunOutcome:
     error_code: str | None = None
     reason_code: str | None = None
     decision: RouteDecision | None = None
+    # The limit that stopped a failed run, when one did (RM03, section 11).
+    budget: str | None = None
 
 
 class ResumeInputError(ValueError):
@@ -312,12 +315,18 @@ class Escalation(Exception):
     one the external stage could not resolve either, such as a skill with
     no permitted tool (RM08); an admitted parallel route, whose workflow
     (RM15) is not wired yet; and an unavailable local model, since no
-    operator policy permits degraded mode yet (section 11). Such a stop
+    operator policy permits degraded mode (section 11). Such a stop
     ends as needs_external without a handoff (section 4.4).
     """
 
     def __init__(
-        self, reason_code: str, detail: str, *, hand_off: bool = True, **extra: Any
+        self,
+        reason_code: str,
+        detail: str,
+        *,
+        hand_off: bool = True,
+        degraded: bool = False,
+        **extra: Any,
     ) -> None:
         if reason_code not in REASON_CODES:
             raise ValueError(f"{reason_code!r} is not a section 8 reason code")
@@ -325,6 +334,9 @@ class Escalation(Exception):
         self.reason_code = reason_code
         self.detail = detail
         self.hand_off = hand_off
+        # The local model was unavailable (section 11): a handoff is then
+        # degraded mode, and the trace says so.
+        self.degraded = degraded
         self.extra = extra
 
 
@@ -438,9 +450,13 @@ class LocalOrchestrator:
         enabled_workflows: Collection[str] = (),
         parallel_in_auto: bool = False,
         external: ConfiguredModel | None = None,
+        degraded_mode: bool = False,
     ) -> None:
         self.model = model
         self.external = external
+        # Operator policy (section 11): an unavailable local model may
+        # route directly to external. Off by default.
+        self.degraded_mode = degraded_mode
         self.skills = skills
         self.tools = tools
         self.store = store
@@ -998,6 +1014,7 @@ class _Run:
             error_code=error_code,
             reason_code=extra.get("reason_code"),
             decision=self.decision,
+            budget=extra.get("budget"),
         )
 
     def _needs_external(self, stop: Escalation) -> RunOutcome:
@@ -1061,6 +1078,15 @@ class _Run:
 
     # -- escalation and the external stage (RM04, RM13, RM14) ----------------------
 
+    def _local_unavailable(self, detail: str) -> Escalation:
+        """The stop for an unavailable local model (section 11).
+
+        It hands off only when the operator policy permits degraded mode.
+        """
+        return Escalation(
+            "capability_missing", detail, hand_off=self.o.degraded_mode, degraded=True
+        )
+
     async def _escalate(self, stop: Escalation) -> RunOutcome:
         """Hand the run to the external model, or end it as needs_external (RM04).
 
@@ -1093,6 +1119,8 @@ class _Run:
                     tool_status=blocker["status"],
                 )
             )
+        if stop.degraded:
+            self._record_degraded_route()
         # The external stage works from the recorded evidence the envelope
         # carries, not from what the local loop kept: an operation can be
         # recorded just before a local stop (RM05, RM13).
@@ -1171,6 +1199,11 @@ class _Run:
                     "operation_ids": list(envelope.operation_ids),
                     "allowed_tools": list(envelope.allowed_tools),
                     "request": size.to_json_object(),
+                    **(
+                        {"degraded_mode": True, "local_failure": stop.detail}
+                        if stop.degraded
+                        else {}
+                    ),
                 },
             ),
         )
@@ -1182,6 +1215,19 @@ class _Run:
             conversation, schemas, available, skill, predicate, capabilities, actor=EXTERNAL_ACTOR
         )
         return await self._run_external(loop, stop)
+
+    def _record_degraded_route(self) -> None:
+        """Before any routing decision exists, the gateway records its own (section 11)."""
+        if self.decision is not None:
+            return
+        decision = self.o.router.degraded_decision(self.messages, self.mode, language=self.language)
+        self.decision = decision
+        self.language = decision.language
+        self.emit(
+            EventType.ROUTE_SELECTED,
+            GATEWAY_ACTOR,
+            {"decision": decision.to_json_object(), "mechanism": "degraded_mode"},
+        )
 
     async def _run_external(
         self, loop: _Loop, stop: Escalation, confirmed: _Confirmation | None = None
@@ -1312,17 +1358,14 @@ class _Run:
             capabilities = await adapter.capabilities()
             capabilities.require("tool_calling", "tokenizer_available")
         except UnsupportedCapabilityError as exc:
-            # Section 11: degraded mode needs an operator policy; none exists.
-            raise Escalation("capability_missing", str(exc), hand_off=False) from exc
+            raise self._local_unavailable(str(exc)) from exc
 
         routing_messages = router.routing_messages(self.messages)
         functions = router.functions()
         try:
             input_tokens = await adapter.count_tokens(routing_messages, functions)
         except (TokenCountError, UnsupportedCapabilityError) as exc:
-            raise Escalation(
-                "capability_missing", f"router input could not be counted: {exc}", hand_off=False
-            ) from exc
+            raise self._local_unavailable(f"router input could not be counted: {exc}") from exc
 
         if not router.within_input_cap(input_tokens):
             decision = router.bypass_decision(self.messages, self.mode, language=self.language)
@@ -1461,11 +1504,7 @@ class _Run:
                 raise ExternalFailure(
                     f"external generation failed: {failure.code}", generation_error=failure.code
                 )
-            # Section 11: an unavailable local model hands off only when
-            # operator policy permits degraded mode; no such policy exists.
-            raise Escalation(
-                "capability_missing", f"local generation failed: {failure.code}", hand_off=False
-            )
+            raise self._local_unavailable(f"local generation failed: {failure.code}")
         self.meter.check_time()
         return call_id, generation
 

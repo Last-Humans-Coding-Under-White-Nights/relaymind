@@ -24,6 +24,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Failure behavior and error codes (#21; RM04, AC07, AC16 error part; spec
+  0.13 section 11): `relaymind.api.errors` holds the error contract, an
+  `ApiError` with a stable code, message, and run reference, one status
+  per code (400, 401, 403, 404, 409, 422, 429, 500, 503, 504), and the
+  mapping of orchestrator exceptions (`error_from_exception`) and failed
+  runs (`error_from_outcome`: `external_failed` is 503, or 504 when a
+  time limit stopped it; `context_limit_exceeded` is 400). Internal
+  errors carry a fixed message and no credentials.
+  `relaymind.api.auth.require_bearer_token` gives 401 `unauthenticated`.
+  `RunOutcome.budget` names the limit that stopped a failed run.
+  Degraded mode is an operator policy (`degraded_mode`, off by default):
+  an unavailable local model hands off to the external model, with the
+  evidence so far, when external dispatch is permitted. The trace records
+  it as `route.selected` with mechanism `degraded_mode` (when no decision
+  existed) and `degraded_mode` and `local_failure` in `handoff.started`.
+  `tests/test_error_contract.py`, `tests/test_ac07_failure_behavior.py`,
+  and `tests/test_degraded_mode.py` cover every status, the bounded
+  failure after an exhausted local budget, and degraded mode.
 - Tool-output injection defenses and secret redaction (#20; RM08, RM12,
   AC06; spec 0.12 section 8): `Redactor.redact_with_repeats` also replaces
   a value found under a secret field (a string or a number) wherever the

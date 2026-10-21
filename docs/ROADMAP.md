@@ -246,7 +246,14 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   runs it belongs to the API work (#25).
 - Prompt-injection test for tool output and secret redaction (#20;
   RM12).
-- Failure behavior and error codes (#21; RM04, section 11).
+- Failure behavior and error codes (#21; RM04, section 11): the error
+  contract (`relaymind.api.errors`, `relaymind.api.auth`: one status and
+  stable code per failure, the mapping of failed runs, no internal
+  detail in a response) and degraded mode as an operator policy, off by
+  default and recorded in the trace (spec 0.13). AC07 and the error part
+  of AC16 pass with model doubles (`tests/test_ac07_failure_behavior.py`,
+  `tests/test_error_contract.py`, `tests/test_degraded_mode.py`); the
+  HTTP transport that serves the contract is the M4 API work.
 - AC08, orchestrator and skill half (#49; RM18): the same orchestrator and
   skill packages across a local and an external swap.
 - Closes: AC02, AC05, AC06, AC07, AC08.

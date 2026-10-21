@@ -8,7 +8,7 @@ spec is the source of truth; this page only explains where things live.
 
 | Spec component | Package | Responsibility |
 |----------------|---------|----------------|
-| API layer | `src/relaymind/api/` | Validate requests; expose the chat contract and native run API; authenticate callers. |
+| API layer | `src/relaymind/api/` | Validate requests; expose the chat contract and native run API; authenticate callers. `errors.py` holds the error contract: the stable codes, one HTTP status for each, and the mapping of orchestrator exceptions and failed runs (section 11). `auth.py` checks the application token. |
 | Orchestrator | `src/relaymind/orchestrator/` | Own state transitions, budgets, routing, handoff, cancellation, and the final-answer owner. `handoff.py` holds the HandoffEnvelope schema and builder, the external request messages, the context measurement, and the single dispatch authority (RM13, RM14). `recovery.py` fails unfinished runs as `interrupted` at startup and settles their pending tool operations (RM10, RM17). |
 | Model adapter | `src/relaymind/adapters/` | Translate normalized messages, tools, and options into provider-specific requests and events. |
 | Skill registry | `src/relaymind/skills/` | Validate packages; expose descriptions; load selected instructions and approved resources; check answers with the registered completion predicates (`predicates.py`). |

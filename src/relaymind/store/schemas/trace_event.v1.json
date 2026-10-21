@@ -370,7 +370,9 @@
                 },
                 "required": ["size", "limit", "method"],
                 "additionalProperties": false
-              }
+              },
+              "degraded_mode": {"const": true},
+              "local_failure": {"type": "string", "pattern": "\\S"}
             },
             "required": [
               "reason_code",
@@ -379,7 +381,11 @@
               "operation_ids",
               "allowed_tools",
               "request"
-            ]
+            ],
+            "dependentRequired": {
+              "degraded_mode": ["local_failure"],
+              "local_failure": ["degraded_mode"]
+            }
           }
         }
       }

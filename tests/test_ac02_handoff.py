@@ -934,12 +934,12 @@ def test_an_admitted_parallel_workflow_is_not_run_as_a_single_external_actor(tmp
     ids=["no-tool-calling", "no-tokenizer", "routing-failed", "skill-generation-failed"],
 )
 def test_an_unavailable_local_model_does_not_hand_off(tmp_path, turns, capabilities):
-    """Section 11, RM04: degraded mode needs an operator policy, and none exists yet.
+    """Section 11, RM04: degraded mode is off by default.
 
     "An unavailable local model may route directly to external only when
-    policy permits; the trace records degraded mode." No such policy is
-    configurable in this version, so the run ends as needs_external with
-    reason capability_missing and no external call.
+    policy permits; the trace records degraded mode." Without the policy
+    the run ends as needs_external with reason capability_missing and no
+    external call. The policy on is tests/test_degraded_mode.py.
     """
     gateway = build_gateway(
         tmp_path,

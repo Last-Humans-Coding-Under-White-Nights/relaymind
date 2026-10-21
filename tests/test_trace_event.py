@@ -687,6 +687,20 @@ SAMPLE_EVENTS.update(
             request={"size": 1, "limit": 2, "method": "utf8_bytes", "tokens": 1},
         ),
         "handoff-request-text": terminal_with("handoff.started", request="1200"),
+        "handoff-degraded": terminal_with(
+            "handoff.started", degraded_mode=True, local_failure="local generation failed"
+        ),
+        "handoff-degraded-false": terminal_with(
+            "handoff.started", degraded_mode=False, local_failure="x"
+        ),
+        "handoff-degraded-text": terminal_with(
+            "handoff.started", degraded_mode="yes", local_failure="x"
+        ),
+        "handoff-degraded-no-cause": terminal_with("handoff.started", degraded_mode=True),
+        "handoff-cause-without-flag": terminal_with("handoff.started", local_failure="x"),
+        "handoff-degraded-blank-cause": terminal_with(
+            "handoff.started", degraded_mode=True, local_failure=" "
+        ),
     }
 )
 
@@ -924,6 +938,20 @@ def test_a_recovered_tool_finished_is_never_a_replay():
         with pytest.raises(TraceEventError, match=key):
             validate_trace_event(SAMPLE_EVENTS[name])
         assert not SCHEMA_VALIDATOR.is_valid(SAMPLE_EVENTS[name]), name
+
+
+def test_a_degraded_handoff_names_its_cause():
+    """Spec 0.13 sections 8 and 11: degraded_mode (true) and local_failure go together."""
+    validate_trace_event(SAMPLE_EVENTS["handoff-degraded"])
+    for name in (
+        "handoff-degraded-false",
+        "handoff-degraded-text",
+        "handoff-degraded-no-cause",
+        "handoff-cause-without-flag",
+        "handoff-degraded-blank-cause",
+    ):
+        with pytest.raises(TraceEventError):
+            validate_trace_event(SAMPLE_EVENTS[name])
 
 
 def validator_accepts(data):

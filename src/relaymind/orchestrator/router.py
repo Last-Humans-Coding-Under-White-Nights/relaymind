@@ -251,6 +251,21 @@ class Router:
             reason_code="context_limit",
         )
 
+    def degraded_decision(
+        self,
+        messages: Sequence[Message],
+        mode: ExecutionMode,
+        *,
+        language: Language | None = None,
+    ) -> RouteDecision:
+        """An unavailable local model, with degraded mode permitted (section 11)."""
+        return self._validated(
+            mode,
+            route=Route.EXTERNAL.value,
+            language=(language or request_language(messages)).value,
+            reason_code="capability_missing",
+        )
+
     def execution_mode_decision(self, messages: Sequence[Message]) -> RouteDecision:
         """external_only: the gateway's own decision, no routing generation (7.4)."""
         return self._validated(
