@@ -250,12 +250,14 @@ def launch_settings_argv(launch_settings: Mapping[str, object]) -> list[str]:
         mode = launch_settings["reasoning"]
         if mode not in ("on", "off", "auto"):
             raise ManifestError("launch_settings.reasoning must be on, off, or auto")
-        kwargs = launch_settings.get("chat_template_kwargs")
-        if isinstance(kwargs, Mapping) and "enable_thinking" in kwargs:
-            raise ManifestError(
-                "use launch_settings.reasoning instead of the deprecated "
-                "chat_template_kwargs.enable_thinking launch control"
-            )
+    # RM18: the CLI template boolean is deprecated in b11785, with or
+    # without a reasoning setting next to it.
+    kwargs = launch_settings.get("chat_template_kwargs")
+    if isinstance(kwargs, Mapping) and "enable_thinking" in kwargs:
+        raise ManifestError(
+            "use launch_settings.reasoning instead of the deprecated "
+            "chat_template_kwargs.enable_thinking launch control"
+        )
     argv: list[str] = []
     for key, value in launch_settings.items():
         flag = _launch_flag(key)

@@ -93,21 +93,24 @@ def server(tmp_path_factory, manifest, adapter_settings):
     # adapter_settings is unused here; requesting it derives the adapter
     # settings before the server starts, so unusable settings fail
     # without a model load.
-    # RM18: a passing smoke on a different binary does not qualify this pin.
-    version = subprocess.run(
-        ["llama-server", "--version"], capture_output=True, text=True, check=True
-    )
-    banner = version.stdout + version.stderr
-    assert f"version: {manifest.runtime_version}" in banner.splitlines(), banner
-    print(f"\nRuntime: {manifest.runtime_version}")
     override = os.environ.get(MODEL_ENV)
     model_path = Path(override) if override else MODELS_DIR / manifest.file_name
     if not model_path.is_file():
         # Only the default location may be absent (no local artifact);
-        # an explicit override that does not exist is a mistake.
+        # an explicit override that does not exist is a mistake. Checked
+        # before the runtime, so a machine without the model skips.
         if override:
             pytest.fail(f"{MODEL_ENV} points to a missing file: {model_path}")
         pytest.skip(f"model artifact not found: {model_path}")
+    # RM18: a passing smoke on a different binary does not qualify this pin.
+    version = subprocess.run(
+        ["llama-server", "--version"], capture_output=True, text=True, check=True
+    )
+    banner = "\n".join((version.stdout, version.stderr))
+    # Strip each line: Windows output may end lines with CR or spaces.
+    banner_lines = [line.strip() for line in banner.splitlines()]
+    assert f"version: {manifest.runtime_version}" in banner_lines, banner
+    print(f"\nRuntime: {manifest.runtime_version}")
     # models/README.md: verify against the manifest before use. A
     # mismatched artifact is a failure, never a silent substitution.
     try:
@@ -245,9 +248,14 @@ def test_reasoning_never_appears_as_answer_content(make_adapter, enable_thinking
     # adapter emitted exactly the content channel, never the reasoning channel.
     deltas = []
     for line in b"".join(wire_chunks).decode().splitlines():
-        if line.startswith("data: ") and line != "data: [DONE]":
-            for choice in json.loads(line[6:]).get("choices", []):
-                deltas.append(choice.get("delta", {}))
+        line = line.strip()
+        if not line.startswith("data:"):
+            continue
+        data = line[len("data:") :].strip()
+        if not data or data == "[DONE]":
+            continue
+        for choice in json.loads(data).get("choices") or []:
+            deltas.append(choice.get("delta") or {})
     thoughts = "".join(delta.get("reasoning_content") or "" for delta in deltas)
     assert bool(thoughts.strip()) is enable_thinking
     assert text == "".join(delta.get("content") or "" for delta in deltas)

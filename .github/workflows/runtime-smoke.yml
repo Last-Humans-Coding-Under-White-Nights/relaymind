@@ -77,7 +77,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Live smoke failed' }
           [xml]$results = Get-Content evidence/results.xml
           $suite = $results.testsuites.testsuite
-          if ($suite.tests -ne '7' -or $suite.skipped -ne '0') { throw 'Expected seven executed smoke cases' }
+          if ($suite.tests -ne '7' -or $suite.skipped -ne '0' -or $suite.failures -ne '0' -or $suite.errors -ne '0') {
+            throw "Expected seven passing smoke cases with no skips, failures, or errors; got tests=$($suite.tests) skipped=$($suite.skipped) failures=$($suite.failures) errors=$($suite.errors)"
+          }
 
       - uses: actions/upload-artifact@v4
         if: always()

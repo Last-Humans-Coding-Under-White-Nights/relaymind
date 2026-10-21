@@ -33,8 +33,9 @@ the model. On Windows, use a current x64 Visual C++ Redistributable.
 Non-thinking launch settings are `--ctx-size 8192 --jinja --reasoning off
 --reasoning-format deepseek`. `launch_adapter_settings` translates `off`
 to the supported HTTP `chat_template_kwargs.enable_thinking=false`; `on`
-translates to `true`. Other template kwargs are preserved. Do not combine
-the new launch control with the deprecated `enable_thinking` CLI kwarg.
+translates to `true`. Other template kwargs are preserved. A manifest
+that sets the deprecated `enable_thinking` CLI kwarg in launch settings is
+rejected, with or without `reasoning`.
 
 To enable thinking on the same server, configure `LlamaCppConfig` with
 `chat_template_kwargs={"enable_thinking": True}`. This HTTP boolean remains

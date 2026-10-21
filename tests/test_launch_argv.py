@@ -24,7 +24,7 @@ def test_settings_map_to_flags_values_and_json():
         {
             "ctx_size": 8192,
             "jinja": True,
-            "chat_template_kwargs": {"enable_thinking": False},
+            "chat_template_kwargs": {"custom": False},
         }
     )
     assert argv == [
@@ -32,7 +32,7 @@ def test_settings_map_to_flags_values_and_json():
         "8192",
         "--jinja",
         "--chat-template-kwargs",
-        '{"enable_thinking":false}',
+        '{"custom":false}',
     ]
 
 
@@ -243,3 +243,12 @@ def test_two_launch_reasoning_controls_are_rejected(enabled):
                 "chat_template_kwargs": {"enable_thinking": enabled},
             }
         )
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+@pytest.mark.parametrize("derive", [launch_settings_argv, launch_adapter_settings])
+def test_deprecated_launch_reasoning_control_alone_is_rejected(derive, enabled):
+    # RM18 / section 6: without launch_settings.reasoning, the deprecated
+    # CLI template boolean must still fail, not render --chat-template-kwargs.
+    with pytest.raises(ManifestError, match="use launch_settings.reasoning instead"):
+        derive({"ctx_size": 8192, "chat_template_kwargs": {"enable_thinking": enabled}})
