@@ -543,3 +543,57 @@ Observations, not conclusions:
   Whether the predicate should accept a capitalized service ID at the
   start of a sentence is a question for the predicate owner (#55) and
   the M6 corpus; this rerun does not change it.
+
+## 2026-10-21 — M2 live check-service-health run on the rebuilt stack (#55 974d4f7, #59 333f5ec, #61), Apple Silicon macOS
+
+The same live AC01 test as the two entries above, run once more on the
+#61 branch after the stack was rebuilt: #55 now matches service and
+database IDs in any case and gives the identifier inputs English and
+Chinese labels, #59 uses those labels, and #61 adds the clarification
+resume flow and the spec 0.6 stage budgets. The entries above are
+unchanged.
+
+| Field | Value |
+|-------|-------|
+| Machine | Apple M1, 8 GiB RAM, macOS 27.0.1 (build 26A434), Metal backend |
+| Runtime | llama.cpp 0.7.0 (build 11669, commit 620d2225c), Homebrew build, AppleClang arm64 |
+| Artifact | `models/qwen3-0.6b-q8_0.manifest.json`: Qwen3-0.6B Q8_0, verified against the manifest SHA-256 before launch (given with `RELAYMIND_SMOKE_MODEL`) |
+| Launch | derived from the manifest, as above |
+| Command | `RELAYMIND_TRACE_OUT=<file> pytest -m live tests/test_local_loop_live.py` on `feat/clarification-repair` (base #59 `333f5ec`); the export's `command` field records the scratch path it was first written to |
+| Prompts | The same four paired requests and the same warm-up run as above |
+| Configuration | Default budgets (RM03, spec 0.6 section 11), temperature 0, external dispatch not wired. A recording external model double is configured; it received no requests in any run |
+| Raw export | [`evidence/2026-10-21-m2-local-trace-stack-rebuilt-apple-m1.json`](evidence/2026-10-21-m2-local-trace-stack-rebuilt-apple-m1.json) |
+| Result | 3 passed, 1 failed in 18.14 s |
+
+| Prompt | Route (decision language; model's language argument) | Final answer or last model text | Outcome | Active time |
+|--------|------------------------------------------------------|---------------------------------|---------|------------:|
+| Is staging-api healthy right now? (warm-up) | local, check-service-health (en; en) | The staging-api is healthy and checked at 2026-10-20T02:58:00Z. | completed (not graded) | 3834 ms |
+| Is staging-api healthy right now? | local, check-service-health (en; en) | The staging-api is healthy and checked at 2026-10-20T02:58:00Z. | **completed** | 2521 ms |
+| staging-api 现在健康吗？ | local, check-service-health (zh; **en**) | (not published) staging-api 现在健康。检查时间是 2026-10-20T02:58:00Z。 | **failed**, `needs_external`, `invalid_output` | 3133 ms |
+| Check the health of payments-api. | local, check-service-health (en; en) | The payments-api is unavailable at checked_at 2026-10-20T02:59:00Z. | **completed** | 2978 ms |
+| 帮我检查一下 payments-api 的健康状态。 | local, check-service-health (zh; zh) | payments-api 的健康状态为 unavailable，检查时间是 2026-10-20T02:59:00Z。 | **completed** | 3076 ms |
+
+Every run made zero external calls: the external double received no
+request, every `model.started` has actor `local`, and `run.completed` /
+`run.failed` count `external_calls: 0` from the recorded calls (RM01,
+RM16). Each run is one stage, and `waiting_ms` is 0 in every
+`run.completed` / `run.failed`: none of these prompts asks for
+clarification.
+
+Observations, not conclusions:
+
+- 3 of 4 measured runs completed locally, against 2 of 4 in the entry
+  above. The English staging-api run completed again, but not because
+  the case-insensitive service match was used: the model's text
+  changed. Its finalize proposal now starts with `The staging-api`, not
+  `Staging-api`. The skill-stage prompt is not the same as before: the
+  tool input schemas offered to the model now carry `title` and
+  `x-relaymind-label` on the `service` property (#55). So the
+  case-insensitive match was not exercised by this run.
+- The Chinese staging-api run failed as in both entries above: the
+  final answer translated `healthy` to 健康, so the predicate refused it.
+- This is a single-pass observation of a fixed model on four prompts,
+  not a completion rate.
+- No live clarification (AC03) run is recorded. AC03 and AC04 are
+  checked with model doubles only (`tests/test_ac03_clarification.py`,
+  `tests/test_ac04_invalid_proposals.py`).

@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.6 | 21 October 2026 | Proposed implementation baseline
+Version 0.7 | 21 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that lets a small model complete bounded tasks with skills and tools, and transfers complex work to an external model. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -10,13 +10,13 @@ SDD means Spec-Driven Development here. MUST and MUST NOT identify acceptance re
 
 The prototype MUST demonstrate that the local model can select a skill, choose tools and arguments, consume actual execution results, and finish a simple task without an external model call. It MUST also demonstrate transfer of completed work to an external model, with visible attribution of skill selection, tool proposals, execution, and final output.
 
-The agreed requirements are English and Chinese interaction, macOS and Windows execution, replaceable models, an OpenAI-compatible entry point, shared skills and tools, and observable routing. Qwen3-0.6B is the initial local candidate; the earlier approximate 300M size is no longer a constraint. The 500 ms first-response objective remains an experimental target.
+The agreed requirements are English interaction, with Chinese interaction supported on a best-effort basis, macOS and Windows execution, replaceable models, an OpenAI-compatible entry point, shared skills and tools, and observable routing. Qwen3-0.6B is the initial local candidate; the earlier approximate 300M size is no longer a constraint. The 500 ms first-response objective remains an experimental target.
 
 The implementation baseline adds these decisions: a single-user local service, Python with FastAPI, a separate llama.cpp server process, SQLite execution records, trusted local skill packages, and a small deterministic demo tool service. The external provider and model are operator configuration, not hard-coded product dependencies.
 
 | Priority | Included behavior |
 | --- | --- |
-| P0 | Local skill selection and tool loop; clarification; escalation; external completion; model adapters; trace UI; cancellation; simulated destructive action with confirmation; API conformance; bilingual evaluation |
+| P0 | Local skill selection and tool loop; clarification; escalation; external completion; model adapters; trace UI; cancellation; simulated destructive action with confirmation; API conformance; evaluation (English required, Chinese best-effort) |
 | P1 | One bounded parallel workflow with independent read-only branches; exact routing cache experiments |
 | Outside this prototype | Token-level speculative decoding; replacing already streamed answer text; universal agent compatibility; arbitrary shell execution; production database deletion; production multi-tenancy; native desktop installers; general PDF ingestion; automatic skill installation; MCP connector marketplace |
 
@@ -153,7 +153,7 @@ Normalized generation outputs are text_delta, tool_call, usage, completed, and e
 
 For Qwen3, non-thinking mode MUST be configured through the pinned runtime's supported chat-template settings and verified by a smoke test. A /no_think string alone is not the qualification criterion. Exact runtime switches MUST come from the selected build's documentation. Model-specific templates and parsing remain inside the adapter. Non-thinking is the default and the configuration used for the latency experiment; an operator MAY enable thinking mode through the same chat-template settings. Reasoning output MUST NOT appear as answer content in either mode, and latency results from the two modes MUST NOT be mixed. [S1, S3, S10]
 
-The artifact manifest MUST record model source, revision, file SHA-256, quantization, tokenizer and template hashes, runtime version and commit, launch settings, and license metadata. Q4 and Q8 are comparison candidates, not prequalified defaults. The selected artifact becomes the default only after the bilingual tool tests. External configuration similarly records endpoint, model identifier, supported parameters, and provider-returned version information when available.
+The artifact manifest MUST record model source, revision, file SHA-256, quantization, tokenizer and template hashes, runtime version and commit, launch settings, and license metadata. Q4 and Q8 are comparison candidates, not prequalified defaults. The selected artifact becomes the default only after the English tool tests; Chinese tool test results are reported when run but do not block the choice. External configuration similarly records endpoint, model identifier, supported parameters, and provider-returned version information when available.
 
 ## 7 Public API contract
 
@@ -313,7 +313,7 @@ The initial tool contract uses service IDs staging-api and payments-api, windows
 
 All listed input fields are required unless explicitly described otherwise. A health tool's unavailable status is a successful observation of the service state; failure to contact the tool itself produces a failed ToolResult. The deletion handler compares expected_revision atomically and returns a conflict without mutation if the fixture changed. The pending approval binds that revision as well as the database ID.
 
-Each skill includes paired English and Chinese examples and completion criteria. For health checks, the final response must preserve the exact returned health state and time. For diagnostics, it must distinguish observations from hypotheses and may report insufficient evidence. Native Chinese review is required for the evaluation corpus; family-level multilingual claims do not replace task evaluation.
+Each skill includes English examples and completion criteria. Chinese examples are best-effort: they are kept where they exist, but they are not required. For health checks, the final response must preserve the exact returned health state and time. For diagnostics, it must distinguish observations from hypotheses and may report insufficient evidence. Native Chinese review is not required. Evidence must state honestly when Chinese material has not been natively reviewed (RM16). Family-level multilingual claims do not replace task evaluation.
 
 The UI shows the original prompt, selected mode, active model, loaded skill, tool name and arguments, execution result, escalation reason, final answer, and timing. The comparison view runs equivalent inputs in auto and external_only modes against reset fixtures. A user can cancel a run and inspect failed operations.
 
@@ -371,19 +371,19 @@ The 500 ms hypothesis is p95 first model action at or below 500 ms for the warme
 
 ### 12.2 Reproducible experiment
 
-The correctness corpus contains 40 scenario pairs, each written in English and Simplified Chinese: 12 simple, 10 complex, 6 ambiguous, 6 requiring mutation confirmation, and 6 adversarial or fault scenarios. This yields 80 language-specific cases. Each case includes fixture state, acceptable tools and arguments, required evidence, expected permissions, and a grading rubric. Freeze the corpus before comparing candidates and keep development examples separate.
+The correctness corpus contains 40 English scenarios: 12 simple, 10 complex, 6 ambiguous, 6 requiring mutation confirmation, and 6 adversarial or fault scenarios. Simplified Chinese versions of the scenarios are optional and best-effort; when present, results are reported per language and never merged into the English results. Each case includes fixture state, acceptable tools and arguments, required evidence, expected permissions, and a grading rubric. Freeze the corpus before comparing candidates and keep development examples separate.
 
 Run auto, external_only, and local_only against the same fixture snapshots. Baselines use the same skills, tool descriptions, execution rules, and output criteria. Select identical relevant external data where the route permits it. Count provider calls; do not infer cost savings from latency. Monetary estimates require actual provider rates and a dated rate source and are optional.
 
-For the latency experiment, use 12 short prompts, six per language, including routing, clarification, and simple tool tasks. Perform three warm-up requests per model configuration, then ten measured runs per prompt in randomized order. Record errors and timeouts rather than dropping them. Report p50, p95, sample count, and timeout fraction. Report cold startup separately, including model load time. Exact-route caching stays off; runtime prefix-cache behavior is explicitly recorded.
+For the latency experiment, use 12 short English prompts, including routing, clarification, and simple tool tasks. Perform three warm-up requests per model configuration, then ten measured runs per prompt in randomized order. Record errors and timeouts rather than dropping them. Chinese prompts may be added on a best-effort basis and are reported per language. Report p50, p95, sample count, and timeout fraction. Report cold startup separately, including model load time. Exact-route caching stays off; runtime prefix-cache behavior is explicitly recorded.
 
 Record OS version, CPU, GPU, RAM, backend, thread settings, model hashes, quantization, context settings, sampling parameters, runtime and application revisions, external endpoint region if known, and test time. Shared provider load remains a potential source of variability. Actual hardware is filled into the benchmark report after execution; no reference machine performance is assumed here.
 
 ### 12.3 Gates and experimental targets
 
-Hard acceptance gates are all deterministic contract and authorization tests passing, successful live local skill-and-tool traces for all three simple demo skills in both languages, correct handoff without duplicate completed operations, a working model substitution test, and a reproducible benchmark report from both target platforms.
+Hard acceptance gates are all deterministic contract and authorization tests passing, successful live local skill-and-tool traces for all three simple demo skills in English (Chinese live results are reported but do not block acceptance), correct handoff without duplicate completed operations, a working model substitution test, and a reproducible benchmark report from both target platforms.
 
-Proposed model-quality targets are at least 80 percent successful local completion on the simple subset in each language, at least 95 percent correct tool-and-argument proposals on that subset, and no missed mandatory confirmation in the bounded test corpus. Report exact numerators and denominators. Passing a small corpus does not establish a production reliability guarantee.
+Proposed model-quality targets are at least 80 percent successful local completion on the English simple subset, at least 95 percent correct tool-and-argument proposals on that subset, and no missed mandatory confirmation in the bounded test corpus. Chinese results, when present, are reported per language against the same targets but do not block acceptance. Report exact numerators and denominators. Passing a small corpus does not establish a production reliability guarantee.
 
 The 500 ms target and quality percentages are experimental outcomes, not pre-existing facts. If a target fails, retain the evidence, qualify the candidate as unsuitable for that claim, and compare another model or narrower skill scope. Do not silently substitute a larger model while continuing to label results Qwen3-0.6B.
 
@@ -393,7 +393,7 @@ The following scenarios define the implementation acceptance suite. Model double
 
 | Test | Given and when | Required result | Requirements |
 | --- | --- | --- | --- |
-| AC01 | A simple health request with a valid service in each language | Local skill selection, real sandbox tool call, correct final status, zero external calls | RM01 to RM03, RM06, RM16, RM23 |
+| AC01 | A simple health request with a valid service in English (Chinese requests are reported best-effort and do not block acceptance) | Local skill selection, real sandbox tool call, correct final status, zero external calls | RM01 to RM03, RM06, RM16, RM23 |
 | AC02 | A complex diagnostic request after local metrics collection | External request contains the original task and completed evidence; completed calls are not replayed | RM04, RM13, RM14 |
 | AC03 | A request omits the target service, then the caller resumes with it | Clarification names the missing input; the resumed run continues with the chosen skill in the run's language; no guessed target or mutation | RM03, RM05, RM17, RM22 |
 | AC04 | The model proposes an unknown tool or invalid arguments | No execution; bounded repair or explicit escalation; recorded reason | RM02, RM08, RM09 |
@@ -407,12 +407,12 @@ The following scenarios define the implementation acceptance suite. Model double
 | AC12 | Cancel during generation and restart during a write | Dispatch stops; actual or unknown outcomes remain recorded; no automatic write replay | RM10, RM14, RM17 |
 | AC13 | Change a skill or permission with caching enabled | Cache invalidates; current permissions apply; baseline remains cache-off | RM07, RM24 |
 | AC14 | Execute the fixed parallel workflow | Independent read-only branches are attributable; synthesis uses results in a later call | RM14, RM15, RM22 |
-| AC15 | Repeat the benchmark on both platforms | Reproducible manifest and separate language and platform results, including failures | RM18, RM25 |
+| AC15 | Repeat the benchmark on both platforms | Reproducible manifest and separate platform results, and separate language results where Chinese prompts are present, including failures | RM18, RM25 |
 | AC16 | Unsupported parameters, oversized context, or stale resume version | Explicit documented error; no silent feature downgrade or lost context | RM17 to RM21 |
 
 ## 14 Delivery and SDD change control
 
-Implementation deliverables are the gateway source, pinned dependencies, setup instructions for both platforms, model artifact manifest, skill packages, registered demo tools, native demo UI, versioned schemas, API examples, deterministic acceptance suite, bilingual evaluation corpus, and benchmark report. Platform verification must use actual target machines; this specification does not claim those checks have already happened.
+Implementation deliverables are the gateway source, pinned dependencies, setup instructions for both platforms, model artifact manifest, skill packages, registered demo tools, native demo UI, versioned schemas, API examples, deterministic acceptance suite, evaluation corpus (English, with best-effort Chinese), and benchmark report. Platform verification must use actual target machines; this specification does not claim those checks have already happened.
 
 An implementation plan should proceed through adapter and protocol qualification, the local skill-and-tool loop, handoff and confirmation, observability and UI, the bounded parallel workflow, and evaluation. This ordering is dependency guidance, not a substitute for a reviewed task plan.
 

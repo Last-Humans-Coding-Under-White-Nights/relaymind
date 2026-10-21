@@ -13,8 +13,22 @@ One run, start to end, with the local model only:
    router input with the local tokenizer, and either take the bypass
    decision for an oversized input (section 4.1) or run the single
    routing generation (RM02, ``relaymind.orchestrator.router``).
-   Clarify waits for input; a non-local route returns needs_external.
-   The run keeps the language of this first RouteDecision (section 5).
+   A non-local route returns needs_external. The run keeps the language
+   of this first RouteDecision across every resume (section 5).
+2a. Clarify suspends the run in waiting_input with clarification.required
+   (RM05; spec 0.6 sections 5 and 8): question, language, reason_code,
+   skill_id, the missing input, and waiting_seconds. The stage ends and
+   the wait is not active time (section 11). ``LocalOrchestrator.resume``
+   takes explicit new input text: it records clarification.answered
+   (input redacted, missing, waited_ms), appends the question as an
+   assistant turn and the input as a user turn, and opens a new local
+   stage with the full per-stage budgets, bounded by the entire-run
+   limits. When the clarify decision named a skill, the gateway checks
+   the new input for the missing identifier without a routing
+   generation; when its skill_id was null, the run routes again with a
+   routing generation. At most ``clarification_rounds`` clarifications
+   are asked; a further one fails the run with missing_input. A wait
+   longer than ``waiting_seconds`` fails with input_expired.
 3. local_running: load the selected skill (skill.loaded, RM06) and loop.
    Each generation returns a tool proposal or a finalize proposal (an
    answer text). A tool proposal is validated once (RM09) and checked
@@ -43,14 +57,16 @@ failed with error code needs_external and the RM04 reason code; partial
 evidence stays in the trace (section 5). An external model, when one is
 configured, is never called here.
 
-Any other exception fails the run with error code internal_error and
-its run.failed event, which releases the execution slot, and then
-propagates; a cancelled run ends as cancelled. A terminal run never
-changes again (RM17).
+Any other exception, in the first stage or after a resume, fails the
+run with error code internal_error and its run.failed event, which
+releases the execution slot, and then propagates; a cancelled run ends
+as cancelled. A terminal run never changes again (RM17).
 
 The trace proves locality (RM01, RM16): every model call is labelled
 with the locality its adapter declares, and run.completed lists every
-model call and the number of them that were external.
+model call and the number of them that were external. run.completed and
+run.failed report active_ms and waiting_ms separately (RM22, section
+12.1); waiting_ms is the sum of the recorded waits.
 
 Tool arguments, tool results, and model text are redacted of configured
 secret fields before they are persisted (RM12, section 8).
@@ -59,7 +75,7 @@ secret fields before they are persisted (RM12, section 8).
 import asyncio
 import json
 import uuid
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -81,6 +97,7 @@ from relaymind.adapters import (
 from relaymind.orchestrator import identifiers
 from relaymind.orchestrator.budgets import BudgetExceededError, BudgetMeter, LocalBudgets
 from relaymind.orchestrator.route_decision import (
+    REASON_CODES,
     ExecutionMode,
     Language,
     Route,
@@ -90,14 +107,16 @@ from relaymind.orchestrator.route_decision import (
 from relaymind.orchestrator.router import Router, Routing
 from relaymind.orchestrator.run_state import (
     TERMINAL_STATES,
+    InvalidTransitionError,
     RunState,
     RunStateMachine,
     SlotUnavailableError,
+    TerminalStateError,
 )
 from relaymind.redaction import Redactor, redact_text
 from relaymind.skills import Skill, SkillRegistry
 from relaymind.skills.predicates import COMPLETION_PREDICATES, Predicate
-from relaymind.store import RunRecord, RunStore, TraceClock
+from relaymind.store import RunRecord, RunStore, StaleVersionError, TraceClock
 from relaymind.store.run_store import EventDraft
 from relaymind.store.trace_event import EventType
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry, ToolRejectedError
@@ -110,8 +129,12 @@ GATEWAY_ACTOR = "gateway"
 LOCALITIES = (LOCAL_ACTOR, EXTERNAL_ACTOR)
 NEEDS_EXTERNAL = "needs_external"
 INTERNAL_ERROR = "internal_error"
+INPUT_EXPIRED = "input_expired"
+MISSING_INPUT = "missing_input"
+INVALID_RESUME_INPUT = "invalid_resume_input"
 CONFIRMATION_REQUIRED = "confirmation_required"
 ROUTING_MECHANISM = "native_function_calling"
+RESUME_MECHANISM = "clarification_resume"
 
 # Skill-stage layout. In development runs against the pinned model, it
 # often wrote its tool call as plain JSON text instead of a native call
@@ -168,14 +191,42 @@ class RunOutcome:
     decision: RouteDecision | None = None
 
 
-class _Stop(Exception):
-    """End the run as needs_external with an RM04 reason code."""
+class ResumeInputError(ValueError):
+    """A resume body that does not match the waiting state (400, sections 7.4, 11).
+
+    In waiting_input that is missing or blank input text. The run keeps
+    waiting and its version is unchanged.
+    """
+
+    http_status = 400
+    code = INVALID_RESUME_INPUT
+
+
+class Escalation(Exception):
+    """End the run as needs_external with an RM04 reason code.
+
+    The reason code must be one of the section 8 operational labels;
+    anything else is a gateway bug, refused before it reaches a trace.
+    Raised inside a run, that refusal is an unexpected exception, so the
+    run fails with internal_error and never stays active.
+    """
 
     def __init__(self, reason_code: str, detail: str, **extra: Any) -> None:
+        if reason_code not in REASON_CODES:
+            raise ValueError(f"{reason_code!r} is not a section 8 reason code")
         super().__init__(detail)
         self.reason_code = reason_code
         self.detail = detail
         self.extra = extra
+
+
+@dataclass(frozen=True)
+class _Pending:
+    """The clarification a waiting run asked (section 8 payload fields)."""
+
+    question: str
+    missing: str
+    skill_id: str | None
 
 
 @dataclass
@@ -227,6 +278,10 @@ class LocalOrchestrator:
         )
         self.executor = ToolExecutor(tools, store, clock=self.clock, redactor=self.redactor)
         self.machine = RunStateMachine(store)
+        # Runs this orchestrator suspended in waiting_input. A process
+        # restart fails unfinished runs as interrupted (section 5), so
+        # nothing here has to outlive the process.
+        self._waiting: dict[str, _Run] = {}
 
     async def run_text(self, text: str, **options: Any) -> RunOutcome:
         """Run one user request given as plain text."""
@@ -247,7 +302,89 @@ class LocalOrchestrator:
         Raises SlotUnavailableError (429) when another run holds the
         execution slot; no run is created then.
         """
-        return await _Run(self, tuple(messages), execution_mode, model_alias).execute()
+        run = _Run(self, tuple(messages), execution_mode, model_alias)
+        return self._keep_if_waiting(run, await run.execute())
+
+    async def resume(self, run_id: str, expected_version: int, text: object) -> RunOutcome:
+        """Resume a run waiting for input with explicit new input (section 5, RM17).
+
+        A terminal run never restarts (TerminalStateError) and a stale
+        version is 409 (StaleVersionError). Missing or blank input text is
+        400 invalid_resume_input (ResumeInputError) and leaves the run
+        waiting with its version unchanged (sections 7.4, 11); the body is
+        checked before the waiting limit, so a malformed resume never
+        changes the run, even after the wait expired. A valid resume of a
+        wait older than waiting_seconds ends the run as failed with
+        input_expired. If another run holds the execution slot, the resume
+        is 429 and the run keeps waiting (section 5).
+        """
+        record = self.store.get_run(run_id)
+        state = RunState(record.state)
+        if state in TERMINAL_STATES:
+            self._waiting.pop(run_id, None)
+            raise TerminalStateError(f"run {run_id} is {state}; terminal runs never restart")
+        if record.version != expected_version:
+            raise StaleVersionError(run_id, expected_version, record.version)
+        if state is not RunState.WAITING_INPUT:
+            raise InvalidTransitionError(f"run {run_id} is {state}, not waiting for input")
+        run = self._waiting.get(run_id)
+        if run is None:
+            raise InvalidTransitionError(
+                f"run {run_id} is waiting_input but is not tracked by this gateway process"
+            )
+        if not isinstance(text, str) or not text.strip():
+            raise ResumeInputError("a resume in waiting_input needs non-blank input text")
+        if run.wait_expired():
+            # Untracked only once the expiry is recorded, so a store
+            # error leaves the wait for the next sweep (section 5).
+            outcome = run.expire()
+            del self._waiting[run_id]
+            return outcome
+        run.reopen(expected_version)
+        del self._waiting[run_id]
+        return self._keep_if_waiting(run, await run.continue_with(text))
+
+    def expire_waiting(self) -> list[RunOutcome]:
+        """Fail every wait older than waiting_seconds with input_expired (section 5).
+
+        A run that left waiting_input some other way (for example, it was
+        cancelled) is dropped without a transition: a terminal run never
+        changes again (RM17). That holds when it is cancelled during its
+        own expiry too: the failed transition is then not an error. An
+        error on one run does not stop the sweep:
+        the other waits are still expired, the run that failed stays
+        tracked for the next sweep, and the errors are raised together at
+        the end. The expired runs are recorded in the store either way.
+        """
+        expired: list[RunOutcome] = []
+        errors: list[Exception] = []
+        for run_id, run in list(self._waiting.items()):
+            try:
+                if self.store.get_run(run_id).state != RunState.WAITING_INPUT.value:
+                    del self._waiting[run_id]
+                elif run.wait_expired():
+                    expired.append(run.expire())
+                    del self._waiting[run_id]
+            except Exception as exc:
+                if self._left_waiting(run_id):
+                    self._waiting.pop(run_id, None)
+                else:
+                    errors.append(exc)
+        if errors:
+            raise ExceptionGroup("some expired waits could not be failed", errors)
+        return expired
+
+    def _left_waiting(self, run_id: str) -> bool:
+        """True when the store shows the run is no longer in waiting_input."""
+        try:
+            return self.store.get_run(run_id).state != RunState.WAITING_INPUT.value
+        except Exception:
+            return False
+
+    def _keep_if_waiting(self, run: "_Run", outcome: RunOutcome) -> RunOutcome:
+        if outcome.state is RunState.WAITING_INPUT:
+            self._waiting[run.run_id] = run
+        return outcome
 
 
 class _Run:
@@ -269,6 +406,13 @@ class _Run:
         self.model_calls: list[dict[str, str]] = []
         self.record: RunRecord
         self.decision: RouteDecision | None = None
+        # Fixed by the first RouteDecision and kept across resumes (section 5).
+        self.language: Language | None = None
+        # The clarification being waited on, its start, and the waits so far.
+        self.pending: _Pending | None = None
+        self.waiting_since: float | None = None
+        self.waiting_ms = 0
+        self.clarifications = 0
         # The run.accepted snapshot (section 8); RM07 pins skills to it.
         self.offered = owner.skills.offered_snapshot(owner.router.offered)
         # Secret values seen in tool results, scrubbed from model text (RM12).
@@ -295,10 +439,15 @@ class _Run:
         return redact_text(text, self.secrets)
 
     def _summary(self) -> dict[str, Any]:
+        """The run.completed / run.failed evidence (RM16, RM22, section 12.1)."""
+        usage = self.meter.usage()
         return {
             "model_calls": list(self.model_calls),
             "external_calls": sum(1 for c in self.model_calls if c["actor"] == EXTERNAL_ACTOR),
-            "budget_usage": self.meter.usage(),
+            "budget_usage": usage,
+            # Active and waiting time, reported separately.
+            "active_ms": usage["active_ms"],
+            "waiting_ms": self.waiting_ms,
         }
 
     # -- the run ---------------------------------------------------------------
@@ -332,27 +481,36 @@ class _Run:
         except BaseException as exc:
             self._abort(exc)
             raise
+        return await self._guarded(self._route)
+
+    async def _guarded(self, route: Callable[[], Awaitable[Routing]]) -> RunOutcome:
+        """Drive the run; any unexpected exception ends it (RM17, section 5)."""
         try:
-            return await self._drive()
+            return await self._drive(route)
         except BaseException as exc:
             self._abort(exc)
             raise
 
-    async def _drive(self) -> RunOutcome:
+    async def _drive(self, route: Callable[[], Awaitable[Routing]]) -> RunOutcome:
+        """Route, then wait, stop, or run the local loop to completion."""
         try:
-            routing = await self._route()
+            routing = await route()
             decision = self.decision = routing.decision
+            if self.language is None:
+                self.language = decision.language
             if decision.route is Route.CLARIFY:
                 return self._clarify(routing)
             if decision.route is not Route.LOCAL:
-                raise _Stop(decision.reason_code, f"route {decision.route.value} needs external")
+                raise Escalation(
+                    decision.reason_code, f"route {decision.route.value} needs external"
+                )
             self.move(RunState.LOCAL_RUNNING)
             answer = await self._local(decision)
-        except _Stop as stop:
+        except Escalation as stop:
             return self._needs_external(stop)
         except BudgetExceededError as exceeded:
             return self._needs_external(
-                _Stop(exceeded.reason_code, str(exceeded), budget=exceeded.budget)
+                Escalation(exceeded.reason_code, str(exceeded), budget=exceeded.budget)
             )
         self.move(
             RunState.COMPLETED,
@@ -364,9 +522,27 @@ class _Run:
         )
         return RunOutcome(self.run_id, RunState.COMPLETED, answer=answer, decision=decision)
 
+    # -- waiting for input (spec 0.6 sections 5, 8, 11) ------------------------------
+
     def _clarify(self, routing: Routing) -> RunOutcome:
+        """Suspend in waiting_input, or fail once the clarification rounds are spent."""
         decision = routing.decision
         assert decision.clarification is not None
+        if not routing.missing or not routing.missing.strip():
+            raise ValueError("a clarification must name the input it waits for (section 8)")
+        if self.clarifications >= self.o.budgets.clarification_rounds:
+            return self._fail(
+                MISSING_INPUT,
+                reason_code=MISSING_INPUT,
+                detail=(
+                    f"a clarification beyond the {self.o.budgets.clarification_rounds} "
+                    "allowed rounds was needed"
+                ),
+                missing=routing.missing,
+            )
+        self.clarifications += 1
+        # Section 11: the stage ends; waiting is not active time.
+        self.meter.end_stage()
         self.move(
             RunState.WAITING_INPUT,
             event=(
@@ -378,9 +554,12 @@ class _Run:
                     "reason_code": decision.reason_code,
                     "skill_id": decision.skill_id,
                     "missing": routing.missing,
+                    "waiting_seconds": float(self.o.budgets.waiting_seconds),
                 },
             ),
         )
+        self.pending = _Pending(decision.clarification, routing.missing, decision.skill_id)
+        self.waiting_since = self.o.clock.monotonic()
         return RunOutcome(
             self.run_id,
             RunState.WAITING_INPUT,
@@ -389,7 +568,102 @@ class _Run:
             decision=decision,
         )
 
-    def _needs_external(self, stop: _Stop) -> RunOutcome:
+    def _waited_ms(self) -> int:
+        assert self.waiting_since is not None
+        return round((self.o.clock.monotonic() - self.waiting_since) * 1000)
+
+    def wait_expired(self) -> bool:
+        assert self.waiting_since is not None
+        return self.o.clock.monotonic() - self.waiting_since > self.o.budgets.waiting_seconds
+
+    def expire(self) -> RunOutcome:
+        """An expired wait ends as failed with input_expired (section 5).
+
+        Section 12.1: the wait counts toward the waiting_ms of run.failed,
+        the only waiting field that event has (section 8). The wait is
+        closed only once the transition succeeds: if the store fails, the
+        run keeps its wait unchanged, so a later sweep can expire it.
+        """
+        waited_ms = self._waited_ms()
+        self.record = self.o.store.get_run(self.run_id)
+        self.waiting_ms += waited_ms
+        try:
+            outcome = self._fail(INPUT_EXPIRED, detail="no input arrived within the waiting limit")
+        except BaseException:
+            self.waiting_ms -= waited_ms
+            raise
+        self.waiting_since = None
+        return outcome
+
+    def reopen(self, expected_version: int) -> None:
+        """Back to the state that suspended; reacquires the slot or raises 429 (section 5)."""
+        self.record = self.o.machine.resume(self.run_id, expected_version)
+
+    async def continue_with(self, text: str) -> RunOutcome:
+        """Record the answer, open a new stage, and continue the run (section 5)."""
+
+        async def route() -> Routing:
+            pending = self.pending
+            assert pending is not None
+            waited_ms = self._waited_ms()
+            self.waiting_ms += waited_ms
+            self.emit(
+                EventType.CLARIFICATION_ANSWERED,
+                GATEWAY_ACTOR,
+                {"input": self.scrub(text), "missing": pending.missing, "waited_ms": waited_ms},
+            )
+            self.pending = None
+            self.waiting_since = None
+            # Section 11: a new local stage with the full per-stage limits.
+            self.meter.new_stage()
+            self.messages = (
+                *self.messages,
+                Message(role=Role.ASSISTANT, content=pending.question),
+                Message(role=Role.USER, content=text),
+            )
+            if pending.skill_id is None:
+                # No skill was chosen: route again with a routing generation.
+                return await self._route()
+            return self._resume_route(pending.skill_id)
+
+        return await self._guarded(route)
+
+    def _resume_route(self, skill_id: str) -> Routing:
+        """The clarify named a skill: check the new input, no generation (section 5)."""
+        assert self.language is not None
+        try:
+            routing = self.o.router.resume_decision(
+                skill_id, self.messages, mode=self.mode, language=self.language
+            )
+        except RouteDecisionError as exc:
+            raise Escalation("invalid_output", f"resume decision rejected: {exc}") from exc
+        self.emit(
+            EventType.ROUTE_SELECTED,
+            GATEWAY_ACTOR,
+            {"decision": routing.decision.to_json_object(), "mechanism": RESUME_MECHANISM},
+        )
+        return routing
+
+    def _fail(self, error_code: str, *, detail: str, **extra: Any) -> RunOutcome:
+        """End the run as failed with error_code and its run.failed event."""
+        self.move(
+            RunState.FAILED,
+            error_code=error_code,
+            event=(
+                EventType.RUN_FAILED,
+                GATEWAY_ACTOR,
+                {"error_code": error_code, "detail": detail, **extra, **self._summary()},
+            ),
+        )
+        return RunOutcome(
+            self.run_id,
+            RunState.FAILED,
+            error_code=error_code,
+            reason_code=extra.get("reason_code"),
+            decision=self.decision,
+        )
+
+    def _needs_external(self, stop: Escalation) -> RunOutcome:
         self.move(
             RunState.FAILED,
             error_code=NEEDS_EXTERNAL,
@@ -466,17 +740,19 @@ class _Run:
             capabilities = await adapter.capabilities()
             capabilities.require("tool_calling", "tokenizer_available")
         except UnsupportedCapabilityError as exc:
-            raise _Stop("capability_missing", str(exc)) from exc
+            raise Escalation("capability_missing", str(exc)) from exc
 
         routing_messages = router.routing_messages(self.messages)
         functions = router.functions()
         try:
             input_tokens = await adapter.count_tokens(routing_messages, functions)
         except (TokenCountError, UnsupportedCapabilityError) as exc:
-            raise _Stop("capability_missing", f"router input could not be counted: {exc}") from exc
+            raise Escalation(
+                "capability_missing", f"router input could not be counted: {exc}"
+            ) from exc
 
         if not router.within_input_cap(input_tokens):
-            decision = router.bypass_decision(self.messages, self.mode)
+            decision = router.bypass_decision(self.messages, self.mode, language=self.language)
             self.emit(
                 EventType.ROUTE_SELECTED,
                 GATEWAY_ACTOR,
@@ -493,9 +769,11 @@ class _Run:
             "routing", routing_messages, functions, router.options()
         )
         try:
-            routing = router.decide(generation.calls, self.messages, mode=self.mode)
+            routing = router.decide(
+                generation.calls, self.messages, mode=self.mode, language=self.language
+            )
         except RouteDecisionError as exc:
-            raise _Stop("invalid_output", f"routing output rejected: {exc}") from exc
+            raise Escalation("invalid_output", f"routing output rejected: {exc}") from exc
         self.emit(
             EventType.ROUTE_SELECTED,
             self.actor,
@@ -592,8 +870,8 @@ class _Run:
         )
         if failure is not None:
             if failure.code == "local_budget":
-                raise BudgetExceededError("active_seconds", self.o.budgets.active_seconds)
-            raise _Stop("capability_missing", f"local generation failed: {failure.code}")
+                raise self.meter.time_exhausted()
+            raise Escalation("capability_missing", f"local generation failed: {failure.code}")
         self.meter.check_time()
         return call_id, generation
 
@@ -618,7 +896,7 @@ class _Run:
         schemas = self.o.tools.tool_schemas(n for n in skill.allowed_tools if n in available)
         if not schemas:
             # RM08: nothing the skill allows is available to this caller.
-            raise _Stop("capability_missing", f"no permitted tools for skill {skill.name!r}")
+            raise Escalation("capability_missing", f"no permitted tools for skill {skill.name!r}")
         predicate = COMPLETION_PREDICATES[skill.completion_predicate]
         tool_names = " or ".join(schema.name for schema in schemas)
         conversation: list[Message] = [
@@ -647,7 +925,7 @@ class _Run:
                 if rejection is not None and rejection["code"] == CONFIRMATION_REQUIRED:
                     # RM11: the confirmation flow (#19) is not wired here, so
                     # a mutating tool is never executed by this loop.
-                    raise _Stop("capability_missing", rejection["message"])
+                    raise Escalation("capability_missing", rejection["message"])
                 if rejection is not None:
                     purpose = self._repair_or_stop(rejection)
                     conversation += _tool_exchange(call, {"error": rejection})
@@ -656,7 +934,7 @@ class _Run:
                 result = await self._dispatch(admitted, proposal_id)
                 results.append(result)
                 if result.status is not ToolStatus.SUCCEEDED:
-                    raise _Stop(
+                    raise Escalation(
                         "tool_failure",
                         f"tool {result.tool_name!r} ended {result.status.value}",
                         operation_id=result.operation_id,
@@ -691,7 +969,7 @@ class _Run:
         """The next purpose, repair, if a repair is left; otherwise stop (RM04)."""
         if self.meter.may_repair():
             return "repair"
-        raise _Stop("invalid_output", f"unrepaired output: {problem['code']}")
+        raise Escalation("invalid_output", f"unrepaired output: {problem['code']}")
 
     def _admit(
         self,
@@ -786,7 +1064,7 @@ class _Run:
             )
         except OperationInFlightError as exc:
             # RM14: an operation in flight blocks continuation that could repeat it.
-            raise _Stop("tool_failure", str(exc), operation_id=exc.operation_id) from exc
+            raise Escalation("tool_failure", str(exc), operation_id=exc.operation_id) from exc
         self.secrets |= execution.secrets
         result = execution.result
         self.emit(
@@ -804,7 +1082,7 @@ class _Run:
         # A tool bounded by the remaining budget ends the run on budget.
         # Timer resolution can leave the trace clock just before its deadline.
         if execution.time_limit_exhausted:
-            raise BudgetExceededError("active_seconds", self.o.budgets.active_seconds)
+            raise self.meter.time_exhausted()
         self.meter.check_time()
         return execution
 
@@ -815,8 +1093,8 @@ class _Run:
         results: Sequence[ToolResult],
     ) -> str:
         """The final generation with tools disabled (section 7.3)."""
-        assert self.decision is not None
-        language_line = ANSWER_LANGUAGE[self.decision.language]
+        assert self.language is not None
+        language_line = ANSWER_LANGUAGE[self.language]
         _, generation = await self._generate(
             "final",
             (
@@ -826,10 +1104,12 @@ class _Run:
             (),
         )
         if generation.calls:
-            raise _Stop("invalid_output", "the final generation proposed a tool call")
+            raise Escalation("invalid_output", "the final generation proposed a tool call")
         answer = generation.text
         if not answer.strip() or not predicate(answer, results):
-            raise _Stop("invalid_output", "the final answer does not meet the completion criteria")
+            raise Escalation(
+                "invalid_output", "the final answer does not meet the completion criteria"
+            )
         published = self.scrub(answer)
         # A secret may span pieces; then the scrubbed answer is one delta.
         pieces = generation.pieces if published == answer else [published]
@@ -854,4 +1134,10 @@ def _tool_exchange(call: ToolCall, content: Mapping[str, Any]) -> list[Message]:
     ]
 
 
-__all__ = ["ConfiguredModel", "LocalOrchestrator", "RunOutcome"]
+__all__ = [
+    "ConfiguredModel",
+    "Escalation",
+    "LocalOrchestrator",
+    "ResumeInputError",
+    "RunOutcome",
+]

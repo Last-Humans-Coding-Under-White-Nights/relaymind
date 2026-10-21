@@ -9,8 +9,7 @@ originating model. RM16: model events and run.completed name the
 models, so a completed run identifies every actual model call and the
 final-answer model. RM25: timestamps are UTC. Part of issue #27.
 Spec 0.6 (RM22, section 8): clarification.answered follows every resume
-with input text and records the redacted input, the missing input it
-answers, and the monotonic waiting time.
+with input text, and both clarification events name the missing input.
 """
 
 import copy
@@ -81,13 +80,29 @@ REQUIRED_PAYLOAD = {
         "version": "1.0.0",
         "content_hash": "sha256:ab12",
     },
+    # Spec 0.6 section 8: the clarification payloads name the input the
+    # run waits for, and the question in the run's language.
+    "clarification.required": {
+        "question": "Which service?",
+        "language": "en",
+        "reason_code": "missing_input",
+        "skill_id": "check-service-health",
+        "missing": "service",
+        "waiting_seconds": 300.0,
+    },
     # Spec 0.6 section 8: the redacted resume input, the input it
     # answers, and the monotonic waiting time (RM25).
     "clarification.answered": {"input": "staging-api", "missing": "service", "waited_ms": 1200},
 }
 
 # Payload keys whose published schema is not plain non-blank text.
+# Spec 0.6 section 8: clarification.required carries the clarify
+# decision's skill_id (or null) and the section 11 waiting limit.
 NON_TEXT_PAYLOAD = {
+    "clarification.required": {
+        "skill_id": {"type": ["string", "null"], "pattern": "\\S"},
+        "waiting_seconds": {"type": "number", "exclusiveMinimum": 0},
+    },
     "clarification.answered": {"waited_ms": {"type": "integer", "minimum": 0}},
 }
 
@@ -248,6 +263,52 @@ def test_the_published_schema_states_the_payload_rules():
     }
 
 
+CLARIFICATION = with_changes(
+    event_type="clarification.required", payload=REQUIRED_PAYLOAD["clarification.required"]
+)
+
+
+def clarification_with(**changes):
+    data = copy.deepcopy(CLARIFICATION)
+    data["payload"].update(changes)
+    return data
+
+
+def test_a_clarification_without_a_chosen_skill_has_a_null_skill_id():
+    """Spec 0.6 section 8: skill_id is the clarify decision's skill_id, or null."""
+    event = validate_trace_event(clarification_with(skill_id=None, missing="skill_selection"))
+    assert event.payload["skill_id"] is None
+
+
+@pytest.mark.parametrize("seconds", [300, 0.5])
+def test_the_clarification_waiting_limit_is_any_positive_number(seconds):
+    """Spec 0.6 section 8: waiting_seconds is the section 11 waiting limit in force."""
+    validate_trace_event(clarification_with(waiting_seconds=seconds))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("skill_id", ""),
+        ("skill_id", " "),
+        ("skill_id", 5),
+        ("waiting_seconds", None),
+        ("waiting_seconds", 0),
+        ("waiting_seconds", -1.0),
+        ("waiting_seconds", True),
+        ("waiting_seconds", "300"),
+        # RM03: a limit is finite; infinity would be no limit (review 61 #4335042335).
+        ("waiting_seconds", float("inf")),
+        ("waiting_seconds", float("nan")),
+    ],
+)
+def test_clarification_skill_and_waiting_values_are_checked(field, value):
+    """Spec 0.6 section 8: skill_id is non-blank text or null, and
+    waiting_seconds is a positive number."""
+    with pytest.raises(TraceEventError, match=field):
+        validate_trace_event(clarification_with(**{field: value}))
+
+
 ANSWERED = with_changes(
     event_type="clarification.answered", payload=REQUIRED_PAYLOAD["clarification.answered"]
 )
@@ -281,7 +342,7 @@ def test_a_resume_answered_at_once_waited_zero_ms():
 )
 def test_clarification_answered_input_and_waiting_values_are_checked(field, value):
     """Spec 0.6 section 8: input is non-blank (redacted) text, and waited_ms
-    is a non-negative integer (RM22, RM25)."""
+    is a non-negative integer (RM25)."""
     with pytest.raises(TraceEventError, match=field):
         validate_trace_event(answered_with(**{field: value}))
 
@@ -442,11 +503,6 @@ SAMPLE_EVENTS = {
     ),
     "blank-error-code": with_changes(event_type="run.failed", payload={"error_code": " "}),
     "blank-skill-root": accepted_with(skill_roots=[" "]),
-    "answered-zero-wait": answered_with(waited_ms=0),
-    "answered-negative-wait": answered_with(waited_ms=-1),
-    "answered-float-wait": answered_with(waited_ms=1.5),
-    "answered-boolean-wait": answered_with(waited_ms=True),
-    "answered-blank-input": answered_with(input=" "),
     "blank-skill-version": accepted_with(
         skills_offered=[{"name": "n", "version": " ", "content_hash": "sha256:ab12"}]
     ),
@@ -458,9 +514,65 @@ SAMPLE_EVENTS = {
     "list-event-type": with_changes(event_type=["run.accepted"]),
     "list-execution-mode": accepted_with(requested_execution_mode=["auto"]),
     "native-run-alias": accepted_with(model_alias=None),
+    "clarification-null-skill": clarification_with(skill_id=None),
+    "clarification-blank-skill": clarification_with(skill_id=" "),
+    "clarification-integer-wait": clarification_with(waiting_seconds=300),
+    "clarification-zero-wait": clarification_with(waiting_seconds=0),
+    "clarification-boolean-wait": clarification_with(waiting_seconds=True),
+    "answered-zero-wait": answered_with(waited_ms=0),
+    "answered-negative-wait": answered_with(waited_ms=-1),
+    "answered-float-wait": answered_with(waited_ms=1.5),
+    "answered-boolean-wait": answered_with(waited_ms=True),
+    "answered-blank-input": answered_with(input=" "),
     "client-tools-alias": accepted_with(model_alias="relaymind-client-tools", skills_offered=[]),
     "unknown-alias": accepted_with(model_alias="gpt-4o"),
 }
+
+
+TIMING_FIELDS = ("external_calls", "active_ms", "waiting_ms")
+
+
+def terminal_with(event_type, **changes):
+    payload = {**REQUIRED_PAYLOAD[event_type], **changes}
+    return with_changes(event_type=event_type, payload=payload)
+
+
+@pytest.mark.parametrize("event_type", ["run.completed", "run.failed"])
+def test_terminal_timing_fields_are_non_negative_integers(event_type):
+    """Spec 0.6 section 8 / 12.1, RM16, RM25: run.completed and run.failed
+    carry model_calls (an array of calls) and external_calls, active_ms,
+    and waiting_ms as non-negative integers. A value of another shape is
+    rejected by name; 0 is valid."""
+    validate_trace_event(
+        terminal_with(
+            event_type,
+            model_calls=[{"call_id": "c1", "model": "qwen3", "actor": "local", "purpose": "x"}],
+            external_calls=0,
+            active_ms=0,
+            waiting_ms=0,
+        )
+    )
+    for field in TIMING_FIELDS:
+        for bad in (-1, 1.5, True, "3", None):
+            with pytest.raises(TraceEventError, match=field):
+                validate_trace_event(terminal_with(event_type, **{field: bad}))
+    for bad in ("calls", {"call_id": "c1"}, [1]):
+        with pytest.raises(TraceEventError, match="model_calls"):
+            validate_trace_event(terminal_with(event_type, model_calls=bad))
+
+
+SAMPLE_EVENTS.update(
+    {
+        "failed-with-timing": terminal_with(
+            "run.failed", model_calls=[], external_calls=0, active_ms=12, waiting_ms=0
+        ),
+        "failed-negative-active": terminal_with("run.failed", active_ms=-1),
+        "completed-float-waiting": terminal_with("run.completed", waiting_ms=1.5),
+        "completed-boolean-external": terminal_with("run.completed", external_calls=True),
+        "completed-text-model-calls": terminal_with("run.completed", model_calls="x"),
+        "failed-scalar-model-call": terminal_with("run.failed", model_calls=[1]),
+    }
+)
 
 
 def validator_accepts(data):

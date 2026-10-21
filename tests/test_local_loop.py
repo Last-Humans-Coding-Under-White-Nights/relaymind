@@ -26,6 +26,7 @@ import pytest
 
 from gateway_helpers import (
     LOCAL_MODEL_ID,
+    STAGING_OK,
     assert_needs_external,
     build_gateway,
     executed_tools,
@@ -47,9 +48,6 @@ from relaymind.store import TraceClock
 from relaymind.store.trace_event import TraceEventError, validate_trace_event
 from relaymind.tools import CallerContext, ToolUnavailableError
 from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
-
-STAGING_OK = "staging-api is healthy (checked at 2026-10-20T02:58:00Z)."
-PAYMENTS_OK = "payments-api is unavailable (checked at 2026-10-20T02:59:00Z)."
 
 HEALTH_RUN = [
     route_turn("check-service-health"),
@@ -285,6 +283,7 @@ def test_budget_usage_counts_routing_repair_and_tools(tmp_path):
         "repair_generations": 1,
         "tool_calls": 1,
         "active_ms": 2500,
+        "stages": 1,
     }
 
 

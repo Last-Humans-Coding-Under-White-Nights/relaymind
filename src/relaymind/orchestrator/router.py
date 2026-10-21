@@ -20,12 +20,17 @@ trusted only for the skill choice:
   ``staging-api`` does not change it. The model's language argument is
   required by the function schema but not used alone: in the probe it
   was wrong for 5 of 6 Chinese prompts. The run keeps the language of
-  its first RouteDecision (section 5).
+  its first RouteDecision (section 5): every later decision of the run
+  is given that language.
 - Missing identifiers are not left to the model (RM05). A selected skill
   whose tools all need an enumerated identifier (such as ``service``)
   gets a clarify decision with missing_input, naming that skill and the
   missing argument, when no allowed value appears in a user turn
   (``relaymind.orchestrator.identifiers``).
+- On resume after such a clarification (section 5), resume_decision
+  checks the new input for the missing identifier with the same rule,
+  without a routing generation: the chosen skill's route, or the same
+  clarify again.
 
 Anything else is invalid routing output and raises RouteDecisionError:
 no call, more than one call, an unknown function, undeclared or invalid
@@ -228,12 +233,21 @@ class Router:
             context=self.context(mode),
         )
 
-    def bypass_decision(self, messages: Sequence[Message], mode: ExecutionMode) -> RouteDecision:
-        """An oversized input skips the fast router (section 4.1)."""
+    def bypass_decision(
+        self,
+        messages: Sequence[Message],
+        mode: ExecutionMode,
+        *,
+        language: Language | None = None,
+    ) -> RouteDecision:
+        """An oversized input skips the fast router (section 4.1).
+
+        language is the run's language once it has one (section 5).
+        """
         return self._validated(
             mode,
             route=Route.EXTERNAL.value,
-            language=request_language(messages).value,
+            language=(language or request_language(messages)).value,
             reason_code="context_limit",
         )
 
@@ -252,13 +266,18 @@ class Router:
         messages: Sequence[Message],
         *,
         mode: ExecutionMode = ExecutionMode.AUTO,
+        language: Language | None = None,
     ) -> Routing:
-        """Map the routing generation's function calls to a validated decision."""
+        """Map the routing generation's function calls to a validated decision.
+
+        language is the run's language once it has one (section 5); the
+        first decision takes it from the conversation.
+        """
         if len(calls) != 1:
             raise RouteDecisionError(f"expected one routing function call, got {len(calls)}")
         call = calls[0]
         arguments = dict(call.arguments)
-        language = request_language(messages).value
+        run_language = language or request_language(messages)
         if arguments.get("language") not in ("en", "zh"):
             raise RouteDecisionError("routing call 'language' must be en or zh")
 
@@ -271,7 +290,7 @@ class Router:
             decision = self._validated(
                 mode,
                 route=Route.CLARIFY.value,
-                language=language,
+                language=run_language.value,
                 reason_code="missing_input",
                 clarification=question,
             )
@@ -282,22 +301,49 @@ class Router:
             raise RouteDecisionError(f"unknown routing function: {call.tool_name!r}")
         if set(arguments) != {"language"}:
             raise RouteDecisionError(f"skill function {skill.name!r} takes only language")
+        return self._skill_routing(skill, messages, mode, run_language)
 
-        missing = self._missing_identifier(skill, messages, Language(language))
+    def resume_decision(
+        self,
+        skill_id: str,
+        messages: Sequence[Message],
+        *,
+        mode: ExecutionMode,
+        language: Language,
+    ) -> Routing:
+        """The decision for a resume after a clarify that named skill_id (section 5).
+
+        No routing generation: the gateway checks the conversation, now
+        with the resume input, for the identifier the skill still needs.
+        """
+        skill = self._skills.get(skill_id)
+        if skill is None:
+            raise RouteDecisionError(f"skill {skill_id!r} is not in the advertised catalog")
+        return self._skill_routing(skill, messages, mode, language)
+
+    def _skill_routing(
+        self, skill: Skill, messages: Sequence[Message], mode: ExecutionMode, language: Language
+    ) -> Routing:
+        """The chosen skill's route, or clarify for a missing identifier (RM05)."""
+        missing = self._missing_identifier(skill, messages, language)
         if missing is not None:
             name, label, values = missing
             decision = self._validated(
                 mode,
                 route=Route.CLARIFY.value,
                 skill_id=skill.name,
-                language=language,
+                language=language.value,
                 reason_code="missing_input",
-                clarification=_clarification(Language(language), label, values),
+                clarification=_clarification(language, label, values),
             )
             return Routing(decision, missing=name)
         route, reason = self._route_for(skill, mode)
         decision = self._validated(
-            mode, route=route.value, skill_id=skill.name, language=language, reason_code=reason
+            mode,
+            route=route.value,
+            skill_id=skill.name,
+            language=language.value,
+            reason_code=reason,
         )
         return Routing(decision)
 

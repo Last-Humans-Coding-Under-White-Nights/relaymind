@@ -32,6 +32,11 @@ from relaymind.tools.sandbox import (
 LOCAL_MODEL_ID = "double-qwen3-0.6b"
 EXTERNAL_MODEL_ID = "double-external"
 
+# Final answers that meet the health predicate for the sandbox seed.
+STAGING_OK = "staging-api is healthy (checked at 2026-10-20T02:58:00Z)."
+PAYMENTS_OK = "payments-api is unavailable (checked at 2026-10-20T02:59:00Z)."
+PAYMENTS_ZH = "payments-api 的状态是 unavailable（不可用），检查时间为 2026-10-20T02:59:00Z。"
+
 
 @dataclass
 class Gateway:
@@ -117,6 +122,11 @@ def executed_tools(events) -> list[str]:
     return [e.payload["tool_name"] for e in of_type(events, "tool.started")]
 
 
+def purposes(events) -> list[str]:
+    """The purpose of every model call, in order (RM03)."""
+    return [e.payload["purpose"] for e in of_type(events, "model.started")]
+
+
 def replace_handler(
     gateway: Gateway, name: str, handler, *, timeout_seconds: float | None = None
 ) -> None:
@@ -157,3 +167,20 @@ def tool_turn(tool: str, call_id: str = "call_tool", **arguments) -> list:
 
 def text_turn(*pieces: str) -> list:
     return [*(TextDelta(text=piece) for piece in pieces), Completed(finish_reason="stop")]
+
+
+def clarify_turn(question: str = "Which service do you mean?", language: str = "en") -> list:
+    """The routing generation calling request_clarification (no skill chosen)."""
+    return [
+        ToolCall(
+            call_id="call_route",
+            tool_name="request_clarification",
+            arguments={"language": language, "question": question},
+        ),
+        Completed(finish_reason="tool_calls"),
+    ]
+
+
+def health_tail(service: str = "staging-api", answer: str = STAGING_OK) -> list:
+    """A health check after routing: tool call, finalize proposal, final answer."""
+    return [tool_turn("get_service_health", service=service), text_turn(answer), text_turn(answer)]

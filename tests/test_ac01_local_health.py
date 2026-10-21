@@ -181,6 +181,12 @@ def test_the_budgets_and_their_use_are_recorded(tmp_path, case):
             "active_seconds": 4.0,
             "routing_input_tokens": 2048,
             "routing_output_tokens": 128,
+            # Spec 0.6 section 11: entire-run limits, waiting, and rounds.
+            "run_active_seconds": 60.0,
+            "run_generations": 8,
+            "run_tool_executions": 6,
+            "waiting_seconds": 300.0,
+            "clarification_rounds": 2,
         }
     )
     offered = accepted.payload["skills_offered"]
