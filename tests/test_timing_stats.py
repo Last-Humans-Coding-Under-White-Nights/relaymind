@@ -531,3 +531,28 @@ def test_an_interrupted_comparison_still_exports_what_it_measured(tmp_path):
     assert [g["prompt"] for g in generations] == ["p1", "p2"]
     assert generations[0]["finish_reason"] == "stop"
     assert generations[1]["failure_code"] == "cancelled"
+
+
+def test_export_records_run_info_under_its_own_key(tmp_path):
+    # A probe export must carry what produced it (the command, cold
+    # start, prompts), so an EVIDENCE.md entry can point at one file
+    # instead of a description of a script (RM16, section 12).
+    out = tmp_path / "probe.json"
+    run_info = {"command": "python scripts/probe_timing.py probe.json", "cold_start_seconds": 1.2}
+    export_stats(
+        out,
+        identity=AdapterIdentity(adapter="llamacpp", model_id="qwen3-0.6b"),
+        records=[],
+        run_info=run_info,
+    )
+    document = json.loads(out.read_text(encoding="utf-8"))
+    assert document["run"] == run_info
+    assert document["status"] == "engineering_instrumentation"
+
+
+def test_export_without_run_info_has_no_run_key(tmp_path):
+    out = tmp_path / "plain.json"
+    export_stats(
+        out, identity=AdapterIdentity(adapter="llamacpp", model_id="qwen3-0.6b"), records=[]
+    )
+    assert "run" not in json.loads(out.read_text(encoding="utf-8"))

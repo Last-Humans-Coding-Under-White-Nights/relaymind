@@ -224,20 +224,26 @@ def export_stats(
     *,
     identity: AdapterIdentity,
     records: Sequence[GenerationStats],
+    run_info: Mapping[str, object] | None = None,
 ) -> None:
     """Write one machine-readable JSON export for one adapter config.
 
     Token counts stay per call and are never summed across different
     tokenizers (spec 12.1). The status field marks the numbers as
-    working data, never publishable results (spec 12.3).
+    working data, never publishable results (spec 12.3). run_info, when
+    given, is written under "run": what produced the numbers (the
+    command, prompts, cold start, warm-ups), so an evidence entry can
+    point at the file alone (RM16, section 12).
     """
-    document = {
+    document: dict[str, object] = {
         "schema_version": 1,
         "status": "engineering_instrumentation",
         "exported_at_utc": datetime.now(UTC).isoformat(),
         "adapter": asdict(identity),
         "generations": [asdict(record) for record in records],
     }
+    if run_info is not None:
+        document["run"] = dict(run_info)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")

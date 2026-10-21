@@ -31,7 +31,7 @@ codebase.
 | `skills/` | Demo skill packages, one directory per skill, SKILL.md format |
 | `tests/` | Test suite; `tests/fixtures/` holds sandbox demo data |
 | `scripts/` | Developer scripts: model manifest generation (RM18), evaluation and benchmarks (RM25); `scripts/README.md` lists what exists |
-| `docs/` | Spec, architecture, roadmap |
+| `docs/` | Spec, architecture, roadmap, testing guide, live evidence record (`docs/EVIDENCE.md`, raw exports in `docs/evidence/`) |
 
 ## Ownership boundaries (do not blur these)
 

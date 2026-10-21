@@ -23,6 +23,25 @@
   unwarmed, and never publishable as measured results (spec 12.3). The
   formal benchmark with warm-ups, randomized order, and percentiles is
   the latency experiment runner below.
+- `probe_timing.py` — run one reproducible timing probe against the
+  pinned local artifact and write the export a `docs/EVIDENCE.md` entry
+  points at. It verifies the GGUF against its manifest, launches
+  llama-server from the manifest's launch settings, records cold start
+  (launch to the first `/health` 200), sends warm-up rounds of both
+  prompt kinds, then runs one pass over the plain and tool-call prompts
+  in the probe definition. The export carries the 12.1 metrics per
+  generation and a `run` block with the command, prompts, system
+  prompt, tool schema, warm-up ids, server argv, and each generation's
+  answer or tool proposal (RM16, section 12). Probe definitions live in
+  `scripts/probes/`.
+
+  ```bash
+  python scripts/probe_timing.py scripts/probes/m1_timing.json \
+      --out docs/evidence/<date>-m1-timing-<machine>.json
+  ```
+
+  Single pass, sequential, concurrency one: observations, never p50 or
+  p95 (spec 12.3).
 
 ## Planned
 

@@ -40,6 +40,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   orchestrator and skill half of AC08 remains open.
 - Manual testing guide for the M1 deliverable on macOS and Windows
   (`docs/TESTING.md`).
+- Live evidence record (`docs/EVIDENCE.md`, raw exports in
+  `docs/evidence/`): the M1 live smoke run and a timing probe on Apple
+  Silicon macOS, with machine, runtime build, manifest, exact command,
+  and result. Single-pass observations, not benchmark results (spec
+  section 12.3).
+- Reproducible timing probe (`scripts/probe_timing.py` with probe
+  definitions in `scripts/probes/`): launches llama-server from the
+  manifest, records cold start, warm-ups of both prompt kinds, and one
+  measured pass, and writes an export whose `run` block names the
+  command, prompts, system prompt, tool schema, and each generation's
+  outcome (RM16, RM25). `export_stats` accepts that block as `run_info`.
 - Project scaffold: repository layout, CI, and contributor guides.
 - Specification v0.1 (`docs/SPECIFICATION.md`) as the single source of
   truth for the prototype.
@@ -48,6 +59,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Roadmap after M1: M2 split into a routing probe plus vertical slice
+  and a widening stage; required trace events (#27) moved from M4 to
+  M2; restart recovery (#8) moved from M2 to M3; Windows qualification
+  (#46) added to M1; the orchestrator half of AC08 (#49) tracked in M3.
+  Milestones now close against `docs/EVIDENCE.md`. No behavior change
+  and no spec revision.
 - Specification 0.2 → 0.3: the artifact manifest records the "runtime
   version and commit" (one composite field) instead of only a "runtime
   commit", matching the implemented `runtime_version` field.

@@ -1,0 +1,466 @@
+{
+  "schema_version": 1,
+  "status": "engineering_instrumentation",
+  "exported_at_utc": "2026-10-20T11:49:11.880199+00:00",
+  "adapter": {
+    "adapter": "llamacpp",
+    "model_id": "qwen3-0.6b",
+    "quantization": "Q8_0",
+    "runtime_version": "0.7.0 (build 11669, commit 620d2225c)"
+  },
+  "generations": [
+    {
+      "generation_id": "warmup_text_0",
+      "prompt": "Reply with exactly one word: pong",
+      "started_at_utc": "2026-10-20T11:49:07.350909+00:00",
+      "first_transport_event_seconds": 0.09160525002516806,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.09160525002516806,
+      "completion_seconds": 0.10640854202210903,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 19,
+      "output_tokens": 2,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "warmup_tool_0",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-20T11:49:07.458363+00:00",
+      "first_transport_event_seconds": 0.47503891604719684,
+      "first_model_action_seconds": 0.47503891604719684,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 186,
+      "output_tokens": 23,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "warmup_text_1",
+      "prompt": "Reply with exactly one word: pong",
+      "started_at_utc": "2026-10-20T11:49:07.934886+00:00",
+      "first_transport_event_seconds": 0.030267583031672984,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.030267583031672984,
+      "completion_seconds": 0.045829166017938405,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 19,
+      "output_tokens": 2,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "warmup_tool_1",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-20T11:49:07.981521+00:00",
+      "first_transport_event_seconds": 0.3812873339629732,
+      "first_model_action_seconds": 0.3812873339629732,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 186,
+      "output_tokens": 23,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "warmup_text_2",
+      "prompt": "Reply with exactly one word: pong",
+      "started_at_utc": "2026-10-20T11:49:08.364160+00:00",
+      "first_transport_event_seconds": 0.02903654199326411,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.02903654199326411,
+      "completion_seconds": 0.044437791977543384,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 19,
+      "output_tokens": 2,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "warmup_tool_2",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-20T11:49:08.409554+00:00",
+      "first_transport_event_seconds": 0.37884575000498444,
+      "first_model_action_seconds": 0.37884575000498444,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 186,
+      "output_tokens": 23,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "text_00",
+      "prompt": "Reply with exactly one word: pong",
+      "started_at_utc": "2026-10-20T11:49:08.789483+00:00",
+      "first_transport_event_seconds": 0.027836749970447272,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.027836749970447272,
+      "completion_seconds": 0.043551583017688245,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 19,
+      "output_tokens": 2,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "text_01",
+      "prompt": "What is the capital of France? Answer in one word.",
+      "started_at_utc": "2026-10-20T11:49:08.833756+00:00",
+      "first_transport_event_seconds": 0.043289082997944206,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.043289082997944206,
+      "completion_seconds": 0.06263237504754215,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 24,
+      "output_tokens": 2,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "text_02",
+      "prompt": "Say hello in one short sentence.",
+      "started_at_utc": "2026-10-20T11:49:08.897096+00:00",
+      "first_transport_event_seconds": 0.07212324999272823,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.07212324999272823,
+      "completion_seconds": 0.19783295801607892,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 19,
+      "output_tokens": 9,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "text_03",
+      "prompt": "\u53ea\u7528\u4e00\u4e2a\u8bcd\u56de\u7b54\uff1apong",
+      "started_at_utc": "2026-10-20T11:49:09.095810+00:00",
+      "first_transport_event_seconds": 0.043955542030744255,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.043955542030744255,
+      "completion_seconds": 0.06262083403998986,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 19,
+      "output_tokens": 2,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "text_04",
+      "prompt": "\u6cd5\u56fd\u7684\u9996\u90fd\u662f\u54ea\u91cc\uff1f\u7528\u4e00\u4e2a\u8bcd\u56de\u7b54\u3002",
+      "started_at_utc": "2026-10-20T11:49:09.159103+00:00",
+      "first_transport_event_seconds": 0.04176320799160749,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.04176320799160749,
+      "completion_seconds": 0.06136183300986886,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 23,
+      "output_tokens": 2,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "text_05",
+      "prompt": "\u7528\u4e00\u53e5\u8bdd\u6253\u4e2a\u62db\u547c\u3002",
+      "started_at_utc": "2026-10-20T11:49:09.221313+00:00",
+      "first_transport_event_seconds": 0.04675350000616163,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.04675350000616163,
+      "completion_seconds": 0.1752303340472281,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 18,
+      "output_tokens": 9,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "tool_00",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-20T11:49:09.397381+00:00",
+      "first_transport_event_seconds": 0.38177516602445394,
+      "first_model_action_seconds": 0.38177516602445394,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 186,
+      "output_tokens": 23,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "tool_01",
+      "prompt": "Check the health of payments-api.",
+      "started_at_utc": "2026-10-20T11:49:09.780580+00:00",
+      "first_transport_event_seconds": 0.38609375001396984,
+      "first_model_action_seconds": 0.38609375001396984,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 186,
+      "output_tokens": 22,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "tool_02",
+      "prompt": "Is payments-api up?",
+      "started_at_utc": "2026-10-20T11:49:10.168163+00:00",
+      "first_transport_event_seconds": 0.3845167920226231,
+      "first_model_action_seconds": 0.3845167920226231,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 184,
+      "output_tokens": 22,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "tool_03",
+      "prompt": "staging-api \u73b0\u5728\u5065\u5eb7\u5417\uff1f",
+      "started_at_utc": "2026-10-20T11:49:10.554201+00:00",
+      "first_transport_event_seconds": 0.42606045899447054,
+      "first_model_action_seconds": 0.42606045899447054,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 189,
+      "output_tokens": 23,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "tool_04",
+      "prompt": "\u68c0\u67e5 payments-api \u7684\u5065\u5eb7\u72b6\u51b5\u3002",
+      "started_at_utc": "2026-10-20T11:49:10.981730+00:00",
+      "first_transport_event_seconds": 0.3790892080287449,
+      "first_model_action_seconds": 0.3790892080287449,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 186,
+      "output_tokens": 22,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "tool_05",
+      "prompt": "payments-api \u6b63\u5e38\u8fd0\u884c\u5417\uff1f",
+      "started_at_utc": "2026-10-20T11:49:11.362372+00:00",
+      "first_transport_event_seconds": 0.38995566696394235,
+      "first_model_action_seconds": 0.38995566696394235,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 187,
+      "output_tokens": 22,
+      "cached_tokens": 0
+    }
+  ],
+  "run": {
+    "command": "python scripts/probe_timing.py scripts/probes/m1_timing.json --out docs/evidence/2026-10-20-m1-timing-apple-m1.json",
+    "passes": 1,
+    "cold_start_seconds": 1.058330166968517,
+    "cold_start_definition": "llama-server process launch to the first /health 200; the artifact was read in full for SHA-256 verification just before launch, so its pages were warm in the OS file cache",
+    "warmups": 3,
+    "warmup_generation_ids": [
+      "warmup_text_0",
+      "warmup_tool_0",
+      "warmup_text_1",
+      "warmup_tool_1",
+      "warmup_text_2",
+      "warmup_tool_2"
+    ],
+    "manifest": "qwen3-0.6b-q8_0.manifest.json",
+    "model_file": "Qwen3-0.6B-Q8_0.gguf",
+    "server_argv": [
+      "--ctx-size",
+      "8192",
+      "--jinja",
+      "--chat-template-kwargs",
+      "{\"enable_thinking\":false}"
+    ],
+    "runtime_banner": "version: 0.7.0 (build 11669, commit 620d2225c)\nbuilt with AppleClang 21.0.0.21000334 for Darwin arm64",
+    "system_prompt": "You check service health. Use the get_service_health tool to answer health questions.",
+    "tool": {
+      "name": "get_service_health",
+      "description": "Return current health for a service.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "enum": [
+              "staging-api",
+              "payments-api"
+            ]
+          }
+        },
+        "required": [
+          "service"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "text_prompts": [
+      "Reply with exactly one word: pong",
+      "What is the capital of France? Answer in one word.",
+      "Say hello in one short sentence.",
+      "\u53ea\u7528\u4e00\u4e2a\u8bcd\u56de\u7b54\uff1apong",
+      "\u6cd5\u56fd\u7684\u9996\u90fd\u662f\u54ea\u91cc\uff1f\u7528\u4e00\u4e2a\u8bcd\u56de\u7b54\u3002",
+      "\u7528\u4e00\u53e5\u8bdd\u6253\u4e2a\u62db\u547c\u3002"
+    ],
+    "tool_prompts": [
+      "Is staging-api healthy right now?",
+      "Check the health of payments-api.",
+      "Is payments-api up?",
+      "staging-api \u73b0\u5728\u5065\u5eb7\u5417\uff1f",
+      "\u68c0\u67e5 payments-api \u7684\u5065\u5eb7\u72b6\u51b5\u3002",
+      "payments-api \u6b63\u5e38\u8fd0\u884c\u5417\uff1f"
+    ],
+    "outcomes": {
+      "warmup_text_0": {
+        "answer": "pong",
+        "tool_calls": []
+      },
+      "warmup_tool_0": {
+        "answer": null,
+        "tool_calls": [
+          {
+            "tool_name": "get_service_health",
+            "arguments": {
+              "service": "staging-api"
+            }
+          }
+        ]
+      },
+      "warmup_text_1": {
+        "answer": "pong",
+        "tool_calls": []
+      },
+      "warmup_tool_1": {
+        "answer": null,
+        "tool_calls": [
+          {
+            "tool_name": "get_service_health",
+            "arguments": {
+              "service": "staging-api"
+            }
+          }
+        ]
+      },
+      "warmup_text_2": {
+        "answer": "pong",
+        "tool_calls": []
+      },
+      "warmup_tool_2": {
+        "answer": null,
+        "tool_calls": [
+          {
+            "tool_name": "get_service_health",
+            "arguments": {
+              "service": "staging-api"
+            }
+          }
+        ]
+      },
+      "text_00": {
+        "answer": "pong",
+        "tool_calls": []
+      },
+      "text_01": {
+        "answer": "Paris",
+        "tool_calls": []
+      },
+      "text_02": {
+        "answer": "Hello! How can I assist you?",
+        "tool_calls": []
+      },
+      "text_03": {
+        "answer": "\u4e52\u4e53\u7403",
+        "tool_calls": []
+      },
+      "text_04": {
+        "answer": "\u5df4\u9ece",
+        "tool_calls": []
+      },
+      "text_05": {
+        "answer": "\u4f60\u597d\uff01\u6709\u4ec0\u4e48\u6211\u53ef\u4ee5\u5e2e\u4f60\u7684\u5417\uff1f",
+        "tool_calls": []
+      },
+      "tool_00": {
+        "answer": null,
+        "tool_calls": [
+          {
+            "tool_name": "get_service_health",
+            "arguments": {
+              "service": "staging-api"
+            }
+          }
+        ]
+      },
+      "tool_01": {
+        "answer": null,
+        "tool_calls": [
+          {
+            "tool_name": "get_service_health",
+            "arguments": {
+              "service": "payments-api"
+            }
+          }
+        ]
+      },
+      "tool_02": {
+        "answer": null,
+        "tool_calls": [
+          {
+            "tool_name": "get_service_health",
+            "arguments": {
+              "service": "payments-api"
+            }
+          }
+        ]
+      },
+      "tool_03": {
+        "answer": null,
+        "tool_calls": [
+          {
+            "tool_name": "get_service_health",
+            "arguments": {
+              "service": "staging-api"
+            }
+          }
+        ]
+      },
+      "tool_04": {
+        "answer": null,
+        "tool_calls": [
+          {
+            "tool_name": "get_service_health",
+            "arguments": {
+              "service": "payments-api"
+            }
+          }
+        ]
+      },
+      "tool_05": {
+        "answer": null,
+        "tool_calls": [
+          {
+            "tool_name": "get_service_health",
+            "arguments": {
+              "service": "payments-api"
+            }
+          }
+        ]
+      }
+    },
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "python": "3.14.7"
+  }
+}

@@ -202,4 +202,6 @@ Manual terminal checks are for exploration and platform qualification
 notes (the spec's platform matrix includes Windows). Evidence for
 closing a milestone comes from the recorded automated runs: the
 deterministic suite plus the marked live tests (spec section 13, RM16:
-a manual poke is not a measured result).
+a manual poke is not a measured result). Live runs are recorded in
+[`EVIDENCE.md`](EVIDENCE.md) with the machine, runtime build, manifest,
+command, and result.
