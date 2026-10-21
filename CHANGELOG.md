@@ -74,6 +74,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.5 → 0.6: section 8 adds cross-field rules for
+  RouteDecision (clarification, and skill_id by route, mode, and the
+  enabled parallel workflow), names the `run.accepted` `model_alias`
+  field, and defines the `clarification.required` payload and the new
+  required `clarification.answered` event. Section 7.4 states that a
+  native run takes no model alias and always uses managed execution,
+  that `external_only` records a gateway-produced RouteDecision with
+  reason code `execution_mode`, and that a resume body that does not
+  match the waiting state is 400 `invalid_resume_input`. Section 4.4
+  says the operator enables the parallel workflow and which execution
+  modes admit it. RM04 scopes the explicit escalation proposal to the
+  routing decision for the MVP. Sections 5 and 11 define clarification
+  resume: continue with the chosen skill or route again, per-stage
+  local budgets with a two-round clarification limit, the run language
+  kept across resume, and the resume input and waiting time recorded
+  as evidence. After review: RM04's explicit proposal is `route=external`
+  with `complex_skill` only, the `parallel_workflow` external route is
+  gateway-produced, and `route=parallel` where the workflow is not
+  admitted is invalid output; section 8 constrains `reason_code` by
+  route, says the gateway sets the language of every later decision,
+  and defines the `run.completed` and `run.failed` payloads
+  (`active_ms`, `waiting_ms`); the resume body field is `input`
+  (section 7.4); `parallel_demo` with an unavailable workflow fails with
+  `workflow_unavailable` (503 on the chat endpoint); section 12.1 sums
+  all recorded waits; AC03 references RM22. Owners: the RouteDecision validator (#53; #14), the
+  run.accepted validator (#54; #27), and the clarification flow
+  (#61; #16).
 - Specification 0.4 → 0.5: require proxy bypass for loopback llama.cpp
   inference and startup health polls, preserving normal proxy handling
   for non-loopback endpoints and the external Chat Completions adapter
