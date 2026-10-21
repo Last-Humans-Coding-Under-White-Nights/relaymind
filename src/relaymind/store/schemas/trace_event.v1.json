@@ -131,6 +131,18 @@
                   },
                   "required": ["name", "version", "content_hash"]
                 }
+              },
+              "original_messages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "role": {"enum": ["system", "developer", "user", "assistant"]},
+                    "content": {"type": "string"}
+                  },
+                  "required": ["role", "content"],
+                  "additionalProperties": false
+                }
               }
             },
             "required": [
@@ -139,7 +151,8 @@
               "model_alias",
               "budgets",
               "skill_roots",
-              "skills_offered"
+              "skills_offered",
+              "original_messages"
             ]
           }
         }

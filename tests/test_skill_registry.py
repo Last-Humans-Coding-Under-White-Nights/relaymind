@@ -494,6 +494,7 @@ def test_the_run_snapshot_fits_the_run_accepted_payload(tmp_path):
                 "effective_execution_mode": ACCEPTED_PAYLOAD["effective_execution_mode"],
                 "model_alias": ACCEPTED_PAYLOAD["model_alias"],
                 "budgets": ACCEPTED_PAYLOAD["budgets"],
+                "original_messages": ACCEPTED_PAYLOAD["original_messages"],
                 **snapshot,
             },
         }
