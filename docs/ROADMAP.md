@@ -255,7 +255,10 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   `tests/test_error_contract.py`, `tests/test_degraded_mode.py`); the
   HTTP transport that serves the contract is the M4 API work.
 - AC08, orchestrator and skill half (#49; RM18): the same orchestrator and
-  skill packages across a local and an external swap.
+  skill packages across a local and an external swap. Implemented with
+  scripted endpoints behind the real adapters
+  (`tests/test_ac08_model_substitution.py`); no live variant, because
+  only one local artifact has a manifest.
 - Closes: AC02, AC05, AC06, AC07, AC08.
 
 ## M4 — Public API and observability

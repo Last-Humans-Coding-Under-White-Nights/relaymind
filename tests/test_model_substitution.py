@@ -14,8 +14,8 @@ whether that artifact is qualified, is pinned by the artifact manifest
 (spec section 6) and is not tied to LlamaCppConfig, so this test does
 not show a qualified-model swap. Only one artifact has a manifest so
 far. AC08 also requires the same orchestrator and skill packages to
-run unchanged across the swap; that half needs the orchestrator and
-skill registry, which do not exist yet, and is tracked in issue #5.
+run unchanged across the swap; that half is tests/test_ac08_model_substitution.py
+(issue #49).
 """
 
 import json

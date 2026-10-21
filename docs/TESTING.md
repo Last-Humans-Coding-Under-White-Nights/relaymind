@@ -73,6 +73,22 @@ itself, with the manifest's SHA-256; any other file fails the run.
   works; a second recovery changes nothing. The cancellation half of
   AC12 is #29 (M4), so AC12 is not closed yet.
 
+- AC08, deterministic: `pytest tests/test_ac08_model_substitution.py`
+  runs one managed scenario (a local skill and two local tools, a local
+  budget stop, then a handoff that finishes the run) through the real
+  orchestrator, the real llama.cpp and Chat Completions adapters over
+  scripted endpoints, and the checked-in skill packages. It runs under
+  configuration A, then under configuration B (a second local endpoint
+  and model identifier, a second external endpoint, model, and
+  credential variable), with no code change and one skill root. The two
+  traces name their own models and are otherwise equal: routing, tool
+  proposals, results, handoff content, and the request the external
+  model received. The adapter layer is `tests/test_model_substitution.py`.
+  There is no live AC08 variant: only one local artifact has a manifest
+  (`models/`, spec section 6), so a swap to a second qualified artifact
+  cannot be run yet. The second local model in the deterministic test is
+  a configuration value, not a qualified artifact.
+
 ### Required trace events (RM16, RM22, RM25)
 
 `pytest tests/test_required_trace_events.py tests/test_trace_artifacts.py`

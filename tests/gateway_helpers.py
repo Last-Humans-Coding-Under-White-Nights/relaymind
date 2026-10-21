@@ -82,12 +82,17 @@ def build_gateway(
     external_turns=None,
     external_capabilities=None,
     skill_roots=None,
+    local_model: ConfiguredModel | None = None,
+    external_model: ConfiguredModel | None = None,
     **options,
 ) -> Gateway:
     """A gateway over a fresh sandbox; options go to LocalOrchestrator.
 
     external_turns scripts the external model (RM13); without it none
     is configured. skill_roots replaces the checked-in demo skills.
+    local_model and external_model replace the model doubles with
+    configured models over real adapters (AC08); gateway.adapter and
+    gateway.external are then those adapters.
     """
     clock = clock or FakeClock()
     tools = ToolRegistry(clock=clock)
@@ -111,22 +116,33 @@ def build_gateway(
         turns=external_turns or [], capabilities=external_capabilities, locality="external"
     )
     store = RunStore(tmp_path / "runs.sqlite3", clock=clock)
+    local = local_model or ConfiguredModel(adapter=adapter, model_id=LOCAL_MODEL_ID)
+    remote = external_model or (
+        None
+        if external_turns is None
+        else ConfiguredModel(adapter=external, model_id=EXTERNAL_MODEL_ID)
+    )
     orchestrator = LocalOrchestrator(
-        ConfiguredModel(adapter=adapter, model_id=LOCAL_MODEL_ID),
+        local,
         skills=skills,
         tools=tools,
         store=store,
         policy=OperatorPolicy(enabled_tools=DEMO_TOOL_NAMES),
         caller=caller or CallerContext(permissions=frozenset({READ_PERMISSION})),
         budgets=budgets or LocalBudgets(),
-        external=(
-            None
-            if external_turns is None
-            else ConfiguredModel(adapter=external, model_id=EXTERNAL_MODEL_ID)
-        ),
+        external=remote,
         **options,
     )
-    return Gateway(orchestrator, adapter, external, store, sandbox, tools, skills, clock)
+    return Gateway(
+        orchestrator,
+        local.adapter,
+        remote.adapter if remote else external,
+        store,
+        sandbox,
+        tools,
+        skills,
+        clock,
+    )
 
 
 def run(gateway: Gateway, prompt: str = "Is staging-api healthy right now?", **options):
