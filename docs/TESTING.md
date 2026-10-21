@@ -114,8 +114,11 @@ itself, with the manifest's SHA-256; any other file fails the run.
   an unmet evidence predicate that cannot finalize, and a provider
   failure after the first chunk (an error event, no finish chunk, no
   `[DONE]`, no replacement answer), in process and with the OpenAI SDK
-  over a loopback socket. The failing provider is a backend double; the
-  production live backend is issue #24.
+  over a loopback socket. It also checks that a provider failure before
+  any answer text, or in a request without stream, is a normal 503
+  `external_failed` response, and that a client disconnect closes the
+  provider stream without recording a failure. The failing provider is a
+  backend double; the production live backend is issue #24.
 
 ### Required trace events (RM16, RM22, RM25)
 

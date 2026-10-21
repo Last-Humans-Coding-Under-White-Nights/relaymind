@@ -24,9 +24,16 @@ from dataclasses import dataclass
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
+from starlette.types import Receive, Scope, Send
 
 from relaymind.api.auth import require_bearer_token
-from relaymind.api.chat import ChatBackend, ManagedChat, completion_body, stream_chunks
+from relaymind.api.chat import (
+    ChatBackend,
+    ManagedChat,
+    collect_live,
+    completion_body,
+    open_stream,
+)
 from relaymind.api.chat_request import (
     CLIENT_TOOLS,
     MANAGED,
@@ -124,17 +131,37 @@ def create_app(
         headers = {RUN_ID_HEADER: result.run_id}
         created = int(time.time())
         if chat.stream:
-            return StreamingResponse(
-                stream_chunks(chat.alias, result, created),
+            # Started here, so a failure before the first chunk still has its status.
+            lines = await open_stream(chat.alias, result, created)
+            return _ClosingStream(
+                lines,
                 media_type="text/event-stream",
                 headers={**headers, "Cache-Control": "no-cache"},
             )
+        result = await collect_live(result)
         return JSONResponse(completion_body(chat.alias, result, created), headers=headers)
 
     return app
 
 
 _Handler = Callable[[Request], Awaitable[Response]]
+
+
+class _ClosingStream(StreamingResponse):
+    """A stream whose lines are closed however the response ends.
+
+    Starlette leaves the body iterator suspended when the client goes
+    away; closing it closes a live provider stream, which is the
+    cancellation request of a chat disconnect (section 7.4).
+    """
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            aclose = getattr(self.body_iterator, "aclose", None)
+            if aclose is not None:
+                await aclose()
 
 
 def _guarded(handler: _Handler) -> _Handler:

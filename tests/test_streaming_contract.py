@@ -8,6 +8,10 @@ replacement answer. A skill whose evidence predicate is unmet cannot
 finalize. Deterministic: the orchestrator runs over model doubles.
 """
 
+import asyncio
+import json
+import logging
+
 import httpx
 import openai
 import pytest
@@ -30,7 +34,7 @@ from gateway_helpers import (
 )
 from helpers import of_type
 from relaymind.adapters import ToolCall
-from relaymind.api.chat import ChatResult, LiveAnswer
+from relaymind.api.chat import ChatResult, LiveAnswer, StreamAborted
 from relaymind.api.chat_request import CLIENT_TOOLS, MANAGED
 from relaymind.orchestrator.budgets import LocalBudgets
 
@@ -59,24 +63,33 @@ class LiveBackend:
     """A client-owned backend double that forwards provider text as it arrives.
 
     The provider yields the given pieces and then, when fail_with is
-    set, raises. fail stands for the backend recording run.failed; by
-    default it notes the run id in failed.
+    set, raises; with hang set it waits forever instead of ending. fail
+    stands for the backend recording run.failed; by default it notes
+    the run id in failed. closed turns true when the provider stream is
+    closed, which is how the gateway requests cancellation.
     """
 
-    def __init__(self, pieces, *, fail_with=None, fail=None):
+    def __init__(self, pieces, *, fail_with=None, fail=None, hang=False):
         self.pieces = pieces
         self.fail_with = fail_with
+        self.hang = hang
         self.failed: list[str] = []
         self.fail = fail or (lambda: self.failed.append("run_live"))
         self.delivered: list[str] = []
+        self.closed = False
 
     async def complete(self, request, mode):
         async def provider():
-            for piece in self.pieces:
-                self.delivered.append(piece)
-                yield piece
-            if self.fail_with is not None:
-                raise self.fail_with
+            try:
+                for piece in self.pieces:
+                    self.delivered.append(piece)
+                    yield piece
+                if self.hang:
+                    await asyncio.Event().wait()
+                if self.fail_with is not None:
+                    raise self.fail_with
+            finally:
+                self.closed = True
 
         return ChatResult(
             run_id="run_live",
@@ -168,6 +181,7 @@ def test_managed_content_chunks_are_exactly_the_published_answer_deltas(tmp_path
 
 
 def test_the_stream_never_shortens_or_rewrites_what_a_plain_response_says(tmp_path):
+    """RM20, AC09: the joined content chunks are the answer of the plain response."""
     plain = chat(make_app(healthy_gateway(tmp_path / "a"))).json()
     streamed = chat(make_app(healthy_gateway(tmp_path / "b")), stream=True)
     text = "".join(c["choices"][0]["delta"].get("content", "") for c in sse_events(streamed)[:-1])
@@ -188,6 +202,7 @@ def test_the_final_generation_runs_with_tools_disabled(tmp_path):
 
 
 def test_a_live_stream_forwards_pieces_in_order_and_finishes_once(tmp_path):
+    """RM20, AC09: a live stream forwards each piece in order, then one finish chunk."""
     backend = LiveBackend(PIECES)
     app = make_app(healthy_gateway(tmp_path), client_tools=backend)
     events = live_stream(app)
@@ -199,6 +214,7 @@ def test_a_live_stream_forwards_pieces_in_order_and_finishes_once(tmp_path):
 
 
 def test_a_live_stream_skips_empty_pieces(tmp_path):
+    """RM20: no empty heartbeat chunks, even when the provider yields empty text."""
     backend = LiveBackend(("a", "", "b"))
     app = make_app(healthy_gateway(tmp_path), client_tools=backend)
     assert contents(live_stream(app)[1:-2]) == ["a", "b"]
@@ -240,6 +256,7 @@ def test_no_replacement_answer_follows_a_mid_stream_failure(tmp_path):
 
 
 def test_a_failing_recorder_still_ends_the_stream_without_a_success_marker(tmp_path):
+    """RM20, section 11: a run.failed write that fails never turns into a success marker."""
 
     def broken():
         raise RuntimeError("store is closed")
@@ -284,6 +301,157 @@ def test_the_sdk_sees_a_mid_stream_failure_as_an_error_over_a_socket(tmp_path):
     assert PROVIDER_TEXT not in str(caught.value)
     assert [c.choices[0].delta.content for c in received[1:]] == list(PIECES[:2])
     assert all(c.choices[0].finish_reason is None for c in received)
+    assert backend.failed == ["run_live"]
+
+
+@pytest.mark.parametrize("pieces", [(), ("",)], ids=["no_piece", "empty_piece"])
+def test_a_provider_failure_before_any_answer_text_is_a_normal_error_response(tmp_path, pieces):
+    """RM20, section 11: before answer text is sent, the status line can still say it failed."""
+    backend = LiveBackend(pieces, fail_with=RuntimeError(PROVIDER_TEXT))
+    app = make_app(healthy_gateway(tmp_path), client_tools=backend)
+    response = chat(app, model=CLIENT_TOOLS, stream=True)
+    assert response.status_code == 503
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers[RUN_ID_HEADER] == "run_live"
+    assert response.json()["error"]["code"] == "external_failed"
+    assert response.json()["error"]["run_id"] == "run_live"
+    assert PROVIDER_TEXT not in response.text and "sk-live" not in response.text
+    assert backend.failed == ["run_live"]
+    assert backend.closed
+
+
+def test_a_live_answer_in_a_plain_response_is_the_whole_answer(tmp_path):
+    """RM20, AC09: stream false collects the live answer; it is never an empty success."""
+    backend = LiveBackend(("a", "", "b"))
+    app = make_app(healthy_gateway(tmp_path), client_tools=backend)
+    response = chat(app, model=CLIENT_TOOLS)
+    assert response.status_code == 200
+    choice = response.json()["choices"][0]
+    assert choice["message"]["content"] == "ab" and choice["finish_reason"] == "stop"
+    assert backend.failed == [] and backend.closed
+
+
+def test_a_live_answer_that_fails_in_a_plain_response_is_a_normal_error_response(tmp_path):
+    """RM20, section 11: no partial text as an answer; the run is recorded as failed."""
+    backend = LiveBackend(PIECES[:2], fail_with=RuntimeError(PROVIDER_TEXT))
+    app = make_app(healthy_gateway(tmp_path), client_tools=backend)
+    response = chat(app, model=CLIENT_TOOLS)
+    assert response.status_code == 503
+    assert response.json()["error"] == {
+        "code": "external_failed",
+        "message": response.json()["error"]["message"],
+        "run_id": "run_live",
+    }
+    assert PROVIDER_TEXT not in response.text and PIECES[0] not in response.text
+    assert backend.failed == ["run_live"]
+
+
+def test_a_result_cannot_be_both_tool_calls_and_a_live_answer():
+    """RM20: one terminal path per stream; a live answer is never silently dropped."""
+
+    async def provider():
+        yield "text"
+
+    with pytest.raises(ValueError, match="live"):
+        ChatResult(
+            run_id="run_client",
+            content=None,
+            finish_reason="tool_calls",
+            tool_calls=tool_call_result().tool_calls,
+            live=LiveAnswer(pieces=provider(), fail=lambda: None),
+        )
+
+
+async def disconnect_after_first_content(app, backend):
+    """Drive the ASGI app directly; the client goes away after the first content chunk."""
+    body = json.dumps({"model": CLIENT_TOOLS, "messages": MESSAGES, "stream": True}).encode()
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/v1/chat/completions",
+        "raw_path": b"/v1/chat/completions",
+        "query_string": b"",
+        "root_path": "",
+        "server": ("127.0.0.1", 80),
+        "client": ("127.0.0.1", 50000),
+        "headers": [
+            (b"authorization", f"Bearer {token_of(app)}".encode()),
+            (b"content-type", b"application/json"),
+        ],
+    }
+    gone = asyncio.Event()
+    sent: list[bytes] = []
+    requested = False
+
+    async def receive():
+        nonlocal requested
+        if not requested:
+            requested = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        await gone.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        if message["type"] == "http.response.body":
+            sent.append(message.get("body", b""))
+            if b'"content": "' + PIECES[0].encode() in message.get("body", b""):
+                # The client goes away while this chunk is still being written.
+                gone.set()
+                await asyncio.sleep(5)
+
+    await asyncio.wait_for(app(scope, receive, send), timeout=5)
+    # Checked before the event loop shuts down and finalizes leftover generators.
+    return b"".join(sent).decode(), backend.closed
+
+
+def test_a_client_disconnect_closes_the_provider_stream(tmp_path):
+    """RM20, section 7.4: a chat disconnect requests cancellation; it is not a provider failure."""
+    backend = LiveBackend(PIECES[:1], hang=True)
+    app = make_app(healthy_gateway(tmp_path), client_tools=backend)
+    text, closed = asyncio.run(disconnect_after_first_content(app, backend))
+    assert "[DONE]" not in text
+    assert closed, "the provider stream was left open after the client went away"
+    assert backend.failed == []
+
+
+class Records(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record):
+        self.records.append(record)
+
+
+def test_a_mid_stream_failure_logs_one_line_without_a_traceback(tmp_path):
+    """RM12, section 11: the expected abort is not logged by the server as an app crash."""
+    backend = LiveBackend(PIECES[:1], fail_with=RuntimeError(PROVIDER_TEXT))
+    app = make_app(healthy_gateway(tmp_path), client_tools=backend)
+    server = RunningServer(app)  # configures the server loggers, so the handler comes after
+    server_log = logging.getLogger("uvicorn.error")
+    records = Records()
+    server_log.addHandler(records)
+    try:
+        with server as running:
+            client = openai.OpenAI(
+                api_key=token_of(app),
+                base_url=running.base_url,
+                http_client=httpx.Client(trust_env=False),
+                max_retries=0,
+            )
+            stream = client.chat.completions.create(
+                model=CLIENT_TOOLS, messages=MESSAGES, stream=True
+            )
+            with pytest.raises(openai.APIError):
+                for _ in stream:
+                    pass
+    finally:
+        server_log.removeHandler(records)
+    aborts = [r for r in records.records if r.exc_info and isinstance(r.exc_info[1], StreamAborted)]
+    assert aborts == []
     assert backend.failed == ["run_live"]
 
 

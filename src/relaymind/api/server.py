@@ -4,12 +4,20 @@ The bind address is checked before a server object exists, so a
 public address is a startup error and never reaches a socket. The
 rule is the one of spec section 6: ``localhost`` or an IPv4 or IPv6
 loopback literal, with no DNS lookup.
+
+A stream that fails after its first chunk ends with ``StreamAborted``,
+the only way to close a started response. The gateway has already
+logged that failure in one line (RM12), so the server does not log it
+again as a crash with a traceback.
 """
+
+import logging
 
 import uvicorn
 from fastapi import FastAPI
 
 from relaymind.adapters.local_http import is_loopback_host
+from relaymind.api.chat import StreamAborted
 
 __all__ = ["build_server", "serve", "validate_bind_host"]
 
@@ -27,9 +35,21 @@ def validate_bind_host(host: str) -> str:
     return host.removeprefix("[").removesuffix("]")
 
 
+class _ExpectedAborts(logging.Filter):
+    """Drops the server's crash record of an aborted stream; every other record passes."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not (record.exc_info and isinstance(record.exc_info[1], StreamAborted))
+
+
+_EXPECTED_ABORTS = _ExpectedAborts()
+
+
 def build_server(app: FastAPI, *, host: str = "127.0.0.1", port: int = 8080) -> uvicorn.Server:
     """A uvicorn server for app on a validated loopback host."""
     config = uvicorn.Config(app, host=validate_bind_host(host), port=port, log_level="warning")
+    # After the config, which sets up the server loggers; adding the one filter twice is a no-op.
+    logging.getLogger("uvicorn.error").addFilter(_EXPECTED_ABORTS)
     return uvicorn.Server(config)
 
 
