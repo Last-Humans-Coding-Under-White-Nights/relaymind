@@ -36,8 +36,12 @@ workaround are recorded with that run.
 Automatic loopback proxy bypass is implemented with deterministic coverage in
 [#57](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/57);
 the historical Windows run used a session workaround and predates this fix.
-Reasoning-control migration at the next runtime update is
-[#58](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/58).
+The reasoning-control migration
+([#58](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/58),
+#63) requalified llama.cpp b11785 with `--reasoning off` on both target
+platforms; the live runs are recorded in [`EVIDENCE.md`](EVIDENCE.md),
+separately from the historical runtime evidence. The M1 milestone is
+closed.
 
 What M1 did not test, and M2 therefore must: skill selection among
 several descriptions, the RouteDecision envelope, and Chinese input. The
