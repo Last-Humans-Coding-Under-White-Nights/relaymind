@@ -13,14 +13,19 @@ values never reach a response (RM12).
 """
 
 from relaymind.orchestrator.local_loop import (
+    APPROVAL_EXPIRED,
     CONTEXT_LIMIT_EXCEEDED,
     EXTERNAL_FAILED,
+    INPUT_EXPIRED,
     INTERNAL_ERROR,
+    MISSING_INPUT,
     NEEDS_EXTERNAL,
     ApprovalRejectedError,
     ResumeInputError,
     RunOutcome,
+    aborted_run_id,
 )
+from relaymind.orchestrator.recovery import INTERRUPTED
 from relaymind.orchestrator.run_state import (
     InvalidTransitionError,
     RunState,
@@ -55,7 +60,7 @@ STATUS_BY_CODE: dict[str, int] = {
 # Time limits: a run stopped by one of these is a deadline, not an outage.
 DEADLINE_BUDGETS = frozenset({"run_active_seconds", "external_seconds"})
 # Failed runs that are run state, not an error of the request (section 11).
-NOT_AN_ERROR = frozenset({"missing_input", "input_expired", "approval_expired", "interrupted"})
+NOT_AN_ERROR = frozenset({MISSING_INPUT, INPUT_EXPIRED, APPROVAL_EXPIRED, INTERRUPTED})
 INTERNAL_MESSAGE = "an internal error occurred"
 WORKFLOW_UNAVAILABLE = "workflow_unavailable"
 
@@ -92,6 +97,8 @@ class ApiError(Exception):
 
 
 # Most specific first: TerminalStateError is an InvalidTransitionError.
+# Each exception also declares its http_status (and code, when it has
+# one); a test keeps them equal to this mapping.
 _KNOWN: tuple[tuple[type[Exception], str], ...] = (
     (ResumeInputError, "invalid_resume_input"),
     (ApprovalRejectedError, "approval_invalid"),
@@ -104,9 +111,17 @@ _KNOWN: tuple[tuple[type[Exception], str], ...] = (
 
 
 def error_from_exception(exc: BaseException, *, run_id: str | None = None) -> ApiError:
-    """The documented error for an exception; anything unknown is internal_error."""
+    """The documented error for an exception; anything unknown is internal_error.
+
+    An exception raised by a run's own work is internal_error whatever
+    its type: the run already ended as failed with internal_error, and
+    the request was not at fault (sections 5, 11).
+    """
     if isinstance(exc, ApiError):
         return exc
+    aborted = aborted_run_id(exc)
+    if aborted is not None:
+        return ApiError("internal_error", INTERNAL_MESSAGE, run_id=aborted)
     for kind, code in _KNOWN:
         if isinstance(exc, kind):
             return ApiError(code, str(exc), run_id=getattr(exc, "run_id", None) or run_id)

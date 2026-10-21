@@ -109,6 +109,10 @@ def test_an_exhausted_local_budget_without_external_dispatch_returns_needs_exter
 
     assert_needs_external(gateway, outcome, events, "local_budget")
     assert len(gateway.store.tool_operations(outcome.run_id)) == 2
+    # RunOutcome.budget names the limit that stopped the run, as run.failed does.
+    (failed,) = of_type(events, "run.failed")
+    assert outcome.budget is not None
+    assert outcome.budget == failed.payload["budget"]
     error = error_from_outcome(outcome)
     assert (error.status, error.code, error.reason_code) == (422, "needs_external", "local_budget")
 

@@ -86,8 +86,8 @@ active budget, whichever is shorter.
    Some stops never hand off (section 4.4): an admitted parallel route,
    because the parallel workflow (RM15) is not wired yet; an unavailable
    local model unless the operator policy permits degraded mode (section
-   11), which records route.selected with mechanism degraded_mode when no
-   decision exists yet, and degraded_mode and local_failure in
+   11), which records route.selected with mechanism degraded_mode when the
+   stage has no routing decision yet, and degraded_mode and local_failure in
    handoff.started; and a selected skill with no permitted tool (RM08).
 
 Any other exception, in the first stage or after a resume, fails the
@@ -281,6 +281,21 @@ class RunOutcome:
     budget: str | None = None
 
 
+# The attribute that marks an exception raised by a run's own work (section 11).
+_ABORTED_RUN = "_relaymind_aborted_run"
+
+
+def aborted_run_id(exc: BaseException) -> str | None:
+    """The run whose own work raised exc, or None for any other exception.
+
+    Such a run already ended as failed with internal_error or as
+    cancelled (section 5), so the exception is never an error of the
+    request, whatever its type (section 11).
+    """
+    run_id = getattr(exc, _ABORTED_RUN, None)
+    return run_id if isinstance(run_id, str) else None
+
+
 class ResumeInputError(ValueError):
     """A resume body that does not match the waiting state (400, sections 7.4, 11).
 
@@ -314,9 +329,11 @@ class Escalation(Exception):
     hand_off is False for a stop that must not reach the external model:
     one the external stage could not resolve either, such as a skill with
     no permitted tool (RM08); an admitted parallel route, whose workflow
-    (RM15) is not wired yet; and an unavailable local model, since no
-    operator policy permits degraded mode (section 11). Such a stop
-    ends as needs_external without a handoff (section 4.4).
+    (RM15) is not wired yet; and an unavailable local model when the
+    operator policy does not permit degraded mode (section 11). Such a
+    stop ends as needs_external without a handoff (section 4.4). With
+    degraded mode permitted, an unavailable local model hands off like
+    any other stop, and degraded is set so the trace records it.
     """
 
     def __init__(
@@ -1039,6 +1056,7 @@ class _Run:
             error_code=NEEDS_EXTERNAL,
             reason_code=stop.reason_code,
             decision=self.decision,
+            budget=stop.extra.get("budget"),
         )
 
     def _abort(self, exc: BaseException) -> None:
@@ -1048,7 +1066,13 @@ class _Run:
         was cancelled; either way the slot is released. Only the
         exception type is recorded: a message may carry data (RM12). A
         failure to record this never hides the original exception.
+        The exception is marked with the run, so the API reports it as
+        internal_error, never as an error of the request (section 11).
         """
+        try:
+            setattr(exc, _ABORTED_RUN, self.run_id)
+        except Exception:
+            pass
         try:
             self.record = self.o.machine.get(self.run_id)
             if RunState(self.record.state) in TERMINAL_STATES:
@@ -1200,7 +1224,7 @@ class _Run:
                     "allowed_tools": list(envelope.allowed_tools),
                     "request": size.to_json_object(),
                     **(
-                        {"degraded_mode": True, "local_failure": stop.detail}
+                        {"degraded_mode": True, "local_failure": self.scrub(stop.detail)}
                         if stop.degraded
                         else {}
                     ),
@@ -1217,8 +1241,13 @@ class _Run:
         return await self._run_external(loop, stop)
 
     def _record_degraded_route(self) -> None:
-        """Before any routing decision exists, the gateway records its own (section 11)."""
-        if self.decision is not None:
+        """Before any routing decision exists, the gateway records its own (section 11).
+
+        A clarify decision belongs to the stage before the wait: a
+        resumed stage that failed while routing again has no decision
+        yet (section 5).
+        """
+        if self.decision is not None and self.decision.route is not Route.CLARIFY:
             return
         decision = self.o.router.degraded_decision(self.messages, self.mode, language=self.language)
         self.decision = decision
@@ -2036,4 +2065,5 @@ __all__ = [
     "LocalOrchestrator",
     "ResumeInputError",
     "RunOutcome",
+    "aborted_run_id",
 ]

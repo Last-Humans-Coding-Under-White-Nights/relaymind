@@ -10,6 +10,9 @@ policy the run ends as needs_external (RM04). Deterministic, with
 scripted model doubles.
 """
 
+import asyncio
+import json
+
 import pytest
 
 from gateway_helpers import (
@@ -17,15 +20,19 @@ from gateway_helpers import (
     STAGING_OK,
     assert_needs_external,
     build_gateway,
+    clarify_turn,
+    local_eligible_skills,
     route_turn,
     run,
+    seed_with,
     text_turn,
     tool_turn,
 )
-from helpers import make_capabilities, of_type
+from helpers import BASELINE, make_capabilities, of_type
 from relaymind.adapters import GenerationFailed
 from relaymind.api.errors import error_from_outcome
 from relaymind.orchestrator.run_state import RunState
+from relaymind.redaction import Redactor
 
 UNREACHABLE = [GenerationFailed(code="unreachable", message="no route to host")]
 HEALTH_EXTERNAL = [tool_turn("get_service_health", call_id="e1", service="staging-api")]
@@ -165,3 +172,73 @@ def test_an_ordinary_handoff_does_not_claim_degraded_mode(tmp_path):
     (handoff,) = of_type(events, "handoff.started")
     assert "degraded_mode" not in handoff.payload
     assert "local_failure" not in handoff.payload
+
+
+def test_a_degraded_handoff_after_a_clarification_records_its_own_decision(tmp_path):
+    """Section 11: the resumed stage has no routing decision yet; the gateway records one.
+
+    The clarify decision belongs to the stage before the wait (section
+    5). When the routing generation of the resumed stage fails, the trace
+    shows route.selected with mechanism degraded_mode before
+    handoff.started, and the outcome reports the external decision.
+    """
+    gateway = build_gateway(
+        tmp_path,
+        [clarify_turn(), UNREACHABLE],
+        external_turns=[text_turn(STAGING_OK)],
+        degraded_mode=True,
+    )
+    orchestrator = gateway.orchestrator
+    waiting = asyncio.run(orchestrator.run_text("Is the service healthy?"))
+    assert waiting.state is RunState.WAITING_INPUT
+    version = gateway.store.get_run(waiting.run_id).version
+    outcome = asyncio.run(orchestrator.resume(waiting.run_id, version, "staging-api"))
+    events = gateway.store.events(outcome.run_id)
+
+    assert outcome.state is RunState.COMPLETED
+    assert [e.payload["mechanism"] for e in of_type(events, "route.selected")] == [
+        "native_function_calling",
+        "degraded_mode",
+    ]
+    types = [e.event_type for e in events]
+    assert types.index("clarification.answered") < max(
+        i for i, t in enumerate(types) if t == "route.selected"
+    )
+    assert max(i for i, t in enumerate(types) if t == "route.selected") < types.index(
+        "handoff.started"
+    )
+    assert outcome.decision.route.value == "external"
+    assert outcome.decision.reason_code == "capability_missing"
+
+
+def test_the_local_failure_in_the_trace_is_scrubbed_of_known_secrets(tmp_path):
+    """RM12, section 8: a secret seen in a tool result never reaches local_failure.
+
+    handoff.started records the cause of the local failure, which is
+    adapter text like the error message of model.finished, so the run's
+    known secret values are scrubbed from it.
+    """
+    secret = "svc-account:K9x2-live-7731"
+    services = json.loads(BASELINE.read_text("utf-8"))["services"]
+    services["staging-api"]["logs"][0].update(source=secret)
+    gateway = build_gateway(
+        tmp_path,
+        [
+            route_turn("investigate-performance"),
+            tool_turn("get_recent_logs", call_id="c1", service="staging-api", limit=3),
+            [GenerationFailed(code=f"refused {secret}", message="x")],
+        ],
+        skill_roots=local_eligible_skills(tmp_path),
+        seed=seed_with(tmp_path, services=services),
+        redactor=Redactor(secret_fields={"source"}),
+        external_turns=[[GenerationFailed(code="down", message="x")]],
+        external_capabilities=make_capabilities(tokenizer_available=False),
+        degraded_mode=True,
+    )
+    outcome, events = run(gateway, "Why is staging-api slow right now?")
+
+    assert outcome.error_code == "external_failed"
+    (handoff,) = of_type(events, "handoff.started")
+    assert handoff.payload["degraded_mode"] is True
+    assert handoff.payload["local_failure"].startswith("local generation failed: refused")
+    assert secret not in handoff.payload["local_failure"]

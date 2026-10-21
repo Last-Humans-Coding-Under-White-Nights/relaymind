@@ -15,9 +15,13 @@ import pytest
 
 from gateway_helpers import build_gateway, clarify_turn, health_tail, route_turn, tool_turn
 from relaymind.api.auth import require_bearer_token
-from relaymind.api.errors import STATUS_BY_CODE, ApiError, error_from_exception
+from relaymind.api.errors import _KNOWN, STATUS_BY_CODE, ApiError, error_from_exception
 from relaymind.orchestrator.local_loop import ApprovalRejectedError, ResumeInputError
-from relaymind.orchestrator.run_state import RunState, SlotUnavailableError
+from relaymind.orchestrator.run_state import (
+    InvalidTransitionError,
+    RunState,
+    SlotUnavailableError,
+)
 from relaymind.store import RunNotFoundError, StaleVersionError
 from relaymind.tools import CallerContext
 from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
@@ -232,3 +236,37 @@ def test_an_unexpected_error_is_500_with_a_fixed_message(tmp_path):
 def test_an_api_error_passes_through_unchanged():
     original = ApiError("unsupported_parameter", "parameter n must be 1")
     assert error_from_exception(original) is original
+
+
+def test_a_state_error_raised_inside_a_run_s_own_work_is_500(tmp_path):
+    """Section 11: a gateway bug inside a run is internal_error, as its run.failed says.
+
+    The run ended as failed with internal_error (section 5), so the
+    response must not be a 409 that blames the request, and the
+    exception text must not reach it.
+    """
+    failures = [
+        InvalidTransitionError("run run_x is routing, not local_running"),
+        StaleVersionError("run_x", 1, 2),
+    ]
+    for index, failure in enumerate(failures):
+
+        def crash(request, failure=failure):
+            raise failure
+
+        gateway = build_gateway(tmp_path / str(index), [route_turn("check-service-health")])
+        gateway.adapter.on_generate = crash
+        with pytest.raises(type(failure)) as caught:
+            start(gateway)
+        (run_id,) = [row[0] for row in gateway.store._conn.execute("SELECT run_id FROM runs")]
+        assert gateway.store.get_run(run_id).error_code == "internal_error"
+        error = error_from_exception(caught.value)
+        assert (error.status, error.code, error.run_id) == (500, "internal_error", run_id)
+        assert "run_x" not in error.message
+
+
+@pytest.mark.parametrize(("kind", "code"), _KNOWN)
+def test_each_mapped_exception_declares_the_status_and_code_of_its_mapping(kind, code):
+    """One status per code: an exception's own http_status and code agree with the table."""
+    assert kind.http_status == STATUS_BY_CODE[code]
+    assert getattr(kind, "code", code) == code

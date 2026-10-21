@@ -30,15 +30,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   per code (400, 401, 403, 404, 409, 422, 429, 500, 503, 504), and the
   mapping of orchestrator exceptions (`error_from_exception`) and failed
   runs (`error_from_outcome`: `external_failed` is 503, or 504 when a
-  time limit stopped it; `context_limit_exceeded` is 400). Internal
-  errors carry a fixed message and no credentials.
+  time limit stopped it; `context_limit_exceeded` is 400). An exception
+  raised by a run's own work is 500 `internal_error` whatever its type,
+  as its `run.failed` event says. Internal errors carry a fixed message
+  and no credentials.
   `relaymind.api.auth.require_bearer_token` gives 401 `unauthenticated`.
-  `RunOutcome.budget` names the limit that stopped a failed run.
+  `RunOutcome.budget` names the limit that stopped a failed run, as the
+  `budget` field of its `run.failed` event does.
   Degraded mode is an operator policy (`degraded_mode`, off by default):
   an unavailable local model hands off to the external model, with the
   evidence so far, when external dispatch is permitted. The trace records
-  it as `route.selected` with mechanism `degraded_mode` (when no decision
-  existed) and `degraded_mode` and `local_failure` in `handoff.started`.
+  it as `route.selected` with mechanism `degraded_mode` (when the stage
+  had no routing decision, also after a clarification) and
+  `degraded_mode` and `local_failure` (scrubbed of known secrets) in
+  `handoff.started`.
   `tests/test_error_contract.py`, `tests/test_ac07_failure_behavior.py`,
   and `tests/test_degraded_mode.py` cover every status, the bounded
   failure after an exhausted local budget, and degraded mode.
