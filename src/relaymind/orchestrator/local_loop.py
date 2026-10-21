@@ -116,6 +116,7 @@ are persisted (RM12, section 8).
 """
 
 import asyncio
+import contextlib
 import hashlib
 import hmac
 import json
@@ -1361,14 +1362,6 @@ class _Run:
             budget=stop.extra.get("budget"),
         )
 
-    @staticmethod
-    async def _cancel_generation(adapter: ModelAdapter, call_id: str) -> None:
-        """Ask an adapter to stop one generation; its own failure never hides the cancel."""
-        try:
-            await adapter.cancel(call_id)
-        except Exception:
-            pass
-
     def _abort(self, exc: BaseException) -> None:
         """End a run an unexpected exception interrupted (RM17, section 5).
 
@@ -1819,8 +1812,10 @@ class _Run:
             if cancelled:
                 # RM14, AC12: a cancelled run asks its provider to stop the
                 # generation. Best effort: a provider that does not stop
-                # cannot dispatch anything, because the run is already ending.
-                await self._cancel_generation(adapter, call_id)
+                # cannot dispatch anything, because the run is already ending,
+                # and its own failure never hides the cancel.
+                with contextlib.suppress(Exception):
+                    await adapter.cancel(call_id)
             raise
         finally:
             self.emit(

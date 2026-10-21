@@ -14,6 +14,8 @@ sandbox is a disposable copy.
 import asyncio
 import threading
 
+import pytest
+
 from api_helpers import make_app
 from gateway_helpers import (
     build_gateway,
@@ -51,29 +53,38 @@ class GatedFrom(ScriptedAdapter):
         self.index = index
         self.gate = asyncio.Event()
         self.started = asyncio.Event()
-        self.released = []
 
     async def generate(self, request):
         if len(self.requests) == self.index:
             self.started.set()
-            try:
-                await self.gate.wait()
-            finally:
-                self.released.append(request.generation_id)
+            await self.gate.wait()
         async for event in super().generate(request):
             yield event
 
 
-def delete_gateway(tmp_path, **options):
-    """A delete run: route, list, propose the delete, then the answer turns."""
-    turns = [
+def delete_turns():
+    """A delete run: route, list, propose the delete, then the answer."""
+    return [
         route_turn("delete-demo-database"),
         tool_turn("list_demo_databases", call_id="call_list"),
         tool_turn("delete_demo_database", call_id="call_delete", **DELETE),
         text_turn(ANSWER),
-        text_turn(ANSWER),
     ]
-    return build_gateway(tmp_path, turns, caller=CALLER, external_turns=[], **options)
+
+
+def delete_gateway(tmp_path):
+    turns = [*delete_turns(), text_turn(ANSWER)]
+    return build_gateway(tmp_path, turns, caller=CALLER, external_turns=[])
+
+
+def delete_finished(events):
+    """The one tool.finished event of the delete."""
+    (finished,) = [
+        e
+        for e in of_type(events, "tool.finished")
+        if e.payload["tool_name"] == "delete_demo_database"
+    ]
+    return finished
 
 
 def block_handler(gateway, name):
@@ -101,14 +112,13 @@ async def approved_write_in_flight(gateway):
     assert waiting.state is RunState.WAITING_CONFIRMATION
     request = waiting.confirmation
     version = gateway.store.get_run(waiting.run_id).version
-    started = gateway.orchestrator.start_confirmation(
+    return gateway.orchestrator.start_confirmation(
         waiting.run_id,
         version,
         approval_id=request.approval_id,
         token=request.token,
         approve=True,
     )
-    return started
 
 
 # -- cancel during generation ------------------------------------------------------
@@ -203,11 +213,7 @@ def test_cancel_during_a_write_records_unknown_outcome_and_never_replays_it(tmp_
 
     assert record.state == "cancelled"
     events = gateway.store.events(run_id)
-    (finished,) = [
-        e
-        for e in of_type(events, "tool.finished")
-        if e.payload["tool_name"] == "delete_demo_database"
-    ]
+    finished = delete_finished(events)
     result = finished.payload["result"]
     assert result["status"] == "unknown_outcome"
     assert result["error"]["code"] == "tool_interrupted"
@@ -265,31 +271,18 @@ def test_a_cancelled_run_is_terminal_and_cannot_continue_the_write(tmp_path):
         version = gateway.store.get_run(started.run_id).version
         await gateway.orchestrator.cancel(started.run_id, version)
         final = gateway.store.get_run(started.run_id)
-        try:
+        with pytest.raises(TerminalStateError):
             await gateway.orchestrator.cancel(started.run_id, final.version)
-        except TerminalStateError:
-            terminal = True
-        else:
-            terminal = False
         release.set()
         await asyncio.sleep(0.05)
-        return terminal
 
-    assert asyncio.run(go()) is True
+    asyncio.run(go())
     assert len(calls) == 1
 
 
 def test_cancel_after_a_write_succeeded_keeps_the_actual_outcome(tmp_path):
     """RM10, RM14, AC12: a cancel during the next generation keeps the write as succeeded."""
-    adapter = GatedFrom(
-        turns=[
-            route_turn("delete-demo-database"),
-            tool_turn("list_demo_databases", call_id="call_list"),
-            tool_turn("delete_demo_database", call_id="call_delete", **DELETE),
-            text_turn(ANSWER),
-        ],
-        index=3,
-    )
+    adapter = GatedFrom(turns=delete_turns(), index=3)
     gateway = build_gateway(
         tmp_path,
         None,
@@ -299,16 +292,7 @@ def test_cancel_after_a_write_succeeded_keeps_the_actual_outcome(tmp_path):
     )
 
     async def go():
-        waiting = await gateway.orchestrator.run_text(PROMPT)
-        request = waiting.confirmation
-        version = gateway.store.get_run(waiting.run_id).version
-        started = gateway.orchestrator.start_confirmation(
-            waiting.run_id,
-            version,
-            approval_id=request.approval_id,
-            token=request.token,
-            approve=True,
-        )
+        started = await approved_write_in_flight(gateway)
         await adapter.started.wait()
         version = gateway.store.get_run(started.run_id).version
         record = await gateway.orchestrator.cancel(started.run_id, version)
@@ -320,11 +304,7 @@ def test_cancel_after_a_write_succeeded_keeps_the_actual_outcome(tmp_path):
 
     assert record.state == "cancelled"
     events = gateway.store.events(run_id)
-    (finished,) = [
-        e
-        for e in of_type(events, "tool.finished")
-        if e.payload["tool_name"] == "delete_demo_database"
-    ]
+    finished = delete_finished(events)
     assert finished.payload["result"]["status"] == "succeeded"
     operation = gateway.store.get_tool_operation(finished.payload["operation_id"])
     assert operation["status"] == "succeeded"
@@ -374,10 +354,6 @@ def test_native_cancel_during_a_write_answers_cancelled_and_keeps_the_outcome(tm
     assert cancelled.json()["state"] == "cancelled"
     assert (again.status_code, error_of(again)["code"]) == (409, "run_terminal")
     events = gateway.store.events(accepted["run_id"])
-    (finished,) = [
-        e
-        for e in of_type(events, "tool.finished")
-        if e.payload["tool_name"] == "delete_demo_database"
-    ]
+    finished = delete_finished(events)
     assert finished.payload["result"]["status"] == "unknown_outcome"
     assert len(calls) == 1
