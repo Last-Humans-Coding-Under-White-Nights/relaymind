@@ -17,8 +17,10 @@ spec is the source of truth; this page only explains where things live.
 | Demo UI | `src/relaymind/ui/` | Display model decisions and execution evidence; collect clarification and confirmation. |
 | Timing instrumentation | `src/relaymind/stats.py` | Record spec 12.1 metrics per generation around any adapter; export JSON for adapter comparisons (M1 working data, not benchmark evidence). |
 
-Demo skill packages (SKILL.md format, spec section 9) live in `skills/` at
-the repository root, one directory per skill. Pinned model artifact
+Demo skill packages (SKILL.md plus `skill.manifest.json`, spec sections
+4.2 and 9) live in `skills/` at the repository root, one directory per
+skill; that directory is the default skill root, and operators can
+configure others. Pinned model artifact
 manifests (RM18, spec section 6) live in `models/`; the GGUF files they
 describe are downloaded per `models/README.md`, never checked in.
 

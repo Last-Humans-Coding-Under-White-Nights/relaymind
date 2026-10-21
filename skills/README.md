@@ -1,10 +1,12 @@
 # Demo skill packages
 
 One directory per skill. Each package contains a `SKILL.md` with Agent
-Skills `name` and `description` frontmatter, plus a registry manifest with
-RelayMind-specific settings (version, languages, local eligibility, allowed
-tool IDs, resource paths, completion predicate ID). See
-[`docs/SPECIFICATION.md`](../docs/SPECIFICATION.md) sections 4.2 and 9.
+Skills `name` and `description` frontmatter, plus a registry manifest
+`skill.manifest.json` with RelayMind-specific settings (version,
+languages, local eligibility, allowed tool IDs, resource paths, completion
+predicate ID). This directory is the default skill root; operators can
+configure others. See [`docs/SPECIFICATION.md`](../docs/SPECIFICATION.md)
+sections 4.2 and 9.
 
 Planned demo skills:
 

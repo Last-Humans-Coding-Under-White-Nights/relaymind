@@ -65,6 +65,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (#46) added to M1; the orchestrator half of AC08 (#49) tracked in M3.
   Milestones now close against `docs/EVIDENCE.md`. No behavior change
   and no spec revision.
+- Specification 0.3 → 0.4: the compatible chat endpoint accepts an
+  optional `X-RelayMind-Execution-Mode` request header carrying the
+  native `execution_mode` values under the same operator policy, so a
+  standard OpenAI client can force a local or external run without
+  the native API. The model alias keeps selecting tool ownership only.
+  Section 7.1 lists request headers in their own table and names the
+  error codes for invalid, forbidden, and body-supplied modes
+  (sections 7.1, 7.2, 7.4; issues #22, #24).
+- Specification 0.4: `needs_external` on the chat endpoint is HTTP 422
+  with an error object (sections 7.2, 11).
+- Specification 0.4: section 4.2 states where skills come from: an
+  operator-configured list of local roots, `["skills/"]` by default,
+  where every subdirectory is a candidate package with `SKILL.md` and
+  `skill.manifest.json`, unique names across roots, and strict load
+  errors (issue #9).
+- Specification 0.4: section 8 defines the `run.accepted` payload,
+  which records the execution mode, model alias, budgets, skill roots,
+  and offered skills for every run.
 - Specification 0.2 → 0.3: the artifact manifest records the "runtime
   version and commit" (one composite field) instead of only a "runtime
   commit", matching the implemented `runtime_version` field.
