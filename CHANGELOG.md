@@ -73,7 +73,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   API. Unknown values return 400 `invalid_execution_mode`; forbidden
   values return 403 `execution_mode_forbidden`. The model alias keeps
   selecting tool ownership only (sections 7.1, 7.2, 7.4; issues #22,
-  #24).
+  #24). Section 4.2 also states where skills come from: one or more
+  operator-configured local roots, `skills/` by default, scanned one
+  level deep, with unique names across roots, strict load errors, and
+  the roots and skill hashes recorded in each run (issue #9).
 - Specification 0.2 → 0.3: the artifact manifest records the "runtime
   version and commit" (one composite field) instead of only a "runtime
   commit", matching the implemented `runtime_version` field.
