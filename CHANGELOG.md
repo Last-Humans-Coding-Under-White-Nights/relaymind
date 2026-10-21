@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Loopback llama.cpp inference and runtime startup health polls bypass
+  environment and system proxies without changing process-wide settings
+  (#57; RM01, RM18). Non-loopback endpoints and the external Chat
+  Completions adapter keep normal proxy handling. Deterministic tests
+  cover localhost, IPv4/IPv6 loopback, and remote hostnames; the historical
+  Windows qualification remains evidence for its recorded revision only.
+
 ### Added
 
 - Native x86-64 Windows M1 qualification record in `docs/EVIDENCE.md`
@@ -65,6 +74,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.4 → 0.5: require proxy bypass for loopback llama.cpp
+  inference and startup health polls, preserving normal proxy handling
+  for non-loopback endpoints and the external Chat Completions adapter
+  (#57; RM01, RM18; section 6).
 - Roadmap after M1: M2 split into a routing probe plus vertical slice
   and a widening stage; required trace events (#27) moved from M4 to
   M2; restart recovery (#8) moved from M2 to M3; Windows qualification

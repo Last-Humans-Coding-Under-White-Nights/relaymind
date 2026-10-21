@@ -34,6 +34,7 @@ from helpers import (
 )
 from relaymind.adapters import Completed, Message, Role, TextDelta, ToolCall
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
+from relaymind.adapters.local_http import health_client
 from relaymind.adapters.manifest import (
     ArtifactManifest,
     ManifestError,
@@ -136,8 +137,9 @@ def server(tmp_path_factory, manifest, adapter_settings):
             if process.poll() is not None:
                 pytest.fail(f"llama-server exited early with {process.returncode}\n{log_tail()}")
             try:
-                if httpx.get(f"{base_url}/health", timeout=2).status_code == 200:
-                    break
+                with health_client(base_url) as client:
+                    if client.get("/health").status_code == 200:
+                        break
             except httpx.HTTPError:
                 pass
             time.sleep(1)

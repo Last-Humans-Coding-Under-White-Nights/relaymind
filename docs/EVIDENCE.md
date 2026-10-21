@@ -225,10 +225,12 @@ bilingual skill selection and the M6 benchmark remain separate gates.
 - **Proxy and loopback:** before the environment overrides above,
   health polls and completion requests timed out on a machine with a
   corporate proxy configured in Windows registry settings. With the
-  overrides, the live suite passed in 11.73 s. The adapter currently
-  creates its HTTP client with default proxy handling; automatic
-  loopback proxy bypass is tracked in
-  [#57](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/57).
+  overrides, the live suite passed in 11.73 s. At the recorded revision,
+  the adapter created its HTTP client with default proxy handling.
+  The subsequent loopback bypass fix in
+  [#57](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/57)
+  has deterministic coverage; this historical run does not qualify that
+  new behavior on Windows. See [the current testing notes](TESTING.md#windows-qualification-notes).
   In CPython 3.12.10 on Windows,
   [`getproxies()`](https://github.com/python/cpython/blob/v3.12.10/Lib/urllib/request.py#L2766-L2773)
   uses environment proxy settings when any exist, falling back to the
