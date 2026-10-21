@@ -77,7 +77,9 @@ itself, with the manifest's SHA-256; any other file fails the run.
   runs one managed scenario (a local skill and two local tools, a local
   budget stop, then a handoff that finishes the run) through the real
   orchestrator, the real llama.cpp and Chat Completions adapters over
-  scripted endpoints, and the checked-in skill packages. It runs under
+  scripted endpoints, and one copy of the checked-in skill packages in
+  which only `investigate-performance` sets `local_eligible`, as in the
+  AC02 scenario; the test checks that this is the only change. It runs under
   configuration A, then under configuration B (a second local endpoint
   and model identifier, a second external endpoint, model, and
   credential variable), with no code change and one skill root. The two
@@ -87,7 +89,8 @@ itself, with the manifest's SHA-256; any other file fails the run.
   There is no live AC08 variant: only one local artifact has a manifest
   (`models/`, spec section 6), so a swap to a second qualified artifact
   cannot be run yet. The second local model in the deterministic test is
-  a configuration value, not a qualified artifact.
+  a configuration value, not a qualified artifact, so AC08 stays open
+  (`docs/ROADMAP.md`).
 
 ### Required trace events (RM16, RM22, RM25)
 

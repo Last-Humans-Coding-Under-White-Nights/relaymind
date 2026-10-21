@@ -258,8 +258,10 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   skill packages across a local and an external swap. Implemented with
   scripted endpoints behind the real adapters
   (`tests/test_ac08_model_substitution.py`); no live variant, because
-  only one local artifact has a manifest.
-- Closes: AC02, AC05, AC06, AC07, AC08.
+  only one local artifact has a manifest. AC08 asks for a second
+  qualified local model, so it stays open until a second artifact is
+  qualified (spec section 6) and the swap runs against it.
+- Closes: AC02, AC05, AC06, AC07. AC08 is not closed (see above).
 
 ## M4 — Public API and observability
 
@@ -335,3 +337,6 @@ listed here so the current order can be traced to its reason.
   budgets, entire-run limits, the clarification.answered event, and
   `invalid_resume_input`. The code follows the spec. Nothing about
   resume is decided here.
+- 2026-10-22, #49: AC08 no longer closes in M3. The orchestrator and
+  skill swap passes with scripted endpoints, but the spec asks for a
+  second qualified local model, and only one artifact is qualified.

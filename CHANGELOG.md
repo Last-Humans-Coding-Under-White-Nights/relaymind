@@ -33,7 +33,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   are equal in routing, tool proposals, results, and handoff content.
   `build_gateway` in the test helpers accepts configured models over
   real adapters. No live variant: only one local artifact has a
-  manifest, which `docs/TESTING.md` records.
+  manifest, which `docs/TESTING.md` records, so AC08 stays open until a
+  second local artifact is qualified.
 - Failure behavior and error codes (#21; RM04, AC07, AC16 error part; spec
   0.13 section 11): `relaymind.api.errors` holds the error contract, an
   `ApiError` with a stable code, message, and run reference, one status
