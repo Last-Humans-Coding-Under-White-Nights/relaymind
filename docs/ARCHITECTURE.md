@@ -15,6 +15,7 @@ spec is the source of truth; this page only explains where things live.
 | Tool registry and executor | `src/relaymind/tools/` | Validate arguments and permissions; execute registered functions; record outcomes. |
 | Run store | `src/relaymind/store/` | Persist ordered events, tool outcomes, pending approvals, and versioned state in SQLite. |
 | Demo UI | `src/relaymind/ui/` | Display model decisions and execution evidence; collect clarification and confirmation. |
+| Schema boundary checks | `src/relaymind/schema_util.py` | Shared checks for published, versioned JSON Schemas (closed field sets, exact schema_version, first schema error; spec section 8). |
 | Timing instrumentation | `src/relaymind/stats.py` | Record spec 12.1 metrics per generation around any adapter; export JSON for adapter comparisons (M1 working data, not benchmark evidence). |
 
 Demo skill packages (SKILL.md plus `skill.manifest.json`, spec sections
@@ -62,6 +63,10 @@ api ──► orchestrator ──► adapters
           │  └────► skills
           └───────► store
 ```
+
+`schema_util.py` is a leaf module: the orchestrator (RouteDecision) and
+the store (TraceEvent) import it, and it imports no other RelayMind
+package.
 
 Lower layers must not import higher ones. The store must not depend on
 adapters. Adapters must not depend on SQLite.

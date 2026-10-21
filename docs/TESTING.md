@@ -18,7 +18,15 @@ ruff format --check .
 
 The live suite needs `llama-server` on PATH and the pinned model
 artifact (see [`models/README.md`](../models/README.md)). It starts and
-stops its own server; nothing below is required for it.
+stops its own server; nothing below is required for it. Besides the
+smoke checks, `tests/test_llamacpp_live_smoke.py` runs the live
+tokenizer check: the local token count for English and Chinese prompts,
+with and without tools, must equal the prompt tokens the runtime reports
+(spec section 4.1).
+
+To use the pinned GGUF from another location, set
+`RELAYMIND_SMOKE_MODEL=<path>`. The file must be the pinned artifact
+itself, with the manifest's SHA-256; any other file fails the run.
 
 ### Windows qualification notes
 
