@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "version": "0.1.0",
+  "languages": [
+    "en",
+    "zh"
+  ],
+  "local_eligible": false,
+  "allowed_tools": [
+    "get_latest_deployment",
+    "get_metrics",
+    "get_recent_logs"
+  ],
+  "resources": [
+    "examples.json"
+  ],
+  "completion_predicate": "performance_evidence_separated",
+  "parallel_workflow": null
+}

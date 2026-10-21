@@ -21,7 +21,12 @@ from relaymind.adapters import (
     ToolSchema,
 )
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
+from relaymind.orchestrator.workflows import PARALLEL_WORKFLOWS
+from relaymind.skills import SkillRegistry
+from relaymind.skills.predicates import COMPLETION_PREDICATES
 from relaymind.store import TraceClock
+from relaymind.tools import SideEffect, ToolDeclaration, ToolRegistry
+from relaymind.tools.sandbox import SandboxDataService, register_demo_tools
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = REPO_ROOT / "models"
@@ -65,17 +70,68 @@ ACCEPTED_PAYLOAD = {
     ],
 }
 
+# The section 9 service-ID input object, shared across test files.
+SERVICE_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {"service": {"enum": ["staging-api", "payments-api"]}},
+    "required": ["service"],
+    "additionalProperties": False,
+}
+
 # The canonical demo tool (spec section 9), shared across test files.
 HEALTH_TOOL = ToolSchema(
     name="get_service_health",
     description="Return current health for a service.",
-    input_schema={
-        "type": "object",
-        "properties": {"service": {"enum": ["staging-api", "payments-api"]}},
-        "required": ["service"],
-        "additionalProperties": False,
-    },
+    input_schema=SERVICE_INPUT_SCHEMA,
 )
+
+# Sandbox demo data (RM23, section 9) and a fixed test time.
+BASELINE = REPO_ROOT / "tests" / "fixtures" / "sandbox" / "baseline.json"
+# The checked-in demo skills: the default root, skills/, of this checkout.
+DEMO_SKILLS_ROOT = REPO_ROOT / "skills"
+
+
+def make_tool_declaration(**overrides) -> ToolDeclaration:
+    """A valid read-only tool declaration; overrides replace fields."""
+    fields = {
+        "name": "echo_service",
+        "description": "Return the requested service ID.",
+        "input_schema": SERVICE_INPUT_SCHEMA,
+        "output_schema": {
+            "type": "object",
+            "properties": {"service": {"type": "string"}},
+            "required": ["service"],
+            "additionalProperties": False,
+        },
+        "timeout_seconds": 1.0,
+        "side_effect": SideEffect.READ_ONLY,
+        "handler": lambda args: {"service": args["service"]},
+        "required_permission": "demo.read",
+    }
+    fields.update(overrides)
+    return ToolDeclaration(**fields)
+
+
+def make_sandbox(tmp_path: Path, seed: Path = BASELINE) -> SandboxDataService:
+    """A fresh, reset sandbox working copy under tmp_path (fixtures rule)."""
+    return SandboxDataService(seed, work_dir=tmp_path / "sandbox", clock=FakeClock(), reset=True)
+
+
+def make_demo_tools(tmp_path: Path, service: SandboxDataService | None = None) -> ToolRegistry:
+    """The seven section 9 tools over a sandbox (a fresh one by default)."""
+    registry = ToolRegistry(clock=FakeClock())
+    register_demo_tools(registry, service or make_sandbox(tmp_path))
+    return registry
+
+
+def make_demo_skills(tools: ToolRegistry) -> SkillRegistry:
+    """The checked-in demo skills, loaded from this checkout's skills/."""
+    return SkillRegistry.load(
+        [DEMO_SKILLS_ROOT],
+        tools=tools,
+        predicates=COMPLETION_PREDICATES.keys(),
+        workflows=PARALLEL_WORKFLOWS,
+    )
 
 
 # A llama-server endpoint for adapter tests over a mock transport.

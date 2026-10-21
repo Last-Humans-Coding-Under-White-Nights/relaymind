@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaymind.local/schemas/demo/get_metrics.v1.json",
+  "title": "get_metrics",
+  "description": "Read latency, error rate, and request count samples for one demo service.",
+  "input_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "service": {
+        "title": "service",
+        "x-relaymind-label": {
+          "en": "service",
+          "zh": "服务"
+        },
+        "enum": [
+          "staging-api",
+          "payments-api"
+        ]
+      },
+      "window_minutes": {
+        "enum": [
+          15,
+          60,
+          1440
+        ]
+      }
+    },
+    "required": [
+      "service",
+      "window_minutes"
+    ],
+    "additionalProperties": false
+  },
+  "output_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "service": {
+        "enum": [
+          "staging-api",
+          "payments-api"
+        ]
+      },
+      "window_minutes": {
+        "enum": [
+          15,
+          60,
+          1440
+        ]
+      },
+      "samples": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "timestamp": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+            },
+            "p95_latency_ms": {
+              "type": "number",
+              "minimum": 0
+            },
+            "error_rate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "request_count": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "timestamp",
+            "p95_latency_ms",
+            "error_rate",
+            "request_count"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "fixture": {
+        "type": "object",
+        "description": "Sandbox fixture scenario and observation metadata (spec section 9).",
+        "properties": {
+          "scenario": {
+            "type": "string",
+            "minLength": 1
+          },
+          "observed_at": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          }
+        },
+        "required": [
+          "scenario",
+          "observed_at"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "service",
+      "window_minutes",
+      "samples",
+      "fixture"
+    ],
+    "additionalProperties": false
+  }
+}

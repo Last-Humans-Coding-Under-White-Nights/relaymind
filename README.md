@@ -43,7 +43,7 @@ See [`AGENTS.md`](AGENTS.md) for the full contributor workflow.
 | `docs/ROADMAP.md` | Implementation milestones with requirement IDs. |
 | `src/relaymind/` | Gateway source (Python; FastAPI API layer planned for M4). |
 | `models/` | Pinned model artifact manifests; the GGUF files are downloaded, not checked in. |
-| `skills/` | Demo skill packages (SKILL.md format). |
+| `skills/` | Demo skill packages (SKILL.md plus skill.manifest.json). |
 | `tests/` | Test suite and sandbox fixtures. |
 | `scripts/` | Developer scripts; see `scripts/README.md` for what each one does. |
 

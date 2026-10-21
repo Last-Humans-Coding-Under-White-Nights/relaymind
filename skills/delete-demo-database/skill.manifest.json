@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "version": "0.1.0",
+  "languages": [
+    "en",
+    "zh"
+  ],
+  "local_eligible": true,
+  "allowed_tools": [
+    "list_demo_databases",
+    "delete_demo_database"
+  ],
+  "resources": [
+    "examples.json"
+  ],
+  "completion_predicate": "deletion_outcome_reported",
+  "parallel_workflow": null
+}
