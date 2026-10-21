@@ -65,6 +65,14 @@ itself, with the manifest's SHA-256; any other file fails the run.
   flow in the external stage. No live model is run, so there is no live
   AC05 record yet.
 
+- AC12, restart part, deterministic: `pytest tests/test_restart_recovery.py`
+  simulates a restart with a new gateway over the same SQLite file. Runs
+  left in any unfinished state fail as `interrupted`; a pending write is
+  `unknown_outcome` and a pending read is `failed`, with no handler run
+  and no model call; a pending approval expires and its token no longer
+  works; a second recovery changes nothing. The cancellation half of
+  AC12 is #29 (M4), so AC12 is not closed yet.
+
 ### Required trace events (RM16, RM22, RM25)
 
 `pytest tests/test_required_trace_events.py tests/test_trace_artifacts.py`

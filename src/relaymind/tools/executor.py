@@ -254,6 +254,38 @@ class ToolExecutor:
             )
         )
 
+    def settle_after_restart(self, operation: Mapping[str, Any]) -> ToolResult:
+        """Finish a pending operation a restart left without an outcome (RM10).
+
+        The handler is never run and the operation is never retried. A
+        mutating tool may have written, so its outcome is
+        ``unknown_outcome``; a read-only tool has no side effect to
+        reconcile and is ``failed``. A tool that is no longer registered
+        is treated as mutating, since nothing says it was safe.
+        """
+        tool_name = operation["tool_name"]
+        operation_id = operation["operation_id"]
+        try:
+            mutating = self.registry.get(tool_name).side_effect is SideEffect.MUTATING
+        except KeyError:
+            mutating = True
+        raw = ToolResult(
+            operation_id=operation_id,
+            tool_name=tool_name,
+            status=ToolStatus.UNKNOWN_OUTCOME if mutating else ToolStatus.FAILED,
+            data=None,
+            error={
+                "code": "tool_interrupted",
+                "message": f"the gateway restarted before {tool_name!r} recorded an outcome; "
+                + ("its outcome is unknown and it is not retried" if mutating else "no result"),
+            },
+            observed_at=utc_timestamp(self._clock.utc_now()),
+            duration_ms=0,
+            source_ref=f"tool:{tool_name}/{operation_id}",
+            truncated=False,
+        )
+        return self._finish(operation_id, raw).result
+
     def _finish(self, operation_id: str, raw: ToolResult) -> Execution:
         """Redact, record the outcome once, and return what was recorded."""
         secrets = self.redactor.secret_values(raw.data)

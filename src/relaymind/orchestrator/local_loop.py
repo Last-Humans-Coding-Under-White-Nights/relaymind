@@ -144,6 +144,7 @@ from relaymind.orchestrator.handoff import (
     measure_request,
     unsettled_operations,
 )
+from relaymind.orchestrator.recovery import RecoveryReport, recover_interrupted_runs
 from relaymind.orchestrator.route_decision import (
     REASON_CODES,
     ExecutionMode,
@@ -506,6 +507,18 @@ class LocalOrchestrator:
         run.reopen(expected_version)
         del self._waiting[run_id]
         return self._keep_if_waiting(run, await run.continue_with(text))
+
+    def recover_after_restart(self) -> RecoveryReport:
+        """Fail every unfinished run as interrupted, once, at startup (section 5, RM17).
+
+        Pending writes become unknown_outcome and are never retried;
+        pending approvals expire; no model loop resumes. Call it before
+        this orchestrator accepts a run. It refuses while the process
+        tracks waiting runs, because those are alive, not interrupted.
+        """
+        if self._waiting:
+            raise RuntimeError("restart recovery is a startup step; this process has waiting runs")
+        return recover_interrupted_runs(self.store, self.tools, redactor=self.redactor)
 
     async def resume_confirmation(
         self,

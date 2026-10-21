@@ -24,6 +24,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Restart recovery (#8; RM10, RM17, AC12 restart part; spec 0.11
+  sections 5 and 8): `LocalOrchestrator.recover_after_restart` (and
+  `relaymind.orchestrator.recovery.recover_interrupted_runs`) fails
+  every unfinished run with `interrupted` and a `run.failed` event that
+  names the state it was in, rebuilds `model_calls` from the trace, and
+  releases the execution slot. A pending write is finished as
+  `unknown_outcome` and a pending read as `failed` (error code
+  `tool_interrupted`, a `tool.finished` event marked `recovered`);
+  no handler runs, nothing is retried, and a later proposal of the
+  same call replays the recorded outcome. Pending approvals expire at
+  recovery time. Each run is recovered in one store transaction, one
+  failing run does not stop the others, terminal runs are untouched,
+  and a second recovery changes nothing. No model is called and no
+  model loop is resumed. The startup call is part of the API work
+  (#25); the cancellation half of AC12 stays in #29. Deterministic
+  coverage is `tests/test_restart_recovery.py`.
 - Confirmation flow for mutating demo actions (#19; RM11, RM10, RM17,
   AC05; spec 0.10 sections 4.3, 5, 7.4, 8): an admitted
   `delete_demo_database` proposal no longer stops the run. The run
@@ -480,6 +496,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   from answer content. Non-thinking remains the default; operator-enabled
   thinking remains supported. Record both live runs separately from the
   historical runtime evidence and add a Windows runtime smoke workflow.
+- Specification 0.10 → 0.11: section 5 defines restart recovery (RM10,
+  RM17, #8): when it runs, what it settles (pending writes as
+  `unknown_outcome`, pending reads as `failed`, pending approvals
+  expired), the `interrupted` failure and that a recovered run is never
+  resumed. Section 8 adds `interrupted_state` and `settled_operations`
+  to the `run.failed` payload.
 - Specification 0.9 → 0.10: sections 4.3, 4.4, 5, 7.4, 8, 9, and 11 define
   the confirmation flow (RM11, #19): the `confirmation_target` a mutating
   tool declares, the single-use token and its hash, the binding, the

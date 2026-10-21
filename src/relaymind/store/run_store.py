@@ -33,7 +33,7 @@ import sqlite3
 import threading
 import time
 import uuid
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -587,6 +587,21 @@ class RunStore:
             raise RunNotFoundError(f"no run {run_id}")
         return _run_record(row)
 
+    def unfinished_runs(self, terminal_states: Collection[str]) -> list[RunRecord]:
+        """Runs whose state is not terminal, oldest first (section 5 restart recovery).
+
+        The state machine owns which states are terminal, so the caller
+        names them.
+        """
+        marks = ", ".join("?" for _ in terminal_states)
+        with self._lock:
+            self._check_open()
+            rows = self._conn.execute(
+                f"SELECT * FROM runs WHERE state NOT IN ({marks}) ORDER BY created_at, rowid",
+                tuple(terminal_states),
+            ).fetchall()
+        return [_run_record(row) for row in rows]
+
     def active_run_id(self) -> str | None:
         """The run that holds the one active execution slot, if any (section 11)."""
         with self._lock:
@@ -1028,6 +1043,23 @@ class RunStore:
         record["created_at"] = _parse(row["created_at"])
         record["expires_at"] = _parse(row["expires_at"])
         return record
+
+    def expire_approvals(self, run_id: str) -> int:
+        """End the run's pending approvals now; return how many were still live (RM11).
+
+        Restart recovery uses it: an approval that is unused and not yet
+        past its expiry gets that expiry moved to the current time, so no
+        token can be consumed, and the record shows when it ended. A used
+        or already expired approval is left as it is.
+        """
+        now = _iso(self.clock.utc_now())
+        with self._write():
+            cursor = self._conn.execute(
+                "UPDATE approvals SET expires_at = ?"
+                " WHERE run_id = ? AND consumed_at IS NULL AND expires_at > ?",
+                (now, run_id, now),
+            )
+        return cursor.rowcount
 
     def consume_approval(
         self,
