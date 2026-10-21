@@ -1,6 +1,6 @@
 {
   "illustrative": true,
-  "note": "Illustrative examples that use the sandbox fixture values (tests/fixtures/sandbox/baseline.json). Not live model output or measured results. The Chinese text still needs native review (spec section 9).",
+  "note": "Illustrative examples that use the sandbox fixture values (tests/fixtures/sandbox/baseline.json). Not live model output or measured results. The Chinese text has not been natively reviewed; spec 0.7 section 9 does not require that review.",
   "pairs": [
     {
       "tool_calls": [
@@ -27,7 +27,7 @@
       ],
       "en": {
         "request": "Why is payments-api so slow right now?",
-        "response": "Observations:\n- get_latest_deployment: payments-api has no recorded deployment.\n- get_metrics (15 minutes): p95 latency went from 2450 ms to 3020 ms and the error rate from 0.41 to 0.57.\n- get_recent_logs (3 newest, list truncated): ledger-db timeouts after 2000 ms, failed health probes, and an exhausted retry budget on POST /v1/charges.\n\nHypotheses:\n- The upstream ledger-db may be slow or unreachable, which would explain the timeouts and failed probes.\n- A recent deployment is unlikely to be the cause, because none is recorded."
+        "response": "Observations:\n- get_latest_deployment: payments-api has no recorded deployment.\n- get_metrics (15 minutes): p95 latency went from 2450 ms to 3020 ms and the error rate from 0.41 to 0.57.\n- get_recent_logs (3 newest, list truncated): a ledger-db timeout after 2000 ms, a failed health probe, and an exhausted retry budget on POST /v1/charges.\n\nHypotheses:\n- The upstream ledger-db may be slow or unreachable, which would explain the timeout and the failed probe.\n- A recent deployment is unlikely to be the cause, because none is recorded."
       },
       "zh": {
         "request": "payments-api 现在为什么这么慢？",
@@ -45,11 +45,11 @@
         }
       ],
       "en": {
-        "request": "Is something wrong with staging-api performance this hour?",
+        "request": "Is something wrong with staging-api performance in the last hour?",
         "response": "Observations:\n- get_metrics (60 minutes): p95 latency 175 ms and 186 ms, error rate 0.001 and 0.002.\n\nInsufficient evidence to name a performance problem or a cause from these samples."
       },
       "zh": {
-        "request": "staging-api 这一小时的性能有问题吗？",
+        "request": "staging-api 最近一小时的性能有问题吗？",
         "response": "观察：\n- get_metrics（60 分钟）：p95 延迟为 175 ms 和 186 ms，错误率为 0.001 和 0.002。\n\n证据不足：仅凭这些样本无法判断存在性能问题，也无法确定原因。"
       }
     }

@@ -397,6 +397,10 @@ Observations, not conclusions:
   checklist skill in both.
 - Language: the model's language value was wrong for 5 of 6 Chinese
   prompts with native calls and 6 of 6 with grammar.
+- Review: the six Chinese probe prompts, like the Chinese examples of
+  the demo skills, have not been natively reviewed. Spec 0.7 section 9
+  makes Chinese support best-effort and does not require that review
+  (RM16).
 - The envelope without grammar never validated: all twelve outputs were
   wrapped in a Markdown code fence, and some were also wrong inside
   (`"route": "simple_skill"`). Grammar fixed the shape as the validator

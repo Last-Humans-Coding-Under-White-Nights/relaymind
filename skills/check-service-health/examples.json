@@ -1,6 +1,6 @@
 {
   "illustrative": true,
-  "note": "Illustrative examples that use the sandbox fixture values (tests/fixtures/sandbox/baseline.json). Not live model output or measured results. The Chinese text still needs native review (spec section 9).",
+  "note": "Illustrative examples that use the sandbox fixture values (tests/fixtures/sandbox/baseline.json). Not live model output or measured results. The Chinese text has not been natively reviewed; spec 0.7 section 9 does not require that review.",
   "pairs": [
     {
       "tool_calls": [

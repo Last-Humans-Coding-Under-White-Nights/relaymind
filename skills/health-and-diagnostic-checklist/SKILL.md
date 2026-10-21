@@ -24,6 +24,7 @@ service and a checklist for diagnosing it. It runs the fixed
 - Report the observed health exactly as returned: the `status` word and
   the `checked_at` time. An `unavailable` service is never described as
   healthy.
+- Start the health line with `Observation:`. In Chinese: `观察：`.
 - Label the checklist as a draft: `Diagnostic checklist (draft, not
   log-backed)`. In Chinese: `诊断检查清单（草稿，未基于日志）`.
 - The checklist is not a diagnosis. Do not present its items as findings.

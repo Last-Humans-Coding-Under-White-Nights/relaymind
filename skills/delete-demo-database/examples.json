@@ -1,6 +1,6 @@
 {
   "illustrative": true,
-  "note": "Illustrative examples that use the sandbox fixture values (tests/fixtures/sandbox/baseline.json). Not live model output or measured results. The Chinese text still needs native review (spec section 9).",
+  "note": "Illustrative examples that use the sandbox fixture values (tests/fixtures/sandbox/baseline.json). Not live model output or measured results. The Chinese text has not been natively reviewed; spec 0.7 section 9 does not require that review.",
   "pairs": [
     {
       "note": "The gateway asks the user to confirm between the two tool calls (RM11).",
@@ -19,11 +19,11 @@
       ],
       "en": {
         "request": "Delete the sandbox database demo-orders-db.",
-        "response": "Deleted the sandbox database demo-orders-db. Its fixture revision is now 4."
+        "response": "Deleted the sandbox database demo-orders-db. The sandbox fixture revision is now 4."
       },
       "zh": {
         "request": "删除沙箱数据库 demo-orders-db。",
-        "response": "已删除沙箱数据库 demo-orders-db，其夹具版本现为 4。"
+        "response": "已删除沙箱数据库 demo-orders-db，沙箱夹具版本现为 4。"
       }
     }
   ]

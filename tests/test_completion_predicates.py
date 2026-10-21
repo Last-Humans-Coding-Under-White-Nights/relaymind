@@ -34,9 +34,10 @@ def result(tool_name, data=None, *, status=ToolStatus.SUCCEEDED, op="op_1"):
     )
 
 
+T = "2026-10-20T02:59:00Z"
 UNAVAILABLE = result(
     "get_service_health",
-    {"service": "payments-api", "status": "unavailable", "checked_at": "2026-10-20T02:59:00Z"},
+    {"service": "payments-api", "status": "unavailable", "checked_at": T},
 )
 OLDER_HEALTHY = result(
     "get_service_health",
@@ -542,3 +543,286 @@ def test_lowercase_identifiers_match_in_any_case(predicate, answer, results, exp
     longer ID is another resource. Deployment IDs have no case rule in the
     output schema, so a quoted deployment ID must stay exact (RM05)."""
     check(predicate, answer, results, expected)
+
+
+# --- Audit fixes: wrong passes (RM05, RM16, section 9; issue #13) --------------
+
+HEALTHY = result(
+    "get_service_health", {"service": "payments-api", "status": "healthy", "checked_at": T}
+)
+
+
+@pytest.mark.parametrize(
+    ("answer", "results", "expected"),
+    [
+        pytest.param(f"payments-api is not healthy (checked at {T}).", [HEALTHY], False, id="not"),
+        pytest.param(
+            f"payments-api is no longer healthy (checked at {T}).",
+            [HEALTHY],
+            False,
+            id="no-longer",
+        ),
+        pytest.param(
+            f"payments-api 的状态不 healthy，检查时间为 {T}。", [HEALTHY], False, id="zh-bu"
+        ),
+        pytest.param(
+            f"payments-api 的状态非 healthy，检查时间为 {T}。", [HEALTHY], False, id="zh-fei"
+        ),
+        pytest.param(
+            f"payments-api is unavailable or healthy (checked at {T}).",
+            [UNAVAILABLE],
+            False,
+            id="second-status-same-statement",
+        ),
+        pytest.param(
+            f"payments-api is unavailable (checked at {T}), but payments-api is "
+            "self-healing and healthy now.",
+            [UNAVAILABLE],
+            False,
+            id="hyphenated-word-is-not-a-resource",
+        ),
+        pytest.param(
+            f"payments-api 的状态是 unavailable（健康），检查时间为 {T}。",
+            [UNAVAILABLE],
+            False,
+            id="zh-gloss-contradicts",
+        ),
+        pytest.param(
+            f"payments-api 的状态是 healthy（不可用），检查时间为 {T}。",
+            [HEALTHY],
+            False,
+            id="zh-gloss-contradicts-healthy",
+        ),
+        pytest.param(
+            f"payments-api 的状态是 healthy（健康），检查时间为 {T}。",
+            [HEALTHY],
+            True,
+            id="zh-gloss-matches",
+        ),
+        pytest.param(
+            f"payments-api is unavailable (checked at {T}). Next, check whether web-1 "
+            "and ledger-db are healthy.",
+            [UNAVAILABLE],
+            True,
+            id="other-resources-still-end-the-statement",
+        ),
+        pytest.param(
+            f"payments-api is unavailable (checked at {T}); the self-test is not done.",
+            [UNAVAILABLE],
+            True,
+            id="negator-elsewhere-is-fine",
+        ),
+    ],
+)
+def test_health_status_rejects_negated_or_mixed_statuses(answer, results, expected):
+    """RM16: an unavailable service is never reported as healthy, by
+    negation, by a second status word, or by a contradicting gloss."""
+    check("health_status_preserved", answer, results, expected)
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        pytest.param(
+            "Diagnostic checklist (draft, not log-backed):\n"
+            f"- Observation: payments-api is unavailable (checked at {T}).",
+            False,
+            id="list-item-is-not-the-observation-section",
+        ),
+        pytest.param(
+            f"Observation: payments-api is unavailable (checked at {T}). This is not a "
+            "Diagnostic checklist (draft, not log-backed); root cause is ledger-db.",
+            False,
+            id="draft-label-mid-sentence",
+        ),
+        pytest.param(
+            "Diagnostic checklist (draft, not log-backed):\n- Check ledger-db.\n\n"
+            f"**Observation:** payments-api is unavailable (checked at {T}).",
+            True,
+            id="observation-heading-after-checklist",
+        ),
+        pytest.param(
+            OBSERVED + "## Diagnostic checklist (draft, not log-backed):\n- Check ledger-db.",
+            True,
+            id="draft-label-as-markdown-heading",
+        ),
+    ],
+)
+def test_health_checklist_structure(answer, expected):
+    """RM16: the draft label starts its own line, and a checklist item
+    never stands in for the observation section."""
+    check("health_checklist_separated", answer, [UNAVAILABLE], expected)
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        pytest.param(
+            "Observations:\n- p95 rose.\n"
+            "Insufficient evidence is not an issue: the root cause is ledger-db.",
+            False,
+            id="insufficient-words-in-an-assertion",
+        ),
+        pytest.param(
+            "观察：\n- p95 上升。\n证据不足以说明其他原因，根因就是 ledger-db 宕机。",
+            False,
+            id="zh-insufficient-words-in-an-assertion",
+        ),
+        pytest.param(
+            "Observations:\n- The root cause is ledger-db.\nHypotheses:",
+            False,
+            id="empty-hypotheses",
+        ),
+        pytest.param(
+            "Observations:\n\nHypotheses:\n- ledger-db is slow.", False, id="empty-observations"
+        ),
+        pytest.param(
+            "Observations:\n- p95 rose.\n\nInsufficient evidence:", False, id="empty-insufficient"
+        ),
+        pytest.param(
+            "Observations:\n- p95 rose.\n\nInsufficient evidence: one sample is not enough.",
+            True,
+            id="insufficient-label-with-colon",
+        ),
+        pytest.param(
+            "观察：\n- p95 为 175 ms。\n\n证据不足：仅凭这些样本，无法判断是否存在性能问题。",
+            True,
+            id="zh-insufficient-label",
+        ),
+    ],
+)
+def test_performance_sections_are_real_and_non_empty(answer, expected):
+    """Section 9: observations and hypotheses (or insufficient evidence)
+    are labelled, non-empty sections; the insufficient-evidence label is
+    a label, not the start of an assertion."""
+    check("performance_evidence_separated", answer, [METRICS], expected)
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        pytest.param(
+            "In the last 1440 minutes staging-api had 7 incidents: 1 critical, 3 warning, "
+            "3 info. They were caused by the 22:10 deployment.",
+            False,
+            id="inferred-cause",
+        ),
+        pytest.param(
+            "In the last 1440 minutes staging-api had 7 incidents: 1 critical, 3 warning, "
+            "3 info, because of a bad deploy.",
+            False,
+            id="because",
+        ),
+        pytest.param(
+            "过去 1440 分钟内，staging-api 共有 7 个事件：严重 1 个，警告 3 个，信息 3 个。"
+            "原因是最近一次部署。",
+            False,
+            id="zh-inferred-cause",
+        ),
+        pytest.param(
+            "过去 1440 分钟内，staging-api 共有 7 个事件：严重 1 个，警告 3 个，信息 3 个，"
+            "由于部署导致。",
+            False,
+            id="zh-due-to",
+        ),
+        pytest.param(
+            "In the last 1440 minutes staging-api had 7 incidents: 1 critical, 3 warning, "
+            "3 info. Correction: 9 incidents, 2 critical.",
+            False,
+            id="second-number-for-a-label",
+        ),
+        pytest.param(
+            "In the last 1440 minutes staging-api had 7 incidents: 3 critical 1 warning 3 info.",
+            False,
+            id="label-ambiguity",
+        ),
+        pytest.param(
+            "In the last 1440 minutes: 7 incidents, 1 critical, 3 warning, 3 info.",
+            False,
+            id="service-not-named",
+        ),
+        pytest.param(
+            "In the last 1440 minutes, staging-api had 7 incidents: 1 critical, 3 warning, "
+            "and 3 info.",
+            True,
+            id="comma-after-window",
+        ),
+        pytest.param(
+            "最近 1440 分钟内，staging-api 共有 7 个事件：严重 1 个，警告 3 个，信息 3 个。",
+            True,
+            id="zh-zuijin",
+        ),
+    ],
+)
+def test_incident_counts_without_causes_or_conflicts(answer, expected):
+    """Section 9: the summary reports the returned counts for the named
+    service, without inferred causes and without a second number for a
+    count."""
+    check("incident_counts_reported", answer, [COUNTS], expected)
+
+
+@pytest.mark.parametrize(
+    ("answer", "results", "expected"),
+    [
+        pytest.param(
+            "staging-api latest deployment is dep-staging-0199; the one before was "
+            "dep-staging-0142 at 2026-10-19T22:10:00Z.",
+            [DEPLOYED],
+            False,
+            id="another-deployment-id",
+        ),
+        pytest.param(
+            "The latest staging-api deployment is dep-staging-0142, deployed at "
+            "2026-10-19T22:10:00Z (revision 4f2c9e1).",
+            [DEPLOYED],
+            True,
+            id="returned-revision",
+        ),
+        pytest.param(
+            "staging-api 最近一次部署是 dep-staging-0142，部署时间为 2026-10-19T22:10:00Z"
+            "（修订号 4f2c9e1）。",
+            [DEPLOYED],
+            True,
+            id="zh-returned-revision",
+        ),
+        pytest.param(
+            "payments-api has no recorded deployment ID, but revision 4f2c9e1 is running.",
+            [NO_DEPLOYMENT],
+            False,
+            id="invented-revision",
+        ),
+        pytest.param(
+            "payments-api 最近一次部署编号为 0142。", [NO_DEPLOYMENT], False, id="zh-invented-id"
+        ),
+        pytest.param("payments-api 没有部署记录。", [NO_DEPLOYMENT], True, id="zh-none"),
+    ],
+)
+def test_deployment_ids_come_from_the_tool_result(answer, results, expected):
+    """RM05: the answer names no deployment ID or revision the tool did
+    not return."""
+    check("deployment_reported", answer, results, expected)
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        pytest.param("Failed to delete demo-orders-db; it still exists.", False, id="failed"),
+        pytest.param("demo-orders-db was not deleted.", False, id="not-deleted"),
+        pytest.param("未能删除 demo-orders-db。", False, id="zh-failed"),
+        pytest.param("没有删除 demo-orders-db。", False, id="zh-not"),
+        pytest.param("Deleted demo-orders-db and demo-users-db.", False, id="another-database"),
+        pytest.param("demo-orders-db is listed.", False, id="no-deletion-verb"),
+        pytest.param(
+            "Deleted the sandbox database demo-orders-db. The sandbox fixture revision is now 4.",
+            True,
+            id="deleted-with-revision",
+        ),
+        pytest.param(
+            "已删除沙箱数据库 demo-orders-db。沙箱数据的修订号现为 4。", True, id="zh-deleted"
+        ),
+    ],
+)
+def test_deletion_answer_reports_the_returned_outcome(answer, expected):
+    """RM16: the answer states the deletion that happened, for the
+    returned database only, without negating it."""
+    check("deletion_outcome_reported", answer, [DELETED], expected)
