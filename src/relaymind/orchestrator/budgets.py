@@ -25,6 +25,15 @@ toward none of them. waiting_seconds is how long one wait may last
 before the run fails with input_expired, and clarification_rounds is
 how many clarifications a run may ask for; a further one fails the run
 with missing_input (section 11).
+
+The external stage (RM13, section 11). After a handoff, start_external
+switches the meter to the external phase: the per-stage local limits no
+longer apply, an external generation is charged to the entire-run
+generation limit and to external_generations, an executed tool to the
+entire-run tool limit, and time is bounded by external_seconds for each
+generation and by the entire-run active time. external_room says
+before a handoff whether any of that room is left, so a run that cannot
+be dispatched ends as needs_external instead of failing mid-handoff.
 """
 
 import math
@@ -41,6 +50,8 @@ GENERATION_CHARGES: Mapping[str, tuple[str, ...]] = {
     "skill": ("local_generations",),
     "repair": ("repair_generations", "local_generations"),
     "final": ("local_generations",),
+    # Only the entire-run limit and external_generations (section 11).
+    "external": (),
 }
 
 # Entire-run limits (section 11) and what each one sums.
@@ -90,9 +101,18 @@ class LocalBudgets:
     # Waiting state and clarification rounds (sections 5 and 11).
     waiting_seconds: float = 300.0
     clarification_rounds: int = 2
+    # External stage (section 11): generations after a handoff, and the
+    # time one external generation may take.
+    external_generations: int = 6
+    external_seconds: float = 30.0
 
     def __post_init__(self) -> None:
-        for name in ("routing_generations", "local_generations", "run_generations"):
+        for name in (
+            "routing_generations",
+            "local_generations",
+            "run_generations",
+            "external_generations",
+        ):
             _check_limit(name, getattr(self, name), allow_zero=False, integer=True)
         for name in (
             "tool_calls",
@@ -103,7 +123,7 @@ class LocalBudgets:
             _check_limit(name, getattr(self, name), allow_zero=True, integer=True)
         for name in ("routing_input_tokens", "routing_output_tokens"):
             _check_limit(name, getattr(self, name), allow_zero=False, integer=True)
-        for name in ("active_seconds", "run_active_seconds", "waiting_seconds"):
+        for name in ("active_seconds", "run_active_seconds", "waiting_seconds", "external_seconds"):
             _check_limit(name, getattr(self, name), allow_zero=False, integer=False)
         if self.repair_generations > self.local_generations:
             raise ValueError("repair generations happen within the local generation limit")
@@ -111,7 +131,7 @@ class LocalBudgets:
     def to_json_object(self) -> dict[str, int | float]:
         """The limits as recorded in the run (RM03)."""
         data = asdict(self)
-        for name in ("active_seconds", "run_active_seconds", "waiting_seconds"):
+        for name in ("active_seconds", "run_active_seconds", "waiting_seconds", "external_seconds"):
             data[name] = float(data[name])
         return data
 
@@ -135,6 +155,8 @@ class BudgetMeter:
         self._stage = dict.fromkeys(_STAGE_COUNTERS, 0)
         self._total = dict.fromkeys(_STAGE_COUNTERS, 0)
         self._run = dict.fromkeys(_RUN_LIMITS, 0)
+        self._external = False
+        self._external_generations = 0
 
     # -- stages ------------------------------------------------------------
 
@@ -151,6 +173,40 @@ class BudgetMeter:
         self._stage_started = self._clock.monotonic()
         self._stage = dict.fromkeys(_STAGE_COUNTERS, 0)
 
+    # -- the external stage ---------------------------------------------------
+
+    def start_external(self) -> None:
+        """Switch to the external phase after a handoff (section 11)."""
+        self._external = True
+
+    def external_room(self) -> BudgetExceededError | None:
+        """The limit that stops an external stage from starting, or None.
+
+        An external stage needs one more generation and some active time
+        inside the entire-run limits.
+        """
+        if self._run["generations"] + 1 > self.budgets.run_generations:
+            return BudgetExceededError("run_generations", self.budgets.run_generations)
+        if self.active_seconds() >= self.budgets.run_active_seconds:
+            return BudgetExceededError("run_active_seconds", self.budgets.run_active_seconds)
+        return None
+
+    def remaining_budgets(self) -> dict[str, int | float]:
+        """What the external stage has left, as the handoff preserves it (RM13)."""
+        return {
+            "run_generations": max(self.budgets.run_generations - self._run["generations"], 0),
+            "run_tool_executions": max(
+                self.budgets.run_tool_executions - self._run["tool_calls"], 0
+            ),
+            "run_active_seconds": max(
+                round(self.budgets.run_active_seconds - self.active_seconds(), 6), 0.0
+            ),
+            "external_generations": max(
+                self.budgets.external_generations - self._external_generations, 0
+            ),
+            "external_seconds": float(self.budgets.external_seconds),
+        }
+
     # -- time --------------------------------------------------------------
 
     def elapsed_seconds(self) -> float:
@@ -164,7 +220,16 @@ class BudgetMeter:
         return self._closed_active + self.elapsed_seconds()
 
     def remaining_seconds(self) -> float:
-        """The tighter of the stage and the entire-run time budgets."""
+        """The tighter of the stage and the entire-run time budgets.
+
+        In the external phase: external_seconds, or the entire-run time
+        left if that is less.
+        """
+        if self._external:
+            return min(
+                self.budgets.external_seconds,
+                self.budgets.run_active_seconds - self.active_seconds(),
+            )
         return min(
             self.budgets.active_seconds - self.elapsed_seconds(),
             self.budgets.run_active_seconds - self.active_seconds(),
@@ -172,6 +237,11 @@ class BudgetMeter:
 
     def time_exhausted(self) -> BudgetExceededError:
         """The stop for work that ran out of time: the tighter time budget."""
+        if self._external:
+            run_left = self.budgets.run_active_seconds - self.active_seconds()
+            if run_left < self.budgets.external_seconds:
+                return BudgetExceededError("run_active_seconds", self.budgets.run_active_seconds)
+            return BudgetExceededError("external_seconds", self.budgets.external_seconds)
         stage_left = self.budgets.active_seconds - self.elapsed_seconds()
         run_left = self.budgets.run_active_seconds - self.active_seconds()
         if run_left < stage_left:
@@ -180,7 +250,7 @@ class BudgetMeter:
 
     def check_time(self) -> None:
         """Raise once the stage or the entire-run active time budget is spent."""
-        if self.elapsed_seconds() > self.budgets.active_seconds:
+        if not self._external and self.elapsed_seconds() > self.budgets.active_seconds:
             raise BudgetExceededError("active_seconds", self.budgets.active_seconds)
         if self.active_seconds() > self.budgets.run_active_seconds:
             raise BudgetExceededError("run_active_seconds", self.budgets.run_active_seconds)
@@ -189,6 +259,8 @@ class BudgetMeter:
 
     def _charge(self, names: tuple[str, ...], run_counter: str) -> None:
         self.check_time()
+        if self._external:
+            names = ()
         for name in names:
             limit = getattr(self.budgets, name)
             if self._stage[name] + 1 > limit:
@@ -208,6 +280,12 @@ class BudgetMeter:
             names = GENERATION_CHARGES[purpose]
         except KeyError:
             raise ValueError(f"unknown generation purpose {purpose!r}") from None
+        if purpose == "external":
+            if self._external_generations + 1 > self.budgets.external_generations:
+                raise BudgetExceededError("external_generations", self.budgets.external_generations)
+            self._charge(names, "generations")
+            self._external_generations += 1
+            return
         self._charge(names, "generations")
 
     def charge_tool_call(self) -> None:
@@ -233,6 +311,7 @@ class BudgetMeter:
         """What the run used over all stages, as recorded in its trace."""
         return {
             **self._total,
+            "external_generations": self._external_generations,
             "active_ms": round(self.active_seconds() * 1000),
             "stages": self._stages,
         }

@@ -94,6 +94,8 @@ _REQUIRED_PAYLOAD: dict[EventType, tuple[str, ...]] = {
     # Spec 0.6 section 8: the input the run waits for is never blank.
     EventType.CLARIFICATION_REQUIRED: ("question", "language", "reason_code", "missing"),
     EventType.CLARIFICATION_ANSWERED: ("input", "missing"),
+    # Spec 0.9 section 8 (RM13): the escalation reason and the external model.
+    EventType.HANDOFF_STARTED: ("reason_code", "model"),
 }
 
 # Native execution_mode values, shared by the chat header (sections 7.1, 7.2).
@@ -262,6 +264,15 @@ def _check_answered_payload(payload: Mapping[str, Any]) -> None:
         raise TraceEventError("'waited_ms' must be a non-negative integer")
 
 
+def _check_handoff_payload(payload: Mapping[str, Any]) -> None:
+    """The completed operations a handoff carries (spec 0.9 section 8; RM13, RM14)."""
+    if "operation_ids" not in payload:
+        raise TraceEventError("handoff.started payload needs 'operation_ids'")
+    ids = payload["operation_ids"]
+    if not _is_array(ids) or not all(_is_text(operation_id) for operation_id in ids):
+        raise TraceEventError("'operation_ids' must be an array of non-blank strings")
+
+
 def _check_result_reference(payload: Mapping[str, Any]) -> None:
     """A result or its retained artifact, with explicit truncation (RM22)."""
     if "result" in payload:
@@ -294,6 +305,8 @@ def _check_payload(event_type: EventType, payload: Mapping[str, Any]) -> None:
         _check_clarification_payload(payload)
     if event_type is EventType.CLARIFICATION_ANSWERED:
         _check_answered_payload(payload)
+    if event_type is EventType.HANDOFF_STARTED:
+        _check_handoff_payload(payload)
     if event_type in (EventType.RUN_COMPLETED, EventType.RUN_FAILED, EventType.RUN_CANCELLED):
         _check_terminal_payload(event_type, payload)
     if event_type in _TOOL_EVENTS:

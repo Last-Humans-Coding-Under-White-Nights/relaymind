@@ -94,6 +94,13 @@ REQUIRED_PAYLOAD = {
     # Spec 0.6 section 8: the redacted resume input, the input it
     # answers, and the monotonic waiting time (RM25).
     "clarification.answered": {"input": "staging-api", "missing": "service", "waited_ms": 1200},
+    # Spec 0.9 section 8 (RM13): the RM04 reason, the external model, and
+    # the completed operations the handoff envelope carries.
+    "handoff.started": {
+        "reason_code": "complex_skill",
+        "model": "external-model",
+        "operation_ids": ["op_1"],
+    },
 }
 
 # Payload keys whose published schema is not plain non-blank text.
@@ -115,6 +122,9 @@ NON_TEXT_PAYLOAD = {
         "waiting_seconds": {"type": "number", "exclusiveMinimum": 0},
     },
     "clarification.answered": {"waited_ms": {"type": "integer", "minimum": 0}},
+    "handoff.started": {
+        "operation_ids": {"type": "array", "items": {"type": "string", "pattern": "\\S"}}
+    },
 }
 
 
@@ -582,6 +592,12 @@ SAMPLE_EVENTS.update(
         "completed-boolean-external": terminal_with("run.completed", external_calls=True),
         "completed-text-model-calls": terminal_with("run.completed", model_calls="x"),
         "failed-scalar-model-call": terminal_with("run.failed", model_calls=[1]),
+        "handoff-no-operations": terminal_with("handoff.started", operation_ids=[]),
+        "handoff-blank-operation": terminal_with("handoff.started", operation_ids=[" "]),
+        "handoff-text-operations": terminal_with("handoff.started", operation_ids="op_1"),
+        "handoff-integer-operation": terminal_with("handoff.started", operation_ids=[5]),
+        "handoff-blank-reason": terminal_with("handoff.started", reason_code=" "),
+        "handoff-blank-model": terminal_with("handoff.started", model=" "),
     }
 )
 

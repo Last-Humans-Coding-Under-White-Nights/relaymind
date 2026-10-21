@@ -6,13 +6,14 @@ and four seconds of active local time including routing and tools; all
 recorded in the run. RM04: exceeding a budget, unrepaired output,
 unavailable local capability, or oversized context escalates if external
 dispatch is permitted and otherwise returns needs_external, with a
-reason code; never silent continuation. External dispatch is not
-configured before the handoff work (#18), so every escalation here ends
-as needs_external. RM02 / RM09: invalid routing output or an invalid
-tool proposal never executes a tool. RM05: an identifier the request,
-context, or tool results never named is not used. RM10: the same call
-in one run replays the recorded result. Section 4.1: oversized router
-input bypasses the fast path without a routing generation.
+reason code; never silent continuation. These tests configure no
+external model (the handoff itself is covered in test_ac02_handoff.py,
+#18), so every escalation here ends as needs_external. RM02 / RM09:
+invalid routing output or an invalid tool proposal never executes a tool.
+RM05: an identifier the request, context, or tool results never named is
+not used. RM10: the same call in one run replays the recorded result.
+Section 4.1: oversized router input bypasses the fast path without a
+routing generation.
 Issues #14 and #15.
 """
 
@@ -281,6 +282,7 @@ def test_budget_usage_counts_routing_repair_and_tools(tmp_path):
         "local_generations": 4,
         "repair_generations": 1,
         "tool_calls": 1,
+        "external_generations": 0,
         "active_ms": 2500,
         "stages": 1,
     }

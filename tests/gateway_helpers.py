@@ -6,6 +6,11 @@ scripted model turns (spec section 13). Nothing here touches a
 production resource. Every gateway also has an external model double
 that records requests, so a test measures external calls (RM01) instead
 of trusting a number in the trace.
+
+The external model is configured only when a test scripts it
+(``external_turns``). Without it the gateway has no external model, so
+every escalation ends as needs_external (RM04), and the double still
+records any call that should not have happened (RM01).
 """
 
 import asyncio
@@ -19,7 +24,9 @@ from relaymind.adapters import Completed, TextDelta, ToolCall, Usage
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
 from relaymind.orchestrator.run_state import RunState
+from relaymind.orchestrator.workflows import PARALLEL_WORKFLOWS
 from relaymind.skills import SkillRegistry
+from relaymind.skills.predicates import COMPLETION_PREDICATES
 from relaymind.store import RunStore
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry
 from relaymind.tools.sandbox import (
@@ -62,20 +69,37 @@ def build_gateway(
     sandbox_clock=None,
     caller: CallerContext | None = None,
     seed: Path = BASELINE,
+    external_turns=None,
+    external_capabilities=None,
+    skill_roots=None,
     **options,
 ) -> Gateway:
-    """A gateway over a fresh sandbox; options go to LocalOrchestrator."""
+    """A gateway over a fresh sandbox; options go to LocalOrchestrator.
+
+    external_turns scripts the external model (RM13); without it none
+    is configured. skill_roots replaces the checked-in demo skills.
+    """
     clock = clock or FakeClock()
     tools = ToolRegistry(clock=clock)
     sandbox = SandboxDataService(
         seed, work_dir=tmp_path / "sandbox", clock=sandbox_clock or clock, reset=True
     )
     register_demo_tools(tools, sandbox)
-    skills = make_demo_skills(tools)
+    if skill_roots is None:
+        skills = make_demo_skills(tools)
+    else:
+        skills = SkillRegistry.load(
+            skill_roots,
+            tools=tools,
+            predicates=COMPLETION_PREDICATES.keys(),
+            workflows=PARALLEL_WORKFLOWS,
+        )
     adapter = ScriptedAdapter(
         turns=turns, capabilities=capabilities, input_tokens=input_tokens, on_generate=on_generate
     )
-    external = ScriptedAdapter(turns=[], locality="external")
+    external = ScriptedAdapter(
+        turns=external_turns or [], capabilities=external_capabilities, locality="external"
+    )
     store = RunStore(tmp_path / "runs.sqlite3", clock=clock)
     orchestrator = LocalOrchestrator(
         ConfiguredModel(adapter=adapter, model_id=LOCAL_MODEL_ID),
@@ -85,7 +109,11 @@ def build_gateway(
         policy=OperatorPolicy(enabled_tools=DEMO_TOOL_NAMES),
         caller=caller or CallerContext(permissions=frozenset({READ_PERMISSION})),
         budgets=budgets or LocalBudgets(),
-        external=ConfiguredModel(adapter=external, model_id=EXTERNAL_MODEL_ID),
+        external=(
+            None
+            if external_turns is None
+            else ConfiguredModel(adapter=external, model_id=EXTERNAL_MODEL_ID)
+        ),
         **options,
     )
     return Gateway(orchestrator, adapter, external, store, sandbox, tools, skills, clock)

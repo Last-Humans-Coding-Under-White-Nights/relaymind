@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaymind.local/schemas/handoff_envelope.v1.json",
+  "title": "HandoffEnvelope",
+  "description": "Everything a handoff to the external model preserves (spec section 8, RM13). Unknown fields are rejected. Each evidence result is a ToolResult (tool_result.v1.json); the validator checks it against that schema, and also checks that every evidence entry belongs to a listed completed operation and that no operation is listed twice. Local assumptions appear only in local_proposals, each labeled as a proposal.",
+  "type": "object",
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string", "pattern": "\\S"},
+    "original_messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {"enum": ["system", "developer", "user", "assistant"]},
+          "content": {"type": "string"}
+        },
+        "required": ["role", "content"],
+        "additionalProperties": false
+      }
+    },
+    "skill": {
+      "type": ["object", "null"],
+      "properties": {
+        "name": {"type": "string", "pattern": "\\S"},
+        "version": {"type": "string", "pattern": "\\S"},
+        "content_hash": {"type": "string", "pattern": "\\S"}
+      },
+      "required": ["name", "version", "content_hash"],
+      "additionalProperties": false
+    },
+    "completed_operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "operation_id": {"type": "string", "pattern": "\\S"},
+          "tool_name": {"type": "string", "pattern": "\\S"},
+          "arguments": {"type": "object"},
+          "status": {"enum": ["succeeded", "failed"]}
+        },
+        "required": ["operation_id", "tool_name", "arguments", "status"],
+        "additionalProperties": false
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "operation_id": {"type": "string", "pattern": "\\S"},
+          "source_ref": {"type": "string", "pattern": "\\S"},
+          "truncated": {"type": "boolean"},
+          "result": {"type": "object"}
+        },
+        "required": ["operation_id", "source_ref", "truncated", "result"],
+        "additionalProperties": false
+      }
+    },
+    "local_proposals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {"enum": ["tool_call", "answer_draft"]},
+          "label": {"const": "proposal"},
+          "proposal_id": {"type": "string", "pattern": "\\S"},
+          "tool_name": {"type": "string", "pattern": "\\S"},
+          "arguments": {"type": "object"},
+          "rejection_code": {"type": ["string", "null"]},
+          "text": {"type": "string"}
+        },
+        "required": ["kind", "label"],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {"properties": {"kind": {"const": "tool_call"}}},
+            "then": {"required": ["tool_name", "arguments"]},
+            "else": {"required": ["text"]}
+          }
+        ]
+      }
+    },
+    "pending_work": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {"enum": ["tool_call", "final_answer"]},
+          "tool_name": {"type": ["string", "null"]}
+        },
+        "required": ["kind", "tool_name"],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {"properties": {"kind": {"const": "tool_call"}}},
+            "then": {"properties": {"tool_name": {"type": "string", "pattern": "\\S"}}},
+            "else": {"properties": {"tool_name": {"type": "null"}}}
+          }
+        ]
+      }
+    },
+    "allowed_tools": {"type": "array", "items": {"type": "string", "pattern": "\\S"}, "uniqueItems": true},
+    "reason_code": {
+      "enum": [
+        "simple_skill",
+        "complex_skill",
+        "missing_input",
+        "local_budget",
+        "invalid_output",
+        "tool_failure",
+        "context_limit",
+        "capability_missing",
+        "parallel_workflow",
+        "execution_mode"
+      ]
+    },
+    "remaining_budgets": {
+      "type": "object",
+      "additionalProperties": {"type": "number", "minimum": 0}
+    },
+    "language": {"enum": ["en", "zh"]}
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "original_messages",
+    "skill",
+    "completed_operations",
+    "evidence",
+    "local_proposals",
+    "pending_work",
+    "allowed_tools",
+    "reason_code",
+    "remaining_budgets",
+    "language"
+  ],
+  "additionalProperties": false
+}

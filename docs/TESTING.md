@@ -41,6 +41,15 @@ itself, with the manifest's SHA-256; any other file fails the run.
   works the same way. Set `RELAYMIND_TRACE_OUT=<file.json>` to write
   the full traces (the warm-up run included) that `EVIDENCE.md` records;
   nothing is written otherwise.
+- AC02, deterministic: `pytest tests/test_ac02_handoff.py` runs the
+  handoff with scripted local and external model doubles: the external
+  request carries the original task and the completed evidence, completed
+  operations are not replayed, local assumptions stay labeled proposals,
+  evidence over the external context limit fails with
+  `context_limit_exceeded` before any external call, and the local actor
+  cannot dispatch after the handoff. `tests/test_handoff_envelope.py`
+  checks the published schema against the validator. No live external
+  model is run, so there is no live AC02 record yet.
 - AC03 and AC04, deterministic: `pytest tests/test_ac03_clarification.py`
   (clarification and resume) and `pytest tests/test_ac04_invalid_proposals.py`
   (invalid proposals never execute) run with scripted model doubles in
@@ -52,9 +61,10 @@ itself, with the manifest's SHA-256; any other file fails the run.
 checks completed local runs, clarification/resume, failed and cancelled
 calls, monotonic durations despite UTC clock changes, and large-result
 persistence. Completed traces identify every actual model request, the
-final-answer model, and the external call count. Confirmation, handoff,
-and cache-hit scenarios exercise the state/store event contracts;
-execution of those flows remains in #19, #18, and #31 respectively.
+final-answer model, and the external call count. Confirmation and
+cache-hit scenarios exercise the state/store event contracts; their
+execution remains in #19 and #31. The handoff flow runs in
+`tests/test_ac02_handoff.py` (#18).
 
 The published `src/relaymind/store/schemas/trace_event.v1.json` and the
 write-time validator require terminal timing and completed/failed call

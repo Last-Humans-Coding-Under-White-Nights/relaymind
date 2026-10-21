@@ -223,7 +223,11 @@ def test_future_flow_event_contracts_persist_in_state_scenarios(scenario, tmp_pa
                 state = "waiting_confirmation"
             else:
                 kind = EventType.HANDOFF_STARTED
-                payload = {"reason_code": "complex_skill", "model": "external-model"}
+                payload = {
+                    "reason_code": "complex_skill",
+                    "model": "external-model",
+                    "operation_ids": [],
+                }
                 state = "external_running"
             record = machine.transition(
                 record.run_id, record.version, state, event=(kind, "gateway", payload)

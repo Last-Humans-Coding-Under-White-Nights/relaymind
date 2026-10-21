@@ -187,6 +187,9 @@ def test_the_budgets_and_their_use_are_recorded(tmp_path, case):
             "run_tool_executions": 6,
             "waiting_seconds": 300.0,
             "clarification_rounds": 2,
+            # Spec 0.9 section 11: the external stage limits.
+            "external_generations": 6,
+            "external_seconds": 30.0,
         }
     )
     offered = accepted.payload["skills_offered"]

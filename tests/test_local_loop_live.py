@@ -76,11 +76,13 @@ def gateway(server, manifest, adapter_settings, tmp_path_factory):  # noqa: F811
         )
     )
     model_id = manifest.file_name
-    # A recording external double: RM01 is measured on it, not assumed.
+    # A recording external double that is not configured on the gateway:
+    # with an external model configured, an escalation would dispatch to it
+    # (RM13), and these live runs measure the local path. The trace count
+    # of external calls is what proves RM01 here.
     external = ScriptedAdapter(turns=[], locality="external")
     orchestrator = LocalOrchestrator(
         ConfiguredModel(adapter=adapter, model_id=model_id),
-        external=ConfiguredModel(adapter=external, model_id="unused-external"),
         skills=skills,
         tools=tools,
         store=store,

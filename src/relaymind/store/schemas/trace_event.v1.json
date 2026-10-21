@@ -261,6 +261,21 @@
       }
     },
     {
+      "if": {"properties": {"event_type": {"enum": ["handoff.started"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "reason_code": {"type": "string", "pattern": "\\S"},
+              "model": {"type": "string", "pattern": "\\S"},
+              "operation_ids": {"type": "array", "items": {"type": "string", "pattern": "\\S"}}
+            },
+            "required": ["reason_code", "model", "operation_ids"]
+          }
+        }
+      }
+    },
+    {
       "if": {"properties": {"event_type": {"enum": ["cache.hit"]}}, "required": ["event_type"]},
       "then": {
         "properties": {

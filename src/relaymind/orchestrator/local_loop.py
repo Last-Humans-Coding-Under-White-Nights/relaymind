@@ -51,11 +51,25 @@ before it runs, and every tool execution is charged when the executor
 is about to run it (a replay is not an execution). Exceeding a budget
 is an explicit stop with reason code local_budget, never silent
 continuation (RM04). A tool is bounded by its timeout or the remaining
-active budget, whichever is shorter. External dispatch (handoff, #18)
-is not wired into this loop, so every escalation ends the run as
-failed with error code needs_external and the RM04 reason code; partial
-evidence stays in the trace (section 5). An external model, when one is
-configured, is never called here.
+active budget, whichever is shorter.
+
+5. Escalation (RM04, RM13, RM14). Every stop above is an Escalation with
+   an RM04 reason code. If external dispatch is permitted (an external
+   model is configured, the mode is not local_only, and the entire-run
+   limits leave room), ``_escalate`` builds the HandoffEnvelope from the
+   run store (``relaymind.orchestrator.handoff``), measures the external
+   request against the external context limit, records handoff.started,
+   and moves the run to external_running. The local actor's dispatch
+   authority is revoked at that point; the external model then proposes
+   tools that run through the same validation, provenance check, and
+   executor, and it owns the final answer (RM14, RM20). A proposal that
+   repeats a completed operation gets the recorded result and runs no
+   handler (RM10). Evidence over the external context limit fails the
+   run with context_limit_exceeded before any external call (RM13); an
+   external stage that cannot finish fails with external_failed
+   (section 11). If dispatch is not permitted, the run ends as failed
+   with error code needs_external and the RM04 reason code; partial
+   evidence stays in the trace (section 5).
 
 Any other exception, in the first stage or after a resume, fails the
 run with error code internal_error and its run.failed event, which
@@ -96,6 +110,14 @@ from relaymind.adapters import (
 )
 from relaymind.orchestrator import identifiers
 from relaymind.orchestrator.budgets import BudgetExceededError, BudgetMeter, LocalBudgets
+from relaymind.orchestrator.handoff import (
+    DispatchAuthority,
+    RequestSize,
+    build_handoff_envelope,
+    external_messages,
+    measure_request,
+    unsettled_operations,
+)
 from relaymind.orchestrator.route_decision import (
     REASON_CODES,
     ExecutionMode,
@@ -104,7 +126,7 @@ from relaymind.orchestrator.route_decision import (
     RouteDecision,
     RouteDecisionError,
 )
-from relaymind.orchestrator.router import Router, Routing
+from relaymind.orchestrator.router import Router, Routing, request_language
 from relaymind.orchestrator.run_state import (
     TERMINAL_STATES,
     InvalidTransitionError,
@@ -132,6 +154,8 @@ INTERNAL_ERROR = "internal_error"
 INPUT_EXPIRED = "input_expired"
 MISSING_INPUT = "missing_input"
 INVALID_RESUME_INPUT = "invalid_resume_input"
+CONTEXT_LIMIT_EXCEEDED = "context_limit_exceeded"
+EXTERNAL_FAILED = "external_failed"
 CONFIRMATION_REQUIRED = "confirmation_required"
 ROUTING_MECHANISM = "native_function_calling"
 RESUME_MECHANISM = "clarification_resume"
@@ -150,6 +174,13 @@ FINAL_INSTRUCTION = "Write the final answer to the user now, from the tool resul
 ANSWER_LANGUAGE = {Language.EN: "Answer in English.", Language.ZH: "请用中文回答。"}
 # Local generations are deterministic, like the routing generation.
 LOCAL_OPTIONS = GenerationOptions(temperature=0)
+# External providers differ in the sampling options they accept (RM18),
+# so the external stage sets none.
+EXTERNAL_OPTIONS = GenerationOptions()
+CORRECTION = (
+    "[gateway] The answer did not meet the skill's completion criteria. "
+    "Answer again from the tool results only, following the skill rules."
+)
 
 
 @dataclass(frozen=True)
@@ -218,6 +249,23 @@ class Escalation(Exception):
         self.reason_code = reason_code
         self.detail = detail
         self.extra = extra
+
+
+class ExternalFailure(Exception):
+    """The external stage cannot finish (error code external_failed, section 11)."""
+
+    def __init__(self, detail: str, **extra: Any) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.extra = extra
+
+
+class ContextLimitExceeded(Exception):
+    """The external request does not fit the external context limit (RM13)."""
+
+    def __init__(self, size: RequestSize) -> None:
+        super().__init__(f"external request of {size.size} exceeds the limit {size.limit}")
+        self.size = size
 
 
 @dataclass(frozen=True)
@@ -418,6 +466,15 @@ class _Run:
         # Secret values seen in tool results, scrubbed from model text (RM12).
         self.secrets: set[str] = set()
         self._calls = 0
+        # RM14: who may dispatch and who owns the final answer.
+        self.authority = DispatchAuthority()
+        # The skill the local loop loaded, and every tool result of the run.
+        self.skill: Skill | None = None
+        self.results: list[ToolResult] = []
+        # Local proposals that never produced an operation, and rejected
+        # drafts; a handoff carries them labeled as proposals (RM13).
+        self.local_proposals: dict[str, dict[str, Any]] = {}
+        self.drafts: list[dict[str, Any]] = []
 
     # -- trace helpers ---------------------------------------------------------
 
@@ -426,8 +483,16 @@ class _Run:
         return self.record.run_id
 
     @property
+    def active_model(self) -> ConfiguredModel:
+        """The model that holds dispatch authority now (RM14)."""
+        if self.authority.holder == EXTERNAL_ACTOR:
+            assert self.o.external is not None
+            return self.o.external
+        return self.o.model
+
+    @property
     def actor(self) -> str:
-        return self.o.model.actor
+        return self.active_model.actor
 
     def emit(self, event_type: EventType | str, actor: str, payload: Mapping[str, Any]) -> None:
         self.o.store.append_event(self.run_id, EventType(event_type), actor, payload)
@@ -507,9 +572,9 @@ class _Run:
             self.move(RunState.LOCAL_RUNNING)
             answer = await self._local(decision)
         except Escalation as stop:
-            return self._needs_external(stop)
+            return await self._escalate(stop)
         except BudgetExceededError as exceeded:
-            return self._needs_external(
+            return await self._escalate(
                 Escalation(exceeded.reason_code, str(exceeded), budget=exceeded.budget)
             )
         self.move(
@@ -722,6 +787,207 @@ class _Run:
         except Exception:
             pass
 
+    # -- escalation and the external stage (RM04, RM13, RM14) ----------------------
+
+    async def _escalate(self, stop: Escalation) -> RunOutcome:
+        """Hand the run to the external model, or end it as needs_external (RM04).
+
+        External dispatch needs a configured external model, an effective
+        mode other than local_only, and room in the entire-run limits. An
+        operation with no known outcome blocks the handoff (RM14). The
+        envelope is measured against the external context limit before
+        anything is sent (RM13).
+        """
+        external = self.o.external
+        if external is None or self.mode is ExecutionMode.LOCAL_ONLY:
+            return self._needs_external(stop)
+        room = self.meter.external_room()
+        if room is not None:
+            return self._needs_external(
+                Escalation(
+                    stop.reason_code, stop.detail, **{**stop.extra, "dispatch_blocked": room.budget}
+                )
+            )
+        operations = self.o.store.tool_operations(self.run_id)
+        unsettled = unsettled_operations(operations)
+        if unsettled:
+            blocker = unsettled[0]
+            return self._needs_external(
+                Escalation(
+                    "tool_failure",
+                    f"operation {blocker['operation_id']} has no known outcome; it blocks handoff",
+                    operation_id=blocker["operation_id"],
+                    tool_status=blocker["status"],
+                )
+            )
+
+        skill = self.skill
+        if skill is None and self.decision is not None and self.decision.skill_id is not None:
+            skill = self._load_skill(self.decision.skill_id)
+        if skill is not None:
+            allowlist: tuple[str, ...] = skill.allowed_tools
+            catalog: tuple[tuple[str, str], ...] = ()
+        else:
+            offered = [self.o.skills.get(name) for name in self.o.router.offered]
+            allowlist = tuple(dict.fromkeys(t for s in offered for t in s.allowed_tools))
+            catalog = tuple((s.name, s.description) for s in offered)
+        available = self.o.tools.available_tools(
+            skill_allowlist=allowlist, policy=self.o.policy, caller=self.o.caller
+        )
+        schemas = self.o.tools.tool_schemas(name for name in allowlist if name in available)
+        language = self.language or request_language(self.messages)
+        done = {op["tool_name"] for op in operations}
+        pending: list[dict[str, Any]] = (
+            [{"kind": "tool_call", "tool_name": s.name} for s in schemas if s.name not in done]
+            if skill is not None
+            else []
+        )
+        pending.append({"kind": "final_answer", "tool_name": None})
+        envelope = build_handoff_envelope(
+            run_id=self.run_id,
+            messages=self.messages,
+            skill=None
+            if skill is None
+            else {"name": skill.name, "version": skill.version, "content_hash": skill.content_hash},
+            operations=operations,
+            proposals=[*self.local_proposals.values(), *self.drafts],
+            allowed_tools=[s.name for s in schemas],
+            pending_work=pending,
+            reason_code=stop.reason_code,
+            remaining_budgets=self.meter.remaining_budgets(),
+            language=language.value,
+        )
+        conversation = list(
+            external_messages(
+                envelope,
+                skill_body=None if skill is None else skill.body,
+                catalog=catalog,
+                answer_instruction=ANSWER_LANGUAGE[language],
+            )
+        )
+        try:
+            capabilities = await external.adapter.capabilities()
+            if schemas:
+                capabilities.require("tool_calling")
+            size = await measure_request(external.adapter, conversation, schemas)
+        except (UnsupportedCapabilityError, TokenCountError) as exc:
+            return self._fail(
+                EXTERNAL_FAILED,
+                detail=f"the external request could not be prepared: {exc}",
+                reason_code=stop.reason_code,
+            )
+        if not size.fits:
+            return self._fail_context(size)
+
+        self.move(
+            RunState.EXTERNAL_RUNNING,
+            event=(
+                EventType.HANDOFF_STARTED,
+                GATEWAY_ACTOR,
+                {
+                    "reason_code": stop.reason_code,
+                    "model": external.model_id,
+                    "skill": None if envelope.skill is None else dict(envelope.skill),
+                    "operation_ids": list(envelope.operation_ids),
+                    "allowed_tools": list(envelope.allowed_tools),
+                    "request": size.to_json_object(),
+                },
+            ),
+        )
+        # RM14: from here only the external actor dispatches or answers.
+        self.authority.hand_off_to_external()
+        self.meter.start_external()
+        try:
+            answer = await self._external(conversation, schemas, available, skill, size)
+        except ContextLimitExceeded as exceeded:
+            return self._fail_context(exceeded.size)
+        except ExternalFailure as failure:
+            return self._fail(EXTERNAL_FAILED, detail=failure.detail, **failure.extra)
+        except Escalation as stopped:
+            # A stop inside the external stage has no further escalation (RM14).
+            return self._fail(
+                EXTERNAL_FAILED,
+                detail=stopped.detail,
+                reason_code=stopped.reason_code,
+                **stopped.extra,
+            )
+        except BudgetExceededError as exceeded:
+            return self._fail(EXTERNAL_FAILED, detail=str(exceeded), budget=exceeded.budget)
+        self.move(
+            RunState.COMPLETED,
+            event=(
+                EventType.RUN_COMPLETED,
+                GATEWAY_ACTOR,
+                {"final_answer_model": external.model_id, "answer": answer, **self._summary()},
+            ),
+        )
+        return RunOutcome(self.run_id, RunState.COMPLETED, answer=answer, decision=self.decision)
+
+    def _fail_context(self, size: RequestSize) -> RunOutcome:
+        """Evidence over the external context budget fails explicitly (RM13)."""
+        return self._fail(
+            CONTEXT_LIMIT_EXCEEDED,
+            reason_code="context_limit",
+            detail=(
+                f"the external request needs {size.size} ({size.method}) "
+                f"and the external context limit is {size.limit}"
+            ),
+            request=size.to_json_object(),
+        )
+
+    async def _external(
+        self,
+        conversation: list[Message],
+        schemas: tuple[ToolSchema, ...],
+        available: frozenset[str],
+        skill: Skill | None,
+        first_size: RequestSize,
+    ) -> str:
+        """The external model's bounded loop: propose tools, then answer (RM13, RM14).
+
+        Tool proposals take the local path's checks and the same
+        executor. A proposal that repeats a completed operation is
+        answered from the record and runs no handler (RM10). The answer
+        is buffered, checked against the skill's completion predicate,
+        and published once (RM20).
+        """
+        external = self.o.external
+        assert external is not None
+        predicate = None if skill is None else COMPLETION_PREDICATES[skill.completion_predicate]
+        size: RequestSize | None = first_size
+        while True:
+            if size is None:
+                # Tool results accumulate, so the request is measured again (RM13).
+                size = await measure_request(external.adapter, conversation, schemas)
+            if not size.fits:
+                raise ContextLimitExceeded(size)
+            size = None
+            _, generation = await self._generate(
+                "external", conversation, schemas, EXTERNAL_OPTIONS, external
+            )
+            if generation.calls:
+                call = generation.calls[0]
+                admitted, rejection = self._admit(generation.calls, available, self.results)
+                proposal_id = self._propose(call, skill, rejection)
+                for extra in generation.calls[1:]:
+                    self._propose(extra, skill, rejection)
+                if rejection is not None:
+                    conversation += _tool_exchange(call, {"error": rejection})
+                    continue
+                assert admitted is not None
+                result = await self._dispatch(admitted, proposal_id, EXTERNAL_ACTOR)
+                self.results.append(result)
+                conversation += _tool_exchange(call, result.to_json_object())
+                continue
+            if generation.text.strip() and (
+                predicate is None or predicate(generation.text, self.results)
+            ):
+                return self._publish(generation, external, EXTERNAL_ACTOR)
+            conversation += [
+                Message(role=Role.ASSISTANT, content=generation.text or "(no answer)"),
+                Message(role=Role.USER, content=CORRECTION),
+            ]
+
     # -- routing ---------------------------------------------------------------
 
     async def _route(self) -> Routing:
@@ -796,11 +1062,14 @@ class _Run:
         messages: Sequence[Message],
         tool_schemas: Sequence[ToolSchema],
         options: GenerationOptions = LOCAL_OPTIONS,
+        model: ConfiguredModel | None = None,
     ) -> tuple[str, _Generation]:
         """Charge, run, and trace one model call (RM03, RM16); the only budget path.
 
-        Returns the call ID and what the model produced.
+        model is the local model unless the external stage passes the
+        external one. Returns the call ID and what the model produced.
         """
+        model = model or self.o.model
         self.meter.charge_generation(purpose)
         self._calls += 1
         call_id = f"{self.run_id}_gen{self._calls}_{purpose}"
@@ -810,12 +1079,13 @@ class _Run:
             tool_schemas=tuple(tool_schemas),
             options=options,
         )
-        model_id = self.o.model.model_id
-        call = {"call_id": call_id, "model": model_id, "actor": self.actor, "purpose": purpose}
+        model_id = model.model_id
+        actor = model.actor
+        call = {"call_id": call_id, "model": model_id, "actor": actor, "purpose": purpose}
         self.model_calls.append(call)
         self.emit(
             EventType.MODEL_STARTED,
-            self.actor,
+            actor,
             {**call, "tools_offered": [t.name for t in request.tool_schemas]},
         )
         started = self.o.clock.monotonic()
@@ -823,7 +1093,7 @@ class _Run:
         usage: Usage | None = None
         finish: str | None = None
         failure: GenerationFailed | None = None
-        adapter = self.o.model.adapter
+        adapter = model.adapter
         try:
             async with asyncio.timeout(max(self.meter.remaining_seconds(), 0.001)):
                 async for event in adapter.generate(request):
@@ -850,7 +1120,7 @@ class _Run:
             redactor = self.o.redactor
             self.emit(
                 EventType.MODEL_FINISHED,
-                self.actor,
+                actor,
                 {
                     "call_id": call_id,
                     "model": model_id,
@@ -878,6 +1148,10 @@ class _Run:
         if failure is not None:
             if failure.code == "local_budget":
                 raise self.meter.time_exhausted()
+            if model is not self.o.model:
+                raise ExternalFailure(
+                    f"external generation failed: {failure.code}", generation_error=failure.code
+                )
             raise Escalation("capability_missing", f"local generation failed: {failure.code}")
         self.meter.check_time()
         return call_id, generation
@@ -896,7 +1170,7 @@ class _Run:
 
     async def _local(self, decision: RouteDecision) -> str:
         assert decision.skill_id is not None
-        skill = self._load_skill(decision.skill_id)
+        skill = self.skill = self._load_skill(decision.skill_id)
         available = self.o.tools.available_tools(
             skill_allowlist=skill.allowed_tools, policy=self.o.policy, caller=self.o.caller
         )
@@ -914,7 +1188,7 @@ class _Run:
             *self.messages,
             Message(role=Role.SYSTEM, content=f"{BODY_HEADER}\n{skill.body}"),
         ]
-        results: list[ToolResult] = []
+        results = self.results
         purpose = "skill"
 
         while True:
@@ -938,7 +1212,8 @@ class _Run:
                     conversation += _tool_exchange(call, {"error": rejection})
                     continue
                 assert admitted is not None
-                result = await self._dispatch(admitted, proposal_id)
+                result = await self._dispatch(admitted, proposal_id, LOCAL_ACTOR)
+                self.local_proposals.pop(proposal_id, None)
                 results.append(result)
                 if result.status is not ToolStatus.SUCCEEDED:
                     raise Escalation(
@@ -953,6 +1228,7 @@ class _Run:
             # A text answer is a finalize proposal (section 7.3).
             if generation.text.strip() and predicate(generation.text, results):
                 return await self._final(conversation, predicate, results)
+            self._keep_draft(generation.text)
             problem = {
                 "code": "completion_predicate_unmet" if generation.text.strip() else "empty_output",
                 "message": (
@@ -963,14 +1239,15 @@ class _Run:
             purpose = self._repair_or_stop(problem)
             conversation += [
                 Message(role=Role.ASSISTANT, content=generation.text or "(no answer)"),
-                Message(
-                    role=Role.USER,
-                    content=(
-                        "[gateway] The answer did not meet the skill's completion criteria. "
-                        "Answer again from the tool results only, following the skill rules."
-                    ),
-                ),
+                Message(role=Role.USER, content=CORRECTION),
             ]
+
+    def _keep_draft(self, text: str) -> None:
+        """Keep a rejected local answer so a handoff can label it a proposal (RM13)."""
+        if text.strip():
+            self.drafts.append(
+                {"kind": "answer_draft", "label": "proposal", "text": self.scrub(text)}
+            )
 
     def _repair_or_stop(self, problem: Mapping[str, str]) -> str:
         """The next purpose, repair, if a repair is left; otherwise stop (RM04)."""
@@ -1015,13 +1292,16 @@ class _Run:
                 "code": CONFIRMATION_REQUIRED,
                 "message": (
                     f"tool {call.tool_name!r} is mutating and needs a confirmation, "
-                    "which this local loop cannot request yet"
+                    "which this run cannot request yet"
                 ),
             }
         return admitted, None
 
-    def _propose(self, call: ToolCall, skill: Skill, rejection: dict[str, str] | None) -> str:
+    def _propose(
+        self, call: ToolCall, skill: Skill | None, rejection: dict[str, str] | None
+    ) -> str:
         proposal_id = f"proposal_{uuid.uuid4().hex[:16]}"
+        arguments = self.o.redactor.redact(dict(call.arguments))
         self.emit(
             EventType.TOOL_PROPOSED,
             self.actor,
@@ -1029,19 +1309,33 @@ class _Run:
                 "proposal_id": proposal_id,
                 "call_id": call.call_id,
                 "tool_name": call.tool_name,
-                "arguments": self.o.redactor.redact(dict(call.arguments)),
-                "skill_id": skill.name,
-                "skill_version": skill.version,
+                "arguments": arguments,
+                "skill_id": None if skill is None else skill.name,
+                "skill_version": None if skill is None else skill.version,
                 "run_state_version": self.record.version,
-                "model": self.o.model.model_id,
+                "model": self.active_model.model_id,
                 "admissible": rejection is None,
                 "rejection": rejection,
             },
         )
+        if self.authority.holder == LOCAL_ACTOR:
+            # Until it produces an operation, it is only a proposal (RM13).
+            self.local_proposals[proposal_id] = {
+                "kind": "tool_call",
+                "label": "proposal",
+                "proposal_id": proposal_id,
+                "tool_name": call.tool_name,
+                "arguments": arguments,
+                "rejection_code": None if rejection is None else rejection["code"],
+            }
         return proposal_id
 
-    async def _dispatch(self, call: ValidatedCall, proposal_id: str) -> ToolResult:
-        """Execute (or replay) the call, with the one retry section 11 allows."""
+    async def _dispatch(self, call: ValidatedCall, proposal_id: str, actor: str) -> ToolResult:
+        """Execute (or replay) the call, with the one retry section 11 allows.
+
+        Only the actor that holds dispatch authority may dispatch (RM14).
+        """
+        self.authority.require(actor)
         execution = await self._execute(call, proposal_id, attempt=1)
         if self.o.executor.may_retry(call, execution.result, attempt=1):
             execution = await self._execute(call, proposal_id, attempt=2)
@@ -1049,7 +1343,7 @@ class _Run:
 
     async def _execute(self, call: ValidatedCall, proposal_id: str, *, attempt: int) -> Execution:
         common = {"proposal_id": proposal_id, "tool_name": call.tool_name, "attempt": attempt}
-        model_id = self.o.model.model_id
+        model_id = self.active_model.model_id
 
         def before_run(operation_id: str) -> None:
             # Only a real execution is charged (RM03); a replay never is.
@@ -1117,14 +1411,25 @@ class _Run:
             raise Escalation("invalid_output", "the final generation proposed a tool call")
         answer = generation.text
         if not answer.strip() or not predicate(answer, results):
+            self._keep_draft(answer)
             raise Escalation(
                 "invalid_output", "the final answer does not meet the completion criteria"
             )
+        return self._publish(generation, self.o.model, LOCAL_ACTOR)
+
+    def _publish(self, generation: _Generation, model: ConfiguredModel, role: str) -> str:
+        """Publish a validated answer as answer.delta events, once (RM14, RM20).
+
+        role is the dispatch role of the model, local or external; the
+        events are labeled with the locality its adapter declares.
+        """
+        self.authority.claim_final_answer(role)
+        answer = generation.text
         published = self.scrub(answer)
         # A secret may span pieces; then the scrubbed answer is one delta.
         pieces = generation.pieces if published == answer else [published]
         drafts: list[EventDraft] = [
-            (EventType.ANSWER_DELTA, self.actor, {"text": piece, "model": self.o.model.model_id})
+            (EventType.ANSWER_DELTA, model.actor, {"text": piece, "model": model.model_id})
             for piece in pieces
             if piece
         ]
