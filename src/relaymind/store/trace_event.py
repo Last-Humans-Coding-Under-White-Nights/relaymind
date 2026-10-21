@@ -15,8 +15,8 @@ no skill was chosen), and the positive waiting_seconds limit in force
 (section 11), clarification.answered names the redacted resume input (non-blank),
 the missing input it answers, and the non-negative integer waited_ms
 from the monotonic clock (spec 0.6 section 8; RM12, RM25), run.completed
-and run.failed, when they carry them, give model_calls as an array of
-objects and external_calls, active_ms, and waiting_ms as non-negative
+and run.failed give model_calls as an array of identified calls and
+external_calls, active_ms, and waiting_ms as non-negative
 integers (section 8, 12.1), cache.hit names the originating version,
 and skill.loaded names the skill, its version, and its content hash
 (RM06). Timestamps are UTC; elapsed_ms
@@ -231,15 +231,27 @@ def _check_clarification_payload(payload: Mapping[str, Any]) -> None:
 _TERMINAL_COUNTS = ("external_calls", "active_ms", "waiting_ms")
 
 
-def _check_terminal_payload(payload: Mapping[str, Any]) -> None:
-    """The section 8 run.completed / run.failed evidence, checked when present (RM16, RM25)."""
+def _check_terminal_payload(event_type: EventType, payload: Mapping[str, Any]) -> None:
+    """Required terminal evidence from section 8 (RM16, RM22, RM25)."""
+    required = ("active_ms", "waiting_ms")
+    if event_type is not EventType.RUN_CANCELLED:
+        required += ("model_calls", "external_calls")
+    for key in required:
+        if key not in payload:
+            raise TraceEventError(f"{event_type} payload needs '{key}'")
     for key in _TERMINAL_COUNTS:
         if key in payload and not _is_count(payload[key], 0):
             raise TraceEventError(f"'{key}' must be a non-negative integer")
     if "model_calls" in payload:
         calls = payload["model_calls"]
-        if not _is_array(calls) or not all(isinstance(call, Mapping) for call in calls):
-            raise TraceEventError("'model_calls' must be an array of objects")
+        if not _is_array(calls) or not all(
+            isinstance(call, Mapping)
+            and all(_is_text(call.get(key)) for key in ("call_id", "model", "actor", "purpose"))
+            for call in calls
+        ):
+            raise TraceEventError(
+                "'model_calls' must identify each call_id, model, actor, and purpose"
+            )
 
 
 def _check_answered_payload(payload: Mapping[str, Any]) -> None:
@@ -250,6 +262,31 @@ def _check_answered_payload(payload: Mapping[str, Any]) -> None:
         raise TraceEventError("'waited_ms' must be a non-negative integer")
 
 
+def _check_result_reference(payload: Mapping[str, Any]) -> None:
+    """A result or its retained artifact, with explicit truncation (RM22)."""
+    if "result" in payload:
+        if "result_ref" in payload:
+            raise TraceEventError("a tool event cannot carry both result and result_ref")
+        result = payload["result"]
+        if not isinstance(result, Mapping) or type(result.get("truncated")) is not bool:
+            raise TraceEventError("a tool result needs a boolean 'truncated'")
+    if "result_ref" not in payload:
+        return
+    ref = check_closed_fields(
+        payload["result_ref"],
+        ("artifact_id", "uri", "size_bytes", "truncated"),
+        TraceEventError,
+        kind="result_ref",
+    )
+    for key in ("artifact_id", "uri"):
+        if not _is_text(ref[key]):
+            raise TraceEventError(f"result_ref needs a non-blank '{key}'")
+    if not _is_count(ref["size_bytes"], 0):
+        raise TraceEventError("result_ref 'size_bytes' must be a non-negative integer")
+    if type(ref["truncated"]) is not bool:
+        raise TraceEventError("result_ref 'truncated' must be a boolean")
+
+
 def _check_payload(event_type: EventType, payload: Mapping[str, Any]) -> None:
     if event_type is EventType.RUN_ACCEPTED:
         _check_accepted_payload(payload)
@@ -257,9 +294,10 @@ def _check_payload(event_type: EventType, payload: Mapping[str, Any]) -> None:
         _check_clarification_payload(payload)
     if event_type is EventType.CLARIFICATION_ANSWERED:
         _check_answered_payload(payload)
-    if event_type in (EventType.RUN_COMPLETED, EventType.RUN_FAILED):
-        _check_terminal_payload(payload)
+    if event_type in (EventType.RUN_COMPLETED, EventType.RUN_FAILED, EventType.RUN_CANCELLED):
+        _check_terminal_payload(event_type, payload)
     if event_type in _TOOL_EVENTS:
+        _check_result_reference(payload)
         ids = [key for key in ("operation_id", "proposal_id") if key in payload]
         if not ids:
             raise TraceEventError(f"{event_type} payload needs operation_id or proposal_id")

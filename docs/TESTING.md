@@ -46,6 +46,42 @@ itself, with the manifest's SHA-256; any other file fails the run.
   (invalid proposals never execute) run with scripted model doubles in
   the default suite. There is no live AC03 or AC04 test yet.
 
+### Required trace events (RM16, RM22, RM25)
+
+`pytest tests/test_required_trace_events.py tests/test_trace_artifacts.py`
+checks completed local runs, clarification/resume, failed and cancelled
+calls, monotonic durations despite UTC clock changes, and large-result
+persistence. Completed traces identify every actual model request, the
+final-answer model, and the external call count. Confirmation, handoff,
+and cache-hit scenarios exercise the state/store event contracts;
+execution of those flows remains in #19, #18, and #31 respectively.
+
+The published `src/relaymind/store/schemas/trace_event.v1.json` and the
+write-time validator require terminal timing and completed/failed call
+inventories. Tool events retain their operation or proposal ID and
+originating model. Interrupted model and tool calls retain finish events
+before the run's terminal event.
+
+`RunStore(max_inline_result_bytes=16384)` stores tool results larger than
+that UTF-8 JSON byte threshold as SQLite artifacts. The trace contains
+`result_ref` in place of `result`, with `artifact_id`, `uri`, `size_bytes`,
+and `truncated`. `read_artifact(artifact_id)` retrieves the retained JSON;
+its `sqlite:artifact/…` URI is an opaque store reference. Artifact content
+is already redacted by the executor, commits with the event, survives
+reopening, and is removed with its run by deletion or retention. The
+executor and model still receive the full result; storing a reference
+does not itself truncate evidence. Predicates requiring complete results
+reject truncated sources instead of falling back to older evidence. The
+diagnostic predicate still accepts partial observations, as its skill
+contract permits.
+
+Store migration 2 adds artifact content and measured state intervals.
+The intervals let cancellation report active and waiting time separately,
+including waits resumed without intervening trace events. Reopening uses
+the last recorded elapsed value as its monotonic baseline; process
+downtime and intervals from before the migration are not reconstructed
+from wall-clock timestamps.
+
 ### Windows qualification notes
 
 The native x86-64 Windows run for #46 used CPython 3.12.10, PowerShell

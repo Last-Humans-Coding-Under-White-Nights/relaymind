@@ -173,6 +173,7 @@ class ToolExecutor:
         attempt: int = 1,
         before_run: Callable[[str], None] | None = None,
         time_limit: Callable[[], float] | None = None,
+        on_finished: Callable[[Execution], None] | None = None,
     ) -> Execution:
         """Replay or run one attempt of a validated call (RM10).
 
@@ -180,7 +181,15 @@ class ToolExecutor:
         run; an exception from it stops here with nothing recorded.
         time_limit() gives the caller's remaining active seconds; the
         handler is bounded by the shorter of it and the tool timeout.
+        on_finished receives every recorded outcome, including a replay
+        or interruption, so the caller can close its trace (RM22).
         """
+
+        def finished(execution: Execution) -> Execution:
+            if on_finished is not None:
+                on_finished(execution)
+            return execution
+
         if not 1 <= attempt <= MAX_ATTEMPTS:
             raise ValueError(f"attempt must be 1 to {MAX_ATTEMPTS}")
         operation_id = self.operation_id(
@@ -190,7 +199,9 @@ class ToolExecutor:
         if recorded is not None:
             if recorded["status"] == PENDING:
                 raise OperationInFlightError(operation_id)
-            return Execution(ToolResult.from_json_object(recorded["result"]), replayed=True)
+            return finished(
+                Execution(ToolResult.from_json_object(recorded["result"]), replayed=True)
+            )
         if before_run is not None:
             before_run(operation_id)
         try:
@@ -221,15 +232,17 @@ class ToolExecutor:
             raw = await self._run_bounded(call, operation_id, bound)
         except BaseException:
             # Interrupted after the pending record: never leave it pending.
-            self._finish(operation_id, self._interrupted_result(call, operation_id))
+            finished(self._finish(operation_id, self._interrupted_result(call, operation_id)))
             raise
-        return replace(
-            self._finish(operation_id, raw),
-            time_limit_exhausted=(
-                limited_by_caller
-                and raw.error is not None
-                and raw.error.get("code") == "tool_timeout"
-            ),
+        return finished(
+            replace(
+                self._finish(operation_id, raw),
+                time_limit_exhausted=(
+                    limited_by_caller
+                    and raw.error is not None
+                    and raw.error.get("code") == "tool_timeout"
+                ),
+            )
         )
 
     def _finish(self, operation_id: str, raw: ToolResult) -> Execution:

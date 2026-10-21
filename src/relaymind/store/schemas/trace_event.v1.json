@@ -49,7 +49,46 @@
     "payload"
   ],
   "additionalProperties": false,
+  "$defs": {
+    "model_call": {
+      "type": "object",
+      "properties": {
+        "call_id": {"type": "string", "pattern": "\\S"},
+        "model": {"type": "string", "pattern": "\\S"},
+        "actor": {"type": "string", "pattern": "\\S"},
+        "purpose": {"type": "string", "pattern": "\\S"}
+      },
+      "required": ["call_id", "model", "actor", "purpose"]
+    },
+    "artifact_ref": {
+      "type": "object",
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "\\S"},
+        "uri": {"type": "string", "pattern": "\\S"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean"}
+      },
+      "required": ["artifact_id", "uri", "size_bytes", "truncated"],
+      "additionalProperties": false
+    }
+  },
   "allOf": [
+    {
+      "if": {"properties": {"event_type": {"enum": ["run.cancelled"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "active_ms": {"type": "integer", "minimum": 0},
+              "waiting_ms": {"type": "integer", "minimum": 0},
+              "external_calls": {"type": "integer", "minimum": 0},
+              "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}}
+            },
+            "required": ["active_ms", "waiting_ms"]
+          }
+        }
+      }
+    },
     {
       "if": {"properties": {"seq": {"const": 1}}, "required": ["seq"]},
       "then": {"properties": {"event_type": {"const": "run.accepted"}}}
@@ -103,9 +142,16 @@
             "properties": {
               "model": {"type": "string", "pattern": "\\S"},
               "operation_id": {"type": "string", "pattern": "\\S"},
-              "proposal_id": {"type": "string", "pattern": "\\S"}
+              "proposal_id": {"type": "string", "pattern": "\\S"},
+              "result_ref": {"$ref": "#/$defs/artifact_ref"},
+              "result": {
+                "type": "object",
+                "properties": {"truncated": {"type": "boolean"}},
+                "required": ["truncated"]
+              }
             },
             "required": ["model"],
+            "not": {"required": ["result", "result_ref"]},
             "anyOf": [{"required": ["operation_id"]}, {"required": ["proposal_id"]}]
           }
         }
@@ -132,12 +178,12 @@
           "payload": {
             "properties": {
               "final_answer_model": {"type": "string", "pattern": "\\S"},
-              "model_calls": {"type": "array", "items": {"type": "object"}},
+              "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}},
               "external_calls": {"type": "integer", "minimum": 0},
               "active_ms": {"type": "integer", "minimum": 0},
               "waiting_ms": {"type": "integer", "minimum": 0}
             },
-            "required": ["final_answer_model"]
+            "required": ["final_answer_model", "model_calls", "external_calls", "active_ms", "waiting_ms"]
           }
         }
       }
@@ -149,12 +195,12 @@
           "payload": {
             "properties": {
               "error_code": {"type": "string", "pattern": "\\S"},
-              "model_calls": {"type": "array", "items": {"type": "object"}},
+              "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}},
               "external_calls": {"type": "integer", "minimum": 0},
               "active_ms": {"type": "integer", "minimum": 0},
               "waiting_ms": {"type": "integer", "minimum": 0}
             },
-            "required": ["error_code"]
+            "required": ["error_code", "model_calls", "external_calls", "active_ms", "waiting_ms"]
           }
         }
       }

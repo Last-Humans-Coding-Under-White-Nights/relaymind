@@ -14,7 +14,7 @@ from datetime import timedelta
 
 import pytest
 
-from helpers import ACCEPTED_PAYLOAD
+from helpers import ACCEPTED_PAYLOAD, TERMINAL_EVIDENCE
 from relaymind.orchestrator.run_state import (
     ACTIVE_STATES,
     ALLOWED_TRANSITIONS,
@@ -100,10 +100,14 @@ def start(machine):
 def terminal_event(state, error_code=None):
     """The RM22 event a transition into a terminal state carries."""
     if state is S.COMPLETED:
-        return (EventType.RUN_COMPLETED, "local", {"final_answer_model": "qwen3"})
+        return (
+            EventType.RUN_COMPLETED,
+            "local",
+            {"final_answer_model": "qwen3", **TERMINAL_EVIDENCE},
+        )
     if state is S.FAILED:
-        return (EventType.RUN_FAILED, "gateway", {"error_code": error_code})
-    return (EventType.RUN_CANCELLED, "gateway", {})
+        return (EventType.RUN_FAILED, "gateway", {"error_code": error_code, **TERMINAL_EVIDENCE})
+    return (EventType.RUN_CANCELLED, "gateway", {"active_ms": 0, "waiting_ms": 0})
 
 
 def end(machine, run, terminal, error_code=None):
@@ -286,7 +290,11 @@ def test_cancel_records_its_reason_and_event(machine, store):
         run.run_id,
         run.version,
         reason="user_denied",
-        event=(EventType.RUN_CANCELLED, "gateway", {"reason": "user_denied"}),
+        event=(
+            EventType.RUN_CANCELLED,
+            "gateway",
+            {"reason": "user_denied", "active_ms": 0, "waiting_ms": 0},
+        ),
     )
     assert cancelled.error_code == "user_denied"
     assert [e.event_type for e in store.events(run.run_id)] == [
@@ -302,15 +310,16 @@ def test_cancel_without_an_event_records_a_default_run_cancelled(machine, store)
     cancelled = machine.cancel(run.run_id, run.version)
     assert cancelled.state == S.CANCELLED
     last = store.events(run.run_id)[-1]
-    assert (last.event_type, last.actor, last.payload) == (
-        EventType.RUN_CANCELLED,
-        "gateway",
-        {},
-    )
+    assert (last.event_type, last.actor) == (EventType.RUN_CANCELLED, "gateway")
+    assert last.payload["waiting_ms"] == 0
+    assert last.payload["active_ms"] >= 0
     other = walk(machine, start(machine), S.ROUTING, S.LOCAL_RUNNING, S.WAITING_CONFIRMATION)
     denied = machine.cancel(other.run_id, other.version, reason="user_denied")
     assert denied.error_code == "user_denied"
-    assert store.events(other.run_id)[-1].payload == {"reason": "user_denied"}
+    payload = store.events(other.run_id)[-1].payload
+    assert payload["reason"] == "user_denied"
+    assert payload["active_ms"] >= 0
+    assert payload["waiting_ms"] >= 0
 
 
 ACCEPTED_EVENT = (EventType.RUN_ACCEPTED, "gateway", ACCEPTED_PAYLOAD)

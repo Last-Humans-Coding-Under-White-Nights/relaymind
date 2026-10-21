@@ -70,6 +70,9 @@ ACCEPTED_PAYLOAD = {
     ],
 }
 
+# Valid empty terminal evidence for store/state contract fixtures (RM16, RM25).
+TERMINAL_EVIDENCE = {"model_calls": [], "external_calls": 0, "active_ms": 0, "waiting_ms": 0}
+
 # The section 9 service-ID input object, shared across test files.
 SERVICE_INPUT_SCHEMA = {
     "type": "object",

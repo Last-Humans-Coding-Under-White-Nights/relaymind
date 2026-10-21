@@ -17,7 +17,7 @@ import copy
 import jsonschema
 import pytest
 
-from helpers import ACCEPTED_PAYLOAD
+from helpers import ACCEPTED_PAYLOAD, TERMINAL_EVIDENCE
 from relaymind.store.trace_event import (
     TRACE_EVENT_SCHEMA,
     EventType,
@@ -71,8 +71,9 @@ TOOL_EVENT_TYPES = ("tool.proposed", "tool.started", "tool.finished")
 REQUIRED_PAYLOAD = {
     "model.started": {"call_id": "call_1", "model": "qwen3"},
     "model.finished": {"call_id": "call_1", "model": "qwen3"},
-    "run.completed": {"final_answer_model": "qwen3"},
-    "run.failed": {"error_code": "x"},
+    "run.completed": {"final_answer_model": "qwen3", **TERMINAL_EVIDENCE},
+    "run.failed": {"error_code": "x", **TERMINAL_EVIDENCE},
+    "run.cancelled": {"active_ms": 0, "waiting_ms": 0},
     "cache.hit": {"originating_version": "v1"},
     # RM06: every load emits skill.loaded with the name, version, and hash.
     "skill.loaded": {
@@ -99,6 +100,16 @@ REQUIRED_PAYLOAD = {
 # Spec 0.6 section 8: clarification.required carries the clarify
 # decision's skill_id (or null) and the section 11 waiting limit.
 NON_TEXT_PAYLOAD = {
+    **{
+        kind: {
+            "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}},
+            **{
+                key: {"type": "integer", "minimum": 0}
+                for key in ("active_ms", "waiting_ms", "external_calls")
+            },
+        }
+        for kind in ("run.completed", "run.failed", "run.cancelled")
+    },
     "clarification.required": {
         "skill_id": {"type": ["string", "null"], "pattern": "\\S"},
         "waiting_seconds": {"type": "number", "exclusiveMinimum": 0},

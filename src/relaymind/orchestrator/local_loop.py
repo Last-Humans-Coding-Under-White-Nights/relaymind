@@ -838,36 +838,43 @@ class _Run:
                     elif isinstance(event, GenerationFailed):
                         failure = event
         except TimeoutError:
-            await adapter.cancel(call_id)
             failure = GenerationFailed(code="local_budget", message="active local time spent")
-        redactor = self.o.redactor
-        self.emit(
-            EventType.MODEL_FINISHED,
-            self.actor,
-            {
-                "call_id": call_id,
-                "model": model_id,
-                "purpose": purpose,
-                "duration_ms": round((self.o.clock.monotonic() - started) * 1000),
-                "finish_reason": finish,
-                "tool_calls": len(generation.calls),
-                "proposed_calls": [
-                    {"tool_name": c.tool_name, "arguments": redactor.redact(dict(c.arguments))}
-                    for c in generation.calls
-                ],
-                "text": self.scrub(generation.text) or None,
-                "usage": None
-                if usage is None
-                else {
-                    "input_tokens": usage.input_tokens,
-                    "output_tokens": usage.output_tokens,
-                    "cached_tokens": usage.cached_tokens,
+            await adapter.cancel(call_id)
+        except BaseException as exc:
+            failure = GenerationFailed(
+                code="cancelled" if isinstance(exc, asyncio.CancelledError) else "interrupted",
+                message="model generation interrupted",
+            )
+            raise
+        finally:
+            redactor = self.o.redactor
+            self.emit(
+                EventType.MODEL_FINISHED,
+                self.actor,
+                {
+                    "call_id": call_id,
+                    "model": model_id,
+                    "purpose": purpose,
+                    "duration_ms": round((self.o.clock.monotonic() - started) * 1000),
+                    "finish_reason": finish,
+                    "tool_calls": len(generation.calls),
+                    "proposed_calls": [
+                        {"tool_name": c.tool_name, "arguments": redactor.redact(dict(c.arguments))}
+                        for c in generation.calls
+                    ],
+                    "text": self.scrub(generation.text) or None,
+                    "usage": None
+                    if usage is None
+                    else {
+                        "input_tokens": usage.input_tokens,
+                        "output_tokens": usage.output_tokens,
+                        "cached_tokens": usage.cached_tokens,
+                    },
+                    "error": None
+                    if failure is None
+                    else {"code": failure.code, "message": self.scrub(failure.message)},
                 },
-                "error": None
-                if failure is None
-                else {"code": failure.code, "message": self.scrub(failure.message)},
-            },
-        )
+            )
         if failure is not None:
             if failure.code == "local_budget":
                 raise self.meter.time_exhausted()
@@ -1053,6 +1060,22 @@ class _Run:
                 {**common, "operation_id": operation_id, "model": model_id},
             )
 
+        def on_finished(execution: Execution) -> None:
+            self.secrets |= execution.secrets
+            result = execution.result
+            self.emit(
+                EventType.TOOL_FINISHED,
+                GATEWAY_ACTOR,
+                {
+                    **common,
+                    "operation_id": result.operation_id,
+                    "model": model_id,
+                    "status": result.status.value,
+                    "replayed": execution.replayed,
+                    "result": result.to_json_object(),
+                },
+            )
+
         try:
             execution = await self.o.executor.execute(
                 call,
@@ -1061,24 +1084,11 @@ class _Run:
                 attempt=attempt,
                 before_run=before_run,
                 time_limit=self.meter.remaining_seconds,
+                on_finished=on_finished,
             )
         except OperationInFlightError as exc:
             # RM14: an operation in flight blocks continuation that could repeat it.
             raise Escalation("tool_failure", str(exc), operation_id=exc.operation_id) from exc
-        self.secrets |= execution.secrets
-        result = execution.result
-        self.emit(
-            EventType.TOOL_FINISHED,
-            GATEWAY_ACTOR,
-            {
-                **common,
-                "operation_id": result.operation_id,
-                "model": model_id,
-                "status": result.status.value,
-                "replayed": execution.replayed,
-                "result": result.to_json_object(),
-            },
-        )
         # A tool bounded by the remaining budget ends the run on budget.
         # Timer resolution can leave the trace clock just before its deadline.
         if execution.time_limit_exhausted:
