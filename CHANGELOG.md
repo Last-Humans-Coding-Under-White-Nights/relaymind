@@ -34,10 +34,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `tool_interrupted`, a `tool.finished` event marked `recovered`);
   no handler runs, nothing is retried, and a later proposal of the
   same call replays the recorded outcome. Pending approvals expire at
-  recovery time. Each run is recovered in one store transaction, one
-  failing run does not stop the others, terminal runs are untouched,
-  and a second recovery changes nothing. No model is called and no
-  model loop is resumed. The startup call is part of the API work
+  recovery time (a void approval is not counted). Each run is read again
+  and recovered in one store transaction, one failing run does not stop
+  the others (a `RecoveryError` carries the report of the recovered
+  ones), terminal runs are untouched, and a second recovery changes
+  nothing. Recovery uses the orchestrator's executor and clock, and is
+  refused once the orchestrator has accepted a run. No model is called
+  and no model loop is resumed. The startup call is part of the API work
   (#25); the cancellation half of AC12 stays in #29. Deterministic
   coverage is `tests/test_restart_recovery.py`.
 - Confirmation flow for mutating demo actions (#19; RM11, RM10, RM17,

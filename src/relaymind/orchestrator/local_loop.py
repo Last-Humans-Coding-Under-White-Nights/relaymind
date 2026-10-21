@@ -459,6 +459,9 @@ class LocalOrchestrator:
         # waiting_confirmation. A process restart fails unfinished runs as
         # interrupted (section 5), so nothing here has to outlive the process.
         self._waiting: dict[str, _Run] = {}
+        # Set once this orchestrator accepts a run; restart recovery is
+        # refused from then on (section 5).
+        self._accepted_a_run = False
 
     async def run_text(self, text: str, **options: Any) -> RunOutcome:
         """Run one user request given as plain text."""
@@ -513,12 +516,13 @@ class LocalOrchestrator:
 
         Pending writes become unknown_outcome and are never retried;
         pending approvals expire; no model loop resumes. Call it before
-        this orchestrator accepts a run. It refuses while the process
-        tracks waiting runs, because those are alive, not interrupted.
+        this orchestrator accepts a run. It refuses once this
+        orchestrator has accepted one, because a run of this process is
+        alive, not interrupted. Calling it again before that is safe.
         """
-        if self._waiting:
-            raise RuntimeError("restart recovery is a startup step; this process has waiting runs")
-        return recover_interrupted_runs(self.store, self.tools, redactor=self.redactor)
+        if self._accepted_a_run:
+            raise RuntimeError("restart recovery is a startup step; this process accepted a run")
+        return recover_interrupted_runs(self.store, self.machine, self.executor)
 
     async def resume_confirmation(
         self,
@@ -727,6 +731,8 @@ class _Run:
     async def execute(self) -> RunOutcome:
         if self.o.machine.active_run_id() is not None:
             raise SlotUnavailableError("another run holds the execution slot (section 11)")
+        # Section 5: from here on restart recovery must not run.
+        self.o._accepted_a_run = True
         # RM22: run.accepted is written with the run in one transaction,
         # so an invalid payload creates no run, and a run can always fail
         # or be cancelled from accepted (section 5).

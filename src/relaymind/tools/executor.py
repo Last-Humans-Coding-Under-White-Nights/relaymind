@@ -114,6 +114,13 @@ class Execution:
     time_limit_exhausted: bool = False
 
 
+def _uncertain_note(status: ToolStatus) -> str:
+    """How an uncertain outcome ends: a possible write is never retried (RM10)."""
+    if status is ToolStatus.UNKNOWN_OUTCOME:
+        return "its outcome is unknown and it is not retried"
+    return "no result"
+
+
 class ToolExecutor:
     """Runs validated tool calls once per logical operation (RM10)."""
 
@@ -269,20 +276,16 @@ class ToolExecutor:
             mutating = self.registry.get(tool_name).side_effect is SideEffect.MUTATING
         except KeyError:
             mutating = True
-        raw = ToolResult(
-            operation_id=operation_id,
-            tool_name=tool_name,
-            status=ToolStatus.UNKNOWN_OUTCOME if mutating else ToolStatus.FAILED,
-            data=None,
+        status = self._uncertain(mutating)
+        raw = self._result(
+            tool_name,
+            operation_id,
+            status=status,
             error={
                 "code": "tool_interrupted",
                 "message": f"the gateway restarted before {tool_name!r} recorded an outcome; "
-                + ("its outcome is unknown and it is not retried" if mutating else "no result"),
+                + _uncertain_note(status),
             },
-            observed_at=utc_timestamp(self._clock.utc_now()),
-            duration_ms=0,
-            source_ref=f"tool:{tool_name}/{operation_id}",
-            truncated=False,
         )
         return self._finish(operation_id, raw).result
 
@@ -331,7 +334,7 @@ class ToolExecutor:
 
     def _result(
         self,
-        call: ValidatedCall,
+        tool_name: str,
         operation_id: str,
         *,
         status: ToolStatus,
@@ -340,29 +343,27 @@ class ToolExecutor:
     ) -> ToolResult:
         return ToolResult(
             operation_id=operation_id,
-            tool_name=call.tool_name,
+            tool_name=tool_name,
             status=status,
             data=None,
             error=error,
             observed_at=utc_timestamp(self._clock.utc_now()),
             duration_ms=duration_ms,
-            source_ref=f"tool:{call.tool_name}/{operation_id}",
+            source_ref=f"tool:{tool_name}/{operation_id}",
             truncated=False,
         )
 
-    def _uncertain(self, call: ValidatedCall) -> ToolStatus:
-        mutating = call.tool.side_effect is SideEffect.MUTATING
+    @staticmethod
+    def _uncertain(mutating: bool) -> ToolStatus:
+        """A mutating tool may have written; a read-only one simply failed (RM10)."""
         return ToolStatus.UNKNOWN_OUTCOME if mutating else ToolStatus.FAILED
 
     def _timeout_result(self, call: ValidatedCall, operation_id: str, bound: float) -> ToolResult:
-        status = self._uncertain(call)
-        message = f"tool {call.tool_name!r} did not finish within {bound:.3f} s; " + (
-            "its outcome is unknown and it is not retried"
-            if status is ToolStatus.UNKNOWN_OUTCOME
-            else "no result"
-        )
+        status = self._uncertain(call.tool.side_effect is SideEffect.MUTATING)
+        message = f"tool {call.tool_name!r} did not finish within {bound:.3f} s; "
+        message += _uncertain_note(status)
         return self._result(
-            call,
+            call.tool_name,
             operation_id,
             status=status,
             error={"code": "tool_timeout", "message": message},
@@ -374,9 +375,9 @@ class ToolExecutor:
     ) -> ToolResult:
         # The type only: an exception message may repeat argument values (RM12).
         return self._result(
-            call,
+            call.tool_name,
             operation_id,
-            status=self._uncertain(call),
+            status=self._uncertain(call.tool.side_effect is SideEffect.MUTATING),
             error={
                 "code": "tool_error",
                 "message": f"tool {call.tool_name!r} worker raised {type(exc).__name__}",
@@ -385,9 +386,9 @@ class ToolExecutor:
 
     def _interrupted_result(self, call: ValidatedCall, operation_id: str) -> ToolResult:
         return self._result(
-            call,
+            call.tool_name,
             operation_id,
-            status=self._uncertain(call),
+            status=self._uncertain(call.tool.side_effect is SideEffect.MUTATING),
             error={
                 "code": "tool_interrupted",
                 "message": f"execution of {call.tool_name!r} was interrupted before an outcome",

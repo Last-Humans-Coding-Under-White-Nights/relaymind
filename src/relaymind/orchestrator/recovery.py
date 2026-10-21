@@ -13,11 +13,12 @@ write is ever replayed. Each run is recovered in one store transaction:
    execution slot.
 
 One run that cannot be recovered is rolled back whole and does not stop
-the others; the errors are raised together at the end. Running it again
-is safe: terminal runs are never touched.
+the others; the errors are raised together at the end as a
+``RecoveryError`` that still carries the report of the recovered runs.
+Running it again is safe: terminal runs are never touched.
 """
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -28,10 +29,8 @@ from relaymind.orchestrator.run_state import (
     RunState,
     RunStateMachine,
 )
-from relaymind.redaction import Redactor
-from relaymind.store import RunRecord, RunStore
+from relaymind.store import RunStore
 from relaymind.store.trace_event import EventType
-from relaymind.tools import ToolRegistry
 from relaymind.tools.executor import ToolExecutor
 
 INTERRUPTED = "interrupted"
@@ -60,40 +59,75 @@ class RecoveryReport:
     runs: tuple[RecoveredRun, ...]
 
 
+class RecoveryError(ExceptionGroup):
+    """Some runs could not be recovered; ``report`` lists the ones that were."""
+
+    report: RecoveryReport
+
+    def __new__(
+        cls, message: str, exceptions: Sequence[Exception], report: RecoveryReport
+    ) -> "RecoveryError":
+        error = super().__new__(cls, message, exceptions)
+        error.report = report
+        return error
+
+    def __init__(
+        self, message: str, exceptions: Sequence[Exception], report: RecoveryReport
+    ) -> None:
+        super().__init__(message, exceptions)
+
+    def derive(self, excs: Sequence[Exception]) -> "RecoveryError":
+        return RecoveryError(self.message, excs, self.report)
+
+
 def recover_interrupted_runs(
-    store: RunStore, tools: ToolRegistry, *, redactor: Redactor | None = None
+    store: RunStore, machine: RunStateMachine, executor: ToolExecutor
 ) -> RecoveryReport:
-    """Fail every unfinished run as interrupted and settle what it left open."""
-    machine = RunStateMachine(store)
-    executor = ToolExecutor(tools, store, clock=store.clock, redactor=redactor)
+    """Fail every unfinished run as interrupted and settle what it left open.
+
+    The orchestrator passes its own state machine and executor, so
+    recovered results use the clock and redaction it was configured with.
+    """
+    terminal = [state.value for state in TERMINAL_STATES]
     recovered: list[RecoveredRun] = []
     errors: list[Exception] = []
-    for record in store.unfinished_runs([state.value for state in TERMINAL_STATES]):
+    for listed in store.unfinished_runs(terminal):
         try:
-            recovered.append(_recover(store, machine, executor, record))
+            run = _recover(store, machine, executor, listed.run_id, terminal)
         except Exception as exc:
             errors.append(exc)
+        else:
+            if run is not None:
+                recovered.append(run)
+    report = RecoveryReport(tuple(recovered))
     if errors:
-        raise ExceptionGroup("some interrupted runs could not be recovered", errors)
-    return RecoveryReport(tuple(recovered))
+        raise RecoveryError("some interrupted runs could not be recovered", errors, report)
+    return report
 
 
 def _recover(
-    store: RunStore, machine: RunStateMachine, executor: ToolExecutor, record: RunRecord
-) -> RecoveredRun:
+    store: RunStore,
+    machine: RunStateMachine,
+    executor: ToolExecutor,
+    run_id: str,
+    terminal: Collection[str],
+) -> RecoveredRun | None:
     # RM25: this process has no baseline for the run yet; downtime is not counted.
-    store.start_run_clock(record.run_id)
+    store.start_run_clock(run_id)
     with store.transaction():
+        # Read the run again inside the transaction: the listing may be stale.
+        record = store.get_run(run_id)
+        if record.state in terminal:
+            return None
         settled = tuple(
             _settle(store, executor, operation)
-            for operation in store.tool_operations(record.run_id)
-            if operation["status"] == "pending"
+            for operation in store.tool_operations(run_id, status="pending")
         )
-        expired = store.expire_approvals(record.run_id)
-        timings = store.state_timings(record.run_id)
-        calls = _model_calls(store, record.run_id)
+        expired = store.expire_approvals(run_id)
+        timings = store.state_timings(run_id)
+        calls = _model_calls(store, run_id)
         machine.transition(
-            record.run_id,
+            run_id,
             record.version,
             RunState.FAILED,
             error_code=INTERRUPTED,
@@ -111,7 +145,7 @@ def _recover(
                 },
             ),
         )
-    return RecoveredRun(record.run_id, record.state, settled, expired)
+    return RecoveredRun(run_id, record.state, settled, expired)
 
 
 def _settle(
@@ -137,6 +171,5 @@ def _model_calls(store: RunStore, run_id: str) -> list[dict[str, Any]]:
     """The run's model calls, rebuilt from its model.started events (RM16)."""
     return [
         {key: event.payload[key] for key in ("call_id", "model", "actor", "purpose")}
-        for event in store.events(run_id)
-        if event.event_type is EventType.MODEL_STARTED
+        for event in store.events(run_id, event_type=EventType.MODEL_STARTED)
     ]

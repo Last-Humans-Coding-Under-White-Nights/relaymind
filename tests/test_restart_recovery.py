@@ -20,12 +20,13 @@ from gateway_helpers import (
     route_turn,
     tool_turn,
 )
-from helpers import ACCEPTED_PAYLOAD, of_type
-from relaymind.orchestrator.recovery import recover_interrupted_runs
+from helpers import ACCEPTED_PAYLOAD, FakeClock, of_type
+from relaymind.orchestrator.local_loop import LocalOrchestrator
+from relaymind.orchestrator.recovery import RecoveryError, recover_interrupted_runs
 from relaymind.orchestrator.run_state import RunState, SlotUnavailableError, TerminalStateError
 from relaymind.store.trace_event import EventType
 from relaymind.tools import CallerContext
-from relaymind.tools.executor import ToolExecutor
+from relaymind.tools.executor import ToolExecutor, utc_timestamp
 from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
 
 CALLER = CallerContext(permissions=frozenset({READ_PERMISSION, MUTATE_PERMISSION}))
@@ -362,8 +363,151 @@ def test_a_run_that_cannot_be_recovered_does_not_stop_the_others(tmp_path):
     new.store.set_state = flaky
 
     with pytest.raises(ExceptionGroup):
-        recover_interrupted_runs(new.store, new.tools)
+        recover_interrupted_runs(new.store, new.orchestrator.machine, new.orchestrator.executor)
 
     assert new.store.get_run(second.run_id).state == "failed"
     # The failed run is rolled back whole: still unfinished, so a later recovery retries it.
     assert new.store.get_run(first.run_id).state == "local_running"
+
+
+def test_recovery_refuses_after_this_process_accepted_a_run(tmp_path):
+    """Section 5: recovery runs before the gateway accepts any run, not after."""
+    gateway = build_gateway(
+        tmp_path, [route_turn("check-service-health"), *health_tail()], caller=CALLER
+    )
+    outcome = asyncio.run(gateway.orchestrator.run_text("Is staging-api healthy right now?"))
+    assert outcome.state is RunState.COMPLETED
+
+    with pytest.raises(RuntimeError, match="startup"):
+        gateway.orchestrator.recover_after_restart()
+
+
+def test_recovery_never_fails_a_run_this_process_is_executing(tmp_path):
+    """Section 5, RM17: a live local_running run is not interrupted by recovery."""
+    gateway = build_gateway(
+        tmp_path, [route_turn("check-service-health"), *health_tail()], caller=CALLER
+    )
+    original = gateway.tools.get("get_service_health").declaration.handler
+    refused = []
+
+    def handler(arguments):
+        try:
+            gateway.orchestrator.recover_after_restart()
+        except RuntimeError as exc:
+            refused.append(exc)
+        return original(arguments)
+
+    replace_handler(gateway, "get_service_health", handler)
+
+    outcome = asyncio.run(gateway.orchestrator.run_text("Is staging-api healthy right now?"))
+
+    assert len(refused) == 1
+    assert outcome.state is RunState.COMPLETED
+    assert of_type(gateway.store.events(outcome.run_id), "run.failed") == []
+
+
+def test_recovery_report_survives_a_run_that_cannot_be_recovered(tmp_path):
+    """Section 5: the runs that were recovered are still reported with the errors."""
+    old = build_gateway(tmp_path, [], caller=CALLER, external_turns=[])
+    first = unfinished_run(old)
+    second = old.orchestrator.machine.create(
+        accepted=(EventType.RUN_ACCEPTED, "gateway", ACCEPTED_PAYLOAD)
+    )
+    new = restart(old, tmp_path)
+    original = new.store.set_state
+
+    def flaky(run_id, **kwargs):
+        if run_id == first.run_id:
+            raise RuntimeError("disk full")
+        return original(run_id, **kwargs)
+
+    new.store.set_state = flaky
+
+    with pytest.raises(RecoveryError) as caught:
+        new.orchestrator.recover_after_restart()
+
+    assert [r.run_id for r in caught.value.report.runs] == [second.run_id]
+    assert [str(e) for e in caught.value.exceptions] == ["disk full"]
+
+
+def test_recovery_uses_the_orchestrator_clock(tmp_path):
+    """RM25: recovered tool results use the clock the orchestrator was given."""
+    old = build_gateway(tmp_path, [], caller=CALLER, external_turns=[])
+    run = unfinished_run(old)
+    write = pending_operation(old, run.run_id, "delete_demo_database", DELETE)
+    new = restart(old, tmp_path)
+    other = FakeClock()
+    other.advance(3600)
+    orchestrator = LocalOrchestrator(
+        new.orchestrator.model,
+        skills=new.skills,
+        tools=new.tools,
+        store=new.store,
+        policy=new.orchestrator.policy,
+        caller=CALLER,
+        clock=other,
+    )
+
+    orchestrator.recover_after_restart()
+
+    observed = new.store.get_tool_operation(write)["result"]["observed_at"]
+    assert observed == utc_timestamp(other.utc_now())
+
+
+def test_a_run_that_moved_after_the_listing_is_read_again(tmp_path):
+    """RM17: recovery reads each run inside its transaction, not from a stale listing."""
+    old = build_gateway(tmp_path, [], caller=CALLER, external_turns=[])
+    moved = unfinished_run(old)
+    ended = old.orchestrator.machine.create(
+        accepted=(EventType.RUN_ACCEPTED, "gateway", ACCEPTED_PAYLOAD)
+    )
+    new = restart(old, tmp_path)
+    original = new.store.unfinished_runs
+
+    def stale_listing(terminal_states):
+        records = original(terminal_states)
+        machine = new.orchestrator.machine
+        machine.transition(moved.run_id, moved.version, RunState.EXTERNAL_RUNNING)
+        record = new.store.get_run(ended.run_id)
+        machine.cancel(ended.run_id, record.version, reason="user_denied")
+        return records
+
+    new.store.unfinished_runs = stale_listing
+
+    report = new.orchestrator.recover_after_restart()
+
+    assert [(r.run_id, r.interrupted_state) for r in report.runs] == [
+        (moved.run_id, "external_running")
+    ]
+    assert new.store.get_run(ended.run_id).state == "cancelled"
+    assert new.store.get_run(moved.run_id).state == "failed"
+
+
+def test_a_void_approval_is_not_counted_as_expired(tmp_path):
+    """RM11: an approval whose run moved past its state version is not pending."""
+    old = build_gateway(tmp_path, [], caller=CALLER, external_turns=[])
+    run = unfinished_run(old)
+    old.store.create_approval(
+        run.run_id,
+        token="old",
+        tool_name="delete_demo_database",
+        arguments=DELETE,
+        target="demo-orders-db",
+        state_version=run.version,
+    )
+    record = old.orchestrator.machine.transition(
+        run.run_id, run.version, RunState.WAITING_CONFIRMATION
+    )
+    old.store.create_approval(
+        run.run_id,
+        token="live",
+        tool_name="delete_demo_database",
+        arguments=DELETE,
+        target="demo-orders-db",
+        state_version=record.version,
+    )
+    new = restart(old, tmp_path)
+
+    report = new.orchestrator.recover_after_restart()
+
+    assert report.runs[0].expired_approvals == 1
