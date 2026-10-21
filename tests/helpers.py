@@ -1,4 +1,4 @@
-"""Shared test helpers for the adapter test suite."""
+"""Shared test helpers for the test suite."""
 
 import asyncio
 import importlib.util
@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 from collections.abc import Awaitable, Callable, Sequence
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -20,6 +21,7 @@ from relaymind.adapters import (
     ToolSchema,
 )
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
+from relaymind.store import TraceClock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = REPO_ROOT / "models"
@@ -27,6 +29,41 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 
 # The checked-in candidate manifest (RM18, spec section 6).
 PINNED_MANIFEST_PATH = MODELS_DIR / "qwen3-0.6b-q8_0.manifest.json"
+
+# The start time of FakeClock, a fixed UTC moment.
+T0 = datetime(2026, 10, 20, 3, 0, 0, tzinfo=UTC)
+
+
+class FakeClock(TraceClock):
+    """A controllable UTC clock and monotonic clock (RM25) for store tests."""
+
+    def __init__(self) -> None:
+        self.now = T0
+        self.mono = 1000.0
+
+    def utc_now(self) -> datetime:
+        return self.now
+
+    def monotonic(self) -> float:
+        return self.mono
+
+    def advance(self, seconds: float) -> None:
+        self.now += timedelta(seconds=seconds)
+        self.mono += seconds
+
+
+# A valid run.accepted payload (spec section 8). run.accepted is the
+# first event of every run (RM22), so store tests write it before others.
+ACCEPTED_PAYLOAD = {
+    "requested_execution_mode": None,
+    "effective_execution_mode": "auto",
+    "model_alias": "relaymind",
+    "budgets": {"run_generations": 8, "run_tool_executions": 6, "run_active_seconds": 60},
+    "skill_roots": ["/srv/relaymind/skills"],
+    "skills_offered": [
+        {"name": "check-service-health", "version": "1.0.0", "content_hash": "sha256:ab12"}
+    ],
+}
 
 # The canonical demo tool (spec section 9), shared across test files.
 HEALTH_TOOL = ToolSchema(

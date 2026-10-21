@@ -100,6 +100,65 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   corrected in `docs/EVIDENCE.md` (grammar 7 of 12 valid, not 12 of
   12); its limits (tokenizer time excluded, prompt cache on and
   unmeasured) are stated there.
+- Run state machine (#6, spec section 5, RM17):
+  `relaymind.orchestrator.run_state` with the ten section 5 states and
+  their allowed transitions. Each transition is a compare-and-set on the
+  run state version, so stale transitions, resumes, and cancels get 409
+  and leave the run unchanged; a stale version is reported before a
+  terminal state. A resume starts the resuming store's run clock
+  (RM25). Terminal runs never change or restart; a
+  retry is a new run linked to the previous one. One execution slot
+  (section 11) is held in the active states, released by waiting and
+  terminal states, and reacquired on resume or refused with 429. The
+  slot is a flag on the run row, set in the same SQLite transaction as
+  the state change, so every process on one store file shares it. A
+  transition into completed, failed, or cancelled carries its
+  run.completed, run.failed, or run.cancelled event (RM22), and a
+  failed run's event names the run's error code. A waiting run
+  continues only through resume, to the state that suspended it, or
+  fails or is cancelled; deleting or purging a run frees a slot it held.
+  `create(accepted=...)` writes run.accepted with the run in one
+  transaction, so a run can fail or be cancelled straight from
+  accepted. `cancel()` without an event records a gateway run.cancelled
+  with the reason, if any.
+- SQLite run store (#7, spec section 5): `relaymind.store.RunStore`
+  with runs, events, tool_operations, approvals, and artifact_refs
+  under versioned migrations, split into statements with
+  `sqlite3.complete_statement`. Event sequence numbers increase per
+  run. A tool operation is recorded as pending with its canonical
+  arguments and their SHA-256 before its side effect, then finished
+  once as succeeded, failed, or unknown_outcome; a CHECK constraint
+  admits only those statuses (RM10). Approval tokens are kept only as
+  SHA-256 hashes; an approval is issued for the run's current state
+  version, expires after the configured TTL (five minutes, RM11), and
+  is consumed once in one atomic update that matches its run, tool,
+  canonical arguments, target, and the run's current version. A run's
+  pending approval can be read without its token hash (RM21). Store
+  times must be timezone-aware UTC. A failed commit rolls back, and a
+  failed rollback reopens the connection. Runs older than the seven-day
+  default retention are purged or deleted explicitly with everything
+  they own. `tool_operations(run_id)` and `artifact_refs(run_id)` list a
+  run's operations and artifact references in record order, for the
+  section 8 HandoffEnvelope (RM13).
+- TraceEvent schema (spec section 8, RM22; part of #27): published as
+  `relaymind/store/schemas/trace_event.v1.json` and validated before
+  every write; tests check that the validator and the schema (through
+  jsonschema) accept and reject the same events. It covers the RM22
+  event types; tool events must name their operation or proposal ID and
+  originating model, model events their call and model, and
+  run.completed the final-answer model (RM16), and skill.loaded its
+  name, version, and content hash (RM06). clarification.answered (spec
+  0.6 section 8) needs a non-blank redacted `input`, a non-blank
+  `missing`, and a non-negative integer `waited_ms`. Text fields must contain
+  a non-space character, and an ID that is present must be non-blank.
+  run.accepted is the first event (seq 1) and carries the section 8
+  payload: requested and effective execution mode, model_alias
+  (`relaymind`, `relaymind-client-tools`, or null for a native run;
+  spec 0.6 section 8), budgets, skill_roots, and skills_offered (any
+  sequence, stored as lists).
+  The trace event API is exported from `relaymind.store`. Timestamps are UTC and elapsed_ms
+  comes from a monotonic clock (RM25); a store joining a run continues
+  from its last persisted elapsed_ms, so elapsed_ms never goes back.
 - Project scaffold: repository layout, CI, and contributor guides.
 - Specification v0.1 (`docs/SPECIFICATION.md`) as the single source of
   truth for the prototype.
