@@ -292,15 +292,15 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   #25 is implemented with model doubles (`tests/test_native_run_api.py`,
   spec 0.17): the six endpoints, `/healthz` and `/readyz`, Last-Event-ID
   replay that reads the store only, and `parallel_demo` failing with
-  `workflow_unavailable` until #30. In-flight write cancellation (#29)
-  is not part of it.
+  `workflow_unavailable` until #30. In-flight write cancellation is #29.
   #26 is implemented with model doubles (`tests/test_idempotency.py`,
   spec 0.18): `Idempotency-Key` on native creation and chat, stored with
   the run in one transaction, with 409 for a changed payload, the stored
   response (also as stream chunks) for a completed chat duplicate, and
   keys leaving with their run at the seven-day limit.
 - Cancellation during generation and in-flight writes (#29; RM10, RM14,
-  RM17); closes AC12 together with #8.
+  RM17); closes AC12 together with #8. Implemented with model doubles
+  (`tests/test_ac12_cancellation.py`, spec 0.19); no live run.
 - Demo trace UI (#28; RM23), including the visual timing view over the
   statistics collected since M1.
 - Closes: AC09, AC10, AC11, AC12, AC16.
