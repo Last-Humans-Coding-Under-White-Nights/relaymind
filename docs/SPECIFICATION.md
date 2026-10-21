@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.3 | 20 October 2026 | Proposed implementation baseline
+Version 0.4 | 21 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that lets a small model complete bounded tasks with skills and tools, and transfers complex work to an external model. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -162,6 +162,7 @@ The artifact manifest MUST record model source, revision, file SHA-256, quantiza
 | parallel_tool_calls | Client-owned mode accepts false or omission; true is rejected in MVP. |
 | response_format | Omitted or text only. Structured final-output modes are explicitly deferred. |
 | Other behavior-changing fields | Reject with a named unsupported_parameter error; never silently ignore them. |
+| X-RelayMind-Execution-Mode header | Optional. Carries the native execution_mode value (auto, local_only, external_only, parallel_demo); absent means auto. The same operator policy applies as for the native run API. An unknown value is rejected with 400 and code invalid_execution_mode; a value the policy forbids is rejected with 403 and code execution_mode_forbidden. The mode is never downgraded silently. The model alias still selects tool ownership; the header selects only where inference runs. |
 
 The standard response uses one assistant choice with a stable request ID and virtual model alias. Streaming uses chat.completion.chunk content or tool-call deltas and the appropriate terminal finish_reason followed by [DONE]. Already emitted answer text is append-only. The schema foundation is Chat Completions; this table defines RelayMind's narrower supported surface. [S5]
 
@@ -172,6 +173,8 @@ The relaymind alias selects managed execution. It uses the installed skills and 
 The relaymind-client-tools alias returns tool_calls to the caller. The caller executes them and includes matching tool messages in the next request. The hub MUST NOT execute those tools or certify that caller-reported results are trustworthy. Gateway-installed business tools are disabled for this alias. A caller may supply procedural instructions; managed skill execution is demonstrated through the managed alias. Local routing may fall back to external generation before output is committed, but external fallback is not permitted after partial client tool calls have been exposed. [S6]
 
 The client-owned alias MUST honor tool_choice, preserve tool call IDs, and reject tool results without matching calls. No global tool-execution authorization guarantee is claimed for tools executed by third-party clients.
+
+The X-RelayMind-Execution-Mode header applies to both aliases. With the managed alias it selects the route for skill execution. With the client-owned alias, local_only returns needs_external when the local model cannot produce the answer or tool calls, and external_only sends the request to the external model directly; the rule that external fallback is not permitted after partial client tool calls are exposed is unchanged.
 
 ### 7.3 Streaming and early feedback
 
@@ -196,7 +199,7 @@ Usage is optional in the compatible response when a truthful unified count is un
 | POST /relay/v1/runs/{id}/cancel | Accept expected_version; request cancellation; return current state. |
 | GET /healthz and GET /readyz | Process liveness and readiness of the configured execution mode; model warm state is explicit. |
 
-Execution mode is constrained by operator policy. local_only never calls externally and returns needs_external when the task cannot complete locally. external_only bypasses local inference while using the same managed tools, skill catalog, and permissions. parallel_demo fails explicitly when its configured workflow is unavailable.
+Execution mode is constrained by operator policy. local_only never calls externally and returns needs_external when the task cannot complete locally. external_only bypasses local inference while using the same managed tools, skill catalog, and permissions. parallel_demo fails explicitly when its configured workflow is unavailable. The compatible chat endpoint accepts the same values through the X-RelayMind-Execution-Mode request header (section 7.1), so chat and native runs share one mode enumeration and one policy check, and a standard chat client can run the auto versus external_only comparison without the native API. The effective mode is recorded in the run trace either way.
 
 Chat responses include X-RelayMind-Run-ID for trace correlation. Confirmations for managed writes require the native resume endpoint or demo UI. Ordinary clients can read the pending-confirmation message but cannot approve it solely by sending a free-form yes. Clarification can be resumed natively, or submitted as a new chat request with complete context.
 

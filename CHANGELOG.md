@@ -65,6 +65,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (#46) added to M1; the orchestrator half of AC08 (#49) tracked in M3.
   Milestones now close against `docs/EVIDENCE.md`. No behavior change
   and no spec revision.
+- Specification 0.3 → 0.4: the compatible chat endpoint accepts an
+  optional `X-RelayMind-Execution-Mode` request header carrying the
+  native `execution_mode` values (auto, local_only, external_only,
+  parallel_demo), under the same operator policy, so a standard
+  OpenAI client can force a local or external run without the native
+  API. Unknown values return 400 `invalid_execution_mode`; forbidden
+  values return 403 `execution_mode_forbidden`. The model alias keeps
+  selecting tool ownership only (sections 7.1, 7.2, 7.4; issues #22,
+  #24).
 - Specification 0.2 → 0.3: the artifact manifest records the "runtime
   version and commit" (one composite field) instead of only a "runtime
   commit", matching the implemented `runtime_version` field.

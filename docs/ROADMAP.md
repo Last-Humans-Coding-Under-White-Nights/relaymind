@@ -106,7 +106,9 @@ infrastructure around it is built.
 ## M4 — Public API and observability
 
 - `/v1/models` and `/v1/chat/completions` with the supported subset
-  (#22, #23, #24; RM19, RM20).
+  (#22, #23, #24; RM19, RM20), including the `X-RelayMind-Execution-Mode`
+  header that selects auto, local_only, or external_only from a standard
+  chat client (spec 0.4, section 7.1).
 - Native run API: runs, events SSE, resume, cancel, idempotency (#25,
   #26; RM21). SSE exposes the events recorded since M2.
 - Cancellation during generation and in-flight writes (#29; RM10, RM14,
