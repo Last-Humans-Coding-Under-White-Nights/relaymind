@@ -40,9 +40,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `answer.delta` chunks when streaming; a duplicate of an unfinished run
   is 409 `idempotency_conflict` with its run ID, and one of a failed or
   cancelled run is 409 `run_terminal`. A changed payload is 409
-  `idempotency_conflict`. A request refused before a run exists stores no
-  key. Keys leave with their run at the seven-day retention limit or on
-  deletion. `tests/test_idempotency.py` covers it with model doubles;
+  `idempotency_conflict`; a request that loses a race for the key after
+  the lookup is answered the same way. A duplicate first ends an expired
+  wait, so it never answers from a run waiting past its limit. A request
+  refused before a run exists stores no key, and a request without a key
+  is not hashed. Keys leave with their run at the seven-day retention
+  limit or on deletion; a key whose run is past that limit is unknown
+  even before a purge. Client-owned `function.arguments` are sent with
+  sorted keys, as the store keeps them, so a replay sends the same text.
+  `tests/test_idempotency.py` covers it with model doubles;
   the old tests that expected the header to be refused are removed.
 - Native run API (#25; RM21, AC11; spec 0.17 section 7.4):
   `POST /relay/v1/runs` accepts messages and an optional

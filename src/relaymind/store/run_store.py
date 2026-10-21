@@ -24,7 +24,8 @@ validated against the TraceEvent schema before it is written (section
 
 An idempotency key (spec 0.18 section 7.4) is stored with the run it
 creates, in the same transaction, and belongs to a caller. It leaves
-with its run: retention and explicit deletion remove it.
+with its run: retention and explicit deletion remove it, and a key whose
+run is past the retention window is unknown even before a purge.
 
 Retention defaults to seven days, with explicit deletion. Redaction of
 configured secret fields happens before data reaches the store (RM12);
@@ -230,10 +231,8 @@ class IdempotencyClaim:
 
 @dataclass(frozen=True)
 class IdempotencyRecord:
-    """A stored key and the run it created."""
+    """What a stored key holds: the request hash and the run it created."""
 
-    caller: str
-    key: str
     request_hash: str
     run_id: str
 
@@ -516,7 +515,8 @@ class RunStore:
         idempotency, when given, stores the caller's key with the run in
         the same transaction (spec 0.18 section 7.4). A key that is
         already stored raises IdempotencyKeyTakenError and no run is
-        created.
+        created. A key whose run is past retention is released first,
+        as a purge would.
 
         accepted, when given, is the run.accepted event (RM22), written as
         seq 1 in the same transaction as the run row. The run can then
@@ -540,6 +540,11 @@ class RunStore:
                 (run_id, initial_state),
             )
             if idempotency is not None:
+                self._conn.execute(
+                    "DELETE FROM idempotency_keys WHERE caller = ? AND idempotency_key = ?"
+                    " AND run_id IN (SELECT run_id FROM runs WHERE created_at <= ?)",
+                    (idempotency.caller, idempotency.key, self._retention_cutoff()),
+                )
                 try:
                     self._conn.execute(
                         "INSERT INTO idempotency_keys (caller, idempotency_key, request_hash,"
@@ -571,17 +576,22 @@ class RunStore:
         )
 
     def find_idempotency_key(self, caller: str, key: str) -> IdempotencyRecord | None:
-        """The stored key of a caller and the run it created, or None (spec 0.18 section 7.4)."""
+        """The stored key of a caller and the run it created, or None (spec 0.18 section 7.4).
+
+        A key is valid for the retention window of its run (section 5):
+        once the run is past it, the key is unknown, purged or not.
+        """
         with self._lock:
             self._check_open()
             row = self._conn.execute(
-                "SELECT request_hash, run_id FROM idempotency_keys"
-                " WHERE caller = ? AND idempotency_key = ?",
-                (caller, key),
+                "SELECT k.request_hash, k.run_id FROM idempotency_keys AS k"
+                " JOIN runs AS r ON r.run_id = k.run_id"
+                " WHERE k.caller = ? AND k.idempotency_key = ? AND r.created_at > ?",
+                (caller, key, self._retention_cutoff()),
             ).fetchone()
         if row is None:
             return None
-        return IdempotencyRecord(caller, key, row["request_hash"], row["run_id"])
+        return IdempotencyRecord(row["request_hash"], row["run_id"])
 
     def start_run_clock(self, run_id: str) -> None:
         """Start measuring a run's elapsed_ms with this store's monotonic clock (RM25).
@@ -761,13 +771,17 @@ class RunStore:
                 self._conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
             self._run_started.pop(run_id, None)
 
+    def _retention_cutoff(self) -> str:
+        """Runs created at or before this time are past retention (section 5)."""
+        return _iso(self.clock.utc_now() - self.retention)
+
     def purge_expired(self) -> list[str]:
         """Delete runs created at or before now minus retention; return their IDs.
 
         The caller learns which runs are gone, so the state machine can
         release an execution slot a purged run still held.
         """
-        cutoff = _iso(self.clock.utc_now() - self.retention)
+        cutoff = self._retention_cutoff()
         with self._lock:
             with self._write():
                 rows = self._conn.execute(

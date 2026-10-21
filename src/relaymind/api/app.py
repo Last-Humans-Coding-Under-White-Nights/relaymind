@@ -54,7 +54,7 @@ from relaymind.api.idempotency import (
     check_stored_key,
     claim_for,
     idempotency_key,
-    request_hash,
+    stored_after_race,
     stored_chat_result,
 )
 from relaymind.api.native import (
@@ -72,6 +72,7 @@ from relaymind.api.native import (
 from relaymind.orchestrator.local_loop import LocalOrchestrator, StartedRun
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
+from relaymind.store import IdempotencyKeyTakenError
 
 __all__ = [
     "MIN_TOKEN_LENGTH",
@@ -160,14 +161,20 @@ def create_app(
         key = idempotency_key(request.headers)
         mode_header = request.headers.get(MODE_HEADER)
         mode = _execution_mode(mode_header, MODE_HEADER, chat.alias, settings)
-        claim = claim_for(key, request_hash("chat", body, mode_header))
+        claim = claim_for(key, "chat", body, mode_header)
         stored = check_stored_key(orchestrator.store, claim)
         if stored is None:
-            result = await backends[chat.alias].complete(replace(chat, idempotency=claim), mode)
+            try:
+                result = await backends[chat.alias].complete(replace(chat, idempotency=claim), mode)
+            except IdempotencyKeyTakenError as taken:
+                stored = stored_after_race(orchestrator.store, claim, taken)
+        if stored is None:
             created = int(time.time())
             headers = {RUN_ID_HEADER: result.run_id}
         else:
             # A duplicate: answered from the stored run, so no model or tool runs.
+            # An expired wait ends first, so it is never answered as unfinished.
+            sweep_expired_waits(orchestrator)
             result, ended = stored_chat_result(
                 orchestrator.store, stored.run_id, stream=chat.stream
             )
@@ -194,19 +201,25 @@ def create_app(
         run = parse_run_request(body)
         key = idempotency_key(request.headers)
         mode = _execution_mode(run.execution_mode, "execution_mode", None, settings)
-        claim = claim_for(key, request_hash("native", body))
+        claim = claim_for(key, "native", body)
         stored = check_stored_key(orchestrator.store, claim)
-        if stored is not None:
-            # A duplicate: the existing run's reference, with its current state.
-            record = orchestrator.store.get_run(stored.run_id)
-            existing = StartedRun(record.run_id, record.state, record.version)
-            return _accepted(existing, {REPLAYED_HEADER: "true"})
-        started = orchestrator.start(
-            run.messages,
-            execution_mode=None if run.execution_mode is None else mode.value,
-            idempotency=claim,
-        )
-        return _accepted(started)
+        if stored is None:
+            try:
+                started = orchestrator.start(
+                    run.messages,
+                    execution_mode=None if run.execution_mode is None else mode.value,
+                    idempotency=claim,
+                )
+            except IdempotencyKeyTakenError as taken:
+                stored = stored_after_race(orchestrator.store, claim, taken)
+            else:
+                return _accepted(started)
+        # A duplicate: the existing run's reference, with its current state.
+        # An expired wait ends first, so a run is never shown waiting past its limit.
+        sweep_expired_waits(orchestrator)
+        record = orchestrator.store.get_run(stored.run_id)
+        existing = StartedRun(record.run_id, record.state, record.version)
+        return _accepted(existing, {REPLAYED_HEADER: "true"})
 
     @app.get("/relay/v1/runs/{run_id}")
     @_guarded

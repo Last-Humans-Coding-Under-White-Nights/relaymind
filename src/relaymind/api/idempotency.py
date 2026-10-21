@@ -12,7 +12,6 @@ its events, so a replay says what the run recorded and nothing a model
 is asked for again.
 """
 
-import hashlib
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any
@@ -22,10 +21,16 @@ from starlette.datastructures import Headers
 from relaymind.adapters import ToolCall
 from relaymind.api.chat import TOOL_CALLS, ChatResult, answer_pieces
 from relaymind.api.errors import ApiError
-from relaymind.canonical import canonical_json
+from relaymind.canonical import canonical_digest
 from relaymind.orchestrator.run_state import TERMINAL_STATES, RunState
 from relaymind.redaction import REDACTED
-from relaymind.store import EventType, IdempotencyClaim, IdempotencyRecord, RunStore
+from relaymind.store import (
+    EventType,
+    IdempotencyClaim,
+    IdempotencyKeyTakenError,
+    IdempotencyRecord,
+    RunStore,
+)
 
 __all__ = [
     "APPLICATION_CALLER",
@@ -36,6 +41,7 @@ __all__ = [
     "claim_for",
     "idempotency_key",
     "request_hash",
+    "stored_after_race",
     "stored_chat_result",
 ]
 
@@ -67,14 +73,18 @@ def idempotency_key(headers: Headers) -> str | None:
 def request_hash(endpoint: str, body: object, mode_header: str | None = None) -> str:
     """The SHA-256 of the canonical JSON of the endpoint, the decoded body, and the mode header."""
     try:
-        text = canonical_json({"endpoint": endpoint, "body": body, "mode_header": mode_header})
+        return canonical_digest({"endpoint": endpoint, "body": body, "mode_header": mode_header})
     except ValueError:
         raise ApiError("invalid_request", "the request body must be valid JSON") from None
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def claim_for(key: str | None, digest: str) -> IdempotencyClaim | None:
-    return None if key is None else IdempotencyClaim(APPLICATION_CALLER, key, digest)
+def claim_for(
+    key: str | None, endpoint: str, body: object, mode_header: str | None = None
+) -> IdempotencyClaim | None:
+    """The claim of a keyed request; None without a key, which is then never hashed."""
+    if key is None:
+        return None
+    return IdempotencyClaim(APPLICATION_CALLER, key, request_hash(endpoint, body, mode_header))
 
 
 def check_stored_key(store: RunStore, claim: IdempotencyClaim | None) -> IdempotencyRecord | None:
@@ -89,6 +99,21 @@ def check_stored_key(store: RunStore, claim: IdempotencyClaim | None) -> Idempot
             "idempotency_conflict",
             f"{IDEMPOTENCY_HEADER} was used with a different request; send a new key",
         )
+    return stored
+
+
+def stored_after_race(
+    store: RunStore, claim: IdempotencyClaim | None, error: IdempotencyKeyTakenError
+) -> IdempotencyRecord:
+    """The stored key that another request took after this one looked (RM17).
+
+    The unique key let only one request create a run. This one is then
+    a duplicate of it, or 409 when its payload differs, as if the
+    lookup had found the key.
+    """
+    stored = check_stored_key(store, claim)
+    if stored is None:
+        raise error
     return stored
 
 

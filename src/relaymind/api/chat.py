@@ -231,11 +231,20 @@ def request_id(result: ChatResult) -> str:
     return f"chatcmpl-{result.run_id}"
 
 
+def _arguments_text(arguments: Mapping[str, Any]) -> str:
+    """function.arguments with sorted keys, as the store keeps them (spec 0.18 section 7.4).
+
+    The store writes tool.proposed with sorted keys, so a replay of the
+    stored call (``relaymind.api.idempotency``) sends the same text.
+    """
+    return json.dumps(dict(arguments), sort_keys=True)
+
+
 def _tool_call_json(call: ToolCall) -> dict[str, Any]:
     return {
         "id": call.call_id,
         "type": "function",
-        "function": {"name": call.tool_name, "arguments": json.dumps(dict(call.arguments))},
+        "function": {"name": call.tool_name, "arguments": _arguments_text(call.arguments)},
     }
 
 

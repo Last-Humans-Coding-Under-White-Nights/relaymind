@@ -396,12 +396,11 @@ def test_redacted_client_tool_arguments_are_not_replayed_as_the_original(tmp_pat
 
 
 def test_an_expired_key_starts_a_new_run(tmp_path):
-    """Section 5, 7.4: after the seven-day window the key is unknown."""
+    """Section 5, 7.4: after the seven-day window the key is unknown, with no purge run."""
     gateway = healthy_gateway(tmp_path)
     app = make_app(gateway)
     first = chat(app, headers=KEY)
     gateway.clock.advance(timedelta(days=7, seconds=1).total_seconds())
-    gateway.store.purge_expired()
     gateway.adapter._turns.extend([route_turn("check-service-health"), *health_tail()])
     second = chat(app, headers=KEY)
     assert second.status_code == 200
@@ -409,7 +408,11 @@ def test_an_expired_key_starts_a_new_run(tmp_path):
 
 
 def test_a_key_taken_between_the_lookup_and_the_run_is_409(tmp_path):
-    """RM17: if two requests race past the lookup, the unique key lets only one create work."""
+    """RM17: if two requests race past the lookup, the unique key lets only one create work.
+
+    Here every lookup misses, so the key that blocked the run cannot be
+    read back; the request is then refused as a conflict.
+    """
     gateway = healthy_gateway(tmp_path)
     app = make_app(gateway)
     assert chat(app, headers=KEY).status_code == 200
@@ -420,4 +423,168 @@ def test_a_key_taken_between_the_lookup_and_the_run_is_409(tmp_path):
     finally:
         gateway.store.find_idempotency_key = real
     assert (raced.status_code, error_of(raced)["code"]) == (409, "idempotency_conflict")
+    assert run_count(gateway) == 1
+
+
+# -- review round 1 ----------------------------------------------------------------------
+
+
+def test_a_key_past_the_retention_window_is_unknown_without_a_purge():
+    """Section 5, 7.4: a key is valid for seven days, whether or not a purge has run yet."""
+    clock = FakeClock()
+    store = RunStore(clock=clock)
+    old = accepted(store)
+    clock.advance(timedelta(days=7).total_seconds())
+    assert store.find_idempotency_key("alice", "k") is None
+    # The key is free again: a new run takes it in its creation transaction.
+    fresh = accepted(store, request_hash="h2")
+    assert fresh.run_id != old.run_id
+    assert store.find_idempotency_key("alice", "k").run_id == fresh.run_id
+
+
+def test_an_expired_native_key_starts_a_new_run(tmp_path):
+    """Section 5, 7.4: after the seven-day window the native key is unknown too."""
+    gateway = healthy_gateway(tmp_path)
+    app = make_app(gateway)
+
+    async def go():
+        async with session(app) as client:
+            first = await start_run(client, headers=KEY)
+            await settled(client, first.json()["run_id"])
+            gateway.clock.advance(timedelta(days=7, seconds=1).total_seconds())
+            gateway.adapter._turns.extend([route_turn("check-service-health"), *health_tail()])
+            second = await start_run(client, headers=KEY)
+            await settled(client, second.json()["run_id"])
+            return first, second
+
+    first, second = asyncio.run(go())
+    assert second.status_code == 202 and REPLAYED not in second.headers
+    assert second.json()["run_id"] != first.json()["run_id"]
+
+
+def test_a_native_duplicate_of_an_expired_wait_shows_it_ended(tmp_path):
+    """Section 5, 7.4: a duplicate never shows a run waiting past its limit."""
+    gateway = healthy_gateway(tmp_path)
+    app = make_app(gateway)
+
+    async def go():
+        async with session(app) as client:
+            first = await start_run(client, "Is the service healthy?", headers=KEY)
+            waiting = await settled(client, first.json()["run_id"])
+            gateway.clock.advance(gateway.orchestrator.budgets.waiting_seconds + 1)
+            again = await start_run(client, "Is the service healthy?", headers=KEY)
+            return waiting, again
+
+    waiting, again = asyncio.run(go())
+    assert waiting["state"] == "waiting_input"
+    assert again.status_code == 202 and again.json()["run_id"] == waiting["run_id"]
+    assert again.json()["state"] == "failed"
+    record = gateway.store.get_run(waiting["run_id"])
+    assert (record.state, record.error_code) == ("failed", "input_expired")
+    assert again.json()["state_version"] == record.version
+
+
+def test_a_chat_duplicate_of_an_expired_wait_is_run_terminal(tmp_path):
+    """Section 5, 7.4: the expired wait ends first, so the duplicate sees a failed run."""
+    gateway = healthy_gateway(tmp_path)
+    app = make_app(gateway)
+    first = chat(app, prompt="Is the service healthy?", headers=KEY)
+    assert first.status_code == 200
+    run_id = first.headers[RUN_ID_HEADER]
+    assert gateway.store.get_run(run_id).state == "waiting_input"
+    gateway.clock.advance(gateway.orchestrator.budgets.waiting_seconds + 1)
+    again = chat(app, prompt="Is the service healthy?", headers=KEY)
+    assert again.status_code == 409
+    assert (error_of(again)["code"], error_of(again)["run_id"]) == ("run_terminal", run_id)
+
+
+def test_a_request_without_a_key_is_not_hashed(tmp_path):
+    """Section 7.4: a request without the header behaves as before; nothing is hashed.
+
+    The canonical form refuses NaN (RM10), which the JSON decoder accepts,
+    so hashing a keyless body could newly refuse it.
+    """
+    gateway = build_gateway(tmp_path, [tool_turn("get_weather", call_id="call_w1", city="Oslo")])
+    app = make_app(gateway, client_tools=ClientToolsChat(gateway.orchestrator))
+    body = (
+        '{"model": "relaymind-client-tools",'
+        ' "messages": [{"role": "user", "content": "Weather in Oslo?"}],'
+        ' "tools": [{"type": "function", "function": {"name": "get_weather", "parameters":'
+        ' {"type": "object", "properties": {"city": {"type": "string"},'
+        ' "days": {"type": "integer", "maximum": NaN}}}}}]}'
+    )
+    response = call(app, "POST", "/v1/chat/completions", content=body)
+    assert response.status_code == 200, response.text
+
+
+def test_replayed_tool_call_arguments_are_the_same_text(tmp_path):
+    """AC10, AC11: function.arguments of a replay is the exact string first sent."""
+    gateway = build_gateway(
+        tmp_path, [tool_turn("get_weather", call_id="call_w1", units="metric", city="Oslo")]
+    )
+    app = make_app(gateway, client_tools=ClientToolsChat(gateway.orchestrator))
+    fields = {"model": CLIENT_TOOLS, "tools": [WEATHER], "prompt": "Weather in Oslo?"}
+    first = chat(app, headers=KEY, **fields)
+    again = chat(app, headers=KEY, **fields)
+
+    def arguments(response):
+        return response.json()["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]
+
+    assert again.headers[REPLAYED] == "true"
+    assert arguments(again) == arguments(first)
+
+
+def lose_the_lookup_once(store):
+    """The first lookup misses, as if another request stored the key just after it."""
+    real = store.find_idempotency_key
+    missed = []
+
+    def lookup(caller, key):
+        if not missed:
+            missed.append(key)
+            return None
+        return real(caller, key)
+
+    store.find_idempotency_key = lookup
+
+
+def test_a_same_payload_race_on_chat_is_answered_as_a_duplicate(tmp_path):
+    """RM17, section 7.4: a key taken after the lookup is a duplicate, not a changed payload."""
+    gateway = healthy_gateway(tmp_path)
+    app = make_app(gateway)
+    first = chat(app, headers=KEY)
+    lose_the_lookup_once(gateway.store)
+    raced = chat(app, headers=KEY)
+    assert raced.status_code == 200 and raced.headers[REPLAYED] == "true"
+    assert raced.headers[RUN_ID_HEADER] == first.headers[RUN_ID_HEADER]
+    assert run_count(gateway) == 1
+
+
+def test_a_same_payload_race_on_native_creation_returns_the_existing_run(tmp_path):
+    """RM17, RM21, section 7.4: the raced creation answers with the run that took the key."""
+    gateway = healthy_gateway(tmp_path)
+    app = make_app(gateway)
+
+    async def go():
+        async with session(app) as client:
+            first = await start_run(client, headers=KEY)
+            await settled(client, first.json()["run_id"])
+            lose_the_lookup_once(gateway.store)
+            return first, await start_run(client, headers=KEY)
+
+    first, raced = asyncio.run(go())
+    assert raced.status_code == 202 and raced.headers[REPLAYED] == "true"
+    assert raced.json()["run_id"] == first.json()["run_id"]
+    assert run_count(gateway) == 1
+
+
+def test_a_changed_payload_race_is_409_with_no_run_id(tmp_path):
+    """RM17, section 7.4: a key taken after the lookup by another payload is a conflict."""
+    gateway = healthy_gateway(tmp_path)
+    app = make_app(gateway)
+    assert chat(app, headers=KEY).status_code == 200
+    lose_the_lookup_once(gateway.store)
+    raced = chat(app, prompt="Is staging-db healthy?", headers=KEY)
+    assert raced.status_code == 409
+    assert (error_of(raced)["code"], error_of(raced)["run_id"]) == ("idempotency_conflict", None)
     assert run_count(gateway) == 1
