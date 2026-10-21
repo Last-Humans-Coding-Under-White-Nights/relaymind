@@ -32,6 +32,7 @@ import httpx
 import pytest
 
 from gateway_helpers import (
+    Gateway,
     build_gateway,
     local_eligible_skills,
     route_turn,
@@ -42,7 +43,7 @@ from helpers import delta_chunk, of_type, sse_response
 from relaymind.adapters import Completed, TextDelta, ToolCall
 from relaymind.adapters.chat_completions import ChatCompletionsAdapter, ChatCompletionsConfig
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
-from relaymind.orchestrator.local_loop import ConfiguredModel
+from relaymind.orchestrator.local_loop import ConfiguredModel, RunOutcome
 from relaymind.orchestrator.run_state import RunState
 
 PROPOSAL_ID = re.compile(r"proposal_[0-9a-f]{16}")
@@ -162,12 +163,15 @@ class Endpoint:
 
 @dataclass
 class Observed:
-    outcome: object
+    """One run of the scenario: the configuration it ran under and what it left behind."""
+
+    config: Configuration
+    outcome: RunOutcome
     events: list
     operations: list
     local: Endpoint
     external: Endpoint
-    gateway: object
+    gateway: Gateway
 
 
 def run_scenario(tmp_path, skill_roots, config: Configuration, local_turns=LOCAL_TURNS) -> Observed:
@@ -187,7 +191,6 @@ def run_scenario(tmp_path, skill_roots, config: Configuration, local_turns=LOCAL
         work,
         [],
         skill_roots=skill_roots,
-        external_turns=[],
         local_model=ConfiguredModel(adapter=local_adapter, model_id=config.local_model_id),
         external_model=ConfiguredModel(adapter=external_adapter, model_id=config.external_model_id),
     )
@@ -198,6 +201,7 @@ def run_scenario(tmp_path, skill_roots, config: Configuration, local_turns=LOCAL
 
     outcome = asyncio.run(go())
     return Observed(
+        config,
         outcome,
         gateway.store.events(outcome.run_id),
         gateway.store.tool_operations(outcome.run_id),
@@ -221,7 +225,7 @@ def model_names(value) -> set[str]:
     return found
 
 
-def renamer(observed: Observed, config: Configuration):
+def renamer(observed: Observed):
     """A function that rewrites the values that differ per run into names.
 
     Renamed: the model identifiers (to local-model and external-model),
@@ -229,8 +233,8 @@ def renamer(observed: Observed, config: Configuration):
     run, so numbered in order of first appearance).
     """
     names = {
-        config.local_model_id: "local-model",
-        config.external_model_id: "external-model",
+        observed.config.local_model_id: "local-model",
+        observed.config.external_model_id: "external-model",
         observed.outcome.run_id: "run",
     }
     for index, operation in enumerate(observed.operations):
@@ -254,7 +258,7 @@ def renamer(observed: Observed, config: Configuration):
     return rename
 
 
-def normalized(observed: Observed, config: Configuration) -> list[dict]:
+def normalized(observed: Observed) -> list[dict]:
     """The trace without the values that are configuration or per-run.
 
     Dropped: run id and wall-clock timestamps. One more field is
@@ -264,21 +268,22 @@ def normalized(observed: Observed, config: Configuration) -> list[dict]:
     proposals, arguments, results, handoff content, and the order of
     events.
     """
-    rename = renamer(observed, config)
+    rename = renamer(observed)
+    limit = observed.config.external.context_limit
     out = []
     for event in observed.events:
         record = event.to_json_object()
         for key in ("run_id", "timestamp"):
             record.pop(key)
         if record["event_type"] == "handoff.started":
-            assert record["payload"]["request"].pop("limit") == config.external.context_limit
+            assert record["payload"]["request"].pop("limit") == limit
         out.append(rename(record))
     return out
 
 
-def external_requests(observed: Observed, config: Configuration) -> list[dict]:
+def external_requests(observed: Observed) -> list[dict]:
     """What the external model received, as sent on the wire, with the same renames."""
-    rename = renamer(observed, config)
+    rename = renamer(observed)
     return [
         {"messages": rename(body["messages"]), "tools": body["tools"]}
         for body in observed.external.generations
@@ -298,12 +303,18 @@ def credentials(monkeypatch):
     monkeypatch.setenv("AC08_KEY_B", "sk-b")
 
 
-def test_the_scenario_completes_through_a_handoff_under_each_configuration(tmp_path, skill_roots):
-    """AC08, RM18: the managed scenario works under A and under B."""
-    for config in (CONFIG_A, CONFIG_B):
-        observed = run_scenario(tmp_path, skill_roots, config)
+@pytest.fixture
+def swapped(tmp_path, skill_roots) -> tuple[Observed, Observed]:
+    """The scenario under configuration A, then under configuration B."""
+    first = run_scenario(tmp_path, skill_roots, CONFIG_A)
+    second = run_scenario(tmp_path, skill_roots, CONFIG_B)
+    return first, second
 
-        assert observed.outcome.state is RunState.COMPLETED, config.name
+
+def test_the_scenario_completes_through_a_handoff_under_each_configuration(swapped):
+    """AC08, RM18: the managed scenario works under A and under B."""
+    for observed in swapped:
+        assert observed.outcome.state is RunState.COMPLETED, observed.config.name
         assert observed.outcome.answer == ANSWER
         assert [op["tool_name"] for op in observed.operations] == [
             "get_latest_deployment",
@@ -317,16 +328,15 @@ def test_the_scenario_completes_through_a_handoff_under_each_configuration(tmp_p
         assert observed.external.turns == []
 
 
-def test_the_swap_reaches_the_swapped_endpoints(tmp_path, skill_roots):
+def test_the_swap_reaches_the_swapped_endpoints(swapped):
     """AC08, RM01, RM18: each run talks to its own endpoints, local ones only on loopback."""
-    first = run_scenario(tmp_path, skill_roots, CONFIG_A)
-    second = run_scenario(tmp_path, skill_roots, CONFIG_B)
+    first, second = swapped
 
     assert first.local.hosts() == {("127.0.0.1", 8033)}
     assert second.local.hosts() == {("127.0.0.1", 9044)}
     assert first.external.hosts() == {("api.provider-one.example", None)}
     assert second.external.hosts() == {("api.provider-two.example", None)}
-    for observed, config, key in ((first, CONFIG_A, "sk-a"), (second, CONFIG_B, "sk-b")):
+    for observed, key in ((first, "sk-a"), (second, "sk-b")):
         # Local generations carry no model identifier and no credential.
         assert len(observed.local.generations) == 4
         assert all("model" not in body for body in observed.local.generations)
@@ -334,15 +344,14 @@ def test_the_swap_reaches_the_swapped_endpoints(tmp_path, skill_roots):
         # External generations name the configured model and use its credential.
         assert len(observed.external.generations) == 2
         assert {body["model"] for body in observed.external.generations} == {
-            config.external_model_id
+            observed.config.external_model_id
         }
         assert {r.headers["authorization"] for r in observed.external.requests} == {f"Bearer {key}"}
 
 
-def test_both_runs_use_the_same_skill_packages(tmp_path, skill_roots):
+def test_both_runs_use_the_same_skill_packages(swapped, skill_roots):
     """AC08, RM07, RM18: one skill root, the same versions and content hashes."""
-    first = run_scenario(tmp_path, skill_roots, CONFIG_A)
-    second = run_scenario(tmp_path, skill_roots, CONFIG_B)
+    first, second = swapped
 
     def offered(observed):
         (accepted,) = of_type(observed.events, "run.accepted")
@@ -356,16 +365,12 @@ def test_both_runs_use_the_same_skill_packages(tmp_path, skill_roots):
         )
 
 
-def test_the_traces_name_the_actual_models(tmp_path, skill_roots):
+def test_the_traces_name_the_actual_models(swapped):
     """AC08, RM16, RM22: run A names A's models only, run B names B's models only."""
-    first = run_scenario(tmp_path, skill_roots, CONFIG_A)
-    second = run_scenario(tmp_path, skill_roots, CONFIG_B)
-
-    for observed, config in ((first, CONFIG_A), (second, CONFIG_B)):
-        seen = set()
-        for event in observed.events:
-            seen |= model_names(event.to_json_object()["payload"])
-        assert seen == {config.local_model_id, config.external_model_id}
+    for observed in swapped:
+        config = observed.config
+        payloads = [event.to_json_object()["payload"] for event in observed.events]
+        assert model_names(payloads) == {config.local_model_id, config.external_model_id}
         # The local generations are attributed to the local model and the
         # external ones to the external model, by actor.
         started = of_type(observed.events, "model.started")
@@ -377,13 +382,12 @@ def test_the_traces_name_the_actual_models(tmp_path, skill_roots):
         assert completed.payload["final_answer_model"] == config.external_model_id
 
 
-def test_routing_tool_proposals_and_handoff_are_the_same_across_the_swap(tmp_path, skill_roots):
+def test_routing_tool_proposals_and_handoff_are_the_same_across_the_swap(swapped):
     """AC08, RM13, RM18: same routing, proposals, and handoff content in both traces."""
-    first = run_scenario(tmp_path, skill_roots, CONFIG_A)
-    second = run_scenario(tmp_path, skill_roots, CONFIG_B)
+    first, second = swapped
 
-    trace_a = normalized(first, CONFIG_A)
-    trace_b = normalized(second, CONFIG_B)
+    trace_a = normalized(first)
+    trace_b = normalized(second)
 
     assert trace_a == trace_b
     # The comparison is not vacuous: it covers the facts AC08 names.
@@ -392,8 +396,8 @@ def test_routing_tool_proposals_and_handoff_are_the_same_across_the_swap(tmp_pat
         assert needed in types
     # The handoff content the external model received is identical too:
     # the same task, evidence, proposals, and tool schemas on the wire.
-    sent_a = external_requests(first, CONFIG_A)
-    sent_b = external_requests(second, CONFIG_B)
+    sent_a = external_requests(first)
+    sent_b = external_requests(second)
     assert sent_a == sent_b
     assert "Handoff (JSON):" in sent_a[0]["messages"][0]["content"]
 
@@ -408,4 +412,4 @@ def test_the_comparison_notices_a_difference_in_tool_proposals(tmp_path, skill_r
     first = run_scenario(tmp_path, skill_roots, CONFIG_A)
     second = run_scenario(tmp_path, skill_roots, CONFIG_B, local_turns=different)
 
-    assert normalized(first, CONFIG_A) != normalized(second, CONFIG_B)
+    assert normalized(first) != normalized(second)
