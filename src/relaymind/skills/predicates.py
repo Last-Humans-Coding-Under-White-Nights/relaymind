@@ -42,19 +42,25 @@ _DRAFT_CHECKLIST_LABEL = re.compile(
 _STATUS_WORD = re.compile(r"(?<![A-Za-z])(healthy|degraded|unavailable)(?![A-Za-z])", re.IGNORECASE)
 # A negator right before a status word reverses it: "not healthy",
 # "no longer healthy", "不 healthy" (RM16).
-_NEGATED = re.compile(r"(?:(?<![A-Za-z])(?:not|no longer)|n't)\s+$|[不非]\s*$", re.IGNORECASE)
+_NEGATED = re.compile(
+    r"(?:(?<![A-Za-z])(?:not|no longer)|n't)\s+$|(?:不是|不再|[不非未])\s*$", re.IGNORECASE
+)
 # The Chinese gloss a status word may carry, such as unavailable（不可用）.
 _GLOSS = re.compile(r"\s*[（(]\s*(健康|降级|不可用)\s*[）)]")
 _GLOSS_STATUS = {"健康": "healthy", "降级": "degraded", "不可用": "unavailable"}
 # A statement about a service ends at a sentence or line break, or where
 # another resource ID (such as ledger-db or web-1) starts a new subject.
-# A resource ID ends in an infrastructure word or a digit-bearing part,
-# so hyphenated English words such as self-healing do not end it.
+# An ID-shaped token is a new subject only when followed by a predicate.
+# Procedural prose such as "in step-1 and is healthy" keeps the service
+# as its subject; an infrastructure suffix alone is not enough.
 _STATEMENT_END = re.compile(r"[.!?](?=\s|$)|[。！？；;\n]")
 _RESOURCE_ID = re.compile(
     r"(?<![A-Za-z0-9-])[a-z][a-z0-9]*(?:-[a-z0-9]+)*"
     r"-(?:api|db|service|svc|cache|queue|worker|web|server|gateway|proxy|[a-z]*\d[a-z0-9]*)"
-    r"(?![A-Za-z0-9-])",
+    r"(?![A-Za-z0-9-])"
+    r"(?=(?:[ \t]+|[ \t]*[,：:][ \t]*)(?:(?:which|that)[ \t]+)?"
+    r"(?:is|are|was|were|seems?|remains?|healthy|degraded|unavailable)"
+    r"(?![A-Za-z])|[ \t]*(?:的状态|状态|是))",
     re.IGNORECASE,
 )
 
@@ -75,7 +81,7 @@ _CAUSE_WORDS = re.compile(
     r"(?<![A-Za-z])(?:caused by|because|due to|root cause)(?![A-Za-z])|原因|由于|导致",
     re.IGNORECASE,
 )
-_COUNT_NUMBER = re.compile(r"(?<![A-Za-z0-9_.])\d+(?!\.?\d)")
+_COUNT_NUMBER = re.compile(r"(?<![A-Za-z0-9_.-])-?\d+(?![A-Za-z0-9_]|\.\d)")
 
 _EVIDENCE_TOOLS = ("get_latest_deployment", "get_metrics", "get_recent_logs")
 
@@ -97,11 +103,17 @@ def _alternation(items: Sequence[str]) -> str:
 # label; otherwise a label right before it ("total 7", "警告 3 个")
 # names it.
 _LABEL_AFTER = {
-    key: re.compile(rf"\s*(?:个|-)?\s*(?:{_alternation(items)})(?![A-Za-z])", re.IGNORECASE)
+    key: re.compile(
+        rf"[ \t]*(?:[个起次]|-)?[ \t]*(?:{_alternation(items)})(?![A-Za-z])", re.IGNORECASE
+    )
     for key, items in _INCIDENT_LABELS.items()
 }
 _LABEL_BEFORE = {
-    key: re.compile(rf"(?<![A-Za-z])(?:{_alternation(items)})\s*(?:[:：]|of)?\s*$", re.IGNORECASE)
+    key: re.compile(
+        rf"(?<![A-Za-z])(?:{_alternation(items)})(?![A-Za-z])"
+        r"[ \t]*(?:incidents?(?![A-Za-z])|事件)?[ \t]*(?:[:：]|of)?[ \t]*$",
+        re.IGNORECASE,
+    )
     for key, items in _INCIDENT_LABELS.items()
 }
 
@@ -113,12 +125,14 @@ def _labeled_numbers(answer: str) -> dict[str, list[int]]:
     """
     found: dict[str, list[int]] = {key: [] for key in _INCIDENT_LABELS}
     for number in _COUNT_NUMBER.finditer(answer):
-        key = next((k for k, p in _LABEL_AFTER.items() if p.match(answer, number.end())), None)
-        if key is None:
-            key = next(
-                (k for k, p in _LABEL_BEFORE.items() if p.search(answer, 0, number.start())),
-                None,
-            )
+        # A severity label is more specific than the unit noun "incident".
+        # Prefer labels after the number for "7 incidents: 1 critical",
+        # but use the preceding severity in "Critical: 1 incident".
+        after = [k for k, p in _LABEL_AFTER.items() if p.match(answer, number.end())]
+        before = [k for k, p in _LABEL_BEFORE.items() if p.search(answer, 0, number.start())]
+        key = next((k for k in [*after, *before] if k != "total"), None)
+        if key is None and (after or before):
+            key = (after or before)[0]
         if key is not None:
             found[key].append(int(number.group()))
     return found
@@ -133,13 +147,15 @@ def _section_pattern(labels: Sequence[str], *, prefix: str = _HEADING_PREFIX) ->
     return re.compile(rf"{prefix}(?:{_alternation(labels)}){_COLON}", re.IGNORECASE | re.MULTILINE)
 
 
-# The insufficient-evidence label is "Insufficient evidence:",
-# "Insufficient evidence to ...", or "证据不足：". Other sentences that
+# Insufficient-evidence labels accept colons, standalone lines, and
+# sentence endings in both languages, plus "Insufficient evidence to ...".
+# Other sentences that
 # start with the words, such as "Insufficient evidence is not an issue:
 # the cause is ...", are assertions, not the label.
+_LABEL_END = rf"(?:{_COLON}|[ \t*_]*(?:[.。](?=[ \t]*(?:\r?$))|(?=\r?$)))"
 _INSUFFICIENT_SECTION = re.compile(
-    rf"{_HEADING_PREFIX}(?:Insufficient evidence(?:{_COLON}|[ \t]+to(?![A-Za-z]))"
-    rf"|证据不足{_COLON})",
+    rf"{_HEADING_PREFIX}(?:Insufficient evidence(?:{_LABEL_END}|[ \t]+to(?![A-Za-z]))"
+    rf"|证据不足{_LABEL_END})",
     re.IGNORECASE | re.MULTILINE,
 )
 _SECTIONS = {
@@ -178,22 +194,28 @@ def _filled_sections(answer: str) -> set[str]:
 # digit-bearing token, or directly by digits. Words that only start with
 # dep, such as depth2, deposit-1, or departure3, do not count.
 _DEPLOYMENT_LIKE_ID = re.compile(
-    r"(?<![A-Za-z0-9])dep(?:loy(?:ment)?)?(?:[-_#:]+[A-Za-z0-9_-]*\d|\d)", re.IGNORECASE
+    r"(?<![A-Za-z0-9])dep(?:loy(?:ment)?)?"
+    r"(?:[-_#:]+[A-Za-z0-9_-]*\d|\d)[A-Za-z0-9_-]*(?![A-Za-z0-9_-])",
+    re.IGNORECASE,
 )
-# RM05: with no recorded deployment, a revision-like hex token (letters
-# and digits, such as 4f2c9e1) or a Chinese deployment number is also
-# invented.
+# RM05: a revision-like hex token must come from the tool result.
+# A number assigned directly to the Chinese deployment-ID label is an ID;
+# nearby query counts and durations are not.
 _REVISION_LIKE = re.compile(
     r"(?<![A-Za-z0-9])(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,40}(?![A-Za-z0-9])",
     re.IGNORECASE,
 )
-_ZH_DEPLOYMENT_NUMBER = re.compile(r"部署编号[^\d。\n]{0,6}\d")
+_ZH_DEPLOYMENT_NUMBER = re.compile(r"部署编号[ \t]*(?:为|是)?[ \t]*[:：#]?[ \t]*[（(]?[ \t]*\d+")
 
 # A deletion answer states the deletion and does not negate it.
 _DELETION_VERB = re.compile(r"(?<![A-Za-z])deleted(?![A-Za-z])|已删除|删除了", re.IGNORECASE)
 _DELETION_NEGATED = re.compile(
-    r"(?<![A-Za-z])(?:fail(?:ed|s)?|not|unable|cannot)(?![A-Za-z])|n't"
-    r"|未能|未删除|没有|无法|失败",
+    r"(?<![A-Za-z])(?:not|never|cannot|\w+n't)[ \t]+"
+    r"(?:(?:actually|successfully|been|be|yet)[ \t]+)*deleted(?![A-Za-z])"
+    r"|(?<![A-Za-z])(?:failed|unable)[ \t]+to[ \t]+delete(?![A-Za-z])"
+    r"|(?<![A-Za-z])deletion[ \t]+failed(?![A-Za-z])"
+    r"|(?:未能|没有|无法|未|不能|不曾|不)[ \t]*(?:成功[ \t]*)?删除"
+    r"|删除(?:操作)?[ \t]*(?:失败|未成功)",
     re.IGNORECASE,
 )
 _DEMO_DATABASE_ID = re.compile(
@@ -273,9 +295,12 @@ def deployment_reported(answer: str, results: Sequence[ToolResult]) -> bool:
     if _id_mention(data["service"]).search(answer) is None:
         return False
     if data["deployment_id"] is None:
-        return not any(
-            pattern.search(answer)
-            for pattern in (_DEPLOYMENT_LIKE_ID, _REVISION_LIKE, _ZH_DEPLOYMENT_NUMBER)
+        return (
+            _DEPLOYMENT_LIKE_ID.search(answer) is None
+            and _ZH_DEPLOYMENT_NUMBER.search(answer) is None
+            and all(
+                found.group() == data.get("revision") for found in _REVISION_LIKE.finditer(answer)
+            )
         )
     # The deployment ID has no case rule in the output schema, so it must
     # be quoted exactly, and no other deployment-like ID may appear (RM05).
