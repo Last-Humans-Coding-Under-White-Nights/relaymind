@@ -20,6 +20,7 @@ external-required (spec section 9), so the local-prep tests use a copy of
 the demo skills with that one manifest flag changed, in tmp_path.
 """
 
+import asyncio
 import json
 import shutil
 
@@ -38,11 +39,13 @@ from gateway_helpers import (
     tool_turn,
 )
 from helpers import DEMO_SKILLS_ROOT, ScriptedAdapter, make_capabilities, of_type
-from relaymind.adapters import GenerationFailed, Role
+from relaymind.adapters import GenerationFailed, Role, TextDelta
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel
 from relaymind.orchestrator.run_state import RunState
 from relaymind.redaction import Redactor
+from relaymind.tools import CallerContext
+from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
 
 PROMPT = "Why is staging-api slow right now?"
 ANSWER = (
@@ -769,3 +772,89 @@ def test_external_capabilities_are_fetched_once_per_handoff(tmp_path, local_prep
     assert outcome.state is RunState.COMPLETED
     assert len(external.requests) == 2
     assert external.fetched == 1
+
+
+# --- review of #18, round 2: no futile handoff, honest timeout evidence ------------
+
+
+def test_a_mutating_tool_that_needs_confirmation_does_not_hand_off(tmp_path):
+    """RM11, RM04, section 4.4: the external stage cannot run the mutation either.
+
+    The local loop stops on confirmation_required. A handoff would send
+    the same proposal to the external model, which the gateway rejects
+    the same way, so the run ends as needs_external with no external call.
+    """
+    gateway = build_gateway(
+        tmp_path,
+        [
+            route_turn("delete-demo-database"),
+            tool_turn("list_demo_databases", call_id="call_list"),
+            tool_turn(
+                "delete_demo_database",
+                call_id="call_delete",
+                database_id="demo-orders-db",
+                expected_revision=3,
+            ),
+        ],
+        caller=CallerContext(permissions=frozenset({READ_PERMISSION, MUTATE_PERMISSION})),
+        external_turns=[text_turn("Deleted demo-orders-db.")],
+    )
+    outcome, events = run(gateway, "Delete the demo-orders-db sandbox database.")
+
+    assert_needs_external(gateway, outcome, events, "capability_missing")
+    assert not of_type(events, "handoff.started")
+    assert "delete_demo_database" not in executed_tools(events)
+
+
+@pytest.mark.parametrize(
+    ("skill", "prompt"),
+    [
+        ("check-service-health", "Is staging-api healthy right now?"),
+        ("investigate-performance", PROMPT),
+    ],
+    ids=["local-skill", "external-required-skill"],
+)
+def test_a_skill_with_no_permitted_tools_does_not_hand_off(tmp_path, skill, prompt):
+    """RM08, RM04, section 4.4: no tool of the skill is permitted to the caller.
+
+    The external stage gets the same permitted tools, none, so it could
+    never collect the evidence the skill's completion predicate needs.
+    """
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn(skill)],
+        caller=CallerContext(permissions=frozenset()),
+        external_turns=[text_turn("staging-api is healthy.")],
+    )
+    outcome, events = run(gateway, prompt)
+
+    assert_needs_external(gateway, outcome, events, "capability_missing")
+    assert not of_type(events, "handoff.started")
+
+
+def test_an_external_generation_timeout_is_not_traced_as_local_time(tmp_path, local_prep_skills):
+    """RM16, RM03, section 11: the trace names the limit that stopped the generation."""
+
+    class Stalled(ScriptedAdapter):
+        async def generate(self, request):
+            self.requests.append(request)
+            await asyncio.sleep(1)
+            yield TextDelta(text="too late")
+
+    gateway = after_local_collection(
+        tmp_path, local_prep_skills, [], budgets=LocalBudgets(external_seconds=0.05)
+    )
+    external = Stalled(locality="external", capabilities=NO_TOKENIZER)
+    gateway.orchestrator.external = ConfiguredModel(adapter=external, model_id=EXTERNAL_MODEL_ID)
+    outcome, events = run(gateway, PROMPT)
+
+    assert outcome.error_code == "external_failed"
+    (failed,) = of_type(events, "run.failed")
+    assert failed.payload["budget"] == "external_seconds"
+    assert "local" not in failed.payload["detail"]
+    finished = [e for e in of_type(events, "model.finished") if e.actor == "external"]
+    assert len(finished) == 1
+    error = finished[0].payload["error"]
+    assert error["code"] != "local_budget"
+    assert "local" not in error["message"]
+    assert "external_seconds" in error["message"]

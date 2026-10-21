@@ -241,14 +241,21 @@ class Escalation(Exception):
     anything else is a gateway bug, refused before it reaches a trace.
     Raised inside a run, that refusal is an unexpected exception, so the
     run fails with internal_error and never stays active.
+
+    hand_off is False for a stop the external stage could not resolve
+    either, such as a mutation that needs the confirmation flow (RM11);
+    such a stop ends as needs_external without a handoff (section 4.4).
     """
 
-    def __init__(self, reason_code: str, detail: str, **extra: Any) -> None:
+    def __init__(
+        self, reason_code: str, detail: str, *, hand_off: bool = True, **extra: Any
+    ) -> None:
         if reason_code not in REASON_CODES:
             raise ValueError(f"{reason_code!r} is not a section 8 reason code")
         super().__init__(detail)
         self.reason_code = reason_code
         self.detail = detail
+        self.hand_off = hand_off
         self.extra = extra
 
 
@@ -797,10 +804,11 @@ class _Run:
         mode other than local_only, and room in the entire-run limits. An
         operation with no known outcome blocks the handoff (RM14). The
         envelope is measured against the external context limit before
-        anything is sent (RM13).
+        anything is sent (RM13). A stop the external stage could not
+        resolve either does not hand off (section 4.4).
         """
         external = self.o.external
-        if external is None or self.mode is ExecutionMode.LOCAL_ONLY:
+        if external is None or self.mode is ExecutionMode.LOCAL_ONLY or not stop.hand_off:
             return self._needs_external(stop)
         room = self.meter.external_room()
         if room is not None:
@@ -840,6 +848,12 @@ class _Run:
             skill_allowlist=allowlist, policy=self.o.policy, caller=self.o.caller
         )
         schemas = self.o.tools.tool_schemas(name for name in allowlist if name in available)
+        if skill is not None and not schemas:
+            # RM08: the external stage gets the same permitted tools, none,
+            # so it could not collect the evidence the skill needs.
+            return self._needs_external(
+                Escalation("capability_missing", f"no permitted tools for skill {skill.name!r}")
+            )
         language = self.language or request_language(self.messages)
         done = {op["tool_name"] for op in operations}
         pending: list[dict[str, Any]] = (
@@ -1095,6 +1109,7 @@ class _Run:
         usage: Usage | None = None
         finish: str | None = None
         failure: GenerationFailed | None = None
+        exhausted: BudgetExceededError | None = None
         adapter = model.adapter
         try:
             async with asyncio.timeout(max(self.meter.remaining_seconds(), 0.001)):
@@ -1110,7 +1125,10 @@ class _Run:
                     elif isinstance(event, GenerationFailed):
                         failure = event
         except TimeoutError:
-            failure = GenerationFailed(code="local_budget", message="active local time spent")
+            # The trace names the limit that bounded this generation, local
+            # or external, not always local time (RM03, RM16).
+            exhausted = self.meter.time_exhausted()
+            failure = GenerationFailed(code="time_budget", message=f"{exhausted.budget} spent")
             await adapter.cancel(call_id)
         except BaseException as exc:
             failure = GenerationFailed(
@@ -1147,9 +1165,9 @@ class _Run:
                     else {"code": failure.code, "message": self.scrub(failure.message)},
                 },
             )
+        if exhausted is not None:
+            raise exhausted
         if failure is not None:
-            if failure.code == "local_budget":
-                raise self.meter.time_exhausted()
             if model is not self.o.model:
                 raise ExternalFailure(
                     f"external generation failed: {failure.code}", generation_error=failure.code
@@ -1203,8 +1221,9 @@ class _Run:
                 )
                 if rejection is not None and rejection["code"] == CONFIRMATION_REQUIRED:
                     # RM11: the confirmation flow (#19) is not wired here, so
-                    # a mutating tool is never executed by this loop.
-                    raise Escalation("capability_missing", rejection["message"])
+                    # a mutating tool is never executed by this loop. The
+                    # external stage rejects it the same way, so no handoff.
+                    raise Escalation("capability_missing", rejection["message"], hand_off=False)
                 if rejection is not None:
                     purpose = self._repair_or_stop(rejection)
                     conversation += _tool_exchange(call, {"error": rejection})

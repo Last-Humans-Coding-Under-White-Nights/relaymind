@@ -43,7 +43,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   UTF-8 byte length as an upper bound) before dispatch and before every
   external generation; over the limit the run fails with
   `context_limit_exceeded` and no external call. An operation with no
-  known outcome blocks handoff. New budgets `external_generations` (6)
+  known outcome blocks handoff, and so does a stop the external stage
+  could not resolve either (a mutation that needs confirmation, or a
+  skill with no permitted tool): those end as `needs_external` with
+  `capability_missing` and no external call. A timed-out generation is
+  traced with the limit that bounded it, never as local time. New budgets `external_generations` (6)
   and `external_seconds` (30) are recorded in each run. External failures
   end as `external_failed`; without a configured external model, in
   `local_only`, or with no run budget left, the run still ends as
@@ -445,9 +449,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Specification 0.8 → 0.9: sections 4.4, 8, and 11 define the handoff
   (RM13, RM14, #18): how the HandoffEnvelope is built from the run
   store and sent as normalized messages, the context measurement and the
-  `context_limit_exceeded` failure, what blocks a handoff, the external
-  stage and its limits, the `handoff.started` payload, and the
-  `external_failed` error code.
+  `context_limit_exceeded` failure, what blocks a handoff (including a
+  mutation that needs confirmation and a skill with no permitted tool),
+  the external stage and its limits, the `handoff.started` payload, and
+  the `external_failed` error code.
 - Specification 0.7 → 0.8: section 6 uses the selected runtime's
   supported reasoning controls (RM18, #58). llama.cpp b11785 uses
   `--reasoning off/on` at launch and the supported HTTP template boolean

@@ -65,12 +65,17 @@ _RUN_LIMITS: Mapping[str, str] = {
 
 
 class BudgetExceededError(Exception):
-    """A local budget would be exceeded (RM04: escalate or needs_external)."""
+    """A budget would be exceeded (RM03).
+
+    Before a handoff RM04 escalates or returns needs_external; in the
+    external stage the run fails with external_failed (section 11). The
+    message names the limit and never calls an external limit local (RM16).
+    """
 
     reason_code = LOCAL_BUDGET_REASON
 
     def __init__(self, budget: str, limit: int | float) -> None:
-        super().__init__(f"local budget {budget} ({limit}) is exhausted")
+        super().__init__(f"budget {budget} ({limit}) is exhausted")
         self.budget = budget
         self.limit = limit
 
