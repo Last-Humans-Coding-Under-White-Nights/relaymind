@@ -78,7 +78,9 @@ The router receives caller instructions, relevant conversation context, and comp
 
 The package uses SKILL.md with Agent Skills name and description frontmatter. RelayMind-specific settings live in a separate registry manifest: version, supported languages, local eligibility, allowed tool IDs, resource paths, completion predicate ID, and optional parallel-workflow ID. Completion predicates are registered gateway validators, not executable text supplied by the model. This is a documented RelayMind extension, not a claim of complete compatibility with every skill host. [S7]
 
-Skill locations are operator configuration, not code. The registry loads from one or more skill roots: the default root is the `skills/` directory of the checkout, and an operator MAY add further local directories, such as a team-shared folder, in a fixed configured order. Each root is scanned one level deep; every subdirectory that contains a SKILL.md and a registry manifest is a package. A malformed package is a startup error, never skipped silently. Skill names MUST be unique across all roots; a duplicate is a configuration error, not a precedence rule. Each run records the configured roots and the name, version, and hash of every skill offered to the router. Roots are local filesystem paths. Fetching packages from a URL or a remote registry is automatic skill installation, which section 1 leaves out of the prototype.
+The registry manifest is the file `skill.manifest.json` in the package directory, next to SKILL.md. It is a JSON object with a `schema_version` field, following the `*.manifest.json` convention of the model artifact manifests in section 6. The skill's content hash covers both files.
+
+Skill locations are operator configuration, not code. The registry loads from an ordered list of skill roots. The default list is `["skills/"]`, the `skills/` directory of the checkout. An operator MAY replace the list, for example with a single isolated directory in a container or a test fixture, or extend it with further local directories such as a team-shared folder; a configured list replaces the default, it does not add to it. Each root is scanned one level deep, and every subdirectory of a root is a candidate package. A candidate that lacks SKILL.md or `skill.manifest.json`, or whose files fail validation, is a startup error, never skipped silently. Plain files in a root, such as a README, are ignored. Skill names MUST be unique across all roots; a duplicate is a configuration error, not a precedence rule. Each run records the configured roots and the skill catalog offered to the router in the run.accepted payload (section 8); this is the version snapshot that RM07 preserves. Roots are local filesystem paths. Fetching packages from a URL or a remote registry is automatic skill installation, which section 1 leaves out of the prototype.
 
 The MVP uses at most eight short skill descriptions per router prompt and one selected skill body at a time. Resource reads are restricted to the selected package directory. Skills cannot install dependencies, execute bundled scripts, change permissions, or alter model configuration. Any required executable operation must be an explicitly registered tool.
 
@@ -163,8 +165,16 @@ The artifact manifest MUST record model source, revision, file SHA-256, quantiza
 | tools and tool_choice | Client-owned mode only; function tools; auto, none, required, or a named supplied function. |
 | parallel_tool_calls | Client-owned mode accepts false or omission; true is rejected in MVP. |
 | response_format | Omitted or text only. Structured final-output modes are explicitly deferred. |
+| execution_mode | Not a body field on this endpoint. Rejected as unsupported_parameter like any other unsupported field; the mode is selected with the request header below. |
 | Other behavior-changing fields | Reject with a named unsupported_parameter error; never silently ignore them. |
-| X-RelayMind-Execution-Mode header | Optional. Carries the native execution_mode value (auto, local_only, external_only, parallel_demo); absent means auto. The same operator policy applies as for the native run API. An unknown value is rejected with 400 and code invalid_execution_mode; a value the policy forbids is rejected with 403 and code execution_mode_forbidden. The mode is never downgraded silently. The model alias still selects tool ownership; the header selects only where inference runs. |
+
+Request headers are a separate surface from the JSON body:
+
+| Request header | MVP behavior |
+| --- | --- |
+| Authorization | Required. Bearer application token (section 3). A missing or invalid token returns 401. |
+| X-RelayMind-Execution-Mode | Optional. Carries the native execution_mode value (auto, local_only, external_only, parallel_demo); absent means auto. The same operator policy applies as for the native run API. An unknown value, or a value that is not admissible for the selected alias (section 7.2), is rejected with 400 and code invalid_execution_mode; a value the policy forbids is rejected with 403 and code execution_mode_forbidden. The mode is never downgraded silently. The model alias still selects tool ownership; the header selects only where inference runs. |
+| Idempotency-Key | Optional; see section 7.4. |
 
 The standard response uses one assistant choice with a stable request ID and virtual model alias. Streaming uses chat.completion.chunk content or tool-call deltas and the appropriate terminal finish_reason followed by [DONE]. Already emitted answer text is append-only. The schema foundation is Chat Completions; this table defines RelayMind's narrower supported surface. [S5]
 
@@ -176,7 +186,9 @@ The relaymind-client-tools alias returns tool_calls to the caller. The caller ex
 
 The client-owned alias MUST honor tool_choice, preserve tool call IDs, and reject tool results without matching calls. No global tool-execution authorization guarantee is claimed for tools executed by third-party clients.
 
-The X-RelayMind-Execution-Mode header applies to both aliases. With the managed alias it selects the route for skill execution. With the client-owned alias, local_only returns needs_external when the local model cannot produce the answer or tool calls, and external_only sends the request to the external model directly; the rule that external fallback is not permitted after partial client tool calls are exposed is unchanged.
+The X-RelayMind-Execution-Mode header applies to both aliases. With the managed alias it selects the route for skill execution. With the client-owned alias, external_only sends the request to the external model directly, and local_only keeps the request on the local model; the rule that external fallback is not permitted after partial client tool calls are exposed is unchanged. local_only returns needs_external with both aliases when the local model cannot produce the answer or, for the client-owned alias, the tool calls. parallel_demo is admissible only with the managed alias, because its fixed workflow runs gateway tools and managed skills (RM15, section 9), which the client-owned alias disables; parallel_demo with relaymind-client-tools is rejected with 400 and code invalid_execution_mode. This is a request validation failure, like a tools array with the managed alias, not an operator policy decision, so it is not a 403.
+
+On this endpoint needs_external is an error before any answer content is sent, because RM04 raises it before output is committed. The response is HTTP 422 with an error object carrying code needs_external, a message, the reason code, and the run ID; partial results stay in the native trace of that run. 422 is used because the request was valid and authorized and no service was unavailable: the task cannot complete under the effective execution mode, and a retry with the same request would give the same result.
 
 ### 7.3 Streaming and early feedback
 
@@ -201,7 +213,7 @@ Usage is optional in the compatible response when a truthful unified count is un
 | POST /relay/v1/runs/{id}/cancel | Accept expected_version; request cancellation; return current state. |
 | GET /healthz and GET /readyz | Process liveness and readiness of the configured execution mode; model warm state is explicit. |
 
-Execution mode is constrained by operator policy. local_only never calls externally and returns needs_external when the task cannot complete locally. external_only bypasses local inference while using the same managed tools, skill catalog, and permissions. parallel_demo fails explicitly when its configured workflow is unavailable. The compatible chat endpoint accepts the same values through the X-RelayMind-Execution-Mode request header (section 7.1), so chat and native runs share one mode enumeration and one policy check, and a standard chat client can run the auto versus external_only comparison without the native API. The effective mode is recorded in the run trace either way.
+Execution mode is constrained by operator policy. local_only never calls externally and returns needs_external when the task cannot complete locally. external_only bypasses local inference while using the same managed tools, skill catalog, and permissions. parallel_demo fails explicitly when its configured workflow is unavailable. The compatible chat endpoint accepts the same values through the X-RelayMind-Execution-Mode request header (section 7.1), so chat and native runs share one mode enumeration and one policy check, and a standard chat client can run the auto versus external_only comparison without the native API. Both endpoints record the requested and effective mode in the run.accepted payload (section 8).
 
 Chat responses include X-RelayMind-Run-ID for trace correlation. Confirmations for managed writes require the native resume endpoint or demo UI. Ordinary clients can read the pending-confirmation message but cannot approve it solely by sending a free-form yes. Clarification can be resumed natively, or submitted as a new chat request with complete context.
 
@@ -218,10 +230,11 @@ The following objects define required fields. Implementations MUST publish equiv
 | ToolResult | operation_id; tool_name; status succeeded, failed, or unknown_outcome; validated data or null; error or null; observed_at; duration_ms; source_ref; truncated boolean. |
 | HandoffEnvelope | schema_version; run_id; original messages; skill snapshot; completed operations; evidence references; pending work; allowed tools; reason_code; remaining budgets; language. |
 | TraceEvent | schema_version=1; run_id; seq; timestamp; elapsed_ms; event_type; actor; payload. |
+| run.accepted payload | requested_execution_mode (the header or native value, or null when absent); effective_execution_mode (the mode applied after defaults and policy); model alias; budgets (the section 11 limits in force, RM03); skill_roots (the configured roots in order); skills_offered (array of name, version, and content_hash for every skill in the catalog offered to the router, empty for the client-owned alias). |
 
 Reason codes include simple_skill, complex_skill, missing_input, local_budget, invalid_output, tool_failure, context_limit, capability_missing, and parallel_workflow. They are operational labels, not generated chains of thought.
 
-**RM22** Required events are run.accepted, route.selected, skill.loaded, model.started, model.finished, tool.proposed, tool.started, tool.finished, clarification.required, confirmation.required, handoff.started, answer.delta, run.completed, run.failed, and run.cancelled. Cached routes, when enabled, emit cache.hit with the originating version. Every tool event includes its operation or proposal ID and originating model.
+**RM22** Required events are run.accepted, route.selected, skill.loaded, model.started, model.finished, tool.proposed, tool.started, tool.finished, clarification.required, confirmation.required, handoff.started, answer.delta, run.completed, run.failed, and run.cancelled. Cached routes, when enabled, emit cache.hit with the originating version. Every tool event includes its operation or proposal ID and originating model. run.accepted is the first event of a run; its payload is defined in the table above.
 
 Example event:
 
@@ -303,7 +316,7 @@ Initial engineering defaults are listed below. They are configurable limits, not
 
 The two model branches in parallel_demo are allowed within a single active run. The local-first per-stage limits do not constrain external-only baseline routing, but the total run limits apply to every mode. A skill that requires more local work is escalated instead of quietly increasing budgets.
 
-Validation failures return 400; unauthenticated requests 401; denied access 403; missing runs 404; stale state or idempotency conflict 409; overload 429; unavailable required model 503; exhausted deadlines 504 before streaming starts. Errors use a stable code, message, and run reference where available. Internal errors must omit credentials.
+Validation failures return 400; unauthenticated requests 401; denied access 403; missing runs 404; stale state or idempotency conflict 409; a task that cannot complete under the effective execution mode 422 with code needs_external (section 7.2); overload 429; unavailable required model 503; exhausted deadlines 504 before streaming starts. Errors use a stable code, message, and run reference where available. Internal errors must omit credentials.
 
 After streaming starts, an unrecoverable failure is signaled as an error and connection termination, and recorded as run.failed. It MUST NOT produce a successful finish marker. The compatible client behavior for this failure is part of integration tests because SDK handling may vary.
 

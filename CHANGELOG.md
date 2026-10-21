@@ -67,16 +67,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and no spec revision.
 - Specification 0.3 → 0.4: the compatible chat endpoint accepts an
   optional `X-RelayMind-Execution-Mode` request header carrying the
-  native `execution_mode` values (auto, local_only, external_only,
-  parallel_demo), under the same operator policy, so a standard
-  OpenAI client can force a local or external run without the native
-  API. Unknown values return 400 `invalid_execution_mode`; forbidden
-  values return 403 `execution_mode_forbidden`. The model alias keeps
-  selecting tool ownership only (sections 7.1, 7.2, 7.4; issues #22,
-  #24). Section 4.2 also states where skills come from: one or more
-  operator-configured local roots, `skills/` by default, scanned one
-  level deep, with unique names across roots, strict load errors, and
-  the roots and skill hashes recorded in each run (issue #9).
+  native `execution_mode` values under the same operator policy, so a
+  standard OpenAI client can force a local or external run without
+  the native API. The model alias keeps selecting tool ownership only.
+  Section 7.1 lists request headers in their own table and names the
+  error codes for invalid, forbidden, and body-supplied modes
+  (sections 7.1, 7.2, 7.4; issues #22, #24).
+- Specification 0.4: `needs_external` on the chat endpoint is HTTP 422
+  with an error object (sections 7.2, 11).
+- Specification 0.4: section 4.2 states where skills come from: an
+  operator-configured list of local roots, `["skills/"]` by default,
+  where every subdirectory is a candidate package with `SKILL.md` and
+  `skill.manifest.json`, unique names across roots, and strict load
+  errors (issue #9).
+- Specification 0.4: section 8 defines the `run.accepted` payload,
+  which records the execution mode, model alias, budgets, skill roots,
+  and offered skills for every run.
 - Specification 0.2 → 0.3: the artifact manifest records the "runtime
   version and commit" (one composite field) instead of only a "runtime
   commit", matching the implemented `runtime_version` field.

@@ -121,24 +121,32 @@ tool-call requests are in [`docs/TESTING.md`](docs/TESTING.md).
 
 This is the planned contract (spec section 7), not something that runs
 yet. The gateway speaks the OpenAI Chat Completions shape, so any
-OpenAI client works once pointed at it. You do not pick a model: the
-alias `relaymind` means "route it for me". The local model selects a
-skill, runs the tool, and escalates to the external model only if it
-cannot finish.
+OpenAI client works once pointed at it. Every request carries the
+application token the gateway generates at start (spec section 3);
+the examples below keep it in `RELAYMIND_TOKEN`. You do not pick a
+model: the alias `relaymind` means "route it for me". The local model
+selects a skill, runs the tool, and escalates to the external model
+only if it cannot finish.
 
 ```bash
 curl -s http://127.0.0.1:8080/v1/chat/completions \
+  -H "Authorization: Bearer $RELAYMIND_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"model": "relaymind",
        "messages": [{"role": "user", "content": "Is staging-api healthy right now?"}]}'
 ```
 
 To force where inference runs, add one header with `auto`,
-`local_only`, or `external_only`. Operator policy decides which values
-a caller may use; the trace always shows which model answered.
+`local_only`, `external_only`, or `parallel_demo`. Operator policy
+decides which values a caller may use; the trace always shows which
+model answered. `parallel_demo` runs the one fixed parallel workflow
+(spec section 4.4, planned for M5) and works only with the `relaymind`
+alias. `local_only` answers with HTTP 422 and code `needs_external`
+when the local model cannot finish.
 
 ```bash
 curl -s http://127.0.0.1:8080/v1/chat/completions \
+  -H "Authorization: Bearer $RELAYMIND_TOKEN" \
   -H "Content-Type: application/json" \
   -H "X-RelayMind-Execution-Mode: external_only" \
   -d '{"model": "relaymind",
