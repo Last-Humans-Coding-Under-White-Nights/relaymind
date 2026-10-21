@@ -167,3 +167,33 @@ def test_a_secret_is_never_stored_or_shown(tmp_path, local_skills):
         assert all(SECRET not in (m.content or "") for m in request.messages)
     assert REDACTED in operations
     assert SECRET not in store_text(gateway, tmp_path)
+
+
+def test_a_secret_the_model_copies_into_tool_arguments_is_never_stored(tmp_path, local_skills):
+    """AC06, RM12, section 8 (spec 0.12): model-proposed arguments are later model text.
+
+    The obedient double puts the secret it read into the arguments of
+    a new tool call. The proposal, the model.finished event, any tool
+    operation, and the store file must hold only the redacted value.
+    """
+    turns = [
+        route_turn("investigate-performance"),
+        tool_turn("get_recent_logs", call_id="c1", service="staging-api", limit=3),
+        tool_turn("get_recent_logs", call_id="c2", service=SECRET, limit=1),
+        text_turn("Done."),
+    ]
+    gateway = build_gateway(
+        tmp_path,
+        turns,
+        skill_roots=local_skills,
+        seed=poisoned_seed(tmp_path),
+        redactor=REDACTOR,
+    )
+    outcome, events = run(gateway, PROMPT)
+
+    proposed = [e.payload for e in of_type(events, "tool.proposed")]
+    assert any(p["arguments"].get("service") == REDACTED for p in proposed)
+    assert SECRET not in json.dumps([e.to_json_object() for e in events])
+    operations = json.dumps(gateway.store.tool_operations(outcome.run_id), default=str)
+    assert SECRET not in operations
+    assert SECRET not in store_text(gateway, tmp_path)

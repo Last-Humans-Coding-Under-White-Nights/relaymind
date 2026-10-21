@@ -57,7 +57,7 @@ from types import MappingProxyType
 from typing import Any
 
 from relaymind.canonical import canonical_json
-from relaymind.redaction import Redactor
+from relaymind.redaction import Redactor, redact_text, scrub
 from relaymind.store import RunStore, TraceClock
 from relaymind.tools.registry import (
     RegisteredTool,
@@ -190,6 +190,7 @@ class ToolExecutor:
         before_run: Callable[[str], None] | None = None,
         time_limit: Callable[[], float] | None = None,
         on_finished: Callable[[Execution], None] | None = None,
+        secrets: Collection[str] = (),
     ) -> Execution:
         """Replay or run one attempt of a validated call (RM10).
 
@@ -199,6 +200,8 @@ class ToolExecutor:
         handler is bounded by the shorter of it and the tool timeout.
         on_finished receives every recorded outcome, including a replay
         or interruption, so the caller can close its trace (RM22).
+        secrets are the secret values the run already knows; they are
+        scrubbed from the recorded arguments and result too (RM12).
         """
 
         def finished(execution: Execution) -> Execution:
@@ -227,7 +230,7 @@ class ToolExecutor:
                 proposal_id=proposal_id,
                 tool_name=call.tool_name,
                 model=model,
-                arguments=self.redactor.redact(dict(call.arguments)),
+                arguments=self.redactor.redact_with_repeats(dict(call.arguments), secrets),
             )
         except sqlite3.IntegrityError:
             # Another caller recorded the same operation first.
@@ -246,13 +249,17 @@ class ToolExecutor:
                 limited_by_caller = remaining <= bound
                 bound = max(0.0, min(bound, remaining))
             raw = await self._run_bounded(call, operation_id, bound)
+            execution = self._finish(operation_id, raw, secrets)
         except BaseException:
-            # Interrupted after the pending record: never leave it pending.
-            finished(self._finish(operation_id, self._interrupted_result(call, operation_id)))
+            # Interrupted after the pending record, or the outcome could not
+            # be recorded: never leave it pending. The store only finishes a
+            # pending record, so a recorded outcome is never rewritten.
+            interrupted = self._interrupted_result(call, operation_id)
+            finished(self._finish(operation_id, interrupted, secrets))
             raise
         return finished(
             replace(
-                self._finish(operation_id, raw),
+                execution,
                 time_limit_exhausted=(
                     limited_by_caller
                     and raw.error is not None
@@ -289,13 +296,27 @@ class ToolExecutor:
         )
         return self._finish(operation_id, raw).result
 
-    def _finish(self, operation_id: str, raw: ToolResult) -> Execution:
-        """Redact, record the outcome once, and return what was recorded."""
-        secrets = self.redactor.secret_values(raw.data)
-        recorded = self.redactor.redact_with_repeats(raw.to_json_object())
+    def _finish(self, operation_id: str, raw: ToolResult, known: Collection[str] = ()) -> Execution:
+        """Redact, record the outcome once, and return what was recorded.
+
+        Secret fields are redacted by key everywhere. The secret values
+        found in the data, and those the run already knows, are also
+        replaced where they repeat in the free text: the data and the
+        error message (spec 0.12, section 8). The envelope's own fields
+        (tool name, status, timestamps, source reference) are never
+        scrubbed, so a secret value that is also one of their words
+        cannot break the recorded ToolResult.
+        """
+        found = self.redactor.secret_values(raw.data)
+        repeats = found | frozenset(known)
+        recorded = self.redactor.redact(raw.to_json_object())
+        recorded["data"] = scrub(recorded["data"], repeats)
+        error = recorded["error"]
+        if isinstance(error, dict) and isinstance(error.get("message"), str):
+            recorded["error"] = {**error, "message": redact_text(error["message"], repeats)}
         result = ToolResult.from_json_object(recorded)
         self.store.finish_tool_operation(operation_id, status=result.status.value, result=recorded)
-        return Execution(result, replayed=False, secrets=secrets)
+        return Execution(result, replayed=False, secrets=found)
 
     async def _run_bounded(
         self, call: ValidatedCall, operation_id: str, bound: float
