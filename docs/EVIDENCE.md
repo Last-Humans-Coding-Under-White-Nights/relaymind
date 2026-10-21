@@ -97,11 +97,18 @@ Observations, not conclusions:
 
 ## 2026-10-21 — M1 live smoke test, x86-64 Windows
 
-Windows qualification for #46 (RM18; spec sections 3, 6, 14). This entry
-transcribes the contributor-supplied Windows run record; it was not rerun
-on the macOS machine used to prepare this documentation. The Windows
-application revision and raw test/server logs were not included in the
-supplied record. Durations below are single-pass observations.
+Windows qualification for #46 (RM18; spec sections 3, 6, 14), transcribed
+from @ArcsinX's supplied Windows run notes. The application revision and
+raw test/server logs were not included. Durations below are single-pass
+observations.
+
+The recorded counts (258 passed, 3 deselected; 48 formatted files) are
+consistent with unmodified master commits `777f1c8`, `c65a5c0`, or
+`9370473`. This narrows the likely revision from the counts; it does not
+recover the exact checkout or establish that it was unmodified.
+`git diff 777f1c8 2847013 -- src/relaymind/adapters tests/test_llamacpp_live_smoke.py`
+is empty, so the adapter implementation and smoke tests in that range
+match the PR's base `2847013`.
 
 ### Environment and pins
 
@@ -120,8 +127,14 @@ supplied record. Durations below are single-pass observations.
 | Binary version banner | `version: 0.7.0-dev (build 11669, commit 620d2225c)`; `built with MSVC 19.42.34436.0 for x64` |
 | Launch | `-m models/Qwen3-0.6B-Q8_0.gguf --host 127.0.0.1 --port <free> --ctx-size 8192 --jinja --chat-template-kwargs '{"enable_thinking": false}'`; settings derived from the manifest via `launch_settings_argv` |
 
-The reported version has a `-dev` suffix; its build number and commit
-match the manifest. The model hashes and launch settings are unchanged.
+The banner's build number and commit were set explicitly with
+`-DLLAMA_BUILD_NUMBER` / `-DLLAMA_BUILD_COMMIT` because the source tarball
+has no `.git` directory. They repeat the requested pin and do not
+independently verify the source commit. Source provenance is the reported
+download of the commit-specific tarball in step 1; no source archive hash
+was recorded. The `-dev` suffix reflects the pinned source's default
+[`LLAMA_BUILD_IS_DEV=ON`](https://github.com/ggml-org/llama.cpp/blob/620d2225c/CMakeLists.txt#L9-L19).
+The model hashes and launch settings are unchanged.
 
 ### Runtime setup and commands
 
@@ -153,14 +166,15 @@ the pinned commit instead:
    no additional runtime DLLs beyond the VC143 CRT.
 
 With the project and dev dependencies installed, the following commands
-were run from the repository root (`$build` names the build directory):
+were run from the repository root (`$build` names the build directory).
+The redundant lowercase `$env:no_proxy` assignment in the notes is
+omitted: Windows environment variable names are case-insensitive.
 
 ```powershell
 $env:PATH = "$build\bin\Release;$env:PATH"
 
-# Bypass this machine's corporate proxy for loopback traffic.
+# Proxy workaround for this test session; scope explained below.
 $env:NO_PROXY = "127.0.0.1,localhost,::1"
-$env:no_proxy = "127.0.0.1,localhost,::1"
 $env:HTTP_PROXY = ""
 $env:HTTPS_PROXY = ""
 
@@ -199,19 +213,30 @@ bilingual skill selection and the M6 benchmark remain separate gates.
   [`TESTING.md`](TESTING.md#1-start-the-pinned-runtime) stop-parsing
   example covers this. The live suite uses a Python `subprocess.Popen`
   argument list and passed without a launch-setting change.
-- **Runtime deprecation warning:** the pinned build accepted
+- **Runtime deprecation warning (not platform-specific):** the pinned build accepted
   `--chat-template-kwargs` but warned that setting `enable_thinking`
   this way is deprecated in favor of `--reasoning on` / `--reasoning off`.
-  This was a warning, not a test failure. The passing qualification
-  retains the manifest settings; any future runtime migration must
-  requalify the reasoning controls together with the adapter.
+  This warning comes from the pinned build's
+  [common argument parser](https://github.com/ggml-org/llama.cpp/blob/620d2225c/common/arg.cpp#L3445-L3462)
+  on every platform; it was not a test failure. The passing qualification
+  retains the manifest settings. [#58](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/58)
+  tracks migrating the controls and requalifying the adapter at the next
+  runtime update.
 - **Proxy and loopback:** before the environment overrides above,
   health polls and completion requests timed out on a machine with a
   corporate proxy configured in Windows registry settings. With the
   overrides, the live suite passed in 11.73 s. The adapter currently
   creates its HTTP client with default proxy handling; automatic
-  loopback proxy bypass remains a follow-up robustness concern. This
-  run qualifies the explicitly configured environment only.
+  loopback proxy bypass is tracked in
+  [#57](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/57).
+  In CPython 3.12.10 on Windows,
+  [`getproxies()`](https://github.com/python/cpython/blob/v3.12.10/Lib/urllib/request.py#L2557-L2564)
+  uses environment proxy settings when any exist, falling back to the
+  registry only otherwise. With `NO_PROXY` set and `HTTP_PROXY` /
+  `HTTPS_PROXY` removed, this machine's registry proxy was skipped for
+  all HTTPX requests in the session, including external destinations.
+  This is broader than a loopback-only bypass. The run qualifies this
+  configured environment only; the workaround is not a gateway fix.
 - **C++ runtime distribution:** the prebuilt executable failed with
   the older system CRT; the source build plus matching app-local CRT
   succeeded. This changes runtime installation, not the pinned commit,

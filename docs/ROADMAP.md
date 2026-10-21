@@ -33,6 +33,10 @@ Status: complete. Passing live smoke tests are recorded in
 native x86-64 Windows (#46), using the pinned model and runtime commit
 (RM18; spec sections 3, 6, 14). Windows setup differences and the proxy
 workaround are recorded with that run.
+Automatic loopback proxy bypass is follow-up work in
+[#57](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/57);
+reasoning-control migration at the next runtime update is
+[#58](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/58).
 
 What M1 did not test, and M2 therefore must: skill selection among
 several descriptions, the RouteDecision envelope, and Chinese input. The

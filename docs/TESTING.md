@@ -29,11 +29,22 @@ results are recorded in [`EVIDENCE.md`](EVIDENCE.md#2026-10-21--m1-live-smoke-te
 
 On that machine, a corporate proxy caused loopback health checks and
 completion requests to time out. These session settings were used before
-running the automated suites from the repository root:
+running the automated suites from the repository root. Ensure
+`llama-server.exe` is on PATH first; for the source build in the evidence
+entry, use `$env:PATH = "$build\bin\Release;$env:PATH"`, with `$build`
+set to the build directory.
+
+Use a dedicated test shell: on this machine the workaround disabled the
+registry proxy for all HTTPX requests in that session, including external
+destinations. CPython uses environment proxy settings (including
+`NO_PROXY`) before falling back to the Windows registry. Assigning `""`
+to `HTTP_PROXY` / `HTTPS_PROXY` removes those variables in PowerShell
+5.1. Other configured proxy variables, such as `ALL_PROXY`, may still
+apply. Windows environment variable names are case-insensitive, so only
+one spelling of `NO_PROXY` is needed.
 
 ```powershell
 $env:NO_PROXY = "127.0.0.1,localhost,::1"
-$env:no_proxy = "127.0.0.1,localhost,::1"
 $env:HTTP_PROXY = ""
 $env:HTTPS_PROXY = ""
 
@@ -47,9 +58,21 @@ The official prebuilt runtime initially crashed in an older system
 evidence entry for the exact build flags and DLL versions. Native Windows
 qualification requires neither WSL nor Docker.
 
+Untested alternatives for the prebuilt binary: install the
+[Microsoft Visual C++ Redistributable (x64)](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170),
+or place the matching VC143 CRT DLLs next to the prebuilt
+`llama-server.exe`. Microsoft requires a redistributable at least as
+recent as the MSVC tools used to build the application. Either approach
+may avoid rebuilding, but neither was tried in this run; record the
+result in `EVIDENCE.md` if tested. Only the source build plus app-local
+CRT is qualified here.
+
 No manifest or tool-call parser change was needed. The pinned runtime
-accepted `--chat-template-kwargs` with a deprecation warning; retain the
-qualified settings until a future runtime update is tested.
+accepted `--chat-template-kwargs` with a deprecation warning on all
+platforms; retain the qualified settings until a future runtime update
+is tested ([#58](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/58)).
+Automatic loopback proxy bypass is tracked separately in
+[#57](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/57).
 
 ## Manual JSON testing from a terminal
 
