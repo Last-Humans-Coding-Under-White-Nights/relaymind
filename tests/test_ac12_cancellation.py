@@ -13,7 +13,9 @@ sandbox is a disposable copy.
 
 import asyncio
 import threading
+import time
 
+import httpx
 import pytest
 
 from api_helpers import make_app
@@ -26,9 +28,10 @@ from gateway_helpers import (
     text_turn,
     tool_turn,
 )
-from helpers import ScriptedAdapter, of_type
+from helpers import LLAMACPP_CONFIG, ScriptedAdapter, of_type
 from native_helpers import GatedAdapter, error_of, gated_gateway, session, settled, start_run
 from relaymind.adapters import Message, Role
+from relaymind.adapters.llamacpp import LlamaCppAdapter
 from relaymind.orchestrator.local_loop import ConfiguredModel
 from relaymind.orchestrator.run_state import RunState, TerminalStateError
 from relaymind.store.trace_event import validate_trace_event
@@ -87,23 +90,38 @@ def delete_finished(events):
     return finished
 
 
-def block_handler(gateway, name):
-    """Make a tool block on a worker thread until released; count its calls."""
-    original = gateway.tools.get(name).declaration.handler
-    entered, release, calls = threading.Event(), threading.Event(), []
+class Handler:
+    """A tool handler that blocks on its worker thread until released."""
 
-    def blocked(arguments):
-        calls.append(arguments)
-        entered.set()
-        release.wait(5)
-        return original(arguments)
+    def __init__(self, gateway, name):
+        self.original = gateway.tools.get(name).declaration.handler
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.calls = []
+        self.threads: list[threading.Thread] = []
+        replace_handler(gateway, name, self.run, timeout_seconds=30.0)
 
-    replace_handler(gateway, name, blocked, timeout_seconds=30.0)
-    return entered, release, calls
+    def run(self, arguments):
+        self.calls.append(arguments)
+        self.threads.append(threading.current_thread())
+        self.entered.set()
+        self.release.wait(5)
+        return self.original(arguments)
 
+    async def started(self):
+        assert await asyncio.to_thread(self.entered.wait, 5), "the handler never started"
 
-async def wait_for(flag: threading.Event):
-    assert await asyncio.to_thread(flag.wait, 5), "the handler never started"
+    async def finish(self):
+        """Release the handler and wait until its late result reached the event loop.
+
+        The worker thread hands its result to the loop before it ends, so
+        once the thread is joined one loop pass runs that late settle.
+        """
+        self.release.set()
+        for thread in self.threads:
+            await asyncio.to_thread(thread.join, 5)
+            assert not thread.is_alive(), "the handler never finished"
+        await asyncio.sleep(0)
 
 
 async def approved_write_in_flight(gateway):
@@ -133,9 +151,6 @@ def test_cancel_during_local_generation_stops_dispatch_and_cancels_the_model(tmp
         await adapter.started.wait()
         version = gateway.store.get_run(started.run_id).version
         record = await gateway.orchestrator.cancel(started.run_id, version)
-        # The model would now answer: a late result must change nothing.
-        adapter.gate.set()
-        await asyncio.sleep(0.05)
         return started.run_id, record
 
     run_id, record = asyncio.run(go())
@@ -146,8 +161,12 @@ def test_cancel_during_local_generation_stops_dispatch_and_cancels_the_model(tmp
     assert cancelled.payload["reason"] == "cancel_requested"
     validate_trace_event(cancelled.to_json_object())
     (started_call,) = of_type(events, "model.started")
-    # The adapter was told to stop the very generation that was in flight.
-    assert adapter.cancelled == [started_call.payload["call_id"]]
+    call_id = started_call.payload["call_id"]
+    # The adapter was told to stop the very generation that was in flight,
+    # while it was still running, and the generation was closed.
+    assert adapter.cancelled == [call_id]
+    assert adapter.late_cancels == []
+    assert adapter.interrupted == [call_id]
     assert executed_tools(events) == []
     assert of_type(events, "answer.delta") == []
     assert len(of_type(events, "model.started")) == 1
@@ -155,7 +174,7 @@ def test_cancel_during_local_generation_stops_dispatch_and_cancels_the_model(tmp
 
 
 def test_cancel_during_external_generation_stops_dispatch_and_cancels_the_model(tmp_path):
-    """RM14, RM17, AC12: an external generation is cancelled; a late result is dropped."""
+    """RM14, RM17, AC12: an external generation is asked to stop; nothing dispatches."""
     external = GatedAdapter(turns=[tool_turn("get_service_health", service="staging-api")])
     external.locality = "external"
     gateway = build_gateway(
@@ -171,9 +190,6 @@ def test_cancel_during_external_generation_stops_dispatch_and_cancels_the_model(
         await external.started.wait()
         version = gateway.store.get_run(started.run_id).version
         record = await gateway.orchestrator.cancel(started.run_id, version)
-        # The provider answers late with a tool call: it must not dispatch.
-        external.gate.set()
-        await asyncio.sleep(0.05)
         return started.run_id, record
 
     run_id, record = asyncio.run(go())
@@ -184,10 +200,184 @@ def test_cancel_during_external_generation_stops_dispatch_and_cancels_the_model(
     (call,) = of_type(events, "model.started")
     assert call.actor == "external"
     assert external.cancelled == [call.payload["call_id"]]
+    assert external.late_cancels == []
+    assert external.interrupted == [call.payload["call_id"]]
     assert cancelled.payload["external_calls"] == 1
     assert executed_tools(events) == []
     assert of_type(events, "answer.delta") == []
     assert gateway.store.active_run_id() is None
+
+
+class ObservedLlamaCpp(LlamaCppAdapter):
+    """The real llama-server adapter; records whether each cancel found its generation."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cancels: list[tuple[str, bool]] = []
+
+    async def cancel(self, generation_id: str) -> None:
+        # The adapter keeps a cancel event only while generate runs.
+        self.cancels.append((generation_id, generation_id in self._cancel_events))
+        await super().cancel(generation_id)
+
+
+def test_cancel_reaches_a_real_adapter_while_its_generation_runs(tmp_path):
+    """RM14, RM18, AC12, spec 0.19 section 7.4: the cancel finds the live generation.
+
+    A cancel that arrives only after the adapter's stream was torn down
+    asks for nothing: the adapter no longer knows that generation ID.
+    """
+    streaming = asyncio.Event()
+
+    class IdleStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            streaming.set()
+            await asyncio.Event().wait()  # the provider is still generating
+            yield b""
+
+        async def aclose(self):
+            pass
+
+    def endpoint(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"status": "ok"})
+        if request.url.path == "/apply-template":
+            return httpx.Response(200, json={"prompt": "templated"})
+        if request.url.path == "/tokenize":
+            return httpx.Response(200, json={"tokens": list(range(100))})
+        return httpx.Response(
+            200, headers={"content-type": "text/event-stream"}, stream=IdleStream()
+        )
+
+    adapter = ObservedLlamaCpp(LLAMACPP_CONFIG, transport=httpx.MockTransport(endpoint))
+    gateway = build_gateway(
+        tmp_path,
+        None,
+        local_model=ConfiguredModel(adapter=adapter, model_id="llama"),
+        external_turns=[],
+    )
+
+    async def go():
+        started = gateway.orchestrator.start(user("Is staging-api healthy right now?"))
+        await asyncio.wait_for(streaming.wait(), 5)
+        version = gateway.store.get_run(started.run_id).version
+        record = await gateway.orchestrator.cancel(started.run_id, version)
+        return started.run_id, record
+
+    run_id, record = asyncio.run(go())
+
+    assert record.state == "cancelled"
+    (call,) = of_type(gateway.store.events(run_id), "model.started")
+    assert adapter.cancels == [(call.payload["call_id"], True)]
+
+
+class Stubborn(GatedAdapter):
+    """A provider that does not stop: it ignores the cancel and answers late."""
+
+    async def generate(self, request):
+        self.requests.append(request)
+        self.started.set()
+        try:
+            await self.gate.wait()
+        except asyncio.CancelledError:
+            self.interrupted.append(request.generation_id)
+        for event in self._turns.pop(0):
+            yield event
+
+
+def test_a_late_result_of_a_provider_that_does_not_stop_is_dropped(tmp_path):
+    """RM14, RM17, AC12, spec 0.19 section 7.4: a late result proposes and runs nothing."""
+    external = Stubborn(turns=[tool_turn("get_service_health", service="staging-api")])
+    external.locality = "external"
+    gateway = build_gateway(
+        tmp_path,
+        [],
+        external_model=ConfiguredModel(adapter=external, model_id="stubborn-external"),
+    )
+
+    async def go():
+        started = gateway.orchestrator.start(
+            user("Is staging-api healthy right now?"), execution_mode="external_only"
+        )
+        await external.started.wait()
+        version = gateway.store.get_run(started.run_id).version
+        record = await gateway.orchestrator.cancel(started.run_id, version, wait_seconds=1)
+        return started.run_id, record
+
+    run_id, record = asyncio.run(go())
+
+    assert external.interrupted, "the double never saw the cancel"
+    assert record.state == "cancelled"
+    events = gateway.store.events(run_id)
+    assert of_type(events, "tool.proposed") == []
+    assert executed_tools(events) == []
+    assert of_type(events, "answer.delta") == []
+    (finished,) = of_type(events, "model.finished")
+    assert finished.payload["error"]["code"] == "cancelled"
+    assert finished.payload["proposed_calls"] == []
+    assert len(external.requests) == 1
+
+
+def test_a_provider_cancel_that_never_returns_does_not_hold_the_run(tmp_path):
+    """RM14, RM17, AC12, spec 0.19 section 7.4: the run does not wait for the provider."""
+
+    class Hanging(GatedAdapter):
+        async def cancel(self, generation_id: str) -> None:
+            await super().cancel(generation_id)
+            await asyncio.Event().wait()  # the provider's cancel never answers
+
+    adapter = Hanging(turns=[route_turn("check-service-health"), *health_tail()])
+    gateway = build_gateway(
+        tmp_path,
+        None,
+        local_model=ConfiguredModel(adapter=adapter, model_id="hanging"),
+        external_turns=[],
+    )
+
+    async def go():
+        started = gateway.orchestrator.start(user("Is staging-api healthy right now?"))
+        await adapter.started.wait()
+        version = gateway.store.get_run(started.run_id).version
+        began = time.monotonic()
+        record = await gateway.orchestrator.cancel(started.run_id, version, wait_seconds=2)
+        return record, time.monotonic() - began
+
+    record, took = asyncio.run(go())
+
+    assert record.state == "cancelled"
+    assert took < 1
+    assert gateway.store.active_run_id() is None
+
+
+def test_a_provider_cancel_that_fails_never_hides_the_cancel(tmp_path):
+    """RM14, AC12, spec 0.19 section 7.4: the cancel is best effort; its error is not the run's."""
+
+    class Failing(GatedAdapter):
+        async def cancel(self, generation_id: str) -> None:
+            await super().cancel(generation_id)
+            raise httpx.ConnectError("provider cancel endpoint unreachable")
+
+    adapter = Failing(turns=[route_turn("check-service-health"), *health_tail()])
+    gateway = build_gateway(
+        tmp_path,
+        None,
+        local_model=ConfiguredModel(adapter=adapter, model_id="failing"),
+        external_turns=[],
+    )
+
+    async def go():
+        started = gateway.orchestrator.start(user("Is staging-api healthy right now?"))
+        await adapter.started.wait()
+        version = gateway.store.get_run(started.run_id).version
+        return started.run_id, await gateway.orchestrator.cancel(started.run_id, version)
+
+    run_id, record = asyncio.run(go())
+
+    assert record.state == "cancelled"
+    (call,) = of_type(gateway.store.events(run_id), "model.started")
+    assert adapter.cancelled == [call.payload["call_id"]]
+    (cancelled,) = of_type(gateway.store.events(run_id), "run.cancelled")
+    assert cancelled.payload["reason"] == "cancel_requested"
 
 
 # -- cancel during a write -----------------------------------------------------------
@@ -196,20 +386,22 @@ def test_cancel_during_external_generation_stops_dispatch_and_cancels_the_model(
 def test_cancel_during_a_write_records_unknown_outcome_and_never_replays_it(tmp_path):
     """RM10, RM14, AC12: an in-flight write keeps a recorded outcome; nothing runs it again."""
     gateway = delete_gateway(tmp_path)
-    entered, release, calls = block_handler(gateway, "delete_demo_database")
+    handler = Handler(gateway, "delete_demo_database")
 
     async def go():
         started = await approved_write_in_flight(gateway)
-        await wait_for(entered)
+        await handler.started()
         version = gateway.store.get_run(started.run_id).version
         record = await gateway.orchestrator.cancel(started.run_id, version)
         before = gateway.store.events(started.run_id)
+        operation = gateway.store.get_tool_operation(
+            delete_finished(before).payload["operation_id"]
+        )
         # The abandoned handler finishes late: it may leave evidence, never a new effect.
-        release.set()
-        await asyncio.sleep(0.1)
-        return started.run_id, record, before
+        await handler.finish()
+        return started.run_id, record, before, operation
 
-    run_id, record, before = asyncio.run(go())
+    run_id, record, before, operation_before = asyncio.run(go())
 
     assert record.state == "cancelled"
     events = gateway.store.events(run_id)
@@ -220,8 +412,11 @@ def test_cancel_during_a_write_records_unknown_outcome_and_never_replays_it(tmp_
     operation = gateway.store.get_tool_operation(finished.payload["operation_id"])
     assert operation["status"] == "unknown_outcome"
     # The late handler result did not rewrite the record or the trace.
+    assert operation == operation_before
     assert gateway.store.events(run_id) == before
-    assert len(calls) == 1
+    # The handler ran once and committed once; nothing undid or repeated it.
+    assert len(handler.calls) == 1
+    assert "demo-orders-db" not in [db["database_id"] for db in gateway.sandbox.list_databases()]
     (cancelled,) = of_type(events, "run.cancelled")
     assert cancelled.payload["reason"] == "cancel_requested"
     assert of_type(events, "run.completed") == []
@@ -238,15 +433,14 @@ def test_cancel_during_a_read_records_it_as_failed(tmp_path):
         [route_turn("check-service-health"), *health_tail()],
         external_turns=[],
     )
-    entered, release, calls = block_handler(gateway, "get_service_health")
+    handler = Handler(gateway, "get_service_health")
 
     async def go():
         started = gateway.orchestrator.start(user("Is staging-api healthy right now?"))
-        await wait_for(entered)
+        await handler.started()
         version = gateway.store.get_run(started.run_id).version
         record = await gateway.orchestrator.cancel(started.run_id, version)
-        release.set()
-        await asyncio.sleep(0.05)
+        await handler.finish()
         return started.run_id, record
 
     run_id, record = asyncio.run(go())
@@ -256,28 +450,30 @@ def test_cancel_during_a_read_records_it_as_failed(tmp_path):
     (finished,) = of_type(events, "tool.finished")
     assert finished.payload["result"]["status"] == "failed"
     assert finished.payload["result"]["error"]["code"] == "tool_interrupted"
-    assert len(calls) == 1
+    assert len(handler.calls) == 1
     assert len(of_type(events, "model.started")) == 2
+    assert gateway.store.events(run_id)[-1].event_type == "run.cancelled"
 
 
 def test_a_cancelled_run_is_terminal_and_cannot_continue_the_write(tmp_path):
     """RM17, RM14, AC12: no transition from cancelled; a second cancel is a terminal error."""
     gateway = delete_gateway(tmp_path)
-    entered, release, calls = block_handler(gateway, "delete_demo_database")
+    handler = Handler(gateway, "delete_demo_database")
 
     async def go():
         started = await approved_write_in_flight(gateway)
-        await wait_for(entered)
+        await handler.started()
         version = gateway.store.get_run(started.run_id).version
         await gateway.orchestrator.cancel(started.run_id, version)
         final = gateway.store.get_run(started.run_id)
         with pytest.raises(TerminalStateError):
             await gateway.orchestrator.cancel(started.run_id, final.version)
-        release.set()
-        await asyncio.sleep(0.05)
+        await handler.finish()
+        return started.run_id, final
 
-    asyncio.run(go())
-    assert len(calls) == 1
+    run_id, final = asyncio.run(go())
+    assert gateway.store.get_run(run_id) == final
+    assert len(handler.calls) == 1
 
 
 def test_cancel_after_a_write_succeeded_keeps_the_actual_outcome(tmp_path):
@@ -296,8 +492,6 @@ def test_cancel_after_a_write_succeeded_keeps_the_actual_outcome(tmp_path):
         await adapter.started.wait()
         version = gateway.store.get_run(started.run_id).version
         record = await gateway.orchestrator.cancel(started.run_id, version)
-        adapter.gate.set()
-        await asyncio.sleep(0.05)
         return started.run_id, record
 
     run_id, record = asyncio.run(go())
@@ -315,7 +509,7 @@ def test_cancel_after_a_write_succeeded_keeps_the_actual_outcome(tmp_path):
 def test_native_cancel_during_a_write_answers_cancelled_and_keeps_the_outcome(tmp_path):
     """RM21, RM10, AC12: the native cancel endpoint reports cancelled; the write stays unknown."""
     gateway = delete_gateway(tmp_path)
-    entered, release, calls = block_handler(gateway, "delete_demo_database")
+    handler = Handler(gateway, "delete_demo_database")
     app = make_app(gateway)
 
     async def go():
@@ -334,7 +528,7 @@ def test_native_cancel_during_a_write_answers_cancelled_and_keeps_the_outcome(tm
                 },
             )
             assert resumed.status_code == 202, resumed.text
-            await wait_for(entered)
+            await handler.started()
             current = (await client.get(f"/relay/v1/runs/{accepted['run_id']}")).json()
             cancelled = await client.post(
                 f"/relay/v1/runs/{accepted['run_id']}/cancel",
@@ -344,8 +538,7 @@ def test_native_cancel_during_a_write_answers_cancelled_and_keeps_the_outcome(tm
                 f"/relay/v1/runs/{accepted['run_id']}/cancel",
                 json={"expected_version": cancelled.json()["state_version"]},
             )
-            release.set()
-            await asyncio.sleep(0.05)
+            await handler.finish()
             return accepted, cancelled, again
 
     accepted, cancelled, again = asyncio.run(go())
@@ -356,4 +549,4 @@ def test_native_cancel_during_a_write_answers_cancelled_and_keeps_the_outcome(tm
     events = gateway.store.events(accepted["run_id"])
     finished = delete_finished(events)
     assert finished.payload["result"]["status"] == "unknown_outcome"
-    assert len(calls) == 1
+    assert len(handler.calls) == 1

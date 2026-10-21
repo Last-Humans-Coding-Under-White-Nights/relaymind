@@ -232,6 +232,10 @@ LOCAL_OPTIONS = GenerationOptions(temperature=0)
 # External providers differ in the sampling options they accept (RM18),
 # so the external stage sets none.
 EXTERNAL_OPTIONS = GenerationOptions()
+# The longest a request to an adapter to cancel a generation may take.
+# The run never waits for it (spec 0.19 section 7.4); the bound only keeps
+# a provider that never answers from holding a task forever.
+PROVIDER_CANCEL_SECONDS = 5.0
 CORRECTION = (
     "[gateway] The answer did not meet the skill's completion criteria. "
     "Answer again from the tool results only, following the skill rules."
@@ -539,6 +543,9 @@ class LocalOrchestrator:
         # whose token has not been read yet (RM11, spec 0.17).
         self._driven: dict[str, tuple[_Run, asyncio.Task[RunOutcome]]] = {}
         self._issued: dict[str, ConfirmationRequest] = {}
+        # Requests to adapters to cancel a generation, still in progress;
+        # held so a pending one is not garbage collected (section 7.4).
+        self._provider_cancels: set[asyncio.Task[None]] = set()
         # Set once this orchestrator accepts a run; restart recovery is
         # refused from then on (section 5).
         self._accepted_a_run = False
@@ -772,9 +779,33 @@ class LocalOrchestrator:
                 "close that request to cancel it"
             )
         run, task = driven
+        # Spec 0.19 section 7.4: the run task cannot dispatch anything
+        # until this call yields, so asking the adapter first still stops
+        # dispatch first, and the adapter is asked while it still knows
+        # the generation (task.cancel() tears its stream down).
+        run.cancel_generation()
         task.cancel()
         await asyncio.wait({task}, timeout=wait_seconds)
         return self.store.get_run(run_id)
+
+    def ask_provider_to_cancel(self, adapter: ModelAdapter, generation_id: str) -> None:
+        """Ask an adapter to cancel one generation, without waiting (RM14, AC12).
+
+        Best effort (spec 0.19 section 7.4): the request starts at once, so
+        an adapter whose cancel does not wait has acted when this returns.
+        The run never waits for it, its failure is never the run's, and it
+        is dropped after PROVIDER_CANCEL_SECONDS.
+        """
+
+        async def ask() -> None:
+            with contextlib.suppress(Exception):
+                async with asyncio.timeout(PROVIDER_CANCEL_SECONDS):
+                    await adapter.cancel(generation_id)
+
+        request = asyncio.Task(ask(), eager_start=True)
+        if not request.done():
+            self._provider_cancels.add(request)
+            request.add_done_callback(self._provider_cancels.discard)
 
     def _cancel_untracked(self, run_id: str, expected_version: int) -> RunRecord:
         """Cancel a waiting run this process no longer tracks, from the store alone.
@@ -959,6 +990,9 @@ class _Run:
         self.model_alias = model_alias
         self.meter = BudgetMeter(owner.budgets, clock=owner.clock)
         self.model_calls: list[dict[str, str]] = []
+        # Set when a cancel request stops the run (run.cancelled reason).
+        # The adapter and ID of the generation in flight, for a cancel (RM14).
+        self.generating: tuple[ModelAdapter, str] | None = None
         self.record: RunRecord
         self.decision: RouteDecision | None = None
         # Fixed by the first RouteDecision and kept across resumes (section 5).
@@ -1746,6 +1780,11 @@ class _Run:
 
     # -- generations -------------------------------------------------------------
 
+    def cancel_generation(self) -> None:
+        """Ask the adapter of the generation in flight, if any, to cancel it (RM14, AC12)."""
+        if self.generating is not None:
+            self.o.ask_provider_to_cancel(*self.generating)
+
     async def _generate(
         self,
         purpose: str,
@@ -1784,6 +1823,7 @@ class _Run:
         failure: GenerationFailed | None = None
         exhausted: BudgetExceededError | None = None
         adapter = model.adapter
+        self.generating = (adapter, call_id)
         try:
             async with asyncio.timeout(max(self.meter.remaining_seconds(), 0.001)):
                 async for event in adapter.generate(request):
@@ -1797,27 +1837,27 @@ class _Run:
                         finish = event.finish_reason
                     elif isinstance(event, GenerationFailed):
                         failure = event
+            task = asyncio.current_task()
+            if task is not None and task.cancelling():
+                # A provider that ignored the cancel answered late. Its
+                # result is dropped: it proposes, runs, and publishes
+                # nothing (spec 0.19 section 7.4).
+                generation, finish = _Generation(), None
+                raise asyncio.CancelledError
         except TimeoutError:
             # The trace names the limit that bounded this generation, local
             # or external, not always local time (RM03, RM16).
             exhausted = self.meter.time_exhausted()
             failure = GenerationFailed(code="time_budget", message=f"{exhausted.budget} spent")
-            await adapter.cancel(call_id)
+            self.o.ask_provider_to_cancel(adapter, call_id)
         except BaseException as exc:
-            cancelled = isinstance(exc, asyncio.CancelledError)
             failure = GenerationFailed(
-                code="cancelled" if cancelled else "interrupted",
+                code="cancelled" if isinstance(exc, asyncio.CancelledError) else "interrupted",
                 message="model generation interrupted",
             )
-            if cancelled:
-                # RM14, AC12: a cancelled run asks its provider to stop the
-                # generation. Best effort: a provider that does not stop
-                # cannot dispatch anything, because the run is already ending,
-                # and its own failure never hides the cancel.
-                with contextlib.suppress(Exception):
-                    await adapter.cancel(call_id)
             raise
         finally:
+            self.generating = None
             self.emit(
                 EventType.MODEL_FINISHED,
                 actor,

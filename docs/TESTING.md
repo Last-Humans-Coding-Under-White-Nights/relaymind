@@ -73,11 +73,15 @@ itself, with the manifest's SHA-256; any other file fails the run.
   works; a second recovery changes nothing.
 
 - AC12, cancel part, deterministic: `pytest tests/test_ac12_cancellation.py`
-  cancels a run during a local and an external generation (the adapter
-  receives cancel for that generation, no tool runs, a late result is
-  dropped), during an in-flight write (recorded as `unknown_outcome`,
-  never run again, not rewritten when the abandoned handler finishes),
-  during an in-flight read (`failed`), and after a write succeeded (the
+  cancels a run during a local and an external generation (the adapter,
+  including the real llama-server adapter over a mock transport,
+  receives cancel for that generation while it still runs, and no tool
+  runs), with a provider that ignores the cancel (its late result is
+  dropped) and one whose cancel hangs or fails (the run still ends
+  cancelled at once), during an in-flight write (recorded as
+  `unknown_outcome`, never run again, not rewritten when the abandoned
+  handler finishes; the test joins the handler thread), during an
+  in-flight read (`failed`), and after a write succeeded (the
   `succeeded` outcome stays). The native cancel endpoint is covered. No
   live model is run, so there is no live AC12 record yet.
 

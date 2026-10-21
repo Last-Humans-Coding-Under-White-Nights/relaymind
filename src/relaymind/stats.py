@@ -102,6 +102,10 @@ class TimingCollector(ModelAdapter):
         self._adapter = adapter
         self._clock = clock
         self.records: list[GenerationStats] = []
+        # The generations running now, and those of them asked to cancel.
+        # A cancel of a generation that is not running is not kept, so a
+        # late cancel never outlives its generation.
+        self._running: set[str] = set()
         self._cancel_requested: set[str] = set()
 
     async def capabilities(self) -> AdapterCapabilities:
@@ -122,6 +126,7 @@ class TimingCollector(ModelAdapter):
         )
         self.records.append(record)
         started = self._clock()
+        self._running.add(request.generation_id)
         try:
             # aclosing: an abandoned or failed stream closes the inner
             # one at once, releasing its provider connection.
@@ -152,6 +157,7 @@ class TimingCollector(ModelAdapter):
                 record.failure_code = "cancelled"
             raise
         finally:
+            self._running.discard(request.generation_id)
             self._cancel_requested.discard(request.generation_id)
 
     @staticmethod
@@ -184,7 +190,8 @@ class TimingCollector(ModelAdapter):
         return records
 
     async def cancel(self, generation_id: str) -> None:
-        self._cancel_requested.add(generation_id)
+        if generation_id in self._running:
+            self._cancel_requested.add(generation_id)
         await self._adapter.cancel(generation_id)
 
     async def health(self) -> AdapterHealth:
