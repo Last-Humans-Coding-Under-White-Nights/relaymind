@@ -1,0 +1,2950 @@
+{
+  "kind": "relaymind.live_local_trace",
+  "note": "Live single-pass traces; observations, not benchmark results (spec 12.3).",
+  "command": "RELAYMIND_TRACE_OUT=docs/evidence/2026-10-21-m2-local-trace-rebased-apple-m1.json pytest -m live tests/test_local_loop_live.py",
+  "machine": {
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "python": "3.14.7"
+  },
+  "runtime_banner": "version: 0.7.0 (build 11669, commit 620d2225c)\nbuilt with AppleClang 21.0.0.21000334 for Darwin arm64",
+  "model_file": "Qwen3-0.6B-Q8_0.gguf",
+  "runs": [
+    {
+      "prompt": "Is staging-api healthy right now?",
+      "warmup": true,
+      "outcome": {
+        "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+        "state": "failed",
+        "answer": null,
+        "error_code": "needs_external",
+        "reason_code": "invalid_output"
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 1,
+          "timestamp": "2026-10-21T05:12:34.487573Z",
+          "elapsed_ms": 0,
+          "event_type": "run.accepted",
+          "actor": "gateway",
+          "payload": {
+            "budgets": {
+              "active_seconds": 4.0,
+              "local_generations": 3,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "routing_input_tokens": 2048,
+              "routing_output_tokens": 128,
+              "tool_calls": 2
+            },
+            "effective_execution_mode": "auto",
+            "model_alias": null,
+            "requested_execution_mode": null,
+            "skill_roots": [
+              "<repo>/skills"
+            ],
+            "skills_offered": [
+              {
+                "content_hash": "sha256:5c69b436d94ecafc420d7f5d1a2bbcac84f8c94888914a521d7a1adf0d343138",
+                "name": "check-service-health",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:b9b95a69a5b19a4575909269e66c799a1825b0191e9a433c0fb2505d478e8366",
+                "name": "delete-demo-database",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:c1f67ba29b8987b782e69a836746b80fb5259136e101368be890d5d89158c8e1",
+                "name": "health-and-diagnostic-checklist",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:0e6a3ebdb449c3b19994779e55d9b2d786d47e4eaed507d2bd328bba937b6894",
+                "name": "investigate-performance",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:0211a7d6927c303df3165442ff5f662709fdf267286e3914534e20a18c3f1700",
+                "name": "lookup-latest-deployment",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:2673ff26de342956d0406d9ccc7132ae9d6b0a81da604438c778793fa50e2478",
+                "name": "summarize-incident-counts",
+                "version": "0.1.0"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 2,
+          "timestamp": "2026-10-21T05:12:34.499192Z",
+          "elapsed_ms": 12,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e_gen1_routing",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "routing",
+            "tools_offered": [
+              "check-service-health",
+              "delete-demo-database",
+              "health-and-diagnostic-checklist",
+              "investigate-performance",
+              "lookup-latest-deployment",
+              "summarize-incident-counts",
+              "request_clarification"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 3,
+          "timestamp": "2026-10-21T05:12:35.579424Z",
+          "elapsed_ms": 1092,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e_gen1_routing",
+            "duration_ms": 1080,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "language": "en"
+                },
+                "tool_name": "check-service-health"
+              }
+            ],
+            "purpose": "routing",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 962,
+              "output_tokens": 21
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 4,
+          "timestamp": "2026-10-21T05:12:35.580412Z",
+          "elapsed_ms": 1093,
+          "event_type": "route.selected",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e_gen1_routing",
+            "decision": {
+              "clarification": null,
+              "language": "en",
+              "reason_code": "simple_skill",
+              "route": "local",
+              "schema_version": 1,
+              "skill_id": "check-service-health"
+            },
+            "input_tokens": 962,
+            "mechanism": "native_function_calling",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "model_language": "en"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 5,
+          "timestamp": "2026-10-21T05:12:35.581052Z",
+          "elapsed_ms": 1094,
+          "event_type": "skill.loaded",
+          "actor": "gateway",
+          "payload": {
+            "content_hash": "sha256:5c69b436d94ecafc420d7f5d1a2bbcac84f8c94888914a521d7a1adf0d343138",
+            "name": "check-service-health",
+            "version": "0.1.0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 6,
+          "timestamp": "2026-10-21T05:12:35.581324Z",
+          "elapsed_ms": 1094,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e_gen2_skill",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 7,
+          "timestamp": "2026-10-21T05:12:36.382738Z",
+          "elapsed_ms": 1895,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e_gen2_skill",
+            "duration_ms": 801,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "service": "staging-api"
+                },
+                "tool_name": "get_service_health"
+              }
+            ],
+            "purpose": "skill",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 536,
+              "output_tokens": 23
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 8,
+          "timestamp": "2026-10-21T05:12:36.383535Z",
+          "elapsed_ms": 1896,
+          "event_type": "tool.proposed",
+          "actor": "local",
+          "payload": {
+            "admissible": true,
+            "arguments": {
+              "service": "staging-api"
+            },
+            "call_id": "7XNNauQWrgFjTZ0dx17VPd3r7qEJKcSI",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposal_id": "proposal_10ccdc4c2876482f",
+            "rejection": null,
+            "run_state_version": 3,
+            "skill_id": "check-service-health",
+            "skill_version": "0.1.0",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 9,
+          "timestamp": "2026-10-21T05:12:36.384126Z",
+          "elapsed_ms": 1897,
+          "event_type": "tool.started",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "operation_id": "op_0bfc380b592b040206091377e6a24905",
+            "proposal_id": "proposal_10ccdc4c2876482f",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 10,
+          "timestamp": "2026-10-21T05:12:36.387232Z",
+          "elapsed_ms": 1900,
+          "event_type": "tool.finished",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "operation_id": "op_0bfc380b592b040206091377e6a24905",
+            "proposal_id": "proposal_10ccdc4c2876482f",
+            "replayed": false,
+            "result": {
+              "data": {
+                "checked_at": "2026-10-20T02:58:00Z",
+                "fixture": {
+                  "observed_at": "2026-10-21T05:12:36Z",
+                  "scenario": "baseline"
+                },
+                "service": "staging-api",
+                "status": "healthy"
+              },
+              "duration_ms": 1,
+              "error": null,
+              "observed_at": "2026-10-21T05:12:36Z",
+              "operation_id": "op_0bfc380b592b040206091377e6a24905",
+              "source_ref": "tool:get_service_health/op_0bfc380b592b040206091377e6a24905",
+              "status": "succeeded",
+              "tool_name": "get_service_health",
+              "truncated": false
+            },
+            "status": "succeeded",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 11,
+          "timestamp": "2026-10-21T05:12:36.387548Z",
+          "elapsed_ms": 1900,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e_gen3_skill",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 12,
+          "timestamp": "2026-10-21T05:12:37.138805Z",
+          "elapsed_ms": 2651,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e_gen3_skill",
+            "duration_ms": 751,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [],
+            "purpose": "skill",
+            "text": "Staging-api is healthy and checked at 2026-10-20T02:58:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 794,
+              "output_tokens": 31
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 13,
+          "timestamp": "2026-10-21T05:12:37.139560Z",
+          "elapsed_ms": 2652,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e_gen4_repair",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "repair",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 14,
+          "timestamp": "2026-10-21T05:12:37.751055Z",
+          "elapsed_ms": 3264,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e_gen4_repair",
+            "duration_ms": 611,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [],
+            "purpose": "repair",
+            "text": "Staging-api is healthy and checked at 2026-10-20T02:58:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 861,
+              "output_tokens": 31
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e",
+          "seq": 15,
+          "timestamp": "2026-10-21T05:12:37.751600Z",
+          "elapsed_ms": 3264,
+          "event_type": "run.failed",
+          "actor": "gateway",
+          "payload": {
+            "budget_usage": {
+              "active_ms": 3264,
+              "local_generations": 3,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "tool_calls": 1
+            },
+            "detail": "unrepaired output: completion_predicate_unmet",
+            "error_code": "needs_external",
+            "external_calls": 0,
+            "model_calls": [
+              {
+                "actor": "local",
+                "call_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e_gen1_routing",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "routing"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e_gen2_skill",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e_gen3_skill",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_f6dc12f75413475f8e5ce1ee5df72d9e_gen4_repair",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "repair"
+              }
+            ],
+            "reason_code": "invalid_output"
+          }
+        }
+      ]
+    },
+    {
+      "prompt": "Is staging-api healthy right now?",
+      "warmup": false,
+      "outcome": {
+        "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+        "state": "failed",
+        "answer": null,
+        "error_code": "needs_external",
+        "reason_code": "invalid_output"
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 1,
+          "timestamp": "2026-10-21T05:12:37.755892Z",
+          "elapsed_ms": 0,
+          "event_type": "run.accepted",
+          "actor": "gateway",
+          "payload": {
+            "budgets": {
+              "active_seconds": 4.0,
+              "local_generations": 3,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "routing_input_tokens": 2048,
+              "routing_output_tokens": 128,
+              "tool_calls": 2
+            },
+            "effective_execution_mode": "auto",
+            "model_alias": null,
+            "requested_execution_mode": null,
+            "skill_roots": [
+              "<repo>/skills"
+            ],
+            "skills_offered": [
+              {
+                "content_hash": "sha256:5c69b436d94ecafc420d7f5d1a2bbcac84f8c94888914a521d7a1adf0d343138",
+                "name": "check-service-health",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:b9b95a69a5b19a4575909269e66c799a1825b0191e9a433c0fb2505d478e8366",
+                "name": "delete-demo-database",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:c1f67ba29b8987b782e69a836746b80fb5259136e101368be890d5d89158c8e1",
+                "name": "health-and-diagnostic-checklist",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:0e6a3ebdb449c3b19994779e55d9b2d786d47e4eaed507d2bd328bba937b6894",
+                "name": "investigate-performance",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:0211a7d6927c303df3165442ff5f662709fdf267286e3914534e20a18c3f1700",
+                "name": "lookup-latest-deployment",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:2673ff26de342956d0406d9ccc7132ae9d6b0a81da604438c778793fa50e2478",
+                "name": "summarize-incident-counts",
+                "version": "0.1.0"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 2,
+          "timestamp": "2026-10-21T05:12:37.783773Z",
+          "elapsed_ms": 28,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_7a2d403bf5d94a5e8251be7cc27172fd_gen1_routing",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "routing",
+            "tools_offered": [
+              "check-service-health",
+              "delete-demo-database",
+              "health-and-diagnostic-checklist",
+              "investigate-performance",
+              "lookup-latest-deployment",
+              "summarize-incident-counts",
+              "request_clarification"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 3,
+          "timestamp": "2026-10-21T05:12:38.185050Z",
+          "elapsed_ms": 429,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_7a2d403bf5d94a5e8251be7cc27172fd_gen1_routing",
+            "duration_ms": 401,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "language": "en"
+                },
+                "tool_name": "check-service-health"
+              }
+            ],
+            "purpose": "routing",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 962,
+              "output_tokens": 21
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 4,
+          "timestamp": "2026-10-21T05:12:38.185702Z",
+          "elapsed_ms": 430,
+          "event_type": "route.selected",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_7a2d403bf5d94a5e8251be7cc27172fd_gen1_routing",
+            "decision": {
+              "clarification": null,
+              "language": "en",
+              "reason_code": "simple_skill",
+              "route": "local",
+              "schema_version": 1,
+              "skill_id": "check-service-health"
+            },
+            "input_tokens": 962,
+            "mechanism": "native_function_calling",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "model_language": "en"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 5,
+          "timestamp": "2026-10-21T05:12:38.186219Z",
+          "elapsed_ms": 430,
+          "event_type": "skill.loaded",
+          "actor": "gateway",
+          "payload": {
+            "content_hash": "sha256:5c69b436d94ecafc420d7f5d1a2bbcac84f8c94888914a521d7a1adf0d343138",
+            "name": "check-service-health",
+            "version": "0.1.0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 6,
+          "timestamp": "2026-10-21T05:12:38.186465Z",
+          "elapsed_ms": 431,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_7a2d403bf5d94a5e8251be7cc27172fd_gen2_skill",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 7,
+          "timestamp": "2026-10-21T05:12:38.614324Z",
+          "elapsed_ms": 859,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_7a2d403bf5d94a5e8251be7cc27172fd_gen2_skill",
+            "duration_ms": 428,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "service": "staging-api"
+                },
+                "tool_name": "get_service_health"
+              }
+            ],
+            "purpose": "skill",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 536,
+              "output_tokens": 23
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 8,
+          "timestamp": "2026-10-21T05:12:38.615084Z",
+          "elapsed_ms": 859,
+          "event_type": "tool.proposed",
+          "actor": "local",
+          "payload": {
+            "admissible": true,
+            "arguments": {
+              "service": "staging-api"
+            },
+            "call_id": "SzXMO54NkzRK7YY6E0K8aYKKQKYwoSAb",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposal_id": "proposal_4b3f0bed33ad4ab0",
+            "rejection": null,
+            "run_state_version": 3,
+            "skill_id": "check-service-health",
+            "skill_version": "0.1.0",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 9,
+          "timestamp": "2026-10-21T05:12:38.615567Z",
+          "elapsed_ms": 860,
+          "event_type": "tool.started",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "operation_id": "op_48ac22bc0c1c01f8644ac634e11f57ae",
+            "proposal_id": "proposal_4b3f0bed33ad4ab0",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 10,
+          "timestamp": "2026-10-21T05:12:38.618771Z",
+          "elapsed_ms": 863,
+          "event_type": "tool.finished",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "operation_id": "op_48ac22bc0c1c01f8644ac634e11f57ae",
+            "proposal_id": "proposal_4b3f0bed33ad4ab0",
+            "replayed": false,
+            "result": {
+              "data": {
+                "checked_at": "2026-10-20T02:58:00Z",
+                "fixture": {
+                  "observed_at": "2026-10-21T05:12:38Z",
+                  "scenario": "baseline"
+                },
+                "service": "staging-api",
+                "status": "healthy"
+              },
+              "duration_ms": 1,
+              "error": null,
+              "observed_at": "2026-10-21T05:12:38Z",
+              "operation_id": "op_48ac22bc0c1c01f8644ac634e11f57ae",
+              "source_ref": "tool:get_service_health/op_48ac22bc0c1c01f8644ac634e11f57ae",
+              "status": "succeeded",
+              "tool_name": "get_service_health",
+              "truncated": false
+            },
+            "status": "succeeded",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 11,
+          "timestamp": "2026-10-21T05:12:38.619110Z",
+          "elapsed_ms": 863,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_7a2d403bf5d94a5e8251be7cc27172fd_gen3_skill",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 12,
+          "timestamp": "2026-10-21T05:12:39.351377Z",
+          "elapsed_ms": 1596,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_7a2d403bf5d94a5e8251be7cc27172fd_gen3_skill",
+            "duration_ms": 732,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [],
+            "purpose": "skill",
+            "text": "Staging-api is healthy and checked at 2026-10-20T02:58:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 788,
+              "output_tokens": 31
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 13,
+          "timestamp": "2026-10-21T05:12:39.352519Z",
+          "elapsed_ms": 1597,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_7a2d403bf5d94a5e8251be7cc27172fd_gen4_repair",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "repair",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 14,
+          "timestamp": "2026-10-21T05:12:39.967407Z",
+          "elapsed_ms": 2212,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_7a2d403bf5d94a5e8251be7cc27172fd_gen4_repair",
+            "duration_ms": 614,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [],
+            "purpose": "repair",
+            "text": "Staging-api is healthy and checked at 2026-10-20T02:58:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 855,
+              "output_tokens": 31
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_7a2d403bf5d94a5e8251be7cc27172fd",
+          "seq": 15,
+          "timestamp": "2026-10-21T05:12:39.968018Z",
+          "elapsed_ms": 2212,
+          "event_type": "run.failed",
+          "actor": "gateway",
+          "payload": {
+            "budget_usage": {
+              "active_ms": 2213,
+              "local_generations": 3,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "tool_calls": 1
+            },
+            "detail": "unrepaired output: completion_predicate_unmet",
+            "error_code": "needs_external",
+            "external_calls": 0,
+            "model_calls": [
+              {
+                "actor": "local",
+                "call_id": "run_7a2d403bf5d94a5e8251be7cc27172fd_gen1_routing",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "routing"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_7a2d403bf5d94a5e8251be7cc27172fd_gen2_skill",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_7a2d403bf5d94a5e8251be7cc27172fd_gen3_skill",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_7a2d403bf5d94a5e8251be7cc27172fd_gen4_repair",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "repair"
+              }
+            ],
+            "reason_code": "invalid_output"
+          }
+        }
+      ]
+    },
+    {
+      "prompt": "staging-api 现在健康吗？",
+      "warmup": false,
+      "outcome": {
+        "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+        "state": "failed",
+        "answer": null,
+        "error_code": "needs_external",
+        "reason_code": "invalid_output"
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 1,
+          "timestamp": "2026-10-21T05:12:40.020477Z",
+          "elapsed_ms": 0,
+          "event_type": "run.accepted",
+          "actor": "gateway",
+          "payload": {
+            "budgets": {
+              "active_seconds": 4.0,
+              "local_generations": 3,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "routing_input_tokens": 2048,
+              "routing_output_tokens": 128,
+              "tool_calls": 2
+            },
+            "effective_execution_mode": "auto",
+            "model_alias": null,
+            "requested_execution_mode": null,
+            "skill_roots": [
+              "<repo>/skills"
+            ],
+            "skills_offered": [
+              {
+                "content_hash": "sha256:5c69b436d94ecafc420d7f5d1a2bbcac84f8c94888914a521d7a1adf0d343138",
+                "name": "check-service-health",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:b9b95a69a5b19a4575909269e66c799a1825b0191e9a433c0fb2505d478e8366",
+                "name": "delete-demo-database",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:c1f67ba29b8987b782e69a836746b80fb5259136e101368be890d5d89158c8e1",
+                "name": "health-and-diagnostic-checklist",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:0e6a3ebdb449c3b19994779e55d9b2d786d47e4eaed507d2bd328bba937b6894",
+                "name": "investigate-performance",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:0211a7d6927c303df3165442ff5f662709fdf267286e3914534e20a18c3f1700",
+                "name": "lookup-latest-deployment",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:2673ff26de342956d0406d9ccc7132ae9d6b0a81da604438c778793fa50e2478",
+                "name": "summarize-incident-counts",
+                "version": "0.1.0"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 2,
+          "timestamp": "2026-10-21T05:12:40.035841Z",
+          "elapsed_ms": 15,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_829af74a691f4f95939d8e1a27b45eac_gen1_routing",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "routing",
+            "tools_offered": [
+              "check-service-health",
+              "delete-demo-database",
+              "health-and-diagnostic-checklist",
+              "investigate-performance",
+              "lookup-latest-deployment",
+              "summarize-incident-counts",
+              "request_clarification"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 3,
+          "timestamp": "2026-10-21T05:12:40.459368Z",
+          "elapsed_ms": 439,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_829af74a691f4f95939d8e1a27b45eac_gen1_routing",
+            "duration_ms": 423,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "language": "en"
+                },
+                "tool_name": "check-service-health"
+              }
+            ],
+            "purpose": "routing",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 965,
+              "output_tokens": 21
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 4,
+          "timestamp": "2026-10-21T05:12:40.459631Z",
+          "elapsed_ms": 439,
+          "event_type": "route.selected",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_829af74a691f4f95939d8e1a27b45eac_gen1_routing",
+            "decision": {
+              "clarification": null,
+              "language": "zh",
+              "reason_code": "simple_skill",
+              "route": "local",
+              "schema_version": 1,
+              "skill_id": "check-service-health"
+            },
+            "input_tokens": 965,
+            "mechanism": "native_function_calling",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "model_language": "en"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 5,
+          "timestamp": "2026-10-21T05:12:40.459840Z",
+          "elapsed_ms": 439,
+          "event_type": "skill.loaded",
+          "actor": "gateway",
+          "payload": {
+            "content_hash": "sha256:5c69b436d94ecafc420d7f5d1a2bbcac84f8c94888914a521d7a1adf0d343138",
+            "name": "check-service-health",
+            "version": "0.1.0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 6,
+          "timestamp": "2026-10-21T05:12:40.459953Z",
+          "elapsed_ms": 440,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_829af74a691f4f95939d8e1a27b45eac_gen2_skill",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 7,
+          "timestamp": "2026-10-21T05:12:41.115195Z",
+          "elapsed_ms": 1095,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_829af74a691f4f95939d8e1a27b45eac_gen2_skill",
+            "duration_ms": 655,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "service": "staging-api"
+                },
+                "tool_name": "get_service_health"
+              }
+            ],
+            "purpose": "skill",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 539,
+              "output_tokens": 23
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 8,
+          "timestamp": "2026-10-21T05:12:41.116051Z",
+          "elapsed_ms": 1096,
+          "event_type": "tool.proposed",
+          "actor": "local",
+          "payload": {
+            "admissible": true,
+            "arguments": {
+              "service": "staging-api"
+            },
+            "call_id": "FXYaTytO8kNdKqYxeU3hG9y3KZY82dBE",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposal_id": "proposal_da4a69473cbd442a",
+            "rejection": null,
+            "run_state_version": 3,
+            "skill_id": "check-service-health",
+            "skill_version": "0.1.0",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 9,
+          "timestamp": "2026-10-21T05:12:41.116487Z",
+          "elapsed_ms": 1096,
+          "event_type": "tool.started",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "operation_id": "op_065a9aed1dfc8657481410cc98374d4c",
+            "proposal_id": "proposal_da4a69473cbd442a",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 10,
+          "timestamp": "2026-10-21T05:12:41.119163Z",
+          "elapsed_ms": 1099,
+          "event_type": "tool.finished",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "operation_id": "op_065a9aed1dfc8657481410cc98374d4c",
+            "proposal_id": "proposal_da4a69473cbd442a",
+            "replayed": false,
+            "result": {
+              "data": {
+                "checked_at": "2026-10-20T02:58:00Z",
+                "fixture": {
+                  "observed_at": "2026-10-21T05:12:41Z",
+                  "scenario": "baseline"
+                },
+                "service": "staging-api",
+                "status": "healthy"
+              },
+              "duration_ms": 1,
+              "error": null,
+              "observed_at": "2026-10-21T05:12:41Z",
+              "operation_id": "op_065a9aed1dfc8657481410cc98374d4c",
+              "source_ref": "tool:get_service_health/op_065a9aed1dfc8657481410cc98374d4c",
+              "status": "succeeded",
+              "tool_name": "get_service_health",
+              "truncated": false
+            },
+            "status": "succeeded",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 11,
+          "timestamp": "2026-10-21T05:12:41.119489Z",
+          "elapsed_ms": 1099,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_829af74a691f4f95939d8e1a27b45eac_gen3_skill",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 12,
+          "timestamp": "2026-10-21T05:12:41.884652Z",
+          "elapsed_ms": 1864,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_829af74a691f4f95939d8e1a27b45eac_gen3_skill",
+            "duration_ms": 765,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [],
+            "purpose": "skill",
+            "text": "The staging-api is currently healthy, checked at 2026-10-20T02:58:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 791,
+              "output_tokens": 32
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 13,
+          "timestamp": "2026-10-21T05:12:41.885141Z",
+          "elapsed_ms": 1865,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_829af74a691f4f95939d8e1a27b45eac_gen4_final",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "final",
+            "tools_offered": []
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 14,
+          "timestamp": "2026-10-21T05:12:42.967400Z",
+          "elapsed_ms": 2947,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_829af74a691f4f95939d8e1a27b45eac_gen4_final",
+            "duration_ms": 1082,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [],
+            "purpose": "final",
+            "text": "staging-api 现在健康。检查时间是 2026-10-20T02:58:00Z。",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 645,
+              "output_tokens": 35
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_829af74a691f4f95939d8e1a27b45eac",
+          "seq": 15,
+          "timestamp": "2026-10-21T05:12:42.968016Z",
+          "elapsed_ms": 2948,
+          "event_type": "run.failed",
+          "actor": "gateway",
+          "payload": {
+            "budget_usage": {
+              "active_ms": 2948,
+              "local_generations": 3,
+              "repair_generations": 0,
+              "routing_generations": 1,
+              "tool_calls": 1
+            },
+            "detail": "the final answer does not meet the completion criteria",
+            "error_code": "needs_external",
+            "external_calls": 0,
+            "model_calls": [
+              {
+                "actor": "local",
+                "call_id": "run_829af74a691f4f95939d8e1a27b45eac_gen1_routing",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "routing"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_829af74a691f4f95939d8e1a27b45eac_gen2_skill",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_829af74a691f4f95939d8e1a27b45eac_gen3_skill",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_829af74a691f4f95939d8e1a27b45eac_gen4_final",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "final"
+              }
+            ],
+            "reason_code": "invalid_output"
+          }
+        }
+      ]
+    },
+    {
+      "prompt": "Check the health of payments-api.",
+      "warmup": false,
+      "outcome": {
+        "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+        "state": "completed",
+        "answer": "The payments-api is unavailable at checked_at 2026-10-20T02:59:00Z.",
+        "error_code": null,
+        "reason_code": null
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 1,
+          "timestamp": "2026-10-21T05:12:42.982851Z",
+          "elapsed_ms": 0,
+          "event_type": "run.accepted",
+          "actor": "gateway",
+          "payload": {
+            "budgets": {
+              "active_seconds": 4.0,
+              "local_generations": 3,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "routing_input_tokens": 2048,
+              "routing_output_tokens": 128,
+              "tool_calls": 2
+            },
+            "effective_execution_mode": "auto",
+            "model_alias": null,
+            "requested_execution_mode": null,
+            "skill_roots": [
+              "<repo>/skills"
+            ],
+            "skills_offered": [
+              {
+                "content_hash": "sha256:5c69b436d94ecafc420d7f5d1a2bbcac84f8c94888914a521d7a1adf0d343138",
+                "name": "check-service-health",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:b9b95a69a5b19a4575909269e66c799a1825b0191e9a433c0fb2505d478e8366",
+                "name": "delete-demo-database",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:c1f67ba29b8987b782e69a836746b80fb5259136e101368be890d5d89158c8e1",
+                "name": "health-and-diagnostic-checklist",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:0e6a3ebdb449c3b19994779e55d9b2d786d47e4eaed507d2bd328bba937b6894",
+                "name": "investigate-performance",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:0211a7d6927c303df3165442ff5f662709fdf267286e3914534e20a18c3f1700",
+                "name": "lookup-latest-deployment",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:2673ff26de342956d0406d9ccc7132ae9d6b0a81da604438c778793fa50e2478",
+                "name": "summarize-incident-counts",
+                "version": "0.1.0"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 2,
+          "timestamp": "2026-10-21T05:12:43.007153Z",
+          "elapsed_ms": 24,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_fc0dade261ce4d4d890d118bd33d1fea_gen1_routing",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "routing",
+            "tools_offered": [
+              "check-service-health",
+              "delete-demo-database",
+              "health-and-diagnostic-checklist",
+              "investigate-performance",
+              "lookup-latest-deployment",
+              "summarize-incident-counts",
+              "request_clarification"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 3,
+          "timestamp": "2026-10-21T05:12:43.453209Z",
+          "elapsed_ms": 470,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_fc0dade261ce4d4d890d118bd33d1fea_gen1_routing",
+            "duration_ms": 446,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "language": "en"
+                },
+                "tool_name": "check-service-health"
+              }
+            ],
+            "purpose": "routing",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 962,
+              "output_tokens": 21
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 4,
+          "timestamp": "2026-10-21T05:12:43.454023Z",
+          "elapsed_ms": 471,
+          "event_type": "route.selected",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_fc0dade261ce4d4d890d118bd33d1fea_gen1_routing",
+            "decision": {
+              "clarification": null,
+              "language": "en",
+              "reason_code": "simple_skill",
+              "route": "local",
+              "schema_version": 1,
+              "skill_id": "check-service-health"
+            },
+            "input_tokens": 962,
+            "mechanism": "native_function_calling",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "model_language": "en"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 5,
+          "timestamp": "2026-10-21T05:12:43.454739Z",
+          "elapsed_ms": 472,
+          "event_type": "skill.loaded",
+          "actor": "gateway",
+          "payload": {
+            "content_hash": "sha256:5c69b436d94ecafc420d7f5d1a2bbcac84f8c94888914a521d7a1adf0d343138",
+            "name": "check-service-health",
+            "version": "0.1.0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 6,
+          "timestamp": "2026-10-21T05:12:43.455137Z",
+          "elapsed_ms": 472,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_fc0dade261ce4d4d890d118bd33d1fea_gen2_skill",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 7,
+          "timestamp": "2026-10-21T05:12:44.065729Z",
+          "elapsed_ms": 1083,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_fc0dade261ce4d4d890d118bd33d1fea_gen2_skill",
+            "duration_ms": 610,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "service": "payments-api"
+                },
+                "tool_name": "get_service_health"
+              }
+            ],
+            "purpose": "skill",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 536,
+              "output_tokens": 22
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 8,
+          "timestamp": "2026-10-21T05:12:44.066360Z",
+          "elapsed_ms": 1084,
+          "event_type": "tool.proposed",
+          "actor": "local",
+          "payload": {
+            "admissible": true,
+            "arguments": {
+              "service": "payments-api"
+            },
+            "call_id": "CGs1oX7jrPhl92AVTRVhsAI5jqgriDWY",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposal_id": "proposal_078ab00a969a49e5",
+            "rejection": null,
+            "run_state_version": 3,
+            "skill_id": "check-service-health",
+            "skill_version": "0.1.0",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 9,
+          "timestamp": "2026-10-21T05:12:44.066776Z",
+          "elapsed_ms": 1084,
+          "event_type": "tool.started",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "operation_id": "op_9cfb673529dd8e490a40ed07411461bc",
+            "proposal_id": "proposal_078ab00a969a49e5",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 10,
+          "timestamp": "2026-10-21T05:12:44.069999Z",
+          "elapsed_ms": 1087,
+          "event_type": "tool.finished",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "operation_id": "op_9cfb673529dd8e490a40ed07411461bc",
+            "proposal_id": "proposal_078ab00a969a49e5",
+            "replayed": false,
+            "result": {
+              "data": {
+                "checked_at": "2026-10-20T02:59:00Z",
+                "fixture": {
+                  "observed_at": "2026-10-21T05:12:44Z",
+                  "scenario": "baseline"
+                },
+                "service": "payments-api",
+                "status": "unavailable"
+              },
+              "duration_ms": 1,
+              "error": null,
+              "observed_at": "2026-10-21T05:12:44Z",
+              "operation_id": "op_9cfb673529dd8e490a40ed07411461bc",
+              "source_ref": "tool:get_service_health/op_9cfb673529dd8e490a40ed07411461bc",
+              "status": "succeeded",
+              "tool_name": "get_service_health",
+              "truncated": false
+            },
+            "status": "succeeded",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 11,
+          "timestamp": "2026-10-21T05:12:44.070288Z",
+          "elapsed_ms": 1088,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_fc0dade261ce4d4d890d118bd33d1fea_gen3_skill",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 12,
+          "timestamp": "2026-10-21T05:12:44.803456Z",
+          "elapsed_ms": 1821,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_fc0dade261ce4d4d890d118bd33d1fea_gen3_skill",
+            "duration_ms": 733,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [],
+            "purpose": "skill",
+            "text": "The payments-api is unavailable at checked_at 2026-10-20T02:59:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 787,
+              "output_tokens": 31
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 13,
+          "timestamp": "2026-10-21T05:12:44.804087Z",
+          "elapsed_ms": 1821,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_fc0dade261ce4d4d890d118bd33d1fea_gen4_final",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "final",
+            "tools_offered": []
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 14,
+          "timestamp": "2026-10-21T05:12:45.813944Z",
+          "elapsed_ms": 2831,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_fc0dade261ce4d4d890d118bd33d1fea_gen4_final",
+            "duration_ms": 1010,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [],
+            "purpose": "final",
+            "text": "The payments-api is unavailable at checked_at 2026-10-20T02:59:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 640,
+              "output_tokens": 31
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 15,
+          "timestamp": "2026-10-21T05:12:45.814554Z",
+          "elapsed_ms": 2832,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "The"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 16,
+          "timestamp": "2026-10-21T05:12:45.814628Z",
+          "elapsed_ms": 2832,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": " payments"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 17,
+          "timestamp": "2026-10-21T05:12:45.814685Z",
+          "elapsed_ms": 2832,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "-api"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 18,
+          "timestamp": "2026-10-21T05:12:45.814737Z",
+          "elapsed_ms": 2832,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": " is"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 19,
+          "timestamp": "2026-10-21T05:12:45.814787Z",
+          "elapsed_ms": 2832,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": " unavailable"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 20,
+          "timestamp": "2026-10-21T05:12:45.814831Z",
+          "elapsed_ms": 2832,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": " at"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 21,
+          "timestamp": "2026-10-21T05:12:45.814874Z",
+          "elapsed_ms": 2832,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": " checked"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 22,
+          "timestamp": "2026-10-21T05:12:45.814917Z",
+          "elapsed_ms": 2832,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "_at"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 23,
+          "timestamp": "2026-10-21T05:12:45.814958Z",
+          "elapsed_ms": 2832,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": " "
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 24,
+          "timestamp": "2026-10-21T05:12:45.814999Z",
+          "elapsed_ms": 2832,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 25,
+          "timestamp": "2026-10-21T05:12:45.815036Z",
+          "elapsed_ms": 2832,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 26,
+          "timestamp": "2026-10-21T05:12:45.815111Z",
+          "elapsed_ms": 2832,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 27,
+          "timestamp": "2026-10-21T05:12:45.815177Z",
+          "elapsed_ms": 2832,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "6"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 28,
+          "timestamp": "2026-10-21T05:12:45.815225Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "-"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 29,
+          "timestamp": "2026-10-21T05:12:45.815273Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 30,
+          "timestamp": "2026-10-21T05:12:45.815315Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 31,
+          "timestamp": "2026-10-21T05:12:45.815359Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "-"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 32,
+          "timestamp": "2026-10-21T05:12:45.815405Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 33,
+          "timestamp": "2026-10-21T05:12:45.815446Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 34,
+          "timestamp": "2026-10-21T05:12:45.815486Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "T"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 35,
+          "timestamp": "2026-10-21T05:12:45.815529Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 36,
+          "timestamp": "2026-10-21T05:12:45.815579Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 37,
+          "timestamp": "2026-10-21T05:12:45.815623Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": ":"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 38,
+          "timestamp": "2026-10-21T05:12:45.815666Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "5"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 39,
+          "timestamp": "2026-10-21T05:12:45.815706Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "9"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 40,
+          "timestamp": "2026-10-21T05:12:45.815749Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": ":"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 41,
+          "timestamp": "2026-10-21T05:12:45.815789Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 42,
+          "timestamp": "2026-10-21T05:12:45.815832Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 43,
+          "timestamp": "2026-10-21T05:12:45.815872Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "Z"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 44,
+          "timestamp": "2026-10-21T05:12:45.815912Z",
+          "elapsed_ms": 2833,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "."
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_fc0dade261ce4d4d890d118bd33d1fea",
+          "seq": 45,
+          "timestamp": "2026-10-21T05:12:45.816631Z",
+          "elapsed_ms": 2834,
+          "event_type": "run.completed",
+          "actor": "gateway",
+          "payload": {
+            "answer": "The payments-api is unavailable at checked_at 2026-10-20T02:59:00Z.",
+            "budget_usage": {
+              "active_ms": 2834,
+              "local_generations": 3,
+              "repair_generations": 0,
+              "routing_generations": 1,
+              "tool_calls": 1
+            },
+            "external_calls": 0,
+            "final_answer_model": "Qwen3-0.6B-Q8_0.gguf",
+            "model_calls": [
+              {
+                "actor": "local",
+                "call_id": "run_fc0dade261ce4d4d890d118bd33d1fea_gen1_routing",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "routing"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_fc0dade261ce4d4d890d118bd33d1fea_gen2_skill",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_fc0dade261ce4d4d890d118bd33d1fea_gen3_skill",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_fc0dade261ce4d4d890d118bd33d1fea_gen4_final",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "final"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "prompt": "帮我检查一下 payments-api 的健康状态。",
+      "warmup": false,
+      "outcome": {
+        "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+        "state": "completed",
+        "answer": "payments-api 的健康状态为 unavailable，检查时间是 2026-10-20T02:59:00Z。",
+        "error_code": null,
+        "reason_code": null
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 1,
+          "timestamp": "2026-10-21T05:12:45.822797Z",
+          "elapsed_ms": 0,
+          "event_type": "run.accepted",
+          "actor": "gateway",
+          "payload": {
+            "budgets": {
+              "active_seconds": 4.0,
+              "local_generations": 3,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "routing_input_tokens": 2048,
+              "routing_output_tokens": 128,
+              "tool_calls": 2
+            },
+            "effective_execution_mode": "auto",
+            "model_alias": null,
+            "requested_execution_mode": null,
+            "skill_roots": [
+              "<repo>/skills"
+            ],
+            "skills_offered": [
+              {
+                "content_hash": "sha256:5c69b436d94ecafc420d7f5d1a2bbcac84f8c94888914a521d7a1adf0d343138",
+                "name": "check-service-health",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:b9b95a69a5b19a4575909269e66c799a1825b0191e9a433c0fb2505d478e8366",
+                "name": "delete-demo-database",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:c1f67ba29b8987b782e69a836746b80fb5259136e101368be890d5d89158c8e1",
+                "name": "health-and-diagnostic-checklist",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:0e6a3ebdb449c3b19994779e55d9b2d786d47e4eaed507d2bd328bba937b6894",
+                "name": "investigate-performance",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:0211a7d6927c303df3165442ff5f662709fdf267286e3914534e20a18c3f1700",
+                "name": "lookup-latest-deployment",
+                "version": "0.1.0"
+              },
+              {
+                "content_hash": "sha256:2673ff26de342956d0406d9ccc7132ae9d6b0a81da604438c778793fa50e2478",
+                "name": "summarize-incident-counts",
+                "version": "0.1.0"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 2,
+          "timestamp": "2026-10-21T05:12:45.856325Z",
+          "elapsed_ms": 34,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_94f75fbc8099473d8e68ddb716254609_gen1_routing",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "routing",
+            "tools_offered": [
+              "check-service-health",
+              "delete-demo-database",
+              "health-and-diagnostic-checklist",
+              "investigate-performance",
+              "lookup-latest-deployment",
+              "summarize-incident-counts",
+              "request_clarification"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 3,
+          "timestamp": "2026-10-21T05:12:46.296043Z",
+          "elapsed_ms": 473,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_94f75fbc8099473d8e68ddb716254609_gen1_routing",
+            "duration_ms": 439,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "language": "zh"
+                },
+                "tool_name": "check-service-health"
+              }
+            ],
+            "purpose": "routing",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 964,
+              "output_tokens": 21
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 4,
+          "timestamp": "2026-10-21T05:12:46.297008Z",
+          "elapsed_ms": 474,
+          "event_type": "route.selected",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_94f75fbc8099473d8e68ddb716254609_gen1_routing",
+            "decision": {
+              "clarification": null,
+              "language": "zh",
+              "reason_code": "simple_skill",
+              "route": "local",
+              "schema_version": 1,
+              "skill_id": "check-service-health"
+            },
+            "input_tokens": 964,
+            "mechanism": "native_function_calling",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "model_language": "zh"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 5,
+          "timestamp": "2026-10-21T05:12:46.298246Z",
+          "elapsed_ms": 476,
+          "event_type": "skill.loaded",
+          "actor": "gateway",
+          "payload": {
+            "content_hash": "sha256:5c69b436d94ecafc420d7f5d1a2bbcac84f8c94888914a521d7a1adf0d343138",
+            "name": "check-service-health",
+            "version": "0.1.0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 6,
+          "timestamp": "2026-10-21T05:12:46.298513Z",
+          "elapsed_ms": 476,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_94f75fbc8099473d8e68ddb716254609_gen2_skill",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 7,
+          "timestamp": "2026-10-21T05:12:46.980843Z",
+          "elapsed_ms": 1158,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_94f75fbc8099473d8e68ddb716254609_gen2_skill",
+            "duration_ms": 682,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "service": "payments-api"
+                },
+                "tool_name": "get_service_health"
+              }
+            ],
+            "purpose": "skill",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 538,
+              "output_tokens": 22
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 8,
+          "timestamp": "2026-10-21T05:12:46.981509Z",
+          "elapsed_ms": 1159,
+          "event_type": "tool.proposed",
+          "actor": "local",
+          "payload": {
+            "admissible": true,
+            "arguments": {
+              "service": "payments-api"
+            },
+            "call_id": "20qpEs26eyAmeUX2dRboaegjtl4Sj4Kr",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposal_id": "proposal_19959607204d4df0",
+            "rejection": null,
+            "run_state_version": 3,
+            "skill_id": "check-service-health",
+            "skill_version": "0.1.0",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 9,
+          "timestamp": "2026-10-21T05:12:46.981991Z",
+          "elapsed_ms": 1159,
+          "event_type": "tool.started",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "operation_id": "op_604e1bb0b5e935ccfa0db1d14d19cc5d",
+            "proposal_id": "proposal_19959607204d4df0",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 10,
+          "timestamp": "2026-10-21T05:12:46.984831Z",
+          "elapsed_ms": 1162,
+          "event_type": "tool.finished",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "operation_id": "op_604e1bb0b5e935ccfa0db1d14d19cc5d",
+            "proposal_id": "proposal_19959607204d4df0",
+            "replayed": false,
+            "result": {
+              "data": {
+                "checked_at": "2026-10-20T02:59:00Z",
+                "fixture": {
+                  "observed_at": "2026-10-21T05:12:46Z",
+                  "scenario": "baseline"
+                },
+                "service": "payments-api",
+                "status": "unavailable"
+              },
+              "duration_ms": 1,
+              "error": null,
+              "observed_at": "2026-10-21T05:12:46Z",
+              "operation_id": "op_604e1bb0b5e935ccfa0db1d14d19cc5d",
+              "source_ref": "tool:get_service_health/op_604e1bb0b5e935ccfa0db1d14d19cc5d",
+              "status": "succeeded",
+              "tool_name": "get_service_health",
+              "truncated": false
+            },
+            "status": "succeeded",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 11,
+          "timestamp": "2026-10-21T05:12:46.985145Z",
+          "elapsed_ms": 1162,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_94f75fbc8099473d8e68ddb716254609_gen3_skill",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 12,
+          "timestamp": "2026-10-21T05:12:47.757244Z",
+          "elapsed_ms": 1935,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_94f75fbc8099473d8e68ddb716254609_gen3_skill",
+            "duration_ms": 772,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [],
+            "purpose": "skill",
+            "text": "The payments-api is unavailable at checked_at 2026-10-20T02:59:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 787,
+              "output_tokens": 31
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 13,
+          "timestamp": "2026-10-21T05:12:47.758125Z",
+          "elapsed_ms": 1935,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_94f75fbc8099473d8e68ddb716254609_gen4_final",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "purpose": "final",
+            "tools_offered": []
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 14,
+          "timestamp": "2026-10-21T05:12:48.901849Z",
+          "elapsed_ms": 3079,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_94f75fbc8099473d8e68ddb716254609_gen4_final",
+            "duration_ms": 1143,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "proposed_calls": [],
+            "purpose": "final",
+            "text": "payments-api 的健康状态为 unavailable，检查时间是 2026-10-20T02:59:00Z。",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 641,
+              "output_tokens": 34
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 15,
+          "timestamp": "2026-10-21T05:12:48.902963Z",
+          "elapsed_ms": 3080,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "payments"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 16,
+          "timestamp": "2026-10-21T05:12:48.903088Z",
+          "elapsed_ms": 3080,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "-api"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 17,
+          "timestamp": "2026-10-21T05:12:48.903188Z",
+          "elapsed_ms": 3081,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": " 的"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 18,
+          "timestamp": "2026-10-21T05:12:48.903277Z",
+          "elapsed_ms": 3081,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "健康"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 19,
+          "timestamp": "2026-10-21T05:12:48.903383Z",
+          "elapsed_ms": 3081,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "状态"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 20,
+          "timestamp": "2026-10-21T05:12:48.903468Z",
+          "elapsed_ms": 3081,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "为"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 21,
+          "timestamp": "2026-10-21T05:12:48.903551Z",
+          "elapsed_ms": 3081,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": " unavailable"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 22,
+          "timestamp": "2026-10-21T05:12:48.903664Z",
+          "elapsed_ms": 3081,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "，"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 23,
+          "timestamp": "2026-10-21T05:12:48.903776Z",
+          "elapsed_ms": 3081,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "检查"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 24,
+          "timestamp": "2026-10-21T05:12:48.903858Z",
+          "elapsed_ms": 3081,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "时间"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 25,
+          "timestamp": "2026-10-21T05:12:48.903939Z",
+          "elapsed_ms": 3081,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "是"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 26,
+          "timestamp": "2026-10-21T05:12:48.904029Z",
+          "elapsed_ms": 3081,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": " "
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 27,
+          "timestamp": "2026-10-21T05:12:48.904114Z",
+          "elapsed_ms": 3081,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 28,
+          "timestamp": "2026-10-21T05:12:48.904195Z",
+          "elapsed_ms": 3082,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 29,
+          "timestamp": "2026-10-21T05:12:48.904291Z",
+          "elapsed_ms": 3082,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 30,
+          "timestamp": "2026-10-21T05:12:48.904388Z",
+          "elapsed_ms": 3082,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "6"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 31,
+          "timestamp": "2026-10-21T05:12:48.904471Z",
+          "elapsed_ms": 3082,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "-"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 32,
+          "timestamp": "2026-10-21T05:12:48.904560Z",
+          "elapsed_ms": 3082,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 33,
+          "timestamp": "2026-10-21T05:12:48.904648Z",
+          "elapsed_ms": 3082,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 34,
+          "timestamp": "2026-10-21T05:12:48.904732Z",
+          "elapsed_ms": 3082,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "-"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 35,
+          "timestamp": "2026-10-21T05:12:48.904814Z",
+          "elapsed_ms": 3082,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 36,
+          "timestamp": "2026-10-21T05:12:48.904936Z",
+          "elapsed_ms": 3082,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 37,
+          "timestamp": "2026-10-21T05:12:48.905023Z",
+          "elapsed_ms": 3082,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "T"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 38,
+          "timestamp": "2026-10-21T05:12:48.905107Z",
+          "elapsed_ms": 3082,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 39,
+          "timestamp": "2026-10-21T05:12:48.905186Z",
+          "elapsed_ms": 3083,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 40,
+          "timestamp": "2026-10-21T05:12:48.905269Z",
+          "elapsed_ms": 3083,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": ":"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 41,
+          "timestamp": "2026-10-21T05:12:48.905351Z",
+          "elapsed_ms": 3083,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "5"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 42,
+          "timestamp": "2026-10-21T05:12:48.905432Z",
+          "elapsed_ms": 3083,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "9"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 43,
+          "timestamp": "2026-10-21T05:12:48.905513Z",
+          "elapsed_ms": 3083,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": ":"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 44,
+          "timestamp": "2026-10-21T05:12:48.905595Z",
+          "elapsed_ms": 3083,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 45,
+          "timestamp": "2026-10-21T05:12:48.905676Z",
+          "elapsed_ms": 3083,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 46,
+          "timestamp": "2026-10-21T05:12:48.905755Z",
+          "elapsed_ms": 3083,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "Z"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 47,
+          "timestamp": "2026-10-21T05:12:48.905838Z",
+          "elapsed_ms": 3083,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q8_0.gguf",
+            "text": "。"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_94f75fbc8099473d8e68ddb716254609",
+          "seq": 48,
+          "timestamp": "2026-10-21T05:12:48.907488Z",
+          "elapsed_ms": 3085,
+          "event_type": "run.completed",
+          "actor": "gateway",
+          "payload": {
+            "answer": "payments-api 的健康状态为 unavailable，检查时间是 2026-10-20T02:59:00Z。",
+            "budget_usage": {
+              "active_ms": 3085,
+              "local_generations": 3,
+              "repair_generations": 0,
+              "routing_generations": 1,
+              "tool_calls": 1
+            },
+            "external_calls": 0,
+            "final_answer_model": "Qwen3-0.6B-Q8_0.gguf",
+            "model_calls": [
+              {
+                "actor": "local",
+                "call_id": "run_94f75fbc8099473d8e68ddb716254609_gen1_routing",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "routing"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_94f75fbc8099473d8e68ddb716254609_gen2_skill",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_94f75fbc8099473d8e68ddb716254609_gen3_skill",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_94f75fbc8099473d8e68ddb716254609_gen4_final",
+                "model": "Qwen3-0.6B-Q8_0.gguf",
+                "purpose": "final"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

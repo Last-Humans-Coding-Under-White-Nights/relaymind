@@ -413,3 +413,133 @@ Observations, not conclusions:
   envelope).
 - The routing decision that follows from this is in
   [`ROADMAP.md`](ROADMAP.md) (M2 stage A).
+
+## 2026-10-21 — M2 Stage A live check-service-health trace, Apple Silicon macOS
+
+Issues #11, #14, #15 (AC01, spec section 13). The full local loop runs
+against the pinned model: the router (native function calling, one
+function per skill), the check-service-health skill, the tool executor,
+and the sandbox data service. Does a simple health request finish
+locally, in English and Chinese, with the correct status and zero
+external calls?
+
+| Field | Value |
+|-------|-------|
+| Machine | Apple M1, 8 GiB RAM, macOS 27.0.1 (build 26A434), Metal backend |
+| Runtime | llama.cpp 0.7.0 (build 11669, commit 620d2225c), Homebrew build, AppleClang arm64 |
+| Artifact | `models/qwen3-0.6b-q8_0.manifest.json`: Qwen3-0.6B Q8_0, SHA-256 `9465e63a…bb031`, verified before launch |
+| Launch | derived from the manifest: `--ctx-size 8192 --jinja --chat-template-kwargs {"enable_thinking":false}` |
+| Command | `RELAYMIND_TRACE_OUT=docs/evidence/2026-10-21-m2-local-trace-apple-m1.json pytest -m live tests/test_local_loop_live.py` on branch `feat/orchestrator-core` (base `d55d02a`) |
+| Prompts | The four paired requests of `skills/check-service-health/examples.json`: both demo services, each in English and Simplified Chinese. One warm-up run with the first prompt, recorded and not graded |
+| Configuration | Default budgets (RM03): one routing generation, three further local generations, two tool calls, one repair, four seconds active time, 2,048 router input tokens, 128 routing output tokens. Temperature 0. External dispatch not configured, so any escalation ends as `needs_external` |
+| Raw export | [`evidence/2026-10-21-m2-local-trace-apple-m1.json`](evidence/2026-10-21-m2-local-trace-apple-m1.json): every TraceEvent of each run, including model output text and tool calls per generation, tool results, the RouteDecision, budgets, and budget use |
+| Result | 3 passed, 1 failed in 17.21 s |
+
+Each run made four local generations: routing, a tool proposal, a
+finalize proposal (answer text), and the final generation with tools
+disabled (spec section 7.3). Times are single-pass observations from
+the trace (`budget_usage.active_ms` of `run.completed` or `run.failed`).
+
+| Prompt | Route (decision language; model's language argument) | Tool call | Final answer | Outcome | Active time |
+|--------|------------------------------------------------------|-----------|--------------|---------|------------:|
+| Is staging-api healthy right now? (warm-up) | local, check-service-health (en; en) | `get_service_health` `{"service": "staging-api"}` → healthy, 2026-10-20T02:58:00Z | The staging-api is healthy and checked at 2026-10-20T02:58:00Z. | completed (not graded) | 3659 ms |
+| Is staging-api healthy right now? | local, check-service-health (en; en) | `{"service": "staging-api"}` → healthy | The staging-api is healthy and checked at 2026-10-20T02:58:00Z. | **completed** | 2356 ms |
+| staging-api 现在健康吗？ | local, check-service-health (zh; **en**) | `{"service": "staging-api"}` → healthy | (not published) model wrote: staging-api 现在健康。检查时间是 2026-10-20T02:58:00Z。 | **failed**, `needs_external`, `invalid_output` | 3029 ms |
+| Check the health of payments-api. | local, check-service-health (en; en) | `{"service": "payments-api"}` → unavailable, 2026-10-20T02:59:00Z | The payments-api is unavailable at checked_at 2026-10-20T02:59:00Z. | **completed** | 2878 ms |
+| 帮我检查一下 payments-api 的健康状态。 | local, check-service-health (zh; zh) | `{"service": "payments-api"}` → unavailable | payments-api 的健康状态为 unavailable，检查时间是 2026-10-20T02:59:00Z。 | **completed** | 2958 ms |
+
+Every run, the failed one included, made zero external calls: each
+`model.started` names the local model with actor `local`, and
+`run.completed` / `run.failed` record `external_calls: 0` and the list
+of model calls (RM01, RM16).
+
+Observations, not conclusions:
+
+- Skill selection: 5 of 5 runs selected check-service-health, and every
+  tool proposal was a native call with the right service. Router input
+  was 962 to 965 local tokens. That is more than in the #48 probe
+  (808 to 818) because the router now advertises the registry's skill
+  descriptions, which are longer than the probe's.
+- The failed Chinese run is the completion predicate working as
+  intended (RM16). The model answered in Chinese but translated the
+  status word `healthy` to 健康. The skill requires the returned status
+  word unchanged, so `health_status_preserved` rejected the final answer,
+  nothing was published, and the run ended as `needs_external` with
+  reason `invalid_output`. The other Chinese prompt kept `unavailable`
+  and passed. So far one of the two Chinese health traces completes.
+- The model's own language argument was wrong for one of the two
+  Chinese prompts. The RouteDecision language comes from the request
+  text, so both Chinese runs got `zh`.
+- Every finalize proposal was written in English, even for Chinese
+  requests. The final generation, told the request language, switched to
+  Chinese.
+- Active local time was 2.4 to 3.0 s in the measured runs, against the
+  four-second budget. The final generation took 0.7 to 1.1 s. With
+  default budgets, a run that needs a repair generation cannot also
+  finish, because routing plus four generations is over the limit.
+- The skill-stage prompt layout (skill description and tool instruction
+  first, the full skill body as a system message after the request,
+  temperature 0) was chosen from development runs earlier the same day,
+  made with scratch scripts that were not kept. In those runs, with the
+  body first in the system prompt, the model often wrote its tool call
+  as JSON text instead of a native call. No numbers from those runs are
+  claimed here. This entry is the recorded run.
+
+## 2026-10-21 — M2 Stage A live check-service-health rerun on the rebased stack, Apple Silicon macOS
+
+The same live AC01 test as the entry above, rerun after #59 was rebased
+onto the fixed lower PRs (#53, #54, #55) and its review findings were
+fixed. The entry above is unchanged; this one records what the same
+prompts give now.
+
+| Field | Value |
+|-------|-------|
+| Machine | Apple M1, 8 GiB RAM, macOS 27.0.1 (build 26A434), Metal backend |
+| Runtime | llama.cpp 0.7.0 (build 11669, commit 620d2225c), Homebrew build, AppleClang arm64 |
+| Artifact | `models/qwen3-0.6b-q8_0.manifest.json`: Qwen3-0.6B Q8_0, verified against the manifest SHA-256 before launch |
+| Launch | derived from the manifest, as above |
+| Command | `RELAYMIND_TRACE_OUT=docs/evidence/2026-10-21-m2-local-trace-rebased-apple-m1.json pytest -m live tests/test_local_loop_live.py` on the rebased `feat/orchestrator-core` (base `2879e89`) |
+| Prompts | The same four paired requests and the same warm-up run as above |
+| Configuration | Default budgets (RM03), temperature 0, external dispatch not wired. A recording external model double is configured; it received no requests in any run |
+| Raw export | [`evidence/2026-10-21-m2-local-trace-rebased-apple-m1.json`](evidence/2026-10-21-m2-local-trace-rebased-apple-m1.json) |
+| Result | 2 passed, 2 failed in 16.60 s |
+
+| Prompt | Route (decision language; model's language argument) | Final answer or last model text | Outcome | Active time |
+|--------|------------------------------------------------------|---------------------------------|---------|------------:|
+| Is staging-api healthy right now? (warm-up) | local, check-service-health (en; en) | (not published) finalize proposal and repair both: Staging-api is healthy and checked at 2026-10-20T02:58:00Z. | failed, `needs_external`, `invalid_output` (not graded) | 3264 ms |
+| Is staging-api healthy right now? | local, check-service-health (en; en) | (not published) same text as the warm-up | **failed**, `needs_external`, `invalid_output` | 2213 ms |
+| staging-api 现在健康吗？ | local, check-service-health (zh; **en**) | (not published) staging-api 现在健康。检查时间是 2026-10-20T02:58:00Z。 | **failed**, `needs_external`, `invalid_output` | 2948 ms |
+| Check the health of payments-api. | local, check-service-health (en; en) | The payments-api is unavailable at checked_at 2026-10-20T02:59:00Z. | **completed** | 2834 ms |
+| 帮我检查一下 payments-api 的健康状态。 | local, check-service-health (zh; zh) | payments-api 的健康状态为 unavailable，检查时间是 2026-10-20T02:59:00Z。 | **completed** | 3085 ms |
+
+Every run made zero external calls: the external double received no
+request, every `model.started` has actor `local` (the locality
+`LlamaCppAdapter` declares), and `run.completed` / `run.failed` count
+`external_calls: 0` from the recorded calls (RM01, RM16). In the entry
+above, `external_calls` and the `local` actor were constants in the code,
+so those two fields were not measurements there; the zero-external
+claim there rests on no external adapter being configured at all.
+
+Observations, not conclusions:
+
+- The model's output did not change. Every generation the two runs have
+  in common produced the same text and the same tool calls as the entry
+  above (temperature 0, same runtime and artifact).
+- The English staging-api result changed from completed to failed
+  because the completion predicate changed, not the model. The model's
+  finalize proposal starts with `Staging-api`, capitalized. The earlier
+  predicate accepted it. The #55 predicate reads the status stated for
+  the exact returned service ID, so a capitalized ID is not that
+  service, and the proposal fails. The repair generation repeated the
+  same text, so the run ended as `invalid_output` before a final
+  generation. In the entry above the final generation wrote `The
+  staging-api is healthy ...`, which the current predicate also accepts;
+  that generation was not reached here.
+- The Chinese staging-api run failed as before: the final answer
+  translated `healthy` to 健康.
+- So 2 of 4 measured runs now complete locally (one per language, both
+  payments-api), against 3 of 4 above. Both are single-pass
+  observations of a fixed model on four prompts, not a completion rate.
+  Whether the predicate should accept a capitalized service ID at the
+  start of a sentence is a question for the predicate owner (#55) and
+  the M6 corpus; this rerun does not change it.

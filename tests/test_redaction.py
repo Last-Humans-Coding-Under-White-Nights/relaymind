@@ -1,0 +1,53 @@
+"""Secret-field redaction (RM12, sections 5 and 8).
+
+RM12: logs and traces redact configured secret fields. Section 8: events
+that contain tool results are redacted before persistence. Section 5:
+secrets are excluded from the store. The fields are configuration.
+"""
+
+import pytest
+
+from relaymind.redaction import DEFAULT_SECRET_FIELDS, REDACTED, Redactor, redact_text
+
+
+def test_secret_fields_are_redacted_at_any_depth_without_regard_to_case():
+    redactor = Redactor(secret_fields={"api_key", "token"})
+    value = {
+        "service": "staging-api",
+        "API_Key": "k-1",
+        "nested": [{"token": {"inner": "t-1"}}, {"keep": "x"}],
+    }
+    assert redactor.redact(value) == {
+        "service": "staging-api",
+        "API_Key": REDACTED,
+        "nested": [{"token": REDACTED}, {"keep": "x"}],
+    }
+    assert value["API_Key"] == "k-1", "redact must return a copy"
+
+
+def test_secret_values_are_collected_for_scrubbing_free_text():
+    redactor = Redactor(secret_fields={"password"})
+    found = redactor.secret_values({"password": ["p-1", {"x": "p-2"}], "other": "o"})
+    assert found == frozenset({"p-1", "p-2"})
+    assert redact_text("say p-1 and p-2 and o", found) == f"say {REDACTED} and {REDACTED} and o"
+
+
+def test_the_default_configuration_covers_common_credential_keys():
+    assert {"api_key", "authorization", "password", "token"} <= DEFAULT_SECRET_FIELDS
+    assert Redactor().redact({"authorization": "Bearer x"}) == {"authorization": REDACTED}
+
+
+@pytest.mark.parametrize("fields", ["token", [""], [None]])
+def test_an_unusable_configuration_is_rejected(fields):
+    with pytest.raises(ValueError):
+        Redactor(secret_fields=fields)
+
+
+def test_a_short_secret_is_not_scrubbed_from_inside_other_words():
+    """RM12: free-text scrubbing replaces a secret value as a whole token,
+    so a short value such as "1" or "true" does not corrupt unrelated
+    numbers and words in the answer; the value on its own is still
+    replaced."""
+    assert redact_text("10 retries, 1 failed", {"1"}) == f"10 retries, {REDACTED} failed"
+    assert redact_text("untrue, but true", {"true"}) == f"untrue, but {REDACTED}"
+    assert redact_text("Bearer sk-abc.", {"sk-abc"}) == f"Bearer {REDACTED}."

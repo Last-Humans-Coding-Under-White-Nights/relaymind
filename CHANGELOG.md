@@ -244,6 +244,96 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   final answer is external (section 9). Native Chinese review is still needed.
 - Runtime dependencies `jsonschema` and `pyyaml` for schema validation
   and SKILL.md frontmatter.
+- Tool executor (#11, RM10, RM14; spec section 11):
+  `relaymind.tools.executor.ToolExecutor` is the only owner of
+  operation IDs and replay. `validate` checks a call once (RM09) and
+  returns a `ValidatedCall`; `execute` runs only such a call. The
+  logical operation ID comes from the run, the tool name, the canonical
+  arguments, and the attempt, and is stored as `pending` before the
+  handler runs. Replaying a finished operation returns the recorded
+  result without running it; a pending one is in flight
+  (`OperationInFlightError`), never a replay. Handlers run on a daemon
+  thread, so the event loop is not blocked, bounded by the tool timeout
+  or the caller's remaining active budget, whichever is shorter. A
+  timed-out or interrupted mutating tool is `unknown_outcome` and is
+  never retried automatically; a read-only one is `failed`. Every
+  pending record is finished, and a worker error is recorded as
+  `tool_error`, not as a timeout. A read-only call gets one retry after
+  a transient failure (`tool_unavailable` or `tool_timeout`), as a new
+  operation. Arguments and results are redacted of configured secret
+  fields before they are stored (RM12). `ToolRegistry.validate`,
+  `ToolRegistry.run`, `ToolRegistry.tool_schemas`, and
+  `ToolResult.from_json_object` are added; `invoke` is validate plus
+  run.
+- Secret-field redaction (RM12, section 8): `relaymind.redaction.Redactor`
+  replaces the values of operator-configured secret fields (a default
+  set of credential key names) at any depth, and `redact_text` scrubs
+  those values from model text, before anything is persisted.
+- Router (#14, RM01, RM02, RM05; spec 0.6 sections 4.1, 4.2, 4.4, 5, 7.4,
+  8): `relaymind.orchestrator.router` uses native function calling, with
+  one function per advertised skill (at most eight) plus
+  `request_clarification`. The gateway builds the RouteDecision and
+  validates it with a `RoutingContext`. Route and reason code come from
+  the skill registry and the run: a skill with a parallel-workflow ID
+  routes parallel only when operator configuration enables the workflow
+  and the effective mode admits it (`parallel_demo`, or `auto` with
+  `parallel_in_auto`); otherwise it routes external with
+  `parallel_workflow`. `external_only` gets the gateway's own decision
+  (external, skill null, `execution_mode`) without a routing generation.
+  The language comes from the latest user turn with words in it, so an
+  identifier-only reply, or a single bare word such as `auth`, keeps it. A selected skill whose tools all need
+  an enumerated identifier gets a clarify decision with `missing_input`,
+  naming the skill and the missing argument, when no user turn names one;
+  the question's label is the schema's `x-relaymind-label` in the run's
+  language (`请问是哪个服务？`), else its title, taken from any allowed
+  tool's schema. Router input over the
+  2,048 local-token cap takes the bypass decision (`context_limit`)
+  without a routing generation. Invalid routing output never reaches a
+  tool. RM05 provenance (user turns and tool results only) lives in
+  `relaymind.orchestrator.identifiers`, shared with the loop; a value
+  joined to a longer token by `.`, `:`, or `/` is another resource.
+- Bounded local generation loop (#15, RM03, RM04, RM16; spec sections
+  7.3, 8, 11): `relaymind.orchestrator.local_loop.LocalOrchestrator` with
+  `LocalBudgets` and `BudgetMeter` (`relaymind.orchestrator.budgets`).
+  Every budget is a finite, configurable number. `run.accepted` carries
+  the section 8 payload: requested and effective execution mode, model
+  alias, budgets, skill roots, and skills offered, and is written with
+  the run in one transaction, so an invalid payload creates no run; the
+  selected skill is loaded at exactly that snapshot (RM07). Every generation is charged by
+  its purpose in one place, and only real tool executions are charged.
+  Exceeding a budget, unrepaired output, a missing capability, an
+  oversized input, a failed tool outcome (`tool_failure`), or a
+  non-local route ends the run as failed with error code
+  `needs_external` and an RM04 reason code, because external dispatch
+  is not wired yet (#18). Any other exception fails the run with
+  `internal_error` (a cancelled run is cancelled), which releases the
+  execution slot. Tool proposals are checked for identifier-like
+  arguments, enum or pattern, that no user turn or tool result named.
+  Every call of a multi-call turn is recorded as its own `tool.proposed`
+  event. A repair is offered only while both the repair and the local
+  generation limits have room. A pending tool operation is finished on
+  every exit, even before its handler runs, and free-text redaction
+  replaces secret values by whole token only. A
+  mutating tool is never executed by this loop: the confirmation flow
+  (#19, RM11) is not wired yet, so such a proposal ends the run as
+  `needs_external` with `capability_missing` and nothing is mutated. A
+  finalize proposal must meet the skill's completion predicate. The
+  final generation then runs with tools disabled, and its answer is
+  checked again before the `answer.delta` events are appended in one
+  batch. Every model call is labelled with its adapter's declared
+  locality (`ModelAdapter.locality`: `local` for `LlamaCppAdapter`,
+  `external` for `ChatCompletionsAdapter`), and the trace counts the
+  external ones. One `TraceClock` serves the store, the tools, and the
+  loop.
+- AC01 with model doubles (`tests/test_ac01_local_health.py`) for both
+  demo services in English and Chinese, with zero external calls
+  measured on a recording external model double, and a live AC01 test
+  (`tests/test_local_loop_live.py`, `pytest -m live`). The first
+  recorded run is in `docs/EVIDENCE.md`: 3 of 4 completed locally. A
+  rerun on the rebased stack, with the stricter #55 completion
+  predicates, is recorded next to it: 2 of 4 completed, with the same
+  model output. `ScriptedAdapter` (tests/helpers.py) now also scripts
+  one turn per generation, and `of_type` is a shared test helper.
 - Project scaffold: repository layout, CI, and contributor guides.
 - Specification v0.1 (`docs/SPECIFICATION.md`) as the single source of
   truth for the prototype.

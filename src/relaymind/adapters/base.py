@@ -264,7 +264,16 @@ class ModelAdapter(ABC):
     Swapping between two supported adapters requires configuration
     changes and restart, never routing-code changes. Provider-specific
     templates and parsing stay inside the adapter.
+
+    locality says where the adapter runs inference: ``local`` for a
+    runtime on this host, ``external`` for a remote provider. The trace
+    labels every model call with it, so the count of external calls is
+    measured from the adapters actually called (RM01, RM16). An adapter
+    that does not declare it leaves it None, and the orchestrator
+    refuses it rather than guess.
     """
+
+    locality: str | None = None
 
     @abstractmethod
     async def capabilities(self) -> AdapterCapabilities:
