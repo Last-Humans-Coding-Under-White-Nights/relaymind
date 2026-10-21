@@ -1,13 +1,15 @@
 """The six demo skill packages under skills/ (RM23, sections 4.2 and 9).
 
 Section 9: the skill table names six skills and their tools exactly;
-each skill includes paired English and Chinese examples and completion
-criteria. Section 4.2: packages pass registry validation from the
+each skill includes English examples and completion criteria. Chinese
+examples are best-effort under spec 0.7; the demo packages keep theirs,
+so these tests still check both languages. Section 4.2: packages pass registry validation from the
 default root. The examples are illustrative; each one names the tool
 calls it assumes, and its responses must satisfy the skill's registered
 completion predicate against the real sandbox tool outputs, so an
 example never states a value the sandbox did not return (RM16).
-Native Chinese review of the examples is still required (section 9).
+The Chinese examples have not been natively reviewed; spec 0.7
+section 9 no longer requires that review, and the evidence says so.
 Issue #13.
 """
 

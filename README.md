@@ -6,7 +6,12 @@ Every routing decision, tool call, and model call is visible in a trace.
 
 Status: **M1 (adapter and protocol qualification) complete.** Live smoke
 results for Apple Silicon macOS and native x86-64 Windows are recorded in
-[`docs/EVIDENCE.md`](docs/EVIDENCE.md). See
+[`docs/EVIDENCE.md`](docs/EVIDENCE.md). **M2 (local skill-and-tool loop)
+is in review, not closed:** AC01, AC03, and AC04 pass with model
+doubles. The spec 0.6 revision (#60) and the earlier M2 pull requests
+are merged. Chinese support is best-effort (spec 0.7): Chinese live
+results are recorded but are not a gate. The open items are listed in
+the roadmap. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan and
 [`CHANGELOG.md`](CHANGELOG.md) for what has landed so far.
 
@@ -32,7 +37,7 @@ See [`AGENTS.md`](AGENTS.md) for the full contributor workflow.
   request, tool evidence, and remaining budgets.
 - Show every decision in a trace UI: selected skill, tool arguments,
   execution results, escalation reason, final answer, and timing.
-- Work in English and Chinese, on macOS and Windows.
+- Work in English, with best-effort Chinese, on macOS and Windows.
 
 ## Repository layout
 

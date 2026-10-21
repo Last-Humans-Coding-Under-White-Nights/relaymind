@@ -9,11 +9,17 @@ Payload rules per event type come from RM22 and RM16: every tool event
 names its operation or proposal ID and its originating model, model
 events name the call and the model, run.completed names the
 final-answer model, run.failed keeps an error code (section 5),
-clarification.answered names the redacted resume input (non-blank),
+clarification.required names its question, language, reason code,
+missing input, the clarify decision's skill_id (non-blank, or null when
+no skill was chosen), and the positive waiting_seconds limit in force
+(section 11), clarification.answered names the redacted resume input (non-blank),
 the missing input it answers, and the non-negative integer waited_ms
-from the monotonic clock (spec 0.6 section 8; RM12, RM25), cache.hit
-names the originating version, and skill.loaded names the skill, its
-version, and its content hash (RM06). Timestamps are UTC; elapsed_ms
+from the monotonic clock (spec 0.6 section 8; RM12, RM25), run.completed
+and run.failed, when they carry them, give model_calls as an array of
+objects and external_calls, active_ms, and waiting_ms as non-negative
+integers (section 8, 12.1), cache.hit names the originating version,
+and skill.loaded names the skill, its version, and its content hash
+(RM06). Timestamps are UTC; elapsed_ms
 comes from a monotonic clock (RM25).
 
 run.accepted is the first event of a run (RM22): it has seq 1, and seq
@@ -25,6 +31,7 @@ null for a native run; spec 0.6 section 8), the budgets in force
 version, and content_hash.
 """
 
+import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -84,7 +91,8 @@ _REQUIRED_PAYLOAD: dict[EventType, tuple[str, ...]] = {
     EventType.CACHE_HIT: ("originating_version",),
     # RM06: every load names the skill, its version, and its hash.
     EventType.SKILL_LOADED: ("name", "version", "content_hash"),
-    # Spec 0.6 section 8: the resume input and the input it answers.
+    # Spec 0.6 section 8: the input the run waits for is never blank.
+    EventType.CLARIFICATION_REQUIRED: ("question", "language", "reason_code", "missing"),
     EventType.CLARIFICATION_ANSWERED: ("input", "missing"),
 }
 
@@ -204,6 +212,36 @@ def _check_accepted_payload(payload: Mapping[str, Any]) -> None:
         )
 
 
+def _check_clarification_payload(payload: Mapping[str, Any]) -> None:
+    """The section 8 clarification.required fields that are not plain text (spec 0.6)."""
+    for key in ("skill_id", "waiting_seconds"):
+        if key not in payload:
+            raise TraceEventError(f"clarification.required payload needs '{key}'")
+    skill_id = payload["skill_id"]
+    if skill_id is not None and not _is_text(skill_id):
+        raise TraceEventError("'skill_id' must be a non-blank string, or null")
+    seconds = payload["waiting_seconds"]
+    # RM03: a limit is finite; infinity or NaN would be no limit.
+    if type(seconds) not in (int, float) or not seconds > 0 or not math.isfinite(seconds):
+        raise TraceEventError("'waiting_seconds' must be a positive finite number")
+
+
+# Spec 0.6 section 8 / 12.1 (RM01, RM25): run.completed and run.failed
+# count calls and time as non-negative integers.
+_TERMINAL_COUNTS = ("external_calls", "active_ms", "waiting_ms")
+
+
+def _check_terminal_payload(payload: Mapping[str, Any]) -> None:
+    """The section 8 run.completed / run.failed evidence, checked when present (RM16, RM25)."""
+    for key in _TERMINAL_COUNTS:
+        if key in payload and not _is_count(payload[key], 0):
+            raise TraceEventError(f"'{key}' must be a non-negative integer")
+    if "model_calls" in payload:
+        calls = payload["model_calls"]
+        if not _is_array(calls) or not all(isinstance(call, Mapping) for call in calls):
+            raise TraceEventError("'model_calls' must be an array of objects")
+
+
 def _check_answered_payload(payload: Mapping[str, Any]) -> None:
     """The section 8 clarification.answered waiting time (spec 0.6; RM25)."""
     if "waited_ms" not in payload:
@@ -215,8 +253,12 @@ def _check_answered_payload(payload: Mapping[str, Any]) -> None:
 def _check_payload(event_type: EventType, payload: Mapping[str, Any]) -> None:
     if event_type is EventType.RUN_ACCEPTED:
         _check_accepted_payload(payload)
+    if event_type is EventType.CLARIFICATION_REQUIRED:
+        _check_clarification_payload(payload)
     if event_type is EventType.CLARIFICATION_ANSWERED:
         _check_answered_payload(payload)
+    if event_type in (EventType.RUN_COMPLETED, EventType.RUN_FAILED):
+        _check_terminal_payload(payload)
     if event_type in _TOOL_EVENTS:
         ids = [key for key in ("operation_id", "proposal_id") if key in payload]
         if not ids:

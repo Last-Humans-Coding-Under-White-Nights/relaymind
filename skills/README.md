@@ -44,5 +44,6 @@ Each package contains:
 Changing a package changes its content hash; bump `version` in
 `skill.manifest.json` as well (RM07).
 
-The Chinese examples have not had native review yet. Spec section 9
-requires it for the evaluation corpus.
+The Chinese examples have not been natively reviewed. Chinese support
+is best-effort, and spec 0.7 section 9 does not require native review;
+the examples are kept, and evidence states that they are not reviewed.

@@ -419,3 +419,50 @@ def test_oversized_input_takes_the_bypass_decision(router):
     assert decision.skill_id is None
     assert decision.reason_code == "context_limit"
     assert decision.language is Language.ZH
+
+
+# --- spec 0.6 section 5: resume after a clarification ------------------------------
+
+
+ASKED = (
+    Message(role=Role.USER, content="Is the service healthy?"),
+    Message(
+        role=Role.ASSISTANT,
+        content="Which service do you mean? Options: staging-api, payments-api.",
+    ),
+)
+
+
+def test_a_resume_with_the_identifier_continues_with_the_chosen_skill(router):
+    """Section 5: the clarify decision named the skill, so the gateway checks
+    the new input for the missing identifier without a routing generation,
+    and the decision keeps the run's language."""
+    messages = (*ASKED, Message(role=Role.USER, content="staging-api"))
+    routing = router.resume_decision(
+        "check-service-health", messages, mode=ExecutionMode.AUTO, language=Language.ZH
+    )
+    decision = routing.decision
+    assert (decision.route, decision.skill_id) == (Route.LOCAL, "check-service-health")
+    assert (decision.language, decision.reason_code) == (Language.ZH, "simple_skill")
+    assert routing.missing is None
+
+
+def test_a_resume_without_the_identifier_asks_again_in_the_run_language(router):
+    """RM05: the gateway's own question lists the IDs but is not provenance."""
+    messages = (*ASKED, Message(role=Role.USER, content="you pick"))
+    routing = router.resume_decision(
+        "check-service-health", messages, mode=ExecutionMode.AUTO, language=Language.ZH
+    )
+    assert routing.decision.route is Route.CLARIFY
+    assert routing.decision.clarification.startswith("请问是哪个服务？")
+    assert (routing.decision.skill_id, routing.missing) == ("check-service-health", "service")
+
+
+def test_a_re_route_uses_the_run_language_when_given(router):
+    """Section 5: the run's language is fixed by its first RouteDecision."""
+    routing = router.decide(
+        [skill_call("check-service-health", language="en")],
+        user("Is payments-api healthy?"),
+        language=Language.ZH,
+    )
+    assert routing.decision.language is Language.ZH

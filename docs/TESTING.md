@@ -41,6 +41,10 @@ itself, with the manifest's SHA-256; any other file fails the run.
   works the same way. Set `RELAYMIND_TRACE_OUT=<file.json>` to write
   the full traces (the warm-up run included) that `EVIDENCE.md` records;
   nothing is written otherwise.
+- AC03 and AC04, deterministic: `pytest tests/test_ac03_clarification.py`
+  (clarification and resume) and `pytest tests/test_ac04_invalid_proposals.py`
+  (invalid proposals never execute) run with scripted model doubles in
+  the default suite. There is no live AC03 or AC04 test yet.
 
 ### Windows qualification notes
 

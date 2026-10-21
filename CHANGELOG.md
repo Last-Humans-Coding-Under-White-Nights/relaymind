@@ -241,7 +241,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   paired English and Chinese examples that are checked against the
   sandbox outputs. investigate-performance and
   health-and-diagnostic-checklist are not local-eligible, because their
-  final answer is external (section 9). Native Chinese review is still needed.
+  final answer is external (section 9). The Chinese examples are not
+  natively reviewed (best-effort since spec 0.7).
 - Runtime dependencies `jsonschema` and `pyyaml` for schema validation
   and SKILL.md frontmatter.
 - Tool executor (#11, RM10, RM14; spec section 11):
@@ -334,6 +335,56 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   predicates, is recorded next to it: 2 of 4 completed, with the same
   model output. `ScriptedAdapter` (tests/helpers.py) now also scripts
   one turn per generation, and `of_type` is a shared test helper.
+- Clarification and resume (#16, RM05, RM17, AC03; spec 0.6 sections 5,
+  8, 11): a request that omits the target service waits in
+  `waiting_input`. Its `clarification.required` event carries the
+  question in the run's language (the schema's Chinese label for zh),
+  the language, the reason code, `skill_id`, a non-blank `missing`
+  (`skill_selection` for a model-issued clarification), and
+  `waiting_seconds`. `LocalOrchestrator.resume` takes explicit input
+  text. A stale version is 409 and a terminal run never restarts.
+  Missing or blank text is 400 `invalid_resume_input`, and the run keeps
+  waiting with its version unchanged, even after its wait expired: the
+  body is checked before the waiting limit (sections 7.4, 11). A busy slot is 429, and the run keeps waiting. A resume
+  records `clarification.answered` (redacted input, `missing`,
+  `waited_ms`). It appends the question as an assistant turn and the
+  input as a user turn, and opens a new local stage with the full
+  per-stage budgets. When the clarify named a skill, the gateway checks
+  the input without a routing generation (`Router.resume_decision`).
+  When `skill_id` was null, the run routes again. The run keeps the
+  language of its first RouteDecision. `LocalBudgets` gains the
+  entire-run limits (`run_active_seconds` 60, `run_generations` 8,
+  `run_tool_executions` 6), which bound all stages, as well as
+  `waiting_seconds` (300) and `clarification_rounds` (2). A third needed
+  clarification fails the run with `missing_input`, and an expired wait
+  fails it with `input_expired`; its wait counts only toward the
+  `waiting_ms` of `run.failed` (section 12.1). `expire_waiting` expires
+  every other wait when one of them raises; the run that raised keeps its
+  wait unchanged for the next sweep, and a run cancelled during its own
+  expiry is dropped without an error (RM17). `run.completed` and `run.failed` report
+  `active_ms` and `waiting_ms` separately (section 12.1). A time stop
+  names the tighter budget (`active_seconds` or `run_active_seconds`).
+  The `clarification.required` payload rules are added to the
+  TraceEvent validator and schema: a non-blank question, language,
+  reason code, and `missing`, a `skill_id` that is non-blank or null,
+  and a positive, finite `waiting_seconds` (RM03). When `run.completed`
+  or `run.failed` carry them, `model_calls` must be an array of objects
+  and `external_calls`, `active_ms`, and `waiting_ms` non-negative
+  integers (section 8) (`clarification.answered` is validated since the
+  TraceEvent schema entry above).
+- Invalid proposals (#17, RM02, RM04, RM08, RM09, AC04): the AC04 test
+  (`tests/test_ac04_invalid_proposals.py`) covers an unknown tool, a bad
+  enum value, an undeclared field, a missing field, a wrong type, and a
+  tool outside the permitted set. None executes, exactly one repair is
+  counted within the generation limit, and an unrepaired proposal stops
+  with `invalid_output`. `Escalation` refuses a reason code outside the
+  section 8 list. Inside a run, that refusal fails the run with
+  `internal_error` and frees the slot.
+- A third live AC01 run, on the rebuilt stack, is recorded in
+  `docs/EVIDENCE.md`: 3 of 4 completed locally. The model's text
+  changed with the labelled tool schemas, so the case-insensitive
+  service match was not exercised. M2 is not closed: see
+  `docs/ROADMAP.md`.
 - Project scaffold: repository layout, CI, and contributor guides.
 - Specification v0.1 (`docs/SPECIFICATION.md`) as the single source of
   truth for the prototype.
@@ -342,6 +393,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.6 → 0.7: Chinese support is best-effort; native
+  Chinese review is no longer required (sections 9, 12.2). English
+  examples, corpus scenarios, and live traces stay required; Chinese
+  ones are kept where they exist and reported per language, but do not
+  block acceptance (sections 1, 6, 12.3, AC01, AC15, section 14).
+  Evidence must say when Chinese material is not natively reviewed
+  (RM16). No native Chinese reviewer is available to the project.
 - Specification 0.5 → 0.6: section 8 adds cross-field rules for
   RouteDecision (clarification, and skill_id by route, mode, and the
   enabled parallel workflow), names the `run.accepted` `model_alias`

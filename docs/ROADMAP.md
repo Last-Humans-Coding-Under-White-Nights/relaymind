@@ -41,7 +41,8 @@ Reasoning-control migration at the next runtime update is
 
 What M1 did not test, and M2 therefore must: skill selection among
 several descriptions, the RouteDecision envelope, and Chinese input. The
-model stays a candidate until the bilingual tool tests (spec section 6).
+model stays a candidate until the English tool tests (spec section 6);
+Chinese results are reported but are not a gate (spec 0.7).
 
 ## M2 — Local skill-and-tool loop
 
@@ -76,7 +77,8 @@ infrastructure around it is built.
 - Router (#14) and local generation loop with recorded budgets (#15;
   RM01–RM03).
 - Exit: AC01 passes with doubles, and the live trace for
-  check-service-health is recorded in both languages.
+  check-service-health is recorded in English. The Chinese live AC01
+  trace is best-effort, recorded but not a gate (spec 0.7).
 
 Status (2026-10-21): **Stage A exit reached.** AC01 passes with model
 doubles (`tests/test_ac01_local_health.py`, both services in both
@@ -173,6 +175,45 @@ as Qwen3-0.6B) is the fallback.
   RM08, RM09).
 - Closes: AC01, AC03, AC04.
 
+Status (2026-10-21): **Stage B code is in review; M2 is not closed.**
+AC01, AC03, and AC04 pass with model doubles
+(`tests/test_ac01_local_health.py`, `tests/test_ac03_clarification.py`,
+`tests/test_ac04_invalid_proposals.py`). The clarification and resume
+behavior follows spec 0.6 sections 5, 8, and 11 (PR #60, now spec 0.7
+with the same text); it is not defined here. In short: a resume opens a new local stage within the
+entire-run limits, the run keeps its first language, and a third
+clarification fails the run with `missing_input`. Invalid proposals
+(#17) never execute, get at most one repair inside the generation
+limit, and every escalation carries a section 8 reason code. A third
+live AC01 run, on the rebuilt stack, completed 3 of 4 (see
+`EVIDENCE.md`).
+
+Open before M2 closes:
+
+- PR #61 (this Stage B close-out) is not merged yet. #60 (spec 0.6),
+  #53, #54, #55, and #59 are merged.
+- #27: confirmation.required, handoff.started, run.cancelled, and
+  cache.hit are not emitted by any scenario yet. They belong to M3 (#18,
+  #19), M4 (#29), and M5 (#31).
+- AC03 and AC04 have no live run recorded. They are deterministic gates
+  with model doubles, and there is no live AC03 test yet.
+- The resume API exists only on `LocalOrchestrator`. The HTTP route
+  `POST /relay/v1/runs/{id}/resume` (section 7.4) is part of the native
+  run API in M4 (#25, #26).
+- The waiting runs are kept in process memory. After a restart, they
+  are failed as `interrupted` by restart recovery (#8, M3), which is not
+  built yet.
+
+Informational, not blocking (spec 0.7: Chinese support is best-effort):
+
+- Chinese live AC01 is best-effort, recorded but not a gate. The
+  staging-api run failed in all three recorded runs, because the final
+  answer translates the status word. That is a model-quality finding
+  for the M6 corpus.
+- #13: the Chinese skill examples have not been natively reviewed.
+  Spec 0.7 section 9 no longer requires that review; the evidence says
+  the examples are not reviewed.
+
 ## M3 — Handoff and confirmation
 
 - Handoff envelope and escalation to the external model (#18; RM13,
@@ -214,8 +255,9 @@ as Qwen3-0.6B) is the fallback.
 
 ## M6 — Evaluation
 
-- Bilingual correctness corpus: 40 scenario pairs, frozen before
-  comparison (#32; section 12.2).
+- Correctness corpus: 40 English scenarios, with best-effort Chinese
+  versions reported per language, frozen before comparison (#32;
+  section 12.2, spec 0.7).
 - Latency experiment on both target platforms; benchmark report with
   full environment manifest (#33; RM25, section 12.3).
 - Closes: AC15 and the release record (section 14).
@@ -255,3 +297,11 @@ listed here so the current order can be traced to its reason.
   generation is told the request language. Chinese answers that
   translate the returned status word fail the completion predicate; that
   goes to Stage B and the M6 corpus.
+- 2026-10-21, Stage B (#16, #17): an earlier draft of #61 decided the
+  resume rules in this log. In that draft, a resume after a model
+  clarification was charged to the run's one routing generation, so it
+  stopped with `local_budget`. Spec 0.6 sections 5, 8, and 11 (#60) now
+  define the resume behavior, and they supersede that entry: per-stage
+  budgets, entire-run limits, the clarification.answered event, and
+  `invalid_resume_input`. The code follows the spec. Nothing about
+  resume is decided here.
