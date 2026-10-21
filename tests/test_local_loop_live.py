@@ -188,8 +188,9 @@ def test_check_service_health_completes_locally(gateway, case):
     # The correct final status (RM16): the registered predicate holds.
     assert health_status_preserved(outcome.answer, results)
 
-    # Zero external calls (RM01): measured on the external double, and
-    # the trace labels every call with the adapter's locality.
+    # Zero external calls (RM01): the gateway has no external model here,
+    # so the trace is the proof: every call is labelled with the adapter's
+    # locality and run.completed counts no external call.
     assert external.requests == []
     started = by_type["model.started"]
     assert all(e.actor == "local" and e.payload["model"] == model_id for e in started)

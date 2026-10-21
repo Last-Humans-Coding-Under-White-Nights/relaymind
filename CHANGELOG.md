@@ -46,7 +46,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   known outcome blocks handoff, and so does a stop the external stage
   could not resolve either (a mutation that needs confirmation, or a
   skill with no permitted tool): those end as `needs_external` with
-  `capability_missing` and no external call. A timed-out generation is
+  `capability_missing` and no external call. An admitted parallel route
+  (the workflow is not wired yet) and an unavailable local model (no
+  operator policy permits degraded mode yet) do not hand off either. An
+  `external_failed` run keeps an RM04 reason code. A timed-out generation is
   traced with the limit that bounded it, never as local time. New budgets `external_generations` (6)
   and `external_seconds` (30) are recorded in each run. External failures
   end as `external_failed`; without a configured external model, in
@@ -450,7 +453,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (RM13, RM14, #18): how the HandoffEnvelope is built from the run
   store and sent as normalized messages, the context measurement and the
   `context_limit_exceeded` failure, what blocks a handoff (including a
-  mutation that needs confirmation and a skill with no permitted tool),
+  mutation that needs confirmation, a skill with no permitted tool, an
+  admitted parallel route, and an unavailable local model),
   the external stage and its limits, the `handoff.started` payload, and
   the `external_failed` error code.
 - Specification 0.7 → 0.8: section 6 uses the selected runtime's

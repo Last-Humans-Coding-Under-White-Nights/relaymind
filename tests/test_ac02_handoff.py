@@ -858,3 +858,87 @@ def test_an_external_generation_timeout_is_not_traced_as_local_time(tmp_path, lo
     assert error["code"] != "local_budget"
     assert "local" not in error["message"]
     assert "external_seconds" in error["message"]
+
+
+# --- review of #18, round 3: what may hand off, and the failure reason --------------
+
+
+def test_an_admitted_parallel_workflow_is_not_run_as_a_single_external_actor(tmp_path):
+    """RM15, RM04, section 4.4: route=parallel is not a single-actor handoff.
+
+    The parallel workflow (#30) is not wired yet. Handing the run to the
+    external model alone would skip the local branch and complete a
+    parallel decision as a plain external run, so the run ends as
+    needs_external with reason parallel_workflow and no external call.
+    """
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn("health-and-diagnostic-checklist")],
+        enabled_workflows={"health-and-diagnostic-checklist"},
+        external_turns=[text_turn("staging-api is healthy.")],
+    )
+    outcome, events = run(
+        gateway, "Run the health checklist for staging-api.", execution_mode="parallel_demo"
+    )
+
+    assert of_type(events, "route.selected")[0].payload["decision"]["route"] == "parallel"
+    assert_needs_external(gateway, outcome, events, "parallel_workflow")
+    assert not of_type(events, "handoff.started")
+
+
+@pytest.mark.parametrize(
+    ("turns", "capabilities"),
+    [
+        ([], make_capabilities(tool_calling=False)),
+        ([], make_capabilities(tokenizer_available=False)),
+        ([[GenerationFailed(code="unreachable", message="no route to host")]], None),
+        (
+            [
+                route_turn("check-service-health"),
+                [GenerationFailed(code="unreachable", message="no route to host")],
+            ],
+            None,
+        ),
+    ],
+    ids=["no-tool-calling", "no-tokenizer", "routing-failed", "skill-generation-failed"],
+)
+def test_an_unavailable_local_model_does_not_hand_off(tmp_path, turns, capabilities):
+    """Section 11, RM04: degraded mode needs an operator policy, and none exists yet.
+
+    "An unavailable local model may route directly to external only when
+    policy permits; the trace records degraded mode." No such policy is
+    configurable in this version, so the run ends as needs_external with
+    reason capability_missing and no external call.
+    """
+    gateway = build_gateway(
+        tmp_path,
+        turns,
+        capabilities=capabilities,
+        external_turns=[text_turn("staging-api is healthy (checked at 2026-10-20T02:58:00Z).")],
+    )
+    outcome, events = run(gateway)
+
+    assert_needs_external(gateway, outcome, events, "capability_missing")
+    assert not of_type(events, "handoff.started")
+
+
+@pytest.mark.parametrize(
+    ("external_turns", "budgets"),
+    [
+        ([[GenerationFailed(code="unreachable", message="no route to host")]], None),
+        ([text_turn("It is slow.")], LocalBudgets(external_generations=1)),
+    ],
+    ids=["adapter-error", "external-budget"],
+)
+def test_an_external_failure_keeps_the_escalation_reason(
+    tmp_path, local_prep_skills, external_turns, budgets
+):
+    """Section 8 run.failed payload, RM04: the reason the run left the local path stays."""
+    options = {} if budgets is None else {"budgets": budgets}
+    gateway = after_local_collection(tmp_path, local_prep_skills, external_turns, **options)
+    outcome, events = run(gateway, PROMPT)
+
+    assert outcome.error_code == "external_failed"
+    assert outcome.reason_code == "local_budget"
+    (failed,) = of_type(events, "run.failed")
+    assert failed.payload["reason_code"] == "local_budget"

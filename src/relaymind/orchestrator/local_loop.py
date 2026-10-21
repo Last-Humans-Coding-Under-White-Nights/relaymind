@@ -13,7 +13,7 @@ One run, start to end, with the local model only:
    router input with the local tokenizer, and either take the bypass
    decision for an oversized input (section 4.1) or run the single
    routing generation (RM02, ``relaymind.orchestrator.router``).
-   A non-local route returns needs_external. The run keeps the language
+   A non-local route is an escalation (step 5). The run keeps the language
    of this first RouteDecision across every resume (section 5).
 2a. Clarify suspends the run in waiting_input with clarification.required
    (RM05; spec 0.6 sections 5 and 8): question, language, reason_code,
@@ -67,9 +67,14 @@ active budget, whichever is shorter.
    handler (RM10). Evidence over the external context limit fails the
    run with context_limit_exceeded before any external call (RM13); an
    external stage that cannot finish fails with external_failed
-   (section 11). If dispatch is not permitted, the run ends as failed
-   with error code needs_external and the RM04 reason code; partial
-   evidence stays in the trace (section 5).
+   (section 11), with the escalation's reason code. If dispatch is not
+   permitted, the run ends as failed with error code needs_external and
+   the RM04 reason code; partial evidence stays in the trace (section 5).
+   Some stops never hand off (section 4.4): an admitted parallel route,
+   because the parallel workflow (RM15) is not wired yet; an unavailable
+   local model, because degraded mode needs an operator policy that does
+   not exist yet (section 11); a mutation that needs confirmation (RM11);
+   and a selected skill with no permitted tool (RM08).
 
 Any other exception, in the first stage or after a resume, fails the
 run with error code internal_error and its run.failed event, which
@@ -242,9 +247,12 @@ class Escalation(Exception):
     Raised inside a run, that refusal is an unexpected exception, so the
     run fails with internal_error and never stays active.
 
-    hand_off is False for a stop the external stage could not resolve
-    either, such as a mutation that needs the confirmation flow (RM11);
-    such a stop ends as needs_external without a handoff (section 4.4).
+    hand_off is False for a stop that must not reach the external model:
+    one the external stage could not resolve either, such as a mutation
+    that needs the confirmation flow (RM11); an admitted parallel route,
+    whose workflow (RM15) is not wired yet; and an unavailable local
+    model, since no operator policy permits degraded mode yet (section
+    11). Such a stop ends as needs_external without a handoff (section 4.4).
     """
 
     def __init__(
@@ -573,6 +581,14 @@ class _Run:
                 self.language = decision.language
             if decision.route is Route.CLARIFY:
                 return self._clarify(routing)
+            if decision.route is Route.PARALLEL:
+                # RM15: the parallel workflow (#30) is not wired yet; a
+                # single external actor is not that workflow (section 4.4).
+                raise Escalation(
+                    decision.reason_code,
+                    "the parallel workflow is not available in this version",
+                    hand_off=False,
+                )
             if decision.route is not Route.LOCAL:
                 raise Escalation(
                     decision.reason_code, f"route {decision.route.value} needs external"
@@ -844,10 +860,7 @@ class _Run:
             offered = [self.o.skills.get(name) for name in self.o.router.offered]
             allowlist = tuple(dict.fromkeys(t for s in offered for t in s.allowed_tools))
             catalog = tuple((s.name, s.description) for s in offered)
-        available = self.o.tools.available_tools(
-            skill_allowlist=allowlist, policy=self.o.policy, caller=self.o.caller
-        )
-        schemas = self.o.tools.tool_schemas(name for name in allowlist if name in available)
+        available, schemas = self._permitted_tools(allowlist)
         if skill is not None and not schemas:
             # RM08: the external stage gets the same permitted tools, none,
             # so it could not collect the evidence the skill needs.
@@ -921,7 +934,12 @@ class _Run:
         except ContextLimitExceeded as exceeded:
             return self._fail_context(exceeded.size)
         except ExternalFailure as failure:
-            return self._fail(EXTERNAL_FAILED, detail=failure.detail, **failure.extra)
+            return self._fail(
+                EXTERNAL_FAILED,
+                detail=failure.detail,
+                reason_code=stop.reason_code,
+                **failure.extra,
+            )
         except Escalation as stopped:
             # A stop inside the external stage has no further escalation (RM14).
             return self._fail(
@@ -931,7 +949,12 @@ class _Run:
                 **stopped.extra,
             )
         except BudgetExceededError as exceeded:
-            return self._fail(EXTERNAL_FAILED, detail=str(exceeded), budget=exceeded.budget)
+            return self._fail(
+                EXTERNAL_FAILED,
+                detail=str(exceeded),
+                reason_code=stop.reason_code,
+                budget=exceeded.budget,
+            )
         self.move(
             RunState.COMPLETED,
             event=(
@@ -1020,7 +1043,8 @@ class _Run:
             capabilities = await adapter.capabilities()
             capabilities.require("tool_calling", "tokenizer_available")
         except UnsupportedCapabilityError as exc:
-            raise Escalation("capability_missing", str(exc)) from exc
+            # Section 11: degraded mode needs an operator policy; none exists.
+            raise Escalation("capability_missing", str(exc), hand_off=False) from exc
 
         routing_messages = router.routing_messages(self.messages)
         functions = router.functions()
@@ -1028,7 +1052,7 @@ class _Run:
             input_tokens = await adapter.count_tokens(routing_messages, functions)
         except (TokenCountError, UnsupportedCapabilityError) as exc:
             raise Escalation(
-                "capability_missing", f"router input could not be counted: {exc}"
+                "capability_missing", f"router input could not be counted: {exc}", hand_off=False
             ) from exc
 
         if not router.within_input_cap(input_tokens):
@@ -1169,11 +1193,24 @@ class _Run:
                 raise ExternalFailure(
                     f"external generation failed: {failure.code}", generation_error=failure.code
                 )
-            raise Escalation("capability_missing", f"local generation failed: {failure.code}")
+            # Section 11: an unavailable local model hands off only when
+            # operator policy permits degraded mode; no such policy exists.
+            raise Escalation(
+                "capability_missing", f"local generation failed: {failure.code}", hand_off=False
+            )
         self.meter.check_time()
         return call_id, generation
 
     # -- local skill loop ----------------------------------------------------------
+
+    def _permitted_tools(
+        self, allowlist: Sequence[str]
+    ) -> tuple[frozenset[str], tuple[ToolSchema, ...]]:
+        """The tools of an allowlist this caller may use, and their schemas (RM08)."""
+        available = self.o.tools.available_tools(
+            skill_allowlist=allowlist, policy=self.o.policy, caller=self.o.caller
+        )
+        return available, self.o.tools.tool_schemas(n for n in allowlist if n in available)
 
     def _load_skill(self, name: str) -> Skill:
         """Load the skill at the version run.accepted recorded (RM06, RM07)."""
@@ -1188,13 +1225,15 @@ class _Run:
     async def _local(self, decision: RouteDecision) -> str:
         assert decision.skill_id is not None
         skill = self.skill = self._load_skill(decision.skill_id)
-        available = self.o.tools.available_tools(
-            skill_allowlist=skill.allowed_tools, policy=self.o.policy, caller=self.o.caller
-        )
-        schemas = self.o.tools.tool_schemas(n for n in skill.allowed_tools if n in available)
+        available, schemas = self._permitted_tools(skill.allowed_tools)
         if not schemas:
-            # RM08: nothing the skill allows is available to this caller.
-            raise Escalation("capability_missing", f"no permitted tools for skill {skill.name!r}")
+            # RM08: nothing the skill allows is available to this caller,
+            # nor to the external stage, which gets the same tools (section 4.4).
+            raise Escalation(
+                "capability_missing",
+                f"no permitted tools for skill {skill.name!r}",
+                hand_off=False,
+            )
         predicate = COMPLETION_PREDICATES[skill.completion_predicate]
         tool_names = " or ".join(schema.name for schema in schemas)
         conversation: list[Message] = [

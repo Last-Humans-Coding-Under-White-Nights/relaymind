@@ -7,10 +7,12 @@ production resource. Every gateway also has an external model double
 that records requests, so a test measures external calls (RM01) instead
 of trusting a number in the trace.
 
-The external model is configured only when a test scripts it
-(``external_turns``). Without it the gateway has no external model, so
-every escalation ends as needs_external (RM04), and the double still
-records any call that should not have happened (RM01).
+The external model is configured only when a test passes
+``external_turns``. Without it the gateway has no external model, so
+every escalation ends as needs_external (RM04) and the double cannot be
+called. A test of a local run that must make zero external calls (RM01)
+passes ``external_turns=[]``: the external model is then configured with
+nothing scripted, so any call to it fails the test.
 """
 
 import asyncio

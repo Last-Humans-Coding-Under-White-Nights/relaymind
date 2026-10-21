@@ -40,6 +40,7 @@ from relaymind.adapters import (
     ToolCall,
     ToolSchema,
 )
+from relaymind.adapters.openai_compat import encode_prompt
 from relaymind.schema_util import (
     FrozenJSONObject,
     first_schema_error,
@@ -286,31 +287,6 @@ class RequestSize:
         return {"size": self.size, "limit": self.limit, "method": self.method}
 
 
-def _request_text(messages: Sequence[Message], tool_schemas: Sequence[ToolSchema]) -> str:
-    return json.dumps(
-        {
-            "messages": [
-                {
-                    "role": m.role.value,
-                    "content": m.content,
-                    "tool_call_id": m.tool_call_id,
-                    "tool_calls": [
-                        {"id": c.call_id, "name": c.tool_name, "arguments": dict(c.arguments)}
-                        for c in m.tool_calls
-                    ],
-                }
-                for m in messages
-            ],
-            "tools": [
-                {"name": t.name, "description": t.description, "schema": dict(t.input_schema)}
-                for t in tool_schemas
-            ],
-        },
-        ensure_ascii=False,
-        default=dict,
-    )
-
-
 async def measure_request(
     adapter: ModelAdapter,
     capabilities: AdapterCapabilities,
@@ -325,7 +301,9 @@ async def measure_request(
     if capabilities.tokenizer_available:
         size = await adapter.count_tokens(messages, tool_schemas)
         return RequestSize(size, capabilities.context_limit, "tokenizer")
-    size = len(_request_text(messages, tool_schemas).encode("utf-8"))
+    # The chat body's prompt fields, as the external adapter encodes them.
+    text = json.dumps(encode_prompt(messages, tool_schemas), ensure_ascii=False)
+    size = len(text.encode("utf-8"))
     return RequestSize(size, capabilities.context_limit, "utf8_bytes")
 
 
