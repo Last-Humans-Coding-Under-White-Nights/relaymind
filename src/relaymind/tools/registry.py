@@ -6,9 +6,10 @@ authorization rule. Availability is the intersection of the skill
 allowlist, operator policy, and caller permissions; a name that is not
 registered here never gains a handler, whatever a client sends.
 
-RM09: ``invoke`` validates the full tool name and the decoded argument
-object before the handler runs, and validates the returned data
-against the output schema. Input objects must use
+RM09: ``validate`` checks the full tool name and the decoded argument
+object before any handler runs, ``run`` runs a validated call, and
+``invoke`` does both. Returned data is checked against the output
+schema. Input objects must use
 additionalProperties=false (section 9), so undeclared fields are
 rejected. Numbers are typed strictly: where a schema says integer, or
 lists integers in an enum or const, a float such as 60.0 or a boolean
@@ -22,8 +23,8 @@ and ToolConflictError mean the handler refused before any change, so
 those stay failed.
 
 Operation persistence, replay, and timeouts with unknown outcomes
-belong to the executor (RM10, issue #11). This module records the
-declared timeout but does not enforce it.
+belong to the executor (RM10, ``relaymind.tools.executor``). This
+module records the declared timeout; the executor enforces it.
 """
 
 import copy
@@ -41,6 +42,7 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, ValidationError
 from jsonschema.validators import extend
 
+from relaymind.adapters.base import ToolSchema
 from relaymind.canonical import canonical_json
 from relaymind.schema_util import first_schema_error, freeze_json, load_packaged_schema
 from relaymind.store import TraceClock
@@ -210,6 +212,22 @@ class ToolResult:
     source_ref: str
     truncated: bool
 
+    @classmethod
+    def from_json_object(cls, data: Mapping[str, Any]) -> "ToolResult":
+        """A ToolResult from its published schema shape (validated first)."""
+        validate_tool_result(data)
+        return cls(
+            operation_id=data["operation_id"],
+            tool_name=data["tool_name"],
+            status=ToolStatus(data["status"]),
+            data=copy.deepcopy(data["data"]),
+            error=dict(data["error"]) if data["error"] is not None else None,
+            observed_at=data["observed_at"],
+            duration_ms=data["duration_ms"],
+            source_ref=data["source_ref"],
+            truncated=data["truncated"],
+        )
+
     def to_json_object(self) -> dict[str, Any]:
         """The result in its published schema shape."""
         return {
@@ -372,6 +390,49 @@ class ToolRegistry:
             and self._tools[name].declaration.required_permission in caller.permissions
         )
 
+    def tool_schemas(self, names: Iterable[str]) -> tuple[ToolSchema, ...]:
+        """The model-facing descriptions of these registered tools, in order.
+
+        A ToolSchema is what a model is offered; it carries no handler.
+        """
+        return tuple(
+            ToolSchema(
+                name=name,
+                description=self._tools[name].declaration.description,
+                input_schema=self._tools[name].declaration.input_schema,
+            )
+            for name in names
+        )
+
+    def validate(
+        self,
+        name: object,
+        arguments: object,
+        *,
+        available: Collection[str],
+    ) -> RegisteredTool:
+        """Check the full tool name and decoded arguments (RM09); run nothing.
+
+        Raises ToolRejectedError (unknown_tool, tool_not_permitted, or
+        invalid_arguments). A call that passes may go to run() as is.
+        """
+        if not isinstance(name, str):
+            raise ToolRejectedError("unknown_tool", "the tool name must be a string")
+        tool = self._tools.get(name)
+        if tool is None:
+            raise ToolRejectedError("unknown_tool", f"tool {name!r} is not registered")
+        if name not in available:
+            raise ToolRejectedError("tool_not_permitted", f"tool {name!r} is not available")
+        if not isinstance(arguments, Mapping):
+            raise ToolRejectedError(
+                "invalid_arguments", "tool arguments must be one fully decoded JSON object"
+            )
+        # A frozen mapping (an adapter ToolCall) is still one decoded object.
+        error = first_schema_error(tool._input, dict(arguments))
+        if error is not None:
+            raise ToolRejectedError("invalid_arguments", _rejection_message(error))
+        return tool
+
     def invoke(
         self,
         name: object,
@@ -387,24 +448,24 @@ class ToolRegistry:
         ToolResult. operation_id comes from the executor, not the model,
         so a blank or non-string one is a caller bug: ValueError.
         """
+        tool = self.validate(name, arguments, available=available)
+        assert isinstance(arguments, Mapping)  # validate() guarantees a decoded object
+        return self.run(tool, arguments, operation_id=operation_id)
+
+    def run(
+        self, tool: RegisteredTool, arguments: Mapping[str, Any], *, operation_id: str
+    ) -> ToolResult:
+        """Run the handler of a call that validate() accepted; never raises for it.
+
+        The caller has validated this exact tool and argument object
+        (RM09); the handler gets a copy, and its output is checked
+        against the output schema. A blank or non-string operation_id is
+        a caller bug and raises ValueError before the handler runs.
+        """
         # Section 8: ToolResult.operation_id is a non-empty string.
         if not isinstance(operation_id, str) or not operation_id.strip():
             raise ValueError("'operation_id' must be a non-blank string")
-        if not isinstance(name, str):
-            raise ToolRejectedError("unknown_tool", "the tool name must be a string")
-        tool = self._tools.get(name)
-        if tool is None:
-            raise ToolRejectedError("unknown_tool", f"tool {name!r} is not registered")
-        if name not in available:
-            raise ToolRejectedError("tool_not_permitted", f"tool {name!r} is not available")
-        if not isinstance(arguments, Mapping):
-            raise ToolRejectedError(
-                "invalid_arguments", "tool arguments must be one fully decoded JSON object"
-            )
-        error = first_schema_error(tool._input, arguments)
-        if error is not None:
-            raise ToolRejectedError("invalid_arguments", _rejection_message(error))
-
+        name = tool.name
         started = self._clock.monotonic()
         mutating = tool.side_effect is SideEffect.MUTATING
         status = ToolStatus.FAILED

@@ -78,6 +78,27 @@ infrastructure around it is built.
 - Exit: AC01 passes with doubles, and the live trace for
   check-service-health is recorded in both languages.
 
+Status (2026-10-21): **Stage A exit reached.** AC01 passes with model
+doubles (`tests/test_ac01_local_health.py`, both services in both
+languages). The live check-service-health traces are recorded in
+[`EVIDENCE.md`](EVIDENCE.md#2026-10-21--m2-stage-a-live-check-service-health-trace-apple-silicon-macos):
+3 of 4 measured runs completed locally with zero external calls (both
+English, one Chinese). The other Chinese run translated the status
+word, so the completion predicate refused the answer and the run ended
+as `needs_external`. That is a model-quality finding for Stage B and
+M6, not a met target. A rerun on the rebased stack, recorded in a
+second `EVIDENCE.md` entry, completed 2 of 4 with the same model output:
+the stricter #55 health predicate refuses the English staging-api
+finalize proposal, which starts with a capitalized `Staging-api`. Both
+traces are recorded in both languages, so the exit condition holds; the
+completion count is open for Stage B. Since that rerun, #55 matches
+service and database IDs in any case (they are lowercase by schema), so
+`Staging-api is healthy ...` now passes the predicate, and the tool
+schemas carry Chinese labels for the clarification question; neither
+change has a live run recorded at this point. The executor (#11), router
+(#14), and bounded loop (#15) are in `relaymind.tools.executor`,
+`relaymind.orchestrator.router`, and `relaymind.orchestrator.local_loop`.
+
 #### Routing mechanism for #14 (decided 2026-10-21)
 
 Chosen: **native function calling, one function per advertised skill**
@@ -121,10 +142,12 @@ choice:
   context, and returns clarify with `missing_input` when one is absent.
   No tool runs on a decision that fails this check.
 - The model's language value is not used alone: it was wrong for 5 of 6
-  Chinese prompts. Proposed for #14: set the RouteDecision language from
-  the request text, checked by tests in both languages. Spec section 8
-  requires the field but does not say who fills it; if #14 finds this
-  changes observable behavior, the spec is revised first.
+  Chinese prompts. Done in #14: the RouteDecision language is set from
+  the conversation (Chinese characters in the latest user turn that has
+  words, so an identifier-only reply such as `staging-api` keeps the
+  language), checked by tests in both languages. Spec 0.6 (section 5)
+  fixes the run language at the first RouteDecision; the loop uses that
+  decision's language for every later step.
 - Router input measured 808 to 818 local tokens with six skills, well
   under the 2,048 cap; the bypass path is still required for longer
   inputs (spec 4.1).
@@ -225,3 +248,10 @@ listed here so the current order can be traced to its reason.
   native result and the mechanism decision are unchanged. The recorded
   numbers exclude tokenizer round trips and ran with the runtime's
   prompt cache on; both are stated in `EVIDENCE.md`.
+- 2026-10-21, Stage A exit: the skill-stage prompt puts the skill
+  description and the tool to call first and the full skill body after
+  the request, at temperature 0, because the pinned model often wrote
+  its tool call as plain text when the body came first. The final
+  generation is told the request language. Chinese answers that
+  translate the returned status word fail the completion predicate; that
+  goes to Stage B and the M6 corpus.

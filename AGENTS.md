@@ -20,13 +20,14 @@ codebase.
 | Path | Purpose |
 |------|---------|
 | `src/relaymind/api/` | API layer: request validation, chat contract, native run API, auth (RM19–RM21) |
-| `src/relaymind/orchestrator/` | State transitions, budgets, routing, handoff, cancellation, final-answer ownership (RM01–RM05, RM13–RM17); the RouteDecision schema and validator (`route_decision.py`, `schemas/route_decision.v1.json`; RM02) |
+| `src/relaymind/orchestrator/` | State transitions, budgets, routing, handoff, cancellation, final-answer ownership (RM01–RM05, RM13–RM17); the RouteDecision schema and validator (`route_decision.py`, `schemas/route_decision.v1.json`; RM02); the router (`router.py`; native function calling; RM01, RM02), the bounded local loop (`local_loop.py`), budgets (`budgets.py`; RM03, RM04, section 11), and identifier provenance (`identifiers.py`; RM05) |
 | `src/relaymind/adapters/` | Model adapters: normalized messages and events per provider (RM18) |
 | `src/relaymind/skills/` | Skill registry: package validation, instruction loading (RM06, RM07); completion predicates (`predicates.py`; RM06, section 9) |
-| `src/relaymind/tools/` | Tool registry and executor: argument validation, permissions, side effects (RM08–RM12); the sandbox demo data service and the seven demo tools (`sandbox.py`, `schemas/demo/`; RM23, section 9) |
+| `src/relaymind/tools/` | Tool registry and executor: argument validation, permissions, side effects (RM08–RM12); the sandbox demo data service and the seven demo tools (`sandbox.py`, `schemas/demo/`; RM23, section 9); the executor (`executor.py`: operation IDs, replay, retry, timeouts; RM10, RM14) |
 | `src/relaymind/store/` | Run store: SQLite events, tool outcomes, approvals, versioned state (RM17, RM22); every event is validated against the published TraceEvent schema before it is written (`trace_event.py`, `schemas/trace_event.v1.json`; RM22, section 8) |
 | `src/relaymind/canonical.py` | One canonical JSON text form for tool schema hashes (RM07), operation IDs (RM10), and approval binding (RM11) |
 | `src/relaymind/schema_util.py` | Shared boundary checks for published, versioned JSON Schemas: closed field sets, exact schema_version, first schema error (spec section 8) |
+| `src/relaymind/redaction.py` | Configured secret-field redaction before anything is persisted (RM12, section 8) |
 | `src/relaymind/stats.py` | Per-generation timing metrics and JSON export for adapter comparisons (RM25, section 12.1) |
 | `src/relaymind/ui/` | Demo UI: decisions and execution evidence (RM23) |
 | `models/` | Pinned model artifact manifests (RM18, spec section 6); GGUF files are downloaded per `models/README.md`, never checked in |

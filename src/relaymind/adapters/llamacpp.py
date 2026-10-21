@@ -96,6 +96,8 @@ class LlamaCppConfig:
 class LlamaCppAdapter(ModelAdapter):
     """ModelAdapter over a llama-server OpenAI-compatible endpoint."""
 
+    locality = "local"
+
     def __init__(
         self,
         config: LlamaCppConfig,

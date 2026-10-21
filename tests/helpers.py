@@ -224,17 +224,52 @@ def sse_response(chunks: list[dict]) -> httpx.Response:
 
 
 class ScriptedAdapter(ModelAdapter):
-    """Model double that replays a scripted event sequence."""
+    """Model double that replays scripted events (spec section 13).
 
-    def __init__(self, events):
-        self._events = events
+    With events, every generation replays that one sequence. With turns,
+    a list of event lists, each generation answers with the next turn,
+    and an unscripted generation fails the test. Every request and token
+    count is recorded. on_generate, if given, runs at the start of every
+    generation (for example to advance a fake clock). input_tokens fixes
+    the count_tokens answer; without it the double counts one unit per
+    content character and per offered tool. locality is the adapter
+    locality the double declares (local or external).
+    """
+
+    def __init__(
+        self,
+        events=(),
+        *,
+        turns=None,
+        capabilities: AdapterCapabilities | None = None,
+        input_tokens: int | None = None,
+        on_generate=None,
+        locality: str = "local",
+    ):
+        self._events = list(events)
+        self._turns = None if turns is None else list(turns)
+        self._capabilities = capabilities or make_capabilities()
+        self.input_tokens = input_tokens
+        self.on_generate = on_generate
+        self.locality = locality
+        self.requests: list[GenerationRequest] = []
+        self.counted: list[tuple] = []
         self.cancelled: list[str] = []
 
     async def capabilities(self) -> AdapterCapabilities:
-        return make_capabilities()
+        return self._capabilities
 
     async def generate(self, request: GenerationRequest):
-        for event in self._events:
+        self.requests.append(request)
+        if self.on_generate is not None:
+            self.on_generate(request)
+        if self._turns is None:
+            events = self._events
+        elif self._turns:
+            events = self._turns.pop(0)
+        else:
+            raise AssertionError(f"unscripted generation {request.generation_id}")
+        for event in events:
             yield event
 
     async def cancel(self, generation_id: str) -> None:
@@ -248,11 +283,19 @@ class ScriptedAdapter(ModelAdapter):
         messages: Sequence[Message],
         tool_schemas: Sequence[ToolSchema] = (),
     ) -> int:
+        self.counted.append((tuple(messages), tuple(tool_schemas)))
+        if self.input_tokens is not None:
+            return self.input_tokens
         # The double claims a tokenizer (make_capabilities), so it counts
         # instead of inheriting the refusing default: one unit per
         # content character and per offered tool. A fixed rule for
         # tests, not an estimate of any real tokenizer.
         return sum(len(message.content or "") for message in messages) + len(tool_schemas)
+
+
+def of_type(events, event_type: str) -> list:
+    """The trace events of one type, in order."""
+    return [event for event in events if event.event_type.value == event_type]
 
 
 def load_script_module(name: str):

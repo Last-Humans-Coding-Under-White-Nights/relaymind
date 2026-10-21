@@ -1,4 +1,4 @@
-"""Tool registry and sandbox demo tools (RM08, RM09, RM23).
+"""Tool registry, executor, and sandbox demo tools (RM08–RM10, RM23).
 
 See AGENTS.md (repository map) and docs/ARCHITECTURE.md.
 """
