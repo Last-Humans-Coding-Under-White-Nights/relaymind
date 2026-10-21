@@ -106,6 +106,7 @@ def test_each_skill_has_paired_english_and_chinese_examples(skills, name):
         assert CJK.search(pair["zh"]["request"])
         assert CJK.search(pair["zh"]["response"])
         assert not CJK.search(pair["en"]["request"])
+        assert not CJK.search(pair["en"]["response"])
 
 
 @pytest.mark.parametrize("name", sorted(SECTION_9_SKILLS))

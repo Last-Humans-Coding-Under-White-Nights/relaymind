@@ -1,6 +1,6 @@
 {
   "illustrative": true,
-  "note": "Illustrative examples that use the sandbox fixture values (tests/fixtures/sandbox/baseline.json). Not live model output or measured results. The Chinese text still needs native review (spec section 9).",
+  "note": "Illustrative examples that use the sandbox fixture values (tests/fixtures/sandbox/baseline.json). Not live model output or measured results. The Chinese text has not been natively reviewed; spec 0.7 section 9 does not require that review.",
   "pairs": [
     {
       "tool_calls": [
@@ -14,7 +14,7 @@
       ],
       "en": {
         "request": "How many incidents did staging-api have in the last 24 hours?",
-        "response": "In the last 1440 minutes staging-api had 7 incidents: 1 critical, 3 warning, and 3 info."
+        "response": "In the last 1440 minutes, staging-api had 7 incidents: 1 critical, 3 warning, and 3 info."
       },
       "zh": {
         "request": "staging-api 过去 24 小时有多少事件？",
@@ -33,7 +33,7 @@
       ],
       "en": {
         "request": "Summarize payments-api incidents for the last hour.",
-        "response": "In the last 60 minutes payments-api had 5 incidents: 2 critical, 2 warning, and 1 info."
+        "response": "In the last 60 minutes, payments-api had 5 incidents: 2 critical, 2 warning, and 1 info."
       },
       "zh": {
         "request": "汇总一下 payments-api 最近一小时的事件。",

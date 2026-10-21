@@ -8,6 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Demo skill completion predicates reject answers that break spec
+  section 9 (#13; RM05, RM16, RM23): negated or mixed health statuses,
+  inferred incident causes or a missing service, invented deployment IDs,
+  negated or extra-database deletion reports, and empty or mid-sentence
+  diagnostic section labels. Example notes and `docs/EVIDENCE.md` state
+  that the Chinese material has not been natively reviewed (spec 0.7
+  section 9); all six packages move to version 0.1.1 (RM07).
 - Loopback llama.cpp inference and runtime startup health polls bypass
   environment and system proxies without changing process-wide settings
   (#57; RM01, RM18). Non-loopback endpoints and the external Chat
