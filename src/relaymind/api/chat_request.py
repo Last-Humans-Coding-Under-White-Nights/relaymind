@@ -36,6 +36,7 @@ __all__ = [
     "ClientTool",
     "ToolChoice",
     "parse_chat_request",
+    "parse_managed_messages",
 ]
 
 MANAGED = "relaymind"
@@ -194,6 +195,16 @@ def parse_chat_request(
         tools=tools,
         tool_choice=choice,
     )
+
+
+def parse_managed_messages(raw: object) -> tuple[Message, ...]:
+    """Validate a message array for the managed alias (spec 0.14 section 7.1).
+
+    The native run API takes the same messages as the ``relaymind``
+    alias: text only, the conversation starting and ending with a user
+    message (spec 0.17 section 7.4).
+    """
+    return _messages(raw, MANAGED)
 
 
 def _check_n(n: object) -> None:

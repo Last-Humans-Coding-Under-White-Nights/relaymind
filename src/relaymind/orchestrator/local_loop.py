@@ -90,6 +90,15 @@ active budget, whichever is shorter.
    stage has no routing decision yet, and degraded_mode and local_failure in
    handoff.started; and a selected skill with no permitted tool (RM08).
 
+Native runs (RM21, spec 0.17 section 7.4). ``start``, ``start_resume``,
+and ``start_confirmation`` do the synchronous part of ``run``,
+``resume``, and ``resume_confirmation`` (every check, the slot, the
+transition) and continue the run in a background task, so the HTTP
+request that asked is not the run's owner. ``cancel`` ends a waiting
+run at once and asks a background run to stop; a run that a caller
+awaits directly is not cancelled this way. ``reveal_confirmation``
+hands out a confirmation token once.
+
 Any other exception, in the first stage or after a resume, fails the
 run with error code internal_error and its run.failed event, which
 releases the execution slot, and then propagates; a cancelled run ends
@@ -188,6 +197,9 @@ CONFIRMATION_UNSUPPORTED = "confirmation_unsupported"
 APPROVAL_EXPIRED = "approval_expired"
 APPROVAL_INVALID = "approval_invalid"
 USER_DENIED = "user_denied"
+CANCEL_REQUESTED = "cancel_requested"
+WORKFLOW_UNAVAILABLE = "workflow_unavailable"
+PARALLEL_WORKFLOW = "parallel_workflow"
 ROUTING_MECHANISM = "native_function_calling"
 RESUME_MECHANISM = "clarification_resume"
 # Section 5: each waiting state resumes with its own body shape.
@@ -282,6 +294,22 @@ class RunOutcome:
     # The client-owned calls a completed run returned to its caller (RM08);
     # the gateway executed none of them.
     tool_calls: tuple[ToolCall, ...] = ()
+
+
+@dataclass(frozen=True)
+class StartedRun:
+    """A run accepted for background work (RM21, spec 0.17 section 7.4).
+
+    state_version is the run's version when the call returned. task
+    yields the RunOutcome when the work ends (None when the call
+    already ended the run, as an expired wait does); its exception, if
+    any, was handled by the run itself (internal_error or cancelled),
+    so nobody has to retrieve it.
+    """
+
+    run_id: str
+    state_version: int
+    task: "asyncio.Task[RunOutcome] | None" = None
 
 
 # The attribute that marks an exception raised by a run's own work (section 11).
@@ -479,6 +507,7 @@ class LocalOrchestrator:
         self.degraded_mode = degraded_mode
         self.skills = skills
         self.tools = tools
+        self.enabled_workflows = frozenset(enabled_workflows)
         self.store = store
         self.policy = policy
         self.caller = caller
@@ -499,6 +528,11 @@ class LocalOrchestrator:
         # waiting_confirmation. A process restart fails unfinished runs as
         # interrupted (section 5), so nothing here has to outlive the process.
         self._waiting: dict[str, _Run] = {}
+        # Runs this orchestrator drives in a background task of their own
+        # (native runs), for cancellation; and the confirmation requests
+        # whose token has not been read yet (RM11, spec 0.17).
+        self._driven: dict[str, tuple[_Run, asyncio.Task[RunOutcome]]] = {}
+        self._issued: dict[str, ConfirmationRequest] = {}
         # Set once this orchestrator accepts a run; restart recovery is
         # refused from then on (section 5).
         self._accepted_a_run = False
@@ -545,6 +579,23 @@ class LocalOrchestrator:
         input_expired. If another run holds the execution slot, the resume
         is 429 and the run keeps waiting (section 5).
         """
+        run, step = self._begin_resume(run_id, expected_version, text)
+        outcome = step if isinstance(step, RunOutcome) else await step()
+        return self._keep_if_waiting(run, outcome)
+
+    def start_resume(self, run_id: str, expected_version: int, text: object) -> StartedRun:
+        """Resume as ``resume`` does, but continue the run in a background task.
+
+        Every check of ``resume`` happens before this returns, with the
+        same errors; the continuation then runs on its own (RM21, spec
+        0.17 section 7.4). Call it inside a running event loop.
+        """
+        run, step = self._begin_resume(run_id, expected_version, text)
+        return self._start(run, step)
+
+    def _begin_resume(
+        self, run_id: str, expected_version: int, text: object
+    ) -> "tuple[_Run, _Step]":
         run = self._waiting_run(run_id, expected_version, RunState.WAITING_INPUT)
         if not isinstance(text, str) or not text.strip():
             raise ResumeInputError("a resume in waiting_input needs non-blank input text")
@@ -553,10 +604,10 @@ class LocalOrchestrator:
             # error leaves the wait for the next sweep (section 5).
             outcome = run.expire()
             del self._waiting[run_id]
-            return outcome
+            return run, outcome
         run.reopen(expected_version)
         del self._waiting[run_id]
-        return self._keep_if_waiting(run, await run.continue_with(text))
+        return run, lambda: run.continue_with(text)
 
     def recover_after_restart(self) -> RecoveryReport:
         """Fail every unfinished run as interrupted, once, at startup (section 5, RM17).
@@ -593,6 +644,41 @@ class LocalOrchestrator:
         approval (section 5). A denial cancels the run with user_denied.
         An approval executes the held call once and continues the run.
         """
+        run, step = self._begin_confirmation(
+            run_id, expected_version, approval_id=approval_id, token=token, approve=approve
+        )
+        outcome = step if isinstance(step, RunOutcome) else await step()
+        return self._keep_if_waiting(run, outcome)
+
+    def start_confirmation(
+        self,
+        run_id: str,
+        expected_version: int,
+        *,
+        approval_id: object,
+        token: object,
+        approve: object,
+    ) -> StartedRun:
+        """Answer a confirmation as ``resume_confirmation`` does, continuing in the background.
+
+        Every check, the consumption of the approval, and the transition
+        happen before this returns (RM21, spec 0.17 section 7.4). Call it
+        inside a running event loop.
+        """
+        run, step = self._begin_confirmation(
+            run_id, expected_version, approval_id=approval_id, token=token, approve=approve
+        )
+        return self._start(run, step)
+
+    def _begin_confirmation(
+        self,
+        run_id: str,
+        expected_version: int,
+        *,
+        approval_id: object,
+        token: object,
+        approve: object,
+    ) -> "tuple[_Run, _Step]":
         run = self._waiting_run(run_id, expected_version, RunState.WAITING_CONFIRMATION)
         if not (
             isinstance(approval_id, str)
@@ -605,13 +691,108 @@ class LocalOrchestrator:
                 "a resume in waiting_confirmation needs approval_id, token, and a boolean approve"
             )
         try:
-            outcome = await run.decide(approval_id, token, approve)
+            step = run.begin_decision(approval_id, token, approve)
         finally:
             # A store that cannot be read keeps the run tracked, as in
             # expire_waiting, so a later resume or sweep can still end it.
             if not self._still_waiting(run_id, default=True):
                 self._waiting.pop(run_id, None)
-        return self._keep_if_waiting(run, outcome)
+        return run, step
+
+    def start(
+        self,
+        messages: Sequence[Message],
+        *,
+        execution_mode: str | None = None,
+        model_alias: str | None = None,
+        final_options: GenerationOptions | None = None,
+    ) -> StartedRun:
+        """Accept a managed request and run it in a background task (RM21).
+
+        The run exists, in routing, when this returns: the execution slot
+        is taken or SlotUnavailableError (429) is raised and nothing is
+        created. The work then continues without the caller, so a
+        disconnect of whoever asked does not stop it. Call it inside a
+        running event loop.
+        """
+        run = _Run(self, tuple(messages), execution_mode, model_alias, final_options)
+        run.open()
+        return self._start(run, lambda: run.drive())
+
+    async def cancel(
+        self, run_id: str, expected_version: int, *, wait_seconds: float = 5.0
+    ) -> RunRecord:
+        """Cancel a run on request and return its record (RM17, RM21, spec 0.17 section 7.4).
+
+        A terminal run never changes (TerminalStateError) and a stale
+        version is 409 (StaleVersionError). A waiting run is cancelled
+        at once; its pending approval, if any, is voided in the same
+        transaction. A run driven by a background task is asked to
+        stop, and the call waits up to wait_seconds for it to end, so
+        the record can still be active when the work did not stop in
+        time (best effort). A run active under a request that owns it is
+        InvalidTransitionError: closing that request cancels it.
+        """
+        record = self.store.get_run(run_id)
+        state = RunState(record.state)
+        if state in TERMINAL_STATES:
+            self._driven.pop(run_id, None)
+            raise TerminalStateError(f"run {run_id} is {state}; terminal runs never restart")
+        if record.version != expected_version:
+            raise StaleVersionError(run_id, expected_version, record.version)
+        if state in WAITING_STATES:
+            run = self._waiting.get(run_id)
+            if run is not None:
+                record = run.cancel_waiting(expected_version)
+                self._waiting.pop(run_id, None)
+                return record
+            return self.machine.cancel(run_id, expected_version, reason=CANCEL_REQUESTED)
+        driven = self._driven.get(run_id)
+        if driven is None or driven[1].done():
+            raise InvalidTransitionError(
+                f"run {run_id} is {state.value} under a request that owns it; "
+                "close that request to cancel it"
+            )
+        run, task = driven
+        run.cancel_reason = CANCEL_REQUESTED
+        task.cancel()
+        await asyncio.wait({task}, timeout=wait_seconds)
+        return self.store.get_run(run_id)
+
+    def reveal_confirmation(self, run_id: str) -> ConfirmationRequest | None:
+        """The pending confirmation with its token, the first time it is asked for (RM11).
+
+        Later calls return None, and so does a run with nothing pending:
+        the plaintext token is shown once and never stored (spec 0.17
+        section 7.4).
+        """
+        held = self._issued.pop(run_id, None)
+        if held is None or run_id not in self._waiting:
+            return None
+        pending = self.store.get_pending_approval(run_id)
+        if pending is None or pending["approval_id"] != held.approval_id:
+            return None
+        return held
+
+    def _start(self, run: "_Run", step: "_Step") -> StartedRun:
+        """Drive a prepared step in a background task, or report an ended run."""
+        if isinstance(step, RunOutcome):
+            self._keep_if_waiting(run, step)
+            return StartedRun(run.run_id, self.store.get_run(run.run_id).version)
+
+        async def drive() -> RunOutcome:
+            try:
+                outcome = await step()
+            finally:
+                driven = self._driven.get(run.run_id)
+                if driven is not None and driven[1] is asyncio.current_task():
+                    del self._driven[run.run_id]
+            return self._keep_if_waiting(run, outcome)
+
+        task = asyncio.get_running_loop().create_task(drive())
+        task.add_done_callback(_observe)
+        self._driven[run.run_id] = (run, task)
+        return StartedRun(run.run_id, self.store.get_run(run.run_id).version, task)
 
     def _waiting_run(self, run_id: str, expected_version: int, wanted: RunState) -> "_Run":
         """The tracked run in the waiting state a resume expects (RM17, section 5).
@@ -686,7 +867,26 @@ class LocalOrchestrator:
     def _keep_if_waiting(self, run: "_Run", outcome: RunOutcome) -> RunOutcome:
         if outcome.state in WAITING_STATES:
             self._waiting[run.run_id] = run
+            if outcome.confirmation is not None:
+                self._issued[run.run_id] = outcome.confirmation
+        # A confirmation of a run that is no longer waiting can never be read.
+        for run_id in [r for r in self._issued if r not in self._waiting]:
+            del self._issued[run_id]
         return outcome
+
+
+# What a prepared resume has left to do: nothing (an outcome), or work to await.
+_Step = RunOutcome | Callable[[], Awaitable[RunOutcome]]
+
+
+def _observe(task: "asyncio.Task[RunOutcome]") -> None:
+    """Mark a background run's result as retrieved.
+
+    The run recorded its own failure or cancellation (section 5), so
+    the exception has nothing left to report.
+    """
+    if not task.cancelled():
+        task.exception()
 
 
 class _Run:
@@ -709,6 +909,8 @@ class _Run:
         self.model_alias = model_alias
         self.meter = BudgetMeter(owner.budgets, clock=owner.clock)
         self.model_calls: list[dict[str, str]] = []
+        # Set when a cancel request stops the run (run.cancelled reason).
+        self.cancel_reason: str | None = None
         self.record: RunRecord
         self.decision: RouteDecision | None = None
         # Fixed by the first RouteDecision and kept across resumes (section 5).
@@ -789,6 +991,10 @@ class _Run:
 
     async def execute(self) -> RunOutcome:
         self.open()
+        return await self.drive()
+
+    async def drive(self) -> RunOutcome:
+        """Route and run an opened run to a terminal or waiting state."""
         return await self._guarded(self._route)
 
     def open(self) -> None:
@@ -838,6 +1044,11 @@ class _Run:
 
     async def _drive(self, route: Callable[[], Awaitable[Routing]]) -> RunOutcome:
         """Route, then wait, stop, or run the local loop to completion."""
+        if self.mode is ExecutionMode.PARALLEL_DEMO and (
+            not self.o.enabled_workflows or self.o.external is None
+        ):
+            # Spec 0.17 section 4.4: no routing generation for a run that cannot succeed.
+            return self._workflow_unavailable("configuration does not provide the workflow")
         try:
             routing = await route()
             decision = self.decision = routing.decision
@@ -845,6 +1056,13 @@ class _Run:
                 self.language = decision.language
             if decision.route is Route.CLARIFY:
                 return self._clarify(routing)
+            if self.mode is ExecutionMode.PARALLEL_DEMO and (
+                decision.route is Route.PARALLEL or decision.reason_code == PARALLEL_WORKFLOW
+            ):
+                # RM21: parallel_demo never hands the run off in its place.
+                return self._workflow_unavailable(
+                    "the parallel workflow is not available in this version"
+                )
             if decision.route is Route.PARALLEL:
                 # RM15: the parallel workflow (#30) is not wired yet; a
                 # single external actor is not that workflow (section 4.4).
@@ -1051,6 +1269,10 @@ class _Run:
             budget=extra.get("budget"),
         )
 
+    def _workflow_unavailable(self, detail: str) -> RunOutcome:
+        """parallel_demo fails explicitly when its workflow cannot run (RM21, section 4.4)."""
+        return self._fail(WORKFLOW_UNAVAILABLE, detail=detail, reason_code=PARALLEL_WORKFLOW)
+
     def _needs_external(self, stop: Escalation) -> RunOutcome:
         self.move(
             RunState.FAILED,
@@ -1095,10 +1317,12 @@ class _Run:
             if RunState(self.record.state) in TERMINAL_STATES:
                 return
             if isinstance(exc, asyncio.CancelledError):
+                reason = {} if self.cancel_reason is None else {"reason": self.cancel_reason}
                 self.record = self.o.machine.cancel(
                     self.run_id,
                     self.record.version,
-                    event=(EventType.RUN_CANCELLED, GATEWAY_ACTOR, self._summary()),
+                    reason=self.cancel_reason,
+                    event=(EventType.RUN_CANCELLED, GATEWAY_ACTOR, {**reason, **self._summary()}),
                 )
                 return
             self.move(
@@ -1745,7 +1969,15 @@ class _Run:
         )
 
     async def decide(self, approval_id: str, token: str, approve: bool) -> RunOutcome:
-        """Answer the pending confirmation (RM11, section 5).
+        """Answer the pending confirmation and continue the run (RM11, section 5)."""
+        step = self.begin_decision(approval_id, token, approve)
+        return step if isinstance(step, RunOutcome) else await step()
+
+    def begin_decision(self, approval_id: str, token: str, approve: bool) -> _Step:
+        """Check and apply the answer to the pending confirmation (RM11, section 5).
+
+        Returns the outcome when the answer ended the run, or the
+        continuation to await when the run goes on.
 
         The approval ID and the token are checked first, so a caller
         without the token gets 403 and changes nothing: it cannot expire
@@ -1798,9 +2030,36 @@ class _Run:
         # limits, inside the entire-run limits (spec 0.10 section 5).
         self.meter.new_stage()
         if pending.stop is None:
-            return await self._protected(lambda: self._run_local(pending.loop, pending))
+            return lambda: self._protected(lambda: self._run_local(pending.loop, pending))
         stop = pending.stop
-        return await self._protected(lambda: self._run_external(pending.loop, stop, pending))
+        return lambda: self._protected(lambda: self._run_external(pending.loop, stop, pending))
+
+    def cancel_waiting(self, expected_version: int) -> RunRecord:
+        """Cancel the run on request while it waits (RM17, RM21).
+
+        The pending approval ends in the same transaction as the
+        cancel, and the wait counts toward waiting_ms of run.cancelled.
+        """
+        waited_ms = self._waited_ms()
+        summary = self._summary()
+        summary["waiting_ms"] += waited_ms
+        payload: dict[str, Any] = {"reason": CANCEL_REQUESTED, **summary}
+        if self.confirmation is not None:
+            payload["approval_id"] = self.confirmation.approval_id
+        store = self.o.store
+        with store.transaction():
+            store.expire_approvals(self.run_id)
+            record = self.o.machine.cancel(
+                self.run_id,
+                expected_version,
+                reason=CANCEL_REQUESTED,
+                event=(EventType.RUN_CANCELLED, GATEWAY_ACTOR, payload),
+            )
+        self.record = record
+        self.waiting_ms += waited_ms
+        self.waiting_since = None
+        self.confirmation = None
+        return record
 
     def _deny(self, pending: _Confirmation, waited_ms: int) -> RunRecord:
         """A denied confirmation ends the run as cancelled with user_denied (section 5)."""

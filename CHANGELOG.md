@@ -24,6 +24,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Native run API (#25; RM21, AC11; spec 0.17 section 7.4):
+  `POST /relay/v1/runs` accepts messages and an optional
+  `execution_mode` and answers 202 with `run_id`, `state`,
+  `state_version`, and `events_url`; the run continues in a background
+  task (`LocalOrchestrator.start`), so it does not depend on the request
+  that created it. `GET /relay/v1/runs/{id}` shows state, version,
+  output, error and reason codes, the pending question or approval,
+  metrics, and the requested and effective modes; the confirmation token
+  is shown once, to the first reader, and is never stored or traced.
+  `GET /relay/v1/runs/{id}/events` is SSE with the stored `seq` as the
+  event ID: a reconnect with `Last-Event-ID` replays later retained
+  events from the store with no model call, tool run, or write, and a
+  live stream follows the run across waits until its terminal event.
+  `POST .../resume` (input, or approval ID, token, and `approve`) and
+  `POST .../cancel` take `expected_version`; a stale version is 409,
+  a body that does not match the waiting state is 400
+  `invalid_resume_input`, and a bad token is 403 `approval_invalid`.
+  Cancel ends a waiting run at once (reason `cancel_requested`, pending
+  approval voided in the same transaction) and asks a running run to
+  stop; a run owned by a chat request is 409 `invalid_state`. `/healthz`
+  and `/readyz` report liveness and, for each permitted mode, whether
+  its models are available and warm. The execution modes share the
+  chat endpoint's operator policy (`ChatSettings.allowed_modes`).
+  `parallel_demo` now fails explicitly with `workflow_unavailable`
+  (reason `parallel_workflow`, 503 on chat) when no workflow is enabled,
+  no external model is configured, or the run routes to the workflow,
+  which is not implemented until #30; auto and `local_only` keep their
+  rules. `Idempotency-Key` is still refused until #26, and cancel during
+  an in-flight write is #29. `tests/test_native_run_api.py` covers it
+  with model doubles, including one loopback-socket test of a stream
+  that stays open across a wait; no live model is run.
 - Client-owned tools alias (#24; RM08, RM19, AC10; spec 0.16 section 7.2):
   `relaymind-client-tools` now has a backend (`ClientToolsChat`,
   `relaymind.orchestrator.client_loop`). Each request is its own run with
@@ -629,6 +660,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.16 → 0.17: section 7.4 defines the native run bodies and
+  views (RM21, AC11, #25): the creation checks and 202 body, the run view
+  and the once-only confirmation token, the SSE stream (event ID is the
+  stored `seq`, replay from `Last-Event-ID` reads the store only, the
+  stream stays open across waits and ends after the terminal event), the
+  resume check order, cancel semantics, and `/healthz` and `/readyz`
+  readiness per permitted mode. Section 4.4 names the unimplemented
+  workflow as a cause of `workflow_unavailable` and says the gateway
+  checks it before routing. Section 8 adds the `cancel_requested` reason
+  to `run.cancelled`.
 - Requalify llama.cpp b11785 on Apple Silicon macOS/Metal and native
   x86-64 Windows/CPU (#58; RM18). Migrate the manifest to `--reasoning off`,
   derive the matching HTTP override, and explicitly separate reasoning

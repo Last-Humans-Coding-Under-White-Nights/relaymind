@@ -28,6 +28,7 @@ from gateway_helpers import (
     LOCAL_MODEL_ID,
     STAGING_OK,
     assert_needs_external,
+    assert_workflow_unavailable,
     build_gateway,
     executed_tools,
     replace_handler,
@@ -679,8 +680,7 @@ def test_external_only_records_a_gateway_decision_without_a_generation(tmp_path)
     assert [s["name"] for s in accepted["skills_offered"]] == list(gateway.skills.names())
 
 
-@pytest.mark.parametrize("mode", ["parallel_demo", "auto"])
-def test_an_admitted_parallel_workflow_routes_parallel(tmp_path, mode):
+def test_an_admitted_parallel_workflow_routes_parallel_in_auto(tmp_path):
     """Section 4.4 (spec 0.6): enabled workflow, declaring skill, admitting mode.
 
     The parallel workflow itself (#30) is not wired into this loop, so the
@@ -690,12 +690,63 @@ def test_an_admitted_parallel_workflow_routes_parallel(tmp_path, mode):
         tmp_path,
         [route_turn("health-and-diagnostic-checklist")],
         enabled_workflows={"health-and-diagnostic-checklist"},
-        parallel_in_auto=mode == "auto",
+        parallel_in_auto=True,
     )
-    outcome, events = run(gateway, "Run the health checklist for staging-api.", execution_mode=mode)
+    outcome, events = run(
+        gateway, "Run the health checklist for staging-api.", execution_mode="auto"
+    )
     assert of_type(events, "route.selected")[0].payload["decision"]["route"] == "parallel"
     assert_needs_external(gateway, outcome, events, "parallel_workflow")
     assert executed_tools(events) == []
+
+
+def test_an_admitted_parallel_route_in_parallel_demo_fails_as_workflow_unavailable(tmp_path):
+    """RM15, RM21, section 4.4 (spec 0.17): parallel_demo fails explicitly.
+
+    The workflow (#30) is not implemented, so a parallel route in
+    parallel_demo ends as failed with workflow_unavailable, never as a
+    quiet needs_external or a single-actor handoff.
+    """
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn("health-and-diagnostic-checklist")],
+        enabled_workflows={"health-and-diagnostic-checklist"},
+        external_turns=[],
+    )
+    outcome, events = run(
+        gateway, "Run the health checklist for staging-api.", execution_mode="parallel_demo"
+    )
+    assert of_type(events, "route.selected")[0].payload["decision"]["route"] == "parallel"
+    assert_workflow_unavailable(gateway, outcome, events)
+    assert executed_tools(events) == []
+    assert not of_type(events, "handoff.started")
+
+
+@pytest.mark.parametrize(
+    ("enabled", "external"),
+    [(False, True), (True, False)],
+    ids=["no-enabled-workflow", "no-external-endpoint"],
+)
+def test_parallel_demo_fails_before_routing_when_its_workflow_cannot_run(
+    tmp_path, enabled, external
+):
+    """RM21, section 4.4 (spec 0.17): configuration without the workflow's needs.
+
+    No model is called: a run that cannot succeed does not spend a
+    routing generation.
+    """
+    gateway = build_gateway(
+        tmp_path,
+        [],
+        enabled_workflows={"health-and-diagnostic-checklist"} if enabled else (),
+        external_turns=[] if external else None,
+    )
+    outcome, events = run(
+        gateway, "Run the health checklist for staging-api.", execution_mode="parallel_demo"
+    )
+    assert_workflow_unavailable(gateway, outcome, events)
+    assert not of_type(events, "route.selected")
+    assert gateway.adapter.requests == []
 
 
 @pytest.mark.parametrize(
@@ -703,9 +754,8 @@ def test_an_admitted_parallel_workflow_routes_parallel(tmp_path, mode):
     [
         ("auto", True, False),
         ("local_only", True, True),
-        ("parallel_demo", False, False),
     ],
-    ids=["auto-without-policy", "local-only", "not-enabled"],
+    ids=["auto-without-policy", "local-only"],
 )
 def test_a_parallel_skill_the_run_does_not_admit_routes_external(tmp_path, mode, enabled, in_auto):
     """Section 4.4 (spec 0.6): otherwise external with reason parallel_workflow."""
@@ -719,6 +769,26 @@ def test_a_parallel_skill_the_run_does_not_admit_routes_external(tmp_path, mode,
     decision = of_type(events, "route.selected")[0].payload["decision"]
     assert (decision["route"], decision["reason_code"]) == ("external", "parallel_workflow")
     assert_needs_external(gateway, outcome, events, "parallel_workflow")
+
+
+def test_parallel_demo_does_not_hand_a_parallel_skill_off_when_it_is_not_enabled(tmp_path):
+    """RM21, section 4.4 (spec 0.17): a skill declaring a workflow that is not enabled.
+
+    Another workflow is enabled, so the precondition holds and the skill
+    routes external with parallel_workflow; in parallel_demo that is the
+    unavailable workflow, not a handoff.
+    """
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn("health-and-diagnostic-checklist")],
+        enabled_workflows={"some-other-workflow"},
+        external_turns=[],
+    )
+    outcome, events = run(
+        gateway, "Run the health checklist for staging-api.", execution_mode="parallel_demo"
+    )
+    assert_workflow_unavailable(gateway, outcome, events)
+    assert not of_type(events, "handoff.started")
 
 
 # --- RM05 provenance and the run language (section 5, spec 0.6) ---------------------

@@ -9,6 +9,12 @@ run exists, so a rejected request has no run. Errors use the contract of
 internal_error with no detail (RM12); the operator log names its type
 and where it was raised, never its text.
 
+The native run API (RM21, spec 0.17 section 7.4) is served by the same
+app: six endpoints plus /healthz and /readyz, with the same token, error
+contract, and execution mode policy. A native run continues in the
+background after its 202, so these routes only start, read, resume, or
+cancel it.
+
 The app holds no model, tool, or store logic: the orchestrator owns it
 (section 3).
 """
@@ -42,10 +48,29 @@ from relaymind.api.chat_request import (
     parse_chat_request,
 )
 from relaymind.api.errors import ApiError, error_from_exception
-from relaymind.orchestrator.local_loop import LocalOrchestrator
+from relaymind.api.native import (
+    NativeSettings,
+    event_stream,
+    events_url,
+    parse_expected_version,
+    parse_last_event_id,
+    parse_resume_request,
+    parse_run_request,
+    readiness,
+    run_view,
+    sweep_expired_waits,
+)
+from relaymind.orchestrator.local_loop import LocalOrchestrator, StartedRun
 from relaymind.orchestrator.route_decision import ExecutionMode
+from relaymind.orchestrator.run_state import RunState
 
-__all__ = ["MIN_TOKEN_LENGTH", "ChatSettings", "create_app", "generate_application_token"]
+__all__ = [
+    "MIN_TOKEN_LENGTH",
+    "ChatSettings",
+    "NativeSettings",
+    "create_app",
+    "generate_application_token",
+]
 
 RUN_ID_HEADER = "X-RelayMind-Run-ID"
 MODE_HEADER = "X-RelayMind-Execution-Mode"
@@ -81,6 +106,7 @@ def create_app(
     orchestrator: LocalOrchestrator,
     client_tools: ChatBackend | None = None,
     settings: ChatSettings | None = None,
+    native: NativeSettings | None = None,
 ) -> FastAPI:
     """The compatible API over one orchestrator.
 
@@ -93,6 +119,7 @@ def create_app(
     """
     token = generate_application_token()
     settings = settings or ChatSettings()
+    native = native or NativeSettings()
     backends: dict[str, ChatBackend] = {MANAGED: ManagedChat(orchestrator)}
     if client_tools is not None:
         backends[CLIENT_TOOLS] = client_tools
@@ -126,7 +153,7 @@ def create_app(
             raise ApiError(
                 "unsupported_parameter", f"the {IDEMPOTENCY_HEADER} header is not supported yet"
             )
-        mode = _execution_mode(request.headers.get(MODE_HEADER), chat.alias, settings)
+        mode = _execution_mode(request.headers.get(MODE_HEADER), MODE_HEADER, chat.alias, settings)
         result = await backends[chat.alias].complete(chat, mode)
         headers = {RUN_ID_HEADER: result.run_id}
         created = int(time.time())
@@ -141,7 +168,112 @@ def create_app(
         result = await collect_live(result)
         return JSONResponse(completion_body(chat.alias, result, created), headers=headers)
 
+    # -- the native run API (RM21, spec 0.17 section 7.4) ---------------------
+
+    @app.post("/relay/v1/runs")
+    @_guarded
+    async def create_run(request: Request) -> Response:
+        require_bearer_token(request.headers.get("authorization"), token)
+        run = parse_run_request(_decode(await request.body()))
+        if IDEMPOTENCY_HEADER in request.headers:
+            raise ApiError(
+                "unsupported_parameter", f"the {IDEMPOTENCY_HEADER} header is not supported yet"
+            )
+        mode = _execution_mode(run.execution_mode, "execution_mode", None, settings)
+        started = orchestrator.start(
+            run.messages, execution_mode=None if run.execution_mode is None else mode.value
+        )
+        return _accepted(orchestrator, started)
+
+    @app.get("/relay/v1/runs/{run_id}")
+    @_guarded
+    async def get_run(request: Request) -> Response:
+        require_bearer_token(request.headers.get("authorization"), token)
+        sweep_expired_waits(orchestrator)
+        view = run_view(orchestrator, request.path_params["run_id"], reveal_token=True)
+        return JSONResponse(view, headers={"Cache-Control": "no-store"})
+
+    @app.get("/relay/v1/runs/{run_id}/events")
+    @_guarded
+    async def get_events(request: Request) -> Response:
+        require_bearer_token(request.headers.get("authorization"), token)
+        run_id = request.path_params["run_id"]
+        cursor = parse_last_event_id(request.headers.get("last-event-id"))
+        orchestrator.store.get_run(run_id)  # 404 before the stream starts
+        return _ClosingStream(
+            event_stream(orchestrator, run_id, cursor, native),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    @app.post("/relay/v1/runs/{run_id}/resume")
+    @_guarded
+    async def resume_run(request: Request) -> Response:
+        require_bearer_token(request.headers.get("authorization"), token)
+        run_id = request.path_params["run_id"]
+        orchestrator.store.get_run(run_id)  # 404 first
+        resume = parse_resume_request(_decode(await request.body()))
+        record = orchestrator.store.get_run(run_id)
+        # An input mixed with approval fields matches no waiting state: it
+        # is passed on as unusable so the terminal and version checks of
+        # the waiting state still come first (section 5).
+        if RunState(record.state) is RunState.WAITING_CONFIRMATION:
+            started = orchestrator.start_confirmation(
+                run_id,
+                resume.expected_version,
+                approval_id=resume.approval_id,
+                token=resume.token,
+                approve=None if resume.input is not None else resume.approve,
+            )
+        else:
+            started = orchestrator.start_resume(
+                run_id,
+                resume.expected_version,
+                None if resume.has_approval_fields else resume.input,
+            )
+        return _accepted(orchestrator, started)
+
+    @app.post("/relay/v1/runs/{run_id}/cancel")
+    @_guarded
+    async def cancel_run(request: Request) -> Response:
+        require_bearer_token(request.headers.get("authorization"), token)
+        run_id = request.path_params["run_id"]
+        orchestrator.store.get_run(run_id)  # 404 first
+        body = _decode(await request.body())
+        if not isinstance(body, dict):
+            raise ApiError("invalid_request", "the request body must be a JSON object")
+        expected = parse_expected_version(body.get("expected_version"))
+        await orchestrator.cancel(run_id, expected, wait_seconds=native.cancel_wait_seconds)
+        return JSONResponse(run_view(orchestrator, run_id), headers={"Cache-Control": "no-store"})
+
+    @app.get("/healthz")
+    @_guarded
+    async def healthz(request: Request) -> Response:
+        require_bearer_token(request.headers.get("authorization"), token)
+        return JSONResponse({"status": "ok"})
+
+    @app.get("/readyz")
+    @_guarded
+    async def readyz(request: Request) -> Response:
+        require_bearer_token(request.headers.get("authorization"), token)
+        ready, body = await readiness(orchestrator, settings.allowed_modes)
+        return JSONResponse(body, status_code=200 if ready else 503)
+
     return app
+
+
+def _accepted(orchestrator: LocalOrchestrator, started: StartedRun) -> Response:
+    """The 202 body of a created or resumed run (spec 0.17 section 7.4)."""
+    record = orchestrator.store.get_run(started.run_id)
+    return JSONResponse(
+        {
+            "run_id": started.run_id,
+            "state": record.state,
+            "state_version": record.version,
+            "events_url": events_url(started.run_id),
+        },
+        status_code=202,
+    )
 
 
 _Handler = Callable[[Request], Awaitable[Response]]
@@ -173,6 +305,9 @@ def _guarded(handler: _Handler) -> _Handler:
             return await handler(request)
         except Exception as exc:
             error = error_from_exception(exc)
+            if error.run_id is None and error.code != "unauthenticated":
+                # A run endpoint names the run its request was about.
+                error.run_id = request.path_params.get("run_id")
             if error.code == "internal_error":
                 _log_internal(request, exc)
             return _error_response(error)
@@ -208,17 +343,22 @@ def _decode(raw: bytes) -> object:
         raise ApiError("invalid_request", "the request body must be valid JSON") from None
 
 
-def _execution_mode(header: str | None, alias: str, settings: ChatSettings) -> ExecutionMode:
-    """The effective mode from the header: absent is auto, never downgraded (section 7.1)."""
-    if header is None:
+def _execution_mode(
+    value: object, source: str, alias: str | None, settings: ChatSettings
+) -> ExecutionMode:
+    """The effective mode from a header or a native field: absent is auto, never downgraded.
+
+    One enumeration and one operator policy serve both surfaces (section 7.4).
+    """
+    if value is None:
         mode = ExecutionMode.AUTO
     else:
         try:
-            mode = ExecutionMode(header)
+            mode = ExecutionMode(value)
         except ValueError:
             raise ApiError(
                 "invalid_execution_mode",
-                f"{MODE_HEADER} must be one of: {', '.join(m.value for m in ExecutionMode)}",
+                f"{source} must be one of: {', '.join(m.value for m in ExecutionMode)}",
             ) from None
     if mode is ExecutionMode.PARALLEL_DEMO and alias == CLIENT_TOOLS:
         raise ApiError(

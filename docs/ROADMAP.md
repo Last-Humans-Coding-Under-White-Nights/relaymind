@@ -289,6 +289,11 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   backend yet and the mid-stream failure path stays tested with a double.
 - Native run API: runs, events SSE, resume, cancel, idempotency (#25,
   #26; RM21). SSE exposes the events recorded since M2.
+  #25 is implemented with model doubles (`tests/test_native_run_api.py`,
+  spec 0.17): the six endpoints, `/healthz` and `/readyz`, Last-Event-ID
+  replay that reads the store only, and `parallel_demo` failing with
+  `workflow_unavailable` until #30. Idempotency (#26) and in-flight
+  write cancellation (#29) are not part of it.
 - Cancellation during generation and in-flight writes (#29; RM10, RM14,
   RM17); closes AC12 together with #8.
 - Demo trace UI (#28; RM23), including the visual timing view over the

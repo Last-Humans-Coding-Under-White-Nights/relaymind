@@ -123,6 +123,21 @@ itself, with the manifest's SHA-256; any other file fails the run.
   validates its generation, so no production backend forwards a live
   provider stream yet.
 
+- The native run API, deterministic (issue #25, RM21, AC11, spec 0.17
+  section 7.4): `pytest tests/test_native_run_api.py` runs the real
+  orchestrator over model doubles inside one event loop, because a native
+  run continues in the background after its 202. It checks the creation
+  checks and the 202 body, the run view, event replay with
+  `Last-Event-ID` (the model double, tool operations, and stored events
+  are unchanged by a replay), an SSE disconnect that leaves the run
+  alone, resume and cancel with stale, wrong-state, and wrong-token
+  cases, the once-only confirmation token, operator policy over the
+  execution modes, `local_only` returning `needs_external` with no
+  external call, `parallel_demo` failing with `workflow_unavailable`, and
+  `/healthz` and `/readyz` with explicit model warm state. One test
+  reads a live stream over a loopback socket across a clarification. No
+  live model is run, so there is no live record.
+
 - AC10 and the client-owned alias, deterministic (issue #24, RM08, RM19,
   spec 0.16 section 7.2): `pytest tests/test_client_owned_tools.py` runs
   the real orchestrator over model doubles. It checks the function call
