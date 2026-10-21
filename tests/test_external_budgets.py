@@ -135,3 +135,33 @@ def test_remaining_budgets_report_what_the_external_model_has_left():
         "external_generations": 6,
         "external_seconds": 30.0,
     }
+
+
+def test_an_external_timeout_names_the_limit_that_bounded_the_generation():
+    """RM03, RM16: the trace names the limit that stopped the work, not a later one.
+
+    external_seconds is fixed for each generation while the run's time
+    left shrinks, so the limit must be the one in force when the
+    generation started (review of #18).
+    """
+    meter, clock = external_meter(run_active_seconds=60.0, external_seconds=30.0)
+    clock.advance(4)  # the local stage used 4 seconds
+    assert meter.remaining_seconds() == 30.0
+    clock.advance(30)  # the generation timed out at external_seconds
+    assert meter.time_exhausted().budget == "external_seconds"
+
+    clock.advance(10)  # 44 seconds used, 16 left in the run
+    assert meter.remaining_seconds() == 16.0
+    clock.advance(16)
+    assert meter.time_exhausted().budget == "run_active_seconds"
+
+
+def test_external_tool_executions_are_reported_in_the_usage():
+    """RM03, RM16: budget_usage counts every executed tool of the run."""
+    clock = FakeClock()
+    meter = BudgetMeter(LocalBudgets(), clock=clock)
+    meter.charge_tool_call()
+    meter.start_external()
+    meter.charge_tool_call()
+    meter.charge_tool_call()
+    assert meter.usage()["tool_calls"] == 3

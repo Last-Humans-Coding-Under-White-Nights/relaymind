@@ -94,6 +94,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from relaymind.adapters import (
+    AdapterCapabilities,
     Completed,
     GenerationFailed,
     GenerationOptions,
@@ -820,6 +821,10 @@ class _Run:
                     tool_status=blocker["status"],
                 )
             )
+        # The external stage works from the recorded evidence the envelope
+        # carries, not from what the local loop kept: an operation can be
+        # recorded just before a local stop (RM05, RM13).
+        self.results[:] = [ToolResult.from_json_object(op["result"]) for op in operations]
 
         skill = self.skill
         if skill is None and self.decision is not None and self.decision.skill_id is not None:
@@ -869,7 +874,7 @@ class _Run:
             capabilities = await external.adapter.capabilities()
             if schemas:
                 capabilities.require("tool_calling")
-            size = await measure_request(external.adapter, conversation, schemas)
+            size = await measure_request(external.adapter, capabilities, conversation, schemas)
         except (UnsupportedCapabilityError, TokenCountError) as exc:
             return self._fail(
                 EXTERNAL_FAILED,
@@ -898,7 +903,7 @@ class _Run:
         self.authority.hand_off_to_external()
         self.meter.start_external()
         try:
-            answer = await self._external(conversation, schemas, available, skill)
+            answer = await self._external(conversation, schemas, available, skill, capabilities)
         except ContextLimitExceeded as exceeded:
             return self._fail_context(exceeded.size)
         except ExternalFailure as failure:
@@ -941,6 +946,7 @@ class _Run:
         schemas: tuple[ToolSchema, ...],
         available: frozenset[str],
         skill: Skill | None,
+        capabilities: AdapterCapabilities,
     ) -> str:
         """The external model's bounded loop: propose tools, then answer (RM13, RM14).
 
@@ -956,17 +962,14 @@ class _Run:
                 "external", conversation, schemas, EXTERNAL_OPTIONS
             )
             if generation.calls:
-                call = generation.calls[0]
-                admitted, rejection = self._admit(generation.calls, available, self.results)
-                proposal_id = self._propose(call, skill, rejection)
-                for extra in generation.calls[1:]:
-                    self._propose(extra, skill, rejection)
+                call, admitted, rejection, proposal_id = self._tool_turn(
+                    generation, available, skill
+                )
                 if rejection is not None:
                     conversation += _tool_exchange(call, {"error": rejection})
                 else:
                     assert admitted is not None
-                    result = await self._dispatch(admitted, proposal_id, EXTERNAL_ACTOR)
-                    self.results.append(result)
+                    result = await self._run_admitted(admitted, proposal_id, EXTERNAL_ACTOR)
                     conversation += _tool_exchange(call, result.to_json_object())
             elif generation.text.strip() and (
                 predicate is None or predicate(generation.text, self.results)
@@ -978,7 +981,13 @@ class _Run:
                     Message(role=Role.USER, content=CORRECTION),
                 ]
             # Tool results accumulate, so the request is measured again (RM13).
-            size = await measure_request(self.active_model.adapter, conversation, schemas)
+            try:
+                size = await measure_request(
+                    self.active_model.adapter, capabilities, conversation, schemas
+                )
+            except (UnsupportedCapabilityError, TokenCountError) as exc:
+                # Section 11: an external stage that cannot finish is external_failed.
+                raise ExternalFailure(f"the external request could not be measured: {exc}") from exc
             if not size.fits:
                 raise ContextLimitExceeded(size)
 
@@ -1189,13 +1198,9 @@ class _Run:
             purpose = "skill"
 
             if generation.calls:
-                call = generation.calls[0]
-                admitted, rejection = self._admit(generation.calls, available, results)
-                # RM16, RM23: every proposed call is recorded, so a turn
-                # with several calls keeps all of them in the trace.
-                proposal_id = self._propose(call, skill, rejection)
-                for extra in generation.calls[1:]:
-                    self._propose(extra, skill, rejection)
+                call, admitted, rejection, proposal_id = self._tool_turn(
+                    generation, available, skill
+                )
                 if rejection is not None and rejection["code"] == CONFIRMATION_REQUIRED:
                     # RM11: the confirmation flow (#19) is not wired here, so
                     # a mutating tool is never executed by this loop.
@@ -1205,9 +1210,7 @@ class _Run:
                     conversation += _tool_exchange(call, {"error": rejection})
                     continue
                 assert admitted is not None
-                result = await self._dispatch(admitted, proposal_id, LOCAL_ACTOR)
-                self.local_proposals.pop(proposal_id, None)
-                results.append(result)
+                result = await self._run_admitted(admitted, proposal_id, LOCAL_ACTOR)
                 if result.status is not ToolStatus.SUCCEEDED:
                     raise Escalation(
                         "tool_failure",
@@ -1247,6 +1250,29 @@ class _Run:
         if self.meter.may_repair():
             return "repair"
         raise Escalation("invalid_output", f"unrepaired output: {problem['code']}")
+
+    def _tool_turn(
+        self, generation: _Generation, available: frozenset[str], skill: Skill | None
+    ) -> tuple[ToolCall, ValidatedCall | None, dict[str, str] | None, str]:
+        """Admit a tool turn and record every proposed call (RM05, RM09, RM11, RM16).
+
+        The same checks hold for the local and the external actor. Every
+        proposed call is recorded, so a turn with several calls keeps all
+        of them in the trace (RM16, RM23). Returns the first call, the
+        admitted call or the rejection, and the first call's proposal ID.
+        """
+        call = generation.calls[0]
+        admitted, rejection = self._admit(generation.calls, available, self.results)
+        proposal_id = self._propose(call, skill, rejection)
+        for extra in generation.calls[1:]:
+            self._propose(extra, skill, rejection)
+        return call, admitted, rejection, proposal_id
+
+    async def _run_admitted(self, call: ValidatedCall, proposal_id: str, actor: str) -> ToolResult:
+        """Dispatch an admitted call and keep its result as run evidence."""
+        result = await self._dispatch(call, proposal_id, actor)
+        self.results.append(result)
+        return result
 
     def _admit(
         self,
@@ -1349,6 +1375,9 @@ class _Run:
 
         def on_finished(execution: Execution) -> None:
             self.secrets |= execution.secrets
+            # The proposal has a recorded outcome now, so a handoff lists
+            # it as a completed operation, never also as a proposal (RM13).
+            self.local_proposals.pop(proposal_id, None)
             result = execution.result
             self.emit(
                 EventType.TOOL_FINISHED,

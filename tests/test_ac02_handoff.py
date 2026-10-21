@@ -611,7 +611,7 @@ def test_a_local_dispatch_after_the_handoff_is_refused(tmp_path, local_prep_skil
     from relaymind.orchestrator.handoff import DispatchRevokedError
     from relaymind.orchestrator.local_loop import _Run
 
-    async def stray_local_dispatch(self, conversation, schemas, available, skill):
+    async def stray_local_dispatch(self, conversation, schemas, available, skill, capabilities):
         call = self.o.executor.validate(
             self.run_id,
             "get_recent_logs",
@@ -664,3 +664,108 @@ def test_the_external_stage_is_bounded_by_the_entire_run_active_time(tmp_path, l
     (failed,) = of_type(events, "run.failed")
     assert failed.payload["budget"] == "run_active_seconds"
     assert not of_type(events, "answer.delta")
+
+
+# --- review of #18: evidence recorded before a local stop -----------------------------
+
+
+def slow_first_tool(tmp_path, local_prep_skills, external_turns):
+    """The first local tool succeeds and is recorded, then the stage time is spent."""
+    gateway = build_gateway(
+        tmp_path,
+        [
+            route_turn("investigate-performance"),
+            tool_turn("get_latest_deployment", call_id="c1", service="staging-api"),
+        ],
+        skill_roots=local_prep_skills,
+        external_turns=external_turns,
+        external_capabilities=NO_TOKENIZER,
+    )
+    original = gateway.tools.get("get_latest_deployment").declaration.handler
+
+    def slow(arguments):
+        gateway.clock.advance(5)  # past the 4-second local stage limit
+        return original(arguments)
+
+    replace_handler(gateway, "get_latest_deployment", slow)
+    return gateway
+
+
+def test_evidence_recorded_before_a_local_stop_counts_in_the_external_stage(
+    tmp_path, local_prep_skills
+):
+    """RM13, RM06: the external stage judges the answer on the envelope's evidence.
+
+    The tool result is in the store and in the envelope, so the
+    completion predicate must see it too.
+    """
+    gateway = slow_first_tool(tmp_path, local_prep_skills, [text_turn(ANSWER)])
+    outcome, events = run(gateway, PROMPT)
+
+    (handoff,) = of_type(events, "handoff.started")
+    assert handoff.payload["reason_code"] == "local_budget"
+    assert len(handoff.payload["operation_ids"]) == 1
+    assert outcome.state is RunState.COMPLETED
+    assert len(gateway.external.requests) == 1
+
+
+def test_a_proposal_that_produced_an_operation_is_not_also_a_local_proposal(
+    tmp_path, local_prep_skills
+):
+    """RM13: a call that ran is a completed operation, never also an unverified proposal."""
+    gateway = slow_first_tool(tmp_path, local_prep_skills, [text_turn(ANSWER)])
+    run(gateway, PROMPT)
+
+    block = handoff_block(gateway.external.requests[0])
+    assert len(block["completed_operation_ids"]) == 1
+    assert block["local_proposals"] == []
+
+
+def test_a_token_count_failure_in_the_external_stage_is_external_failed(
+    tmp_path, local_prep_skills
+):
+    """Section 11, RM13: a request that cannot be measured again ends external_failed."""
+    from relaymind.adapters import TokenCountError
+
+    class FailingCount(ScriptedAdapter):
+        async def count_tokens(self, messages, tool_schemas=()):
+            self.counted.append((tuple(messages), tuple(tool_schemas)))
+            if len(self.counted) > 1:
+                raise TokenCountError("the tokenizer is gone")
+            return 10
+
+    gateway = after_local_collection(tmp_path, local_prep_skills, logs_then_answer())
+    external = FailingCount(
+        turns=logs_then_answer(),
+        locality="external",
+        capabilities=make_capabilities(tokenizer_available=True, context_limit=100_000),
+    )
+    gateway.orchestrator.external = ConfiguredModel(adapter=external, model_id=EXTERNAL_MODEL_ID)
+    outcome, events = run(gateway, PROMPT)
+
+    assert outcome.state is RunState.FAILED
+    assert outcome.error_code == "external_failed"
+    assert len(external.requests) == 1
+    assert not of_type(events, "answer.delta")
+
+
+def test_external_capabilities_are_fetched_once_per_handoff(tmp_path, local_prep_skills):
+    """RM18: capabilities are read once and reused for every measurement."""
+
+    class CountingCapabilities(ScriptedAdapter):
+        fetched = 0
+
+        async def capabilities(self):
+            self.fetched += 1
+            return await super().capabilities()
+
+    gateway = after_local_collection(tmp_path, local_prep_skills, logs_then_answer())
+    external = CountingCapabilities(
+        turns=logs_then_answer(), locality="external", capabilities=NO_TOKENIZER
+    )
+    gateway.orchestrator.external = ConfiguredModel(adapter=external, model_id=EXTERNAL_MODEL_ID)
+    outcome, _ = run(gateway, PROMPT)
+
+    assert outcome.state is RunState.COMPLETED
+    assert len(external.requests) == 2
+    assert external.fetched == 1

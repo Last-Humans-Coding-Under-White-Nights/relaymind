@@ -160,6 +160,8 @@ class BudgetMeter:
         self._run = dict.fromkeys(_RUN_LIMITS, 0)
         self._external = False
         self._external_generations = 0
+        # The time limit that bounded the last timed work (remaining_seconds).
+        self._bound: str | None = None
 
     # -- stages ------------------------------------------------------------
 
@@ -175,12 +177,14 @@ class BudgetMeter:
         self._stages += 1
         self._stage_started = self._clock.monotonic()
         self._stage = dict.fromkeys(_STAGE_COUNTERS, 0)
+        self._bound = None
 
     # -- the external stage ---------------------------------------------------
 
     def start_external(self) -> None:
         """Switch to the external phase after a handoff (section 11)."""
         self._external = True
+        self._bound = None
 
     def external_room(self) -> BudgetExceededError | None:
         """The limit that stops an external stage from starting, or None.
@@ -222,34 +226,33 @@ class BudgetMeter:
         """Active seconds over every stage of the run; waiting is excluded."""
         return self._closed_active + self.elapsed_seconds()
 
+    def _time_bound(self) -> tuple[float, str]:
+        """The seconds left under the tighter time limit, and that limit's name."""
+        run_left = self.budgets.run_active_seconds - self.active_seconds()
+        if self._external:
+            name, left = "external_seconds", float(self.budgets.external_seconds)
+        else:
+            name, left = "active_seconds", self.budgets.active_seconds - self.elapsed_seconds()
+        if run_left < left:
+            return run_left, "run_active_seconds"
+        return left, name
+
     def remaining_seconds(self) -> float:
         """The tighter of the stage and the entire-run time budgets.
 
         In the external phase: external_seconds, or the entire-run time
-        left if that is less.
+        left if that is less. The meter notes which limit is the bound,
+        so time_exhausted names it even after the time has passed: an
+        external generation's bound is fixed, while the run's time left
+        keeps shrinking (RM03, RM16).
         """
-        if self._external:
-            return min(
-                self.budgets.external_seconds,
-                self.budgets.run_active_seconds - self.active_seconds(),
-            )
-        return min(
-            self.budgets.active_seconds - self.elapsed_seconds(),
-            self.budgets.run_active_seconds - self.active_seconds(),
-        )
+        seconds, self._bound = self._time_bound()
+        return seconds
 
     def time_exhausted(self) -> BudgetExceededError:
-        """The stop for work that ran out of time: the tighter time budget."""
-        if self._external:
-            run_left = self.budgets.run_active_seconds - self.active_seconds()
-            if run_left < self.budgets.external_seconds:
-                return BudgetExceededError("run_active_seconds", self.budgets.run_active_seconds)
-            return BudgetExceededError("external_seconds", self.budgets.external_seconds)
-        stage_left = self.budgets.active_seconds - self.elapsed_seconds()
-        run_left = self.budgets.run_active_seconds - self.active_seconds()
-        if run_left < stage_left:
-            return BudgetExceededError("run_active_seconds", self.budgets.run_active_seconds)
-        return BudgetExceededError("active_seconds", self.budgets.active_seconds)
+        """The stop for work that ran out of time: the limit that bounded it."""
+        name = self._bound if self._bound is not None else self._time_bound()[1]
+        return BudgetExceededError(name, getattr(self.budgets, name))
 
     def check_time(self) -> None:
         """Raise once the stage or the entire-run active time budget is spent."""
@@ -262,9 +265,10 @@ class BudgetMeter:
 
     def _charge(self, names: tuple[str, ...], run_counter: str) -> None:
         self.check_time()
-        if self._external:
-            names = ()
-        for name in names:
+        # The per-stage limits do not apply to the external stage, but
+        # what it uses still counts in the run's usage (RM03, RM16).
+        checked = () if self._external else names
+        for name in checked:
             limit = getattr(self.budgets, name)
             if self._stage[name] + 1 > limit:
                 raise BudgetExceededError(name, limit)

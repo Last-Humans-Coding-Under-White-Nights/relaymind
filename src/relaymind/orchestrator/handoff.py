@@ -33,6 +33,7 @@ from typing import Any
 import jsonschema
 
 from relaymind.adapters import (
+    AdapterCapabilities,
     Message,
     ModelAdapter,
     Role,
@@ -311,10 +312,16 @@ def _request_text(messages: Sequence[Message], tool_schemas: Sequence[ToolSchema
 
 
 async def measure_request(
-    adapter: ModelAdapter, messages: Sequence[Message], tool_schemas: Sequence[ToolSchema]
+    adapter: ModelAdapter,
+    capabilities: AdapterCapabilities,
+    messages: Sequence[Message],
+    tool_schemas: Sequence[ToolSchema],
 ) -> RequestSize:
-    """Measure a request against the adapter's context limit (RM13)."""
-    capabilities = await adapter.capabilities()
+    """Measure a request against the adapter's context limit (RM13).
+
+    capabilities is the adapter's record, fetched once by the caller and
+    reused for every measurement (section 6).
+    """
     if capabilities.tokenizer_available:
         size = await adapter.count_tokens(messages, tool_schemas)
         return RequestSize(size, capabilities.context_limit, "tokenizer")
