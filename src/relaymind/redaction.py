@@ -56,14 +56,7 @@ class Redactor:
 
     def redact(self, value: Any) -> Any:
         """A copy of a JSON value with every secret field's value replaced."""
-        if isinstance(value, Mapping):
-            return {
-                key: REDACTED if self.is_secret(key) else self.redact(item)
-                for key, item in value.items()
-            }
-        if isinstance(value, list | tuple):
-            return [self.redact(item) for item in value]
-        return value
+        return self._redact(value, frozenset())
 
     def redact_with_repeats(self, value: Any) -> Any:
         """redact(), and the same secret values replaced in every other string.
@@ -73,7 +66,19 @@ class Redactor:
         secret fields of this same value are scrubbed (spec 0.12,
         section 8), as whole tokens (see redact_text).
         """
-        return _scrub_strings(self.redact(value), self.secret_values(value))
+        return self._redact(value, self.secret_values(value))
+
+    def _redact(self, value: Any, secrets: Collection[str]) -> Any:
+        if isinstance(value, Mapping):
+            return {
+                key: REDACTED if self.is_secret(key) else self._redact(item, secrets)
+                for key, item in value.items()
+            }
+        if isinstance(value, list | tuple):
+            return [self._redact(item, secrets) for item in value]
+        if secrets and isinstance(value, str):
+            return redact_text(value, secrets)
+        return value
 
     def secret_values(self, value: Any) -> frozenset[str]:
         """The non-blank strings found under secret fields, at any depth."""
@@ -103,16 +108,3 @@ def redact_text(text: str, secrets: Iterable[str]) -> str:
         pattern = rf"(?<![A-Za-z0-9]){re.escape(secret)}(?![A-Za-z0-9])"
         text = re.sub(pattern, lambda _: REDACTED, text)
     return text
-
-
-def _scrub_strings(value: Any, secrets: Collection[str]) -> Any:
-    """A copy of a JSON value with known secrets replaced in its string values."""
-    if not secrets:
-        return value
-    if isinstance(value, str):
-        return redact_text(value, secrets)
-    if isinstance(value, Mapping):
-        return {key: _scrub_strings(item, secrets) for key, item in value.items()}
-    if isinstance(value, list | tuple):
-        return [_scrub_strings(item, secrets) for item in value]
-    return value

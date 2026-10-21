@@ -17,7 +17,6 @@ section 13); the sandbox is a disposable copy.
 """
 
 import json
-import shutil
 import sqlite3
 
 import pytest
@@ -25,20 +24,20 @@ import pytest
 from gateway_helpers import (
     build_gateway,
     executed_tools,
+    local_eligible_skills,
     route_turn,
     run,
     seed_with,
     text_turn,
     tool_turn,
 )
-from helpers import BASELINE, REPO_ROOT, of_type
+from helpers import BASELINE, of_type
 from relaymind.adapters import Role
 from relaymind.orchestrator.run_state import RunState
 from relaymind.redaction import REDACTED, Redactor
 from relaymind.tools import CallerContext
 from relaymind.tools.sandbox import READ_PERMISSION
 
-DEMO_SKILLS_ROOT = REPO_ROOT / "skills"
 PROMPT = "Why is staging-api slow right now?"
 SECRET = "svc-account:K9x2-live-7731"
 INJECTION = (
@@ -61,13 +60,7 @@ def poisoned_seed(tmp_path):
 @pytest.fixture
 def local_skills(tmp_path):
     """The demo skills, with investigate-performance allowed to run locally."""
-    root = tmp_path / "skills"
-    shutil.copytree(DEMO_SKILLS_ROOT, root)
-    manifest = root / "investigate-performance" / "skill.manifest.json"
-    data = json.loads(manifest.read_text("utf-8"))
-    data["local_eligible"] = True
-    manifest.write_text(json.dumps(data), "utf-8")
-    return [root]
+    return local_eligible_skills(tmp_path)
 
 
 def obedient_local_turns():
@@ -80,14 +73,13 @@ def obedient_local_turns():
     ]
 
 
-def poisoned_gateway(tmp_path, local_skills, turns=None, **options):
-    options.setdefault("redactor", REDACTOR)
+def poisoned_gateway(tmp_path, local_skills):
     return build_gateway(
         tmp_path,
-        turns if turns is not None else obedient_local_turns(),
+        obedient_local_turns(),
         skill_roots=local_skills,
         seed=poisoned_seed(tmp_path),
-        **options,
+        redactor=REDACTOR,
     )
 
 

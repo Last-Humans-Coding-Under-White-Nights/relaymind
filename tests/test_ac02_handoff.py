@@ -22,7 +22,6 @@ the demo skills with that one manifest flag changed, in tmp_path.
 
 import asyncio
 import json
-import shutil
 
 import pytest
 
@@ -32,13 +31,14 @@ from gateway_helpers import (
     assert_needs_external,
     build_gateway,
     executed_tools,
+    local_eligible_skills,
     replace_handler,
     route_turn,
     run,
     text_turn,
     tool_turn,
 )
-from helpers import DEMO_SKILLS_ROOT, ScriptedAdapter, make_capabilities, of_type
+from helpers import ScriptedAdapter, make_capabilities, of_type
 from relaymind.adapters import GenerationFailed, Role, TextDelta
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel
@@ -63,13 +63,7 @@ NO_TOKENIZER = make_capabilities(tokenizer_available=False)
 @pytest.fixture
 def local_prep_skills(tmp_path):
     """The demo skills, with investigate-performance allowed to run locally first."""
-    root = tmp_path / "skills"
-    shutil.copytree(DEMO_SKILLS_ROOT, root)
-    manifest = root / "investigate-performance" / "skill.manifest.json"
-    data = json.loads(manifest.read_text("utf-8"))
-    data["local_eligible"] = True
-    manifest.write_text(json.dumps(data), "utf-8")
-    return [root]
+    return local_eligible_skills(tmp_path)
 
 
 def local_collection():
