@@ -391,15 +391,6 @@ def test_an_unserved_alias_is_invalid_request(tmp_path):
     assert error_of(response)["code"] == "invalid_request"
 
 
-def test_an_idempotency_key_is_refused_until_idempotency_exists(tmp_path):
-    gateway = healthy_gateway(tmp_path)
-    response = chat(make_app(gateway), headers={"Idempotency-Key": "abc"})
-    assert response.status_code == 400
-    error = error_of(response)
-    assert error["code"] == "unsupported_parameter" and "Idempotency-Key" in error["message"]
-    assert gateway.adapter.requests == []
-
-
 # -- errors a run can reach ---------------------------------------------------------------
 
 

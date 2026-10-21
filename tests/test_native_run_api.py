@@ -4,8 +4,8 @@ Spec 0.17 section 7.4. The app runs the real orchestrator over model
 doubles; the client calls it in process inside one event loop, because
 a native run continues in the background after its 202. One test uses a
 real loopback socket to prove that an SSE stream stays open across a
-wait. Idempotency keys are issue #26 and in-flight writes are issue
-#29; neither is covered here.
+wait. Idempotency keys are covered by tests/test_idempotency.py (#26);
+in-flight writes are issue #29 and are not covered here.
 """
 
 import asyncio
@@ -186,24 +186,6 @@ def test_every_native_endpoint_needs_the_application_token(tmp_path):
         assert response.status_code == 401
         assert error_of(response)["code"] == "unauthenticated"
         assert response.headers["www-authenticate"] == "Bearer"
-
-
-def test_idempotency_keys_are_refused_until_they_are_implemented(tmp_path):
-    """Spec 0.17 section 7.4: never imply deduplication that does not exist (#26)."""
-    gateway = healthy_gateway(tmp_path)
-    app = make_app(gateway)
-
-    async def go():
-        async with session(app) as client:
-            return await client.post(
-                "/relay/v1/runs",
-                json={"messages": [{"role": "user", "content": "hi"}]},
-                headers={"Idempotency-Key": "k1"},
-            )
-
-    response = asyncio.run(go())
-    assert (response.status_code, error_of(response)["code"]) == (400, "unsupported_parameter")
-    assert gateway.adapter.requests == []
 
 
 def test_a_second_run_while_one_is_active_is_429_and_creates_nothing(tmp_path):

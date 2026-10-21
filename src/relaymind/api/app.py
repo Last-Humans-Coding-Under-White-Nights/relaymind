@@ -2,9 +2,10 @@
 
 ``create_app`` serves GET /v1/models and POST /v1/chat/completions over
 one orchestrator. The order of checks is fixed: the application token
-(401), the body (400), the Idempotency-Key header (400), then the
-execution mode header (400, then 403). Everything is checked before a
-run exists, so a rejected request has no run. Errors use the contract of
+(401), the body (400), the Idempotency-Key header (400), the
+execution mode header (400, then 403), then a stored key (a replay or
+409, ``relaymind.api.idempotency``). Everything is checked before a
+run exists, so a rejected request has no run and stores no key. Errors use the contract of
 ``relaymind.api.errors``; an unexpected exception becomes a fixed
 internal_error with no detail (RM12); the operator log names its type
 and where it was raised, never its text.
@@ -26,7 +27,7 @@ import secrets
 import time
 import traceback
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -48,6 +49,14 @@ from relaymind.api.chat_request import (
     parse_chat_request,
 )
 from relaymind.api.errors import ApiError, error_from_exception
+from relaymind.api.idempotency import (
+    REPLAYED_HEADER,
+    check_stored_key,
+    claim_for,
+    idempotency_key,
+    request_hash,
+    stored_chat_result,
+)
 from relaymind.api.native import (
     NativeSettings,
     event_stream,
@@ -74,7 +83,6 @@ __all__ = [
 
 RUN_ID_HEADER = "X-RelayMind-Run-ID"
 MODE_HEADER = "X-RelayMind-Execution-Mode"
-IDEMPOTENCY_HEADER = "Idempotency-Key"
 MIN_TOKEN_LENGTH = 32
 
 logger = logging.getLogger(__name__)
@@ -149,14 +157,23 @@ def create_app(
             supported_options=settings.supported_options,
             max_completion_tokens=settings.max_completion_tokens,
         )
-        if IDEMPOTENCY_HEADER in request.headers:
-            raise ApiError(
-                "unsupported_parameter", f"the {IDEMPOTENCY_HEADER} header is not supported yet"
-            )
-        mode = _execution_mode(request.headers.get(MODE_HEADER), MODE_HEADER, chat.alias, settings)
-        result = await backends[chat.alias].complete(chat, mode)
-        headers = {RUN_ID_HEADER: result.run_id}
+        key = idempotency_key(request.headers)
+        mode_header = request.headers.get(MODE_HEADER)
+        mode = _execution_mode(mode_header, MODE_HEADER, chat.alias, settings)
+        claim = claim_for(key, request_hash("chat", body, mode_header))
+        stored = check_stored_key(orchestrator.store, claim)
+        headers = {}
         created = int(time.time())
+        if stored is not None:
+            # A duplicate: answered from the stored run, so no model or tool runs.
+            result, ended = stored_chat_result(
+                orchestrator.store, stored.run_id, stream=chat.stream
+            )
+            created = int(ended.timestamp())
+            headers[REPLAYED_HEADER] = "true"
+        else:
+            result = await backends[chat.alias].complete(replace(chat, idempotency=claim), mode)
+        headers[RUN_ID_HEADER] = result.run_id
         if chat.stream:
             # Started here, so a failure before the first chunk still has its status.
             lines = await open_stream(chat.alias, result, created)
@@ -174,14 +191,21 @@ def create_app(
     @_guarded
     async def create_run(request: Request) -> Response:
         require_bearer_token(request.headers.get("authorization"), token)
-        run = parse_run_request(_decode(await request.body()))
-        if IDEMPOTENCY_HEADER in request.headers:
-            raise ApiError(
-                "unsupported_parameter", f"the {IDEMPOTENCY_HEADER} header is not supported yet"
-            )
+        body = _decode(await request.body())
+        run = parse_run_request(body)
+        key = idempotency_key(request.headers)
         mode = _execution_mode(run.execution_mode, "execution_mode", None, settings)
+        claim = claim_for(key, request_hash("native", body))
+        stored = check_stored_key(orchestrator.store, claim)
+        if stored is not None:
+            # A duplicate: the existing run's reference, with its current state.
+            record = orchestrator.store.get_run(stored.run_id)
+            existing = StartedRun(record.run_id, record.state, record.version)
+            return _accepted(existing, {REPLAYED_HEADER: "true"})
         started = orchestrator.start(
-            run.messages, execution_mode=None if run.execution_mode is None else mode.value
+            run.messages,
+            execution_mode=None if run.execution_mode is None else mode.value,
+            idempotency=claim,
         )
         return _accepted(started)
 
@@ -260,7 +284,7 @@ def create_app(
     return app
 
 
-def _accepted(started: StartedRun) -> Response:
+def _accepted(started: StartedRun, headers: dict[str, str] | None = None) -> Response:
     """The 202 body of a created or resumed run (spec 0.17 section 7.4)."""
     return JSONResponse(
         {
@@ -270,6 +294,7 @@ def _accepted(started: StartedRun) -> Response:
             "events_url": events_url(started.run_id),
         },
         status_code=202,
+        headers=headers,
     )
 
 

@@ -39,7 +39,13 @@ moment where a state and its slot disagree.
 from collections.abc import Mapping
 from enum import StrEnum
 
-from relaymind.store import RunRecord, RunStore, SlotUnavailableError, StaleVersionError
+from relaymind.store import (
+    IdempotencyClaim,
+    RunRecord,
+    RunStore,
+    SlotUnavailableError,
+    StaleVersionError,
+)
 from relaymind.store.run_store import EventDraft
 from relaymind.store.trace_event import EventType
 
@@ -136,15 +142,24 @@ class RunStateMachine:
         *,
         previous_run_id: str | None = None,
         accepted: EventDraft | None = None,
+        idempotency: IdempotencyClaim | None = None,
     ) -> RunRecord:
         """A new run in accepted. A retry links to the run it replaces (RM17).
+
+        idempotency stores the caller's key with the run (spec 0.18
+        section 7.4).
 
         accepted is the run.accepted event (RM22), written with the run in
         one transaction. Pass it so the run can fail or be cancelled
         straight from accepted (section 5): only run.accepted may be seq
         1, so without it the run's first event could not be a terminal one.
         """
-        return self.store.create_run(S.ACCEPTED, previous_run_id=previous_run_id, accepted=accepted)
+        return self.store.create_run(
+            S.ACCEPTED,
+            previous_run_id=previous_run_id,
+            accepted=accepted,
+            idempotency=idempotency,
+        )
 
     def get(self, run_id: str) -> RunRecord:
         return self.store.get_run(run_id)

@@ -25,6 +25,7 @@ from jsonschema.exceptions import SchemaError
 
 from relaymind.adapters import GenerationOptions, Message, Role, ToolCall
 from relaymind.api.errors import ApiError
+from relaymind.store import IdempotencyClaim
 from relaymind.tools.registry import check_parameters_schema
 
 __all__ = [
@@ -117,6 +118,8 @@ class ChatRequest:
     final_options: GenerationOptions
     tools: tuple[ClientTool, ...] = ()
     tool_choice: ToolChoice | None = None
+    # The caller's idempotency key, stored with the run (spec 0.18 section 7.4).
+    idempotency: IdempotencyClaim | None = None
 
 
 def _invalid(message: str) -> ApiError:

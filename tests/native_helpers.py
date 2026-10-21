@@ -29,10 +29,11 @@ async def session(app, *, auth=True):
         yield client
 
 
-async def start_run(client, prompt="Is staging-api healthy right now?", **fields):
+async def start_run(client, prompt="Is staging-api healthy right now?", *, headers=None, **fields):
     return await client.post(
         "/relay/v1/runs",
         json={"messages": [{"role": "user", "content": prompt}], **fields},
+        headers=headers,
     )
 
 

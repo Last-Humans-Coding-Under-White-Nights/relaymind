@@ -176,6 +176,7 @@ class ManagedChat(_RunChat):
             execution_mode=mode.value,
             model_alias=MANAGED,
             final_options=request.final_options,
+            idempotency=request.idempotency,
         )
         return self._result(outcome, stream=request.stream)
 
@@ -202,6 +203,7 @@ class ClientToolsChat(_RunChat):
             execution_mode=mode.value,
             model_alias=CLIENT_TOOLS,
             final_options=request.final_options,
+            idempotency=request.idempotency,
         )
         return self._result(outcome, stream=request.stream)
 

@@ -22,6 +22,10 @@ arguments, target, and the run's current state version. Every event is
 validated against the TraceEvent schema before it is written (section
 8), and run.accepted is always a run's first event (RM22).
 
+An idempotency key (spec 0.18 section 7.4) is stored with the run it
+creates, in the same transaction, and belongs to a caller. It leaves
+with its run: retention and explicit deletion remove it.
+
 Retention defaults to seven days, with explicit deletion. Redaction of
 configured secret fields happens before data reaches the store (RM12);
 local storage is not claimed to be encrypted.
@@ -146,6 +150,15 @@ MIGRATIONS: tuple[str, ...] = (
         content TEXT NOT NULL
     );
     """,
+    """
+    CREATE TABLE idempotency_keys (
+        caller TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        run_id TEXT NOT NULL UNIQUE REFERENCES runs(run_id) ON DELETE CASCADE,
+        PRIMARY KEY (caller, idempotency_key)
+    );
+    """,
 )
 
 
@@ -163,6 +176,17 @@ class SlotUnavailableError(RunStoreError):
     """Another run holds the active execution slot (section 11: 429)."""
 
     http_status = 429
+
+
+class IdempotencyKeyTakenError(RunStoreError):
+    """The caller's idempotency key already belongs to a run (spec 0.18 section 7.4).
+
+    The unique key is the last guard against two requests creating work
+    under one key; the API normally answers a stored key before it gets
+    here. The run being created is not stored.
+    """
+
+    http_status = 409
 
 
 class StaleVersionError(RunStoreError):
@@ -193,6 +217,25 @@ class IssuedApproval:
 
     approval_id: str
     expires_at: datetime
+
+
+@dataclass(frozen=True)
+class IdempotencyClaim:
+    """The key a run is created under: its caller, the key, and the request hash."""
+
+    caller: str
+    key: str
+    request_hash: str
+
+
+@dataclass(frozen=True)
+class IdempotencyRecord:
+    """A stored key and the run it created."""
+
+    caller: str
+    key: str
+    request_hash: str
+    run_id: str
 
 
 @dataclass(frozen=True)
@@ -466,8 +509,14 @@ class RunStore:
         *,
         previous_run_id: str | None = None,
         accepted: EventDraft | None = None,
+        idempotency: IdempotencyClaim | None = None,
     ) -> RunRecord:
         """Create a run at version 1. A retry links to its previous run (RM17).
+
+        idempotency, when given, stores the caller's key with the run in
+        the same transaction (spec 0.18 section 7.4). A key that is
+        already stored raises IdempotencyKeyTakenError and no run is
+        created.
 
         accepted, when given, is the run.accepted event (RM22), written as
         seq 1 in the same transaction as the run row. The run can then
@@ -490,6 +539,17 @@ class RunStore:
                 " VALUES (?, 1, ?, 0)",
                 (run_id, initial_state),
             )
+            if idempotency is not None:
+                try:
+                    self._conn.execute(
+                        "INSERT INTO idempotency_keys (caller, idempotency_key, request_hash,"
+                        " run_id) VALUES (?, ?, ?, ?)",
+                        (idempotency.caller, idempotency.key, idempotency.request_hash, run_id),
+                    )
+                except sqlite3.IntegrityError:
+                    raise IdempotencyKeyTakenError(
+                        "this idempotency key already belongs to a run"
+                    ) from None
             if accepted is not None:
                 # RM25: the run clock starts with the run, before seq 1.
                 self.start_run_clock(run_id)
@@ -509,6 +569,19 @@ class RunStore:
             created_at=_parse(now),
             updated_at=_parse(now),
         )
+
+    def find_idempotency_key(self, caller: str, key: str) -> IdempotencyRecord | None:
+        """The stored key of a caller and the run it created, or None (spec 0.18 section 7.4)."""
+        with self._lock:
+            self._check_open()
+            row = self._conn.execute(
+                "SELECT request_hash, run_id FROM idempotency_keys"
+                " WHERE caller = ? AND idempotency_key = ?",
+                (caller, key),
+            ).fetchone()
+        if row is None:
+            return None
+        return IdempotencyRecord(caller, key, row["request_hash"], row["run_id"])
 
     def start_run_clock(self, run_id: str) -> None:
         """Start measuring a run's elapsed_ms with this store's monotonic clock (RM25).

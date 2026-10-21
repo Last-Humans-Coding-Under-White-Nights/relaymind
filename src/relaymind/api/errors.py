@@ -31,7 +31,12 @@ from relaymind.orchestrator.run_state import (
     RunState,
     TerminalStateError,
 )
-from relaymind.store import RunNotFoundError, SlotUnavailableError, StaleVersionError
+from relaymind.store import (
+    IdempotencyKeyTakenError,
+    RunNotFoundError,
+    SlotUnavailableError,
+    StaleVersionError,
+)
 
 __all__ = ["STATUS_BY_CODE", "ApiError", "error_from_exception", "error_from_outcome"]
 
@@ -107,6 +112,7 @@ _KNOWN: tuple[tuple[type[Exception], str], ...] = (
     (TerminalStateError, "run_terminal"),
     (InvalidTransitionError, "invalid_state"),
     (SlotUnavailableError, "overloaded"),
+    (IdempotencyKeyTakenError, "idempotency_conflict"),
 )
 
 

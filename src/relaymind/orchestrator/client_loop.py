@@ -55,6 +55,7 @@ from relaymind.orchestrator.local_loop import (
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
 from relaymind.schema_util import first_schema_error
+from relaymind.store import IdempotencyClaim
 from relaymind.store.trace_event import EventType
 from relaymind.tools.registry import parameters_validator
 
@@ -132,6 +133,7 @@ async def run_client_request(
     execution_mode: str | None = None,
     model_alias: str | None = None,
     final_options: GenerationOptions | None = None,
+    idempotency: IdempotencyClaim | None = None,
 ) -> RunOutcome:
     """Run one client-owned request to its reply (spec 0.16 section 7.2).
 
@@ -141,7 +143,13 @@ async def run_client_request(
     or failed.
     """
     run = _ClientRun(
-        orchestrator, tuple(messages), offer, execution_mode, model_alias, final_options
+        orchestrator,
+        tuple(messages),
+        offer,
+        execution_mode,
+        model_alias,
+        final_options,
+        idempotency,
     )
     return await run.execute_client()
 
@@ -155,8 +163,9 @@ class _ClientRun(_Run):
         requested_mode: str | None,
         model_alias: str | None,
         final_options: GenerationOptions | None,
+        idempotency: IdempotencyClaim | None = None,
     ) -> None:
-        super().__init__(owner, messages, requested_mode, model_alias, final_options)
+        super().__init__(owner, messages, requested_mode, model_alias, final_options, idempotency)
         self.offer = offer
         # The offered catalog is empty for this alias (section 8).
         self.offered = owner.skills.offered_snapshot(())
