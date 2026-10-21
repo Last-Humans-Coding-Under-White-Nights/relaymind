@@ -52,7 +52,7 @@ from relaymind.api.native import (
     NativeSettings,
     event_stream,
     events_url,
-    parse_expected_version,
+    parse_cancel_request,
     parse_last_event_id,
     parse_resume_request,
     parse_run_request,
@@ -183,7 +183,7 @@ def create_app(
         started = orchestrator.start(
             run.messages, execution_mode=None if run.execution_mode is None else mode.value
         )
-        return _accepted(orchestrator, started)
+        return _accepted(started)
 
     @app.get("/relay/v1/runs/{run_id}")
     @_guarded
@@ -211,9 +211,9 @@ def create_app(
     async def resume_run(request: Request) -> Response:
         require_bearer_token(request.headers.get("authorization"), token)
         run_id = request.path_params["run_id"]
-        orchestrator.store.get_run(run_id)  # 404 first
-        resume = parse_resume_request(_decode(await request.body()))
-        record = orchestrator.store.get_run(run_id)
+        raw = await request.body()
+        record = orchestrator.store.get_run(run_id)  # 404 first
+        resume = parse_resume_request(_decode(raw))
         # An input mixed with approval fields matches no waiting state: it
         # is passed on as unusable so the terminal and version checks of
         # the waiting state still come first (section 5).
@@ -231,18 +231,16 @@ def create_app(
                 resume.expected_version,
                 None if resume.has_approval_fields else resume.input,
             )
-        return _accepted(orchestrator, started)
+        return _accepted(started)
 
     @app.post("/relay/v1/runs/{run_id}/cancel")
     @_guarded
     async def cancel_run(request: Request) -> Response:
         require_bearer_token(request.headers.get("authorization"), token)
         run_id = request.path_params["run_id"]
+        raw = await request.body()
         orchestrator.store.get_run(run_id)  # 404 first
-        body = _decode(await request.body())
-        if not isinstance(body, dict):
-            raise ApiError("invalid_request", "the request body must be a JSON object")
-        expected = parse_expected_version(body.get("expected_version"))
+        expected = parse_cancel_request(_decode(raw))
         await orchestrator.cancel(run_id, expected, wait_seconds=native.cancel_wait_seconds)
         return JSONResponse(run_view(orchestrator, run_id), headers={"Cache-Control": "no-store"})
 
@@ -262,14 +260,13 @@ def create_app(
     return app
 
 
-def _accepted(orchestrator: LocalOrchestrator, started: StartedRun) -> Response:
+def _accepted(started: StartedRun) -> Response:
     """The 202 body of a created or resumed run (spec 0.17 section 7.4)."""
-    record = orchestrator.store.get_run(started.run_id)
     return JSONResponse(
         {
             "run_id": started.run_id,
-            "state": record.state,
-            "state_version": record.version,
+            "state": started.state,
+            "state_version": started.state_version,
             "events_url": events_url(started.run_id),
         },
         status_code=202,

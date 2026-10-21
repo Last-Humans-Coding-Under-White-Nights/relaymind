@@ -300,7 +300,7 @@ class RunOutcome:
 class StartedRun:
     """A run accepted for background work (RM21, spec 0.17 section 7.4).
 
-    state_version is the run's version when the call returned. task
+    state and state_version are the run's when the call returned. task
     yields the RunOutcome when the work ends (None when the call
     already ended the run, as an expired wait does); its exception, if
     any, was handled by the run itself (internal_error or cancelled),
@@ -308,6 +308,7 @@ class StartedRun:
     """
 
     run_id: str
+    state: str
     state_version: int
     task: "asyncio.Task[RunOutcome] | None" = None
 
@@ -580,8 +581,7 @@ class LocalOrchestrator:
         is 429 and the run keeps waiting (section 5).
         """
         run, step = self._begin_resume(run_id, expected_version, text)
-        outcome = step if isinstance(step, RunOutcome) else await step()
-        return self._keep_if_waiting(run, outcome)
+        return self._keep_if_waiting(run, await _finish(step))
 
     def start_resume(self, run_id: str, expected_version: int, text: object) -> StartedRun:
         """Resume as ``resume`` does, but continue the run in a background task.
@@ -647,8 +647,7 @@ class LocalOrchestrator:
         run, step = self._begin_confirmation(
             run_id, expected_version, approval_id=approval_id, token=token, approve=approve
         )
-        outcome = step if isinstance(step, RunOutcome) else await step()
-        return self._keep_if_waiting(run, outcome)
+        return self._keep_if_waiting(run, await _finish(step))
 
     def start_confirmation(
         self,
@@ -717,7 +716,7 @@ class LocalOrchestrator:
         """
         run = _Run(self, tuple(messages), execution_mode, model_alias, final_options)
         run.open()
-        return self._start(run, lambda: run.drive())
+        return self._start(run, run.drive)
 
     async def cancel(
         self, run_id: str, expected_version: int, *, wait_seconds: float = 5.0
@@ -778,7 +777,7 @@ class LocalOrchestrator:
         """Drive a prepared step in a background task, or report an ended run."""
         if isinstance(step, RunOutcome):
             self._keep_if_waiting(run, step)
-            return StartedRun(run.run_id, self.store.get_run(run.run_id).version)
+            return self._started(run.run_id)
 
         async def drive() -> RunOutcome:
             try:
@@ -792,7 +791,11 @@ class LocalOrchestrator:
         task = asyncio.get_running_loop().create_task(drive())
         task.add_done_callback(_observe)
         self._driven[run.run_id] = (run, task)
-        return StartedRun(run.run_id, self.store.get_run(run.run_id).version, task)
+        return self._started(run.run_id, task)
+
+    def _started(self, run_id: str, task: "asyncio.Task[RunOutcome] | None" = None) -> StartedRun:
+        record = self.store.get_run(run_id)
+        return StartedRun(run_id, record.state, record.version, task)
 
     def _waiting_run(self, run_id: str, expected_version: int, wanted: RunState) -> "_Run":
         """The tracked run in the waiting state a resume expects (RM17, section 5).
@@ -877,6 +880,11 @@ class LocalOrchestrator:
 
 # What a prepared resume has left to do: nothing (an outcome), or work to await.
 _Step = RunOutcome | Callable[[], Awaitable[RunOutcome]]
+
+
+async def _finish(step: _Step) -> RunOutcome:
+    """The outcome of a prepared step, awaiting its work when there is any."""
+    return step if isinstance(step, RunOutcome) else await step()
 
 
 def _observe(task: "asyncio.Task[RunOutcome]") -> None:
@@ -1970,8 +1978,7 @@ class _Run:
 
     async def decide(self, approval_id: str, token: str, approve: bool) -> RunOutcome:
         """Answer the pending confirmation and continue the run (RM11, section 5)."""
-        step = self.begin_decision(approval_id, token, approve)
-        return step if isinstance(step, RunOutcome) else await step()
+        return await _finish(self.begin_decision(approval_id, token, approve))
 
     def begin_decision(self, approval_id: str, token: str, approve: bool) -> _Step:
         """Check and apply the answer to the pending confirmation (RM11, section 5).

@@ -929,15 +929,19 @@ PERMITTED = ChatSettings(
 )
 
 
-def test_readyz_reports_model_warm_state_explicitly(tmp_path):
-    """RM21: readiness of each permitted mode, with explicit availability and warmth."""
-    app = make_app(healthy_gateway(tmp_path), settings=PERMITTED)
-
+def readyz(app):
     async def go():
         async with session(app) as client:
             return await client.get("/readyz")
 
-    response = asyncio.run(go())
+    return asyncio.run(go())
+
+
+def test_readyz_reports_model_warm_state_explicitly(tmp_path):
+    """RM21: readiness of each permitted mode, with explicit availability and warmth."""
+    app = make_app(healthy_gateway(tmp_path), settings=PERMITTED)
+
+    response = readyz(app)
     body = response.json()
     assert response.status_code == 200
     assert body["ready"] is True
@@ -957,11 +961,7 @@ def test_a_cold_local_model_is_not_ready(tmp_path):
     gateway.adapter.health = cold
     app = make_app(gateway, settings=PERMITTED)
 
-    async def go():
-        async with session(app) as client:
-            return await client.get("/readyz")
-
-    response = asyncio.run(go())
+    response = readyz(app)
     body = response.json()
     assert response.status_code == 503
     assert body["ready"] is False
@@ -976,11 +976,7 @@ def test_a_permitted_mode_without_its_model_is_not_ready(tmp_path):
     gateway = build_gateway(tmp_path, [])
     app = make_app(gateway, settings=PERMITTED)
 
-    async def go():
-        async with session(app) as client:
-            return await client.get("/readyz")
-
-    response = asyncio.run(go())
+    response = readyz(app)
     body = response.json()
     assert response.status_code == 503
     assert body["models"]["external"] is None
@@ -1000,10 +996,6 @@ def test_parallel_demo_is_not_ready_while_the_workflow_is_not_implemented(tmp_pa
         gateway, settings=ChatSettings(allowed_modes=frozenset({ExecutionMode.PARALLEL_DEMO}))
     )
 
-    async def go():
-        async with session(app) as client:
-            return await client.get("/readyz")
-
-    response = asyncio.run(go())
+    response = readyz(app)
     assert response.status_code == 503
     assert response.json()["modes"]["parallel_demo"]["ready"] is False

@@ -33,7 +33,7 @@ __all__ = [
     "ResumeRequest",
     "RunRequest",
     "event_stream",
-    "parse_expected_version",
+    "parse_cancel_request",
     "parse_last_event_id",
     "parse_resume_request",
     "parse_run_request",
@@ -89,13 +89,6 @@ class ResumeRequest:
     approve: object = None
 
     @property
-    def mixed(self) -> bool:
-        """Input together with approval fields matches no waiting state."""
-        return self.input is not None and any(
-            getattr(self, name) is not None for name in _APPROVAL_FIELDS
-        )
-
-    @property
     def has_approval_fields(self) -> bool:
         return any(getattr(self, name) is not None for name in _APPROVAL_FIELDS)
 
@@ -122,10 +115,15 @@ def parse_run_request(body: object) -> RunRequest:
     )
 
 
-def parse_expected_version(value: object) -> int:
+def _expected_version(value: object) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ApiError("invalid_request", "expected_version must be a non-negative integer")
     return value
+
+
+def parse_cancel_request(body: object) -> int:
+    """The expected_version of a cancel body (spec 0.17 section 7.4)."""
+    return _expected_version(_object(body).get("expected_version"))
 
 
 def parse_resume_request(body: object) -> ResumeRequest:
@@ -133,7 +131,7 @@ def parse_resume_request(body: object) -> ResumeRequest:
     fields = _object(body)
     _closed(fields, _RESUME_FIELDS)
     return ResumeRequest(
-        expected_version=parse_expected_version(fields.get("expected_version")),
+        expected_version=_expected_version(fields.get("expected_version")),
         input=fields.get("input"),
         approval_id=fields.get("approval_id"),
         token=fields.get("token"),
@@ -334,26 +332,23 @@ async def readiness(
     local_ready = local.available and local.warm
     external_ready = external is not None and external.available and external.warm
 
-    def mode_state(mode: ExecutionMode) -> dict[str, Any]:
-        if mode is ExecutionMode.EXTERNAL_ONLY:
-            reason = None if external_ready else "the external model is not ready"
-        elif mode is ExecutionMode.PARALLEL_DEMO:
-            reason = (
-                "the parallel workflow is not implemented in this build"
-                if not PARALLEL_WORKFLOW_IMPLEMENTED
-                else "no workflow is enabled"
-                if not orchestrator.enabled_workflows
-                else "the external model is not ready"
-                if not external_ready
-                else None
-                if local_ready
-                else "the local model is not ready"
-            )
-        else:
-            reason = None if local_ready else "the local model is not ready"
-        return {"ready": reason is None, "reason": reason}
+    def reason_not_ready(mode: ExecutionMode) -> str | None:
+        if mode is ExecutionMode.PARALLEL_DEMO:
+            if not PARALLEL_WORKFLOW_IMPLEMENTED:
+                return "the parallel workflow is not implemented in this build"
+            if not orchestrator.enabled_workflows:
+                return "no workflow is enabled"
+        if (
+            mode in (ExecutionMode.EXTERNAL_ONLY, ExecutionMode.PARALLEL_DEMO)
+            and not external_ready
+        ):
+            return "the external model is not ready"
+        if mode is not ExecutionMode.EXTERNAL_ONLY and not local_ready:
+            return "the local model is not ready"
+        return None
 
-    modes = {m.value: mode_state(m) for m in ExecutionMode if m in set(allowed_modes)}
+    reasons = {m: reason_not_ready(m) for m in ExecutionMode if m in allowed_modes}
+    modes = {m.value: {"ready": r is None, "reason": r} for m, r in reasons.items()}
     ready = bool(modes) and all(m["ready"] for m in modes.values())
     return ready, {
         "ready": ready,
