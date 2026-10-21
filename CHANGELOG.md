@@ -24,6 +24,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Live AC01 record on the pinned llama.cpp b11785 runtime in
+  `docs/EVIDENCE.md` (raw export
+  `docs/evidence/2026-10-21-m2-local-trace-b11785-apple-m1.json`; RM01,
+  RM16, RM18, RM22): 3 of 4 check-service-health runs completed locally
+  with zero external calls, both English prompts among them; the
+  Chinese staging-api answer again translated the status word.
+  `docs/ROADMAP.md` records M1 (#58, #63) and M2 (#27, #67, #69) as
+  closed, with the items carried into M3 to M5.
 - Native x86-64 Windows M1 qualification record in `docs/EVIDENCE.md`
   (#46; RM18, spec sections 3, 6, 14): three live smoke tests passed
   with the pinned model and runtime commit on the contributor's Windows

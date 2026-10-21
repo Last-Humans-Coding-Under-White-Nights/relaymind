@@ -683,3 +683,66 @@ passed on Ubuntu, macOS, and Windows. Both target platforms now have new
 non-thinking, thinking, and tool-call smoke evidence for b11785. These
 English smoke cases do not establish bilingual skill quality or the M6
 latency target.
+
+## 2026-10-21 — M2 live check-service-health run on the pinned b11785 runtime, Apple Silicon macOS
+
+The same live AC01 test as the three M2 entries above, run on the
+runtime the manifest now pins (#58, #63: llama.cpp b11785 with
+`--reasoning off`) and on the current code: the hardened #66 completion
+predicates (skill packages 0.1.1) and the #67 trace schema, which
+requires the model-call inventory and separate active and waiting
+timings in every terminal event. The earlier entries used the Homebrew
+build 11669 and the old reasoning controls; they are unchanged. This
+run is the M2 close-out evidence.
+
+| Field | Value |
+|-------|-------|
+| Machine | Apple M1, 8 GiB RAM, macOS 27.0.1 (build 26A434), Metal backend |
+| Runtime | Official b11785 macOS arm64 archive (`0.7.0-dev (build 11785, commit 8baabd53b)`, AppleClang 21.0.0.21000101), SHA-256 verified against `models/README.md` before use |
+| Python | 3.14.7, pytest 9.1.1 |
+| Artifact | `models/qwen3-0.6b-q8_0.manifest.json`: Qwen3-0.6B Q8_0, SHA-256 `9465e63a…bb031`, verified before launch (given with `RELAYMIND_SMOKE_MODEL`) |
+| Launch | derived from the manifest: `--ctx-size 8192 --jinja --reasoning off --reasoning-format deepseek`; the adapter sends `enable_thinking=false` and `reasoning_format=deepseek` |
+| Application | branch `docs/roadmap-m1-closed` on #69 `5ebd317`, master `da33f53` (#67); no source change since |
+| Command | `RELAYMIND_TRACE_OUT=docs/evidence/2026-10-21-m2-local-trace-b11785-apple-m1.json pytest -m live tests/test_local_loop_live.py` |
+| Prompts | The same four paired requests and the same warm-up run as above |
+| Configuration | Default budgets (RM03, spec section 11), temperature 0, external dispatch not wired. A recording external model double is configured; it received no requests in any run |
+| Raw export | [`evidence/2026-10-21-m2-local-trace-b11785-apple-m1.json`](evidence/2026-10-21-m2-local-trace-b11785-apple-m1.json) |
+| Result | 3 passed, 1 failed in 24.46 s |
+
+| Prompt | Route (decision language; model's language argument) | Final answer or last model text | Outcome | Active time |
+|--------|------------------------------------------------------|---------------------------------|---------|------------:|
+| Is staging-api healthy right now? (warm-up) | local, check-service-health (en; en) | The staging-api is healthy and checked at 2026-10-20T02:58:00Z. | completed (not graded) | 3573 ms |
+| Is staging-api healthy right now? | local, check-service-health (en; en) | The staging-api is healthy and checked at 2026-10-20T02:58:00Z. | **completed** | 2085 ms |
+| staging-api 现在健康吗？ | local, check-service-health (zh; **en**) | (not published) staging-api 现在健康。检查时间是 2026-10-20T02:58:00Z。 | **failed**, `needs_external`, `invalid_output` | 2671 ms |
+| Check the health of payments-api. | local, check-service-health (en; en) | The payments-api is unavailable at checked_at 2026-10-20T02:59:00Z. | **completed** | 2683 ms |
+| 帮我检查一下 payments-api 的健康状态。 | local, check-service-health (zh; zh) | payments-api 的健康状态为 unavailable，检查时间是 2026-10-20T02:59:00Z。 | **completed** | 2619 ms |
+
+Every run made zero external calls: the external double received no
+request, every `model.started` has actor `local`, and the `model_calls`
+inventory in each `run.completed` / `run.failed` lists exactly four
+local calls (routing, two skill generations, final) with
+`external_calls: 0` (RM01, RM16, RM22). Each run is one stage with one
+tool call; `waiting_ms` is 0 everywhere, since no prompt asks for
+clarification. Router input measured 962 to 965 local tokens with six
+skills (spec 4.1 cap 2,048). The export was written through the store,
+so every event passed the #67 write-time schema validation.
+
+Observations, not conclusions:
+
+- 3 of 4 measured runs completed locally, as in the entry above. Both
+  English prompts completed, which is the M2 exit condition (roadmap
+  Stage A and B); the Chinese results are best-effort (spec 0.7).
+- The Chinese staging-api run failed for the fourth time with the same
+  shape: the skill-stage text was English (`The staging-api is currently
+  healthy, checked at 2026-10-20T02:58:00Z.`) and the final generation
+  rewrote it in Chinese, translating `healthy` to 健康, which the
+  predicate refuses. The model's routing language argument was again
+  `en` for this prompt; the decision language came from the
+  conversation (zh). Model-quality finding for the M6 corpus.
+- Active time per measured run was 2.1 to 2.7 s, against 2.5 to 3.1 s
+  on build 11669 above. Single pass on four prompts, not a latency
+  result; the 500 ms first-response target is measured in M6.
+- The routing generation of the warm-up run took 1236 ms; the later
+  routing generations took 350 to 497 ms.
+- No live clarification (AC03) or invalid-proposal (AC04) run is
+  recorded. Both are checked with model doubles only.

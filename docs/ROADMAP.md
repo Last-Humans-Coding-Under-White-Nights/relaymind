@@ -36,8 +36,12 @@ workaround are recorded with that run.
 Automatic loopback proxy bypass is implemented with deterministic coverage in
 [#57](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/57);
 the historical Windows run used a session workaround and predates this fix.
-Reasoning-control migration at the next runtime update is
-[#58](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/58).
+The reasoning-control migration
+([#58](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/58),
+#63) requalified llama.cpp b11785 with `--reasoning off` on both target
+platforms; the live runs are recorded in [`EVIDENCE.md`](EVIDENCE.md),
+separately from the historical runtime evidence. The M1 milestone is
+closed.
 
 What M1 did not test, and M2 therefore must: skill selection among
 several descriptions, the RouteDecision envelope, and Chinese input. The
@@ -97,7 +101,9 @@ completion count is open for Stage B. Since that rerun, #55 matches
 service and database IDs in any case (they are lowercase by schema), so
 `Staging-api is healthy ...` now passes the predicate, and the tool
 schemas carry Chinese labels for the clarification question; neither
-change has a live run recorded at this point. The executor (#11), router
+change had a live run at that point. The b11785 run recorded under
+Stage B runs the same code but exercises neither path (no capitalized
+ID in the model's text, no clarification asked). The executor (#11), router
 (#14), and bounded loop (#15) are in `relaymind.tools.executor`,
 `relaymind.orchestrator.router`, and `relaymind.orchestrator.local_loop`.
 
@@ -175,39 +181,47 @@ as Qwen3-0.6B) is the fallback.
   RM08, RM09).
 - Closes: AC01, AC03, AC04.
 
-Status (2026-10-21): **Stage B code is in review; M2 is not closed.**
-AC01, AC03, and AC04 pass with model doubles
-(`tests/test_ac01_local_health.py`, `tests/test_ac03_clarification.py`,
-`tests/test_ac04_invalid_proposals.py`). The clarification and resume
-behavior follows spec 0.6 sections 5, 8, and 11 (PR #60, now spec 0.7
-with the same text); it is not defined here. In short: a resume opens a new local stage within the
-entire-run limits, the run keeps its first language, and a third
-clarification fails the run with `missing_input`. Invalid proposals
-(#17) never execute, get at most one repair inside the generation
-limit, and every escalation carries a section 8 reason code. A third
-live AC01 run, on the rebuilt stack, completed 3 of 4 (see
-`EVIDENCE.md`).
+Status (2026-10-21): **M2 closed.** AC01, AC03, and AC04 pass with
+model doubles (`tests/test_ac01_local_health.py`,
+`tests/test_ac03_clarification.py`, `tests/test_ac04_invalid_proposals.py`).
+The clarification and resume behavior follows spec 0.6 sections 5, 8,
+and 11 (PR #60, now spec 0.7 with the same text): a resume opens a new
+local stage within the entire-run limits, the run keeps its first
+language, and a third clarification fails the run with `missing_input`.
+Invalid proposals (#17) never execute, get at most one repair inside the
+generation limit, and every escalation carries a section 8 reason code.
+The required trace events (#27, PR #67) are complete: terminal events
+carry the model-call inventory and separate active and waiting timings,
+large tool results are stored as redacted artifacts, and every event is
+schema-checked when written. The live AC01 run that closes the
+milestone is recorded in
+[`EVIDENCE.md`](EVIDENCE.md#2026-10-21--m2-live-check-service-health-run-on-the-pinned-b11785-runtime-apple-silicon-macos)
+on the pinned runtime (llama.cpp b11785, `--reasoning off`), the #66
+predicates, and the #67 trace schema: 3 of 4 runs completed locally with
+zero external calls, both English prompts among them, so the exit
+condition holds on the stack M3 starts from. The three earlier live runs
+used build 11669 and remain as history. Master CI went red on Windows
+after #67 because the tool-budget test gave routing, persistence, and
+the tool a shared 0.3 s wall-clock budget; #69 drives that time with the
+fake clock. The runtime enforced the budget correctly.
 
-Open before M2 closes:
+Carried forward, not M2 scope:
 
-- PR #61 (this Stage B close-out) is not merged yet. #60 (spec 0.6),
-  #53, #54, #55, and #59 are merged.
-- #27: confirmation.required, handoff.started, run.cancelled, and
-  cache.hit are not emitted by any scenario yet. They belong to M3 (#18,
-  #19), M4 (#29), and M5 (#31).
-- AC03 and AC04 have no live run recorded. They are deterministic gates
-  with model doubles, and there is no live AC03 test yet.
+- `confirmation.required`, `handoff.started`, `run.cancelled`, and
+  `cache.hit` have state and store contract coverage (#67); their
+  execution flows are M3 (#18, #19), M4 (#29), and M5 (#31).
+- AC03 and AC04 are deterministic gates with model doubles. There is no
+  live AC03 or AC04 test.
 - The resume API exists only on `LocalOrchestrator`. The HTTP route
   `POST /relay/v1/runs/{id}/resume` (section 7.4) is part of the native
   run API in M4 (#25, #26).
-- The waiting runs are kept in process memory. After a restart, they
-  are failed as `interrupted` by restart recovery (#8, M3), which is not
-  built yet.
+- Waiting runs are kept in process memory. After a restart, they are
+  failed as `interrupted` by restart recovery (#8, M3).
 
 Informational, not blocking (spec 0.7: Chinese support is best-effort):
 
 - Chinese live AC01 is best-effort, recorded but not a gate. The
-  staging-api run failed in all three recorded runs, because the final
+  staging-api run failed in all four recorded runs, because the final
   answer translates the status word. That is a model-quality finding
   for the M6 corpus.
 - #13: the Chinese skill examples have not been natively reviewed.
