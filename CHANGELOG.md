@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Native x86-64 Windows M1 qualification record in `docs/EVIDENCE.md`
+  (#46; RM18, spec sections 3, 6, 14): three live smoke tests passed
+  with the pinned model and runtime commit on the contributor's Windows
+  machine. Records the CPU build, app-local CRT setup, proxy workaround,
+  and PowerShell quoting; `docs/TESTING.md` links the reproduction steps.
+  M1 is now recorded as complete on both target platforms.
 - Model adapter contract (RM18): capabilities, generate, cancel, and
   health with normalized messages and events (`relaymind.adapters`).
 - llama.cpp adapter for Qwen3-0.6B over a llama-server endpoint, with

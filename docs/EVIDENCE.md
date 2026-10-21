@@ -26,8 +26,9 @@ Earlier runs of the same suite on Apple Silicon macOS are described in pull
 requests #36 and #44 (2 passed and 3 passed). Their hardware details were
 not recorded, which is why this file exists.
 
-Not covered by this run: x86-64 Windows (#46), Chinese prompts, more than
-one tool, and skill selection among several descriptions (#48).
+Not covered by this macOS smoke run: x86-64 Windows (recorded below for
+#46), Chinese prompts, more than one tool, and skill selection among
+several descriptions (#48).
 
 ## 2026-10-20 — M1 timing probe, Apple Silicon macOS
 
@@ -93,3 +94,150 @@ Observations, not conclusions:
 - An earlier probe the same day, run from a script that was not kept,
   was removed from this record because its exact command could not be
   reproduced. This entry replaces it.
+
+## 2026-10-21 — M1 live smoke test, x86-64 Windows
+
+Windows qualification for #46 (RM18; spec sections 3, 6, 14), transcribed
+from @ArcsinX's supplied Windows run notes. The application revision and
+raw test/server logs were not included. Durations below are single-pass
+observations.
+
+The recorded counts (258 passed, 3 deselected; 48 formatted files) are
+consistent with unmodified master commits `777f1c8`, `c65a5c0`, or
+`9370473`. This narrows the likely revision from the counts; it does not
+recover the exact checkout or establish that it was unmodified.
+`git diff 777f1c8 2847013 -- src/relaymind/adapters tests/test_llamacpp_live_smoke.py`
+is empty, so the adapter implementation and smoke tests in that range
+match the PR's base `2847013`.
+
+### Environment and pins
+
+| Field | Value |
+|-------|-------|
+| Operating system | Microsoft Windows 11 Pro, version 10.0.26200, build 26200; x86-64 (AMD64) |
+| CPU | 11th Gen Intel Core i7-1165G7 @ 2.80 GHz; 4 cores, 8 logical processors |
+| GPU / backend | Intel Iris Xe Graphics, driver 30.0.100.9864; llama.cpp CPU backend, AVX512, 4 threads; no CUDA, Metal, or Vulkan |
+| RAM | 16 GB |
+| Python / shell | CPython 3.12.10 via `py -3.12`; Windows PowerShell 5.1; native Windows, no WSL or Docker |
+| Manifest | `models/qwen3-0.6b-q8_0.manifest.json` |
+| Artifact | `models/Qwen3-0.6B-Q8_0.gguf`, 639,446,688 bytes |
+| Artifact SHA-256 | `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031`, matching `manifest.file_sha256` |
+| Verification | `relaymind.adapters.manifest.verify_artifact` passed: file, tokenizer, and chat-template hashes matched |
+| Pinned runtime | llama.cpp `0.7.0 (build 11669, commit 620d2225c)` |
+| Binary version banner | `version: 0.7.0-dev (build 11669, commit 620d2225c)`; `built with MSVC 19.42.34436.0 for x64` |
+| Launch | `-m models/Qwen3-0.6B-Q8_0.gguf --host 127.0.0.1 --port <free> --ctx-size 8192 --jinja --chat-template-kwargs '{"enable_thinking": false}'`; settings derived from the manifest via `launch_settings_argv` |
+
+The banner's build number and commit were set explicitly with
+`-DLLAMA_BUILD_NUMBER` / `-DLLAMA_BUILD_COMMIT` because the source tarball
+has no `.git` directory. They repeat the requested pin and do not
+independently verify the source commit. Source provenance is the reported
+download of the commit-specific tarball in step 1; no source archive hash
+was recorded. The `-dev` suffix reflects the pinned source's default
+[`LLAMA_BUILD_IS_DEV=ON`](https://github.com/ggml-org/llama.cpp/blob/620d2225c/CMakeLists.txt#L9-L19).
+The model hashes and launch settings are unchanged.
+
+### Runtime setup and commands
+
+The official `llama-b11669-bin-win-cpu-x64.zip` binary initially crashed
+with `0xC0000005` in `MSVCP140.dll`. The run record identified the system
+DLL as version 14.16.27033.0. The successful run used a source build of
+the pinned commit instead:
+
+1. Downloaded the [source tarball for commit 620d2225c](https://codeload.github.com/ggml-org/llama.cpp/tar.gz/620d2225c)
+   after HTTPS git clone timed out on that network.
+2. Built with CMake and Visual Studio 2022, MSVC 19.42.34436.0, x64,
+   CPU only. Build metadata was supplied explicitly because the source
+   tarball has no `.git` directory. In PowerShell, with `$src` and
+   `$build` set to the extracted source and build directories:
+
+   ```powershell
+   cmake -S $src -B $build -G "Visual Studio 17 2022" -A x64 `
+     -DLLAMA_BUILD_NUMBER=11669 -DLLAMA_BUILD_COMMIT=620d2225c `
+     -DLLAMA_CURL=OFF -DGGML_CUDA=OFF -DGGML_BLAS=OFF `
+     -DBUILD_SHARED_LIBS=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF
+   cmake --build $build --config Release --target llama-server
+   ```
+
+3. Copied the matching VC143 CRT DLLs, including `msvcp140.dll`,
+   `vcruntime140.dll`, and `vcruntime140_1.dll` (14.42.34433.0), from
+   `VC\Redist\MSVC\14.42.34433\x64\Microsoft.VC143.CRT` next to
+   `llama-server.exe`. The binary then started and reported the banner
+   above. This build used `BUILD_SHARED_LIBS=OFF`; the record reports
+   no additional runtime DLLs beyond the VC143 CRT.
+
+With the project and dev dependencies installed, the following commands
+were run from the repository root (`$build` names the build directory).
+The redundant lowercase `$env:no_proxy` assignment in the notes is
+omitted: Windows environment variable names are case-insensitive.
+
+```powershell
+$env:PATH = "$build\bin\Release;$env:PATH"
+
+# Proxy workaround for this test session; scope explained below.
+$env:NO_PROXY = "127.0.0.1,localhost,::1"
+$env:HTTP_PROXY = ""
+$env:HTTPS_PROXY = ""
+
+py -3.12 -m pytest
+py -3.12 -m pytest tests/test_llamacpp_live_smoke.py -m live -v
+ruff check .
+ruff format --check .
+```
+
+### Results and scope
+
+| Suite | Recorded outcome |
+|-------|------------------|
+| Deterministic suite | **258 passed, 3 deselected** in 24.47 s |
+| Live smoke suite | **3 passed** in 11.73 s |
+| `ruff check .` | All checks passed |
+| `ruff format --check .` | 48 files already formatted |
+
+The live tests were:
+
+1. `test_reasoning_never_appears_as_answer_content[non-thinking]`
+2. `test_reasoning_never_appears_as_answer_content[thinking]`
+3. `test_model_proposes_a_valid_tool_call`: `LlamaCppAdapter` parsed
+   the streamed proposal for `get_service_health` with
+   `{"service": "staging-api"}`.
+
+These cover the same non-thinking, thinking, and tool-call smoke cases as
+the macOS entry. No Windows-specific tool-call parsing difference was
+reported. Together, the two platform records complete M1 qualification;
+bilingual skill selection and the M6 benchmark remain separate gates.
+
+### Platform and environment differences
+
+- **PowerShell quoting:** manual `--chat-template-kwargs` JSON was
+  mangled by native argument quoting on PowerShell 5.1. The existing
+  [`TESTING.md`](TESTING.md#1-start-the-pinned-runtime) stop-parsing
+  example covers this. The live suite uses a Python `subprocess.Popen`
+  argument list and passed without a launch-setting change.
+- **Runtime deprecation warning (not platform-specific):** the pinned build accepted
+  `--chat-template-kwargs` but warned that setting `enable_thinking`
+  this way is deprecated in favor of `--reasoning on` / `--reasoning off`.
+  This warning comes from the pinned build's
+  [common argument parser](https://github.com/ggml-org/llama.cpp/blob/620d2225c/common/arg.cpp#L3554-L3570)
+  on every platform; it was not a test failure. The passing qualification
+  retains the manifest settings. [#58](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/58)
+  tracks migrating the controls and requalifying the adapter at the next
+  runtime update.
+- **Proxy and loopback:** before the environment overrides above,
+  health polls and completion requests timed out on a machine with a
+  corporate proxy configured in Windows registry settings. With the
+  overrides, the live suite passed in 11.73 s. The adapter currently
+  creates its HTTP client with default proxy handling; automatic
+  loopback proxy bypass is tracked in
+  [#57](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/57).
+  In CPython 3.12.10 on Windows,
+  [`getproxies()`](https://github.com/python/cpython/blob/v3.12.10/Lib/urllib/request.py#L2766-L2773)
+  uses environment proxy settings when any exist, falling back to the
+  registry only otherwise. With `NO_PROXY` set and `HTTP_PROXY` /
+  `HTTPS_PROXY` removed, this machine's registry proxy was skipped for
+  all HTTPX requests in the session, including external destinations.
+  This is broader than a loopback-only bypass. The run qualifies this
+  configured environment only; the workaround is not a gateway fix.
+- **C++ runtime distribution:** the prebuilt executable failed with
+  the older system CRT; the source build plus matching app-local CRT
+  succeeded. This changes runtime installation, not the pinned commit,
+  model, launch settings, or tool-call parser.

@@ -28,12 +28,15 @@ including manual JSON requests from a macOS or Windows terminal.
 - Closes: AC08 groundwork (adapter layer, #43). The orchestrator and
   skill half of AC08 is #49 in M3.
 
-Status: code complete; the live smoke test is recorded on Apple Silicon
-macOS. Open before M1 closes:
-
-- Windows qualification (#46): the same live smoke test on an x86-64
-  Windows machine, recorded in `EVIDENCE.md`. The platform matrix is
-  both platforms (spec section 3).
+Status: complete. Passing live smoke tests are recorded in
+[`EVIDENCE.md`](EVIDENCE.md) for Apple Silicon macOS and
+native x86-64 Windows (#46), using the pinned model and runtime commit
+(RM18; spec sections 3, 6, 14). Windows setup differences and the proxy
+workaround are recorded with that run.
+Automatic loopback proxy bypass is follow-up work in
+[#57](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/57);
+reasoning-control migration at the next runtime update is
+[#58](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/58).
 
 What M1 did not test, and M2 therefore must: skill selection among
 several descriptions, the RouteDecision envelope, and Chinese input. The
