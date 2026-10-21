@@ -666,6 +666,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.17 → 0.18: section 7.4 defines idempotency keys (RM17,
+  RM21, AC11, #26): the key format, the caller scope, the request hash,
+  that a key is stored with the run it creates, the replay of a native
+  creation (202 for the existing run) and of a stored chat response
+  (also as chunks), 409 `idempotency_conflict` for a changed payload or
+  an unfinished chat duplicate, 409 `run_terminal` for a failed or
+  cancelled one, and the key leaving with its run at the retention limit.
+  Section 7.1 replaces the refusal of `Idempotency-Key` with its format
+  check and the check order, and section 11 widens the 409 row.
 - Specification 0.16 → 0.17: section 7.4 defines the native run bodies and
   views (RM21, AC11, #25): the creation checks and 202 body, the run view
   and the once-only confirmation token, the SSE stream (event ID is the
