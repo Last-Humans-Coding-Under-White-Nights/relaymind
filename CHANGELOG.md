@@ -583,6 +583,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   from answer content. Non-thinking remains the default; operator-enabled
   thinking remains supported. Record both live runs separately from the
   historical runtime evidence and add a Windows runtime smoke workflow.
+- Specification 0.14 → 0.15: section 7.3 defines the streaming contract
+  (RM20, AC09, #23): the buffered stream of the managed alias as a replay of
+  the run's `answer.delta` events, the live stream of a backend that forwards
+  provider text, append-only content chunks, and the mid-stream failure
+  behavior (run recorded as failed, one fixed `error` data event, the
+  connection closed with no finish chunk and no `[DONE]`).
 - Specification 0.13 → 0.14: section 7.1 defines request validation for the
   compatible chat endpoint (RM19, AC16, #22): the order of the checks, which
   fields and message shapes are supported, the named `unsupported_parameter`

@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.14 | 22 October 2026 | Proposed implementation baseline
+Version 0.15 | 22 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that lets a small model complete bounded tasks with skills and tools, and transfers complex work to an external model. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -231,6 +231,10 @@ On this endpoint needs_external is an error before any answer content is sent, b
 **RM20** The compatible stream MUST contain only answer content or client-owned tool-call deltas, with protocol framing. Internal progress and a generic acknowledgment MUST NOT be injected into it to improve reported latency. The demo's early model-selected status is delivered through the native event stream. A standard chat client without RelayMind event support may therefore wait until a valid answer or tool call is ready.
 
 Once answer streaming begins, final-answer ownership is fixed. A subsequent provider error fails the stream; the gateway MUST NOT silently append another model's replacement answer. A later correction is a distinct message or run.
+
+The stream is built in one of two ways. A buffered stream, which the managed alias always uses, is the replay of a finished run: the run has already validated and published its answer, so the stream sends the role chunk, one content chunk for each answer.delta event in order, the finish chunk, and [DONE]. No provider is called while it is sent. A live stream is produced by a backend that forwards answer text while the provider is still generating it (the client-owned alias, issue #24). It sends the role chunk, then a content chunk for each non-empty piece in the order received, and the finish chunk and [DONE] only after the provider finished. In both, an emitted content chunk is never revised, reordered, or retracted, and the joined content chunks are the answer.
+
+Mid-stream failure (RM20, section 11). When the provider fails after the first chunk was sent, the status line can no longer change. The gateway then (1) asks the backend to record the run as failed (run.failed, error_code external_failed; a run that already ended never restarts, RM17), (2) sends one data event whose body is {"error": {"code": "external_failed", "message": <fixed text>, "run_id": <run ID>}}, which standard SDKs raise as an error, and (3) closes the connection without a chunk that has a finish_reason and without [DONE]. The message is fixed and carries no provider text (RM12). The gateway does not send a replacement answer, and it does not retry on another model. A failure before the first chunk is a normal error response with its status (section 11).
 
 In managed mode, tool-planning output is buffered and validated. After the skill's explicit completion predicate is met, or a validated finalize proposal is accepted, the orchestrator starts a final generation with tools disabled. This final generation counts against the model-call budget. Its text can be streamed without risking a later tool call in the same generation. A skill whose evidence predicate is unmet cannot finalize merely because the model requests it.
 
