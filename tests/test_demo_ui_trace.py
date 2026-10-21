@@ -8,6 +8,7 @@ doubles (spec section 13).
 
 import asyncio
 import copy
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -18,6 +19,7 @@ from gateway_helpers import (
     STAGING_OK,
     replace_handler,
     text_turn,
+    tool_turn,
 )
 from helpers import ACCEPTED_PAYLOAD
 from relaymind.store import RunRecord, TraceEvent
@@ -32,8 +34,10 @@ from ui_helpers import (
     clarifying_gateway,
     delete_gateway,
     external_health_gateway,
+    external_health_turns,
     health_gateway,
     run_to_rest,
+    timed_gateway,
     without_original_messages,
 )
 
@@ -136,6 +140,46 @@ def test_a_route_the_gateway_made_itself_is_not_a_model_action(tmp_path):
     assert view["route"]["mechanism"] == "execution_mode"
     assert view["timing"]["first_model_action_ms"] == proposed.elapsed_ms
     assert proposed.elapsed_ms > 0
+
+
+def test_a_rejected_proposal_is_not_the_first_model_action(tmp_path):
+    """RM09, RM25, section 12.1: only a validated proposal counts as a model action."""
+    gateway = timed_gateway(
+        tmp_path,
+        [],
+        external_turns=[
+            tool_turn("get_service_health", call_id="e0", service=42),
+            *external_health_turns(),
+        ],
+    )
+    clock = gateway.clock
+    gateway.external.on_generate = lambda request: clock.advance(GENERATION_SECONDS)
+    outcome = run_to_rest(gateway, execution_mode="external_only")
+    view = view_of(gateway, outcome)
+    events = gateway.store.events(outcome.run_id)
+    rejected, admitted = [e for e in events if e.event_type.value == "tool.proposed"]
+
+    assert (rejected.payload["admissible"], admitted.payload["admissible"]) == (False, True)
+    assert rejected.elapsed_ms < admitted.elapsed_ms
+    assert view["timing"]["first_model_action_ms"] == admitted.elapsed_ms
+
+
+@pytest.mark.parametrize("mechanism", ["clarification_resume", "client_owned"])
+def test_any_route_the_gateway_recorded_is_not_a_model_action(tmp_path, mechanism):
+    """RM25, section 9: a route.selected by the gateway actor is not a model action."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway)
+    record = gateway.store.get_run(outcome.run_id)
+    events = [
+        replace(e, actor="gateway", payload={**e.payload, "mechanism": mechanism})
+        if e.event_type.value == "route.selected"
+        else e
+        for e in gateway.store.events(outcome.run_id)
+    ]
+    proposed = next(e for e in events if e.event_type.value == "tool.proposed")
+
+    view = trace_view_from(record, events)
+    assert view["timing"]["first_model_action_ms"] == proposed.elapsed_ms
 
 
 def test_no_model_action_yet_is_reported_as_none_not_zero():
@@ -303,6 +347,35 @@ def test_an_approved_confirmation_is_shown_as_approved(tmp_path):
         "list_demo_databases",
         "delete_demo_database",
     ]
+
+
+def test_an_approved_operation_answered_from_its_record_is_approved(tmp_path):
+    """RM10, RM11: a replayed operation has no tool.started; tool.finished names the approval."""
+    gateway = delete_gateway(tmp_path, text_turn(DELETE_ANSWER), text_turn(DELETE_ANSWER))
+    waiting = run_to_rest(gateway, DELETE_PROMPT)
+    request = waiting.confirmation
+    version = gateway.store.get_run(waiting.run_id).version
+    asyncio.run(
+        gateway.orchestrator.resume_confirmation(
+            waiting.run_id,
+            version,
+            approval_id=request.approval_id,
+            token=request.token,
+            approve=True,
+        )
+    )
+    record = gateway.store.get_run(waiting.run_id)
+    # As a replay records it: no tool.started, a tool.finished marked replayed.
+    events = [
+        replace(e, payload={**e.payload, "replayed": True})
+        if e.event_type.value == "tool.finished" and e.payload.get("approval_id")
+        else e
+        for e in gateway.store.events(waiting.run_id)
+        if e.event_type.value != "tool.started"
+    ]
+
+    view = trace_view_from(record, events)
+    assert view["confirmation"]["status"] == "approved"
 
 
 def test_a_denied_confirmation_is_shown_as_denied_and_the_run_as_cancelled(tmp_path):

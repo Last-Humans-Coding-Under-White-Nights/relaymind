@@ -37,7 +37,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   fields. Confirmation, denial, clarification, and cancel go through the
   native resume and cancel endpoints. `POST /ui/comparisons` runs the
   same input in auto and then external_only, resetting the sandbox before
-  each run and cancelling any run that waits for input. The run.accepted
+  each run and cancelling any run that waits for input; it never resets
+  the sandbox while a run is active, and an arm still active after its
+  cancel is reported and ends the comparison. The run.accepted
   event now carries `original_messages` (the caller's own text, redacted
   by field name only, kept with the run's seven-day retention). Tests use
   model doubles (`tests/test_demo_ui*.py`); the page script is not run by

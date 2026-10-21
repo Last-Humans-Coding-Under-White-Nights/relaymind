@@ -23,6 +23,8 @@ from gateway_helpers import (
 )
 from native_helpers import gated_gateway, session, settled, start_run
 from relaymind.ui import DataMode, UiSettings
+from relaymind.ui.render import render_trace
+from relaymind.ui.trace_view import build_trace_view
 from ui_helpers import (
     DELETE_ANSWER,
     DELETE_PROMPT,
@@ -31,6 +33,7 @@ from ui_helpers import (
     database_ids,
     delete_gateway,
     health_gateway,
+    run_to_rest,
     timed_gateway,
 )
 
@@ -141,6 +144,19 @@ def test_the_page_script_keeps_the_token_in_memory_only(tmp_path):
         assert forbidden not in script
     assert "innerHTML" in script  # server-escaped fragments only
     assert "Authorization" in script
+
+
+def test_the_page_script_never_overlaps_polls(tmp_path):
+    """RM23: a poll is scheduled only after the previous one ended, never on a fixed interval."""
+    app = ui_app(health_gateway(tmp_path))
+
+    async def go():
+        async with session(app, auth=False) as client:
+            return (await client.get("/ui/app.js")).text
+
+    script = asyncio.run(go())
+    assert "setInterval" not in script
+    assert "setTimeout(poll, POLL_MS)" in script
 
 
 def test_the_shell_names_the_sandbox_when_one_is_configured(tmp_path):
@@ -265,6 +281,21 @@ def test_a_failed_operation_is_inspectable_in_the_fragment(tmp_path):
     assert "Failed operations" in page
     assert "tool_failure" in page
     assert "needs_external" in page or "failed" in page
+    # The error object is shown as its code and message, not as a Python repr.
+    assert "Error: tool_failure: " in page
+    assert "{&#x27;code&#x27;" not in page
+
+
+def test_a_model_call_error_is_shown_as_its_code_and_message(tmp_path):
+    """RM23, section 8: model.finished error is an object with code and message."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway)
+    view = build_trace_view(gateway.store, outcome.run_id)
+    view["model_calls"][0]["error"] = {"code": "time_budget", "message": "local_seconds spent"}
+
+    page = render_trace(view, UiSettings(mode="double"))
+    assert "error: time_budget: local_seconds spent" in page
+    assert "{&#x27;code&#x27;" not in page
 
 
 def test_reading_a_trace_changes_nothing_and_does_not_take_the_token(tmp_path):

@@ -11,7 +11,14 @@ import asyncio
 import pytest
 
 from api_helpers import make_app
-from gateway_helpers import STAGING_OK, build_gateway, health_tail, route_turn, tool_turn
+from gateway_helpers import (
+    STAGING_OK,
+    build_gateway,
+    clarify_turn,
+    health_tail,
+    route_turn,
+    tool_turn,
+)
 from native_helpers import GatedAdapter, session
 from relaymind.api.app import ChatSettings
 from relaymind.api.native import NativeSettings
@@ -177,6 +184,75 @@ def test_a_run_that_does_not_come_to_rest_is_asked_to_cancel(tmp_path):
     assert adapter.cancelled  # the provider was asked to stop the generation
 
 
+def test_a_run_still_active_after_its_cancel_keeps_the_fixtures_and_its_arm(tmp_path):
+    """RM03, RM17, section 9: the next run never starts, or resets, under a run that is active.
+
+    A cancel is best effort (section 7.4): when the first run has not
+    stopped, the comparison reports it in the state it has and stops
+    there, so nothing is reset under it and its arm is not lost to a 429.
+    """
+    adapter = GatedAdapter(turns=[route_turn("check-service-health"), *health_tail()])
+    gateway = build_gateway(
+        tmp_path,
+        None,
+        local_model=ConfiguredModel(adapter=adapter, model_id="gated"),
+        external_turns=external_health_turns(),
+    )
+    log: list[str] = []
+    spy_on_starts(gateway, log)
+    app = compare_app(gateway, fixtures=SpyFixtures(gateway.sandbox, log), arm_wait_seconds=0.05)
+    orchestrator = gateway.orchestrator
+    real_cancel = orchestrator.cancel
+
+    async def ignored_cancel(run_id, expected_version, *, wait_seconds):
+        # The run does not stop within the cancel's wait (best effort).
+        return gateway.store.get_run(run_id)
+
+    async def go():
+        orchestrator.cancel = ignored_cancel
+        async with session(app) as client:
+            response = await compare(client)
+        orchestrator.cancel = real_cancel
+        (arm,) = response.json()["arms"]
+        record = gateway.store.get_run(arm["run_id"])
+        await real_cancel(record.run_id, record.version, wait_seconds=1.0)
+        return response
+
+    response = asyncio.run(go())
+    assert response.status_code == 200, response.text
+    (arm,) = response.json()["arms"]
+    assert arm["execution_mode"] == "auto"
+    assert arm["state"] == "routing"
+    assert log == ["reset", "start:auto:after=None"]
+    assert gateway.external.requests == []
+
+
+def test_a_wait_that_expires_as_the_comparison_cancels_it_is_reported(tmp_path):
+    """RM17, section 5: a cancel that finds the run ended reads the run again, never a 409."""
+    gateway = timed_gateway(tmp_path, [clarify_turn()], external_turns=external_health_turns())
+    app = compare_app(gateway)
+    orchestrator = gateway.orchestrator
+    real_cancel = orchestrator.cancel
+
+    async def late_cancel(run_id, expected_version, *, wait_seconds):
+        # The wait runs out between the comparison's read and its cancel.
+        gateway.clock.advance(orchestrator.budgets.waiting_seconds + 1)
+        return await real_cancel(run_id, expected_version, wait_seconds=wait_seconds)
+
+    orchestrator.cancel = late_cancel
+
+    async def go():
+        async with session(app) as client:
+            return await compare(client)
+
+    response = asyncio.run(go())
+    assert response.status_code == 200, response.text
+    arms = response.json()["arms"]
+    assert [arm["state"] for arm in arms] == ["failed", "completed"]
+    view = build_trace_view(gateway.store, arms[0]["run_id"])
+    assert view["error_code"] == "input_expired"
+
+
 # -- refusals ---------------------------------------------------------------------------------
 
 
@@ -248,12 +324,45 @@ def test_a_comparison_checks_the_token_and_the_body(tmp_path):
     assert gateway.adapter.requests == []
 
 
-def test_a_comparison_while_another_run_is_active_is_429_and_starts_nothing(tmp_path):
-    """Section 11: one run is active at a time; the comparison does not queue."""
+def test_a_comparison_body_follows_the_native_run_body(tmp_path):
+    """RM21, section 9: a null field is absent, as in POST /relay/v1/runs."""
     gateway = comparing_gateway(tmp_path)
+    app = compare_app(gateway)
+
+    async def go():
+        async with session(app) as client:
+            return await compare(client, execution_mode=None)
+
+    response = asyncio.run(go())
+    assert response.status_code == 200, response.text
+    assert [arm["state"] for arm in response.json()["arms"]] == ["completed", "completed"]
+
+
+@pytest.mark.parametrize("body", [{}, [], {"messages": [], "extra": 1}])
+def test_replay_mode_refuses_any_comparison_body_with_409(tmp_path, body):
+    """RM23, section 9: in replay mode the comparison is refused, whatever the body."""
+    gateway = comparing_gateway(tmp_path)
+    app = compare_app(gateway, mode="replay")
+
+    async def go():
+        async with session(app) as client:
+            return await client.post("/ui/comparisons", json=body)
+
+    response = asyncio.run(go())
+    assert (response.status_code, response.json()["error"]["code"]) == (409, "invalid_state")
+
+
+def test_a_comparison_while_another_run_is_active_is_429_and_starts_nothing(tmp_path):
+    """Section 11: one run is active at a time; the comparison does not queue.
+
+    The fixtures are not reset under the active run (RM23, section 9).
+    """
+    gateway = comparing_gateway(tmp_path)
+    gateway.sandbox.delete_database("demo-orders-db", expected_revision=3)
     other = gateway.orchestrator.machine.create()
     gateway.orchestrator.machine.transition(other.run_id, other.version, "routing")
-    app = compare_app(gateway)
+    log: list[str] = []
+    app = compare_app(gateway, fixtures=SpyFixtures(gateway.sandbox, log))
 
     async def go():
         async with session(app) as client:
@@ -262,3 +371,5 @@ def test_a_comparison_while_another_run_is_active_is_429_and_starts_nothing(tmp_
     response = asyncio.run(go())
     assert (response.status_code, response.json()["error"]["code"]) == (429, "overloaded")
     assert gateway.adapter.requests == [] and gateway.external.requests == []
+    assert log == []
+    assert "demo-orders-db" not in database_ids(gateway)

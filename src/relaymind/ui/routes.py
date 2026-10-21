@@ -15,9 +15,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
 from relaymind.api.auth import require_bearer_token
-from relaymind.api.chat_request import parse_managed_messages
 from relaymind.api.errors import ApiError
-from relaymind.api.native import NativeSettings, sweep_expired_waits
+from relaymind.api.native import NativeSettings, parse_run_request, sweep_expired_waits
 from relaymind.orchestrator.local_loop import LocalOrchestrator
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.ui.comparison import COMPARED_MODES, run_comparison
@@ -35,7 +34,6 @@ CONTENT_SECURITY_POLICY = (
     "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 )
 _STATIC_HEADERS = {"Content-Security-Policy": CONTENT_SECURITY_POLICY, "Cache-Control": "no-cache"}
-_COMPARISON_FIELDS = frozenset({"messages"})
 
 
 def _static(name: str) -> str:
@@ -84,20 +82,21 @@ def install_ui_routes(
     @guard
     async def comparison(request: Request) -> Response:
         require_bearer_token(request.headers.get("authorization"), token)
-        body = decode(await request.body())
-        if not isinstance(body, dict):
-            raise ApiError("invalid_request", "the request body must be a JSON object")
-        for name in body:
-            if name not in _COMPARISON_FIELDS:
-                raise ApiError("unsupported_parameter", f"{name} is not supported by this endpoint")
-        messages = parse_managed_messages(body.get("messages"))
+        # Section 9: replay mode refuses every comparison, whatever its body.
         if not settings.interactive:
             raise ApiError("invalid_state", "the comparison is not available in replay mode")
         if settings.fixtures is None:
             raise ApiError("invalid_state", "no fixture service that can reset is configured")
+        # The body of a native run creation (same rules, null is absent), without
+        # execution_mode, because the comparison sets the mode of each run.
+        body = parse_run_request(decode(await request.body()))
+        if body.execution_mode is not None:
+            raise ApiError(
+                "unsupported_parameter", "execution_mode is not supported by this endpoint"
+            )
         for mode in COMPARED_MODES:
             require_mode(mode)
         result = await run_comparison(
-            orchestrator, settings, messages, cancel_wait_seconds=native.cancel_wait_seconds
+            orchestrator, settings, body.messages, cancel_wait_seconds=native.cancel_wait_seconds
         )
         return JSONResponse(result, headers={"Cache-Control": "no-store"})

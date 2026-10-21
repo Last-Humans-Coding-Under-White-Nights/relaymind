@@ -6,6 +6,12 @@ each run, so the second run never sees a change the first one made. A
 run that comes to rest waiting for input or confirmation is cancelled:
 a comparison collects no input and must not change the fixtures after
 the reset. Each run is an ordinary run with its own trace.
+
+The fixtures are reset only while the execution slot is free, so a
+reset never changes the data under a run that is active. A cancel is
+best effort (section 7.4): when a run is still active after it, the
+comparison reports that run in the state it has and starts nothing
+more.
 """
 
 import asyncio
@@ -15,8 +21,14 @@ from typing import Any
 from relaymind.adapters import Message
 from relaymind.orchestrator.local_loop import LocalOrchestrator
 from relaymind.orchestrator.route_decision import ExecutionMode
-from relaymind.orchestrator.run_state import TERMINAL_STATES, WAITING_STATES, RunState
-from relaymind.store import RunRecord
+from relaymind.orchestrator.run_state import (
+    TERMINAL_STATES,
+    WAITING_STATES,
+    RunState,
+    SlotUnavailableError,
+    TerminalStateError,
+)
+from relaymind.store import RunRecord, StaleVersionError
 from relaymind.ui.settings import UiSettings
 
 __all__ = ["COMPARED_MODES", "run_comparison"]
@@ -33,13 +45,20 @@ async def run_comparison(
 ) -> dict[str, Any]:
     """Run messages in each compared mode against freshly reset fixtures.
 
-    Raises whatever the orchestrator raises for the start of a run, such
-    as SlotUnavailableError when another run holds the execution slot.
+    Raises SlotUnavailableError, before any reset, when another run holds
+    the execution slot, and whatever else the orchestrator raises for the
+    start of a run. When an arm's run is still active after its cancel,
+    the arms so far are returned and the next mode is not run.
     """
     fixtures = settings.fixtures
     assert fixtures is not None, "the caller checks that a fixture service is configured"
-    arms = []
+    if orchestrator.machine.active_run_id() is not None:
+        raise SlotUnavailableError("another run holds the execution slot (section 11)")
+    arms: list[dict[str, Any]] = []
     for mode in COMPARED_MODES:
+        if orchestrator.machine.active_run_id() is not None:
+            # The previous arm did not stop in time: never reset under it.
+            break
         fixtures.reset()
         started = orchestrator.start(messages, execution_mode=mode.value)
         record = await _until_rest(orchestrator, started.run_id, settings, cancel_wait_seconds)
@@ -68,6 +87,10 @@ async def _until_rest(
         if state in TERMINAL_STATES:
             return record
         if state in WAITING_STATES or loop.time() >= deadline:
-            await orchestrator.cancel(run_id, record.version, wait_seconds=cancel_wait_seconds)
+            try:
+                await orchestrator.cancel(run_id, record.version, wait_seconds=cancel_wait_seconds)
+            except (StaleVersionError, TerminalStateError):
+                # The run moved, or its wait expired, since the read: read it again.
+                continue
             return store.get_run(run_id)
         await asyncio.sleep(settings.poll_seconds)

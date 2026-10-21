@@ -32,6 +32,14 @@ def _json(value: object) -> str:
     return _ESCAPE(json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False))
 
 
+def _error(value: object) -> str:
+    """An error object (code and message, section 8) as text; anything else as it is."""
+    if isinstance(value, Mapping) and "code" in value:
+        message = value.get("message")
+        return _t(value["code"]) + (f": {_t(message)}" if message else "")
+    return _t(value)
+
+
 def _attrs(**values: object) -> str:
     return " ".join(f'{name.replace("_", "-")}="{_t(value)}"' for name, value in values.items())
 
@@ -133,7 +141,7 @@ def _models(view: Mapping[str, Any]) -> str:
 def _call_status(call: Mapping[str, Any]) -> str:
     if not call["finished"]:
         return "running"
-    error = f", error: {_t(call['error'])}" if call["error"] else ""
+    error = f", error: {_error(call['error'])}" if call["error"] else ""
     return f"{_t(call['finish_reason'])}, {_t(call['duration_ms'])} ms{error}"
 
 
@@ -172,7 +180,7 @@ def _proposals(view: Mapping[str, Any]) -> str:
 
 def _operation(op: Mapping[str, Any]) -> str:
     replay = " (replayed from its record)" if op["replayed"] else ""
-    error = f"<p>Error: {_t(op['error'])}</p>" if op["error"] else ""
+    error = f"<p>Error: {_error(op['error'])}</p>" if op["error"] else ""
     data = f"<pre>{_json(op['data'])}</pre>" if op["data"] is not None else ""
     return (
         f'<li class="op {_t(op["status"])}"><strong>{_t(op["tool_name"])}</strong> '

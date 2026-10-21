@@ -6,9 +6,10 @@
 (() => {
   const POLL_MS = 1000;
   let token = "";
-  const open = new Set();
+  const open = new Map(); // run_id -> the element its trace is refreshed in, while not terminal
   const approvalTokens = new Map(); // approval_id -> token, read once from the native view
   const lostTokens = new Set(); // approval_id whose token the native view no longer returns
+  const tokenReads = new Map(); // approval_id -> the one native read in flight for it
   const submittedAt = new Map(); // run_id -> browser clock time of the submission
 
   const byId = (id) => document.getElementById(id);
@@ -73,17 +74,12 @@
     if (!approve) return;
     const id = approve.dataset.approvalId;
     if (!approvalTokens.has(id) && !lostTokens.has(id)) {
-      // The native view returns the token once; this is its only reader.
-      const response = await api("GET", "/relay/v1/runs/" + trace.dataset.runId);
-      if (response.ok) {
-        const view = await response.json();
-        const pending = view.pending_approval;
-        if (pending && pending.approval_id === id && pending.token) {
-          approvalTokens.set(id, pending.token);
-        } else {
-          lostTokens.add(id);
-        }
+      // The native view returns the token once; this is its only reader, and
+      // a refresh that overlaps it waits for the same read instead of a second.
+      if (!tokenReads.has(id)) {
+        tokenReads.set(id, readToken(trace.dataset.runId, id).finally(() => tokenReads.delete(id)));
       }
+      await tokenReads.get(id);
     }
     const note = slot.querySelector('[data-slot="token-note"]');
     const ready = approvalTokens.has(id);
@@ -95,15 +91,35 @@
     }
   }
 
-  function track(runId) {
-    open.add(runId);
-    return refresh(runId, byId("traces"));
+  async function readToken(runId, id) {
+    const response = await api("GET", "/relay/v1/runs/" + runId);
+    if (!response.ok) return;
+    const view = await response.json();
+    const pending = view.pending_approval;
+    if (pending && pending.approval_id === id && pending.token) {
+      approvalTokens.set(id, pending.token);
+    } else {
+      lostTokens.add(id);
+    }
   }
 
+  // Each open run is refreshed in the element it is shown in: the trace
+  // list, or its column of a comparison.
+  function watch(runId, container) {
+    open.set(runId, container);
+    return refresh(runId, container);
+  }
+
+  function track(runId) {
+    return watch(runId, byId("traces"));
+  }
+
+  // The next poll is scheduled only after this one ends, so polls never overlap.
   async function poll() {
-    for (const runId of Array.from(open)) {
-      try { await refresh(runId, byId("traces")); } catch (_) { say("Could not reach the gateway."); }
+    for (const [runId, container] of Array.from(open)) {
+      try { await refresh(runId, container); } catch (_) { say("Could not reach the gateway."); }
     }
+    setTimeout(poll, POLL_MS);
   }
 
   async function submit(path, body, slot) {
@@ -136,8 +152,7 @@
     } else {
       return;
     }
-    open.add(runId);
-    await refresh(runId, slot.parentElement);
+    await watch(runId, slot.parentElement);
   }
 
   async function onSubmit(event) {
@@ -151,8 +166,7 @@
       expected_version: Number(form.dataset.expectedVersion),
       input,
     }, slot);
-    open.add(runId);
-    await refresh(runId, slot.parentElement);
+    await watch(runId, slot.parentElement);
   }
 
   async function startRun(event) {
@@ -190,8 +204,14 @@
       column.append(heading, reset, holder);
       grid.append(column);
       submittedAt.set(arm.run_id, when);
-      await refresh(arm.run_id, holder);
-      open.delete(arm.run_id);
+      // An arm still stopping stays open and is refreshed in its own column.
+      await watch(arm.run_id, holder);
+    }
+    if (result.arms.length < 2) {
+      const note = document.createElement("p");
+      note.textContent = "The " + result.arms[0].execution_mode + " run did not stop in time, " +
+        "so the comparison did not reset the sandbox or start the next run.";
+      area.append(note);
     }
   }
 
@@ -209,5 +229,5 @@
   if (compareButton) compareButton.addEventListener("click", compare);
   document.addEventListener("click", onClick);
   document.addEventListener("submit", onSubmit);
-  setInterval(poll, POLL_MS);
+  setTimeout(poll, POLL_MS);
 })();

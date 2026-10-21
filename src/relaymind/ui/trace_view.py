@@ -8,9 +8,12 @@ events are already redacted (RM12); the renderer escapes them.
 
 Latency is model action latency only: the elapsed time of the first
 validated model-produced route, clarification, or tool proposal
-(spec section 12.1). A route the gateway made itself is not a model
-action. The run's active and waiting time come from its terminal
-event, as separate fields, and are not answer latency.
+(spec section 12.1). A route the gateway made itself (actor gateway) is
+not a model action, and neither is a proposal the gateway rejected. A
+clarification is a route decision (route=clarify), so its route.selected
+is the action; clarification.required is always the gateway's record.
+The run's active and waiting time come from its terminal event, as
+separate fields, and are not answer latency.
 """
 
 from collections.abc import Mapping, Sequence
@@ -20,8 +23,7 @@ from relaymind.store import EventType, RunRecord, RunStore, TraceEvent
 
 __all__ = ["build_trace_view", "trace_view_from"]
 
-# route.selected mechanisms that are the gateway's own decision, not a model's.
-_GATEWAY_ROUTES = frozenset({"bypass", "execution_mode", "degraded_mode"})
+_GATEWAY_ACTOR = "gateway"
 _TERMINAL_TIMING = (
     EventType.RUN_COMPLETED,
     EventType.RUN_FAILED,
@@ -205,16 +207,19 @@ def _clarifications(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
 def _confirmation(
     events: Sequence[TraceEvent], terminal: TraceEvent | None
 ) -> dict[str, Any] | None:
-    """The latest confirmation: pending, approved (an operation names it), denied, or void."""
+    """The latest confirmation: pending, approved (an operation names it), denied, or void.
+
+    An operation answered from its record emits no tool.started, so its
+    tool.finished, which also names the approval, counts as well (RM10).
+    """
     required = _of(events, EventType.CONFIRMATION_REQUIRED)
     if not required:
         return None
     payload = required[-1].payload
     approval_id = payload["approval_id"]
     status = "pending"
-    if any(
-        e.payload.get("approval_id") == approval_id for e in _of(events, EventType.TOOL_STARTED)
-    ):
+    used = (EventType.TOOL_STARTED, EventType.TOOL_FINISHED)
+    if any(e.event_type in used and e.payload.get("approval_id") == approval_id for e in events):
         status = "approved"
     for event in _of(events, EventType.RUN_CANCELLED):
         if event.payload.get("approval_id") == approval_id:
@@ -257,11 +262,13 @@ def _timing(events: Sequence[TraceEvent], terminal: TraceEvent | None) -> dict[s
 
 
 def _is_model_action(event: TraceEvent) -> bool:
-    """A validated route, clarification, or tool proposal that a model produced."""
+    """A validated route (clarify included) or tool proposal that a model produced.
+
+    A client-owned proposal carries no admissible field: it is exposed
+    only after its validation (section 7.2).
+    """
     if event.event_type is EventType.ROUTE_SELECTED:
-        return event.payload.get("mechanism") not in _GATEWAY_ROUTES
+        return event.actor != _GATEWAY_ACTOR
     if event.event_type is EventType.TOOL_PROPOSED:
-        return True
-    if event.event_type is EventType.CLARIFICATION_REQUIRED:
-        return event.actor != "gateway"
+        return event.payload.get("admissible", True) is True
     return False
