@@ -24,6 +24,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Confirmation flow for mutating demo actions (#19; RM11, RM10, RM17,
+  AC05; spec 0.10 sections 4.3, 5, 7.4, 8): an admitted
+  `delete_demo_database` proposal no longer stops the run. The run
+  suspends in `waiting_confirmation` (from `local_running` or
+  `external_running`), records `confirmation.required`, and returns a
+  random single-use token to the caller in `RunOutcome.confirmation`;
+  the store keeps only its hash and the token is never traced.
+  `LocalOrchestrator.resume_confirmation` takes the approval ID, the
+  token, and `approve`. The approval binds the run, tool, canonical
+  arguments, target (`database_id`, declared by the tool as
+  `confirmation_target`), and run state version; the arguments carry the
+  fixture revision, which the handler still compares atomically. A
+  matching approval opens a new stage like a clarification resume and
+  executes the held call once, and its `tool.started` event names the
+  approval. A denial cancels the run with `user_denied`; an approval
+  older than five minutes fails it with `approval_expired` (also swept
+  by `expire_waiting`); a wrong token or approval ID is 403
+  `approval_invalid`, a malformed body or a text resume is 400
+  `invalid_resume_input`, and a busy execution slot is 429 with the
+  approval kept. A call that already has a recorded operation is a
+  replay and asks for nothing. A mutating tool without a confirmation
+  target is rejected back to the model and never runs. A textual yes in
+  chat is not an approval. Deterministic coverage is
+  `tests/test_ac05_confirmation.py`; no live model was run.
+
 - Handoff envelope and escalation to the external model (#18; RM13,
   RM14, AC02; spec 0.9 sections 4.4, 8, 11): the HandoffEnvelope is
   published as `relaymind/orchestrator/schemas/handoff_envelope.v1.json`
@@ -449,6 +474,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   from answer content. Non-thinking remains the default; operator-enabled
   thinking remains supported. Record both live runs separately from the
   historical runtime evidence and add a Windows runtime smoke workflow.
+- Specification 0.9 → 0.10: sections 4.3, 4.4, 5, 7.4, 8, 9, and 11 define
+  the confirmation flow (RM11, #19): the `confirmation_target` a mutating
+  tool declares, the single-use token and its hash, the binding, the
+  `confirmation.required` and `run.cancelled` payloads, resume with
+  `approval_id`, `token`, and `approve`, `approval_expired`,
+  `user_denied`, and 403 `approval_invalid`. A mutating proposal no
+  longer ends the run as `needs_external`, and the external stage uses
+  the same flow.
 - Specification 0.8 → 0.9: sections 4.4, 8, and 11 define the handoff
   (RM13, RM14, #18): how the HandoffEnvelope is built from the run
   store and sent as normalized messages, the context measurement and the
