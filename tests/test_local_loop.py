@@ -20,7 +20,6 @@ import asyncio
 import dataclasses
 import json
 import threading
-import time
 
 import pytest
 
@@ -1007,27 +1006,41 @@ def test_a_non_transient_read_failure_is_not_retried(tmp_path):
 
 
 def test_a_tool_is_bounded_by_the_remaining_active_budget(tmp_path):
-    """Section 11 / RM03: a tool never runs past the active local budget.
+    """Section 11 / RM03 / AC07: a tool uses only the remaining active budget.
 
-    The tool timeout is 2 s but only about 0.3 s of the active budget is
-    left, so the run stops on budget well before the handler returns.
+    Routing and the tool proposal spend 3.75 s of the 4 s budget. Control
+    that time explicitly so slow CI setup cannot exhaust it before the
+    tool starts; the executor still enforces its real asyncio timeout.
     """
+    clock = FakeClock()
     gateway = build_gateway(
-        tmp_path, HEALTH_RUN, clock=TraceClock(), budgets=LocalBudgets(active_seconds=0.3)
+        tmp_path,
+        HEALTH_RUN,
+        clock=clock,
+        budgets=LocalBudgets(active_seconds=4.0),
+        on_generate=lambda request: clock.advance(1.875),
     )
     original = gateway.tools.get("get_service_health").declaration.handler
+    release = threading.Event()
 
-    def slow(args):
-        time.sleep(1.5)
+    def blocked(args):
+        release.wait(2)
         return original(args)
 
-    replace_handler(gateway, "get_service_health", slow)
-    started = time.monotonic()
-    outcome, events = run(gateway)
-    assert time.monotonic() - started < 1.0
+    replace_handler(gateway, "get_service_health", blocked)
+    try:
+        outcome, events = run(gateway)
+    finally:
+        release.set()
+
     assert_needs_external(gateway, outcome, events, "local_budget")
+    (failed,) = of_type(events, "run.failed")
+    assert failed.payload["budget"] == "active_seconds"
+    assert failed.payload["budget_usage"]["tool_calls"] == 1
+    assert executed_tools(events) == ["get_service_health"]
     (finished,) = of_type(events, "tool.finished")
     assert finished.payload["result"]["error"]["code"] == "tool_timeout"
+    assert finished.payload["result"]["duration_ms"] == 250
     record = gateway.store.get_tool_operation(finished.payload["operation_id"])
     assert record["status"] == "failed"
 
