@@ -1,0 +1,44 @@
+{
+  "illustrative": true,
+  "note": "Illustrative examples that use the sandbox fixture values (tests/fixtures/sandbox/baseline.json). Not live model output or measured results. The Chinese text still needs native review (spec section 9).",
+  "pairs": [
+    {
+      "tool_calls": [
+        {
+          "tool": "get_incident_counts",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 1440
+          }
+        }
+      ],
+      "en": {
+        "request": "How many incidents did staging-api have in the last 24 hours?",
+        "response": "In the last 1440 minutes staging-api had 7 incidents: 1 critical, 3 warning, and 3 info."
+      },
+      "zh": {
+        "request": "staging-api 过去 24 小时有多少事件？",
+        "response": "过去 1440 分钟内，staging-api 共有 7 个事件：严重 1 个，警告 3 个，信息 3 个。"
+      }
+    },
+    {
+      "tool_calls": [
+        {
+          "tool": "get_incident_counts",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 60
+          }
+        }
+      ],
+      "en": {
+        "request": "Summarize payments-api incidents for the last hour.",
+        "response": "In the last 60 minutes payments-api had 5 incidents: 2 critical, 2 warning, and 1 info."
+      },
+      "zh": {
+        "request": "汇总一下 payments-api 最近一小时的事件。",
+        "response": "最近 60 分钟内，payments-api 共有 5 个事件：严重 2 个，警告 2 个，信息 1 个。"
+      }
+    }
+  ]
+}

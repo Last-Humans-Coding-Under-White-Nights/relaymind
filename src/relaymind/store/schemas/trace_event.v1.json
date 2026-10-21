@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaymind.local/schemas/trace_event.v1.json",
+  "title": "TraceEvent",
+  "description": "One ordered run trace event (spec section 8, RM22). Unknown fields are rejected. Text fields (run_id, actor, IDs, models, codes) must contain a non-space character. run.accepted is the first event (seq 1) and carries the section 8 run.accepted payload. Timestamps are UTC; elapsed_ms comes from a monotonic clock (RM25).",
+  "type": "object",
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string", "pattern": "\\S"},
+    "seq": {"type": "integer", "minimum": 1},
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,6})?Z$"
+    },
+    "elapsed_ms": {"type": "integer", "minimum": 0},
+    "event_type": {
+      "enum": [
+        "run.accepted",
+        "route.selected",
+        "skill.loaded",
+        "model.started",
+        "model.finished",
+        "tool.proposed",
+        "tool.started",
+        "tool.finished",
+        "clarification.required",
+        "clarification.answered",
+        "confirmation.required",
+        "handoff.started",
+        "answer.delta",
+        "run.completed",
+        "run.failed",
+        "run.cancelled",
+        "cache.hit"
+      ]
+    },
+    "actor": {"type": "string", "pattern": "\\S"},
+    "payload": {"type": "object"}
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "seq",
+    "timestamp",
+    "elapsed_ms",
+    "event_type",
+    "actor",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"seq": {"const": 1}}, "required": ["seq"]},
+      "then": {"properties": {"event_type": {"const": "run.accepted"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["run.accepted"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "seq": {"const": 1},
+          "payload": {
+            "properties": {
+              "requested_execution_mode": {
+                "enum": ["auto", "local_only", "external_only", "parallel_demo", null]
+              },
+              "effective_execution_mode": {
+                "enum": ["auto", "local_only", "external_only", "parallel_demo"]
+              },
+              "model_alias": {"enum": ["relaymind", "relaymind-client-tools", null]},
+              "budgets": {"type": "object"},
+              "skill_roots": {"type": "array", "items": {"type": "string", "pattern": "\\S"}},
+              "skills_offered": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {"type": "string", "pattern": "\\S"},
+                    "version": {"type": "string", "pattern": "\\S"},
+                    "content_hash": {"type": "string", "pattern": "\\S"}
+                  },
+                  "required": ["name", "version", "content_hash"]
+                }
+              }
+            },
+            "required": [
+              "requested_execution_mode",
+              "effective_execution_mode",
+              "model_alias",
+              "budgets",
+              "skill_roots",
+              "skills_offered"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["tool.proposed", "tool.started", "tool.finished"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "model": {"type": "string", "pattern": "\\S"},
+              "operation_id": {"type": "string", "pattern": "\\S"},
+              "proposal_id": {"type": "string", "pattern": "\\S"}
+            },
+            "required": ["model"],
+            "anyOf": [{"required": ["operation_id"]}, {"required": ["proposal_id"]}]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["model.started", "model.finished"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "call_id": {"type": "string", "pattern": "\\S"},
+              "model": {"type": "string", "pattern": "\\S"}
+            },
+            "required": ["call_id", "model"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["run.completed"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "final_answer_model": {"type": "string", "pattern": "\\S"},
+              "model_calls": {"type": "array", "items": {"type": "object"}},
+              "external_calls": {"type": "integer", "minimum": 0},
+              "active_ms": {"type": "integer", "minimum": 0},
+              "waiting_ms": {"type": "integer", "minimum": 0}
+            },
+            "required": ["final_answer_model"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["run.failed"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "error_code": {"type": "string", "pattern": "\\S"},
+              "model_calls": {"type": "array", "items": {"type": "object"}},
+              "external_calls": {"type": "integer", "minimum": 0},
+              "active_ms": {"type": "integer", "minimum": 0},
+              "waiting_ms": {"type": "integer", "minimum": 0}
+            },
+            "required": ["error_code"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["skill.loaded"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "name": {"type": "string", "pattern": "\\S"},
+              "version": {"type": "string", "pattern": "\\S"},
+              "content_hash": {"type": "string", "pattern": "\\S"}
+            },
+            "required": ["name", "version", "content_hash"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["clarification.required"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "question": {"type": "string", "pattern": "\\S"},
+              "language": {"type": "string", "pattern": "\\S"},
+              "reason_code": {"type": "string", "pattern": "\\S"},
+              "skill_id": {"type": ["string", "null"], "pattern": "\\S"},
+              "missing": {"type": "string", "pattern": "\\S"},
+              "waiting_seconds": {"type": "number", "exclusiveMinimum": 0}
+            },
+            "required": [
+              "question",
+              "language",
+              "reason_code",
+              "skill_id",
+              "missing",
+              "waiting_seconds"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["clarification.answered"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "input": {"type": "string", "pattern": "\\S"},
+              "missing": {"type": "string", "pattern": "\\S"},
+              "waited_ms": {"type": "integer", "minimum": 0}
+            },
+            "required": ["input", "missing", "waited_ms"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["cache.hit"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {"originating_version": {"type": "string", "pattern": "\\S"}},
+            "required": ["originating_version"]
+          }
+        }
+      }
+    }
+  ]
+}

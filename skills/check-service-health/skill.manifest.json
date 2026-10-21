@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "version": "0.1.0",
+  "languages": [
+    "en",
+    "zh"
+  ],
+  "local_eligible": true,
+  "allowed_tools": [
+    "get_service_health"
+  ],
+  "resources": [
+    "examples.json"
+  ],
+  "completion_predicate": "health_status_preserved",
+  "parallel_workflow": null
+}

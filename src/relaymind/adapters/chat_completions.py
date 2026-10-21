@@ -89,6 +89,8 @@ class ChatCompletionsConfig:
 class ChatCompletionsAdapter(ModelAdapter):
     """ModelAdapter over an external Chat Completions endpoint."""
 
+    locality = "external"
+
     def __init__(
         self,
         config: ChatCompletionsConfig,

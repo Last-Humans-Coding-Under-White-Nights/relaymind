@@ -1,0 +1,42 @@
+{
+  "illustrative": true,
+  "note": "Illustrative examples that use the sandbox fixture values (tests/fixtures/sandbox/baseline.json). Not live model output or measured results. The Chinese text still needs native review (spec section 9).",
+  "pairs": [
+    {
+      "tool_calls": [
+        {
+          "tool": "get_service_health",
+          "arguments": {
+            "service": "staging-api"
+          }
+        }
+      ],
+      "en": {
+        "request": "Is staging-api healthy right now?",
+        "response": "staging-api is healthy (checked at 2026-10-20T02:58:00Z)."
+      },
+      "zh": {
+        "request": "staging-api 现在健康吗？",
+        "response": "staging-api 的状态是 healthy（健康），检查时间为 2026-10-20T02:58:00Z。"
+      }
+    },
+    {
+      "tool_calls": [
+        {
+          "tool": "get_service_health",
+          "arguments": {
+            "service": "payments-api"
+          }
+        }
+      ],
+      "en": {
+        "request": "Check the health of payments-api.",
+        "response": "payments-api is unavailable (checked at 2026-10-20T02:59:00Z)."
+      },
+      "zh": {
+        "request": "帮我检查一下 payments-api 的健康状态。",
+        "response": "payments-api 的状态是 unavailable（不可用），检查时间为 2026-10-20T02:59:00Z。"
+      }
+    }
+  ]
+}

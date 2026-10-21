@@ -3,14 +3,16 @@
 Disposable sandbox data for the demo tool service and the test suite.
 Nothing here is a production resource, and tests must never touch one.
 
-Planned contents (spec section 9):
+- `sandbox/baseline.json`: the seed for `relaymind.tools.sandbox`
+  (spec section 9). Scenario `baseline` for the demo services
+  `staging-api` (healthy, one deployment) and `payments-api`
+  (unavailable, no deployment): health, latest deployment, incident
+  counts per window, metrics samples, log entries, two disposable demo
+  databases, and the fixture `revision` they all report.
+  `unreachable_tools` lists tools that simulate a failed tool contact.
+  All values are synthetic.
 
-- Fixture state for the demo services `staging-api` and `payments-api`:
-  health status, deployments, incident counts, metrics samples, log
-  entries.
-- Disposable demo database fixtures for the confirmed-mutation flow
-  (`list_demo_databases` / `delete_demo_database`), with revisions for
-  atomic compare.
-- Fixture scenario metadata carried in tool outputs.
-
-Fixtures are added together with the tests that use them.
+`SandboxDataService` validates the seed against the published tool
+output schemas, then copies it into its own working directory. Tests
+give each service a fresh `tmp_path`, so state resets between tests, and
+`delete_demo_database` only ever writes that working copy.

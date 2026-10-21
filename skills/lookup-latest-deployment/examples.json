@@ -1,0 +1,42 @@
+{
+  "illustrative": true,
+  "note": "Illustrative examples that use the sandbox fixture values (tests/fixtures/sandbox/baseline.json). Not live model output or measured results. The Chinese text still needs native review (spec section 9).",
+  "pairs": [
+    {
+      "tool_calls": [
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "staging-api"
+          }
+        }
+      ],
+      "en": {
+        "request": "What was the last deployment to staging-api?",
+        "response": "The latest staging-api deployment is dep-staging-0142, deployed at 2026-10-19T22:10:00Z (revision 4f2c9e1)."
+      },
+      "zh": {
+        "request": "staging-api 最近一次部署是什么？",
+        "response": "staging-api 最近一次部署是 dep-staging-0142，部署时间为 2026-10-19T22:10:00Z（版本 4f2c9e1）。"
+      }
+    },
+    {
+      "tool_calls": [
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "payments-api"
+          }
+        }
+      ],
+      "en": {
+        "request": "When was payments-api last deployed?",
+        "response": "payments-api has no recorded deployment."
+      },
+      "zh": {
+        "request": "payments-api 上次是什么时候部署的？",
+        "response": "payments-api 没有任何部署记录。"
+      }
+    }
+  ]
+}

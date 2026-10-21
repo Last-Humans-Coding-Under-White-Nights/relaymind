@@ -6,7 +6,12 @@ Every routing decision, tool call, and model call is visible in a trace.
 
 Status: **M1 (adapter and protocol qualification) complete.** Live smoke
 results for Apple Silicon macOS and native x86-64 Windows are recorded in
-[`docs/EVIDENCE.md`](docs/EVIDENCE.md). See
+[`docs/EVIDENCE.md`](docs/EVIDENCE.md). **M2 (local skill-and-tool loop)
+is in review, not closed:** AC01, AC03, and AC04 pass with model
+doubles. The spec 0.6 revision (#60) and the earlier M2 pull requests
+are merged. Chinese support is best-effort (spec 0.7): Chinese live
+results are recorded but are not a gate. The open items are listed in
+the roadmap. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan and
 [`CHANGELOG.md`](CHANGELOG.md) for what has landed so far.
 
@@ -32,7 +37,7 @@ See [`AGENTS.md`](AGENTS.md) for the full contributor workflow.
   request, tool evidence, and remaining budgets.
 - Show every decision in a trace UI: selected skill, tool arguments,
   execution results, escalation reason, final answer, and timing.
-- Work in English and Chinese, on macOS and Windows.
+- Work in English, with best-effort Chinese, on macOS and Windows.
 
 ## Repository layout
 
@@ -41,9 +46,9 @@ See [`AGENTS.md`](AGENTS.md) for the full contributor workflow.
 | `docs/SPECIFICATION.md` | The spec. Single source of truth. |
 | `docs/ARCHITECTURE.md` | How components map to the code layout. |
 | `docs/ROADMAP.md` | Implementation milestones with requirement IDs. |
-| `src/relaymind/` | Gateway source (Python, FastAPI). |
+| `src/relaymind/` | Gateway source (Python; FastAPI API layer planned for M4). |
 | `models/` | Pinned model artifact manifests; the GGUF files are downloaded, not checked in. |
-| `skills/` | Demo skill packages (SKILL.md format). |
+| `skills/` | Demo skill packages (SKILL.md plus skill.manifest.json). |
 | `tests/` | Test suite and sandbox fixtures. |
 | `scripts/` | Developer scripts; see `scripts/README.md` for what each one does. |
 
@@ -127,8 +132,8 @@ OpenAI client works once pointed at it. Every request carries the
 application token the gateway generates at start (spec section 3);
 the examples below keep it in `RELAYMIND_TOKEN`. You do not pick a
 model: the alias `relaymind` means "route it for me". The local model
-selects a skill, runs the tool, and escalates to the external model
-only if it cannot finish.
+selects a skill and proposes the tool call; the gateway runs it and
+escalates to the external model only if the local run cannot finish.
 
 ```bash
 curl -s http://127.0.0.1:8080/v1/chat/completions \
@@ -142,8 +147,8 @@ To force where inference runs, add one header with `auto`,
 `local_only`, `external_only`, or `parallel_demo`. Operator policy
 decides which values a caller may use; the trace always shows which
 model answered. `parallel_demo` runs the one fixed parallel workflow
-(spec section 4.4, planned for M5) and works only with the `relaymind`
-alias. `local_only` answers with HTTP 422 and code `needs_external`
+(spec section 4.4, planned for M5), works only with the `relaymind`
+alias, and only when operator configuration enables the workflow. `local_only` answers with HTTP 422 and code `needs_external`
 when the local model cannot finish.
 
 ```bash

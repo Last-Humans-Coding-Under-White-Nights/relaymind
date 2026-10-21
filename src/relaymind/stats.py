@@ -29,6 +29,7 @@ from relaymind.adapters.base import (
     Role,
     TextDelta,
     ToolCall,
+    ToolSchema,
     Usage,
 )
 
@@ -188,6 +189,15 @@ class TimingCollector(ModelAdapter):
 
     async def health(self) -> AdapterHealth:
         return await self._adapter.health()
+
+    async def count_tokens(
+        self,
+        messages: Sequence[Message],
+        tool_schemas: Sequence[ToolSchema] = (),
+    ) -> int:
+        # The collector reports the wrapped adapter's tokenizer_available,
+        # so the count must come from the same adapter (RM16).
+        return await self._adapter.count_tokens(messages, tool_schemas)
 
     async def aclose(self) -> None:
         aclose = getattr(self._adapter, "aclose", None)

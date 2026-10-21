@@ -71,17 +71,30 @@ def encode_tools(tool_schemas: Sequence[ToolSchema]) -> list[dict[str, object]]:
     ]
 
 
+def encode_prompt(
+    messages: Sequence[Message], tool_schemas: Sequence[ToolSchema]
+) -> dict[str, object]:
+    """The prompt fields of a chat body: messages, and tools when offered."""
+    prompt: dict[str, object] = {"messages": [encode_message(message) for message in messages]}
+    if tool_schemas:
+        prompt["tools"] = encode_tools(tool_schemas)
+    return prompt
+
+
+def streamed_chat_body(prompt: Mapping[str, object]) -> dict[str, object]:
+    """A streamed chat-completion body around the given prompt fields."""
+    return {
+        **prompt,
+        # Last, so no prompt field can switch streaming off. Streaming
+        # responses carry no usage unless explicitly asked.
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+
+
 def base_chat_body(request: GenerationRequest) -> dict[str, object]:
     """The chat-completion body every compatible endpoint shares."""
-    body: dict[str, object] = {
-        "stream": True,
-        # Streaming responses carry no usage unless explicitly asked.
-        "stream_options": {"include_usage": True},
-        "messages": [encode_message(message) for message in request.messages],
-    }
-    if request.tool_schemas:
-        body["tools"] = encode_tools(request.tool_schemas)
-    return body
+    return streamed_chat_body(encode_prompt(request.messages, request.tool_schemas))
 
 
 @dataclass

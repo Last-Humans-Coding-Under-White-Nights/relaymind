@@ -1,0 +1,59 @@
+{
+  "manifest": "../../models/qwen3-0.6b-q8_0.manifest.json",
+  "warmups": 3,
+  "max_output_tokens": 128,
+  "temperature": 0,
+  "cache_prompt": true,
+  "skills": [
+    {
+      "id": "check-service-health",
+      "description": "Check whether one named service (staging-api or payments-api) is healthy right now.",
+      "route": "local",
+      "reason_code": "simple_skill"
+    },
+    {
+      "id": "lookup-latest-deployment",
+      "description": "Look up the latest deployment ID and time for one named service.",
+      "route": "local",
+      "reason_code": "simple_skill"
+    },
+    {
+      "id": "summarize-incident-counts",
+      "description": "Summarize incident counts for one named service over the last 15, 60, or 1440 minutes.",
+      "route": "local",
+      "reason_code": "simple_skill"
+    },
+    {
+      "id": "investigate-performance",
+      "description": "Investigate why a named service is slow or failing, using deployments, metrics, and logs.",
+      "route": "external",
+      "reason_code": "complex_skill"
+    },
+    {
+      "id": "delete-demo-database",
+      "description": "Delete one sandbox demo database after resolving it and asking for confirmation.",
+      "route": "local",
+      "reason_code": "simple_skill"
+    },
+    {
+      "id": "health-and-diagnostic-checklist",
+      "description": "Run the fixed health and diagnostic checklist workflow for a named service.",
+      "route": "parallel",
+      "reason_code": "parallel_workflow"
+    }
+  ],
+  "prompts": [
+    {"text": "Is staging-api healthy right now?", "language": "en", "expected_route": "local", "expected_skill": "check-service-health"},
+    {"text": "What was the latest deployment of payments-api?", "language": "en", "expected_route": "local", "expected_skill": "lookup-latest-deployment"},
+    {"text": "How many incidents did staging-api have in the last 60 minutes?", "language": "en", "expected_route": "local", "expected_skill": "summarize-incident-counts"},
+    {"text": "Is the service healthy?", "language": "en", "expected_route": "clarify", "expected_skill": null},
+    {"text": "payments-api got slow after the last deploy. Find out why.", "language": "en", "expected_route": "external", "expected_skill": "investigate-performance"},
+    {"text": "Delete the demo database demo-orders.", "language": "en", "expected_route": "local", "expected_skill": "delete-demo-database"},
+    {"text": "staging-api 现在健康吗？", "language": "zh", "expected_route": "local", "expected_skill": "check-service-health"},
+    {"text": "payments-api 最近一次部署是什么？", "language": "zh", "expected_route": "local", "expected_skill": "lookup-latest-deployment"},
+    {"text": "staging-api 在过去 60 分钟内有多少个事故？", "language": "zh", "expected_route": "local", "expected_skill": "summarize-incident-counts"},
+    {"text": "这个服务健康吗？", "language": "zh", "expected_route": "clarify", "expected_skill": null},
+    {"text": "payments-api 在上次部署后变慢了，请查明原因。", "language": "zh", "expected_route": "external", "expected_skill": "investigate-performance"},
+    {"text": "删除演示数据库 demo-orders。", "language": "zh", "expected_route": "local", "expected_skill": "delete-demo-database"}
+  ]
+}

@@ -1,10 +1,12 @@
-"""Shared test helpers for the adapter test suite."""
+"""Shared test helpers for the test suite."""
 
 import asyncio
 import importlib.util
 import json
 import subprocess
 import sys
+from collections.abc import Awaitable, Callable, Sequence
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -18,6 +20,13 @@ from relaymind.adapters import (
     Role,
     ToolSchema,
 )
+from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
+from relaymind.orchestrator.workflows import PARALLEL_WORKFLOWS
+from relaymind.skills import SkillRegistry
+from relaymind.skills.predicates import COMPLETION_PREDICATES
+from relaymind.store import TraceClock
+from relaymind.tools import SideEffect, ToolDeclaration, ToolRegistry
+from relaymind.tools.sandbox import SandboxDataService, register_demo_tools
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = REPO_ROOT / "models"
@@ -26,17 +35,119 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 # The checked-in candidate manifest (RM18, spec section 6).
 PINNED_MANIFEST_PATH = MODELS_DIR / "qwen3-0.6b-q8_0.manifest.json"
 
+# The start time of FakeClock, a fixed UTC moment.
+T0 = datetime(2026, 10, 20, 3, 0, 0, tzinfo=UTC)
+
+
+class FakeClock(TraceClock):
+    """A controllable UTC clock and monotonic clock (RM25) for store tests."""
+
+    def __init__(self) -> None:
+        self.now = T0
+        self.mono = 1000.0
+
+    def utc_now(self) -> datetime:
+        return self.now
+
+    def monotonic(self) -> float:
+        return self.mono
+
+    def advance(self, seconds: float) -> None:
+        self.now += timedelta(seconds=seconds)
+        self.mono += seconds
+
+
+# A valid run.accepted payload (spec section 8). run.accepted is the
+# first event of every run (RM22), so store tests write it before others.
+ACCEPTED_PAYLOAD = {
+    "requested_execution_mode": None,
+    "effective_execution_mode": "auto",
+    "model_alias": "relaymind",
+    "budgets": {"run_generations": 8, "run_tool_executions": 6, "run_active_seconds": 60},
+    "skill_roots": ["/srv/relaymind/skills"],
+    "skills_offered": [
+        {"name": "check-service-health", "version": "1.0.0", "content_hash": "sha256:ab12"}
+    ],
+}
+
+# The section 9 service-ID input object, shared across test files.
+SERVICE_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {"service": {"enum": ["staging-api", "payments-api"]}},
+    "required": ["service"],
+    "additionalProperties": False,
+}
+
 # The canonical demo tool (spec section 9), shared across test files.
 HEALTH_TOOL = ToolSchema(
     name="get_service_health",
     description="Return current health for a service.",
-    input_schema={
-        "type": "object",
-        "properties": {"service": {"enum": ["staging-api", "payments-api"]}},
-        "required": ["service"],
-        "additionalProperties": False,
-    },
+    input_schema=SERVICE_INPUT_SCHEMA,
 )
+
+# Sandbox demo data (RM23, section 9) and a fixed test time.
+BASELINE = REPO_ROOT / "tests" / "fixtures" / "sandbox" / "baseline.json"
+# The checked-in demo skills: the default root, skills/, of this checkout.
+DEMO_SKILLS_ROOT = REPO_ROOT / "skills"
+
+
+def make_tool_declaration(**overrides) -> ToolDeclaration:
+    """A valid read-only tool declaration; overrides replace fields."""
+    fields = {
+        "name": "echo_service",
+        "description": "Return the requested service ID.",
+        "input_schema": SERVICE_INPUT_SCHEMA,
+        "output_schema": {
+            "type": "object",
+            "properties": {"service": {"type": "string"}},
+            "required": ["service"],
+            "additionalProperties": False,
+        },
+        "timeout_seconds": 1.0,
+        "side_effect": SideEffect.READ_ONLY,
+        "handler": lambda args: {"service": args["service"]},
+        "required_permission": "demo.read",
+    }
+    fields.update(overrides)
+    return ToolDeclaration(**fields)
+
+
+def make_sandbox(tmp_path: Path, seed: Path = BASELINE) -> SandboxDataService:
+    """A fresh, reset sandbox working copy under tmp_path (fixtures rule)."""
+    return SandboxDataService(seed, work_dir=tmp_path / "sandbox", clock=FakeClock(), reset=True)
+
+
+def make_demo_tools(tmp_path: Path, service: SandboxDataService | None = None) -> ToolRegistry:
+    """The seven section 9 tools over a sandbox (a fresh one by default)."""
+    registry = ToolRegistry(clock=FakeClock())
+    register_demo_tools(registry, service or make_sandbox(tmp_path))
+    return registry
+
+
+def make_demo_skills(tools: ToolRegistry) -> SkillRegistry:
+    """The checked-in demo skills, loaded from this checkout's skills/."""
+    return SkillRegistry.load(
+        [DEMO_SKILLS_ROOT],
+        tools=tools,
+        predicates=COMPLETION_PREDICATES.keys(),
+        workflows=PARALLEL_WORKFLOWS,
+    )
+
+
+# A llama-server endpoint for adapter tests over a mock transport.
+LLAMACPP_CONFIG = LlamaCppConfig(
+    base_url="http://127.0.0.1:8033",
+    context_limit=8192,
+    chat_template_kwargs={"enable_thinking": False},
+)
+
+
+def make_llamacpp_adapter(
+    handler: Callable[[httpx.Request], httpx.Response | Awaitable[httpx.Response]],
+    config: LlamaCppConfig = LLAMACPP_CONFIG,
+) -> LlamaCppAdapter:
+    """A LlamaCppAdapter whose HTTP requests go to handler."""
+    return LlamaCppAdapter(config, transport=httpx.MockTransport(handler))
 
 
 def make_capabilities(**overrides) -> AdapterCapabilities:
@@ -113,17 +224,52 @@ def sse_response(chunks: list[dict]) -> httpx.Response:
 
 
 class ScriptedAdapter(ModelAdapter):
-    """Model double that replays a scripted event sequence."""
+    """Model double that replays scripted events (spec section 13).
 
-    def __init__(self, events):
-        self._events = events
+    With events, every generation replays that one sequence. With turns,
+    a list of event lists, each generation answers with the next turn,
+    and an unscripted generation fails the test. Every request and token
+    count is recorded. on_generate, if given, runs at the start of every
+    generation (for example to advance a fake clock). input_tokens fixes
+    the count_tokens answer; without it the double counts one unit per
+    content character and per offered tool. locality is the adapter
+    locality the double declares (local or external).
+    """
+
+    def __init__(
+        self,
+        events=(),
+        *,
+        turns=None,
+        capabilities: AdapterCapabilities | None = None,
+        input_tokens: int | None = None,
+        on_generate=None,
+        locality: str = "local",
+    ):
+        self._events = list(events)
+        self._turns = None if turns is None else list(turns)
+        self._capabilities = capabilities or make_capabilities()
+        self.input_tokens = input_tokens
+        self.on_generate = on_generate
+        self.locality = locality
+        self.requests: list[GenerationRequest] = []
+        self.counted: list[tuple] = []
         self.cancelled: list[str] = []
 
     async def capabilities(self) -> AdapterCapabilities:
-        return make_capabilities()
+        return self._capabilities
 
     async def generate(self, request: GenerationRequest):
-        for event in self._events:
+        self.requests.append(request)
+        if self.on_generate is not None:
+            self.on_generate(request)
+        if self._turns is None:
+            events = self._events
+        elif self._turns:
+            events = self._turns.pop(0)
+        else:
+            raise AssertionError(f"unscripted generation {request.generation_id}")
+        for event in events:
             yield event
 
     async def cancel(self, generation_id: str) -> None:
@@ -131,6 +277,25 @@ class ScriptedAdapter(ModelAdapter):
 
     async def health(self) -> AdapterHealth:
         return AdapterHealth(available=True, warm=True, detail="scripted")
+
+    async def count_tokens(
+        self,
+        messages: Sequence[Message],
+        tool_schemas: Sequence[ToolSchema] = (),
+    ) -> int:
+        self.counted.append((tuple(messages), tuple(tool_schemas)))
+        if self.input_tokens is not None:
+            return self.input_tokens
+        # The double claims a tokenizer (make_capabilities), so it counts
+        # instead of inheriting the refusing default: one unit per
+        # content character and per offered tool. A fixed rule for
+        # tests, not an estimate of any real tokenizer.
+        return sum(len(message.content or "") for message in messages) + len(tool_schemas)
+
+
+def of_type(events, event_type: str) -> list:
+    """The trace events of one type, in order."""
+    return [event for event in events if event.event_type.value == event_type]
 
 
 def load_script_module(name: str):

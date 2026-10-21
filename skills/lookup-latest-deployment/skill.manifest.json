@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "version": "0.1.0",
+  "languages": [
+    "en",
+    "zh"
+  ],
+  "local_eligible": true,
+  "allowed_tools": [
+    "get_latest_deployment"
+  ],
+  "resources": [
+    "examples.json"
+  ],
+  "completion_predicate": "deployment_reported",
+  "parallel_workflow": null
+}

@@ -71,13 +71,13 @@ jobs:
           llama-server --version 2>&1 | Tee-Object evidence/runtime-version.txt
           if ($LASTEXITCODE -ne 0) { throw 'Runtime startup failed' }
 
-      - name: Qualify non-thinking, thinking, and tool calls (RM18)
+      - name: Qualify non-thinking, thinking, tool calls, and token counts (RM18)
         run: |
           python -m pytest tests/test_llamacpp_live_smoke.py -m live -v -s --basetemp=evidence/tmp --junitxml=evidence/results.xml 2>&1 | Tee-Object evidence/pytest.log
           if ($LASTEXITCODE -ne 0) { throw 'Live smoke failed' }
           [xml]$results = Get-Content evidence/results.xml
           $suite = $results.testsuites.testsuite
-          if ($suite.tests -ne '3' -or $suite.skipped -ne '0') { throw 'Expected three executed smoke cases' }
+          if ($suite.tests -ne '7' -or $suite.skipped -ne '0') { throw 'Expected seven executed smoke cases' }
 
       - uses: actions/upload-artifact@v4
         if: always()

@@ -11,10 +11,13 @@ spec is the source of truth; this page only explains where things live.
 | API layer | `src/relaymind/api/` | Validate requests; expose the chat contract and native run API; authenticate callers. |
 | Orchestrator | `src/relaymind/orchestrator/` | Own state transitions, budgets, routing, handoff, cancellation, and the final-answer owner. |
 | Model adapter | `src/relaymind/adapters/` | Translate normalized messages, tools, and options into provider-specific requests and events. |
-| Skill registry | `src/relaymind/skills/` | Validate packages; expose descriptions; load selected instructions and approved resources. |
-| Tool registry and executor | `src/relaymind/tools/` | Validate arguments and permissions; execute registered functions; record outcomes. |
+| Skill registry | `src/relaymind/skills/` | Validate packages; expose descriptions; load selected instructions and approved resources; check answers with the registered completion predicates (`predicates.py`). |
+| Tool registry and executor | `src/relaymind/tools/` | Validate arguments and permissions; execute registered functions; record outcomes. `sandbox.py` holds the sandbox demo data service and the seven demo tools (spec section 9). |
 | Run store | `src/relaymind/store/` | Persist ordered events, tool outcomes, pending approvals, and versioned state in SQLite. |
 | Demo UI | `src/relaymind/ui/` | Display model decisions and execution evidence; collect clarification and confirmation. |
+| Redaction | `src/relaymind/redaction.py` | Redact configured secret fields before events and tool outcomes are persisted (RM12, section 8). |
+| Canonical JSON | `src/relaymind/canonical.py` | One canonical JSON text form for tool schema hashes (RM07), operation IDs (RM10), and approval binding (RM11). |
+| Schema boundary checks | `src/relaymind/schema_util.py` | Shared checks for published, versioned JSON Schemas (closed field sets, exact schema_version, first schema error; spec section 8). |
 | Timing instrumentation | `src/relaymind/stats.py` | Record spec 12.1 metrics per generation around any adapter; export JSON for adapter comparisons (M1 working data, not benchmark evidence). |
 
 Demo skill packages (SKILL.md plus `skill.manifest.json`, spec sections
@@ -56,12 +59,32 @@ decisions.
 ## Dependency direction
 
 ```
-api ──► orchestrator ──► adapters
-          │  │  │
-          │  │  └─► tools
-          │  └────► skills
-          └───────► store
+api ──► orchestrator ──► skills ──► tools ──► store
+          │  │  │                    │
+          │  │  │                    └─► adapters (ToolSchema)
+          │  │  ├─► tools
+          │  │  └─► store
+          │  └────► adapters
+          └───────► redaction
 ```
+
+The layer order, from top to bottom, is: api, orchestrator, skills,
+tools, then store and adapters side by side, then the leaf modules.
+A module imports only from layers below it.
+
+- The skill registry imports the tool registry: a manifest's tools are
+  checked against it at load, and completion predicates read tool
+  results.
+- The tools import the store (`TraceClock`, and `RunStore` in the
+  executor), `ToolSchema` from the adapters, and `redaction.py` in the
+  executor.
+- The orchestrator imports all of these, and `redaction.py` for the
+  events it writes.
+- `canonical.py`, `schema_util.py`, and `redaction.py` are leaf modules
+  that import no other RelayMind package. The store and the tools use
+  `canonical.py`; the orchestrator, skills, store, and tools use
+  `schema_util.py`; the orchestrator and the tool executor use
+  `redaction.py`.
 
 Lower layers must not import higher ones. The store must not depend on
 adapters. Adapters must not depend on SQLite.

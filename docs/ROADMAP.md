@@ -41,7 +41,8 @@ Reasoning-control migration at the next runtime update is
 
 What M1 did not test, and M2 therefore must: skill selection among
 several descriptions, the RouteDecision envelope, and Chinese input. The
-model stays a candidate until the bilingual tool tests (spec section 6).
+model stays a candidate until the English tool tests (spec section 6);
+Chinese results are reported but are not a gate (spec 0.7).
 
 ## M2 — Local skill-and-tool loop
 
@@ -62,6 +63,9 @@ infrastructure around it is built.
   is documented here.
 - Local tokenizer (#47): router input is capped at 2,048 local tokens
   (spec section 4.1); the adapter needs a token count for it.
+  `LlamaCppAdapter.count_tokens` counts through the runtime's own chat
+  template and tokenizer; the router (#14) takes that count as its input
+  measure.
 - Run states and SQLite store, first increment (#6, #7; RM17,
   section 5): runs, events, tool_operations.
 - Required trace events (#27; RM22, section 8), recorded while the loop
@@ -73,7 +77,88 @@ infrastructure around it is built.
 - Router (#14) and local generation loop with recorded budgets (#15;
   RM01–RM03).
 - Exit: AC01 passes with doubles, and the live trace for
-  check-service-health is recorded in both languages.
+  check-service-health is recorded in English. The Chinese live AC01
+  trace is best-effort, recorded but not a gate (spec 0.7).
+
+Status (2026-10-21): **Stage A exit reached.** AC01 passes with model
+doubles (`tests/test_ac01_local_health.py`, both services in both
+languages). The live check-service-health traces are recorded in
+[`EVIDENCE.md`](EVIDENCE.md#2026-10-21--m2-stage-a-live-check-service-health-trace-apple-silicon-macos):
+3 of 4 measured runs completed locally with zero external calls (both
+English, one Chinese). The other Chinese run translated the status
+word, so the completion predicate refused the answer and the run ended
+as `needs_external`. That is a model-quality finding for Stage B and
+M6, not a met target. A rerun on the rebased stack, recorded in a
+second `EVIDENCE.md` entry, completed 2 of 4 with the same model output:
+the stricter #55 health predicate refuses the English staging-api
+finalize proposal, which starts with a capitalized `Staging-api`. Both
+traces are recorded in both languages, so the exit condition holds; the
+completion count is open for Stage B. Since that rerun, #55 matches
+service and database IDs in any case (they are lowercase by schema), so
+`Staging-api is healthy ...` now passes the predicate, and the tool
+schemas carry Chinese labels for the clarification question; neither
+change has a live run recorded at this point. The executor (#11), router
+(#14), and bounded loop (#15) are in `relaymind.tools.executor`,
+`relaymind.orchestrator.router`, and `relaymind.orchestrator.local_loop`.
+
+#### Routing mechanism for #14 (decided 2026-10-21)
+
+Chosen: **native function calling, one function per advertised skill**
+(spec section 6 allows it; the mechanism is visible in configuration and
+tests). Evidence: the routing probe in
+[`EVIDENCE.md`](EVIDENCE.md#2026-10-21--m2-routing-probe-apple-silicon-macos)
+(Apple M1, Qwen3-0.6B Q8_0, llama.cpp build 11669, single pass).
+
+- Native calls picked the expected skill for 10 of 10 prompts that named
+  their target (5 of 5 in each language), all valid, first model action
+  389 to 519 ms (excluding the tokenizer round trips; see the limits in
+  `EVIDENCE.md`). Unchanged by the spec 0.6 re-scoring below.
+- The JSON envelope without grammar produced 0 of 12 valid outputs
+  (every one wrapped in a code fence). With grammar-constrained decoding
+  it was judged 12 of 12 valid on the day but 8 of 12 routes correct, at
+  986 to 1263 ms. Corrected 2026-10-21 under the spec 0.6 cross-field
+  rules, re-scored from the recorded export (correction note in
+  `EVIDENCE.md`): 7 of 12 valid and 6 of 12 routes correct, because
+  five grammar outputs attached a clarification to a non-clarify route.
+  The envelope is not used for routing. The correction widens the gap
+  between the mechanisms; the decision stands.
+
+How the router uses it, so the model is trusted only for the skill
+choice:
+
+- The gateway builds the RouteDecision. The selected function names the
+  skill; route and reason code come from that skill's registry entry
+  (local eligibility, external-required, parallel-workflow ID; spec
+  4.2, RM04), not from the model. The result goes through the boundary
+  validator (`relaymind.orchestrator.route_decision`) with the run's
+  `RoutingContext` (catalog ownership, effective execution mode,
+  operator-enabled parallel workflows) before anything else happens, so
+  the spec 0.6 cross-field rules are checked there. Parallel
+  admissibility is the gateway's call (spec 4.4): the one native
+  `parallel` decision in the probe (the Chinese missing-identifier
+  prompt) is invalid in any mode that does not admit the workflow.
+- Missing identifiers are not left to the model (RM05). Neither prompt
+  without a service ("Is the service healthy?", "这个服务健康吗？") got a
+  clarification from any mechanism. The router checks the selected
+  skill's required identifiers against the request and conversation
+  context, and returns clarify with `missing_input` when one is absent.
+  No tool runs on a decision that fails this check.
+- The model's language value is not used alone: it was wrong for 5 of 6
+  Chinese prompts. Done in #14: the RouteDecision language is set from
+  the conversation (Chinese characters in the latest user turn that has
+  words, so an identifier-only reply such as `staging-api` keeps the
+  language), checked by tests in both languages. Spec 0.6 (section 5)
+  fixes the run language at the first RouteDecision; the loop uses that
+  decision's language for every later step.
+- Router input measured 808 to 818 local tokens with six skills, well
+  under the 2,048 cap; the bypass path is still required for longer
+  inputs (spec 4.1).
+
+Skill selection was reliable in both languages for well-specified
+prompts, so the narrower-scope path of spec section 12.3 is not taken
+now. If the M2 live traces or the M6 corpus show it failing, that path
+(fewer skills per prompt, or another candidate model, never relabeled
+as Qwen3-0.6B) is the fallback.
 
 ### Stage B — Widen
 
@@ -89,6 +174,45 @@ infrastructure around it is built.
 - Invalid proposals: bounded repair and explicit escalation (#17; RM02,
   RM08, RM09).
 - Closes: AC01, AC03, AC04.
+
+Status (2026-10-21): **Stage B code is in review; M2 is not closed.**
+AC01, AC03, and AC04 pass with model doubles
+(`tests/test_ac01_local_health.py`, `tests/test_ac03_clarification.py`,
+`tests/test_ac04_invalid_proposals.py`). The clarification and resume
+behavior follows spec 0.6 sections 5, 8, and 11 (PR #60, now spec 0.7
+with the same text); it is not defined here. In short: a resume opens a new local stage within the
+entire-run limits, the run keeps its first language, and a third
+clarification fails the run with `missing_input`. Invalid proposals
+(#17) never execute, get at most one repair inside the generation
+limit, and every escalation carries a section 8 reason code. A third
+live AC01 run, on the rebuilt stack, completed 3 of 4 (see
+`EVIDENCE.md`).
+
+Open before M2 closes:
+
+- PR #61 (this Stage B close-out) is not merged yet. #60 (spec 0.6),
+  #53, #54, #55, and #59 are merged.
+- #27: confirmation.required, handoff.started, run.cancelled, and
+  cache.hit are not emitted by any scenario yet. They belong to M3 (#18,
+  #19), M4 (#29), and M5 (#31).
+- AC03 and AC04 have no live run recorded. They are deterministic gates
+  with model doubles, and there is no live AC03 test yet.
+- The resume API exists only on `LocalOrchestrator`. The HTTP route
+  `POST /relay/v1/runs/{id}/resume` (section 7.4) is part of the native
+  run API in M4 (#25, #26).
+- The waiting runs are kept in process memory. After a restart, they
+  are failed as `interrupted` by restart recovery (#8, M3), which is not
+  built yet.
+
+Informational, not blocking (spec 0.7: Chinese support is best-effort):
+
+- Chinese live AC01 is best-effort, recorded but not a gate. The
+  staging-api run failed in all three recorded runs, because the final
+  answer translates the status word. That is a model-quality finding
+  for the M6 corpus.
+- #13: the Chinese skill examples have not been natively reviewed.
+  Spec 0.7 section 9 no longer requires that review; the evidence says
+  the examples are not reviewed.
 
 ## M3 — Handoff and confirmation
 
@@ -131,8 +255,9 @@ infrastructure around it is built.
 
 ## M6 — Evaluation
 
-- Bilingual correctness corpus: 40 scenario pairs, frozen before
-  comparison (#32; section 12.2).
+- Correctness corpus: 40 English scenarios, with best-effort Chinese
+  versions reported per language, frozen before comparison (#32;
+  section 12.2, spec 0.7).
 - Latency experiment on both target platforms; benchmark report with
   full environment manifest (#33; RM25, section 12.3).
 - Closes: AC15 and the release record (section 14).
@@ -155,3 +280,28 @@ listed here so the current order can be traced to its reason.
   moved from M4 to M2; restart recovery (#8) moved from M2 to M3; Windows
   qualification (#46) added to M1; the orchestrator half of AC08 (#49)
   added to M3; live evidence recorded in `EVIDENCE.md`.
+- 2026-10-21, after the routing probe (#48): native function calling
+  chosen as the routing mechanism for #14; route and reason code come
+  from the skill registry, and missing-identifier and language checks
+  are done by the gateway rather than taken from the model.
+- 2026-10-21, after spec 0.6 (#60): the probe's grammar results were
+  re-scored under the new RouteDecision cross-field rules, 7 of 12 valid
+  instead of 12 of 12 and 6 of 12 routes correct instead of 8 of 12; the
+  native result and the mechanism decision are unchanged. The recorded
+  numbers exclude tokenizer round trips and ran with the runtime's
+  prompt cache on; both are stated in `EVIDENCE.md`.
+- 2026-10-21, Stage A exit: the skill-stage prompt puts the skill
+  description and the tool to call first and the full skill body after
+  the request, at temperature 0, because the pinned model often wrote
+  its tool call as plain text when the body came first. The final
+  generation is told the request language. Chinese answers that
+  translate the returned status word fail the completion predicate; that
+  goes to Stage B and the M6 corpus.
+- 2026-10-21, Stage B (#16, #17): an earlier draft of #61 decided the
+  resume rules in this log. In that draft, a resume after a model
+  clarification was charged to the run's one routing generation, so it
+  stopped with `local_budget`. Spec 0.6 sections 5, 8, and 11 (#60) now
+  define the resume behavior, and they supersede that entry: per-stage
+  budgets, entire-run limits, the clarification.answered event, and
+  `invalid_resume_input`. The code follows the spec. Nothing about
+  resume is decided here.

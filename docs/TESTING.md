@@ -1,24 +1,50 @@
-# Testing RelayMind (Milestone 1)
+# Testing RelayMind (Milestones 1 and 2)
 
-How to verify the M1 deliverable by hand on macOS and Windows, next to
-the automated suites. M1 qualifies the local model runtime and the
-adapters (see [`ROADMAP.md`](ROADMAP.md)); the gateway's own public API
+How to verify the M1 and M2 deliverables, by hand on macOS and Windows
+and with the automated suites. M1 qualifies the local model runtime and
+the adapters; M2 adds the bounded local loop (see
+[`ROADMAP.md`](ROADMAP.md)). The gateway's own public API
 (`/v1/chat/completions`, `/relay/v1/runs`) arrives in M4, so manual
-JSON testing in M1 targets the llama-server endpoint that the
+JSON testing targets the llama-server endpoint that the
 `LlamaCppAdapter` talks to.
 
 ## Automated suites
 
 ```bash
 pytest                  # deterministic suite (model doubles, runs in CI)
-pytest -m live          # live smoke against a local llama-server
+pytest -m live          # live tests against a local llama-server
 ruff check .
 ruff format --check .
 ```
 
 The live suite needs `llama-server` on PATH and the pinned model
 artifact (see [`models/README.md`](../models/README.md)). It starts and
-stops its own server; nothing below is required for it.
+stops its own server; nothing below is required for it. Besides the
+smoke checks, `tests/test_llamacpp_live_smoke.py` runs the live
+tokenizer check: the local token count for English and Chinese prompts,
+with and without tools, must equal the prompt tokens the runtime reports
+(spec section 4.1).
+
+To use the pinned GGUF from another location, set
+`RELAYMIND_SMOKE_MODEL=<path>`. The file must be the pinned artifact
+itself, with the manifest's SHA-256; any other file fails the run.
+
+### Acceptance tests for the local loop (M2)
+
+- AC01, deterministic: `pytest tests/test_ac01_local_health.py` runs a
+  simple health request in English and Chinese through the local loop
+  with model doubles (in the default suite and CI).
+- AC01, live: `pytest -m live tests/test_local_loop_live.py` runs the
+  real router, skill loop, executor, and sandbox against the pinned
+  model on llama-server. It reuses the smoke test's fixtures, so it
+  needs the same runtime and artifact, and `RELAYMIND_SMOKE_MODEL`
+  works the same way. Set `RELAYMIND_TRACE_OUT=<file.json>` to write
+  the full traces (the warm-up run included) that `EVIDENCE.md` records;
+  nothing is written otherwise.
+- AC03 and AC04, deterministic: `pytest tests/test_ac03_clarification.py`
+  (clarification and resume) and `pytest tests/test_ac04_invalid_proposals.py`
+  (invalid proposals never execute) run with scripted model doubles in
+  the default suite. There is no live AC03 or AC04 test yet.
 
 ### Windows qualification notes
 
@@ -284,7 +310,8 @@ Normal CI remains deterministic and excludes live tests.
 
 The workflow uploads machine details, the manifest, runtime banner,
 pytest output, JUnit results, and server logs as `runtime-smoke-windows`.
-Three passing cases with zero skips are required. A hosted Windows run
+Seven passing cases with zero skips are required (non-thinking,
+thinking, the tool call, and four token-count checks). A hosted Windows run
 qualifies that Windows Server/CPU environment, not every Windows desktop
 or GPU configuration. Repeat the same smoke file on Apple Silicon and
 record both results in `EVIDENCE.md` before claiming runtime qualification.
