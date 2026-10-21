@@ -51,3 +51,23 @@ def test_a_short_secret_is_not_scrubbed_from_inside_other_words():
     assert redact_text("10 retries, 1 failed", {"1"}) == f"10 retries, {REDACTED} failed"
     assert redact_text("untrue, but true", {"true"}) == f"untrue, but {REDACTED}"
     assert redact_text("Bearer sk-abc.", {"sk-abc"}) == f"Bearer {REDACTED}."
+
+
+def test_a_secret_repeated_in_free_text_of_the_same_value_is_scrubbed():
+    """RM12, section 8 (spec 0.12): the value is replaced where it is repeated, not only by key."""
+    redactor = Redactor(secret_fields={"source"})
+    value = {
+        "entries": [
+            {"message": "use svc-key-7 to log in", "source": "svc-key-7"},
+            {"message": "svc-key-70 is another word", "source": "svc-key-7"},
+        ],
+        "count": 2,
+    }
+    assert redactor.redact_with_repeats(value) == {
+        "entries": [
+            {"message": f"use {REDACTED} to log in", "source": REDACTED},
+            {"message": "svc-key-70 is another word", "source": REDACTED},
+        ],
+        "count": 2,
+    }
+    assert value["entries"][0]["source"] == "svc-key-7", "must return a copy"

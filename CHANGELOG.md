@@ -24,6 +24,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Tool-output injection defenses and secret redaction (#20; RM08, RM12,
+  AC06; spec 0.12 section 8): `Redactor.redact_with_repeats` also replaces
+  a value found under a secret field wherever the same whole token is
+  repeated in the free text of that tool result, and the executor uses it
+  before the first write. `tests/test_ac06_tool_output_injection.py` plays
+  an injected log entry with obedient model doubles: the unallowed
+  `delete_demo_database` call is rejected, caller permissions, the skill
+  allowlist, and the offered tool schemas stay unchanged, the injection
+  reaches the model only as a tool message, and the secret is absent from
+  events, tool operations, model requests, and the SQLite store read back
+  from disk.
 - Restart recovery (#8; RM10, RM17, AC12 restart part; spec 0.11
   sections 5 and 8): `LocalOrchestrator.recover_after_restart` (and
   `relaymind.orchestrator.recovery.recover_interrupted_runs`) fails
@@ -499,6 +510,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   from answer content. Non-thinking remains the default; operator-enabled
   thinking remains supported. Record both live runs separately from the
   historical runtime evidence and add a Windows runtime smoke workflow.
+- Specification 0.11 → 0.12: section 8 states that redaction also replaces a
+  secret value repeated in the free text of the same tool result, and that
+  injected text in tool output never changes tools, permissions, or
+  approvals (RM08, RM11, RM12, AC06, #20).
 - Specification 0.10 → 0.11: section 5 defines restart recovery (RM10,
   RM17, #8): when it runs, what it settles (pending writes as
   `unknown_outcome`, pending reads as `failed`, pending approvals

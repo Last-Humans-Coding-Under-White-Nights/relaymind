@@ -292,7 +292,7 @@ class ToolExecutor:
     def _finish(self, operation_id: str, raw: ToolResult) -> Execution:
         """Redact, record the outcome once, and return what was recorded."""
         secrets = self.redactor.secret_values(raw.data)
-        recorded = self.redactor.redact(raw.to_json_object())
+        recorded = self.redactor.redact_with_repeats(raw.to_json_object())
         result = ToolResult.from_json_object(recorded)
         self.store.finish_tool_operation(operation_id, status=result.status.value, result=recorded)
         return Execution(result, replayed=False, secrets=secrets)
