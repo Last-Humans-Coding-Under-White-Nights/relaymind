@@ -24,6 +24,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Streaming contract (#23; RM20, AC09; spec 0.15 section 7.3): the
+  stream of the managed alias is the replay of the run's `answer.delta`
+  events, so content is append-only and nothing but framing is added. A
+  backend can return a `LiveAnswer` (`relaymind.api.chat`) that forwards
+  provider text as it arrives. If the provider fails after the first
+  chunk, the stream asks the backend to record `run.failed`, sends one
+  `error` event with fixed text (`external_failed`, the run ID, no
+  provider text), and closes the connection with no finish chunk and no
+  `[DONE]`; no replacement answer is sent. `tests/test_streaming_contract.py`
+  covers the framing of both aliases and both terminal paths (`stop`,
+  `tool_calls`), append-only content, the final generation with tools
+  disabled, the mid-stream failure in process and over a loopback socket
+  with the OpenAI SDK, and an unmet evidence predicate that cannot
+  finalize. The production client-owned backend that returns a
+  `LiveAnswer` and records `run.failed` is issue #24.
 - OpenAI-compatible endpoints (#22; RM19, AC09, AC16 request part; spec
   0.14 section 7.1): `GET /v1/models` and `POST /v1/chat/completions` on a
   FastAPI app (`relaymind.api.app`) over the orchestrator. The request

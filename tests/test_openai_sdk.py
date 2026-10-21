@@ -11,17 +11,15 @@ doubles.
 """
 
 import asyncio
-import threading
-import time
 
 import httpx
 import openai
 import pytest
 
-from api_helpers import healthy_gateway, make_app, token_of
+from api_helpers import RunningServer, healthy_gateway, make_app, token_of
 from gateway_helpers import STAGING_OK
 from helpers import of_type
-from relaymind.api.server import build_server, serve
+from relaymind.api.server import serve
 
 PROMPT = "Is staging-api healthy right now?"
 MESSAGES = [{"role": "user", "content": PROMPT}]
@@ -130,30 +128,6 @@ def test_the_execution_mode_header_reaches_the_run_through_the_sdk(tmp_path):
 
 
 # -- a real loopback socket ------------------------------------------------------------
-
-
-class RunningServer:
-    def __init__(self, app):
-        self.server = build_server(app, host="127.0.0.1", port=0)
-        self.thread = threading.Thread(target=self.server.run, daemon=True)
-
-    def __enter__(self):
-        self.thread.start()
-        deadline = time.monotonic() + 10
-        while not self.server.started:
-            assert time.monotonic() < deadline, "the server did not start"
-            time.sleep(0.01)
-        (socket,) = self.server.servers[0].sockets
-        self.address = socket.getsockname()
-        return self
-
-    def __exit__(self, *exc):
-        self.server.should_exit = True
-        self.thread.join(timeout=10)
-
-    @property
-    def base_url(self):
-        return f"http://{self.address[0]}:{self.address[1]}/v1"
 
 
 @pytest.mark.parametrize("stream", [False, True])

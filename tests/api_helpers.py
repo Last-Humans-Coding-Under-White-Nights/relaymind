@@ -7,11 +7,14 @@ is deterministic. One real loopback socket test lives in
 
 import asyncio
 import json
+import threading
+import time
 
 import httpx
 
 from gateway_helpers import build_gateway, health_tail, route_turn
 from relaymind.api.app import create_app
+from relaymind.api.server import build_server
 
 RUN_ID_HEADER = "X-RelayMind-Run-ID"
 
@@ -65,3 +68,27 @@ def sse_events(response):
         data = block[len("data: ") :]
         events.append(data if data == "[DONE]" else json.loads(data))
     return events
+
+
+class RunningServer:
+    def __init__(self, app):
+        self.server = build_server(app, host="127.0.0.1", port=0)
+        self.thread = threading.Thread(target=self.server.run, daemon=True)
+
+    def __enter__(self):
+        self.thread.start()
+        deadline = time.monotonic() + 10
+        while not self.server.started:
+            assert time.monotonic() < deadline, "the server did not start"
+            time.sleep(0.01)
+        (socket,) = self.server.servers[0].sockets
+        self.address = socket.getsockname()
+        return self
+
+    def __exit__(self, *exc):
+        self.server.should_exit = True
+        self.thread.join(timeout=10)
+
+    @property
+    def base_url(self):
+        return f"http://{self.address[0]}:{self.address[1]}/v1"

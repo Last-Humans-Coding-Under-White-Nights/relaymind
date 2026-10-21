@@ -12,10 +12,16 @@ The functions at the end build the JSON bodies. The stream is framing
 plus answer content only (RM20): a role chunk, one content chunk for
 each ``answer.delta`` of the run, a finish chunk, and ``[DONE]``. No
 progress text is added to it.
+
+A backend may also return a ``LiveAnswer``, text forwarded while the
+provider generates it. If that provider fails after the first chunk,
+the stream sends one fixed error event and closes the connection with
+no finish chunk and no ``[DONE]`` (spec 0.15 section 7.3).
 """
 
 import json
-from collections.abc import Iterator, Mapping
+import logging
+from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -30,13 +36,43 @@ from relaymind.store import EventType
 __all__ = [
     "ChatBackend",
     "ChatResult",
+    "LiveAnswer",
     "ManagedChat",
+    "StreamAborted",
     "completion_body",
     "stream_chunks",
 ]
 
 STOP = "stop"
 TOOL_CALLS = "tool_calls"
+STREAM_FAILED_CODE = "external_failed"
+STREAM_FAILED_MESSAGE = "the answer stream failed and was closed; no answer was completed"
+
+logger = logging.getLogger(__name__)
+
+
+class StreamAborted(Exception):
+    """Raised after the error event of a failed stream, to close the connection.
+
+    The status line is gone by then, so the only honest signal left is
+    to end the response without a finish chunk and without [DONE]
+    (RM20, section 11).
+    """
+
+
+@dataclass(frozen=True)
+class LiveAnswer:
+    """Answer text that a backend forwards while the provider still generates it.
+
+    pieces yields the answer text in the order received. fail records
+    the run as failed (run.failed); the stream calls it once, when the
+    provider fails after the first chunk was sent (RM20, spec 0.15
+    section 7.3). The managed alias has no live answer: its run has
+    finished before the first byte.
+    """
+
+    pieces: AsyncIterator[str]
+    fail: Callable[[], None]
 
 
 @dataclass(frozen=True)
@@ -45,7 +81,9 @@ class ChatResult:
 
     content is the assistant text (None when the reply is tool calls).
     pieces are the answer deltas in the order the run published them,
-    when they are known; their join is content. tool_calls are
+    when they are known; their join is content. live, when set, is
+    answer text still being generated; it replaces content and pieces
+    in a stream. tool_calls are
     client-owned calls the caller executes (RM08); the gateway never
     runs them.
     """
@@ -55,6 +93,7 @@ class ChatResult:
     finish_reason: str = STOP
     tool_calls: tuple[ToolCall, ...] = ()
     pieces: tuple[str, ...] = ()
+    live: LiveAnswer | None = None
 
     @property
     def stream_pieces(self) -> tuple[str, ...]:
@@ -161,8 +200,14 @@ def completion_body(alias: str, result: ChatResult, created: int) -> dict[str, A
     }
 
 
-def stream_chunks(alias: str, result: ChatResult, created: int) -> Iterator[str]:
-    """The SSE lines of a finished result: framing and answer content only (RM20)."""
+async def stream_chunks(alias: str, result: ChatResult, created: int) -> AsyncIterator[str]:
+    """The SSE lines of a result: framing and answer content only (RM20).
+
+    A finished result is replayed. A live result is forwarded piece by
+    piece; if its provider fails, the run is recorded as failed, one
+    error event is sent, and StreamAborted closes the connection with
+    no finish chunk and no [DONE] (spec 0.15 section 7.3).
+    """
 
     def chunk(delta: Mapping[str, Any], finish: str | None = None) -> str:
         body = {
@@ -183,7 +228,38 @@ def stream_chunks(alias: str, result: ChatResult, created: int) -> Iterator[str]
         yield chunk({"tool_calls": calls})
     else:
         yield chunk({"role": "assistant", "content": ""})
-        for piece in result.stream_pieces:
-            yield chunk({"content": piece})
+        if result.live is not None:
+            try:
+                async for piece in result.live.pieces:
+                    if piece:
+                        yield chunk({"content": piece})
+            except Exception as exc:
+                yield _failure_event(result, exc)
+                raise StreamAborted from None
+        else:
+            for piece in result.stream_pieces:
+                yield chunk({"content": piece})
     yield chunk({}, result.finish_reason)
     yield "data: [DONE]\n\n"
+
+
+def _failure_event(result: ChatResult, exc: Exception) -> str:
+    """Record the failed run and build the one error event of an aborted stream.
+
+    The event text is fixed: provider text never reaches the client
+    (RM12). The operator log names the failure type only.
+    """
+    assert result.live is not None
+    logger.error("answer stream of %s failed: %s", result.run_id, type(exc).__name__)
+    try:
+        result.live.fail()
+    except Exception as recorder:
+        logger.error(
+            "could not record run.failed for %s: %s", result.run_id, type(recorder).__name__
+        )
+    error = {
+        "code": STREAM_FAILED_CODE,
+        "message": STREAM_FAILED_MESSAGE,
+        "run_id": result.run_id,
+    }
+    return f"data: {json.dumps({'error': error})}\n\n"
