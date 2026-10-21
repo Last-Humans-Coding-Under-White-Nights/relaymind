@@ -516,6 +516,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   from answer content. Non-thinking remains the default; operator-enabled
   thinking remains supported. Record both live runs separately from the
   historical runtime evidence and add a Windows runtime smoke workflow.
+- Specification 0.12 → 0.13: section 11 defines the error contract (RM04,
+  AC07, AC16, #21): the error body with a stable code, message, and run
+  reference, the status for every code, and the mapping of failed runs
+  (needs_external 422, context_limit_exceeded 400, external_failed 503 or
+  504 for an exhausted time limit, workflow_unavailable 503, internal_error
+  500). It also defines degraded mode as an operator policy, off by
+  default, with its trace record (`degraded_mode` and `local_failure` in
+  `handoff.started`). Sections 4.4 and 8 follow.
 - Specification 0.11 → 0.12: section 8 states that redaction also replaces a
   secret value (string or number) repeated in the data or error message of
   the same tool result, and in later tool results, model text, proposed
