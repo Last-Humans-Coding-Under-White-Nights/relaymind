@@ -62,7 +62,7 @@ def waiting_for_input(tmp_path):
 )
 def test_each_documented_code_has_its_status(code, status):
     """Section 11: a stable code per status, and no code the table does not list."""
-    error = ApiError.of(code, "a message")
+    error = ApiError(code, "a message")
     assert error.status == status
     assert error.code == code
 
@@ -74,21 +74,21 @@ def test_the_status_table_lists_exactly_the_documented_codes():
 def test_an_undocumented_code_is_refused():
     """A code is part of the contract; a typo must not become a new one."""
     with pytest.raises(ValueError):
-        ApiError.of("made_up_code", "x")
+        ApiError("made_up_code", "x")
 
 
 def test_the_error_body_has_a_code_a_message_and_a_run_reference():
-    error = ApiError.of("run_not_found", "no run run_1", run_id="run_1")
+    error = ApiError("run_not_found", "no run run_1", run_id="run_1")
     assert error.body() == {
         "error": {"code": "run_not_found", "message": "no run run_1", "run_id": "run_1"}
     }
 
 
 def test_the_error_body_names_no_run_when_none_exists_and_adds_a_reason_code():
-    assert ApiError.of("unauthenticated", "x").body()["error"]["run_id"] is None
-    body = ApiError.of("needs_external", "x", run_id="r", reason_code="local_budget").body()
+    assert ApiError("unauthenticated", "x").body()["error"]["run_id"] is None
+    body = ApiError("needs_external", "x", run_id="r", reason_code="local_budget").body()
     assert body["error"]["reason_code"] == "local_budget"
-    assert "reason_code" not in ApiError.of("overloaded", "x").body()["error"]
+    assert "reason_code" not in ApiError("overloaded", "x").body()["error"]
 
 
 # --- 401 -------------------------------------------------------------------------
@@ -230,5 +230,5 @@ def test_an_unexpected_error_is_500_with_a_fixed_message(tmp_path):
 
 
 def test_an_api_error_passes_through_unchanged():
-    original = ApiError.of("unsupported_parameter", "parameter n must be 1")
+    original = ApiError("unsupported_parameter", "parameter n must be 1")
     assert error_from_exception(original) is original

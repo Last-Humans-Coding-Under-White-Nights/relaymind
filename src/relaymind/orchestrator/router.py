@@ -233,14 +233,14 @@ class Router:
             context=self.context(mode),
         )
 
-    def bypass_decision(
+    def _external_decision(
         self,
         messages: Sequence[Message],
         mode: ExecutionMode,
-        *,
-        language: Language | None = None,
+        language: Language | None,
+        reason_code: str,
     ) -> RouteDecision:
-        """An oversized input skips the fast router (section 4.1).
+        """The gateway's own decision to route external, with no skill.
 
         language is the run's language once it has one (section 5).
         """
@@ -248,8 +248,18 @@ class Router:
             mode,
             route=Route.EXTERNAL.value,
             language=(language or request_language(messages)).value,
-            reason_code="context_limit",
+            reason_code=reason_code,
         )
+
+    def bypass_decision(
+        self,
+        messages: Sequence[Message],
+        mode: ExecutionMode,
+        *,
+        language: Language | None = None,
+    ) -> RouteDecision:
+        """An oversized input skips the fast router (section 4.1)."""
+        return self._external_decision(messages, mode, language, "context_limit")
 
     def degraded_decision(
         self,
@@ -259,12 +269,7 @@ class Router:
         language: Language | None = None,
     ) -> RouteDecision:
         """An unavailable local model, with degraded mode permitted (section 11)."""
-        return self._validated(
-            mode,
-            route=Route.EXTERNAL.value,
-            language=(language or request_language(messages)).value,
-            reason_code="capability_missing",
-        )
+        return self._external_decision(messages, mode, language, "capability_missing")
 
     def execution_mode_decision(self, messages: Sequence[Message]) -> RouteDecision:
         """external_only: the gateway's own decision, no routing generation (7.4)."""

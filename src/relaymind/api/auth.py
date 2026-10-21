@@ -23,4 +23,4 @@ def require_bearer_token(authorization: str | None, token: str) -> None:
         or not supplied
         or not hmac.compare_digest(supplied.encode(), token.encode())
     ):
-        raise ApiError.of("unauthenticated", "a valid application token is required")
+        raise ApiError("unauthenticated", "a valid application token is required")

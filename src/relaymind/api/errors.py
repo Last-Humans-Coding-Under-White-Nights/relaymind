@@ -80,10 +80,6 @@ class ApiError(Exception):
         self.run_id = run_id
         self.reason_code = reason_code
 
-    @classmethod
-    def of(cls, code: str, message: str, **fields: str | None) -> "ApiError":
-        return cls(code, message, **fields)
-
     def body(self) -> dict[str, dict[str, str | None]]:
         error: dict[str, str | None] = {
             "code": self.code,
