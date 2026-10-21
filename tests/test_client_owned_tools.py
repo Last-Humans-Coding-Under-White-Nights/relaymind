@@ -413,15 +413,26 @@ def test_a_call_id_used_earlier_in_the_conversation_is_replaced(tmp_path):
 # -- answer options ------------------------------------------------------------------------
 
 
-def test_the_token_budget_does_not_cut_off_a_generation_that_may_call_a_function(tmp_path):
-    """Spec 7.1: a generation offered tools keeps its own token budget."""
+def test_the_token_budget_bounds_every_generation_because_each_may_be_the_response(tmp_path):
+    """Spec 7.1, 7.2: a client-owned generation is the response, text or call; no tool loop."""
     gateway, app = client_app(tmp_path, [weather_call(), text_turn(ANSWER)])
     request(app, max_completion_tokens=50, temperature=0.5)
-    assert gateway.adapter.requests[0].options.max_output_tokens is None
+    assert gateway.adapter.requests[0].options.max_output_tokens == 50
     assert gateway.adapter.requests[0].options.temperature == 0.5
 
     request(app, max_completion_tokens=50, tool_choice="none")
     assert gateway.adapter.requests[1].options.max_output_tokens == 50
+
+
+def test_the_token_budget_bounds_the_external_generations_too(tmp_path):
+    """Spec 7.1, 7.2, RM04: the external fallback answers the same response."""
+    gateway, app = client_app(tmp_path, [], external_turns=[text_turn(ANSWER)])
+    response = request(
+        app, max_completion_tokens=50, headers={"X-RelayMind-Execution-Mode": "external_only"}
+    )
+    assert response.status_code == 200
+    (external_request,) = gateway.external.requests
+    assert external_request.options.max_output_tokens == 50
 
 
 # -- execution modes and fallback (RM04, section 7.2) -----------------------------------------
@@ -497,16 +508,25 @@ def test_without_an_external_model_a_local_stop_is_needs_external(tmp_path):
     assert error_of(response)["reason_code"] == "invalid_output"
 
 
-def test_an_exhausted_local_generation_budget_stops_with_local_budget(tmp_path):
-    """RM03, RM04: the repair generation needs room in the local limits."""
-    _, app = client_app(
-        tmp_path,
-        [text_turn("x")],
-        budgets=LocalBudgets(local_generations=1, repair_generations=1),
-    )
+@pytest.mark.parametrize(
+    "budgets",
+    [
+        LocalBudgets(local_generations=1, repair_generations=1),
+        LocalBudgets(repair_generations=0),
+    ],
+    ids=["no_local_generation_left", "repair_disabled"],
+)
+def test_invalid_output_without_room_for_a_repair_stops_as_invalid_output(tmp_path, budgets):
+    """RM03, RM04, RM16: the repair needs room in the local limits; the stop is the
+    unrepaired output, as on the managed alias, not a budget stop."""
+    gateway, app = client_app(tmp_path, [text_turn("x"), weather_call()], budgets=budgets)
     response = request(app, tool_choice="required")
     assert response.status_code == 422
-    assert error_of(response)["reason_code"] == "local_budget"
+    assert error_of(response)["reason_code"] == "invalid_output"
+    assert len(gateway.adapter.requests) == 1
+    run = gateway.store.get_run(response.headers[RUN_ID_HEADER])
+    (failed,) = of_type(gateway.store.events(run.run_id), "run.failed")
+    assert "budget" not in failed.payload
 
 
 def test_an_external_failure_after_fallback_is_external_failed(tmp_path):
@@ -520,6 +540,52 @@ def test_an_external_failure_after_fallback_is_external_failed(tmp_path):
     assert response.status_code == 503
     assert error_of(response)["code"] == "external_failed"
     assert error_of(response)["reason_code"] == "invalid_output"
+
+
+def test_an_external_stop_records_the_reason_the_external_stage_stopped(tmp_path):
+    """RM04, RM16, section 11: run.failed carries the external stage's own stop reason."""
+    gateway, app = client_app(
+        tmp_path, [], external_turns=[text_turn("still text"), text_turn("still text")]
+    )
+    response = request(
+        app, tool_choice="required", headers={"X-RelayMind-Execution-Mode": "external_only"}
+    )
+    assert response.status_code == 503
+    assert error_of(response)["reason_code"] == "invalid_output"
+    (failed,) = of_type(events_of(gateway, response), "run.failed")
+    assert failed.payload["reason_code"] == "invalid_output"
+
+
+def test_a_repair_over_the_local_context_limit_escalates_before_generation(tmp_path):
+    """RM13, RM04: the repair exchange grows the request, so it is measured again."""
+    # The double counts one unit per character: the prompt and one tool fit in 60,
+    # the prompt plus the repair exchange does not.
+    gateway, app = client_app(
+        tmp_path,
+        [text_turn("no"), weather_call()],
+        capabilities=make_capabilities(context_limit=60),
+    )
+    gateway.adapter.input_tokens = None  # count characters, not the fixed default
+    response = request(app, tool_choice="required")
+    assert response.status_code == 422
+    assert error_of(response)["reason_code"] == "context_limit"
+    assert len(gateway.adapter.requests) == 1
+
+
+def test_an_external_retry_over_the_external_context_limit_fails_explicitly(tmp_path):
+    """RM13: the external retry is measured again; oversized is context_limit_exceeded."""
+    gateway, app = client_app(
+        tmp_path,
+        [],
+        external_turns=[text_turn("no"), weather_call()],
+        external_capabilities=make_capabilities(context_limit=60),
+    )
+    response = request(
+        app, tool_choice="required", headers={"X-RelayMind-Execution-Mode": "external_only"}
+    )
+    assert response.status_code == 400
+    assert error_of(response)["code"] == "context_limit_exceeded"
+    assert len(gateway.external.requests) == 1
 
 
 def test_the_local_model_without_tool_calling_cannot_serve_offered_functions(tmp_path):
@@ -617,6 +683,63 @@ def test_a_function_with_an_invalid_parameters_schema_is_rejected(tmp_path):
     assert error_of(response)["code"] == "invalid_request"
     assert "tools[0].function.parameters" in error_of(response)["message"]
     assert gateway.adapter.requests == []
+
+
+@pytest.mark.parametrize(
+    "ref",
+    ["https://example.invalid/schema.json", "#/$defs/missing", "#no-such-anchor"],
+    ids=["remote", "missing_pointer", "missing_anchor"],
+)
+def test_a_parameters_schema_with_an_unresolvable_ref_is_rejected(tmp_path, monkeypatch, ref):
+    """RM19, RM01, spec 7.1: a $ref the gateway cannot resolve locally is an invalid
+    schema, and the gateway never fetches one."""
+
+    def no_fetch(*args, **kwargs):
+        raise AssertionError("the gateway must not retrieve a remote schema")
+
+    monkeypatch.setattr("urllib.request.urlopen", no_fetch)
+    bad = {
+        "type": "function",
+        "function": {
+            "name": "f",
+            "parameters": {"type": "object", "properties": {"a": {"$ref": ref}}},
+        },
+    }
+    gateway, app = client_app(tmp_path, [tool_turn("f", call_id="c1", a=1)])
+    response = request(app, tools=[bad])
+    assert response.status_code == 400
+    assert error_of(response)["code"] == "invalid_request"
+    assert "tools[0].function.parameters" in error_of(response)["message"]
+    assert gateway.adapter.requests == []
+
+
+def test_a_parameters_schema_with_local_refs_checks_the_arguments(tmp_path):
+    """RM09, RM19: $defs, anchors, nested $id, and the meta-schema resolve locally."""
+    parameters = {
+        "$id": "https://example.invalid/root.json",
+        "type": "object",
+        "properties": {
+            "city": {"$ref": "#/$defs/city"},
+            "unit": {"$ref": "#unit"},
+            "note": {"$id": "note.json", "$ref": "#/$defs/text", "$defs": {"text": {}}},
+            "schema": {"$ref": "https://json-schema.org/draft/2020-12/schema"},
+        },
+        "required": ["city"],
+        "$defs": {
+            "city": {"type": "string"},
+            "unit": {"$anchor": "unit", "enum": ["c", "f"]},
+        },
+    }
+    tool = {"type": "function", "function": {"name": "f", "parameters": parameters}}
+    gateway, app = client_app(
+        tmp_path, [tool_turn("f", call_id="c1", city=7), tool_turn("f", call_id="c2", city="Oslo")]
+    )
+    response = request(app, tools=[tool])
+    assert response.status_code == 200
+    (exposed,) = message_of(response)["tool_calls"]
+    # The first call broke the referenced schema; the repair produced a valid one.
+    assert exposed["id"] == "c2"
+    assert len(gateway.adapter.requests) == 2
 
 
 def test_the_alias_is_not_served_without_the_client_backend(tmp_path):

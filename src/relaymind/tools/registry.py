@@ -41,6 +41,10 @@ from typing import Any
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, ValidationError
 from jsonschema.validators import extend
+from jsonschema_specifications import REGISTRY as _SPECIFICATIONS
+from referencing import Resource
+from referencing.exceptions import Unresolvable
+from referencing.jsonschema import DRAFT202012, specification_with
 
 from relaymind.adapters.base import ToolSchema
 from relaymind.canonical import canonical_json
@@ -88,6 +92,48 @@ StrictValidator = extend(
     validators={"enum": _strict_enum, "const": _strict_const},
     type_checker=Draft202012Validator.TYPE_CHECKER.redefine("integer", _is_strict_integer),
 )
+
+
+def check_parameters_schema(schema: Mapping[str, Any]) -> None:
+    """Raise SchemaError unless schema is a JSON Schema the gateway can apply (RM09, RM19).
+
+    The schema must pass the draft 2020-12 meta-schema, and every $ref
+    and $dynamicRef in it must resolve inside the schema itself or to a
+    published meta-schema. The gateway never retrieves a schema from
+    anywhere else (RM01), so a reference it cannot resolve here would
+    make every argument check fail.
+    """
+    Draft202012Validator.check_schema(schema)
+    dialect = schema.get("$schema")
+    specification = specification_with(
+        dialect if isinstance(dialect, str) else "urn:unknown-dialect", default=DRAFT202012
+    )
+    resource = specification.create_resource(schema)
+    _check_references(_SPECIFICATIONS.resolver_with_root(resource), resource)
+
+
+def _check_references(resolver: Any, resource: Resource[Any]) -> None:
+    contents = resource.contents
+    if isinstance(contents, Mapping):
+        for keyword in ("$ref", "$dynamicRef"):
+            reference = contents.get(keyword)
+            if isinstance(reference, str):
+                try:
+                    resolver.lookup(reference)
+                except Unresolvable:
+                    raise SchemaError(f"{keyword} {reference!r} does not resolve") from None
+    for subresource in resource.subresources():
+        _check_references(resolver.in_subresource(subresource), subresource)
+
+
+def parameters_validator(schema: Mapping[str, Any]) -> Any:
+    """A strict validator for a schema that passed check_parameters_schema.
+
+    References resolve against the schema and the published
+    meta-schemas only; nothing is retrieved (RM01).
+    """
+    return StrictValidator(schema, registry=_SPECIFICATIONS)
+
 
 _TOOL_NAME = re.compile(r"[a-z][a-z0-9_]{0,63}")
 

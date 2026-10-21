@@ -22,10 +22,9 @@ empty (section 8). The gateway records its own RouteDecision: local, or
 external in external_only.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-
-from jsonschema.exceptions import SchemaError
+from typing import Any
 
 from relaymind.adapters import (
     GenerationOptions,
@@ -44,6 +43,7 @@ from relaymind.orchestrator.local_loop import (
     EXTERNAL_OPTIONS,
     GATEWAY_ACTOR,
     LOCAL_OPTIONS,
+    ContextLimitExceeded,
     Escalation,
     ExternalFailure,
     LocalOrchestrator,
@@ -51,18 +51,11 @@ from relaymind.orchestrator.local_loop import (
     _Generation,
     _Run,
 )
-from relaymind.orchestrator.route_decision import (
-    ExecutionMode,
-    Route,
-    RouteDecision,
-    RoutingContext,
-    parse_route_decision,
-)
-from relaymind.orchestrator.router import request_language
+from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
 from relaymind.schema_util import first_schema_error
 from relaymind.store.trace_event import EventType
-from relaymind.tools.registry import StrictValidator
+from relaymind.tools.registry import parameters_validator
 
 __all__ = ["ToolOffer", "run_client_request"]
 
@@ -78,41 +71,29 @@ class ToolOffer:
 
     choice is auto, none, required, or function; function names the one
     function that must be called. none offers no function and a named
-    choice offers only that one.
+    choice offers only that one. The schemas come from a validated
+    ChatRequest: their names are unique, a named function is one of
+    them, and their parameters passed check_parameters_schema.
     """
 
     schemas: tuple[ToolSchema, ...] = ()
     choice: str = "auto"
     function: str | None = None
     offered: tuple[ToolSchema, ...] = field(init=False)
-    _validators: Mapping[str, StrictValidator] = field(init=False, repr=False, compare=False)
+    _validators: Mapping[str, Any] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if self.choice not in CHOICES:
             raise ValueError(f"tool choice must be one of: {', '.join(CHOICES)}")
         if (self.choice == "function") != (self.function is not None):
             raise ValueError("a function name goes with the function choice, and only with it")
-        names = [schema.name for schema in self.schemas]
-        if len(set(names)) != len(names):
-            raise ValueError("function names must be unique")
-        if self.function is not None and self.function not in names:
-            raise ValueError(f"the chosen function {self.function!r} is not supplied")
         offered = {
             "none": (),
             "function": tuple(s for s in self.schemas if s.name == self.function),
         }.get(self.choice, tuple(self.schemas))
         object.__setattr__(self, "schemas", tuple(self.schemas))
         object.__setattr__(self, "offered", offered)
-        validators = {}
-        for schema in offered:
-            document = dict(schema.input_schema)
-            try:
-                StrictValidator.check_schema(document)
-            except SchemaError as exc:
-                raise ValueError(
-                    f"the parameters of {schema.name!r} are not a JSON Schema"
-                ) from exc
-            validators[schema.name] = StrictValidator(document)
+        validators = {s.name: parameters_validator(dict(s.input_schema)) for s in offered}
         object.__setattr__(self, "_validators", validators)
 
     @property
@@ -178,7 +159,6 @@ class _ClientRun(_Run):
         self.offer = offer
         # The offered catalog is empty for this alias (section 8).
         self.offered = owner.skills.offered_snapshot(())
-        self.language = request_language(messages)
         # Call IDs of the conversation; the reply must not reuse one.
         self._taken = {c.call_id for m in messages for c in m.tool_calls}
 
@@ -190,10 +170,9 @@ class _ClientRun(_Run):
 
     async def drive_client(self) -> RunOutcome:
         try:
+            self._decide()
             if self.mode is ExecutionMode.EXTERNAL_ONLY:
-                self._decide(Route.EXTERNAL, "execution_mode", "execution_mode")
                 raise Escalation("execution_mode", "the execution mode sends the request external")
-            self._decide(Route.LOCAL, "simple_skill", CLIENT_MECHANISM)
             self.move(RunState.LOCAL_RUNNING)
             reply = await self._local_stage()
         except Escalation as stop:
@@ -204,20 +183,14 @@ class _ClientRun(_Run):
             )
         return self._complete(reply)
 
-    def _decide(self, route: Route, reason_code: str, mechanism: str) -> None:
+    def _decide(self) -> None:
         """Record the gateway's own decision; skill_id is null for this alias (section 8)."""
-        decision = parse_route_decision(
-            RouteDecision(
-                route=route,
-                skill_id=None,
-                language=self.language,
-                reason_code=reason_code,
-                clarification=None,
-            ).to_json_object(),
-            skill_ids=(),
-            context=RoutingContext(managed=False, execution_mode=self.mode),
-        )
+        decision = self.o.router.client_decision(self.messages, self.mode)
         self.decision = decision
+        self.language = decision.language
+        mechanism = (
+            "execution_mode" if self.mode is ExecutionMode.EXTERNAL_ONLY else CLIENT_MECHANISM
+        )
         self.emit(
             EventType.ROUTE_SELECTED,
             GATEWAY_ACTOR,
@@ -226,22 +199,30 @@ class _ClientRun(_Run):
 
     # -- the local stage -------------------------------------------------------------
 
-    async def _measure(self, adapter: ModelAdapter) -> RequestSize:
-        """Measure the request against a model's context limit (RM13).
+    async def _measure(
+        self, adapter: ModelAdapter, conversation: Sequence[Message] | None = None
+    ) -> RequestSize:
+        """Measure a request against a model's context limit (RM13).
 
-        Offered functions need tool calling; raises
-        UnsupportedCapabilityError or TokenCountError when the model
-        cannot take the request.
+        conversation defaults to the request as sent. Offered functions
+        need tool calling; raises UnsupportedCapabilityError or
+        TokenCountError when the model cannot take the request.
         """
         schemas = self.offer.offered
         capabilities = await adapter.capabilities()
         if schemas:
             capabilities.require("tool_calling")
-        return await measure_request(adapter, capabilities, self.messages, schemas)
+        messages = self.messages if conversation is None else conversation
+        return await measure_request(adapter, capabilities, messages, schemas)
 
     async def _local_stage(self) -> _Reply:
+        await self._check_local_size(self.messages)
+        return await self._converse(("skill", "repair"), LOCAL_OPTIONS, self._check_local_size)
+
+    async def _check_local_size(self, conversation: Sequence[Message]) -> None:
+        """Escalate when the local model cannot take the conversation (RM04, RM13)."""
         try:
-            size = await self._measure(self.o.model.adapter)
+            size = await self._measure(self.o.model.adapter, conversation)
         except (UnsupportedCapabilityError, TokenCountError) as exc:
             raise self._local_unavailable(
                 f"the local model cannot take the request: {exc}"
@@ -251,17 +232,44 @@ class _ClientRun(_Run):
                 "context_limit",
                 f"the request needs {size.size} ({size.method}); the local limit is {size.limit}",
             )
-        return await self._converse(("skill", "repair"), LOCAL_OPTIONS)
 
-    async def _converse(self, purposes: Sequence[str], defaults: GenerationOptions) -> _Reply:
-        """Generate until a reply is admissible, within the purposes given (RM03)."""
+    async def _check_external_size(self, conversation: Sequence[Message]) -> None:
+        """A retry grows the external request, so it is measured again (RM13)."""
+        external = self.o.external
+        assert external is not None
+        try:
+            size = await self._measure(external.adapter, conversation)
+        except (UnsupportedCapabilityError, TokenCountError) as exc:
+            # Section 11: an external stage that cannot finish is external_failed.
+            raise ExternalFailure(f"the external request could not be measured: {exc}") from exc
+        if not size.fits:
+            raise ContextLimitExceeded(size)
+
+    async def _converse(
+        self,
+        purposes: Sequence[str],
+        defaults: GenerationOptions,
+        check_size: Callable[[Sequence[Message]], Awaitable[None]],
+    ) -> _Reply:
+        """Generate until a reply is admissible, within the purposes given (RM03).
+
+        Every generation is the response, a text or a call, so the
+        caller's token budget applies to each (spec 7.1, 7.2). A repair
+        needs room in the local limits; without it the stop is the
+        unrepaired output (RM04). The grown conversation is measured
+        before each further generation with check_size (RM13).
+        """
         conversation = list(self.messages)
         schemas = self.offer.offered
-        options = self._answer_options(defaults, tools_offered=bool(schemas))
+        options = self._answer_options(defaults)
         problem = "no reply"
-        for purpose in purposes:
+        for index, purpose in enumerate(purposes):
+            if index:
+                if purpose == "repair" and not self.meter.may_repair():
+                    break
+                await check_size(conversation)
             _, generation = await self._generate(purpose, conversation, schemas, options)
-            reply, problem = self._admit(generation)
+            reply, problem = self._admit_reply(generation)
             if reply is not None:
                 return reply
             draft = generation.text.strip() or "(no usable reply)"
@@ -274,7 +282,7 @@ class _ClientRun(_Run):
             ]
         raise Escalation("invalid_output", problem)
 
-    def _admit(self, generation: _Generation) -> tuple[_Reply | None, str]:
+    def _admit_reply(self, generation: _Generation) -> tuple[_Reply | None, str]:
         """The admissible reply of a generation, or why there is none (RM09, RM19)."""
         offer = self.offer
         if generation.calls:
@@ -353,7 +361,11 @@ class _ClientRun(_Run):
         self.authority.hand_off_to_external()
         self.meter.start_external()
         try:
-            reply = await self._converse(("external",) * EXTERNAL_ATTEMPTS, EXTERNAL_OPTIONS)
+            reply = await self._converse(
+                ("external",) * EXTERNAL_ATTEMPTS, EXTERNAL_OPTIONS, self._check_external_size
+            )
+        except ContextLimitExceeded as exceeded:
+            return self._fail_context(exceeded.size)
         except ExternalFailure as failure:
             return self._fail(
                 EXTERNAL_FAILED,
@@ -362,11 +374,12 @@ class _ClientRun(_Run):
                 **failure.extra,
             )
         except Escalation as stopped:
-            # A stop inside the external stage has no further escalation (RM14).
+            # A stop inside the external stage has no further escalation (RM14);
+            # run.failed carries the reason it stopped on (section 11).
             return self._fail(
                 EXTERNAL_FAILED,
                 detail=stopped.detail,
-                reason_code=stop.reason_code,
+                reason_code=stopped.reason_code,
                 **stopped.extra,
             )
         except BudgetExceededError as exceeded:

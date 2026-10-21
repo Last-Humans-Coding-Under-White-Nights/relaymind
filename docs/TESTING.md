@@ -131,9 +131,13 @@ itself, with the manifest's SHA-256; any other file fails the run.
   client-declared function, even one named like a gateway tool (a handler
   spy, no `tool.started`, no tool operation), that the model is offered
   only the supplied functions narrowed by `tool_choice`, arguments checked
-  against the supplied schema, one exposed call per response, unique call
-  IDs, external fallback only before anything is exposed, the three
-  execution modes, and the ownership-mixing rejections on both aliases.
+  against the supplied schema (with local `$ref`s; an unresolvable or
+  remote one is `invalid_request` and nothing is fetched), one exposed
+  call per response, unique call IDs, the token budget on every
+  generation, the repair limits and the context limit after a repair,
+  the stop reason of an external stage, external fallback only before
+  anything is exposed, the three execution modes, and the
+  ownership-mixing rejections on both aliases.
   No live model is run, so there is no live AC10 record yet.
 
 ### Required trace events (RM16, RM22, RM25)

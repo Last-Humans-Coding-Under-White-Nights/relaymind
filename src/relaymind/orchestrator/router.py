@@ -226,11 +226,21 @@ class Router:
 
     # -- decisions -----------------------------------------------------------
 
-    def _validated(self, mode: ExecutionMode, **fields: Any) -> RouteDecision:
+    def _validated(
+        self, mode: ExecutionMode, *, managed: bool = True, **fields: Any
+    ) -> RouteDecision:
+        """The gateway's own decision, checked like a routing generation's (RM02).
+
+        managed is False for the client-owned alias, whose offered
+        catalog is empty (section 7.2).
+        """
+        context = (
+            self.context(mode) if managed else RoutingContext(managed=False, execution_mode=mode)
+        )
         return parse_route_decision(
             {"schema_version": SCHEMA_VERSION, "clarification": None, "skill_id": None, **fields},
-            skill_ids=self.offered,
-            context=self.context(mode),
+            skill_ids=self.offered if managed else (),
+            context=context,
         )
 
     def _external_decision(
@@ -278,6 +288,28 @@ class Router:
             route=Route.EXTERNAL.value,
             language=request_language(messages).value,
             reason_code="execution_mode",
+        )
+
+    def client_decision(self, messages: Sequence[Message], mode: ExecutionMode) -> RouteDecision:
+        """The client-owned alias: the gateway's own decision, no routing generation (7.2).
+
+        Route local with reason simple_skill, or route external with
+        reason execution_mode in external_only; skill_id is null.
+        """
+        if mode is ExecutionMode.EXTERNAL_ONLY:
+            return self._validated(
+                mode,
+                managed=False,
+                route=Route.EXTERNAL.value,
+                language=request_language(messages).value,
+                reason_code="execution_mode",
+            )
+        return self._validated(
+            mode,
+            managed=False,
+            route=Route.LOCAL.value,
+            language=request_language(messages).value,
+            reason_code="simple_skill",
         )
 
     def decide(

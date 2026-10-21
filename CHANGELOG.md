@@ -41,7 +41,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   The reply is buffered, so external fallback happens only before anything
   is exposed, `local_only` returns 422 `needs_external`, and `external_only`
   skips the local model. A function whose `parameters` is not a valid JSON
-  Schema is `invalid_request`. `RunOutcome.tool_calls` carries the calls.
+  Schema, or has a `$ref` that does not resolve inside it, is
+  `invalid_request`; the gateway never retrieves a remote schema.
+  Invalid output with no room left for the repair stops as
+  `invalid_output`, the repair exchange is measured against the context
+  limit before the next generation, `max_completion_tokens` bounds every
+  generation of the run, and an external stage that stops on invalid
+  output records `invalid_output`. `RunOutcome.tool_calls` carries the
+  calls.
   `tests/test_client_owned_tools.py` covers the round trip (in process and
   with the OpenAI SDK over a loopback socket), the no-execution rule, the
   modes, and the ownership-mixing rejections on both aliases. This backend

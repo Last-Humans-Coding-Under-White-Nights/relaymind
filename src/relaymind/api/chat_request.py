@@ -21,11 +21,11 @@ from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 
 from relaymind.adapters import GenerationOptions, Message, Role, ToolCall
 from relaymind.api.errors import ApiError
+from relaymind.tools.registry import check_parameters_schema
 
 __all__ = [
     "CLIENT_TOOLS",
@@ -422,7 +422,7 @@ def _tools(raw: object, alias: str) -> tuple[ClientTool, ...]:
         if not isinstance(parameters, dict):
             raise _invalid(f"{where}.function.parameters must be a JSON Schema object")
         try:
-            Draft202012Validator.check_schema(parameters)
+            check_parameters_schema(parameters)
         except SchemaError:
             raise _invalid(f"{where}.function.parameters must be a valid JSON Schema") from None
         if function.get("strict"):
