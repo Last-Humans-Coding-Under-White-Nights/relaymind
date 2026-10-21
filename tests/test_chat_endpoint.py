@@ -9,10 +9,19 @@ parameter table itself is in tests/test_chat_request.py.
 """
 
 import json
+import logging
 
 import pytest
 
-from api_helpers import RUN_ID_HEADER, TOKEN, call, chat, healthy_gateway, make_app, sse_events
+from api_helpers import (
+    RUN_ID_HEADER,
+    call,
+    chat,
+    healthy_gateway,
+    make_app,
+    sse_events,
+    token_of,
+)
 from gateway_helpers import (
     STAGING_OK,
     build_gateway,
@@ -26,6 +35,7 @@ from relaymind.adapters import ToolCall
 from relaymind.api.app import ChatSettings
 from relaymind.api.chat import ChatResult
 from relaymind.api.chat_request import CLIENT_TOOLS
+from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import RunOutcome
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
@@ -86,7 +96,7 @@ def test_models_lists_the_client_tools_alias_only_when_it_is_served(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "auth", ["Bearer wrong-token", "Basic " + TOKEN, TOKEN, "Bearer ", "Bearer"]
+    "auth", ["Bearer wrong-token", "Basic {token}", "{token}", "Bearer ", "Bearer"]
 )
 @pytest.mark.parametrize(
     ("method", "path"), [("GET", "/v1/models"), ("POST", "/v1/chat/completions")]
@@ -94,6 +104,7 @@ def test_models_lists_the_client_tools_alias_only_when_it_is_served(tmp_path):
 def test_a_wrong_token_is_401_and_creates_no_run(tmp_path, method, path, auth):
     gateway = healthy_gateway(tmp_path)
     app = make_app(gateway)
+    auth = auth.format(token=token_of(app))
     body = {"model": "relaymind", "messages": [{"role": "user", "content": "hi"}]}
     response = call(app, method, path, json_body=body if method == "POST" else None, auth=auth)
     assert response.status_code == 401
@@ -501,3 +512,93 @@ def test_client_tool_calls_stream_as_deltas(tmp_path):
     ]
     assert chunks[-1]["choices"][0]["finish_reason"] == "tool_calls"
     assert all("content" not in c["choices"][0]["delta"] for c in chunks[1:])
+
+
+# -- review findings, round 1 --------------------------------------------------------------
+
+
+def test_a_run_that_fails_as_run_state_is_409_run_terminal_not_500(tmp_path):
+    """RM19, section 11: missing_input is run state, not a server failure (spec 0.14 7.1).
+
+    With no clarification rounds left, a request that needs one ends as
+    failed with missing_input. The chat caller gets 409 run_terminal
+    naming that code, with the run ID, never a 500.
+    """
+    gateway = build_gateway(
+        tmp_path,
+        [clarify_turn("Which service do you mean?")],
+        external_turns=[],
+        budgets=LocalBudgets(clarification_rounds=0),
+    )
+    response = chat(make_app(gateway), prompt="Is it healthy?")
+    assert response.status_code == 409
+    error = error_of(response)
+    assert error["code"] == "run_terminal"
+    assert "missing_input" in error["message"]
+    assert error["run_id"] == response.headers[RUN_ID_HEADER]
+    assert gateway.store.get_run(error["run_id"]).state == "failed"
+
+
+def test_a_body_nested_too_deeply_to_decode_is_invalid_request(tmp_path):
+    """RM19, AC16: a body that cannot be decoded is 400, not 500 (spec 0.14 section 7.1)."""
+    gateway = healthy_gateway(tmp_path)
+    content = b"[" * 1_000_000 + b"]" * 1_000_000
+    response = call(make_app(gateway), "POST", "/v1/chat/completions", content=content)
+    assert response.status_code == 400
+    assert error_of(response)["code"] == "invalid_request"
+    assert gateway.adapter.requests == []
+
+
+def test_an_unexpected_failure_is_logged_without_its_text(tmp_path, caplog):
+    """RM12: the operator can trace a 500, and the log holds no exception text."""
+    gateway = healthy_gateway(tmp_path)
+
+    async def boom(*args, **kwargs):
+        raise RuntimeError("secret-value-123 leaked in a stack trace")
+
+    gateway.orchestrator.run = boom
+    with caplog.at_level(logging.ERROR, logger="relaymind.api"):
+        response = chat(make_app(gateway))
+    assert response.status_code == 500
+    (record,) = [r for r in caplog.records if r.name.startswith("relaymind.api")]
+    logged = record.getMessage()
+    assert "RuntimeError" in logged and "/v1/chat/completions" in logged
+    assert "secret-value-123" not in logged
+    assert record.exc_info is None
+
+
+def test_the_operator_limits_the_token_budget(tmp_path):
+    """RM03, RM19: a budget above the operator limit is 400 (spec 0.14 section 7.1)."""
+    gateway = healthy_gateway(tmp_path)
+    app = make_app(gateway, settings=ChatSettings(max_completion_tokens=100))
+    response = chat(app, max_completion_tokens=101)
+    assert response.status_code == 400
+    assert error_of(response)["code"] == "invalid_request"
+    assert "max_completion_tokens" in error_of(response)["message"]
+    assert gateway.adapter.requests == []
+    assert chat(app, max_completion_tokens=100).status_code == 200
+
+
+def spied_events(gateway):
+    """Record the store's event reads (their keyword arguments)."""
+    reads = []
+    original = gateway.store.events
+
+    def spy(*args, **kwargs):
+        reads.append(kwargs)
+        return original(*args, **kwargs)
+
+    gateway.store.events = spy
+    return reads
+
+
+def test_only_a_stream_reads_the_answer_deltas(tmp_path):
+    """RM20: a plain response needs no trace read; a stream reads only answer.delta."""
+    plain = healthy_gateway(tmp_path / "plain")
+    plain_reads = spied_events(plain)
+    assert chat(make_app(plain)).status_code == 200
+    assert plain_reads == []
+    streamed = healthy_gateway(tmp_path / "stream")
+    stream_reads = spied_events(streamed)
+    assert chat(make_app(streamed), stream=True).status_code == 200
+    assert [kwargs.get("event_type") for kwargs in stream_reads] == ["answer.delta"]

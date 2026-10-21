@@ -8,13 +8,13 @@ refused at startup, never downgraded.
 
 import pytest
 
-from api_helpers import make_app
+from api_helpers import make_app, token_of
 from gateway_helpers import build_gateway
 from relaymind.adapters.local_http import is_loopback_host
 from relaymind.api.app import MIN_TOKEN_LENGTH, create_app, generate_application_token
 from relaymind.api.server import build_server, validate_bind_host
 
-LOOPBACK = ["127.0.0.1", "127.0.0.2", "localhost", "LOCALHOST", "::1", "[::1]"]
+LOOPBACK = ["127.0.0.1", "127.0.0.2", "localhost", "LOCALHOST", "::1"]
 NOT_LOOPBACK = [
     "0.0.0.0",
     "::",
@@ -34,6 +34,16 @@ def test_loopback_hosts_are_accepted(host):
     assert validate_bind_host(host) == host
 
 
+def test_a_bracketed_ipv6_loopback_binds_without_its_brackets():
+    """RM19: a host the validator accepts can be bound (spec 0.14 section 7.1).
+
+    The brackets belong to URL syntax; the socket layer needs the bare
+    address, so the validator returns it.
+    """
+    assert is_loopback_host("[::1]")
+    assert validate_bind_host("[::1]") == "::1"
+
+
 @pytest.mark.parametrize("host", NOT_LOOPBACK)
 def test_other_hosts_are_refused_without_dns(host):
     assert not is_loopback_host(host)
@@ -49,11 +59,20 @@ def test_a_generated_token_is_long_unique_and_url_safe():
         assert token.replace("-", "").replace("_", "").isalnum()
 
 
-@pytest.mark.parametrize("token", ["", "short", "x" * (MIN_TOKEN_LENGTH - 1), None, 12345])
-def test_a_weak_token_is_refused_at_startup(tmp_path, token):
+def test_each_app_generates_its_own_token_at_startup(tmp_path):
+    """RM19: the gateway generates the token; no caller supplies one (section 7.1)."""
     gateway = build_gateway(tmp_path, [])
-    with pytest.raises(ValueError, match="token"):
-        create_app(token=token, orchestrator=gateway.orchestrator)
+    first = create_app(orchestrator=gateway.orchestrator)
+    second = create_app(orchestrator=gateway.orchestrator)
+    assert len(token_of(first)) >= MIN_TOKEN_LENGTH
+    assert token_of(first) != token_of(second)
+
+
+def test_a_caller_cannot_supply_the_token(tmp_path):
+    """RM19: a low-entropy operator token never reaches the endpoints (section 7.1)."""
+    gateway = build_gateway(tmp_path, [])
+    with pytest.raises(TypeError):
+        create_app(token="a" * MIN_TOKEN_LENGTH, orchestrator=gateway.orchestrator)
 
 
 def test_the_server_binds_the_validated_loopback_host(tmp_path):

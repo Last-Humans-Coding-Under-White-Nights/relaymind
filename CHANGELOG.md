@@ -39,9 +39,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   operator policy (`ChatSettings`): 400 `invalid_execution_mode`, 403
   `execution_mode_forbidden`, never downgraded. `max_completion_tokens`,
   `temperature`, and `top_p` apply to the answer generations only
-  (`LocalOrchestrator.run(final_options=...)`). The gateway binds only to
-  loopback (`relaymind.api.server`) and refuses a token shorter than 32
-  characters; `generate_application_token` makes one. `fastapi` and
+  (`LocalOrchestrator.run(final_options=...)`); an external generation
+  offered tools takes the sampling but keeps its own token budget, so the
+  budget never cuts off a tool call. `max_completion_tokens` is bounded by
+  the operator limit `ChatSettings.max_completion_tokens` (default
+  32,768). A run that fails as run state (for example `missing_input`) is
+  409 `run_terminal`, not a 500. The gateway binds only to loopback
+  (`relaymind.api.server`; `[::1]` is bound as `::1`) and generates its
+  own application token at startup (`app.state.application_token`); no
+  caller supplies one. An unexpected failure is logged with its type and
+  frames, never its text. `fastapi` and
   `uvicorn` join the runtime dependencies and `openai` the dev ones.
   The `relaymind-client-tools` alias is served only when a client-owned
   backend is configured (#24), and `Idempotency-Key` is refused until #26.
@@ -580,9 +587,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   compatible chat endpoint (RM19, AC16, #22): the order of the checks, which
   fields and message shapes are supported, the named `unsupported_parameter`
   and `invalid_request` cases, message ordering and tool-call references,
-  how sampling and token budgets are applied, the rejection of
-  `Idempotency-Key` until it is implemented, the response and stream shape,
-  and the loopback bind and generated token rules.
+  how sampling and token budgets are applied (an external generation
+  offered tools keeps its own token budget) and the operator limit on the
+  token budget, the rejection of `Idempotency-Key` until it is
+  implemented, the response and stream shape, 409 `run_terminal` for a
+  run that ends as run state, and the loopback bind and generated token
+  rules.
 - Specification 0.12 → 0.13: section 11 defines the error contract (RM04,
   AC07, AC16, #21): the error body with a stable code, message, and run
   reference, the status for every code, and the mapping of failed runs

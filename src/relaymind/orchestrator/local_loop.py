@@ -519,8 +519,10 @@ class LocalOrchestrator:
         is the chat request's virtual alias, or None for a native run.
         final_options are the caller's token budget and sampling for the
         generations that write the answer: the local final generation and
-        the external generations (spec 0.14 section 7.1). Routing, skill,
-        and repair generations keep their controlled settings (RM03).
+        the external generations (spec 0.14 section 7.1). An external
+        generation offered tools may propose a tool call, so it takes the
+        sampling but keeps its own token budget. Routing, skill, and
+        repair generations keep their controlled settings (RM03).
         Raises SlotUnavailableError (429) when another run holds the
         execution slot; no run is created then.
         """
@@ -1348,7 +1350,7 @@ class _Run:
                 "external",
                 loop.conversation,
                 loop.schemas,
-                self._answer_options(EXTERNAL_OPTIONS),
+                self._answer_options(EXTERNAL_OPTIONS, tools_offered=bool(loop.schemas)),
             )
             if generation.calls:
                 call, admitted, rejection, proposal_id = self._tool_turn(
@@ -2019,11 +2021,20 @@ class _Run:
             )
         return self._publish(generation, LOCAL_ACTOR)
 
-    def _answer_options(self, defaults: GenerationOptions) -> GenerationOptions:
-        """The caller's options laid over an answer generation's defaults."""
+    def _answer_options(
+        self, defaults: GenerationOptions, *, tools_offered: bool = False
+    ) -> GenerationOptions:
+        """The caller's options laid over an answer generation's defaults.
+
+        A generation offered tools may propose a tool call instead of the
+        answer, so the caller's token budget, a final-response budget, is
+        not applied to it: it would cut off the call (spec 0.14 section 7.1).
+        """
         requested = {
             name: value for name, value in asdict(self.final_options).items() if value is not None
         }
+        if tools_offered:
+            requested.pop("max_output_tokens", None)
         return replace(defaults, **requested)
 
     def _publish(self, generation: _Generation, role: str) -> str:

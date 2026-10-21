@@ -475,3 +475,47 @@ def test_a_client_conversation_may_end_with_tool_results():
         client(tools=[WEATHER], messages=[USER, assistant_calls(call()), tool_result()])
     )
     assert request.messages[-1].role is Role.TOOL
+
+
+# -- review findings, round 1 -------------------------------------------------------
+
+
+@pytest.mark.parametrize("field", ["temperature", "top_p", "presence_penalty"])
+def test_an_integer_too_large_for_a_float_is_a_named_400(field):
+    """RM19, AC16: a huge JSON integer is a bad value, not a server error (section 7.1)."""
+    code = "invalid_request" if field != "presence_penalty" else "unsupported_parameter"
+    rejected(body(**{field: 10**400}), code, field)
+
+
+@pytest.mark.parametrize("name", ["max_completion_tokens", "max_tokens"])
+def test_a_token_budget_above_the_operator_limit_is_rejected(name):
+    """RM03, RM19: the token budget is bounded by the operator's limit (section 7.1)."""
+    rejected(body(**{name: 10**30}), "invalid_request", name)
+    rejected(body(**{name: 101}), "invalid_request", name, max_completion_tokens=100)
+    assert parse(body(**{name: 100}), max_completion_tokens=100).final_options == (
+        GenerationOptions(max_output_tokens=100)
+    )
+
+
+def test_deeply_nested_tool_call_arguments_are_invalid_not_a_crash():
+    """RM19, AC16: arguments too deep to decode are a 400, not a 500 (section 7.1)."""
+    deep = "[" * 1_000_000 + "]" * 1_000_000
+    messages = [
+        USER,
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": deep},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "rain"},
+    ]
+    rejected(
+        {"model": CLIENT, "messages": messages},
+        "invalid_request",
+        "messages[1].tool_calls[0].function.arguments",
+    )

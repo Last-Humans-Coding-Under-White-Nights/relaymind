@@ -18,7 +18,7 @@ import httpx
 import openai
 import pytest
 
-from api_helpers import TOKEN, healthy_gateway, make_app
+from api_helpers import healthy_gateway, make_app, token_of
 from gateway_helpers import STAGING_OK
 from helpers import of_type
 from relaymind.api.server import build_server, serve
@@ -27,7 +27,8 @@ PROMPT = "Is staging-api healthy right now?"
 MESSAGES = [{"role": "user", "content": PROMPT}]
 
 
-def in_process_client(app, key=TOKEN):
+def in_process_client(app, key=None):
+    key = token_of(app) if key is None else key
     transport = httpx.ASGITransport(app=app)
     http = httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1/v1")
     return openai.AsyncOpenAI(
@@ -159,10 +160,11 @@ class RunningServer:
 def test_the_sdk_round_trip_over_a_loopback_socket(tmp_path, stream):
     """AC09: stream true and false against a bound server."""
     gateway = healthy_gateway(tmp_path)
-    with RunningServer(make_app(gateway)) as running:
+    app = make_app(gateway)
+    with RunningServer(app) as running:
         assert running.address[0] == "127.0.0.1"
         client = openai.OpenAI(
-            api_key=TOKEN,
+            api_key=token_of(app),
             base_url=running.base_url,
             http_client=httpx.Client(trust_env=False),
             max_retries=0,

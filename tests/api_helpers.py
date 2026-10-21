@@ -13,8 +13,6 @@ import httpx
 from gateway_helpers import build_gateway, health_tail, route_turn
 from relaymind.api.app import create_app
 
-TOKEN = "test-token-" + "x" * 32
-AUTH = {"Authorization": f"Bearer {TOKEN}"}
 RUN_ID_HEADER = "X-RelayMind-Run-ID"
 
 
@@ -25,13 +23,18 @@ def healthy_gateway(tmp_path, **options):
 
 
 def make_app(gateway, **options):
-    options.setdefault("token", TOKEN)
     return create_app(orchestrator=gateway.orchestrator, **options)
+
+
+def token_of(app):
+    """The application token the app generated at startup (section 7.1)."""
+    return app.state.application_token
 
 
 def call(app, method, path, *, json_body=None, content=None, headers=None, auth=True):
     """One request to the app; returns the httpx response."""
-    merged = {**(AUTH if auth is True else {}), **(headers or {})}
+    own = {"Authorization": f"Bearer {token_of(app)}"} if auth is True else {}
+    merged = {**own, **(headers or {})}
     if isinstance(auth, str):
         merged["Authorization"] = auth
 

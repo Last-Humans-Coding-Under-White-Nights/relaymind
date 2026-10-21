@@ -25,6 +25,7 @@ from relaymind.api.errors import ApiError, error_from_outcome
 from relaymind.orchestrator.local_loop import LocalOrchestrator, RunOutcome
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
+from relaymind.store import EventType
 
 __all__ = [
     "ChatBackend",
@@ -43,9 +44,10 @@ class ChatResult:
     """What one chat request produced.
 
     content is the assistant text (None when the reply is tool calls).
-    pieces are the answer deltas in the order the run published them;
-    their join is content. tool_calls are client-owned calls the caller
-    executes (RM08); the gateway never runs them.
+    pieces are the answer deltas in the order the run published them,
+    when they are known; their join is content. tool_calls are
+    client-owned calls the caller executes (RM08); the gateway never
+    runs them.
     """
 
     run_id: str
@@ -53,6 +55,11 @@ class ChatResult:
     finish_reason: str = STOP
     tool_calls: tuple[ToolCall, ...] = ()
     pieces: tuple[str, ...] = ()
+
+    @property
+    def stream_pieces(self) -> tuple[str, ...]:
+        """The content chunks of a stream: the pieces, or else the whole content."""
+        return self.pieces or ((self.content,) if self.content else ())
 
 
 class ChatBackend(Protocol):
@@ -74,13 +81,14 @@ class ManagedChat:
             model_alias=MANAGED,
             final_options=request.final_options,
         )
-        return self._result(outcome)
+        return self._result(outcome, stream=request.stream)
 
-    def _result(self, outcome: RunOutcome) -> ChatResult:
+    def _result(self, outcome: RunOutcome, *, stream: bool) -> ChatResult:
         run_id = outcome.run_id
         match outcome.state:
             case RunState.COMPLETED if outcome.answer is not None:
-                return ChatResult(run_id, outcome.answer, pieces=self._pieces(outcome))
+                pieces = self._pieces(outcome) if stream else ()
+                return ChatResult(run_id, outcome.answer, pieces=pieces)
             case RunState.WAITING_INPUT if outcome.clarification is not None:
                 # The question is the reply; the run waits for native resume or a new request.
                 return ChatResult(run_id, outcome.clarification)
@@ -93,14 +101,22 @@ class ManagedChat:
                 error = error_from_outcome(outcome)
                 if error is not None:
                     raise error
+                # A run-state failure (section 11) is not a server error; the
+                # chat caller, which has no run state view, learns that it ended.
+                raise ApiError(
+                    "run_terminal",
+                    f"run {run_id} ended failed with {outcome.error_code}",
+                    run_id=run_id,
+                    reason_code=outcome.reason_code,
+                )
         # A state this endpoint cannot report must not look like an answer.
         raise ApiError("internal_error", "an internal error occurred", run_id=run_id)
 
     def _pieces(self, outcome: RunOutcome) -> tuple[str, ...]:
-        """The run's answer.delta texts, in order, when they are the answer."""
-        events = self.orchestrator.store.events(outcome.run_id)
-        pieces = tuple(e.payload["text"] for e in events if e.event_type == "answer.delta")
-        return pieces if "".join(pieces) == outcome.answer else (outcome.answer or "",)
+        """The run's answer.delta texts, in order, when they are the answer; else ()."""
+        events = self.orchestrator.store.events(outcome.run_id, event_type=EventType.ANSWER_DELTA)
+        pieces = tuple(e.payload["text"] for e in events)
+        return pieces if "".join(pieces) == outcome.answer else ()
 
 
 def _confirmation_notice(run_id: str, tool_name: str) -> str:
@@ -167,7 +183,7 @@ def stream_chunks(alias: str, result: ChatResult, created: int) -> Iterator[str]
         yield chunk({"tool_calls": calls})
     else:
         yield chunk({"role": "assistant", "content": ""})
-        for piece in result.pieces or ((result.content,) if result.content else ()):
+        for piece in result.stream_pieces:
             yield chunk({"content": piece})
     yield chunk({}, result.finish_reason)
     yield "data: [DONE]\n\n"

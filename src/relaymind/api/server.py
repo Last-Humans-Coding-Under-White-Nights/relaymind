@@ -15,12 +15,16 @@ __all__ = ["build_server", "serve", "validate_bind_host"]
 
 
 def validate_bind_host(host: str) -> str:
-    """Return host when it is a loopback address; otherwise refuse it."""
+    """Return the bindable host when it is a loopback address; otherwise refuse it.
+
+    The brackets of an IPv6 literal belong to URL syntax, so ``[::1]``
+    is returned as ``::1``, the form the socket layer binds.
+    """
     if not is_loopback_host(host):
         raise ValueError(
             f"refusing to bind {host!r}: the gateway binds only to localhost or a loopback address"
         )
-    return host
+    return host.removeprefix("[").removesuffix("]")
 
 
 def build_server(app: FastAPI, *, host: str = "127.0.0.1", port: int = 8080) -> uvicorn.Server:

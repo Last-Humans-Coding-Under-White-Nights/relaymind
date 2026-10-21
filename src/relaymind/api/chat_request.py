@@ -27,6 +27,7 @@ from relaymind.api.errors import ApiError
 __all__ = [
     "CLIENT_TOOLS",
     "MANAGED",
+    "MAX_COMPLETION_TOKENS",
     "SAMPLING_OPTIONS",
     "ChatRequest",
     "ClientTool",
@@ -38,6 +39,9 @@ MANAGED = "relaymind"
 CLIENT_TOOLS = "relaymind-client-tools"
 # The options of GenerationOptions that a request can set (section 7.1).
 SAMPLING_OPTIONS = frozenset({"max_output_tokens", "temperature", "top_p"})
+# The default operator limit on max_completion_tokens (section 7.1). It is
+# a configurable limit, not a claim about any model's output length.
+MAX_COMPLETION_TOKENS = 32_768
 
 _SUPPORTED_FIELDS = frozenset(
     {
@@ -120,7 +124,16 @@ def _unsupported(message: str) -> ApiError:
 
 
 def _is_number(value: object) -> bool:
-    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
+    """A finite JSON number.
+
+    A JSON integer is exact and may be too large for a float, where
+    math.isfinite would overflow, so only a float is checked.
+    """
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    return isinstance(value, float) and math.isfinite(value)
 
 
 def _is_default(value: object, default: object) -> bool:
@@ -134,12 +147,14 @@ def parse_chat_request(
     *,
     served: Collection[str] = (MANAGED, CLIENT_TOOLS),
     supported_options: Collection[str] = SAMPLING_OPTIONS,
+    max_completion_tokens: int = MAX_COMPLETION_TOKENS,
 ) -> ChatRequest:
     """Validate a decoded request body (spec 0.14 section 7.1).
 
     served is the set of aliases this gateway runs; supported_options
     is the operator's declaration of which sampling and budget options
-    the configured adapters accept.
+    the configured adapters accept; max_completion_tokens is the
+    operator's limit on the requested token budget (RM03).
     """
     if not isinstance(body, dict):
         raise _invalid("the request body must be a JSON object")
@@ -163,7 +178,7 @@ def parse_chat_request(
     if "user" in fields and not isinstance(fields["user"], str):
         raise _invalid("user must be a string")
     _check_response_format(fields.get("response_format", {"type": "text"}))
-    options = _final_options(fields, set(supported_options))
+    options = _final_options(fields, set(supported_options), max_completion_tokens)
     messages = _messages(fields.get("messages"), alias)
     tools = _tools(fields.get("tools"), alias)
     choice = _tool_choice(fields.get("tool_choice"), tools, alias)
@@ -192,7 +207,7 @@ def _check_response_format(value: object) -> None:
         raise _unsupported(f"response_format type {value['type']!r} is not supported; only text is")
 
 
-def _final_options(fields: Mapping[str, Any], supported: set[str]) -> GenerationOptions:
+def _final_options(fields: Mapping[str, Any], supported: set[str], limit: int) -> GenerationOptions:
     budget_names = [n for n in ("max_completion_tokens", "max_tokens") if n in fields]
     if len(budget_names) == 2:
         raise _invalid("max_tokens cannot be sent together with max_completion_tokens")
@@ -201,6 +216,8 @@ def _final_options(fields: Mapping[str, Any], supported: set[str]) -> Generation
         value = fields[name]
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             raise _invalid(f"{name} must be a positive integer")
+        if value > limit:
+            raise _invalid(f"{name} must be at most {limit}")
         _require_option("max_output_tokens", name, supported)
         values["max_output_tokens"] = value
     for name, default, in_range, message in _SAMPLING:
@@ -307,7 +324,7 @@ def _tool_calls(where: str, raw: object) -> tuple[ToolCall, ...]:
             raise _invalid(f"{here} must be a function call with an id and a name")
         try:
             arguments = json.loads(function.get("arguments"))  # type: ignore[arg-type]
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, RecursionError):
             arguments = None
         if not isinstance(arguments, dict):
             raise _invalid(f"{here}.function.arguments must be a string holding a JSON object")
