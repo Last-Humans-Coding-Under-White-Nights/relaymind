@@ -292,13 +292,12 @@ class BudgetMeter:
             names = GENERATION_CHARGES[purpose]
         except KeyError:
             raise ValueError(f"unknown generation purpose {purpose!r}") from None
-        if purpose == "external":
-            if self._external_generations + 1 > self.budgets.external_generations:
-                raise BudgetExceededError("external_generations", self.budgets.external_generations)
-            self._charge(names, "generations")
-            self._external_generations += 1
-            return
+        external = purpose == "external"
+        if external and self._external_generations + 1 > self.budgets.external_generations:
+            raise BudgetExceededError("external_generations", self.budgets.external_generations)
         self._charge(names, "generations")
+        if external:
+            self._external_generations += 1
 
     def charge_tool_call(self) -> None:
         """One executed tool call; replays are not executions (RM03)."""

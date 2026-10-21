@@ -112,6 +112,8 @@ from relaymind.adapters import (
 from relaymind.orchestrator import identifiers
 from relaymind.orchestrator.budgets import BudgetExceededError, BudgetMeter, LocalBudgets
 from relaymind.orchestrator.handoff import (
+    EXTERNAL_ACTOR,
+    LOCAL_ACTOR,
     DispatchAuthority,
     RequestSize,
     build_handoff_envelope,
@@ -146,8 +148,6 @@ from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry, ToolRej
 from relaymind.tools.executor import Execution, OperationInFlightError, ToolExecutor, ValidatedCall
 from relaymind.tools.registry import SideEffect, ToolResult, ToolStatus
 
-LOCAL_ACTOR = "local"
-EXTERNAL_ACTOR = "external"
 GATEWAY_ACTOR = "gateway"
 LOCALITIES = (LOCAL_ACTOR, EXTERNAL_ACTOR)
 NEEDS_EXTERNAL = "needs_external"
@@ -990,10 +990,7 @@ class _Run:
             ):
                 return self._publish(generation, EXTERNAL_ACTOR)
             else:
-                conversation += [
-                    Message(role=Role.ASSISTANT, content=generation.text or "(no answer)"),
-                    Message(role=Role.USER, content=CORRECTION),
-                ]
+                conversation += _correction_exchange(generation.text)
             # Tool results accumulate, so the request is measured again (RM13).
             try:
                 size = await measure_request(
@@ -1252,10 +1249,7 @@ class _Run:
                 ),
             }
             purpose = self._repair_or_stop(problem)
-            conversation += [
-                Message(role=Role.ASSISTANT, content=generation.text or "(no answer)"),
-                Message(role=Role.USER, content=CORRECTION),
-            ]
+            conversation += _correction_exchange(generation.text)
 
     def _keep_draft(self, text: str) -> None:
         """Keep a rejected local answer so a handoff can label it a proposal (RM13)."""
@@ -1477,6 +1471,14 @@ class _Run:
         ]
         self.o.store.append_events(self.run_id, drafts)
         return published
+
+
+def _correction_exchange(text: str) -> list[Message]:
+    """A rejected answer and the gateway's correction, for the next generation."""
+    return [
+        Message(role=Role.ASSISTANT, content=text or "(no answer)"),
+        Message(role=Role.USER, content=CORRECTION),
+    ]
 
 
 def _tool_exchange(call: ToolCall, content: Mapping[str, Any]) -> list[Message]:

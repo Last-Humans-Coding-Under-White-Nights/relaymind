@@ -116,7 +116,7 @@ def parse_handoff_envelope(data: object) -> HandoffEnvelope:
     error = first_schema_error(_VALIDATOR, data)
     if error is not None:
         where = "/".join(str(part) for part in error.path)
-        raise HandoffEnvelopeError(f"{error.message}" + (f" (at {where})" if where else ""))
+        raise HandoffEnvelopeError(error.message + (f" (at {where})" if where else ""))
     assert isinstance(data, Mapping)
     seen: set[str] = set()
     for operation in data["completed_operations"]:
