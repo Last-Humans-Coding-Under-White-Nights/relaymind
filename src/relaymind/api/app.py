@@ -16,6 +16,10 @@ contract, and execution mode policy. A native run continues in the
 background after its 202, so these routes only start, read, resume, or
 cancel it.
 
+The demo UI (RM23, spec 0.20 section 9) is served by the same app when
+the operator passes ``ui``: five routes under /ui, added by
+``relaymind.ui.routes``.
+
 The app holds no model, tool, or store logic: the orchestrator owns it
 (section 3).
 """
@@ -73,6 +77,8 @@ from relaymind.orchestrator.local_loop import LocalOrchestrator, StartedRun
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
 from relaymind.store import IdempotencyKeyTakenError
+from relaymind.ui import UiSettings
+from relaymind.ui.routes import install_ui_routes
 
 __all__ = [
     "MIN_TOKEN_LENGTH",
@@ -116,6 +122,7 @@ def create_app(
     client_tools: ChatBackend | None = None,
     settings: ChatSettings | None = None,
     native: NativeSettings | None = None,
+    ui: UiSettings | None = None,
 ) -> FastAPI:
     """The compatible API over one orchestrator.
 
@@ -124,7 +131,8 @@ def create_app(
     what it cannot run. The application token is generated here, at
     startup, from a secure random source; no caller supplies it (spec
     0.14 section 7.1). The operator hands app.state.application_token
-    to the clients.
+    to the clients. ui, when given, adds the demo UI (RM23, spec 0.20
+    section 9); without it the app serves no UI route.
     """
     token = generate_application_token()
     settings = settings or ChatSettings()
@@ -293,6 +301,17 @@ def create_app(
         ready, body = await readiness(orchestrator, settings.allowed_modes)
         return JSONResponse(body, status_code=200 if ready else 503)
 
+    if ui is not None:
+        install_ui_routes(
+            app,
+            orchestrator=orchestrator,
+            token=token,
+            settings=ui,
+            native=native,
+            guard=_guarded,
+            decode=_decode,
+            require_mode=lambda mode: _execution_mode(mode.value, "execution_mode", None, settings),
+        )
     return app
 
 

@@ -303,6 +303,12 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   (`tests/test_ac12_cancellation.py`, spec 0.19); no live run.
 - Demo trace UI (#28; RM23), including the visual timing view over the
   statistics collected since M1.
+  #28 is implemented with model doubles (`tests/test_demo_ui*.py`, spec
+  0.20): a static page served by the gateway, rendered traces built from
+  stored events, persistent live, replay, or double labels, confirmation
+  and clarification through the native resume endpoint, and the
+  comparison on reset fixtures. The page script is not run by an automated
+  browser test, and no live run is recorded.
 - Closes: AC09, AC10, AC11, AC12, AC16.
 
 ## M5 — Parallel workflow and caching
