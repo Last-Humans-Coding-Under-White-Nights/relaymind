@@ -6,8 +6,9 @@ module; the shared chat-completions stream protocol lives in
 openai_compat, and the rest of the gateway only sees normalized events.
 
 Non-thinking mode for Qwen3 is configured through the pinned runtime's
-chat-template settings (``chat_template_kwargs.enable_thinking``), not
-through prompt strings, and is verified by the live smoke test.
+HTTP template boolean (``chat_template_kwargs.enable_thinking``), paired
+with ``--reasoning off/on`` at launch. Both modes explicitly extract
+thoughts into reasoning_content, which never becomes answer text.
 """
 
 import asyncio
@@ -60,6 +61,10 @@ def prompt_fields(
 def chat_body(fields: Mapping[str, object], options: GenerationOptions) -> dict[str, object]:
     """A streamed llama-server chat completion body around the prompt fields."""
     body = streamed_chat_body(fields)
+    # RM18: do not inherit a server's unparsed or legacy reasoning format.
+    # b11785 still supports the HTTP template boolean for both modes;
+    # reasoning_effort alone cannot enable thinking after --reasoning off.
+    body["reasoning_format"] = "deepseek"
     if options.max_output_tokens is not None:
         body["max_tokens"] = options.max_output_tokens
     if options.temperature is not None:

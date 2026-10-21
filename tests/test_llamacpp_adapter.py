@@ -9,10 +9,11 @@ import asyncio
 import json
 
 import httpx
+import pytest
 
 from helpers import collect_events, delta_chunk, make_llamacpp_adapter, make_request, sse_response
 from relaymind.adapters import Completed, GenerationFailed, TextDelta, ToolCall
-from relaymind.adapters.llamacpp import LlamaCppConfig
+from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 
 
 def test_capabilities_come_from_config():
@@ -266,3 +267,27 @@ def test_done_marker_ends_the_stream_without_waiting_for_eof():
 
     events = asyncio.run(asyncio.wait_for(run(), timeout=2))
     assert events == [TextDelta(text="hi"), Completed(finish_reason="stop")]
+
+
+@pytest.mark.parametrize("thinking", [None, False, True])
+def test_every_request_extracts_reasoning_and_never_streams_it_as_answer(thinking):
+    # RM18 / section 6: default and operator-enabled thinking both isolate thoughts.
+    seen = {}
+
+    def handler(request):
+        seen.update(json.loads(request.content))
+        return sse_response(
+            [
+                delta_chunk({"reasoning_content": "private thought"}),
+                delta_chunk({"content": "pong"}),
+                delta_chunk({}, finish_reason="stop"),
+            ]
+        )
+
+    options = {} if thinking is None else {"chat_template_kwargs": {"enable_thinking": thinking}}
+    config = LlamaCppConfig(base_url="http://localhost:8033", context_limit=8192, **options)
+    adapter = LlamaCppAdapter(config, transport=httpx.MockTransport(handler))
+    events = collect_events(adapter, make_request())
+    assert seen["reasoning_format"] == "deepseek"
+    assert seen["chat_template_kwargs"] == {"enable_thinking": thinking is True}
+    assert events == [TextDelta(text="pong"), Completed(finish_reason="stop")]

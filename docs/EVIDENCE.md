@@ -597,3 +597,85 @@ Observations, not conclusions:
 - No live clarification (AC03) run is recorded. AC03 and AC04 are
   checked with model doubles only (`tests/test_ac03_clarification.py`,
   `tests/test_ac04_invalid_proposals.py`).
+
+## 2026-10-21 — Reasoning-control update, llama.cpp b11785 (#58)
+
+RM18, specification 0.8 sections 6 and 14. This is a new M1 runtime
+qualification, separate from the historical Windows #46/#56 record above
+and from the AC15/M6 benchmark. The model file, tokenizer, and template
+hashes are unchanged. Runtime and launch controls changed together.
+
+The selected runtime is **0.7.0-dev (build 11785, commit 8baabd53b)**,
+full source commit `8baabd53b77d1c48c6ef8d3b620436292f3f6231`. Release
+archive hashes and download links are in
+[`models/README.md`](../models/README.md#runtime-and-reasoning-controls).
+The selected build's documentation and request parser (spec source S11)
+confirm that the deprecation applies to the CLI template boolean, while
+the HTTP `enable_thinking` boolean remains supported. Non-empty
+`reasoning_effort` alone does not enable thinking after `--reasoning off`.
+
+Both platforms use the hash-verified Qwen3-0.6B Q8_0 artifact and manifest
+launch settings `--ctx-size 8192 --jinja --reasoning off --reasoning-format
+deepseek`, with the harness supplying only the model path and loopback
+address/port. The adapter derives `enable_thinking=false` from the
+manifest, allows an operator request with `true`, and sends
+`reasoning_format=deepseek` in both cases. Text cases use temperature 0
+and a 512-token output cap. The live tests inspect actual SSE:
+non-thinking must have no reasoning, thinking must have reasoning, and
+normalized answer text must equal only the wire `content` channel.
+
+### Apple Silicon macOS
+
+| Field | Value |
+|-------|-------|
+| Machine | Apple M1, 8 GiB RAM, macOS 27.0.1 (26A434); Metal MTL0, all 29 layers offloaded |
+| Runtime | Official b11785 macOS arm64 archive, SHA-256 verified; AppleClang 21.0.0.21000101 |
+| Python | 3.14.7, pytest 9.1.1 |
+| Application | Based on `ed3292d`; tested-file SHA-256 values recorded in the machine JSON, before the single PR commit was created |
+| Command | Exact command and environment in [macos-machine.json](evidence/2026-10-21-reasoning-controls/macos-machine.json); marked smoke file with `-v -s`, runtime verbosity 4 for backend evidence |
+| Result | **3 passed, 0 skipped in 5.12 s**: both text cases answered `pong`; reasoning absent/present respectively; parsed `get_service_health` with `service=staging-api` |
+| Raw logs | [pytest](evidence/2026-10-21-reasoning-controls/macos-pytest.txt), [server](evidence/2026-10-21-reasoning-controls/macos-server.txt) |
+
+The first attempt was blocked by the local execution sandbox's loopback
+socket restriction before any model request. Outside that sandbox, an
+initial pass took 13.51 s; the recorded repeat enabled verbose runtime
+logging to capture the backend. These are single smoke runs, not latency
+percentiles. Server warnings about CORS/API key defaults, a model token
+type, and slot prefix reuse are retained in the raw log; no deprecated
+reasoning-control warning was emitted.
+
+Deterministic TDD: the new launch/adapter expectations failed in 15 cases
+before the migration; the full suite then passed **356 tests**, with
+three live cases deselected. Ruff lint, format, and diff whitespace checks
+passed. The earlier 342-test baseline also passed.
+
+### Native x86-64 Windows
+
+| Field | Value |
+|-------|-------|
+| Machine | GitHub-hosted `windows-2022` x86-64 runner, Windows Server 2022 Datacenter 10.0.20348; AMD EPYC 9V45, 17,174,360,064 bytes RAM (about 16 GiB); CPU backend |
+| Runner image | `20261012.333.1`; [machine record](evidence/2026-10-21-reasoning-controls/windows-machine.json) |
+| Runtime | Official b11785 Windows CPU x64 archive, SHA-256 verified; Clang 20.1.8 for Windows x86_64; [banner](evidence/2026-10-21-reasoning-controls/windows-runtime-version.txt) and [archive hash](evidence/2026-10-21-reasoning-controls/windows-runtime-archive-sha256.txt) |
+| Python | CPython 3.12.10, pytest 9.1.1 |
+| Application | PR head `6ccd7cc5ebfba259835f7473bf2cb00b110fbcf2`, tested merge `4b3eb3db4f2cb8fd777dc254294b30cf6c40cf26`; the subsequent single-commit amendment adds documentation/evidence only |
+| Command | `python -m pytest tests/test_llamacpp_live_smoke.py -m live -v -s --basetemp=evidence/tmp --junitxml=evidence/results.xml` |
+| Result | **3 passed, 0 skipped in 5.75 s**: both text cases answered `pong`; reasoning absent/present respectively; parsed `get_service_health` with `service=staging-api` |
+| Workflow | [Runtime smoke run 39564456074](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/actions/runs/39564456074), successful; artifact `runtime-smoke-windows` |
+| Raw evidence | [pytest](evidence/2026-10-21-reasoning-controls/windows-pytest.txt), [JUnit](evidence/2026-10-21-reasoning-controls/windows-results.xml), [server](evidence/2026-10-21-reasoning-controls/windows-server.txt), [provenance and tested-file hashes](evidence/2026-10-21-reasoning-controls/windows-provenance.json), [qualified manifest](evidence/2026-10-21-reasoning-controls/qualified-manifest.json) |
+
+The Windows job ran native executables without WSL, Docker, proxy
+overrides, or a source rebuild. It used the same manifest launch flags and
+adapter settings as macOS. No tool-call parser change or platform-specific
+reasoning argument was needed. No deprecated reasoning-control warning
+appeared. Other runtime warnings are retained in the server log. These
+results qualify this hosted Windows Server/CPU environment; they do not
+requalify the earlier contributor's Windows 11 machine, its corporate
+proxy, or Windows GPU backends. Text artifact line endings were normalized
+to LF and trailing spaces removed when copied into this repository
+(also for the macOS logs).
+
+The corresponding [deterministic CI run](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/actions/runs/39564455956)
+passed on Ubuntu, macOS, and Windows. Both target platforms now have new
+non-thinking, thinking, and tool-call smoke evidence for b11785. These
+English smoke cases do not establish bilingual skill quality or the M6
+latency target.

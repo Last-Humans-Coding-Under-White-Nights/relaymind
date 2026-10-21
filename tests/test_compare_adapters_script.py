@@ -157,7 +157,7 @@ def test_a_local_adapter_identity_comes_from_its_model_manifest(tmp_path):
             adapter="llamacpp",
             model_id="qwen3-0.6b",
             quantization="Q8_0",
-            runtime_version="0.7.0 (build 11669, commit 620d2225c)",
+            runtime_version="0.7.0-dev (build 11785, commit 8baabd53b)",
         )
     finally:
         asyncio.run(adapter.aclose())

@@ -120,7 +120,8 @@ def test_the_checked_in_candidate_manifest_is_valid():
     manifest = load_manifest(PINNED_MANIFEST_PATH)
     assert manifest.schema_version == 1
     assert manifest.model_id == "qwen3-0.6b"
-    assert manifest.launch_settings["chat_template_kwargs"] == {"enable_thinking": False}
+    assert manifest.launch_settings["reasoning"] == "off"
+    assert manifest.launch_settings["reasoning_format"] == "deepseek"
 
 
 def test_verify_accepts_matching_artifact(tmp_path):

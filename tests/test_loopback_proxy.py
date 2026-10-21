@@ -133,7 +133,14 @@ def test_startup_health_polls_bypass_discovered_proxy(caller, proxy_routes, monk
         monkeypatch.setenv(module.MODEL_ENV, str(model_path))
         monkeypatch.setattr(module, "verify_artifact", lambda *args: None)
         monkeypatch.setattr(module, "launch_settings_argv", lambda *args: [])
-        manifest = SimpleNamespace(file_name=model_path.name, launch_settings={})
+        manifest = SimpleNamespace(
+            file_name=model_path.name, launch_settings={}, runtime_version="test-runtime"
+        )
+        monkeypatch.setattr(
+            module.subprocess,
+            "run",
+            lambda *args, **kwargs: SimpleNamespace(stdout="version: test-runtime\n", stderr=""),
+        )
         factory = SimpleNamespace(mktemp=lambda name: tmp_path)
         server = module.server.__wrapped__(factory, manifest, (8192, {}))
         try:

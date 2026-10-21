@@ -9,9 +9,9 @@ Example (non-thinking mode is the default per spec section 6):
         --source-revision <hf-commit-sha> \
         --quantization Q8_0 \
         --runtime llama.cpp \
-        --runtime-version "0.7.0 (build 11669, commit 620d2225c)" \
+        --runtime-version "0.7.0-dev (build 11785, commit 8baabd53b)" \
         --launch-settings '{"ctx_size": 8192, "jinja": true,
-                            "chat_template_kwargs": {"enable_thinking": false}}' \
+                            "reasoning": "off", "reasoning_format": "deepseek"}' \
         --license Apache-2.0
 """
 

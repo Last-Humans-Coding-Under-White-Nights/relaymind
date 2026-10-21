@@ -246,6 +246,18 @@ def launch_settings_argv(launch_settings: Mapping[str, object]) -> list[str]:
     tooling derive their command line here instead of hand-copying the
     qualified settings.
     """
+    if "reasoning" in launch_settings:
+        mode = launch_settings["reasoning"]
+        if mode not in ("on", "off", "auto"):
+            raise ManifestError("launch_settings.reasoning must be on, off, or auto")
+    # RM18: the CLI template boolean is deprecated in b11785, with or
+    # without a reasoning setting next to it.
+    kwargs = launch_settings.get("chat_template_kwargs")
+    if isinstance(kwargs, Mapping) and "enable_thinking" in kwargs:
+        raise ManifestError(
+            "use launch_settings.reasoning instead of the deprecated "
+            "chat_template_kwargs.enable_thinking launch control"
+        )
     argv: list[str] = []
     for key, value in launch_settings.items():
         flag = _launch_flag(key)
@@ -280,7 +292,9 @@ def launch_adapter_settings(
     """Adapter context limit and base template kwargs from launch settings.
 
     The adapter must run with the same context size and chat-template
-    kwargs the server was launched with (spec section 6), so both are
+    kwargs the server was launched with (spec section 6). Explicit
+    reasoning on/off is translated to the supported HTTP enable_thinking
+    boolean; auto cannot determine a qualified adapter mode. Both are
     read from the same validated launch settings that
     launch_settings_argv renders. Settings the adapter cannot use raise
     ManifestError.
@@ -292,5 +306,12 @@ def launch_adapter_settings(
             f"launch_settings.ctx_size must be a positive integer, got {ctx_size!r}"
         )
     # launch_settings_argv has checked that this is a mapping.
-    template_kwargs = launch_settings.get("chat_template_kwargs", {})
-    return ctx_size, dict(template_kwargs)
+    template_kwargs = dict(launch_settings.get("chat_template_kwargs", {}))
+    if "reasoning" in launch_settings:
+        mode = launch_settings["reasoning"]
+        if mode == "auto":
+            raise ManifestError("adapter requires explicit reasoning on or off, not auto")
+        # b11785 uses different CLI and HTTP controls. Derive the HTTP
+        # override so requests agree with the manifest's explicit mode.
+        template_kwargs["enable_thinking"] = mode == "on"
+    return ctx_size, template_kwargs

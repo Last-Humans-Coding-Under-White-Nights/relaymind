@@ -1,0 +1,16 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-9.1.1, pluggy-1.7.0
+rootdir: /Users/dmitrykudryavtsev/.codex/worktrees/4c59/relaymind
+configfile: pyproject.toml
+plugins: anyio-4.15.1
+collected 3 items
+
+tests/test_llamacpp_live_smoke.py
+Runtime: 0.7.0-dev (build 11785, commit 8baabd53b)
+thinking=False; reasoning_present=False; answer='pong'
+.thinking=True; reasoning_present=True; answer='pong'
+.tool=get_service_health; arguments={'service': 'staging-api'}
+.
+
+----------- generated xml file: /tmp/issue58-macos-qualification.xml -----------
+============================== 3 passed in 5.12s ===============================

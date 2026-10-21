@@ -393,6 +393,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Requalify llama.cpp b11785 on Apple Silicon macOS/Metal and native
+  x86-64 Windows/CPU (#58; RM18). Migrate the manifest to `--reasoning off`,
+  derive the matching HTTP override, and explicitly separate reasoning
+  from answer content. Non-thinking remains the default; operator-enabled
+  thinking remains supported. Record both live runs separately from the
+  historical runtime evidence and add a Windows runtime smoke workflow.
+- Specification 0.7 → 0.8: section 6 uses the selected runtime's
+  supported reasoning controls (RM18, #58). llama.cpp b11785 uses
+  `--reasoning off/on` at launch and the supported HTTP template boolean
+  for per-request overrides, with explicit `deepseek` reasoning extraction.
 - Specification 0.6 → 0.7: Chinese support is best-effort; native
   Chinese review is no longer required (sections 9, 12.2). English
   examples, corpus scenarios, and live traces stay required; Chinese

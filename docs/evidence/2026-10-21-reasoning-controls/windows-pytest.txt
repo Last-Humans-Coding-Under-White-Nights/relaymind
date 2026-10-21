@@ -1,0 +1,16 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.7.0
+rootdir: D:\a\relaymind\relaymind
+configfile: pyproject.toml
+plugins: anyio-4.15.1, platformdirs-4.13.0
+collected 3 items
+
+tests\test_llamacpp_live_smoke.py
+Runtime: 0.7.0-dev (build 11785, commit 8baabd53b)
+thinking=False; reasoning_present=False; answer='pong'
+.thinking=True; reasoning_present=True; answer='pong'
+.tool=get_service_health; arguments={'service': 'staging-api'}
+.
+
+------ generated xml file: D:\a\relaymind\relaymind\evidence\results.xml ------
+============================== 3 passed in 5.75s ==============================

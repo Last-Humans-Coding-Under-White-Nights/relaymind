@@ -94,10 +94,10 @@ may avoid rebuilding, but neither was tried in this run; record the
 result in `EVIDENCE.md` if tested. Only the source build plus app-local
 CRT is qualified here.
 
-No manifest or tool-call parser change was needed. The pinned runtime
-accepted `--chat-template-kwargs` with a deprecation warning on all
-platforms; retain the qualified settings until a future runtime update
-is tested ([#58](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/58)).
+No manifest or tool-call parser change was needed for that historical
+run. Build 11669 accepted `--chat-template-kwargs` with a deprecation
+warning on all platforms. The #58 update selects b11785 and the reasoning
+controls below; the old run does not qualify the new runtime.
 
 With the #57 fix (RM01, RM18; spec section 6), `LlamaCppAdapter` and
 both automated startup health-poll paths bypass environment and system
@@ -109,42 +109,42 @@ Python clients, not the manual terminal commands below.
 
 `pytest tests/test_loopback_proxy.py` checks routing with controlled proxy
 discovery and transport doubles, without a real proxy or model. The #56
-Windows run predates this fix; it does not establish that the new bypass
-has been tested on a native Windows machine. Record a new live Windows
-run without the historical overrides before claiming that qualification.
+Windows run predates this fix. The #58 hosted native Windows run now
+passes without those overrides (see the new evidence entry); it does not
+reproduce the earlier contributor's corporate proxy environment.
 
 ## Manual JSON testing from a terminal
 
 ### 1. Start the pinned runtime
 
 Use the same launch settings the live smoke test pins (spec section 6:
-non-thinking is configured through chat-template settings, not prompt
-strings).
+non-thinking uses the runtime's reasoning control, not prompt strings).
+Install the exact build and verify its archive as described in
+[`models/README.md`](../models/README.md#runtime-and-reasoning-controls).
 
 macOS / Linux (Terminal):
 
 ```bash
 llama-server -m models/Qwen3-0.6B-Q8_0.gguf \
   --host 127.0.0.1 --port 8033 --ctx-size 8192 \
-  --jinja --chat-template-kwargs '{"enable_thinking": false}'
+  --jinja --reasoning off --reasoning-format deepseek
 ```
 
-Windows (PowerShell 7.3+):
+Windows (PowerShell 5.1+):
 
 ```powershell
 llama-server -m models/Qwen3-0.6B-Q8_0.gguf `
   --host 127.0.0.1 --port 8033 --ctx-size 8192 `
-  --jinja --chat-template-kwargs '{"enable_thinking": false}'
+  --jinja --reasoning off --reasoning-format deepseek
 ```
 
-On older PowerShell versions, native-argument quoting mangles the JSON;
-use the stop-parsing token and escape the inner quotes by hand, since
-the Windows C runtime both splits on the unquoted space and strips
-unescaped double quotes:
-
-```powershell
-llama-server --% -m models/Qwen3-0.6B-Q8_0.gguf --host 127.0.0.1 --port 8033 --ctx-size 8192 --jinja --chat-template-kwargs "{\"enable_thinking\": false}"
-```
+These launch flags also work in PowerShell 5.1; no JSON command-line
+quoting is needed. For a thinking-mode request, set
+`chat_template_kwargs` to `{"enable_thinking": true}` and
+`reasoning_format` to `"deepseek"` in the JSON body. Reasoning must appear
+only in `reasoning_content`; `content` is the answer. The live suite checks
+both channels while consuming the actual stream, and requires reasoning
+to be present in thinking mode and absent in non-thinking mode.
 
 Note for all Windows steps below: in Windows PowerShell 5.1, `curl` is
 a built-in alias for `Invoke-WebRequest`, so the macOS curl commands
@@ -298,3 +298,21 @@ deterministic suite plus the marked live tests (spec section 13, RM16:
 a manual poke is not a measured result). Live runs are recorded in
 [`EVIDENCE.md`](EVIDENCE.md) with the machine, runtime build, manifest,
 command, and result.
+
+## Runtime update qualification in CI
+
+The **Runtime smoke** workflow runs the marked smoke file on a native
+`windows-2022` x86-64 GitHub-hosted runner when a PR changes runtime,
+adapter, or smoke-test files. It downloads the pinned CPU runtime and
+model, verifies the runtime archive checksum, and lets the fixture verify
+the model hashes and runtime banner. It uses neither WSL nor Docker.
+Normal CI remains deterministic and excludes live tests.
+
+The workflow uploads machine details, the manifest, runtime banner,
+pytest output, JUnit results, and server logs as `runtime-smoke-windows`.
+Seven passing cases with zero skips are required (non-thinking,
+thinking, the tool call, and four token-count checks). A hosted Windows run
+qualifies that Windows Server/CPU environment, not every Windows desktop
+or GPU configuration. Repeat the same smoke file on Apple Silicon and
+record both results in `EVIDENCE.md` before claiming runtime qualification.
+The smoke suite is separate from the AC15/M6 benchmark.
