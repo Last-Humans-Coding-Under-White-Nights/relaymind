@@ -97,6 +97,8 @@ _REQUIRED_PAYLOAD: dict[EventType, tuple[str, ...]] = {
     # Spec 0.6 section 8: the input the run waits for is never blank.
     EventType.CLARIFICATION_REQUIRED: ("question", "language", "reason_code", "missing"),
     EventType.CLARIFICATION_ANSWERED: ("input", "missing"),
+    # Spec 0.10 section 8 (RM11): the approval, the tool, and its target.
+    EventType.CONFIRMATION_REQUIRED: ("approval_id", "tool_name", "target"),
     # Spec 0.9 section 8 (RM13): the escalation reason and the external model.
     EventType.HANDOFF_STARTED: ("reason_code", "model"),
 }

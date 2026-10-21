@@ -587,10 +587,10 @@ def test_other_invalid_output_is_repaired_and_never_executed(tmp_path, bad_turn)
 
 def test_a_mutating_tool_never_runs_without_confirmation(tmp_path):
     # RM11 / AGENTS.md invariant 5: a mutating demo action needs a fresh,
-    # single-use confirmation. The confirmation flow is not wired in the
-    # local loop yet (#19), so even a caller with the mutate permission
-    # must not get the delete executed: the run stops before the handler
-    # runs and the sandbox database is still there.
+    # single-use confirmation (#19, tests/test_ac05_confirmation.py). Even
+    # a caller with the mutate permission gets no execution on the
+    # proposal: the run waits in waiting_confirmation, the handler has
+    # not run, and the sandbox database is still there.
     gateway = build_gateway(
         tmp_path,
         [
@@ -609,17 +609,17 @@ def test_a_mutating_tool_never_runs_without_confirmation(tmp_path):
     )
     outcome, events = run(gateway, "Delete the demo-orders-db sandbox database.")
 
+    assert outcome.state is RunState.WAITING_CONFIRMATION
     assert "delete_demo_database" not in executed_tools(events)
     ids = [db["database_id"] for db in gateway.sandbox.databases_output()["databases"]]
     assert "demo-orders-db" in ids
-    assert_needs_external(gateway, outcome, events, "capability_missing")
     proposed = [
         e
         for e in of_type(events, "tool.proposed")
         if e.payload["tool_name"] == "delete_demo_database"
     ]
-    assert proposed and proposed[-1].payload["admissible"] is False
-    assert proposed[-1].payload["rejection"]["code"] == "confirmation_required"
+    assert proposed and proposed[-1].payload["admissible"] is True
+    assert len(of_type(events, "confirmation.required")) == 1
 
 
 # --- run.accepted (section 8) and execution modes (sections 4.4, 7.4) -----------

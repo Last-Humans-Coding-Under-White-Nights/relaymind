@@ -94,6 +94,12 @@ REQUIRED_PAYLOAD = {
     # Spec 0.6 section 8: the redacted resume input, the input it
     # answers, and the monotonic waiting time (RM25).
     "clarification.answered": {"input": "staging-api", "missing": "service", "waited_ms": 1200},
+    # Spec 0.10 section 8 (RM11): the approval, the tool, and its target.
+    "confirmation.required": {
+        "approval_id": "approval_1",
+        "tool_name": "delete_demo_database",
+        "target": "demo-orders-db",
+    },
     # Spec 0.9 section 8 (RM13): the RM04 reason, the external model, the
     # selected skill (or null), the completed operations the handoff
     # envelope carries, the allowed tools, and the measured request.

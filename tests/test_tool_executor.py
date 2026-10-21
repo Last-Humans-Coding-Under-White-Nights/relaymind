@@ -543,3 +543,18 @@ def test_a_time_limit_error_after_the_pending_record_still_finishes_it(store, ru
         call(executor, run_id, time_limit=broken_limit)
     recorded = store.get_tool_operation(operation_id(executor, run_id))
     assert recorded is not None and recorded["status"] != "pending"
+
+
+# --- RM10, RM11: a recorded operation needs no new confirmation -------------------
+
+
+def test_has_operation_is_true_only_once_the_call_was_recorded(store, run_id):
+    """RM10, RM11: the caller can tell a replay from a first execution."""
+    handler = CountingHandler()
+    executor = make_executor(store, declaration("read_service", handler))
+    proposal = validated(executor, run_id)
+    assert not executor.has_operation(proposal)
+    asyncio.run(executor.execute(proposal, proposal_id="proposal_1", model="double-local"))
+    assert executor.has_operation(proposal)
+    changed = validated(executor, run_id, service="payments-api")
+    assert not executor.has_operation(changed)
