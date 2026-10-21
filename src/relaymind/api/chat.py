@@ -5,8 +5,9 @@ A ``ChatBackend`` runs one validated ``ChatRequest`` and returns a
 alias: it hands the conversation to the orchestrator, which owns
 routing, tools, budgets, and the final answer (section 7.2), and
 turns where the run ended into a chat result or an ``ApiError``. The
-client-owned alias has its own backend (issue #24); the app only needs
-the same two-line protocol.
+client-owned alias has its own, ``ClientToolsChat``: it returns the
+caller's own function calls and executes nothing (RM08). The app only
+needs the same two-line protocol.
 
 The functions at the end build the JSON bodies. The stream is framing
 plus answer content only (RM20): a role chunk, one content chunk for
@@ -28,9 +29,10 @@ from collections.abc import AsyncGenerator, AsyncIterator, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from relaymind.adapters import ToolCall
-from relaymind.api.chat_request import MANAGED, ChatRequest
+from relaymind.adapters import ToolCall, ToolSchema
+from relaymind.api.chat_request import CLIENT_TOOLS, MANAGED, ChatRequest
 from relaymind.api.errors import ApiError, error_from_outcome
+from relaymind.orchestrator.client_loop import ToolOffer, run_client_request
 from relaymind.orchestrator.local_loop import LocalOrchestrator, RunOutcome
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
@@ -39,6 +41,7 @@ from relaymind.store import EventType
 __all__ = [
     "ChatBackend",
     "ChatResult",
+    "ClientToolsChat",
     "LiveAnswer",
     "ManagedChat",
     "StreamAborted",
@@ -119,24 +122,18 @@ class ChatBackend(Protocol):
     async def complete(self, request: ChatRequest, mode: ExecutionMode) -> ChatResult: ...
 
 
-class ManagedChat:
-    """The ``relaymind`` alias: managed skills and tools through the orchestrator."""
+class _RunChat:
+    """Turns where a run ended into a chat result or an ``ApiError``."""
 
     def __init__(self, orchestrator: LocalOrchestrator) -> None:
         self.orchestrator = orchestrator
 
-    async def complete(self, request: ChatRequest, mode: ExecutionMode) -> ChatResult:
-        outcome = await self.orchestrator.run(
-            request.messages,
-            execution_mode=mode.value,
-            model_alias=MANAGED,
-            final_options=request.final_options,
-        )
-        return self._result(outcome, stream=request.stream)
-
     def _result(self, outcome: RunOutcome, *, stream: bool) -> ChatResult:
         run_id = outcome.run_id
         match outcome.state:
+            case RunState.COMPLETED if outcome.tool_calls:
+                # Client-owned calls: the caller executes them, never the gateway (RM08).
+                return ChatResult(run_id, None, TOOL_CALLS, tool_calls=outcome.tool_calls)
             case RunState.COMPLETED if outcome.answer is not None:
                 pieces = self._pieces(outcome) if stream else ()
                 return ChatResult(run_id, outcome.answer, pieces=pieces)
@@ -168,6 +165,45 @@ class ManagedChat:
         events = self.orchestrator.store.events(outcome.run_id, event_type=EventType.ANSWER_DELTA)
         pieces = tuple(e.payload["text"] for e in events)
         return pieces if "".join(pieces) == outcome.answer else ()
+
+
+class ManagedChat(_RunChat):
+    """The ``relaymind`` alias: managed skills and tools through the orchestrator."""
+
+    async def complete(self, request: ChatRequest, mode: ExecutionMode) -> ChatResult:
+        outcome = await self.orchestrator.run(
+            request.messages,
+            execution_mode=mode.value,
+            model_alias=MANAGED,
+            final_options=request.final_options,
+        )
+        return self._result(outcome, stream=request.stream)
+
+
+class ClientToolsChat(_RunChat):
+    """The ``relaymind-client-tools`` alias: functions the caller executes (RM08, AC10).
+
+    The orchestrator offers the model only the supplied functions and
+    returns its call to the caller. The gateway executes nothing
+    (spec 0.16 section 7.2).
+    """
+
+    async def complete(self, request: ChatRequest, mode: ExecutionMode) -> ChatResult:
+        choice = request.tool_choice
+        offer = ToolOffer(
+            tuple(ToolSchema(t.name, t.description or "", t.parameters) for t in request.tools),
+            choice="auto" if choice is None else choice.mode,
+            function=None if choice is None else choice.name,
+        )
+        outcome = await run_client_request(
+            self.orchestrator,
+            request.messages,
+            offer,
+            execution_mode=mode.value,
+            model_alias=CLIENT_TOOLS,
+            final_options=request.final_options,
+        )
+        return self._result(outcome, stream=request.stream)
 
 
 def _confirmation_notice(run_id: str, tool_name: str) -> str:

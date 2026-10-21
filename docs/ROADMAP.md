@@ -280,7 +280,13 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   #23 is implemented with model doubles (`tests/test_streaming_contract.py`,
   spec 0.15): append-only buffered streams, a live-stream seam
   (`LiveAnswer`) and its mid-stream failure behavior. The backend that
-  forwards a live provider stream and records `run.failed` is #24.
+  forwards a live provider stream and records `run.failed` is not part
+  of #24 (see below).
+  #24 is implemented with model doubles (`tests/test_client_owned_tools.py`,
+  spec 0.16): the `relaymind-client-tools` backend returns tool calls to
+  the caller and never executes them. It buffers and validates a whole
+  generation, so a live provider stream (`LiveAnswer`) has no production
+  backend yet and the mid-stream failure path stays tested with a double.
 - Native run API: runs, events SSE, resume, cancel, idempotency (#25,
   #26; RM21). SSE exposes the events recorded since M2.
 - Cancellation during generation and in-flight writes (#29; RM10, RM14,

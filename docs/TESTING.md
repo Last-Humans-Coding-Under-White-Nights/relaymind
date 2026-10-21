@@ -103,9 +103,10 @@ itself, with the manifest's SHA-256; any other file fails the run.
   endpoint can reach); `tests/test_openai_sdk.py` runs the official OpenAI
   Python SDK with `stream` true and false, in process and over a real
   loopback socket; `tests/test_api_binding.py` checks the loopback bind
-  rule and the generated token. The client-owned alias is checked only
-  at the API seam, with a backend double, because its execution is
-  issue #24. No live model is run, so there is no live AC09 record yet.
+  rule and the generated token. The client-owned alias is checked at the
+  API seam there, with a backend double; its real backend is covered
+  below (issue #24). No live model is run, so there is no live AC09
+  record yet.
 
 - The streaming contract, deterministic (issue #23, spec 0.15 section 7.3):
   `pytest tests/test_streaming_contract.py` checks the stream framing for
@@ -118,7 +119,22 @@ itself, with the manifest's SHA-256; any other file fails the run.
   any answer text, or in a request without stream, is a normal 503
   `external_failed` response, and that a client disconnect closes the
   provider stream without recording a failure. The failing provider is a
-  backend double; the production live backend is issue #24.
+  backend double: the client-owned backend of issue #24 buffers and
+  validates its generation, so no production backend forwards a live
+  provider stream yet.
+
+- AC10 and the client-owned alias, deterministic (issue #24, RM08, RM19,
+  spec 0.16 section 7.2): `pytest tests/test_client_owned_tools.py` runs
+  the real orchestrator over model doubles. It checks the function call
+  and tool-result round trip with the same call ID (in process and with
+  the OpenAI SDK over a loopback socket), that the gateway executes no
+  client-declared function, even one named like a gateway tool (a handler
+  spy, no `tool.started`, no tool operation), that the model is offered
+  only the supplied functions narrowed by `tool_choice`, arguments checked
+  against the supplied schema, one exposed call per response, unique call
+  IDs, external fallback only before anything is exposed, the three
+  execution modes, and the ownership-mixing rejections on both aliases.
+  No live model is run, so there is no live AC10 record yet.
 
 ### Required trace events (RM16, RM22, RM25)
 
