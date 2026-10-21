@@ -54,6 +54,7 @@ from relaymind.adapters.base import (
     ToolSchema,
 )
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
+from relaymind.adapters.local_http import health_client
 from relaymind.adapters.manifest import (
     ArtifactManifest,
     ManifestError,
@@ -281,7 +282,7 @@ def _launch_server(
     base_url = f"http://127.0.0.1:{port}"
     argv = ["llama-server", "-m", str(model_path), "--host", "127.0.0.1", "--port", str(port)]
     argv += server_argv
-    with httpx.Client(base_url=base_url, timeout=2) as client:
+    with health_client(base_url) as client:
         with log_path.open("wb") as log_file:
             started = time.monotonic()
             process = subprocess.Popen(argv, stdout=log_file, stderr=subprocess.STDOUT)

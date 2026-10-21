@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.4 | 21 October 2026 | Proposed implementation baseline
+Version 0.5 | 21 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that lets a small model complete bounded tasks with skills and tools, and transfers complex work to an external model. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -140,6 +140,8 @@ A denied confirmation ends the run as cancelled with user_denied and performs no
 **RM18** Model identity and provider configuration MUST be independent of orchestration logic. Swapping between two already supported adapters requires configuration changes and restart, not routing-code changes. Adding a new protocol may require a new adapter.
 
 Every adapter exposes capabilities, generate, cancel, and health. Its capability record includes text streaming, tool calling, structured routing output, context limit, supported reasoning controls, usage reporting, and tokenizer availability. The orchestrator requests capabilities explicitly and rejects unsupported combinations.
+
+For local inference (RM01, RM18), the llama.cpp adapter and runtime startup health polls MUST bypass environment and system proxies when the configured base URL names `localhost` (case-insensitive) or an IPv4 or IPv6 loopback address literal. Other hostnames MUST NOT be treated as loopback through DNS resolution or name matching. Non-loopback endpoints and the external Chat Completions adapter MUST retain normal HTTP client proxy handling. This bypass MUST NOT change process-wide proxy settings.
 
 Normalized generation outputs are text_delta, tool_call, usage, completed, and error. A tool_call is emitted to the executor only after complete argument parsing. An adapter may use native function calling or a validated structured envelope for internal local control; the selected mechanism is visible in configuration and tests. Syntactically valid JSON is not evidence that the selected action is correct.
 

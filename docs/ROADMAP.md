@@ -33,9 +33,10 @@ Status: complete. Passing live smoke tests are recorded in
 native x86-64 Windows (#46), using the pinned model and runtime commit
 (RM18; spec sections 3, 6, 14). Windows setup differences and the proxy
 workaround are recorded with that run.
-Automatic loopback proxy bypass is follow-up work in
+Automatic loopback proxy bypass is implemented with deterministic coverage in
 [#57](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/57);
-reasoning-control migration at the next runtime update is
+the historical Windows run used a session workaround and predates this fix.
+Reasoning-control migration at the next runtime update is
 [#58](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/58).
 
 What M1 did not test, and M2 therefore must: skill selection among

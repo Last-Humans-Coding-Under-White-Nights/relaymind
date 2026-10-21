@@ -24,6 +24,7 @@ from relaymind.adapters.base import (
     GenerationRequest,
     ModelAdapter,
 )
+from relaymind.adapters.local_http import is_loopback_url
 from relaymind.adapters.openai_compat import base_chat_body, stream_chat_events
 
 # Spec section 6: non-thinking is the default; an operator may enable
@@ -76,6 +77,7 @@ class LlamaCppAdapter(ModelAdapter):
             base_url=config.base_url,
             timeout=config.request_timeout_seconds,
             transport=transport,
+            trust_env=not is_loopback_url(config.base_url),
         )
         # One awaited event per running generation; cancel() sets it to
         # interrupt the stream even while it is idle between chunks.

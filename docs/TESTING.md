@@ -28,15 +28,16 @@ sections 3, 6, 14). The environment, build commands, failures, and passing
 results are recorded in [`EVIDENCE.md`](EVIDENCE.md#2026-10-21--m1-live-smoke-test-x86-64-windows).
 
 On that machine, a corporate proxy caused loopback health checks and
-completion requests to time out. These session settings were used before
-running the automated suites from the repository root. Ensure
-`llama-server.exe` is on PATH first; for the source build in the evidence
-entry, use `$env:PATH = "$build\bin\Release;$env:PATH"`, with `$build`
-set to the build directory.
+completion requests to time out. The historical #56 qualification used
+the session settings below before running the automated suites from the
+repository root. Ensure `llama-server.exe` is on PATH first; for the
+source build in the evidence entry, use
+`$env:PATH = "$build\bin\Release;$env:PATH"`, with `$build` set to the
+build directory.
 
-Use a dedicated test shell: on this machine the workaround disabled the
-registry proxy for all HTTPX requests in that session, including external
-destinations. CPython uses environment proxy settings (including
+To reproduce that historical workaround, use a dedicated test shell: it
+disabled the registry proxy for all HTTPX requests in that session,
+including external destinations. CPython uses environment proxy settings (including
 `NO_PROXY`) before falling back to the Windows registry. Assigning `""`
 to `HTTP_PROXY` / `HTTPS_PROXY` removes those variables in PowerShell
 5.1. Other configured proxy variables, such as `ALL_PROXY`, may still
@@ -71,8 +72,20 @@ No manifest or tool-call parser change was needed. The pinned runtime
 accepted `--chat-template-kwargs` with a deprecation warning on all
 platforms; retain the qualified settings until a future runtime update
 is tested ([#58](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/58)).
-Automatic loopback proxy bypass is tracked separately in
-[#57](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/57).
+
+With the #57 fix (RM01, RM18; spec section 6), `LlamaCppAdapter` and
+both automated startup health-poll paths bypass environment and system
+proxies for `localhost` and IPv4/IPv6 loopback literals. These paths no
+longer require the session overrides above. Non-loopback endpoints and
+the external Chat Completions adapter retain normal proxy handling;
+process-wide proxy settings are unchanged. This policy applies to the
+Python clients, not the manual terminal commands below.
+
+`pytest tests/test_loopback_proxy.py` checks routing with controlled proxy
+discovery and transport doubles, without a real proxy or model. The #56
+Windows run predates this fix; it does not establish that the new bypass
+has been tested on a native Windows machine. Record a new live Windows
+run without the historical overrides before claiming that qualification.
 
 ## Manual JSON testing from a terminal
 
