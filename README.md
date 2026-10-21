@@ -4,7 +4,9 @@
 tasks with skills and tools. Complex work is transferred to an external model.
 Every routing decision, tool call, and model call is visible in a trace.
 
-Status: **M1 (adapter and protocol qualification) in progress.** See
+Status: **M1 (adapter and protocol qualification) complete.** Live smoke
+results for Apple Silicon macOS and native x86-64 Windows are recorded in
+[`docs/EVIDENCE.md`](docs/EVIDENCE.md). See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan and
 [`CHANGELOG.md`](CHANGELOG.md) for what has landed so far.
 

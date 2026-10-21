@@ -20,6 +20,37 @@ The live suite needs `llama-server` on PATH and the pinned model
 artifact (see [`models/README.md`](../models/README.md)). It starts and
 stops its own server; nothing below is required for it.
 
+### Windows qualification notes
+
+The native x86-64 Windows run for #46 used CPython 3.12.10, PowerShell
+5.1, and a CPU build of the manifest's llama.cpp commit (RM18; spec
+sections 3, 6, 14). The environment, build commands, failures, and passing
+results are recorded in [`EVIDENCE.md`](EVIDENCE.md#2026-10-21--m1-live-smoke-test-x86-64-windows).
+
+On that machine, a corporate proxy caused loopback health checks and
+completion requests to time out. These session settings were used before
+running the automated suites from the repository root:
+
+```powershell
+$env:NO_PROXY = "127.0.0.1,localhost,::1"
+$env:no_proxy = "127.0.0.1,localhost,::1"
+$env:HTTP_PROXY = ""
+$env:HTTPS_PROXY = ""
+
+py -3.12 -m pytest
+py -3.12 -m pytest tests/test_llamacpp_live_smoke.py -m live -v
+```
+
+The official prebuilt runtime initially crashed in an older system
+`MSVCP140.dll`. The successful run used the pinned source commit, MSVC
+19.42, and matching VC143 CRT DLLs next to `llama-server.exe`; see the
+evidence entry for the exact build flags and DLL versions. Native Windows
+qualification requires neither WSL nor Docker.
+
+No manifest or tool-call parser change was needed. The pinned runtime
+accepted `--chat-template-kwargs` with a deprecation warning; retain the
+qualified settings until a future runtime update is tested.
+
 ## Manual JSON testing from a terminal
 
 ### 1. Start the pinned runtime
