@@ -163,8 +163,10 @@ def test_pinned_manifest_produces_the_qualified_argv():
         "--ctx-size",
         "8192",
         "--jinja",
-        "--chat-template-kwargs",
-        '{"enable_thinking":false}',
+        "--reasoning",
+        "off",
+        "--reasoning-format",
+        "deepseek",
     ]
 
 
@@ -199,3 +201,45 @@ def test_launch_adapter_settings_default_template_kwargs_to_empty():
 def test_launch_adapter_settings_reject_unusable_settings(settings):
     with pytest.raises(ManifestError):
         launch_adapter_settings(settings)
+
+
+@pytest.mark.parametrize(("mode", "enabled"), [("off", False), ("on", True)])
+def test_reasoning_launch_control_derives_matching_http_template_setting(mode, enabled):
+    # RM18 / section 6: the CLI and HTTP controls differ in b11785.
+    settings = {
+        "ctx_size": 8192,
+        "reasoning": mode,
+        "reasoning_format": "deepseek",
+        "chat_template_kwargs": {"custom": "preserved"},
+    }
+    assert launch_adapter_settings(settings) == (
+        8192,
+        {"custom": "preserved", "enable_thinking": enabled},
+    )
+    assert settings["chat_template_kwargs"] == {"custom": "preserved"}
+
+
+@pytest.mark.parametrize("mode", [True, False, 0, None, "", "invalid"])
+def test_invalid_reasoning_launch_control_fails_before_startup(mode):
+    # RM18: booleans must not render as nonexistent --no-reasoning flags.
+    with pytest.raises(ManifestError, match="reasoning"):
+        launch_settings_argv({"ctx_size": 8192, "reasoning": mode})
+
+
+def test_auto_reasoning_cannot_silently_choose_the_adapter_mode():
+    # RM18: qualification requires an explicit mode, not template detection.
+    with pytest.raises(ManifestError, match="reasoning"):
+        launch_adapter_settings({"ctx_size": 8192, "reasoning": "auto"})
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_two_launch_reasoning_controls_are_rejected(enabled):
+    # RM18: reject the deprecated launch control even when values agree.
+    with pytest.raises(ManifestError, match="enable_thinking"):
+        launch_settings_argv(
+            {
+                "ctx_size": 8192,
+                "reasoning": "off",
+                "chat_template_kwargs": {"enable_thinking": enabled},
+            }
+        )

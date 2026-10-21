@@ -74,6 +74,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Requalify llama.cpp b11785 on Apple Silicon macOS/Metal and native
+  x86-64 Windows/CPU (#58; RM18). Migrate the manifest to `--reasoning off`,
+  derive the matching HTTP override, and explicitly separate reasoning
+  from answer content. Non-thinking remains the default; operator-enabled
+  thinking remains supported. Record both live runs separately from the
+  historical runtime evidence and add a Windows runtime smoke workflow.
+- Specification 0.6 revises section 6 to use the selected runtime's
+  supported reasoning controls (RM18, #58). llama.cpp b11785 uses
+  `--reasoning off/on` at launch and the supported HTTP template boolean
+  for per-request overrides, with explicit `deepseek` reasoning extraction.
 - Specification 0.4 → 0.5: require proxy bypass for loopback llama.cpp
   inference and startup health polls, preserving normal proxy handling
   for non-loopback endpoints and the external Chat Completions adapter

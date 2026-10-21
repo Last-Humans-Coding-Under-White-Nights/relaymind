@@ -1,0 +1,87 @@
+name: Runtime smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/runtime-smoke.yml'
+      - 'models/**'
+      - 'src/relaymind/adapters/**'
+      - 'tests/test_llamacpp_live_smoke.py'
+      - 'tests/helpers.py'
+      - 'pyproject.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Download and verify pinned runtime and model
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          $release = 'https://github.com/ggml-org/llama.cpp/releases/download/b11785'
+          curl.exe --fail --location --retry 3 "$release/llama-b11785-bin-win-cpu-x64.zip" -o runtime.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime download failed' }
+          $hash = (Get-FileHash runtime.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne 'c59e0d3e31e096b728b94e943d3ca60df42912c34cba33489d520daab775c6fd') {
+            throw "Runtime archive hash mismatch: $hash"
+          }
+          $hash | Set-Content evidence/runtime-archive-sha256.txt
+          Expand-Archive runtime.zip -DestinationPath runtime
+          $server = @(Get-ChildItem runtime -Recurse -Filter llama-server.exe)
+          if ($server.Count -ne 1) { throw 'Expected exactly one llama-server.exe' }
+          $server[0].DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Append
+          $manifest = Get-Content models/qwen3-0.6b-q8_0.manifest.json | ConvertFrom-Json
+          $url = "$($manifest.source_url)/resolve/$($manifest.source_revision)/$($manifest.file_name)"
+          curl.exe --fail --location --retry 3 $url -o "models/$($manifest.file_name)"
+          if ($LASTEXITCODE -ne 0) { throw 'Model download failed' }
+          Copy-Item models/qwen3-0.6b-q8_0.manifest.json evidence/manifest.json
+          $env:RELAYMIND_SMOKE_MODEL = (Resolve-Path "models/$($manifest.file_name)").Path
+          "RELAYMIND_SMOKE_MODEL=$env:RELAYMIND_SMOKE_MODEL" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Record machine and runtime
+        run: |
+          $os = Get-CimInstance Win32_OperatingSystem
+          $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
+          $computer = Get-CimInstance Win32_ComputerSystem
+          @{
+            revision = (git rev-parse HEAD)
+            os = $os.Caption
+            os_version = $os.Version
+            architecture = $os.OSArchitecture
+            cpu = $cpu.Name
+            ram_bytes = $computer.TotalPhysicalMemory
+            backend = 'CPU'
+            python = (python --version)
+            runner_image = $env:ImageVersion
+          } | ConvertTo-Json | Set-Content evidence/machine.json
+          llama-server --version 2>&1 | Tee-Object evidence/runtime-version.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime startup failed' }
+
+      - name: Qualify non-thinking, thinking, and tool calls (RM18)
+        run: |
+          python -m pytest tests/test_llamacpp_live_smoke.py -m live -v -s --basetemp=evidence/tmp --junitxml=evidence/results.xml 2>&1 | Tee-Object evidence/pytest.log
+          if ($LASTEXITCODE -ne 0) { throw 'Live smoke failed' }
+          [xml]$results = Get-Content evidence/results.xml
+          $suite = $results.testsuites.testsuite
+          if ($suite.tests -ne '3' -or $suite.skipped -ne '0') { throw 'Expected three executed smoke cases' }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runtime-smoke-windows
+          path: evidence/
+          if-no-files-found: error

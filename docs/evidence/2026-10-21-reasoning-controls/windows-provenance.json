@@ -1,0 +1,21 @@
+{
+  "workflow_run": "https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/actions/runs/39564456074",
+  "head_revision": "6ccd7cc5ebfba259835f7473bf2cb00b110fbcf2",
+  "tested_merge_revision": "4b3eb3db4f2cb8fd777dc254294b30cf6c40cf26",
+  "provenance": "GitHub-hosted native windows-2022 runner; downloaded runtime-smoke-windows artifact. Text line endings normalized to LF; trailing spaces removed. Later PR amendment adds documentation/evidence only; tested implementation unchanged.",
+  "command": "python -m pytest tests/test_llamacpp_live_smoke.py -m live -v -s --basetemp=evidence/tmp --junitxml=evidence/results.xml",
+  "result": {
+    "passed": 3,
+    "skipped": 0,
+    "seconds": 5.75
+  },
+  "tested_file_sha256": {
+    "src/relaymind/adapters/llamacpp.py": "71dbb89aed38a52b1170edae62260d00c0a23d78a6c9f705f20259347eee6009",
+    "src/relaymind/adapters/manifest.py": "cd440538bc65d1ca10e474a3f283fc49119a6ebb56b5c9263e215213859a7cb7",
+    "src/relaymind/adapters/openai_compat.py": "fcd16b692a7b34144e2f9905ea85e17ee293b5b749effa2c0946c1bef7fcad69",
+    "src/relaymind/adapters/local_http.py": "96f8ccb8cd63c878bdb0e52a9d8f4724f7845e13541d1d8ee5ae6cfb5b6031a5",
+    "tests/test_llamacpp_live_smoke.py": "837ea40a06ab52803eb1a87de5542e22b7d6ba5db6a50e697178b527d3f6324f",
+    "tests/helpers.py": "fec50ac5170ce76c2400f4418634f108a74f3d21c205909acf7e63f61c1fd8f6",
+    "models/qwen3-0.6b-q8_0.manifest.json": "6ea72216f84dd2ce0fe9eb18237ddd7aaaedbe661f46cc48e549fa277dd569b5"
+  }
+}

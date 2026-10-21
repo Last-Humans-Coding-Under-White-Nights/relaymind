@@ -80,7 +80,7 @@ pinned runtime first:
 ```bash
 llama-server -m models/Qwen3-0.6B-Q8_0.gguf \
   --host 127.0.0.1 --port 8033 --ctx-size 8192 \
-  --jinja --chat-template-kwargs '{"enable_thinking": false}'
+  --jinja --reasoning off --reasoning-format deepseek
 ```
 
 Then send a message and print the answer as it streams:

@@ -9,13 +9,12 @@
   "tokenizer_hash": "27b1fe636a04016514d2aa83b89792da06437beef1fcb9cfda669ddfd94b784d",
   "chat_template_hash": "57f1fd00f0013a2be96aa79b857391f27e23df5b5f847072b524c897e24d0361",
   "runtime": "llama.cpp",
-  "runtime_version": "0.7.0 (build 11669, commit 620d2225c)",
+  "runtime_version": "0.7.0-dev (build 11785, commit 8baabd53b)",
   "launch_settings": {
     "ctx_size": 8192,
     "jinja": true,
-    "chat_template_kwargs": {
-      "enable_thinking": false
-    }
+    "reasoning": "off",
+    "reasoning_format": "deepseek"
   },
   "license": "Apache-2.0"
 }

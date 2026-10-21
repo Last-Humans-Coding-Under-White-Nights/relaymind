@@ -1,7 +1,7 @@
 """Live smoke test for the pinned Qwen3-0.6B artifact on llama-server.
 
 RM18, spec section 6: non-thinking is the default, configured through the
-pinned runtime's chat-template settings and verified by a smoke test;
+pinned runtime's reasoning controls and verified by a smoke test;
 thinking mode is an operator option, and reasoning output must not
 appear as answer content in either mode. Model, template, parser,
 quantization, and runtime are pinned and tested together (S2, S3).
@@ -15,6 +15,7 @@ it must be the pinned artifact itself (byte-identical, same SHA-256 as
 the manifest); any other file fails verification.
 """
 
+import json
 import os
 import shutil
 import socket
@@ -32,7 +33,7 @@ from helpers import (
     collect_events,
     make_request,
 )
-from relaymind.adapters import Completed, Message, Role, TextDelta, ToolCall
+from relaymind.adapters import Completed, GenerationOptions, Message, Role, TextDelta, ToolCall
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 from relaymind.adapters.local_http import health_client
 from relaymind.adapters.manifest import (
@@ -83,6 +84,13 @@ def server(tmp_path_factory, manifest, adapter_settings):
     # adapter_settings is unused here; requesting it derives the adapter
     # settings before the server starts, so unusable settings fail
     # without a model load.
+    # RM18: a passing smoke on a different binary does not qualify this pin.
+    version = subprocess.run(
+        ["llama-server", "--version"], capture_output=True, text=True, check=True
+    )
+    banner = version.stdout + version.stderr
+    assert f"version: {manifest.runtime_version}" in banner.splitlines(), banner
+    print(f"\nRuntime: {manifest.runtime_version}")
     override = os.environ.get(MODEL_ENV)
     model_path = Path(override) if override else MODELS_DIR / manifest.file_name
     if not model_path.is_file():
@@ -157,7 +165,39 @@ def server(tmp_path_factory, manifest, adapter_settings):
 
 
 @pytest.fixture()
-def make_adapter(server, adapter_settings):
+def wire_chunks():
+    return []
+
+
+class RecordingStream(httpx.AsyncByteStream):
+    """Observe the actual SSE while retaining incremental adapter consumption."""
+
+    def __init__(self, stream, chunks):
+        self.stream = stream
+        self.chunks = chunks
+
+    async def __aiter__(self):
+        async for chunk in self.stream:
+            self.chunks.append(chunk)
+            yield chunk
+
+    async def aclose(self):
+        await self.stream.aclose()
+
+
+class RecordingTransport(httpx.AsyncHTTPTransport):
+    def __init__(self, chunks):
+        super().__init__()
+        self.chunks = chunks
+
+    async def handle_async_request(self, request):
+        response = await super().handle_async_request(request)
+        response.stream = RecordingStream(response.stream, self.chunks)
+        return response
+
+
+@pytest.fixture()
+def make_adapter(server, adapter_settings, wire_chunks):
     ctx_size, template_kwargs = adapter_settings
 
     def factory(enable_thinking: bool) -> LlamaCppAdapter:
@@ -169,26 +209,42 @@ def make_adapter(server, adapter_settings):
                 # switch as the operator option under test (spec
                 # section 6).
                 chat_template_kwargs={**template_kwargs, "enable_thinking": enable_thinking},
-            )
+            ),
+            transport=RecordingTransport(wire_chunks),
         )
 
     return factory
 
 
 @pytest.mark.parametrize("enable_thinking", [False, True], ids=["non-thinking", "thinking"])
-def test_reasoning_never_appears_as_answer_content(make_adapter, enable_thinking):
+def test_reasoning_never_appears_as_answer_content(make_adapter, enable_thinking, wire_chunks):
     adapter = make_adapter(enable_thinking)
     events = collect_events(
         adapter,
         make_request(
             generation_id=f"smoke_text_{enable_thinking}",
             messages=(Message(role=Role.USER, content="Reply with exactly one word: pong"),),
+            options=GenerationOptions(max_output_tokens=512, temperature=0),
         ),
     )
     text = "".join(event.text for event in events if isinstance(event, TextDelta))
     assert text.strip(), f"no answer text in events: {events}"
     assert "<think>" not in text, f"thinking block leaked into answer: {text!r}"
+    assert "</think>" not in text, f"thinking closing tag leaked into answer: {text!r}"
     assert any(isinstance(event, Completed) for event in events)
+    # RM18: prove the option changed actual runtime behavior, and that the
+    # adapter emitted exactly the content channel, never the reasoning channel.
+    deltas = []
+    for line in b"".join(wire_chunks).decode().splitlines():
+        if line.startswith("data: ") and line != "data: [DONE]":
+            for choice in json.loads(line[6:]).get("choices", []):
+                deltas.append(choice.get("delta", {}))
+    thoughts = "".join(delta.get("reasoning_content") or "" for delta in deltas)
+    assert bool(thoughts.strip()) is enable_thinking
+    assert text == "".join(delta.get("content") or "" for delta in deltas)
+    print(
+        f"thinking={enable_thinking}; reasoning_present={bool(thoughts.strip())}; answer={text!r}"
+    )
 
 
 def test_model_proposes_a_valid_tool_call(make_adapter):
@@ -208,6 +264,7 @@ def test_model_proposes_a_valid_tool_call(make_adapter):
                 Message(role=Role.USER, content="Is staging-api healthy right now?"),
             ),
             tool_schemas=(HEALTH_TOOL,),
+            options=GenerationOptions(max_output_tokens=512, temperature=0),
         ),
     )
     tool_calls = [event for event in events if isinstance(event, ToolCall)]
@@ -215,3 +272,4 @@ def test_model_proposes_a_valid_tool_call(make_adapter):
     call = tool_calls[0]
     assert call.tool_name == "get_service_health"
     assert call.arguments.get("service") == "staging-api"
+    print(f"tool={call.tool_name}; arguments={dict(call.arguments)}")

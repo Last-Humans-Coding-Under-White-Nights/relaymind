@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.5 | 21 October 2026 | Proposed implementation baseline
+Version 0.6 | 21 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that lets a small model complete bounded tasks with skills and tools, and transfers complex work to an external model. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -145,7 +145,7 @@ For local inference (RM01, RM18), the llama.cpp adapter and runtime startup heal
 
 Normalized generation outputs are text_delta, tool_call, usage, completed, and error. A tool_call is emitted to the executor only after complete argument parsing. An adapter may use native function calling or a validated structured envelope for internal local control; the selected mechanism is visible in configuration and tests. Syntactically valid JSON is not evidence that the selected action is correct.
 
-For Qwen3, non-thinking mode MUST be configured through the pinned runtime's supported chat-template settings and verified by a smoke test. A /no_think string alone is not the qualification criterion. Exact runtime switches MUST come from the selected build's documentation. Model-specific templates and parsing remain inside the adapter. Non-thinking is the default and the configuration used for the latency experiment; an operator MAY enable thinking mode through the same chat-template settings. Reasoning output MUST NOT appear as answer content in either mode, and latency results from the two modes MUST NOT be mixed. [S1, S3, S10]
+For Qwen3, non-thinking mode MUST be configured through the pinned runtime's supported reasoning controls and verified by a smoke test. A /no_think string alone is not the qualification criterion. Exact runtime switches MUST come from the selected build's documentation. Model-specific templates and parsing remain inside the adapter. Non-thinking is the default and the configuration used for the latency experiment; an operator MAY enable thinking mode through the selected runtime's supported launch and request controls. For llama.cpp build 11785 (`8baabd53b`), launch with `--reasoning off --reasoning-format deepseek`; the adapter derives `chat_template_kwargs.enable_thinking=false` from that launch setting and explicitly requests `reasoning_format=deepseek`. The operator may set `enable_thinking=true` per request (or launch with `--reasoning on`). The HTTP template boolean remains supported even though its command-line use is deprecated. Non-empty `reasoning_effort` alone does not enable thinking on a server started with reasoning off. Reasoning output MUST NOT appear as answer content in either mode, and latency results from the two modes MUST NOT be mixed. [S1, S3, S10, S11]
 
 The artifact manifest MUST record model source, revision, file SHA-256, quantization, tokenizer and template hashes, runtime version and commit, launch settings, and license metadata. Q4 and Q8 are comparison candidates, not prequalified defaults. The selected artifact becomes the default only after the bilingual tool tests. External configuration similarly records endpoint, model identifier, supported parameters, and provider-returned version information when available.
 
@@ -409,3 +409,4 @@ Primary sources checked on 20 October 2026. These references support platform an
 - S8 OpenAI prompt caching guide: https://developers.openai.com/api/docs/guides/prompt-caching
 - S9 Leviathan et al, Fast Inference from Transformers via Speculative Decoding: https://arxiv.org/abs/2211.17192
 - S10 llama.cpp server documentation: https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
+- S11 llama.cpp b11785 controls (checked 21 October 2026): https://github.com/ggml-org/llama.cpp/blob/8baabd53b77d1c48c6ef8d3b620436292f3f6231/tools/server/README.md and request parser https://github.com/ggml-org/llama.cpp/blob/8baabd53b77d1c48c6ef8d3b620436292f3f6231/tools/server/server-common.cpp

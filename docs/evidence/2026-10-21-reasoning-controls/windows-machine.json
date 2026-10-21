@@ -1,0 +1,11 @@
+{
+  "ram_bytes": 17174360064,
+  "python": "Python 3.12.10",
+  "architecture": "64-bit",
+  "revision": "4b3eb3db4f2cb8fd777dc254294b30cf6c40cf26",
+  "cpu": "AMD EPYC 9V45 96-Core Processor                ",
+  "backend": "CPU",
+  "os": "Microsoft Windows Server 2022 Datacenter",
+  "runner_image": "20261012.333.1",
+  "os_version": "10.0.20348"
+}

@@ -86,7 +86,7 @@ SCENARIO_CHUNKS = [
 # in a generation body is the scenario and must be identical across a
 # swap.
 MODEL_KEYS = ("model",)
-LOCAL_ONLY_KEYS = ("chat_template_kwargs",)
+LOCAL_ONLY_KEYS = ("chat_template_kwargs", "reasoning_format")
 
 # The configurations under test. Each pair differs in configuration
 # values only.
