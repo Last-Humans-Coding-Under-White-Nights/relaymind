@@ -26,8 +26,8 @@ from gateway_helpers import (
 )
 from helpers import of_type
 from native_helpers import (
-    GatedAdapter,
     error_of,
+    gated_gateway,
     parse_sse,
     run_to_rest,
     session,
@@ -37,25 +37,12 @@ from native_helpers import (
 from relaymind.adapters import AdapterHealth, Message, Role
 from relaymind.api.app import ChatSettings
 from relaymind.api.native import NativeSettings, event_stream
-from relaymind.orchestrator.local_loop import ConfiguredModel
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import TERMINAL_STATES
 from relaymind.tools import CallerContext
 from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
 
 ASK_SERVICE_PROMPT = "Is the service healthy?"
-
-
-def gated_gateway(tmp_path):
-    """A health run whose local model waits for adapter.gate, so the run stays in flight."""
-    adapter = GatedAdapter(turns=[route_turn("check-service-health"), *health_tail()])
-    gateway = build_gateway(
-        tmp_path,
-        None,
-        local_model=ConfiguredModel(adapter=adapter, model_id="gated"),
-        external_turns=[],
-    )
-    return gateway, adapter
 
 
 def clarifying_gateway(tmp_path, **options):

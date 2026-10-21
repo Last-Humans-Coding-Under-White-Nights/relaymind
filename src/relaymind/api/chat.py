@@ -36,7 +36,7 @@ from relaymind.orchestrator.client_loop import ToolOffer, run_client_request
 from relaymind.orchestrator.local_loop import LocalOrchestrator, RunOutcome
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
-from relaymind.store import EventType
+from relaymind.store import EventType, RunStore
 
 __all__ = [
     "ChatBackend",
@@ -45,6 +45,7 @@ __all__ = [
     "LiveAnswer",
     "ManagedChat",
     "StreamAborted",
+    "answer_pieces",
     "collect_live",
     "completion_body",
     "open_stream",
@@ -135,7 +136,8 @@ class _RunChat:
                 # Client-owned calls: the caller executes them, never the gateway (RM08).
                 return ChatResult(run_id, None, TOOL_CALLS, tool_calls=outcome.tool_calls)
             case RunState.COMPLETED if outcome.answer is not None:
-                pieces = self._pieces(outcome) if stream else ()
+                store = self.orchestrator.store
+                pieces = answer_pieces(store, run_id, outcome.answer) if stream else ()
                 return ChatResult(run_id, outcome.answer, pieces=pieces)
             case RunState.WAITING_INPUT if outcome.clarification is not None:
                 # The question is the reply; the run waits for native resume or a new request.
@@ -160,11 +162,12 @@ class _RunChat:
         # A state this endpoint cannot report must not look like an answer.
         raise ApiError("internal_error", "an internal error occurred", run_id=run_id)
 
-    def _pieces(self, outcome: RunOutcome) -> tuple[str, ...]:
-        """The run's answer.delta texts, in order, when they are the answer; else ()."""
-        events = self.orchestrator.store.events(outcome.run_id, event_type=EventType.ANSWER_DELTA)
-        pieces = tuple(e.payload["text"] for e in events)
-        return pieces if "".join(pieces) == outcome.answer else ()
+
+def answer_pieces(store: RunStore, run_id: str, answer: str) -> tuple[str, ...]:
+    """The run's answer.delta texts, in order, when they are the answer; else ()."""
+    events = store.events(run_id, event_type=EventType.ANSWER_DELTA)
+    pieces = tuple(e.payload["text"] for e in events)
+    return pieces if "".join(pieces) == answer else ()
 
 
 class ManagedChat(_RunChat):

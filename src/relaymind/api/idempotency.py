@@ -20,7 +20,7 @@ from typing import Any
 from starlette.datastructures import Headers
 
 from relaymind.adapters import ToolCall
-from relaymind.api.chat import TOOL_CALLS, ChatResult
+from relaymind.api.chat import TOOL_CALLS, ChatResult, answer_pieces
 from relaymind.api.errors import ApiError
 from relaymind.canonical import canonical_json
 from relaymind.orchestrator.run_state import TERMINAL_STATES, RunState
@@ -121,7 +121,6 @@ def stored_chat_result(
             f"run {run_id} ended {state.value}; send a new {IDEMPOTENCY_HEADER} to try again",
             run_id=run_id,
         )
-    completed = store.events(run_id, event_type=EventType.RUN_COMPLETED)[-1].payload
     proposed = [
         e.payload
         for e in store.events(run_id, event_type=EventType.TOOL_PROPOSED)
@@ -136,13 +135,9 @@ def stored_chat_result(
             )
         calls = tuple(ToolCall(p["proposal_id"], p["tool_name"], p["arguments"]) for p in proposed)
         return ChatResult(run_id, None, TOOL_CALLS, tool_calls=calls), record.updated_at
+    completed = store.events(run_id, event_type=EventType.RUN_COMPLETED)[-1].payload
     answer: Any = completed.get("answer")
     if not isinstance(answer, str):
         raise ApiError("internal_error", "an internal error occurred", run_id=run_id)
-    pieces: tuple[str, ...] = ()
-    if stream:
-        deltas = tuple(
-            e.payload["text"] for e in store.events(run_id, event_type=EventType.ANSWER_DELTA)
-        )
-        pieces = deltas if "".join(deltas) == answer else ()
+    pieces = answer_pieces(store, run_id, answer) if stream else ()
     return ChatResult(run_id, answer, pieces=pieces), record.updated_at

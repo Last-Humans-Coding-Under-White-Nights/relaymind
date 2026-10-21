@@ -5,10 +5,10 @@ one orchestrator. The order of checks is fixed: the application token
 (401), the body (400), the Idempotency-Key header (400), the
 execution mode header (400, then 403), then a stored key (a replay or
 409, ``relaymind.api.idempotency``). Everything is checked before a
-run exists, so a rejected request has no run and stores no key. Errors use the contract of
-``relaymind.api.errors``; an unexpected exception becomes a fixed
-internal_error with no detail (RM12); the operator log names its type
-and where it was raised, never its text.
+run exists, so a rejected request has no run and stores no key. Errors
+use the contract of ``relaymind.api.errors``; an unexpected exception
+becomes a fixed internal_error with no detail (RM12); the operator log
+names its type and where it was raised, never its text.
 
 The native run API (RM21, spec 0.17 section 7.4) is served by the same
 app: six endpoints plus /healthz and /readyz, with the same token, error
@@ -162,18 +162,17 @@ def create_app(
         mode = _execution_mode(mode_header, MODE_HEADER, chat.alias, settings)
         claim = claim_for(key, request_hash("chat", body, mode_header))
         stored = check_stored_key(orchestrator.store, claim)
-        headers = {}
-        created = int(time.time())
-        if stored is not None:
+        if stored is None:
+            result = await backends[chat.alias].complete(replace(chat, idempotency=claim), mode)
+            created = int(time.time())
+            headers = {RUN_ID_HEADER: result.run_id}
+        else:
             # A duplicate: answered from the stored run, so no model or tool runs.
             result, ended = stored_chat_result(
                 orchestrator.store, stored.run_id, stream=chat.stream
             )
             created = int(ended.timestamp())
-            headers[REPLAYED_HEADER] = "true"
-        else:
-            result = await backends[chat.alias].complete(replace(chat, idempotency=claim), mode)
-        headers[RUN_ID_HEADER] = result.run_id
+            headers = {RUN_ID_HEADER: result.run_id, REPLAYED_HEADER: "true"}
         if chat.stream:
             # Started here, so a failure before the first chunk still has its status.
             lines = await open_stream(chat.alias, result, created)

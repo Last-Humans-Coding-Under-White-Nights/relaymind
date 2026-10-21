@@ -18,10 +18,11 @@ import pytest
 from api_helpers import RUN_ID_HEADER, call, chat, healthy_gateway, make_app, sse_events, token_of
 from gateway_helpers import STAGING_OK, build_gateway, health_tail, route_turn, text_turn, tool_turn
 from helpers import FakeClock
-from native_helpers import error_of, session, settled, start_run
+from native_helpers import error_of, gated_gateway, session, settled, start_run
 from relaymind.api.chat import ClientToolsChat
 from relaymind.api.chat_request import CLIENT_TOOLS
-from relaymind.store import IdempotencyKeyTakenError, RunStore
+from relaymind.redaction import Redactor
+from relaymind.store import IdempotencyClaim, IdempotencyKeyTakenError, RunStore
 
 KEY = {"Idempotency-Key": "key-1"}
 REPLAYED = "idempotent-replayed"
@@ -34,13 +35,15 @@ WEATHER = {
 }
 
 
+def run_ids(store) -> list[str]:
+    return [row["run_id"] for row in store._conn.execute("SELECT run_id FROM runs")]
+
+
 def run_count(gateway) -> int:
-    return len(gateway.store._conn.execute("SELECT run_id FROM runs").fetchall())
+    return len(run_ids(gateway.store))
 
 
 def accepted(store, caller="alice", key="k", request_hash="h1"):
-    from relaymind.store import IdempotencyClaim
-
     return store.create_run("accepted", idempotency=IdempotencyClaim(caller, key, request_hash))
 
 
@@ -63,8 +66,7 @@ def test_a_taken_key_creates_no_second_run():
     first = accepted(store)
     with pytest.raises(IdempotencyKeyTakenError):
         accepted(store, request_hash="h2")
-    runs = store._conn.execute("SELECT run_id FROM runs").fetchall()
-    assert [r["run_id"] for r in runs] == [first.run_id]
+    assert run_ids(store) == [first.run_id]
     # Another caller may use the same text.
     assert accepted(store, caller="bob").run_id != first.run_id
 
@@ -152,16 +154,7 @@ def test_a_duplicate_native_creation_returns_the_existing_run_and_no_new_inferen
 
 def test_a_duplicate_while_the_run_is_active_is_not_429(tmp_path):
     """Section 7.4: the duplicate is answered from the key before the slot is checked."""
-    from native_helpers import GatedAdapter
-    from relaymind.orchestrator.local_loop import ConfiguredModel
-
-    adapter = GatedAdapter(turns=[route_turn("check-service-health"), *health_tail()])
-    gateway = build_gateway(
-        tmp_path,
-        None,
-        local_model=ConfiguredModel(adapter=adapter, model_id="gated"),
-        external_turns=[],
-    )
+    gateway, adapter = gated_gateway(tmp_path)
     app = make_app(gateway)
 
     async def go():
@@ -321,16 +314,7 @@ def test_a_changed_chat_payload_under_the_same_key_is_409(tmp_path):
 
 def test_an_unfinished_chat_duplicate_is_409_with_its_run_id(tmp_path):
     """Section 7.4: the duplicate of a run still in flight names that run."""
-    from native_helpers import GatedAdapter
-    from relaymind.orchestrator.local_loop import ConfiguredModel
-
-    adapter = GatedAdapter(turns=[route_turn("check-service-health"), *health_tail()])
-    gateway = build_gateway(
-        tmp_path,
-        None,
-        local_model=ConfiguredModel(adapter=adapter, model_id="gated"),
-        external_turns=[],
-    )
+    gateway, adapter = gated_gateway(tmp_path)
     app = make_app(gateway)
     body = {
         "model": "relaymind",
@@ -398,8 +382,6 @@ def test_a_client_owned_duplicate_replays_the_stored_tool_calls(tmp_path):
 
 def test_redacted_client_tool_arguments_are_not_replayed_as_the_original(tmp_path):
     """RM12: stored arguments that were redacted differ from the first response; fail closed."""
-    from relaymind.redaction import Redactor
-
     gateway = build_gateway(
         tmp_path,
         [tool_turn("get_weather", call_id="call_w1", city="Oslo", api_key="sk-1")],
