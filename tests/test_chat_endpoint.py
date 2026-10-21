@@ -12,12 +12,11 @@ import json
 
 import pytest
 
-from api_helpers import RUN_ID_HEADER, TOKEN, call, chat, make_app, sse_events
+from api_helpers import RUN_ID_HEADER, TOKEN, call, chat, healthy_gateway, make_app, sse_events
 from gateway_helpers import (
     STAGING_OK,
     build_gateway,
     clarify_turn,
-    health_tail,
     route_turn,
     text_turn,
     tool_turn,
@@ -32,12 +31,6 @@ from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
 from relaymind.tools import CallerContext
 from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
-
-HEALTH = [route_turn("check-service-health"), *health_tail()]
-
-
-def healthy_gateway(tmp_path, **options):
-    return build_gateway(tmp_path, HEALTH, external_turns=[], **options)
 
 
 def error_of(response):

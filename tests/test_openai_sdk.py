@@ -18,18 +18,13 @@ import httpx
 import openai
 import pytest
 
-from api_helpers import TOKEN, make_app
-from gateway_helpers import STAGING_OK, build_gateway, health_tail, route_turn
+from api_helpers import TOKEN, healthy_gateway, make_app
+from gateway_helpers import STAGING_OK
 from helpers import of_type
 from relaymind.api.server import build_server, serve
 
-HEALTH = [route_turn("check-service-health"), *health_tail()]
 PROMPT = "Is staging-api healthy right now?"
 MESSAGES = [{"role": "user", "content": PROMPT}]
-
-
-def gateway_for(tmp_path):
-    return build_gateway(tmp_path, HEALTH, external_turns=[])
 
 
 def in_process_client(app, key=TOKEN):
@@ -42,14 +37,14 @@ def in_process_client(app, key=TOKEN):
 
 def test_models_list_through_the_sdk(tmp_path):
     async def go():
-        client = in_process_client(make_app(gateway_for(tmp_path)))
+        client = in_process_client(make_app(healthy_gateway(tmp_path)))
         return [m.id async for m in client.models.list()]
 
     assert asyncio.run(go()) == ["relaymind"]
 
 
 def test_a_plain_completion_through_the_sdk(tmp_path):
-    gateway = gateway_for(tmp_path)
+    gateway = healthy_gateway(tmp_path)
 
     async def go():
         client = in_process_client(make_app(gateway))
@@ -69,7 +64,7 @@ def test_a_plain_completion_through_the_sdk(tmp_path):
 
 
 def test_a_streamed_completion_through_the_sdk(tmp_path):
-    gateway = gateway_for(tmp_path)
+    gateway = healthy_gateway(tmp_path)
 
     async def go():
         client = in_process_client(make_app(gateway))
@@ -95,7 +90,7 @@ def test_a_streamed_completion_through_the_sdk(tmp_path):
 
 def test_an_unsupported_parameter_is_the_sdks_bad_request(tmp_path):
     async def go():
-        client = in_process_client(make_app(gateway_for(tmp_path)))
+        client = in_process_client(make_app(healthy_gateway(tmp_path)))
         await client.chat.completions.create(model="relaymind", messages=MESSAGES, seed=7)
 
     with pytest.raises(openai.BadRequestError) as caught:
@@ -107,7 +102,7 @@ def test_an_unsupported_parameter_is_the_sdks_bad_request(tmp_path):
 
 def test_a_wrong_key_is_the_sdks_authentication_error(tmp_path):
     async def go():
-        client = in_process_client(make_app(gateway_for(tmp_path)), key="not-the-token")
+        client = in_process_client(make_app(healthy_gateway(tmp_path)), key="not-the-token")
         await client.chat.completions.create(model="relaymind", messages=MESSAGES)
 
     with pytest.raises(openai.AuthenticationError) as caught:
@@ -116,7 +111,7 @@ def test_a_wrong_key_is_the_sdks_authentication_error(tmp_path):
 
 
 def test_the_execution_mode_header_reaches_the_run_through_the_sdk(tmp_path):
-    gateway = gateway_for(tmp_path)
+    gateway = healthy_gateway(tmp_path)
 
     async def go():
         client = in_process_client(make_app(gateway))
@@ -163,7 +158,7 @@ class RunningServer:
 @pytest.mark.parametrize("stream", [False, True])
 def test_the_sdk_round_trip_over_a_loopback_socket(tmp_path, stream):
     """AC09: stream true and false against a bound server."""
-    gateway = gateway_for(tmp_path)
+    gateway = healthy_gateway(tmp_path)
     with RunningServer(make_app(gateway)) as running:
         assert running.address[0] == "127.0.0.1"
         client = openai.OpenAI(
@@ -192,6 +187,6 @@ def test_the_sdk_round_trip_over_a_loopback_socket(tmp_path, stream):
 
 
 def test_serve_refuses_a_public_address(tmp_path):
-    app = make_app(gateway_for(tmp_path))
+    app = make_app(healthy_gateway(tmp_path))
     with pytest.raises(ValueError, match="loopback"):
         serve(app, host="0.0.0.0", port=0)

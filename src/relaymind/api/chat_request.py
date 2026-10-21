@@ -17,7 +17,7 @@ every tool result answers a call. Executing anything is not its job.
 import json
 import math
 import re
-from collections.abc import Collection, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -63,8 +63,11 @@ _DEFAULTS: dict[str, object] = {
     "logprobs": False,
     "store": False,
 }
-_DEFAULT_TEMPERATURE = 1
-_DEFAULT_TOP_P = 1
+# The sampling options: their API default, their range check, and its message.
+_SAMPLING: tuple[tuple[str, int, Callable[[float], bool], str], ...] = (
+    ("temperature", 1, lambda v: 0 <= v <= 2, "temperature must be a number from 0 to 2"),
+    ("top_p", 1, lambda v: 0 < v <= 1, "top_p must be a number above 0 and at most 1"),
+)
 _INSTRUCTION_ROLES = (Role.SYSTEM, Role.DEVELOPER)
 _TOOL_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _MESSAGE_FIELDS = {
@@ -200,20 +203,16 @@ def _final_options(fields: Mapping[str, Any], supported: set[str]) -> Generation
             raise _invalid(f"{name} must be a positive integer")
         _require_option("max_output_tokens", name, supported)
         values["max_output_tokens"] = value
-    temperature = fields.get("temperature")
-    if temperature is not None:
-        if not _is_number(temperature) or not 0 <= temperature <= 2:
-            raise _invalid("temperature must be a number from 0 to 2")
-        if "temperature" in supported or temperature != _DEFAULT_TEMPERATURE:
-            _require_option("temperature", "temperature", supported)
-            values["temperature"] = temperature
-    top_p = fields.get("top_p")
-    if top_p is not None:
-        if not _is_number(top_p) or not 0 < top_p <= 1:
-            raise _invalid("top_p must be a number above 0 and at most 1")
-        if "top_p" in supported or top_p != _DEFAULT_TOP_P:
-            _require_option("top_p", "top_p", supported)
-            values["top_p"] = top_p
+    for name, default, in_range, message in _SAMPLING:
+        value = fields.get(name)
+        if value is None:
+            continue
+        if not _is_number(value) or not in_range(value):
+            raise _invalid(message)
+        # The API default of an option the adapters do not accept is still accepted.
+        if name in supported or value != default:
+            _require_option(name, name, supported)
+            values[name] = value
     return GenerationOptions(**values)
 
 

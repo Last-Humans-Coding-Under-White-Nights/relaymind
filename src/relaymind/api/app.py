@@ -12,10 +12,11 @@ The app holds no model, tool, or store logic: the orchestrator owns it
 (section 3).
 """
 
+import functools
 import json
 import secrets
 import time
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from fastapi import FastAPI, Request
@@ -84,52 +85,57 @@ def create_app(
     # No interactive docs: they would be an unauthenticated surface.
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
-    async def guarded(work: Awaitable[Response]) -> Response:
-        try:
-            return await work
-        except Exception as exc:  # the error contract owns every response (section 11)
-            return _error_response(error_from_exception(exc))
-
     @app.get("/v1/models")
+    @_guarded
     async def models(request: Request) -> Response:
-        async def work() -> Response:
-            require_bearer_token(request.headers.get("authorization"), token)
-            data = [
-                {"id": alias, "object": "model", "created": started, "owned_by": "relaymind"}
-                for alias in backends
-            ]
-            return JSONResponse({"object": "list", "data": data})
-
-        return await guarded(work())
+        require_bearer_token(request.headers.get("authorization"), token)
+        data = [
+            {"id": alias, "object": "model", "created": started, "owned_by": "relaymind"}
+            for alias in backends
+        ]
+        return JSONResponse({"object": "list", "data": data})
 
     @app.post("/v1/chat/completions")
+    @_guarded
     async def completions(request: Request) -> Response:
-        async def work() -> Response:
-            require_bearer_token(request.headers.get("authorization"), token)
-            body = _decode(await request.body())
-            chat = parse_chat_request(
-                body, served=backends, supported_options=settings.supported_options
+        require_bearer_token(request.headers.get("authorization"), token)
+        body = _decode(await request.body())
+        chat = parse_chat_request(
+            body, served=backends, supported_options=settings.supported_options
+        )
+        if IDEMPOTENCY_HEADER in request.headers:
+            raise ApiError(
+                "unsupported_parameter", f"the {IDEMPOTENCY_HEADER} header is not supported yet"
             )
-            if IDEMPOTENCY_HEADER in request.headers:
-                raise ApiError(
-                    "unsupported_parameter",
-                    f"the {IDEMPOTENCY_HEADER} header is not supported yet",
-                )
-            mode = _execution_mode(request.headers.get(MODE_HEADER), chat.alias, settings)
-            result = await backends[chat.alias].complete(chat, mode)
-            headers = {RUN_ID_HEADER: result.run_id}
-            created = int(time.time())
-            if chat.stream:
-                return StreamingResponse(
-                    stream_chunks(chat.alias, result, created),
-                    media_type="text/event-stream",
-                    headers={**headers, "Cache-Control": "no-cache"},
-                )
-            return JSONResponse(completion_body(chat.alias, result, created), headers=headers)
-
-        return await guarded(work())
+        mode = _execution_mode(request.headers.get(MODE_HEADER), chat.alias, settings)
+        result = await backends[chat.alias].complete(chat, mode)
+        headers = {RUN_ID_HEADER: result.run_id}
+        created = int(time.time())
+        if chat.stream:
+            return StreamingResponse(
+                stream_chunks(chat.alias, result, created),
+                media_type="text/event-stream",
+                headers={**headers, "Cache-Control": "no-cache"},
+            )
+        return JSONResponse(completion_body(chat.alias, result, created), headers=headers)
 
     return app
+
+
+_Handler = Callable[[Request], Awaitable[Response]]
+
+
+def _guarded(handler: _Handler) -> _Handler:
+    """Every response of the route follows the error contract (section 11)."""
+
+    @functools.wraps(handler)
+    async def wrapper(request: Request) -> Response:
+        try:
+            return await handler(request)
+        except Exception as exc:
+            return _error_response(error_from_exception(exc))
+
+    return wrapper
 
 
 def _decode(raw: bytes) -> object:

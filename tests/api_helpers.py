@@ -10,11 +10,18 @@ import json
 
 import httpx
 
+from gateway_helpers import build_gateway, health_tail, route_turn
 from relaymind.api.app import create_app
 
 TOKEN = "test-token-" + "x" * 32
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
 RUN_ID_HEADER = "X-RelayMind-Run-ID"
+
+
+def healthy_gateway(tmp_path, **options):
+    """A gateway whose local model routes to check-service-health and answers."""
+    turns = [route_turn("check-service-health"), *health_tail()]
+    return build_gateway(tmp_path, turns, external_turns=[], **options)
 
 
 def make_app(gateway, **options):

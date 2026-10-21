@@ -15,7 +15,7 @@ progress text is added to it.
 """
 
 import json
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -85,7 +85,8 @@ class ManagedChat:
                 # The question is the reply; the run waits for native resume or a new request.
                 return ChatResult(run_id, outcome.clarification)
             case RunState.WAITING_CONFIRMATION if outcome.confirmation is not None:
-                return ChatResult(run_id, _confirmation_notice(outcome))
+                notice = _confirmation_notice(run_id, outcome.confirmation.tool_name)
+                return ChatResult(run_id, notice)
             case RunState.CANCELLED:
                 raise ApiError("run_terminal", f"run {run_id} was cancelled", run_id=run_id)
             case RunState.FAILED:
@@ -102,17 +103,16 @@ class ManagedChat:
         return pieces if "".join(pieces) == outcome.answer else (outcome.answer or "",)
 
 
-def _confirmation_notice(outcome: RunOutcome) -> str:
+def _confirmation_notice(run_id: str, tool_name: str) -> str:
     """Tell a chat caller that a confirmation is pending (section 7.4).
 
     The approval ID and the token are not in it: a chat client cannot
     approve with a free-form yes.
     """
-    assert outcome.confirmation is not None
     return (
-        f"Confirmation is pending for {outcome.confirmation.tool_name}. "
+        f"Confirmation is pending for {tool_name}. "
         "Nothing has changed yet. Approve or deny it with the native run API "
-        f"(run {outcome.run_id}) or the demo UI; a chat reply cannot approve it."
+        f"(run {run_id}) or the demo UI; a chat reply cannot approve it."
     )
 
 
@@ -160,11 +160,11 @@ def stream_chunks(alias: str, result: ChatResult, created: int) -> Iterator[str]
 
     if result.tool_calls:
         yield chunk({"role": "assistant", "content": None})
-        calls: Sequence[dict[str, Any]] = [
+        calls = [
             {"index": index, **_tool_call_json(call)}
             for index, call in enumerate(result.tool_calls)
         ]
-        yield chunk({"tool_calls": list(calls)})
+        yield chunk({"tool_calls": calls})
     else:
         yield chunk({"role": "assistant", "content": ""})
         for piece in result.pieces or ((result.content,) if result.content else ()):
