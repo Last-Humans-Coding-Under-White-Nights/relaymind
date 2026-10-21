@@ -5,6 +5,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 
 import httpx
@@ -18,6 +19,7 @@ from relaymind.adapters import (
     Role,
     ToolSchema,
 )
+from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = REPO_ROOT / "models"
@@ -37,6 +39,22 @@ HEALTH_TOOL = ToolSchema(
         "additionalProperties": False,
     },
 )
+
+
+# A llama-server endpoint for adapter tests over a mock transport.
+LLAMACPP_CONFIG = LlamaCppConfig(
+    base_url="http://127.0.0.1:8033",
+    context_limit=8192,
+    chat_template_kwargs={"enable_thinking": False},
+)
+
+
+def make_llamacpp_adapter(
+    handler: Callable[[httpx.Request], httpx.Response | Awaitable[httpx.Response]],
+    config: LlamaCppConfig = LLAMACPP_CONFIG,
+) -> LlamaCppAdapter:
+    """A LlamaCppAdapter whose HTTP requests go to handler."""
+    return LlamaCppAdapter(config, transport=httpx.MockTransport(handler))
 
 
 def make_capabilities(**overrides) -> AdapterCapabilities:
@@ -131,6 +149,17 @@ class ScriptedAdapter(ModelAdapter):
 
     async def health(self) -> AdapterHealth:
         return AdapterHealth(available=True, warm=True, detail="scripted")
+
+    async def count_tokens(
+        self,
+        messages: Sequence[Message],
+        tool_schemas: Sequence[ToolSchema] = (),
+    ) -> int:
+        # The double claims a tokenizer (make_capabilities), so it counts
+        # instead of inheriting the refusing default: one unit per
+        # content character and per offered tool. A fixed rule for
+        # tests, not an estimate of any real tokenizer.
+        return sum(len(message.content or "") for message in messages) + len(tool_schemas)
 
 
 def load_script_module(name: str):

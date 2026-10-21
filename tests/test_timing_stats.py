@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from helpers import ScriptedAdapter, collect_events, make_capabilities, make_request
+from helpers import HEALTH_TOOL, ScriptedAdapter, collect_events, make_capabilities, make_request
 from relaymind.adapters import (
     Completed,
     GenerationFailed,
@@ -259,6 +259,26 @@ def test_collector_delegates_the_rest_of_the_adapter_contract():
     assert asyncio.run(collector.health()).detail == "scripted"
     asyncio.run(collector.cancel("gen_9"))
     assert adapter.cancelled == ["gen_9"]
+
+
+def test_collector_delegates_count_tokens_to_the_wrapped_adapter():
+    # RM16, spec section 6: the collector reports the wrapped adapter's
+    # tokenizer_available, so it must also hand count_tokens through
+    # instead of refusing with the base-class default.
+    class Counting(ScriptedAdapter):
+        def __init__(self):
+            super().__init__([])
+            self.counted = []
+
+        async def count_tokens(self, messages, tool_schemas=()):
+            self.counted.append((tuple(messages), tuple(tool_schemas)))
+            return 42
+
+    adapter = Counting()
+    collector = TimingCollector(adapter, clock=scripted_clock(0.0))
+    messages = (Message(role=Role.USER, content="is staging-api healthy?"),)
+    assert asyncio.run(collector.count_tokens(messages, (HEALTH_TOOL,))) == 42
+    assert adapter.counted == [(messages, (HEALTH_TOOL,))]
 
 
 @pytest.mark.parametrize("finish_reason", ["tool_calls", "length", "end_of_stream"])

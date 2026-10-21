@@ -66,6 +66,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   measured pass, and writes an export whose `run` block names the
   command, prompts, system prompt, tool schema, and each generation's
   outcome (RM16, RM25). `export_stats` accepts that block as `run_info`.
+- RouteDecision schema and boundary validator (spec section 8, RM02;
+  part of #14): the versioned JSON Schema is published as
+  `relaymind/orchestrator/schemas/route_decision.v1.json`, and
+  `parse_route_decision` / `parse_route_decision_json` reject unknown
+  or missing fields, invalid values, skills outside the advertised
+  catalog, prose around the JSON, duplicate keys, non-finite numbers,
+  and anything else the decoder refuses. The spec 0.6 cross-field rules
+  (#60) are enforced: a clarify route carries a non-blank clarification
+  and every other route none; with a `RoutingContext` (managed or
+  client-owned catalog, effective execution mode, operator-enabled
+  parallel workflows) managed local needs a skill, parallel needs an
+  enabled workflow and an admitting mode, and the client-owned alias
+  has no skills and no parallel. The reason code `execution_mode` is
+  added. The schema mirrors the clarification rule with if/then and
+  requires non-blank text, so it rejects what the validator rejects.
+- Local tokenizer on the llama.cpp adapter (#47, spec section 4.1):
+  `LlamaCppAdapter.count_tokens` counts a normalized message list and
+  its tools through llama-server `/apply-template` and `/tokenize`, and
+  `capabilities()` now reports `tokenizer_available=True`. A runtime
+  failure raises `TokenCountError` instead of estimating. The external
+  adapter still reports no tokenizer and refuses to count. A live test
+  checks the count against the runtime's prompt tokens in English and
+  Chinese.
+- Routing probe spike (#48): `scripts/probes/probe_routing.py` with
+  `scripts/probes/m2_routing.json`, its live result in
+  `docs/EVIDENCE.md`, and the routing mechanism decision for #14
+  (native function calling) in `docs/ROADMAP.md`. The probe applies
+  the 2,048-token router cap (an over-cap row is bypassed and marked),
+  starts its clock before the token count, sends and records
+  llama-server's `cache_prompt` setting, and records adapter errors in
+  their own field. The recorded run was re-scored under spec 0.6 and
+  corrected in `docs/EVIDENCE.md` (grammar 7 of 12 valid, not 12 of
+  12); its limits (tokenizer time excluded, prompt cache on and
+  unmeasured) are stated there.
 - Project scaffold: repository layout, CI, and contributor guides.
 - Specification v0.1 (`docs/SPECIFICATION.md`) as the single source of
   truth for the prototype.

@@ -6,7 +6,7 @@ and rejects unsupported combinations.
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from enum import StrEnum
 from types import MappingProxyType
@@ -14,6 +14,10 @@ from types import MappingProxyType
 
 class UnsupportedCapabilityError(Exception):
     """The adapter does not support a capability the caller requires."""
+
+
+class TokenCountError(Exception):
+    """The runtime could not count tokens; no estimate is substituted."""
 
 
 def _freeze_tuple(obj: object, *field_names: str) -> None:
@@ -284,3 +288,17 @@ class ModelAdapter(ABC):
     @abstractmethod
     async def health(self) -> AdapterHealth:
         """Report provider availability and model warm state."""
+
+    async def count_tokens(
+        self,
+        messages: Sequence[Message],
+        tool_schemas: Sequence[ToolSchema] = (),
+    ) -> int:
+        """Count the input tokens a generation of these messages would use.
+
+        Only adapters whose capability record reports
+        tokenizer_available implement this (spec section 6). The
+        default refuses explicitly: an adapter without a local tokenizer
+        never estimates a count (RM16).
+        """
+        raise UnsupportedCapabilityError("adapter does not support: tokenizer")

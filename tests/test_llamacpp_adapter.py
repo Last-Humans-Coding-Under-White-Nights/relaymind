@@ -10,23 +10,13 @@ import json
 
 import httpx
 
-from helpers import collect_events, delta_chunk, make_request, sse_response
+from helpers import collect_events, delta_chunk, make_llamacpp_adapter, make_request, sse_response
 from relaymind.adapters import Completed, GenerationFailed, TextDelta, ToolCall
-from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
-
-CONFIG = LlamaCppConfig(
-    base_url="http://127.0.0.1:8033",
-    context_limit=8192,
-    chat_template_kwargs={"enable_thinking": False},
-)
-
-
-def make_adapter(handler) -> LlamaCppAdapter:
-    return LlamaCppAdapter(CONFIG, transport=httpx.MockTransport(handler))
+from relaymind.adapters.llamacpp import LlamaCppConfig
 
 
 def test_capabilities_come_from_config():
-    adapter = make_adapter(lambda request: httpx.Response(200))
+    adapter = make_llamacpp_adapter(lambda request: httpx.Response(200))
     caps = asyncio.run(adapter.capabilities())
     assert caps.tool_calling is True
     assert caps.text_streaming is True
@@ -45,7 +35,7 @@ def test_generate_streams_normalized_events():
         ]
         return sse_response(chunks)
 
-    adapter = make_adapter(handler)
+    adapter = make_llamacpp_adapter(handler)
     events = collect_events(adapter, make_request())
     assert seen["path"] == "/v1/chat/completions"
     # Non-thinking mode rides on every request via chat template settings.
@@ -58,14 +48,6 @@ def test_config_defaults_to_non_thinking_mode():
     # enable thinking through the same chat-template settings.
     config = LlamaCppConfig(base_url="http://127.0.0.1:8033", context_limit=8192)
     assert dict(config.chat_template_kwargs) == {"enable_thinking": False}
-
-
-def test_capabilities_do_not_claim_an_unexposed_tokenizer():
-    # Honest evidence (RM16): the adapter has no tokenizer interface
-    # yet, so it must not advertise one.
-    adapter = make_adapter(lambda request: httpx.Response(200))
-    caps = asyncio.run(adapter.capabilities())
-    assert caps.tokenizer_available is False
 
 
 def test_generate_streams_tool_call_over_http():
@@ -88,7 +70,7 @@ def test_generate_streams_tool_call_over_http():
     def handler(request: httpx.Request) -> httpx.Response:
         return sse_response(chunks)
 
-    events = collect_events(make_adapter(handler), make_request())
+    events = collect_events(make_llamacpp_adapter(handler), make_request())
     assert events == [
         ToolCall(call_id="call_1", tool_name="get_service_health", arguments={"service": "s"}),
         Completed(finish_reason="tool_calls"),
@@ -115,7 +97,7 @@ def test_stream_ending_without_finish_reason_still_completes():
     def handler(request: httpx.Request) -> httpx.Response:
         return sse_response(chunks)
 
-    events = collect_events(make_adapter(handler), make_request())
+    events = collect_events(make_llamacpp_adapter(handler), make_request())
     assert events == [
         ToolCall(call_id="call_1", tool_name="get_service_health", arguments={}),
         Completed(finish_reason="end_of_stream"),
@@ -123,7 +105,7 @@ def test_stream_ending_without_finish_reason_still_completes():
 
 
 def test_non_200_response_fails_with_provider_error():
-    adapter = make_adapter(lambda request: httpx.Response(500, text="boom"))
+    adapter = make_llamacpp_adapter(lambda request: httpx.Response(500, text="boom"))
     events = collect_events(adapter, make_request())
     assert len(events) == 1
     assert isinstance(events[0], GenerationFailed)
@@ -137,7 +119,7 @@ def test_unreachable_server_fails_with_provider_unreachable():
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused")
 
-    events = collect_events(make_adapter(handler), make_request())
+    events = collect_events(make_llamacpp_adapter(handler), make_request())
     assert len(events) == 1
     assert isinstance(events[0], GenerationFailed)
     assert events[0].code == "provider_unreachable"
@@ -151,14 +133,14 @@ def test_timeout_fails_with_provider_timeout():
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("read timed out")
 
-    events = collect_events(make_adapter(handler), make_request())
+    events = collect_events(make_llamacpp_adapter(handler), make_request())
     assert len(events) == 1
     assert isinstance(events[0], GenerationFailed)
     assert events[0].code == "provider_timeout"
 
 
 def test_adapter_is_an_async_context_manager():
-    adapter = make_adapter(lambda request: httpx.Response(200))
+    adapter = make_llamacpp_adapter(lambda request: httpx.Response(200))
 
     async def run():
         async with adapter as entered:
@@ -169,11 +151,11 @@ def test_adapter_is_an_async_context_manager():
 
 
 def test_health_maps_ready_loading_and_unreachable():
-    ready = make_adapter(lambda request: httpx.Response(200, json={"status": "ok"}))
+    ready = make_llamacpp_adapter(lambda request: httpx.Response(200, json={"status": "ok"}))
     health = asyncio.run(ready.health())
     assert (health.available, health.warm) == (True, True)
 
-    loading = make_adapter(
+    loading = make_llamacpp_adapter(
         lambda request: httpx.Response(503, json={"error": {"message": "Loading model"}})
     )
     health = asyncio.run(loading.health())
@@ -182,7 +164,7 @@ def test_health_maps_ready_loading_and_unreachable():
     def unreachable(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused")
 
-    down = make_adapter(unreachable)
+    down = make_llamacpp_adapter(unreachable)
     health = asyncio.run(down.health())
     assert health.available is False
 
@@ -194,7 +176,7 @@ def test_cancel_stops_an_active_generation_early():
     def handler(request: httpx.Request) -> httpx.Response:
         return sse_response(chunks)
 
-    adapter = make_adapter(handler)
+    adapter = make_llamacpp_adapter(handler)
 
     async def run():
         events = []
@@ -210,7 +192,7 @@ def test_cancel_stops_an_active_generation_early():
 
 
 def test_cancel_of_unknown_generation_is_a_no_op():
-    adapter = make_adapter(lambda request: httpx.Response(200))
+    adapter = make_llamacpp_adapter(lambda request: httpx.Response(200))
     asyncio.run(adapter.cancel("nope"))
 
 
@@ -234,7 +216,7 @@ def test_cancel_interrupts_an_idle_stream():
             200, headers={"content-type": "text/event-stream"}, stream=HangingStream()
         )
 
-    adapter = make_adapter(handler)
+    adapter = make_llamacpp_adapter(handler)
 
     async def run():
         events = []
@@ -276,7 +258,7 @@ def test_done_marker_ends_the_stream_without_waiting_for_eof():
             200, headers={"content-type": "text/event-stream"}, stream=KeptOpenStream()
         )
 
-    adapter = make_adapter(handler)
+    adapter = make_llamacpp_adapter(handler)
 
     async def run():
         async with adapter:

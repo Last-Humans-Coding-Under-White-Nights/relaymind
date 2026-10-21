@@ -1,0 +1,2274 @@
+{
+  "schema_version": 1,
+  "status": "engineering_instrumentation",
+  "exported_at_utc": "2026-10-21T02:23:29.912796+00:00",
+  "adapter": {
+    "adapter": "llamacpp",
+    "model_id": "qwen3-0.6b",
+    "quantization": "Q8_0",
+    "runtime_version": "0.7.0 (build 11669, commit 620d2225c)"
+  },
+  "generations": [
+    {
+      "generation_id": "warmup_native_function_calling_0",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-21T02:22:48.732466+00:00",
+      "first_transport_event_seconds": 1.2257527909823693,
+      "first_model_action_seconds": 1.2257527909823693,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 810,
+      "output_tokens": 21,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "warmup_native_function_calling_1",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-21T02:22:49.985639+00:00",
+      "first_transport_event_seconds": 0.37250970798777416,
+      "first_model_action_seconds": 0.37250970798777416,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 810,
+      "output_tokens": 21,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "warmup_native_function_calling_2",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-21T02:22:50.382682+00:00",
+      "first_transport_event_seconds": 0.3759757080115378,
+      "first_model_action_seconds": 0.3759757080115378,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 810,
+      "output_tokens": 21,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "native_function_calling_00",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-21T02:22:50.786475+00:00",
+      "first_transport_event_seconds": 0.3890507919713855,
+      "first_model_action_seconds": 0.3890507919713855,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 810,
+      "output_tokens": 21,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "native_function_calling_01",
+      "prompt": "What was the latest deployment of payments-api?",
+      "started_at_utc": "2026-10-21T02:22:51.201614+00:00",
+      "first_transport_event_seconds": 0.44013220799388364,
+      "first_model_action_seconds": 0.44013220799388364,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 812,
+      "output_tokens": 23,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "native_function_calling_02",
+      "prompt": "How many incidents did staging-api have in the last 60 minutes?",
+      "started_at_utc": "2026-10-21T02:22:51.670410+00:00",
+      "first_transport_event_seconds": 0.45818570896517485,
+      "first_model_action_seconds": 0.45818570896517485,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 818,
+      "output_tokens": 25,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "native_function_calling_03",
+      "prompt": "Is the service healthy?",
+      "started_at_utc": "2026-10-21T02:22:52.156729+00:00",
+      "first_transport_event_seconds": 0.08229462499730289,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.08229462499730289,
+      "completion_seconds": 0.3532020839629695,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 808,
+      "output_tokens": 18,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "native_function_calling_04",
+      "prompt": "payments-api got slow after the last deploy. Find out why.",
+      "started_at_utc": "2026-10-21T02:22:52.543802+00:00",
+      "first_transport_event_seconds": 0.4126257090247236,
+      "first_model_action_seconds": 0.4126257090247236,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 816,
+      "output_tokens": 21,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "native_function_calling_05",
+      "prompt": "Delete the demo database demo-orders.",
+      "started_at_utc": "2026-10-21T02:22:52.979221+00:00",
+      "first_transport_event_seconds": 0.41325120796682313,
+      "first_model_action_seconds": 0.41325120796682313,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 810,
+      "output_tokens": 22,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "native_function_calling_06",
+      "prompt": "staging-api \u73b0\u5728\u5065\u5eb7\u5417\uff1f",
+      "started_at_utc": "2026-10-21T02:22:53.420231+00:00",
+      "first_transport_event_seconds": 0.40743349998956546,
+      "first_model_action_seconds": 0.40743349998956546,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 813,
+      "output_tokens": 21,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "native_function_calling_07",
+      "prompt": "payments-api \u6700\u8fd1\u4e00\u6b21\u90e8\u7f72\u662f\u4ec0\u4e48\uff1f",
+      "started_at_utc": "2026-10-21T02:22:53.857437+00:00",
+      "first_transport_event_seconds": 0.4345496249734424,
+      "first_model_action_seconds": 0.4345496249734424,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 811,
+      "output_tokens": 23,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "native_function_calling_08",
+      "prompt": "staging-api \u5728\u8fc7\u53bb 60 \u5206\u949f\u5185\u6709\u591a\u5c11\u4e2a\u4e8b\u6545\uff1f",
+      "started_at_utc": "2026-10-21T02:22:54.317931+00:00",
+      "first_transport_event_seconds": 0.4796929159783758,
+      "first_model_action_seconds": 0.4796929159783758,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 818,
+      "output_tokens": 25,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "native_function_calling_09",
+      "prompt": "\u8fd9\u4e2a\u670d\u52a1\u5065\u5eb7\u5417\uff1f",
+      "started_at_utc": "2026-10-21T02:22:54.822926+00:00",
+      "first_transport_event_seconds": 0.43697212502593175,
+      "first_model_action_seconds": 0.43697212502593175,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 808,
+      "output_tokens": 24,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "native_function_calling_10",
+      "prompt": "payments-api \u5728\u4e0a\u6b21\u90e8\u7f72\u540e\u53d8\u6162\u4e86\uff0c\u8bf7\u67e5\u660e\u539f\u56e0\u3002",
+      "started_at_utc": "2026-10-21T02:22:55.283224+00:00",
+      "first_transport_event_seconds": 0.40309575002174824,
+      "first_model_action_seconds": 0.40309575002174824,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 816,
+      "output_tokens": 21,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "native_function_calling_11",
+      "prompt": "\u5220\u9664\u6f14\u793a\u6570\u636e\u5e93 demo-orders\u3002",
+      "started_at_utc": "2026-10-21T02:22:55.724980+00:00",
+      "first_transport_event_seconds": 0.5192124590394087,
+      "first_model_action_seconds": 0.5192124590394087,
+      "first_answer_token_seconds": null,
+      "completion_seconds": null,
+      "finish_reason": "tool_calls",
+      "failure_code": null,
+      "input_tokens": 809,
+      "output_tokens": 22,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "warmup_json_envelope_0",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-21T02:22:56.277146+00:00",
+      "first_transport_event_seconds": 0.25322454201523215,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.25322454201523215,
+      "completion_seconds": 1.2075549580040388,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 341,
+      "output_tokens": 55,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "warmup_json_envelope_1",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-21T02:22:57.510506+00:00",
+      "first_transport_event_seconds": 0.024178416992072016,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.024178416992072016,
+      "completion_seconds": 1.005283959035296,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 341,
+      "output_tokens": 55,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "warmup_json_envelope_2",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-21T02:22:58.538965+00:00",
+      "first_transport_event_seconds": 0.023265041003469378,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.023265041003469378,
+      "completion_seconds": 1.0064716660417616,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 341,
+      "output_tokens": 55,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_00",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-21T02:22:59.567857+00:00",
+      "first_transport_event_seconds": 0.0230783749721013,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.0230783749721013,
+      "completion_seconds": 1.0007447910029441,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 341,
+      "output_tokens": 55,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_01",
+      "prompt": "What was the latest deployment of payments-api?",
+      "started_at_utc": "2026-10-21T02:23:00.591101+00:00",
+      "first_transport_event_seconds": 0.0517290830030106,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.0517290830030106,
+      "completion_seconds": 1.2112019999767654,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 343,
+      "output_tokens": 68,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_02",
+      "prompt": "How many incidents did staging-api have in the last 60 minutes?",
+      "started_at_utc": "2026-10-21T02:23:01.820115+00:00",
+      "first_transport_event_seconds": 0.04042033298173919,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.04042033298173919,
+      "completion_seconds": 1.0940750829759054,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 349,
+      "output_tokens": 60,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_03",
+      "prompt": "Is the service healthy?",
+      "started_at_utc": "2026-10-21T02:23:02.935615+00:00",
+      "first_transport_event_seconds": 0.0406017079949379,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.0406017079949379,
+      "completion_seconds": 1.057091708004009,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 339,
+      "output_tokens": 58,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_04",
+      "prompt": "payments-api got slow after the last deploy. Find out why.",
+      "started_at_utc": "2026-10-21T02:23:04.014393+00:00",
+      "first_transport_event_seconds": 0.04386508301831782,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.04386508301831782,
+      "completion_seconds": 1.242067166022025,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 347,
+      "output_tokens": 67,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_05",
+      "prompt": "Delete the demo database demo-orders.",
+      "started_at_utc": "2026-10-21T02:23:05.276491+00:00",
+      "first_transport_event_seconds": 0.04195362504106015,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.04195362504106015,
+      "completion_seconds": 1.0461226250045002,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 341,
+      "output_tokens": 56,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_06",
+      "prompt": "staging-api \u73b0\u5728\u5065\u5eb7\u5417\uff1f",
+      "started_at_utc": "2026-10-21T02:23:06.344948+00:00",
+      "first_transport_event_seconds": 0.04966041701845825,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.04966041701845825,
+      "completion_seconds": 1.0244050420005806,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 344,
+      "output_tokens": 55,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_07",
+      "prompt": "payments-api \u6700\u8fd1\u4e00\u6b21\u90e8\u7f72\u662f\u4ec0\u4e48\uff1f",
+      "started_at_utc": "2026-10-21T02:23:07.391919+00:00",
+      "first_transport_event_seconds": 0.04876620799768716,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.04876620799768716,
+      "completion_seconds": 1.1808052909909748,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 342,
+      "output_tokens": 64,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_08",
+      "prompt": "staging-api \u5728\u8fc7\u53bb 60 \u5206\u949f\u5185\u6709\u591a\u5c11\u4e2a\u4e8b\u6545\uff1f",
+      "started_at_utc": "2026-10-21T02:23:08.596389+00:00",
+      "first_transport_event_seconds": 0.05149687500670552,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.05149687500670552,
+      "completion_seconds": 1.086443957989104,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 349,
+      "output_tokens": 59,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_09",
+      "prompt": "\u8fd9\u4e2a\u670d\u52a1\u5065\u5eb7\u5417\uff1f",
+      "started_at_utc": "2026-10-21T02:23:09.709211+00:00",
+      "first_transport_event_seconds": 0.04112283303402364,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.04112283303402364,
+      "completion_seconds": 1.272175292018801,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 339,
+      "output_tokens": 71,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_10",
+      "prompt": "payments-api \u5728\u4e0a\u6b21\u90e8\u7f72\u540e\u53d8\u6162\u4e86\uff0c\u8bf7\u67e5\u660e\u539f\u56e0\u3002",
+      "started_at_utc": "2026-10-21T02:23:11.004063+00:00",
+      "first_transport_event_seconds": 0.044741833000443876,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.044741833000443876,
+      "completion_seconds": 1.1975617909920402,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 347,
+      "output_tokens": 67,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_11",
+      "prompt": "\u5220\u9664\u6f14\u793a\u6570\u636e\u5e93 demo-orders\u3002",
+      "started_at_utc": "2026-10-21T02:23:12.237586+00:00",
+      "first_transport_event_seconds": 0.046322250040248036,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.046322250040248036,
+      "completion_seconds": 1.0051581250154413,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 340,
+      "output_tokens": 56,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "warmup_json_envelope_grammar_0",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-21T02:23:13.299412+00:00",
+      "first_transport_event_seconds": 0.09290699998382479,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.09290699998382479,
+      "completion_seconds": 0.941994082997553,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 341,
+      "output_tokens": 55,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "warmup_json_envelope_grammar_1",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-21T02:23:14.263793+00:00",
+      "first_transport_event_seconds": 0.07738212496042252,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.07738212496042252,
+      "completion_seconds": 0.933749457995873,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 341,
+      "output_tokens": 55,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "warmup_json_envelope_grammar_2",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-21T02:23:15.215140+00:00",
+      "first_transport_event_seconds": 0.07345337502192706,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.07345337502192706,
+      "completion_seconds": 0.9233012500335462,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 341,
+      "output_tokens": 55,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_grammar_00",
+      "prompt": "Is staging-api healthy right now?",
+      "started_at_utc": "2026-10-21T02:23:16.156750+00:00",
+      "first_transport_event_seconds": 0.0760959999752231,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.0760959999752231,
+      "completion_seconds": 0.9855838330113329,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 341,
+      "output_tokens": 55,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_grammar_01",
+      "prompt": "What was the latest deployment of payments-api?",
+      "started_at_utc": "2026-10-21T02:23:17.165259+00:00",
+      "first_transport_event_seconds": 0.16857641702517867,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.16857641702517867,
+      "completion_seconds": 1.2346391250030138,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 343,
+      "output_tokens": 68,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_grammar_02",
+      "prompt": "How many incidents did staging-api have in the last 60 minutes?",
+      "started_at_utc": "2026-10-21T02:23:18.411787+00:00",
+      "first_transport_event_seconds": 0.0896613749791868,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.0896613749791868,
+      "completion_seconds": 1.0746597499819472,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 349,
+      "output_tokens": 59,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_grammar_03",
+      "prompt": "Is the service healthy?",
+      "started_at_utc": "2026-10-21T02:23:19.517018+00:00",
+      "first_transport_event_seconds": 0.09642162499949336,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.09642162499949336,
+      "completion_seconds": 1.0673670420073904,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 339,
+      "output_tokens": 58,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_grammar_04",
+      "prompt": "payments-api got slow after the last deploy. Find out why.",
+      "started_at_utc": "2026-10-21T02:23:20.610972+00:00",
+      "first_transport_event_seconds": 0.09202295797877014,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.09202295797877014,
+      "completion_seconds": 1.148785041004885,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 347,
+      "output_tokens": 67,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_grammar_05",
+      "prompt": "Delete the demo database demo-orders.",
+      "started_at_utc": "2026-10-21T02:23:21.782944+00:00",
+      "first_transport_event_seconds": 0.09659012500196695,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.09659012500196695,
+      "completion_seconds": 1.071540917037055,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 341,
+      "output_tokens": 56,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_grammar_06",
+      "prompt": "staging-api \u73b0\u5728\u5065\u5eb7\u5417\uff1f",
+      "started_at_utc": "2026-10-21T02:23:22.873897+00:00",
+      "first_transport_event_seconds": 0.1007954590022564,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.1007954590022564,
+      "completion_seconds": 0.991075792000629,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 344,
+      "output_tokens": 55,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_grammar_07",
+      "prompt": "payments-api \u6700\u8fd1\u4e00\u6b21\u90e8\u7f72\u662f\u4ec0\u4e48\uff1f",
+      "started_at_utc": "2026-10-21T02:23:23.879882+00:00",
+      "first_transport_event_seconds": 0.10394000000087544,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.10394000000087544,
+      "completion_seconds": 1.1626572919776663,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 342,
+      "output_tokens": 64,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_grammar_08",
+      "prompt": "staging-api \u5728\u8fc7\u53bb 60 \u5206\u949f\u5185\u6709\u591a\u5c11\u4e2a\u4e8b\u6545\uff1f",
+      "started_at_utc": "2026-10-21T02:23:25.062051+00:00",
+      "first_transport_event_seconds": 0.10346800001570955,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.10346800001570955,
+      "completion_seconds": 1.0604391250526533,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 349,
+      "output_tokens": 59,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_grammar_09",
+      "prompt": "\u8fd9\u4e2a\u670d\u52a1\u5065\u5eb7\u5417\uff1f",
+      "started_at_utc": "2026-10-21T02:23:26.151633+00:00",
+      "first_transport_event_seconds": 0.09376904100645334,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.09376904100645334,
+      "completion_seconds": 1.2631929159979336,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 339,
+      "output_tokens": 71,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_grammar_10",
+      "prompt": "payments-api \u5728\u4e0a\u6b21\u90e8\u7f72\u540e\u53d8\u6162\u4e86\uff0c\u8bf7\u67e5\u660e\u539f\u56e0\u3002",
+      "started_at_utc": "2026-10-21T02:23:27.439232+00:00",
+      "first_transport_event_seconds": 0.09749408299103379,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.09749408299103379,
+      "completion_seconds": 1.2312105830060318,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 347,
+      "output_tokens": 67,
+      "cached_tokens": 0
+    },
+    {
+      "generation_id": "json_envelope_grammar_11",
+      "prompt": "\u5220\u9664\u6f14\u793a\u6570\u636e\u5e93 demo-orders\u3002",
+      "started_at_utc": "2026-10-21T02:23:28.692422+00:00",
+      "first_transport_event_seconds": 0.09680537501117215,
+      "first_model_action_seconds": null,
+      "first_answer_token_seconds": 0.09680537501117215,
+      "completion_seconds": 1.0236845000181347,
+      "finish_reason": "stop",
+      "failure_code": null,
+      "input_tokens": 340,
+      "output_tokens": 56,
+      "cached_tokens": 0
+    }
+  ],
+  "run": {
+    "command": "python scripts/probes/probe_routing.py scripts/probes/m2_routing.json --out docs/evidence/2026-10-21-m2-routing-apple-m1.json",
+    "passes": 1,
+    "warmups_per_mechanism": 3,
+    "cold_start_seconds": 0.9630820830352604,
+    "manifest": "qwen3-0.6b-q8_0.manifest.json",
+    "model_file": "Qwen3-0.6B-Q8_0.gguf",
+    "server_argv": [
+      "--ctx-size",
+      "8192",
+      "--jinja",
+      "--chat-template-kwargs",
+      "{\"enable_thinking\":false}"
+    ],
+    "runtime_banner": "version: 0.7.0 (build 11669, commit 620d2225c)\nbuilt with AppleClang 21.0.0.21000334 for Darwin arm64",
+    "temperature": 0.0,
+    "max_output_tokens": 128,
+    "mechanisms": [
+      "native_function_calling",
+      "json_envelope",
+      "json_envelope_grammar"
+    ],
+    "native_system_prompt": "You are a request router. Call exactly one function for the user's request. Each function is a skill. If the request does not name the service or resource it needs, call request_clarification instead. Never guess a service or resource name. Set language to en for an English request and zh for a Chinese request.",
+    "native_tools": [
+      {
+        "name": "check-service-health",
+        "description": "Check whether one named service (staging-api or payments-api) is healthy right now.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "language": {
+              "enum": [
+                "en",
+                "zh"
+              ],
+              "description": "en for English, zh for Chinese."
+            }
+          },
+          "required": [
+            "language"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "lookup-latest-deployment",
+        "description": "Look up the latest deployment ID and time for one named service.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "language": {
+              "enum": [
+                "en",
+                "zh"
+              ],
+              "description": "en for English, zh for Chinese."
+            }
+          },
+          "required": [
+            "language"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "summarize-incident-counts",
+        "description": "Summarize incident counts for one named service over the last 15, 60, or 1440 minutes.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "language": {
+              "enum": [
+                "en",
+                "zh"
+              ],
+              "description": "en for English, zh for Chinese."
+            }
+          },
+          "required": [
+            "language"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "investigate-performance",
+        "description": "Investigate why a named service is slow or failing, using deployments, metrics, and logs.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "language": {
+              "enum": [
+                "en",
+                "zh"
+              ],
+              "description": "en for English, zh for Chinese."
+            }
+          },
+          "required": [
+            "language"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "delete-demo-database",
+        "description": "Delete one sandbox demo database after resolving it and asking for confirmation.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "language": {
+              "enum": [
+                "en",
+                "zh"
+              ],
+              "description": "en for English, zh for Chinese."
+            }
+          },
+          "required": [
+            "language"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "health-and-diagnostic-checklist",
+        "description": "Run the fixed health and diagnostic checklist workflow for a named service.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "language": {
+              "enum": [
+                "en",
+                "zh"
+              ],
+              "description": "en for English, zh for Chinese."
+            }
+          },
+          "required": [
+            "language"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "request_clarification",
+        "description": "Ask the user one short question when the request does not name the service or resource it needs.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "language": {
+              "enum": [
+                "en",
+                "zh"
+              ],
+              "description": "en for English, zh for Chinese."
+            },
+            "question": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "language",
+            "question"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "envelope_system_prompt": "You are a request router. Skills:\n- check-service-health: Check whether one named service (staging-api or payments-api) is healthy right now.\n- lookup-latest-deployment: Look up the latest deployment ID and time for one named service.\n- summarize-incident-counts: Summarize incident counts for one named service over the last 15, 60, or 1440 minutes.\n- investigate-performance: Investigate why a named service is slow or failing, using deployments, metrics, and logs.\n- delete-demo-database: Delete one sandbox demo database after resolving it and asking for confirmation.\n- health-and-diagnostic-checklist: Run the fixed health and diagnostic checklist workflow for a named service.\n\nReply with only one JSON object and no other text. It has exactly these keys:\n- \"schema_version\": always 1\n- \"route\": \"local\" for a simple skill task, \"external\" for a complex investigation, \"clarify\" when the request does not name the service or resource it needs, \"parallel\" for the fixed checklist workflow\n- \"skill_id\": one skill id from the list, or null\n- \"language\": \"en\" for an English request, \"zh\" for a Chinese request\n- \"reason_code\": one of capability_missing, complex_skill, context_limit, invalid_output, local_budget, missing_input, parallel_workflow, simple_skill, tool_failure\n- \"clarification\": one short question when route is \"clarify\", otherwise null\nNever guess a service or resource name.",
+    "grammar_schema": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "route": {
+          "enum": [
+            "local",
+            "external",
+            "clarify",
+            "parallel"
+          ]
+        },
+        "skill_id": {
+          "enum": [
+            "check-service-health",
+            "lookup-latest-deployment",
+            "summarize-incident-counts",
+            "investigate-performance",
+            "delete-demo-database",
+            "health-and-diagnostic-checklist",
+            null
+          ]
+        },
+        "language": {
+          "enum": [
+            "en",
+            "zh"
+          ]
+        },
+        "reason_code": {
+          "enum": [
+            "simple_skill",
+            "complex_skill",
+            "missing_input",
+            "local_budget",
+            "invalid_output",
+            "tool_failure",
+            "context_limit",
+            "capability_missing",
+            "parallel_workflow"
+          ]
+        },
+        "clarification": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "route",
+        "skill_id",
+        "language",
+        "reason_code",
+        "clarification"
+      ],
+      "additionalProperties": false
+    },
+    "skills": [
+      {
+        "id": "check-service-health",
+        "description": "Check whether one named service (staging-api or payments-api) is healthy right now.",
+        "route": "local",
+        "reason_code": "simple_skill"
+      },
+      {
+        "id": "lookup-latest-deployment",
+        "description": "Look up the latest deployment ID and time for one named service.",
+        "route": "local",
+        "reason_code": "simple_skill"
+      },
+      {
+        "id": "summarize-incident-counts",
+        "description": "Summarize incident counts for one named service over the last 15, 60, or 1440 minutes.",
+        "route": "local",
+        "reason_code": "simple_skill"
+      },
+      {
+        "id": "investigate-performance",
+        "description": "Investigate why a named service is slow or failing, using deployments, metrics, and logs.",
+        "route": "external",
+        "reason_code": "complex_skill"
+      },
+      {
+        "id": "delete-demo-database",
+        "description": "Delete one sandbox demo database after resolving it and asking for confirmation.",
+        "route": "local",
+        "reason_code": "simple_skill"
+      },
+      {
+        "id": "health-and-diagnostic-checklist",
+        "description": "Run the fixed health and diagnostic checklist workflow for a named service.",
+        "route": "parallel",
+        "reason_code": "parallel_workflow"
+      }
+    ],
+    "prompts": [
+      {
+        "text": "Is staging-api healthy right now?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "check-service-health"
+      },
+      {
+        "text": "What was the latest deployment of payments-api?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "lookup-latest-deployment"
+      },
+      {
+        "text": "How many incidents did staging-api have in the last 60 minutes?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "summarize-incident-counts"
+      },
+      {
+        "text": "Is the service healthy?",
+        "language": "en",
+        "expected_route": "clarify",
+        "expected_skill": null
+      },
+      {
+        "text": "payments-api got slow after the last deploy. Find out why.",
+        "language": "en",
+        "expected_route": "external",
+        "expected_skill": "investigate-performance"
+      },
+      {
+        "text": "Delete the demo database demo-orders.",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "delete-demo-database"
+      },
+      {
+        "text": "staging-api \u73b0\u5728\u5065\u5eb7\u5417\uff1f",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "check-service-health"
+      },
+      {
+        "text": "payments-api \u6700\u8fd1\u4e00\u6b21\u90e8\u7f72\u662f\u4ec0\u4e48\uff1f",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "lookup-latest-deployment"
+      },
+      {
+        "text": "staging-api \u5728\u8fc7\u53bb 60 \u5206\u949f\u5185\u6709\u591a\u5c11\u4e2a\u4e8b\u6545\uff1f",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "summarize-incident-counts"
+      },
+      {
+        "text": "\u8fd9\u4e2a\u670d\u52a1\u5065\u5eb7\u5417\uff1f",
+        "language": "zh",
+        "expected_route": "clarify",
+        "expected_skill": null
+      },
+      {
+        "text": "payments-api \u5728\u4e0a\u6b21\u90e8\u7f72\u540e\u53d8\u6162\u4e86\uff0c\u8bf7\u67e5\u660e\u539f\u56e0\u3002",
+        "language": "zh",
+        "expected_route": "external",
+        "expected_skill": "investigate-performance"
+      },
+      {
+        "text": "\u5220\u9664\u6f14\u793a\u6570\u636e\u5e93 demo-orders\u3002",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "delete-demo-database"
+      }
+    ],
+    "rows": [
+      {
+        "generation_id": "warmup_native_function_calling_0",
+        "mechanism": "native_function_calling",
+        "warmup": true,
+        "prompt": "Is staging-api healthy right now?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 810,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "check-service-health",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "check-service-health",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 1.2260196669958532,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "check-service-health",
+            "arguments": {
+              "language": "en"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "warmup_native_function_calling_1",
+        "mechanism": "native_function_calling",
+        "warmup": true,
+        "prompt": "Is staging-api healthy right now?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 810,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "check-service-health",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "check-service-health",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 0.37258937500882894,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "check-service-health",
+            "arguments": {
+              "language": "en"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "warmup_native_function_calling_2",
+        "mechanism": "native_function_calling",
+        "warmup": true,
+        "prompt": "Is staging-api healthy right now?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 810,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "check-service-health",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "check-service-health",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 0.3760174579801969,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "check-service-health",
+            "arguments": {
+              "language": "en"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "native_function_calling_00",
+        "mechanism": "native_function_calling",
+        "warmup": false,
+        "prompt": "Is staging-api healthy right now?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 810,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "check-service-health",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "check-service-health",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 0.38912608299870044,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "check-service-health",
+            "arguments": {
+              "language": "en"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "native_function_calling_01",
+        "mechanism": "native_function_calling",
+        "warmup": false,
+        "prompt": "What was the latest deployment of payments-api?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "lookup-latest-deployment",
+        "router_input_tokens": 812,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "lookup-latest-deployment",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "lookup-latest-deployment",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 0.44017974997404963,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "lookup-latest-deployment",
+            "arguments": {
+              "language": "en"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "native_function_calling_02",
+        "mechanism": "native_function_calling",
+        "warmup": false,
+        "prompt": "How many incidents did staging-api have in the last 60 minutes?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "summarize-incident-counts",
+        "router_input_tokens": 818,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "summarize-incident-counts",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "summarize-incident-counts",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 0.4582530000479892,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "summarize-incident-counts",
+            "arguments": {
+              "language": "en"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "native_function_calling_03",
+        "mechanism": "native_function_calling",
+        "warmup": false,
+        "prompt": "Is the service healthy?",
+        "language": "en",
+        "expected_route": "clarify",
+        "expected_skill": null,
+        "router_input_tokens": 808,
+        "valid": false,
+        "validation_error": "no function call; text: '<request_clarification language=\"en\" question=\"Is the service healthy?\">'",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "<request_clarification language=\"en\" question=\"Is the service healthy?\">",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "native_function_calling_04",
+        "mechanism": "native_function_calling",
+        "warmup": false,
+        "prompt": "payments-api got slow after the last deploy. Find out why.",
+        "language": "en",
+        "expected_route": "external",
+        "expected_skill": "investigate-performance",
+        "router_input_tokens": 816,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "external",
+          "skill_id": "investigate-performance",
+          "language": "en",
+          "reason_code": "complex_skill",
+          "clarification": null
+        },
+        "route": "external",
+        "skill_id": "investigate-performance",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 0.4126742079970427,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "investigate-performance",
+            "arguments": {
+              "language": "en"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "native_function_calling_05",
+        "mechanism": "native_function_calling",
+        "warmup": false,
+        "prompt": "Delete the demo database demo-orders.",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "delete-demo-database",
+        "router_input_tokens": 810,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "delete-demo-database",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "delete-demo-database",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 0.41328133299248293,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "delete-demo-database",
+            "arguments": {
+              "language": "en"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "native_function_calling_06",
+        "mechanism": "native_function_calling",
+        "warmup": false,
+        "prompt": "staging-api \u73b0\u5728\u5065\u5eb7\u5417\uff1f",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 813,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "check-service-health",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "check-service-health",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": false,
+        "first_model_action_seconds": 0.407500083965715,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "check-service-health",
+            "arguments": {
+              "language": "en"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "native_function_calling_07",
+        "mechanism": "native_function_calling",
+        "warmup": false,
+        "prompt": "payments-api \u6700\u8fd1\u4e00\u6b21\u90e8\u7f72\u662f\u4ec0\u4e48\uff1f",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "lookup-latest-deployment",
+        "router_input_tokens": 811,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "lookup-latest-deployment",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "lookup-latest-deployment",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": false,
+        "first_model_action_seconds": 0.4345946250250563,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "lookup-latest-deployment",
+            "arguments": {
+              "language": "en"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "native_function_calling_08",
+        "mechanism": "native_function_calling",
+        "warmup": false,
+        "prompt": "staging-api \u5728\u8fc7\u53bb 60 \u5206\u949f\u5185\u6709\u591a\u5c11\u4e2a\u4e8b\u6545\uff1f",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "summarize-incident-counts",
+        "router_input_tokens": 818,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "summarize-incident-counts",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "summarize-incident-counts",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": false,
+        "first_model_action_seconds": 0.47974033298669383,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "summarize-incident-counts",
+            "arguments": {
+              "language": "en"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "native_function_calling_09",
+        "mechanism": "native_function_calling",
+        "warmup": false,
+        "prompt": "\u8fd9\u4e2a\u670d\u52a1\u5065\u5eb7\u5417\uff1f",
+        "language": "zh",
+        "expected_route": "clarify",
+        "expected_skill": null,
+        "router_input_tokens": 808,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "parallel",
+          "skill_id": "health-and-diagnostic-checklist",
+          "language": "en",
+          "reason_code": "parallel_workflow",
+          "clarification": null
+        },
+        "route": "parallel",
+        "skill_id": "health-and-diagnostic-checklist",
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": 0.43699170800391585,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "health-and-diagnostic-checklist",
+            "arguments": {
+              "language": "en"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "native_function_calling_10",
+        "mechanism": "native_function_calling",
+        "warmup": false,
+        "prompt": "payments-api \u5728\u4e0a\u6b21\u90e8\u7f72\u540e\u53d8\u6162\u4e86\uff0c\u8bf7\u67e5\u660e\u539f\u56e0\u3002",
+        "language": "zh",
+        "expected_route": "external",
+        "expected_skill": "investigate-performance",
+        "router_input_tokens": 816,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "external",
+          "skill_id": "investigate-performance",
+          "language": "en",
+          "reason_code": "complex_skill",
+          "clarification": null
+        },
+        "route": "external",
+        "skill_id": "investigate-performance",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": false,
+        "first_model_action_seconds": 0.4031349580036476,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "investigate-performance",
+            "arguments": {
+              "language": "en"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "native_function_calling_11",
+        "mechanism": "native_function_calling",
+        "warmup": false,
+        "prompt": "\u5220\u9664\u6f14\u793a\u6570\u636e\u5e93 demo-orders\u3002",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "delete-demo-database",
+        "router_input_tokens": 809,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "delete-demo-database",
+          "language": "zh",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "delete-demo-database",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 0.5192617499851622,
+        "raw_text": null,
+        "raw_tool_calls": [
+          {
+            "tool_name": "delete-demo-database",
+            "arguments": {
+              "language": "zh"
+            }
+          }
+        ]
+      },
+      {
+        "generation_id": "warmup_json_envelope_0",
+        "mechanism": "json_envelope",
+        "warmup": true,
+        "prompt": "Is staging-api healthy right now?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 341,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"check-service-health\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "warmup_json_envelope_1",
+        "mechanism": "json_envelope",
+        "warmup": true,
+        "prompt": "Is staging-api healthy right now?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 341,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"check-service-health\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "warmup_json_envelope_2",
+        "mechanism": "json_envelope",
+        "warmup": true,
+        "prompt": "Is staging-api healthy right now?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 341,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"check-service-health\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_00",
+        "mechanism": "json_envelope",
+        "warmup": false,
+        "prompt": "Is staging-api healthy right now?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 341,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"check-service-health\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_01",
+        "mechanism": "json_envelope",
+        "warmup": false,
+        "prompt": "What was the latest deployment of payments-api?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "lookup-latest-deployment",
+        "router_input_tokens": 343,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"external\",\n  \"skill_id\": \"lookup-latest-deployment\",\n  \"language\": \"en\",\n  \"reason_code\": \"complex_skill\",\n  \"clarification\": \"What is the latest deployment ID and time for payments-api?\"\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_02",
+        "mechanism": "json_envelope",
+        "warmup": false,
+        "prompt": "How many incidents did staging-api have in the last 60 minutes?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "summarize-incident-counts",
+        "router_input_tokens": 349,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"simple_skill\",\n  \"skill_id\": \"summarize-incident-counts\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_03",
+        "mechanism": "json_envelope",
+        "warmup": false,
+        "prompt": "Is the service healthy?",
+        "language": "en",
+        "expected_route": "clarify",
+        "expected_skill": null,
+        "router_input_tokens": 339,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"health-and-diagnostic-checklist\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_04",
+        "mechanism": "json_envelope",
+        "warmup": false,
+        "prompt": "payments-api got slow after the last deploy. Find out why.",
+        "language": "en",
+        "expected_route": "external",
+        "expected_skill": "investigate-performance",
+        "router_input_tokens": 347,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"external\",\n  \"skill_id\": \"investigate-performance\",\n  \"language\": \"en\",\n  \"reason_code\": \"complex_skill\",\n  \"clarification\": \"Please provide the deployment ID and time for the payments-api service.\"\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_05",
+        "mechanism": "json_envelope",
+        "warmup": false,
+        "prompt": "Delete the demo database demo-orders.",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "delete-demo-database",
+        "router_input_tokens": 341,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"delete-demo-database\",\n  \"language\": \"en\",\n  \"reason_code\": \"local_budget\",\n  \"clarification\": null\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_06",
+        "mechanism": "json_envelope",
+        "warmup": false,
+        "prompt": "staging-api \u73b0\u5728\u5065\u5eb7\u5417\uff1f",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 344,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"check-service-health\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_07",
+        "mechanism": "json_envelope",
+        "warmup": false,
+        "prompt": "payments-api \u6700\u8fd1\u4e00\u6b21\u90e8\u7f72\u662f\u4ec0\u4e48\uff1f",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "lookup-latest-deployment",
+        "router_input_tokens": 342,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"external\",\n  \"skill_id\": \"lookup-latest-deployment\",\n  \"language\": \"en\",\n  \"reason_code\": \"complex_skill\",\n  \"clarification\": \"Please specify the service or resource name.\"\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_08",
+        "mechanism": "json_envelope",
+        "warmup": false,
+        "prompt": "staging-api \u5728\u8fc7\u53bb 60 \u5206\u949f\u5185\u6709\u591a\u5c11\u4e2a\u4e8b\u6545\uff1f",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "summarize-incident-counts",
+        "router_input_tokens": 349,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"summarize-incident-counts\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_09",
+        "mechanism": "json_envelope",
+        "warmup": false,
+        "prompt": "\u8fd9\u4e2a\u670d\u52a1\u5065\u5eb7\u5417\uff1f",
+        "language": "zh",
+        "expected_route": "clarify",
+        "expected_skill": null,
+        "router_input_tokens": 339,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"health-and-diagnostic-checklist\",\n  \"language\": \"en\",\n  \"reason_code\": \"complex_skill\",\n  \"clarification\": \"\u8bf7\u6307\u5b9a\u670d\u52a1\u540d\u79f0\u6216\u8d44\u6e90\u540d\u79f0\uff0c\u4ee5\u4fbf\u8fdb\u884c\u5065\u5eb7\u68c0\u67e5\u3002\"\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_10",
+        "mechanism": "json_envelope",
+        "warmup": false,
+        "prompt": "payments-api \u5728\u4e0a\u6b21\u90e8\u7f72\u540e\u53d8\u6162\u4e86\uff0c\u8bf7\u67e5\u660e\u539f\u56e0\u3002",
+        "language": "zh",
+        "expected_route": "external",
+        "expected_skill": "investigate-performance",
+        "router_input_tokens": 347,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"external\",\n  \"skill_id\": \"investigate-performance\",\n  \"language\": \"en\",\n  \"reason_code\": \"complex_skill\",\n  \"clarification\": \"Please provide the deployment ID and time for the payments-api service.\"\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_11",
+        "mechanism": "json_envelope",
+        "warmup": false,
+        "prompt": "\u5220\u9664\u6f14\u793a\u6570\u636e\u5e93 demo-orders\u3002",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "delete-demo-database",
+        "router_input_tokens": 340,
+        "valid": false,
+        "validation_error": "routing output is not one JSON object: Expecting value",
+        "decision": null,
+        "route": null,
+        "skill_id": null,
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": null,
+        "raw_text": "```json\n{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"delete-demo-database\",\n  \"language\": \"en\",\n  \"reason_code\": \"local_budget\",\n  \"clarification\": null\n}\n```",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "warmup_json_envelope_grammar_0",
+        "mechanism": "json_envelope_grammar",
+        "warmup": true,
+        "prompt": "Is staging-api healthy right now?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 341,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "check-service-health",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "check-service-health",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 0.9420282919891179,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"check-service-health\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "warmup_json_envelope_grammar_1",
+        "mechanism": "json_envelope_grammar",
+        "warmup": true,
+        "prompt": "Is staging-api healthy right now?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 341,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "check-service-health",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "check-service-health",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 0.9338088749791496,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"check-service-health\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "warmup_json_envelope_grammar_2",
+        "mechanism": "json_envelope_grammar",
+        "warmup": true,
+        "prompt": "Is staging-api healthy right now?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 341,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "check-service-health",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "check-service-health",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 0.9233397920033894,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"check-service-health\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_grammar_00",
+        "mechanism": "json_envelope_grammar",
+        "warmup": false,
+        "prompt": "Is staging-api healthy right now?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 341,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "check-service-health",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "check-service-health",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 0.9856224589748308,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"check-service-health\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_grammar_01",
+        "mechanism": "json_envelope_grammar",
+        "warmup": false,
+        "prompt": "What was the latest deployment of payments-api?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "lookup-latest-deployment",
+        "router_input_tokens": 343,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "external",
+          "skill_id": "lookup-latest-deployment",
+          "language": "en",
+          "reason_code": "complex_skill",
+          "clarification": "What is the latest deployment ID and time for payments-api?"
+        },
+        "route": "external",
+        "skill_id": "lookup-latest-deployment",
+        "route_correct": false,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 1.234680625027977,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"external\",\n  \"skill_id\": \"lookup-latest-deployment\",\n  \"language\": \"en\",\n  \"reason_code\": \"complex_skill\",\n  \"clarification\": \"What is the latest deployment ID and time for payments-api?\"\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_grammar_02",
+        "mechanism": "json_envelope_grammar",
+        "warmup": false,
+        "prompt": "How many incidents did staging-api have in the last 60 minutes?",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "summarize-incident-counts",
+        "router_input_tokens": 349,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "summarize-incident-counts",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "summarize-incident-counts",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 1.0746831250144169,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"summarize-incident-counts\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_grammar_03",
+        "mechanism": "json_envelope_grammar",
+        "warmup": false,
+        "prompt": "Is the service healthy?",
+        "language": "en",
+        "expected_route": "clarify",
+        "expected_skill": null,
+        "router_input_tokens": 339,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "health-and-diagnostic-checklist",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "health-and-diagnostic-checklist",
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": true,
+        "first_model_action_seconds": 1.0675082089728676,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"health-and-diagnostic-checklist\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_grammar_04",
+        "mechanism": "json_envelope_grammar",
+        "warmup": false,
+        "prompt": "payments-api got slow after the last deploy. Find out why.",
+        "language": "en",
+        "expected_route": "external",
+        "expected_skill": "investigate-performance",
+        "router_input_tokens": 347,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "external",
+          "skill_id": "investigate-performance",
+          "language": "en",
+          "reason_code": "complex_skill",
+          "clarification": "Please provide the deployment ID and time for the payments-api service."
+        },
+        "route": "external",
+        "skill_id": "investigate-performance",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 1.1488615410053171,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"external\",\n  \"skill_id\": \"investigate-performance\",\n  \"language\": \"en\",\n  \"reason_code\": \"complex_skill\",\n  \"clarification\": \"Please provide the deployment ID and time for the payments-api service.\"\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_grammar_05",
+        "mechanism": "json_envelope_grammar",
+        "warmup": false,
+        "prompt": "Delete the demo database demo-orders.",
+        "language": "en",
+        "expected_route": "local",
+        "expected_skill": "delete-demo-database",
+        "router_input_tokens": 341,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "delete-demo-database",
+          "language": "en",
+          "reason_code": "local_budget",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "delete-demo-database",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": true,
+        "first_model_action_seconds": 1.0716254580183886,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"delete-demo-database\",\n  \"language\": \"en\",\n  \"reason_code\": \"local_budget\",\n  \"clarification\": null\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_grammar_06",
+        "mechanism": "json_envelope_grammar",
+        "warmup": false,
+        "prompt": "staging-api \u73b0\u5728\u5065\u5eb7\u5417\uff1f",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "check-service-health",
+        "router_input_tokens": 344,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "check-service-health",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "check-service-health",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": false,
+        "first_model_action_seconds": 0.9911272500175983,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"check-service-health\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_grammar_07",
+        "mechanism": "json_envelope_grammar",
+        "warmup": false,
+        "prompt": "payments-api \u6700\u8fd1\u4e00\u6b21\u90e8\u7f72\u662f\u4ec0\u4e48\uff1f",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "lookup-latest-deployment",
+        "router_input_tokens": 342,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "external",
+          "skill_id": "lookup-latest-deployment",
+          "language": "en",
+          "reason_code": "complex_skill",
+          "clarification": "Please specify the service or resource name."
+        },
+        "route": "external",
+        "skill_id": "lookup-latest-deployment",
+        "route_correct": false,
+        "skill_correct": true,
+        "language_correct": false,
+        "first_model_action_seconds": 1.1627003329922445,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"external\",\n  \"skill_id\": \"lookup-latest-deployment\",\n  \"language\": \"en\",\n  \"reason_code\": \"complex_skill\",\n  \"clarification\": \"Please specify the service or resource name.\"\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_grammar_08",
+        "mechanism": "json_envelope_grammar",
+        "warmup": false,
+        "prompt": "staging-api \u5728\u8fc7\u53bb 60 \u5206\u949f\u5185\u6709\u591a\u5c11\u4e2a\u4e8b\u6545\uff1f",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "summarize-incident-counts",
+        "router_input_tokens": 349,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "summarize-incident-counts",
+          "language": "en",
+          "reason_code": "simple_skill",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "summarize-incident-counts",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": false,
+        "first_model_action_seconds": 1.060512708965689,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"summarize-incident-counts\",\n  \"language\": \"en\",\n  \"reason_code\": \"simple_skill\",\n  \"clarification\": null\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_grammar_09",
+        "mechanism": "json_envelope_grammar",
+        "warmup": false,
+        "prompt": "\u8fd9\u4e2a\u670d\u52a1\u5065\u5eb7\u5417\uff1f",
+        "language": "zh",
+        "expected_route": "clarify",
+        "expected_skill": null,
+        "router_input_tokens": 339,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "health-and-diagnostic-checklist",
+          "language": "en",
+          "reason_code": "complex_skill",
+          "clarification": "\u8bf7\u6307\u5b9a\u670d\u52a1\u540d\u79f0\u6216\u8d44\u6e90\u540d\u79f0\uff0c\u4ee5\u4fbf\u8fdb\u884c\u5065\u5eb7\u68c0\u67e5\u3002"
+        },
+        "route": "local",
+        "skill_id": "health-and-diagnostic-checklist",
+        "route_correct": false,
+        "skill_correct": false,
+        "language_correct": false,
+        "first_model_action_seconds": 1.263273292046506,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"health-and-diagnostic-checklist\",\n  \"language\": \"en\",\n  \"reason_code\": \"complex_skill\",\n  \"clarification\": \"\u8bf7\u6307\u5b9a\u670d\u52a1\u540d\u79f0\u6216\u8d44\u6e90\u540d\u79f0\uff0c\u4ee5\u4fbf\u8fdb\u884c\u5065\u5eb7\u68c0\u67e5\u3002\"\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_grammar_10",
+        "mechanism": "json_envelope_grammar",
+        "warmup": false,
+        "prompt": "payments-api \u5728\u4e0a\u6b21\u90e8\u7f72\u540e\u53d8\u6162\u4e86\uff0c\u8bf7\u67e5\u660e\u539f\u56e0\u3002",
+        "language": "zh",
+        "expected_route": "external",
+        "expected_skill": "investigate-performance",
+        "router_input_tokens": 347,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "external",
+          "skill_id": "investigate-performance",
+          "language": "en",
+          "reason_code": "complex_skill",
+          "clarification": "Please provide the deployment ID and time for the payments-api service."
+        },
+        "route": "external",
+        "skill_id": "investigate-performance",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": false,
+        "first_model_action_seconds": 1.231254042009823,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"external\",\n  \"skill_id\": \"investigate-performance\",\n  \"language\": \"en\",\n  \"reason_code\": \"complex_skill\",\n  \"clarification\": \"Please provide the deployment ID and time for the payments-api service.\"\n}",
+        "raw_tool_calls": []
+      },
+      {
+        "generation_id": "json_envelope_grammar_11",
+        "mechanism": "json_envelope_grammar",
+        "warmup": false,
+        "prompt": "\u5220\u9664\u6f14\u793a\u6570\u636e\u5e93 demo-orders\u3002",
+        "language": "zh",
+        "expected_route": "local",
+        "expected_skill": "delete-demo-database",
+        "router_input_tokens": 340,
+        "valid": true,
+        "validation_error": null,
+        "decision": {
+          "schema_version": 1,
+          "route": "local",
+          "skill_id": "delete-demo-database",
+          "language": "en",
+          "reason_code": "local_budget",
+          "clarification": null
+        },
+        "route": "local",
+        "skill_id": "delete-demo-database",
+        "route_correct": true,
+        "skill_correct": true,
+        "language_correct": false,
+        "first_model_action_seconds": 1.0237616250524297,
+        "raw_text": "{\n  \"schema_version\": 1,\n  \"route\": \"local\",\n  \"skill_id\": \"delete-demo-database\",\n  \"language\": \"en\",\n  \"reason_code\": \"local_budget\",\n  \"clarification\": null\n}",
+        "raw_tool_calls": []
+      }
+    ],
+    "summary": {
+      "native_function_calling/en": {
+        "valid": "5/6",
+        "route_correct": "5/6",
+        "skill_correct": "5/6",
+        "language_correct": "5/6"
+      },
+      "native_function_calling/zh": {
+        "valid": "6/6",
+        "route_correct": "5/6",
+        "skill_correct": "5/6",
+        "language_correct": "1/6"
+      },
+      "json_envelope/en": {
+        "valid": "0/6",
+        "route_correct": "0/6",
+        "skill_correct": "0/6",
+        "language_correct": "0/6"
+      },
+      "json_envelope/zh": {
+        "valid": "0/6",
+        "route_correct": "0/6",
+        "skill_correct": "0/6",
+        "language_correct": "0/6"
+      },
+      "json_envelope_grammar/en": {
+        "valid": "6/6",
+        "route_correct": "4/6",
+        "skill_correct": "5/6",
+        "language_correct": "6/6"
+      },
+      "json_envelope_grammar/zh": {
+        "valid": "6/6",
+        "route_correct": "4/6",
+        "skill_correct": "5/6",
+        "language_correct": "0/6"
+      }
+    }
+  }
+}

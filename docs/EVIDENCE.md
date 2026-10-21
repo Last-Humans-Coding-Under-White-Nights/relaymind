@@ -243,3 +243,173 @@ bilingual skill selection and the M6 benchmark remain separate gates.
   the older system CRT; the source build plus matching app-local CRT
   succeeded. This changes runtime installation, not the pinned commit,
   model, launch settings, or tool-call parser.
+
+## 2026-10-21 — Local tokenizer live check, Apple Silicon macOS
+
+Issue #47. Same machine, runtime, artifact, and launch as the M1 entries.
+
+| Field | Value |
+|-------|-------|
+| Command | `pytest -m live` on branch `feat/routing-probe-tokenizer` (base `c83f4a0`) |
+| Result | 7 passed in 4.74 s: the three M1 smoke tests, and `test_token_count_matches_the_runtime_prompt_count` for an English and a Chinese prompt, each with and without the `get_service_health` tool. In all four, `LlamaCppAdapter.count_tokens` equals the prompt tokens llama-server reported for a generation of the same messages and tools |
+
+The test was checked against a broken count: with the tools left out of
+the template request it failed for both tool cases (29 counted against
+175 reported, 30 against 176), so it detects a count that does not
+measure the real prompt.
+
+## 2026-10-21 — M2 routing probe, Apple Silicon macOS
+
+Issue #48. Can the pinned model pick one of the six demo skills (spec
+section 9) and produce a valid RouteDecision (spec section 8), in
+English and Chinese, with each mechanism spec section 6 allows?
+
+| Field | Value |
+|-------|-------|
+| Machine | Apple M1, 8 GiB RAM, macOS 27.0.1 (build 26A434), Metal backend |
+| Runtime | llama.cpp 0.7.0 (build 11669, commit 620d2225c), Homebrew build, AppleClang arm64 |
+| Artifact | `models/qwen3-0.6b-q8_0.manifest.json`: Qwen3-0.6B Q8_0, SHA-256 `9465e63a…bb031`, verified before launch |
+| Launch | derived from the manifest: `--ctx-size 8192 --jinja --chat-template-kwargs {"enable_thinking":false}` |
+| Command | `python scripts/probes/probe_routing.py scripts/probes/m2_routing.json --out docs/evidence/2026-10-21-m2-routing-apple-m1.json` on branch `feat/routing-probe-tokenizer` (base `c83f4a0`) |
+| Probe definition | [`scripts/probes/m2_routing.json`](../scripts/probes/m2_routing.json): the six skill descriptions, twelve prompts (six English, six Simplified Chinese: three simple skill tasks, one missing identifier, one complex diagnostic, one sandbox deletion per language), temperature 0, at most 128 output tokens (spec section 11) |
+| Procedure | Verify the artifact, launch llama-server, then per mechanism: three warm-ups with the first prompt, then one pass over the twelve prompts through `LlamaCppAdapter` in `TimingCollector`, sequentially, no other load. Router input is counted with the adapter's local tokenizer (#47) before each request. Every output is judged by the production validator `relaymind.orchestrator.route_decision`; nothing is repaired |
+| Raw export | [`evidence/2026-10-21-m2-routing-apple-m1.json`](evidence/2026-10-21-m2-routing-apple-m1.json): `run.rows` holds one row per generation (warm-ups marked) with the raw model text or call, the validated decision or the validation error, grading, router input tokens, and first model action; `run` also records both system prompts, the native function schemas, and the grammar schema |
+| Cold start | 0.96 s, launch to the first `/health` 200 (artifact pages warm from SHA-256 verification) |
+
+First model action here is the time from request start to a validated
+decision (spec 12.1): the parsed function call for native calls, the end
+of the stream for an envelope, "-" when the output did not validate.
+The `generations` block of the export has the collector's own metrics;
+for envelope generations it has no first model action because no tool
+call is emitted, so use the probe's value in `run.rows`.
+
+Mechanisms tried:
+
+- **native**: native function calling, one function per skill (argument
+  `language`) plus `request_clarification` (`language`, `question`).
+  The gateway maps the call to a RouteDecision: route and reason code
+  come from the skill's entry in the probe definition, not from the
+  model.
+- **envelope**: the model writes the RouteDecision JSON object as text.
+- **grammar**: the same envelope prompt with llama-server
+  `response_format` `json_schema`: the published RouteDecision schema
+  with `skill_id` closed over the six skill ids and null. The pinned
+  build accepted it.
+
+Per prompt, measured pass (route / skill / language of the validated
+decision; "invalid" when the validator rejected the output; † marks a
+grammar decision that the validator of the day accepted and that is
+invalid under the spec 0.6 rules, see the correction below):
+
+| Prompt | Expected | Tokens (native / envelope) | Native | ms | Envelope | Grammar | ms |
+|--------|----------|---------------------------:|--------|---:|----------|---------|---:|
+| Is staging-api healthy right now? | local, check-service-health | 810 / 341 | local, check-service-health, en | 389 | invalid | local, check-service-health, en | 986 |
+| What was the latest deployment of payments-api? | local, lookup-latest-deployment | 812 / 343 | local, lookup-latest-deployment, en | 440 | invalid | external, lookup-latest-deployment, en † | 1235 |
+| How many incidents did staging-api have in the last 60 minutes? | local, summarize-incident-counts | 818 / 349 | local, summarize-incident-counts, en | 458 | invalid | local, summarize-incident-counts, en | 1075 |
+| Is the service healthy? | clarify, no skill | 808 / 339 | invalid (call written as text) | - | invalid | local, health-and-diagnostic-checklist, en | 1068 |
+| payments-api got slow after the last deploy. Find out why. | external, investigate-performance | 816 / 347 | external, investigate-performance, en | 413 | invalid | external, investigate-performance, en † | 1149 |
+| Delete the demo database demo-orders. | local, delete-demo-database | 810 / 341 | local, delete-demo-database, en | 413 | invalid | local, delete-demo-database, en | 1072 |
+| staging-api 现在健康吗？ | local, check-service-health | 813 / 344 | local, check-service-health, **en** | 408 | invalid | local, check-service-health, **en** | 991 |
+| payments-api 最近一次部署是什么？ | local, lookup-latest-deployment | 811 / 342 | local, lookup-latest-deployment, **en** | 435 | invalid | external, lookup-latest-deployment, **en** † | 1163 |
+| staging-api 在过去 60 分钟内有多少个事故？ | local, summarize-incident-counts | 818 / 349 | local, summarize-incident-counts, **en** | 480 | invalid | local, summarize-incident-counts, **en** | 1061 |
+| 这个服务健康吗？ | clarify, no skill | 808 / 339 | parallel, health-and-diagnostic-checklist, **en** | 437 | invalid | local, health-and-diagnostic-checklist, **en** † | 1263 |
+| payments-api 在上次部署后变慢了，请查明原因。 | external, investigate-performance | 816 / 347 | external, investigate-performance, **en** | 403 | invalid | external, investigate-performance, **en** † | 1231 |
+| 删除演示数据库 demo-orders。 | local, delete-demo-database | 809 / 340 | local, delete-demo-database, zh | 519 | invalid | local, delete-demo-database, **en** | 1024 |
+
+Bold marks a wrong language. Totals per language (exact counts, from
+`run.summary`):
+
+| Mechanism | Language | Valid | Route correct | Skill correct | Language correct |
+|-----------|----------|------:|--------------:|--------------:|-----------------:|
+| native | en | 5/6 | 5/6 | 5/6 | 5/6 |
+| native | zh | 6/6 | 5/6 | 5/6 | 1/6 |
+| envelope | en | 0/6 | 0/6 | 0/6 | 0/6 |
+| envelope | zh | 0/6 | 0/6 | 0/6 | 0/6 |
+| grammar | en | 6/6 | 4/6 | 5/6 | 6/6 |
+| grammar | zh | 6/6 | 4/6 | 5/6 | 0/6 |
+
+**Correction, 2026-10-21, after spec 0.6.** The validator that judged
+this run checked fields and catalog membership only. Spec 0.6 (PR #60)
+added the section 8 cross-field rules and the validator now enforces
+them. The recorded decision objects in `run.rows` were re-scored under
+the new rules without re-running the probe; the export file is
+unchanged. Five grammar outputs counted valid above attach a
+clarification to a non-clarify route (`json_envelope_grammar` rows 01,
+04, 07, 09, and 10, marked † in the table) and are invalid. The native
+and envelope rows are unchanged under the context-free rules.
+Corrected totals:
+
+| Mechanism | Language | Valid | Route correct | Skill correct | Language correct |
+|-----------|----------|------:|--------------:|--------------:|-----------------:|
+| native | en | 5/6 | 5/6 | 5/6 | 5/6 |
+| native | zh | 6/6 | 5/6 | 5/6 | 1/6 |
+| grammar | en | 4/6 (was 6/6) | 3/6 (was 4/6) | 3/6 (was 5/6) | 4/6 (was 6/6) |
+| grammar | zh | 3/6 (was 6/6) | 3/6 (was 4/6) | 3/6 (was 5/6) | 0/6 |
+
+Grammar validated 7 of 12, not 12 of 12, and routed 6 of 12 correctly,
+not 8 of 12; the seven valid grammar decisions took 986 to 1075 ms. The
+run-dependent rules (execution mode, enabled parallel workflow) need a
+run context the probe does not have. Under a managed `auto` run without
+an operator-enabled parallel workflow, the native `parallel` decision
+for "这个服务健康吗？" (row 09) is invalid too, so native zh would read
+5/6 valid; that route was already graded wrong. The native result for
+the ten prompts that name their target is unchanged: 10 of 10 valid and
+correct.
+
+Limits of the recorded numbers, stated 2026-10-21:
+
+- First model action excludes the tokenizer round trips. The probe
+  started its clock after `count_tokens` returned, so the
+  `/apply-template` and `/tokenize` requests the router pays for every
+  prompt are not inside the 389 to 519 ms (native) or the grammar
+  times. The probe now starts the clock before the count; future runs
+  include that time and are not directly comparable to these numbers.
+- Prefix-cache behavior was neither controlled nor measured (spec
+  sections 10 and 12.2). The probe did not set llama-server's
+  `cache_prompt`, which defaults to on, so the twelve measured prompts
+  could reuse the KV cache of the roughly 800-token system-prompt-and-
+  functions prefix left by the warm-ups. The warm-up drop from 1226 ms
+  to 373 ms on the same prompt is consistent with that reuse; the
+  measured numbers are warm-prefix numbers. The export's
+  `cached_tokens` is 0 for all 45 generations, but that is the
+  adapter's default value: the adapter does not read a cached-token
+  count from the runtime's usage, so 0 is not a measurement. The probe
+  now sends `cache_prompt` explicitly and records it in the export.
+- The 2,048-token router cap (spec 4.1) was measured but not applied.
+  Every input was under it (339 to 818 tokens), so no row is affected;
+  the probe now marks an over-cap row as bypassed and sends it no
+  generation.
+
+Warm-ups: native 1226, 373, 376 ms (the first request carrying the seven
+function schemas was the slow one); grammar 942, 934, 923 ms; envelope
+warm-ups did not validate.
+
+Observations, not conclusions:
+
+- Skill selection on prompts that name their target: native picked the
+  expected skill for 10 of 10 (5 of 5 per language), and every one of
+  those calls validated. This is a single pass over a small set, not a
+  section 12.3 quality result.
+- Missing identifier (RM05): no mechanism produced a clarification for
+  "Is the service healthy?" or "这个服务健康吗？". Native wrote the
+  clarification call as plain text in English (invalid, so no tool would
+  run) and selected the checklist skill in Chinese. Grammar selected the
+  checklist skill in both.
+- Language: the model's language value was wrong for 5 of 6 Chinese
+  prompts with native calls and 6 of 6 with grammar.
+- The envelope without grammar never validated: all twelve outputs were
+  wrapped in a Markdown code fence, and some were also wrong inside
+  (`"route": "simple_skill"`). Grammar fixed the shape as the validator
+  of the day checked it (12 of 12; 7 of 12 under the spec 0.6 rules, see
+  the correction above) but not the content: it sent the deployment
+  lookup to external in both languages, chose reason codes such as
+  `local_budget` for a delete, and attached clarifications to routes
+  that take none.
+- Cost: native first model action 389 to 519 ms; grammar 986 to 1263 ms
+  (986 to 1075 ms for the seven that validate under spec 0.6), because
+  the model writes the whole object before it is usable. Both exclude
+  the tokenizer round trips (see the limits above). Router input stayed
+  far under the 2,048-token cap (808 to 818 native, 339 to 349
+  envelope).
+- The routing decision that follows from this is in
+  [`ROADMAP.md`](ROADMAP.md) (M2 stage A).
