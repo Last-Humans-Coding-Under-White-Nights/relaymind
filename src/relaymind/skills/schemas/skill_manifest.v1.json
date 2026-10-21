@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaymind.local/schemas/skill_manifest.v1.json",
+  "title": "SkillManifest",
+  "description": "RelayMind registry manifest that sits next to a skill's SKILL.md (spec section 4.2, RM06). Unknown fields are rejected.",
+  "type": "object",
+  "properties": {
+    "schema_version": {"const": 1},
+    "version": {
+      "type": "string",
+      "description": "Skill version as MAJOR.MINOR.PATCH. Change it, or the content hash changes, whenever the skill changes (RM07).",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"
+    },
+    "languages": {
+      "type": "array",
+      "items": {"enum": ["en", "zh"]},
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "local_eligible": {
+      "type": "boolean",
+      "description": "false marks the skill external-required (RM04): its final answer comes from an external model, though local preparation may run first (section 9)."
+    },
+    "allowed_tools": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+      "uniqueItems": true
+    },
+    "resources": {
+      "type": "array",
+      "description": "Package-relative paths the gateway may read for this skill.",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "completion_predicate": {
+      "type": "string",
+      "description": "ID of a registered gateway validator.",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "parallel_workflow": {
+      "type": ["string", "null"],
+      "description": "Optional ID of a registered fixed parallel workflow (RM15). Declaring it joins the workflow; operator configuration must also enable it (section 4.4).",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "version",
+    "languages",
+    "local_eligible",
+    "allowed_tools",
+    "resources",
+    "completion_predicate"
+  ],
+  "additionalProperties": false
+}

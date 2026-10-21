@@ -159,6 +159,91 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   The trace event API is exported from `relaymind.store`. Timestamps are UTC and elapsed_ms
   comes from a monotonic clock (RM25); a store joining a run continues
   from its last persisted elapsed_ms, so elapsed_ms never goes back.
+- Tool registry (#10, RM08, RM09): `relaymind.tools.ToolRegistry`.
+  Registration requires a name, description, input and output JSON
+  Schemas, a timeout of at most two seconds (section 11), a side-effect
+  class, a handler, and an authorization rule; input objects must use
+  additionalProperties=false, and output schemas must be object
+  schemas. The registered declaration holds deep, read-only copies of
+  both schemas, so they cannot drift from the schema hash. Availability is the intersection of the
+  skill allowlist, operator policy, and caller permissions, and a name
+  that is not registered never gets a handler. `invoke` validates the
+  name and the decoded argument object before the handler runs and
+  validates the returned data; a handler error or bad output is a
+  failed ToolResult, except that a mutating handler that raises an
+  unexpected error or returns bad output gives unknown_outcome, since
+  its side effect may have happened (RM10). Integers are strict: a float such as 60.0 or a
+  boolean where a schema declares an integer, or an enum or const of
+  integers, is rejected as invalid_arguments. Rejection messages name
+  the JSON path and schema keyword, never the rejected value (RM12), and
+  a tool name that is not a string is unknown_tool. The schema hash
+  covers the name, description, both schemas, timeout, side-effect
+  class, and required permission, in the canonical JSON form
+  (`relaymind.canonical`) that the run store also uses for approval
+  binding; that form refuses NaN and infinities. `invoke` requires a
+  non-blank operation ID and never reports a negative duration. The
+  ToolResult envelope (section 8) is published as
+  `relaymind/tools/schemas/tool_result.v1.json`. Operation IDs, replay,
+  and timeout enforcement stay with the executor (#11).
+- Sandbox demo data service and the seven demo tools (#12, RM23,
+  section 9): `relaymind.tools.sandbox` with schemas published under
+  `relaymind/tools/schemas/demo/`. The seed fixture is
+  `tests/fixtures/sandbox/baseline.json`, checked at load by running
+  the real tool methods on it; the service works on a disposable copy in
+  its work directory, which a new service keeps and only an explicit
+  reset replaces; a reset reads and checks the seed again, and writes go
+  through a unique temp file. Every output carries the scenario of the
+  working copy and the observation time, an `unavailable` health status
+  is a successful observation, an unreachable tool is a failed
+  ToolResult, and recent logs come newest first. The fixture has one
+  revision that every listed database reports and every delete and
+  reset bumps; `delete_demo_database` compares `expected_revision` with
+  it under a cross-process file lock (fcntl on POSIX, msvcrt on
+  Windows) before it looks up the ID, returns `revision_conflict`
+  without mutation, and returns
+  the revision it stored. Each identifier input (`service`,
+  `database_id`) carries an English `title` and an
+  `x-relaymind-label` with `en` and `zh` text, so a clarification can
+  name the missing input in the run's language.
+- Skill registry (#9, RM06, RM07, spec 0.4 section 4.2):
+  `relaymind.skills.SkillRegistry` loads SKILL.md packages with a
+  `skill.manifest.json` manifest (schema
+  `relaymind/skills/schemas/skill_manifest.v1.json`) from
+  operator-configured local roots, `skills/` by default (a configured
+  list replaces it), one level deep and in order. Relative roots, the
+  default among them, resolve against the working directory, the
+  checkout root when the gateway starts there. Every subdirectory of a
+  root is a candidate package. Missing or malformed package files,
+  duplicate names across roots, remote roots, unregistered tools,
+  predicates, or workflows, package files or directories that resolve
+  outside their package or root, and resource paths that are not
+  normalized or name one file twice are startup errors. The content hash covers the body, manifest, declared
+  resources, and the allowed tools' schema hashes. Loads emit
+  `skill.loaded` with name, version, and hash; a pinned version or hash
+  that is not held fails without substitution; resource reads are
+  limited to declared package files. `offered_snapshot` gives the
+  `skill_roots` and `skills_offered` fields of run.accepted;
+  `skill_roots` are the configured root strings as given, not resolved
+  host paths.
+- Completion predicates (`relaymind.skills.predicates`) as registered
+  gateway validators: the health check reads the status stated for the
+  returned service, the checklist needs its draft label, each incident
+  count must sit next to its own label, diagnostic section labels count
+  only where they start a line, the deployment report must name the
+  returned service, and with no recorded deployment any deployment-like
+  ID (dep, deploy, or deployment followed by a separator and a
+  digit-bearing token, or by digits) fails. Service and database IDs, lowercase by
+  schema, match in any case at ID boundaries ("Staging-api is
+  healthy"); a quoted deployment ID must stay exact. The fixed parallel workflow ID
+  (`relaymind.orchestrator.workflows`, RM15) is the known workflow;
+  operator enablement is checked at routing (spec 0.6 section 4.4).
+- Six demo skill packages under `skills/` (part of #13, section 9) with
+  paired English and Chinese examples that are checked against the
+  sandbox outputs. investigate-performance and
+  health-and-diagnostic-checklist are not local-eligible, because their
+  final answer is external (section 9). Native Chinese review is still needed.
+- Runtime dependencies `jsonschema` and `pyyaml` for schema validation
+  and SKILL.md frontmatter.
 - Project scaffold: repository layout, CI, and contributor guides.
 - Specification v0.1 (`docs/SPECIFICATION.md`) as the single source of
   truth for the prototype.

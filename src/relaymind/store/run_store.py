@@ -41,6 +41,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
 
+from relaymind.canonical import canonical_json
 from relaymind.store.trace_event import (
     SCHEMA_VERSION,
     EventType,
@@ -225,16 +226,6 @@ def _artifact_ref_record(row: sqlite3.Row) -> dict[str, Any]:
 
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-
-def _canonical_arguments(arguments: Mapping[str, Any]) -> str:
-    """One text form per argument object, so equal arguments compare equal (RM10, RM11).
-
-    Sorted keys, no spaces, UTF-8 text. A shared canonical JSON helper
-    for the tool registry arrives with the registries change; this one
-    must stay byte-for-byte equal to it.
-    """
-    return json.dumps(dict(arguments), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def split_sql_statements(script: str) -> list[str]:
@@ -688,7 +679,7 @@ class RunStore:
         sqlite3.IntegrityError, so the same operation is never dispatched
         twice (RM14).
         """
-        canonical = _canonical_arguments(arguments)
+        canonical = canonical_json(dict(arguments))
         with self._write():
             self._require_run(run_id)
             self._conn.execute(
@@ -827,7 +818,7 @@ class RunStore:
                     run_id,
                     _token_hash(token),
                     tool_name,
-                    _canonical_arguments(arguments),
+                    canonical_json(dict(arguments)),
                     target,
                     state_version,
                     _iso(now),
@@ -900,7 +891,7 @@ class RunStore:
                     _token_hash(token),
                     run_id,
                     tool_name,
-                    _canonical_arguments(arguments),
+                    canonical_json(dict(arguments)),
                     target,
                     state_version,
                     now,

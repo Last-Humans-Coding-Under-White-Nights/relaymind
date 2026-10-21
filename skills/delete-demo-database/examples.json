@@ -1,0 +1,30 @@
+{
+  "illustrative": true,
+  "note": "Illustrative examples that use the sandbox fixture values (tests/fixtures/sandbox/baseline.json). Not live model output or measured results. The Chinese text still needs native review (spec section 9).",
+  "pairs": [
+    {
+      "note": "The gateway asks the user to confirm between the two tool calls (RM11).",
+      "tool_calls": [
+        {
+          "tool": "list_demo_databases",
+          "arguments": {}
+        },
+        {
+          "tool": "delete_demo_database",
+          "arguments": {
+            "database_id": "demo-orders-db",
+            "expected_revision": 3
+          }
+        }
+      ],
+      "en": {
+        "request": "Delete the sandbox database demo-orders-db.",
+        "response": "Deleted the sandbox database demo-orders-db. Its fixture revision is now 4."
+      },
+      "zh": {
+        "request": "删除沙箱数据库 demo-orders-db。",
+        "response": "已删除沙箱数据库 demo-orders-db，其夹具版本现为 4。"
+      }
+    }
+  ]
+}
