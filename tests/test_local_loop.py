@@ -39,7 +39,15 @@ from gateway_helpers import (
     tool_turn,
 )
 from helpers import FakeClock, ScriptedAdapter, make_capabilities, of_type
-from relaymind.adapters import Completed, GenerationFailed, Message, Role, TextDelta, ToolCall
+from relaymind.adapters import (
+    AdapterHealth,
+    Completed,
+    GenerationFailed,
+    Message,
+    Role,
+    TextDelta,
+    ToolCall,
+)
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel
 from relaymind.orchestrator.run_state import RunState, SlotUnavailableError
@@ -747,6 +755,37 @@ def test_parallel_demo_fails_before_routing_when_its_workflow_cannot_run(
     assert_workflow_unavailable(gateway, outcome, events)
     assert not of_type(events, "route.selected")
     assert gateway.adapter.requests == []
+
+
+@pytest.mark.parametrize("failure", ["unavailable", "raises"])
+def test_parallel_demo_fails_before_routing_when_the_external_endpoint_is_down(tmp_path, failure):
+    """RM21, section 4.4 (spec 0.17): a configured but unavailable external endpoint.
+
+    The gateway checks that the endpoint the workflow needs is available
+    before the routing generation, so no model is called.
+    """
+    gateway = build_gateway(
+        tmp_path,
+        [],
+        enabled_workflows={"health-and-diagnostic-checklist"},
+        external_turns=[],
+    )
+
+    async def down():
+        if failure == "raises":
+            raise ConnectionError("https://external.invalid refused")
+        return AdapterHealth(available=False, warm=False, detail="connection refused")
+
+    gateway.external.health = down
+    outcome, events = run(
+        gateway, "Run the health checklist for staging-api.", execution_mode="parallel_demo"
+    )
+    assert_workflow_unavailable(gateway, outcome, events)
+    assert not of_type(events, "route.selected")
+    assert not of_type(events, "model.started")
+    assert gateway.adapter.requests == []
+    # RM12: the exception text (it may carry a URL) is not recorded.
+    assert "external.invalid" not in repr([e.to_json_object() for e in events])
 
 
 @pytest.mark.parametrize(

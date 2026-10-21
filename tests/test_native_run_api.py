@@ -34,7 +34,7 @@ from native_helpers import (
     settled,
     start_run,
 )
-from relaymind.adapters import AdapterHealth
+from relaymind.adapters import AdapterHealth, Message, Role
 from relaymind.api.app import ChatSettings
 from relaymind.api.native import NativeSettings, event_stream
 from relaymind.orchestrator.local_loop import ConfiguredModel
@@ -345,6 +345,24 @@ def test_an_unknown_run_is_404_on_every_run_endpoint(tmp_path):
         }
 
 
+@pytest.mark.parametrize("run_id", ["%E2%9C%93", "run%0Abad", "r%C3%A9"])
+def test_a_run_id_that_cannot_be_a_header_is_still_a_contracted_404(tmp_path, run_id):
+    """RM21, section 11: an unknown run is 404 run_not_found, whatever its path text.
+
+    The run ID is echoed in X-RelayMind-Run-ID only when it can be a
+    header value, so an odd path never turns into an uncontracted 500.
+    """
+    app = make_app(healthy_gateway(tmp_path))
+
+    async def go():
+        async with session(app) as client:
+            return await client.get(f"/relay/v1/runs/{run_id}")
+
+    response = asyncio.run(go())
+    assert (response.status_code, error_of(response)["code"]) == (404, "run_not_found")
+    assert "x-relaymind-run-id" not in response.headers
+
+
 def test_a_waiting_run_shows_its_question_and_a_failed_run_its_codes(tmp_path):
     """RM21: the view carries the pending question, metrics, and the version."""
     gateway = build_gateway(tmp_path, [route_turn("check-service-health")], external_turns=[])
@@ -436,6 +454,30 @@ def test_a_malformed_last_event_id_is_400(tmp_path, value):
 
     response = asyncio.run(go())
     assert (response.status_code, error_of(response)["code"]) == (400, "invalid_request")
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["99999999999999999999", "9" * 5000, "0" * 30 + "1"],
+    ids=["past-sqlite-integers", "past-python-int-parsing", "leading-zeros"],
+)
+def test_a_large_last_event_id_is_a_cursor_past_every_event(tmp_path, value):
+    """RM21, AC11: any non-negative integer is a valid cursor; a large one replays nothing."""
+    gateway = healthy_gateway(tmp_path)
+    app = make_app(gateway)
+
+    async def go():
+        async with session(app) as client:
+            accepted, _ = await run_to_rest(client)
+            return await client.get(accepted["events_url"], headers={"Last-Event-ID": value})
+
+    response = asyncio.run(go())
+    assert response.status_code == 200
+    replayed = parse_sse(response.text)
+    if value.lstrip("0") == "1":
+        assert replayed and replayed[0]["id"] == 2
+    else:
+        assert replayed == []
 
 
 def test_a_client_that_leaves_the_event_stream_does_not_stop_the_run(tmp_path):
@@ -781,7 +823,7 @@ def test_a_wrong_token_is_403_and_a_denial_cancels_with_user_denied(tmp_path):
     assert still["state"] == "waiting_confirmation"
     assert (wrong_shape.status_code, error_of(wrong_shape)["code"]) == (400, "invalid_resume_input")
     assert denied.status_code == 202
-    assert final["state"] == "cancelled"
+    assert (final["state"], final["error_code"], final["reason_code"]) == ("cancelled", None, None)
     (cancelled,) = of_type(gateway.store.events(final["run_id"]), "run.cancelled")
     assert cancelled.payload["reason"] == "user_denied"
     assert "demo-orders-db" in database_ids(gateway)
@@ -813,6 +855,8 @@ def test_cancelling_a_waiting_run_cancels_it_and_voids_its_approval(tmp_path):
     assert cancelled.status_code == 200
     view = cancelled.json()
     assert (view["state"], view["pending_approval"]) == ("cancelled", None)
+    # Spec 0.17 section 7.4: error_code and reason_code come from run.failed only.
+    assert (view["error_code"], view["reason_code"]) == (None, None)
     assert (again.status_code, error_of(again)["code"]) == (409, "run_terminal")
     (event,) = of_type(gateway.store.events(waiting["run_id"]), "run.cancelled")
     assert event.payload["reason"] == "cancel_requested"
@@ -875,6 +919,102 @@ def test_cancelling_a_running_run_stops_it_and_stops_dispatch(tmp_path):
     # Dispatch stopped: the one in-flight generation was the only model call.
     assert len(of_type(events, "model.started")) == 1
     assert gateway.store.active_run_id() is None
+
+
+@pytest.mark.parametrize("extra", [{"approve": False}, {"reason": "x"}, {"input": "stop"}])
+def test_a_cancel_body_with_an_unknown_field_is_400_and_changes_nothing(tmp_path, extra):
+    """RM21, spec section 8: native bodies have closed field sets."""
+    gateway = clarifying_gateway(tmp_path)
+    app = make_app(gateway)
+
+    async def go():
+        async with session(app) as client:
+            _, waiting = await run_to_rest(client, ASK_SERVICE_PROMPT)
+            response = await client.post(
+                f"/relay/v1/runs/{waiting['run_id']}/cancel",
+                json={"expected_version": waiting["state_version"], **extra},
+            )
+            return response, await settled(client, waiting["run_id"])
+
+    response, after = asyncio.run(go())
+    assert (response.status_code, error_of(response)["code"]) == (400, "unsupported_parameter")
+    assert after["state"] == "waiting_input"
+
+
+def test_cancelling_an_untracked_waiting_run_still_voids_its_approval(tmp_path):
+    """RM11, RM17, RM21: every cancel of a waiting run voids its pending approval.
+
+    The run is in waiting_confirmation in the store but this process no
+    longer tracks it (for example after a store error during a sweep).
+    """
+    gateway = deleting_gateway(tmp_path)
+    app = make_app(gateway)
+
+    async def go():
+        async with session(app) as client:
+            waiting = await confirming(client)
+            gateway.orchestrator._waiting.pop(waiting["run_id"])
+            cancelled = await client.post(
+                f"/relay/v1/runs/{waiting['run_id']}/cancel",
+                json={"expected_version": waiting["state_version"]},
+            )
+            return waiting, cancelled
+
+    waiting, cancelled = asyncio.run(go())
+    assert cancelled.status_code == 200
+    assert cancelled.json()["state"] == "cancelled"
+    (event,) = of_type(gateway.store.events(waiting["run_id"]), "run.cancelled")
+    assert event.payload["reason"] == "cancel_requested"
+    assert event.payload["approval_id"] == waiting["pending_approval"]["approval_id"]
+    assert gateway.store.get_pending_approval(waiting["run_id"]) is None
+    assert "demo-orders-db" in database_ids(gateway)
+    assert gateway.store.active_run_id() is None
+
+
+def test_cancelling_an_expired_wait_ends_it_as_expired_first(tmp_path):
+    """Section 5, RM21: an expired wait ends as failed (input_expired) whichever request comes.
+
+    A cancel after the waiting limit finds the run terminal (409
+    run_terminal), as resume and GET would show it failed.
+    """
+    gateway = clarifying_gateway(tmp_path)
+    app = make_app(gateway)
+
+    async def go():
+        async with session(app) as client:
+            _, waiting = await run_to_rest(client, ASK_SERVICE_PROMPT)
+            gateway.clock.advance(gateway.orchestrator.budgets.waiting_seconds + 1)
+            response = await client.post(
+                f"/relay/v1/runs/{waiting['run_id']}/cancel",
+                json={"expected_version": waiting["state_version"]},
+            )
+            return waiting, response, await settled(client, waiting["run_id"])
+
+    waiting, response, after = asyncio.run(go())
+    assert (response.status_code, error_of(response)["code"]) == (409, "run_terminal")
+    assert (after["state"], after["error_code"]) == ("failed", "input_expired")
+    assert not of_type(gateway.store.events(waiting["run_id"]), "run.cancelled")
+
+
+def test_a_cancel_before_the_background_task_starts_still_ends_the_run(tmp_path):
+    """RM17, RM21: a run cancelled before its task first runs is cancelled, slot released."""
+    gateway = healthy_gateway(tmp_path)
+    orchestrator = gateway.orchestrator
+    messages = [Message(role=Role.USER, content="Is staging-api healthy right now?")]
+
+    async def go():
+        started = orchestrator.start(messages)
+        # No await between start and cancel: the task has not run yet.
+        record = await orchestrator.cancel(started.run_id, started.state_version, wait_seconds=1.0)
+        return started, record
+
+    started, record = asyncio.run(go())
+    assert record.state == "cancelled"
+    (event,) = of_type(gateway.store.events(started.run_id), "run.cancelled")
+    assert event.payload["reason"] == "cancel_requested"
+    assert gateway.store.active_run_id() is None
+    assert gateway.adapter.requests == []
+    assert started.run_id not in orchestrator._driven
 
 
 def test_a_run_owned_by_a_chat_request_is_not_cancelled_by_the_native_endpoint(tmp_path):

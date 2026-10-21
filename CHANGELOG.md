@@ -49,7 +49,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   chat endpoint's operator policy (`ChatSettings.allowed_modes`).
   `parallel_demo` now fails explicitly with `workflow_unavailable`
   (reason `parallel_workflow`, 503 on chat) when no workflow is enabled,
-  no external model is configured, or the run routes to the workflow,
+  no external model is configured or its health check says it is not
+  available (checked before routing), or the run routes to the workflow,
   which is not implemented until #30; auto and `local_only` keep their
   rules. `Idempotency-Key` is still refused until #26, and cancel during
   an in-flight write is #29. `tests/test_native_run_api.py` covers it

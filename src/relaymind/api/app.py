@@ -302,9 +302,11 @@ def _guarded(handler: _Handler) -> _Handler:
             return await handler(request)
         except Exception as exc:
             error = error_from_exception(exc)
-            if error.run_id is None and error.code != "unauthenticated":
-                # A run endpoint names the run its request was about.
-                error.run_id = request.path_params.get("run_id")
+            run_id = request.path_params.get("run_id")
+            if error.run_id is None and error.code != "unauthenticated" and _header_safe(run_id):
+                # A run endpoint names the run its request was about, when
+                # the path text can be a header value at all.
+                error.run_id = run_id
             if error.code == "internal_error":
                 _log_internal(request, exc)
             return _error_response(error)
@@ -330,6 +332,11 @@ def _log_internal(request: Request, exc: Exception) -> None:
         type(exc).__name__,
         frames,
     )
+
+
+def _header_safe(value: object) -> bool:
+    """True for text that can be an HTTP header value as it is (printable ASCII)."""
+    return isinstance(value, str) and value.isascii() and value.isprintable()
 
 
 def _decode(raw: bytes) -> object:

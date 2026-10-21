@@ -155,7 +155,11 @@ from relaymind.orchestrator.handoff import (
     measure_request,
     unsettled_operations,
 )
-from relaymind.orchestrator.recovery import RecoveryReport, recover_interrupted_runs
+from relaymind.orchestrator.recovery import (
+    RecoveryReport,
+    model_calls,
+    recover_interrupted_runs,
+)
 from relaymind.orchestrator.route_decision import (
     REASON_CODES,
     ExecutionMode,
@@ -731,7 +735,15 @@ class LocalOrchestrator:
         the record can still be active when the work did not stop in
         time (best effort). A run active under a request that owns it is
         InvalidTransitionError: closing that request cancels it.
+
+        A wait past its limit ends as failed (input_expired or
+        approval_expired) first, as every other request ends it, so the
+        cancel then finds a terminal run (section 5).
         """
+        tracked = self._waiting.get(run_id)
+        if tracked is not None and self._still_waiting(run_id) and tracked.wait_expired():
+            tracked.expire()
+            del self._waiting[run_id]
         record = self.store.get_run(run_id)
         state = RunState(record.state)
         if state in TERMINAL_STATES:
@@ -745,7 +757,7 @@ class LocalOrchestrator:
                 record = run.cancel_waiting(expected_version)
                 self._waiting.pop(run_id, None)
                 return record
-            return self.machine.cancel(run_id, expected_version, reason=CANCEL_REQUESTED)
+            return self._cancel_untracked(run_id, expected_version)
         driven = self._driven.get(run_id)
         if driven is None or driven[1].done():
             raise InvalidTransitionError(
@@ -757,6 +769,30 @@ class LocalOrchestrator:
         task.cancel()
         await asyncio.wait({task}, timeout=wait_seconds)
         return self.store.get_run(run_id)
+
+    def _cancel_untracked(self, run_id: str, expected_version: int) -> RunRecord:
+        """Cancel a waiting run this process no longer tracks, from the store alone.
+
+        As for a tracked run, the pending approval is voided in the same
+        transaction and run.cancelled names it (RM11, RM17, spec 0.17).
+        """
+        store = self.store
+        calls = model_calls(store, run_id)
+        payload: dict[str, Any] = {"reason": CANCEL_REQUESTED, **store.state_timings(run_id)}
+        if calls:
+            payload["model_calls"] = calls
+            payload["external_calls"] = sum(1 for c in calls if c["actor"] == EXTERNAL_ACTOR)
+        with store.transaction():
+            pending = store.get_pending_approval(run_id)
+            if pending is not None:
+                payload["approval_id"] = pending["approval_id"]
+                store.expire_approvals(run_id)
+            return self.machine.cancel(
+                run_id,
+                expected_version,
+                reason=CANCEL_REQUESTED,
+                event=(EventType.RUN_CANCELLED, GATEWAY_ACTOR, payload),
+            )
 
     def reveal_confirmation(self, run_id: str) -> ConfirmationRequest | None:
         """The pending confirmation with its token, the first time it is asked for (RM11).
@@ -780,16 +816,24 @@ class LocalOrchestrator:
             return self._started(run.run_id)
 
         async def drive() -> RunOutcome:
-            try:
-                outcome = await step()
-            finally:
-                driven = self._driven.get(run.run_id)
-                if driven is not None and driven[1] is asyncio.current_task():
-                    del self._driven[run.run_id]
-            return self._keep_if_waiting(run, outcome)
+            return self._keep_if_waiting(run, await step())
+
+        def settle(task: "asyncio.Task[RunOutcome]") -> None:
+            driven = self._driven.get(run.run_id)
+            if driven is not None and driven[1] is task:
+                del self._driven[run.run_id]
+            if task.cancelled():
+                # A task cancelled before it first ran never reached
+                # _protected, so the run is ended here: cancelled, slot
+                # released (RM17). A run that already ended is unchanged.
+                run._abort(asyncio.CancelledError())
+            else:
+                # The run recorded its own failure (section 5), so the
+                # exception has nothing left to report.
+                task.exception()
 
         task = asyncio.get_running_loop().create_task(drive())
-        task.add_done_callback(_observe)
+        task.add_done_callback(settle)
         self._driven[run.run_id] = (run, task)
         return self._started(run.run_id, task)
 
@@ -885,16 +929,6 @@ _Step = RunOutcome | Callable[[], Awaitable[RunOutcome]]
 async def _finish(step: _Step) -> RunOutcome:
     """The outcome of a prepared step, awaiting its work when there is any."""
     return step if isinstance(step, RunOutcome) else await step()
-
-
-def _observe(task: "asyncio.Task[RunOutcome]") -> None:
-    """Mark a background run's result as retrieved.
-
-    The run recorded its own failure or cancellation (section 5), so
-    the exception has nothing left to report.
-    """
-    if not task.cancelled():
-        task.exception()
 
 
 class _Run:
@@ -1052,11 +1086,12 @@ class _Run:
 
     async def _drive(self, route: Callable[[], Awaitable[Routing]]) -> RunOutcome:
         """Route, then wait, stop, or run the local loop to completion."""
-        if self.mode is ExecutionMode.PARALLEL_DEMO and (
-            not self.o.enabled_workflows or self.o.external is None
-        ):
+        if self.mode is ExecutionMode.PARALLEL_DEMO:
             # Spec 0.17 section 4.4: no routing generation for a run that cannot succeed.
-            return self._workflow_unavailable("configuration does not provide the workflow")
+            if not self.o.enabled_workflows or self.o.external is None:
+                return self._workflow_unavailable("configuration does not provide the workflow")
+            if not await self._external_available():
+                return self._workflow_unavailable("the external endpoint is not available")
         try:
             routing = await route()
             decision = self.decision = routing.decision
@@ -1276,6 +1311,20 @@ class _Run:
             decision=self.decision,
             budget=extra.get("budget"),
         )
+
+    async def _external_available(self) -> bool:
+        """Whether the configured external endpoint reports itself available (section 4.4).
+
+        A health check that fails counts as unavailable; its text may
+        carry a URL or a key, so it is not recorded (RM12).
+        """
+        external = self.o.external
+        assert external is not None
+        try:
+            health = await external.adapter.health()
+        except Exception:
+            return False
+        return health.available
 
     def _workflow_unavailable(self, detail: str) -> RunOutcome:
         """parallel_demo fails explicitly when its workflow cannot run (RM21, section 4.4)."""

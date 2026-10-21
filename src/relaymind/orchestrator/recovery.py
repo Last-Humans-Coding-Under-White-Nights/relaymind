@@ -125,7 +125,7 @@ def _recover(
         )
         expired = store.expire_approvals(run_id)
         timings = store.state_timings(run_id)
-        calls = _model_calls(store, run_id)
+        calls = model_calls(store, run_id)
         machine.transition(
             run_id,
             record.version,
@@ -167,7 +167,7 @@ def _settle(
     return SettledOperation(operation["operation_id"], result.status.value)
 
 
-def _model_calls(store: RunStore, run_id: str) -> list[dict[str, Any]]:
+def model_calls(store: RunStore, run_id: str) -> list[dict[str, Any]]:
     """The run's model calls, rebuilt from its model.started events (RM16)."""
     return [
         {key: event.payload[key] for key in ("call_id", "model", "actor", "purpose")}
