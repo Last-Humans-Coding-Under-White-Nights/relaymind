@@ -181,16 +181,18 @@ def _operation(op: Mapping[str, Any]) -> str:
     )
 
 
+def _operation_list(operations: Sequence[Mapping[str, Any]], empty: str) -> str:
+    if not operations:
+        return _NONE.format(empty)
+    return f"<ul>{''.join(_operation(op) for op in operations)}</ul>"
+
+
 def _operations(view: Mapping[str, Any]) -> str:
-    if not view["operations"]:
-        return _NONE.format("No tool has run.")
-    return f"<ul>{''.join(_operation(op) for op in view['operations'])}</ul>"
+    return _operation_list(view["operations"], "No tool has run.")
 
 
 def _failed(view: Mapping[str, Any]) -> str:
-    if not view["failed_operations"]:
-        return _NONE.format("None.")
-    return f"<ul>{''.join(_operation(op) for op in view['failed_operations'])}</ul>"
+    return _operation_list(view["failed_operations"], "None.")
 
 
 def _escalation(view: Mapping[str, Any]) -> str:

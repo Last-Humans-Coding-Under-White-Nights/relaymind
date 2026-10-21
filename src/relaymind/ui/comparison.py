@@ -16,6 +16,7 @@ from relaymind.adapters import Message
 from relaymind.orchestrator.local_loop import LocalOrchestrator
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import TERMINAL_STATES, WAITING_STATES, RunState
+from relaymind.store import RunRecord
 from relaymind.ui.settings import UiSettings
 
 __all__ = ["COMPARED_MODES", "run_comparison"]
@@ -56,7 +57,7 @@ async def run_comparison(
 
 async def _until_rest(
     orchestrator: LocalOrchestrator, run_id: str, settings: UiSettings, cancel_wait_seconds: float
-) -> Any:
+) -> RunRecord:
     """Wait for the run to end or wait; cancel it when it waits or takes too long."""
     store = orchestrator.store
     loop = asyncio.get_running_loop()

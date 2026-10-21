@@ -19,6 +19,7 @@ from gateway_helpers import (
     replace_handler,
     text_turn,
 )
+from helpers import ACCEPTED_PAYLOAD
 from relaymind.store import RunRecord, TraceEvent
 from relaymind.store.trace_event import validate_trace_event
 from relaymind.ui.trace_view import build_trace_view, trace_view_from
@@ -33,7 +34,12 @@ from ui_helpers import (
     external_health_gateway,
     health_gateway,
     run_to_rest,
+    without_original_messages,
 )
+
+_NOW = datetime(2026, 10, 20, 3, tzinfo=UTC)
+# A run that was accepted and nothing more.
+FRESH_RECORD = RunRecord("run_1", "routing", 1, None, None, None, _NOW, _NOW)
 
 
 def view_of(gateway, outcome):
@@ -144,19 +150,12 @@ def test_no_model_action_yet_is_reported_as_none_not_zero():
             "event_type": "run.accepted",
             "actor": "gateway",
             "payload": {
-                "requested_execution_mode": None,
-                "effective_execution_mode": "auto",
-                "model_alias": None,
-                "budgets": {},
-                "skill_roots": [],
-                "skills_offered": [],
+                **ACCEPTED_PAYLOAD,
                 "original_messages": [{"role": "user", "content": "hello"}],
             },
         }
     )
-    now = datetime(2026, 10, 20, 3, tzinfo=UTC)
-    record = RunRecord("run_1", "routing", 1, None, None, None, now, now)
-    view = trace_view_from(record, [accepted])
+    view = trace_view_from(FRESH_RECORD, [accepted])
 
     assert view["timing"] == {
         "first_model_action_ms": None,
@@ -177,17 +176,9 @@ def test_a_run_stored_before_the_prompt_was_recorded_says_so():
         elapsed_ms=0,
         event_type="run.accepted",
         actor="gateway",
-        payload={
-            "requested_execution_mode": None,
-            "effective_execution_mode": "auto",
-            "model_alias": None,
-            "budgets": {},
-            "skill_roots": [],
-            "skills_offered": [],
-        },
+        payload={k: v for k, v in ACCEPTED_PAYLOAD.items() if k != "original_messages"},
     )
-    now = datetime(2026, 10, 20, 3, tzinfo=UTC)
-    view = trace_view_from(RunRecord("run_1", "routing", 1, None, None, None, now, now), [accepted])
+    view = trace_view_from(FRESH_RECORD, [accepted])
 
     assert view["prompt"] is None
 
@@ -386,16 +377,6 @@ def test_absent_evidence_is_none_never_invented(tmp_path, missing):
         }[missing]
     ]
     if missing == "prompt":
-        accepted = kept[0]
-        payload = {k: v for k, v in accepted.payload.items() if k != "original_messages"}
-        kept[0] = TraceEvent(
-            accepted.run_id,
-            accepted.seq,
-            accepted.timestamp,
-            accepted.elapsed_ms,
-            accepted.event_type,
-            accepted.actor,
-            payload,
-        )
+        kept[0] = without_original_messages(kept[0])
     view = trace_view_from(record, kept)
     assert view[missing] is None

@@ -13,6 +13,7 @@
 
   const byId = (id) => document.getElementById(id);
   const say = (text) => { byId("status").textContent = text; };
+  const promptMessages = () => [{ role: "user", content: byId("prompt").value }];
 
   async function api(method, path, body) {
     const headers = { Authorization: "Bearer " + token };
@@ -157,10 +158,7 @@
   async function startRun(event) {
     event.preventDefault();
     say("");
-    const body = {
-      messages: [{ role: "user", content: byId("prompt").value }],
-      execution_mode: byId("mode").value,
-    };
+    const body = { messages: promptMessages(), execution_mode: byId("mode").value };
     const when = new Date().toISOString();
     const response = await submit("/relay/v1/runs", body, null);
     if (!response.ok) return;
@@ -171,9 +169,8 @@
 
   async function compare() {
     say("Comparing auto and external_only. This can take a while.");
-    const body = { messages: [{ role: "user", content: byId("prompt").value }] };
     const when = new Date().toISOString();
-    const response = await submit("/ui/comparisons", body, null);
+    const response = await submit("/ui/comparisons", { messages: promptMessages() }, null);
     if (!response.ok) return;
     say("");
     const result = await response.json();

@@ -152,28 +152,28 @@ def _proposals(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
 
 def _operations(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
     """Each finished tool operation, in order, with the model that proposed it."""
-    operations = []
-    for event in _of(events, EventType.TOOL_FINISHED):
-        result = event.payload["result"]
-        operations.append(
-            {
-                "operation_id": event.payload.get("operation_id"),
-                "proposal_id": event.payload.get("proposal_id"),
-                "tool_name": event.payload.get("tool_name"),
-                "model": event.payload.get("model"),
-                "attempt": event.payload.get("attempt"),
-                "approval_id": event.payload.get("approval_id"),
-                "replayed": bool(event.payload.get("replayed")),
-                "status": result.get("status"),
-                "data": result.get("data"),
-                "error": result.get("error"),
-                "duration_ms": result.get("duration_ms"),
-                "observed_at": result.get("observed_at"),
-                "source_ref": result.get("source_ref"),
-                "truncated": result.get("truncated"),
-            }
-        )
-    return operations
+    return [
+        {
+            **_pick(
+                e.payload,
+                ("operation_id", "proposal_id", "tool_name", "model", "attempt", "approval_id"),
+            ),
+            "replayed": bool(e.payload.get("replayed")),
+            **_pick(
+                e.payload["result"],
+                (
+                    "status",
+                    "data",
+                    "error",
+                    "duration_ms",
+                    "observed_at",
+                    "source_ref",
+                    "truncated",
+                ),
+            ),
+        }
+        for e in _of(events, EventType.TOOL_FINISHED)
+    ]
 
 
 def _escalation(events: Sequence[TraceEvent]) -> dict[str, Any] | None:

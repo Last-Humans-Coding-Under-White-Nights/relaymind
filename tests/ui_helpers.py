@@ -6,6 +6,8 @@ generation, so timing values in a trace are not all zero.
 """
 
 import asyncio
+from dataclasses import replace
+from html.parser import HTMLParser
 
 from gateway_helpers import (
     STAGING_OK,
@@ -28,6 +30,24 @@ DELETE_ANSWER = "Deleted demo-orders-db."
 MUTATING_CALLER = CallerContext(permissions=frozenset({READ_PERMISSION, MUTATE_PERMISSION}))
 
 
+def external_health_turns():
+    """The external model's script for the health task: one tool call, then the answer."""
+    return [
+        tool_turn("get_service_health", call_id="e1", service="staging-api"),
+        text_turn(STAGING_OK),
+    ]
+
+
+def database_ids(gateway):
+    return [db["database_id"] for db in gateway.sandbox.list_databases()]
+
+
+def without_original_messages(accepted):
+    """The run.accepted event as a run stored before spec 0.20 wrote it."""
+    payload = {k: v for k, v in accepted.payload.items() if k != "original_messages"}
+    return replace(accepted, payload=payload)
+
+
 def timed_gateway(tmp_path, turns, **options):
     """A gateway whose clock moves GENERATION_SECONDS on each model generation."""
     clock = FakeClock()
@@ -43,15 +63,7 @@ def health_gateway(tmp_path, **options):
 
 def external_health_gateway(tmp_path, **options):
     """The same task for external_only: one tool call, then the answer."""
-    gateway = timed_gateway(
-        tmp_path,
-        [],
-        external_turns=[
-            tool_turn("get_service_health", call_id="e1", service="staging-api"),
-            text_turn(STAGING_OK),
-        ],
-        **options,
-    )
+    gateway = timed_gateway(tmp_path, [], external_turns=external_health_turns(), **options)
     clock = gateway.clock
     gateway.external.on_generate = lambda request: clock.advance(GENERATION_SECONDS)
     return gateway
@@ -85,8 +97,6 @@ class Controls:
     """The elements of a rendered trace that carry a data-action (spec 0.20 section 9)."""
 
     def __init__(self, fragment: str) -> None:
-        from html.parser import HTMLParser
-
         found: list[dict[str, str]] = []
 
         class Collector(HTMLParser):

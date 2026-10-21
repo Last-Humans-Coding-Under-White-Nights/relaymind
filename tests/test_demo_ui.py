@@ -17,16 +17,18 @@ from gateway_helpers import (
     STAGING_OK,
     clarify_turn,
     health_tail,
+    replace_handler,
     route_turn,
     text_turn,
 )
-from native_helpers import gated_gateway, session, settled
+from native_helpers import gated_gateway, session, settled, start_run
 from relaymind.ui import DataMode, UiSettings
 from ui_helpers import (
     DELETE_ANSWER,
     DELETE_PROMPT,
     HEALTH_PROMPT,
     Controls,
+    database_ids,
     delete_gateway,
     health_gateway,
     timed_gateway,
@@ -44,10 +46,7 @@ def ui_app(gateway, mode="double", **ui):
 
 
 async def create(client, prompt=HEALTH_PROMPT, **fields):
-    response = await client.post(
-        "/relay/v1/runs",
-        json={"messages": [{"role": "user", "content": prompt}], **fields},
-    )
+    response = await start_run(client, prompt, **fields)
     assert response.status_code == 202, response.text
     return response.json()["run_id"]
 
@@ -248,8 +247,6 @@ def test_tool_output_and_prompts_are_escaped_not_markup(tmp_path):
 
 def test_a_failed_operation_is_inspectable_in_the_fragment(tmp_path):
     """RM23: a user can inspect failed operations."""
-    from gateway_helpers import replace_handler
-
     gateway = health_gateway(tmp_path, external_turns=None)
 
     def broken(arguments):
@@ -325,7 +322,7 @@ def test_a_confirmation_round_trips_through_the_native_resume_endpoint(tmp_path)
 
     done, page = asyncio.run(go())
     assert done["state"] == "completed"
-    assert "demo-orders-db" not in [d["database_id"] for d in gateway.sandbox.list_databases()]
+    assert "demo-orders-db" not in database_ids(gateway)
     assert Controls(page).actions() == []
     assert "approved" in page
 
@@ -354,7 +351,7 @@ def test_a_denial_round_trips_and_mutates_nothing(tmp_path):
 
     done, page = asyncio.run(go())
     assert done["state"] == "cancelled"
-    assert "demo-orders-db" in [d["database_id"] for d in gateway.sandbox.list_databases()]
+    assert "demo-orders-db" in database_ids(gateway)
     assert "denied" in page
 
 

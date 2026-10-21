@@ -11,10 +11,11 @@ import asyncio
 import pytest
 
 from api_helpers import make_app
-from gateway_helpers import STAGING_OK, health_tail, route_turn, text_turn, tool_turn
+from gateway_helpers import STAGING_OK, build_gateway, health_tail, route_turn, tool_turn
 from native_helpers import GatedAdapter, session
 from relaymind.api.app import ChatSettings
 from relaymind.api.native import NativeSettings
+from relaymind.orchestrator.local_loop import ConfiguredModel
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.ui import UiSettings
 from relaymind.ui.trace_view import build_trace_view
@@ -22,7 +23,10 @@ from ui_helpers import (
     DELETE_ARGS,
     DELETE_PROMPT,
     HEALTH_PROMPT,
+    MUTATING_CALLER,
     SpyFixtures,
+    database_ids,
+    external_health_turns,
     spy_on_starts,
     timed_gateway,
 )
@@ -33,10 +37,7 @@ def comparing_gateway(tmp_path):
     return timed_gateway(
         tmp_path,
         [route_turn("check-service-health"), *health_tail()],
-        external_turns=[
-            tool_turn("get_service_health", call_id="e1", service="staging-api"),
-            text_turn(STAGING_OK),
-        ],
+        external_turns=external_health_turns(),
     )
 
 
@@ -104,7 +105,7 @@ def test_a_change_one_run_left_behind_is_gone_for_the_next(tmp_path):
     """RM23, section 9: a real reset of the sandbox copy, with its label in the answer."""
     gateway = comparing_gateway(tmp_path)
     gateway.sandbox.delete_database("demo-orders-db", expected_revision=3)
-    assert "demo-orders-db" not in [d["database_id"] for d in gateway.sandbox.list_databases()]
+    assert "demo-orders-db" not in database_ids(gateway)
     app = compare_app(gateway)
 
     async def go():
@@ -112,7 +113,7 @@ def test_a_change_one_run_left_behind_is_gone_for_the_next(tmp_path):
             return await compare(client)
 
     arms = asyncio.run(go()).json()["arms"]
-    assert "demo-orders-db" in [d["database_id"] for d in gateway.sandbox.list_databases()]
+    assert "demo-orders-db" in database_ids(gateway)
     for arm in arms:
         assert arm["fixture"] == {
             "label": gateway.sandbox.label,
@@ -122,8 +123,6 @@ def test_a_change_one_run_left_behind_is_gone_for_the_next(tmp_path):
 
 def test_a_run_that_waits_is_cancelled_and_nothing_is_mutated(tmp_path):
     """RM11, section 9: a comparison collects no input; a waiting arm ends cancelled."""
-    from ui_helpers import MUTATING_CALLER
-
     gateway = timed_gateway(
         tmp_path,
         [
@@ -147,7 +146,7 @@ def test_a_run_that_waits_is_cancelled_and_nothing_is_mutated(tmp_path):
     assert response.status_code == 200, response.text
     arms = response.json()["arms"]
     assert [arm["state"] for arm in arms] == ["cancelled", "cancelled"]
-    assert "demo-orders-db" in [d["database_id"] for d in gateway.sandbox.list_databases()]
+    assert "demo-orders-db" in database_ids(gateway)
     for arm in arms:
         view = build_trace_view(gateway.store, arm["run_id"])
         assert view["cancel_reason"] == "cancel_requested"
@@ -159,17 +158,11 @@ def test_a_run_that_waits_is_cancelled_and_nothing_is_mutated(tmp_path):
 def test_a_run_that_does_not_come_to_rest_is_asked_to_cancel(tmp_path):
     """RM03, RM14: the arm limit is bounded; the run is reported in the state it has."""
     adapter = GatedAdapter(turns=[route_turn("check-service-health"), *health_tail()])
-    from gateway_helpers import build_gateway
-    from relaymind.orchestrator.local_loop import ConfiguredModel
-
     gateway = build_gateway(
         tmp_path,
         None,
         local_model=ConfiguredModel(adapter=adapter, model_id="gated"),
-        external_turns=[
-            tool_turn("get_service_health", call_id="e1", service="staging-api"),
-            text_turn(STAGING_OK),
-        ],
+        external_turns=external_health_turns(),
     )
     app = compare_app(gateway, arm_wait_seconds=0.05)
 
