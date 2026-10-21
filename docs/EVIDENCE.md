@@ -217,7 +217,7 @@ bilingual skill selection and the M6 benchmark remain separate gates.
   `--chat-template-kwargs` but warned that setting `enable_thinking`
   this way is deprecated in favor of `--reasoning on` / `--reasoning off`.
   This warning comes from the pinned build's
-  [common argument parser](https://github.com/ggml-org/llama.cpp/blob/620d2225c/common/arg.cpp#L3445-L3462)
+  [common argument parser](https://github.com/ggml-org/llama.cpp/blob/620d2225c/common/arg.cpp#L3554-L3570)
   on every platform; it was not a test failure. The passing qualification
   retains the manifest settings. [#58](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/58)
   tracks migrating the controls and requalifying the adapter at the next
@@ -230,7 +230,7 @@ bilingual skill selection and the M6 benchmark remain separate gates.
   loopback proxy bypass is tracked in
   [#57](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/57).
   In CPython 3.12.10 on Windows,
-  [`getproxies()`](https://github.com/python/cpython/blob/v3.12.10/Lib/urllib/request.py#L2557-L2564)
+  [`getproxies()`](https://github.com/python/cpython/blob/v3.12.10/Lib/urllib/request.py#L2766-L2773)
   uses environment proxy settings when any exist, falling back to the
   registry only otherwise. With `NO_PROXY` set and `HTTP_PROXY` /
   `HTTPS_PROXY` removed, this machine's registry proxy was skipped for
