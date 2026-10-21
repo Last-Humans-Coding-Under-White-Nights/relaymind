@@ -62,6 +62,9 @@ infrastructure around it is built.
   is documented here.
 - Local tokenizer (#47): router input is capped at 2,048 local tokens
   (spec section 4.1); the adapter needs a token count for it.
+  `LlamaCppAdapter.count_tokens` counts through the runtime's own chat
+  template and tokenizer; the router (#14) takes that count as its input
+  measure.
 - Run states and SQLite store, first increment (#6, #7; RM17,
   section 5): runs, events, tool_operations.
 - Required trace events (#27; RM22, section 8), recorded while the loop
@@ -74,6 +77,63 @@ infrastructure around it is built.
   RM01–RM03).
 - Exit: AC01 passes with doubles, and the live trace for
   check-service-health is recorded in both languages.
+
+#### Routing mechanism for #14 (decided 2026-10-21)
+
+Chosen: **native function calling, one function per advertised skill**
+(spec section 6 allows it; the mechanism is visible in configuration and
+tests). Evidence: the routing probe in
+[`EVIDENCE.md`](EVIDENCE.md#2026-10-21--m2-routing-probe-apple-silicon-macos)
+(Apple M1, Qwen3-0.6B Q8_0, llama.cpp build 11669, single pass).
+
+- Native calls picked the expected skill for 10 of 10 prompts that named
+  their target (5 of 5 in each language), all valid, first model action
+  389 to 519 ms (excluding the tokenizer round trips; see the limits in
+  `EVIDENCE.md`). Unchanged by the spec 0.6 re-scoring below.
+- The JSON envelope without grammar produced 0 of 12 valid outputs
+  (every one wrapped in a code fence). With grammar-constrained decoding
+  it was judged 12 of 12 valid on the day but 8 of 12 routes correct, at
+  986 to 1263 ms. Corrected 2026-10-21 under the spec 0.6 cross-field
+  rules, re-scored from the recorded export (correction note in
+  `EVIDENCE.md`): 7 of 12 valid and 6 of 12 routes correct, because
+  five grammar outputs attached a clarification to a non-clarify route.
+  The envelope is not used for routing. The correction widens the gap
+  between the mechanisms; the decision stands.
+
+How the router uses it, so the model is trusted only for the skill
+choice:
+
+- The gateway builds the RouteDecision. The selected function names the
+  skill; route and reason code come from that skill's registry entry
+  (local eligibility, external-required, parallel-workflow ID; spec
+  4.2, RM04), not from the model. The result goes through the boundary
+  validator (`relaymind.orchestrator.route_decision`) with the run's
+  `RoutingContext` (catalog ownership, effective execution mode,
+  operator-enabled parallel workflows) before anything else happens, so
+  the spec 0.6 cross-field rules are checked there. Parallel
+  admissibility is the gateway's call (spec 4.4): the one native
+  `parallel` decision in the probe (the Chinese missing-identifier
+  prompt) is invalid in any mode that does not admit the workflow.
+- Missing identifiers are not left to the model (RM05). Neither prompt
+  without a service ("Is the service healthy?", "这个服务健康吗？") got a
+  clarification from any mechanism. The router checks the selected
+  skill's required identifiers against the request and conversation
+  context, and returns clarify with `missing_input` when one is absent.
+  No tool runs on a decision that fails this check.
+- The model's language value is not used alone: it was wrong for 5 of 6
+  Chinese prompts. Proposed for #14: set the RouteDecision language from
+  the request text, checked by tests in both languages. Spec section 8
+  requires the field but does not say who fills it; if #14 finds this
+  changes observable behavior, the spec is revised first.
+- Router input measured 808 to 818 local tokens with six skills, well
+  under the 2,048 cap; the bypass path is still required for longer
+  inputs (spec 4.1).
+
+Skill selection was reliable in both languages for well-specified
+prompts, so the narrower-scope path of spec section 12.3 is not taken
+now. If the M2 live traces or the M6 corpus show it failing, that path
+(fewer skills per prompt, or another candidate model, never relabeled
+as Qwen3-0.6B) is the fallback.
 
 ### Stage B — Widen
 
@@ -155,3 +215,13 @@ listed here so the current order can be traced to its reason.
   moved from M4 to M2; restart recovery (#8) moved from M2 to M3; Windows
   qualification (#46) added to M1; the orchestrator half of AC08 (#49)
   added to M3; live evidence recorded in `EVIDENCE.md`.
+- 2026-10-21, after the routing probe (#48): native function calling
+  chosen as the routing mechanism for #14; route and reason code come
+  from the skill registry, and missing-identifier and language checks
+  are done by the gateway rather than taken from the model.
+- 2026-10-21, after spec 0.6 (#60): the probe's grammar results were
+  re-scored under the new RouteDecision cross-field rules, 7 of 12 valid
+  instead of 12 of 12 and 6 of 12 routes correct instead of 8 of 12; the
+  native result and the mechanism decision are unchanged. The recorded
+  numbers exclude tokenizer round trips and ran with the runtime's
+  prompt cache on; both are stated in `EVIDENCE.md`.

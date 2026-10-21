@@ -31,8 +31,17 @@ from helpers import (
     PINNED_MANIFEST_PATH,
     collect_events,
     make_request,
+    run_closing,
 )
-from relaymind.adapters import Completed, Message, Role, TextDelta, ToolCall
+from relaymind.adapters import (
+    Completed,
+    GenerationOptions,
+    Message,
+    Role,
+    TextDelta,
+    ToolCall,
+    Usage,
+)
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 from relaymind.adapters.local_http import health_client
 from relaymind.adapters.manifest import (
@@ -215,3 +224,39 @@ def test_model_proposes_a_valid_tool_call(make_adapter):
     call = tool_calls[0]
     assert call.tool_name == "get_service_health"
     assert call.arguments.get("service") == "staging-api"
+
+
+@pytest.mark.parametrize(
+    ("prompt", "with_tools"),
+    [
+        ("Is staging-api healthy right now?", False),
+        ("staging-api 现在健康吗？", False),
+        ("Is staging-api healthy right now?", True),
+        ("payments-api 正常运行吗？", True),
+    ],
+    ids=["en", "zh", "en-tools", "zh-tools"],
+)
+def test_token_count_matches_the_runtime_prompt_count(make_adapter, request, prompt, with_tools):
+    # Issue #47, spec section 4.1: the router input is measured by the
+    # local tokenizer. The count must equal the prompt tokens the runtime
+    # reports for a generation of the same messages and tools.
+    messages = (
+        Message(role=Role.SYSTEM, content="You check service health."),
+        Message(role=Role.USER, content=prompt),
+    )
+    tools = (HEALTH_TOOL,) if with_tools else ()
+    counted = run_closing(make_adapter(False), lambda a: a.count_tokens(messages, tools))
+    events = collect_events(
+        make_adapter(False),
+        make_request(
+            # One id per case (en, zh, en-tools, zh-tools), so the four
+            # generations never share one in adapter bookkeeping.
+            generation_id=f"smoke_count_{request.node.callspec.id}",
+            messages=messages,
+            tool_schemas=tools,
+            options=GenerationOptions(max_output_tokens=1),
+        ),
+    )
+    usage = [event for event in events if isinstance(event, Usage)]
+    assert usage, f"runtime reported no usage; events: {events}"
+    assert counted == usage[-1].input_tokens

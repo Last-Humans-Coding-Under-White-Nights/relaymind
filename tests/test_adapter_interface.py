@@ -130,3 +130,12 @@ def test_assistant_tool_call_message_needs_no_explicit_content():
     call = ToolCall(call_id="call_1", tool_name="get_service_health", arguments={"service": "s"})
     message = Message(role=Role.ASSISTANT, tool_calls=(call,))
     assert message.content is None
+
+
+def test_the_double_counts_tokens_when_it_claims_a_tokenizer():
+    # RM16: a double that reports tokenizer_available must count, not
+    # inherit the contract default that refuses.
+    adapter = ScriptedAdapter([])
+    assert asyncio.run(adapter.capabilities()).tokenizer_available is True
+    count = asyncio.run(adapter.count_tokens(make_request().messages, (HEALTH_TOOL,)))
+    assert isinstance(count, int) and count > 0

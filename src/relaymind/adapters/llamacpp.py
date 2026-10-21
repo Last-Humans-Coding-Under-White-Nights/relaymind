@@ -11,7 +11,7 @@ through prompt strings, and is verified by the live smoke test.
 """
 
 import asyncio
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
@@ -21,15 +21,52 @@ from relaymind.adapters.base import (
     AdapterCapabilities,
     AdapterEvent,
     AdapterHealth,
+    GenerationOptions,
     GenerationRequest,
+    Message,
     ModelAdapter,
+    TokenCountError,
+    ToolSchema,
 )
 from relaymind.adapters.local_http import is_loopback_url
-from relaymind.adapters.openai_compat import base_chat_body, stream_chat_events
+from relaymind.adapters.openai_compat import (
+    encode_prompt,
+    stream_chat_events,
+    streamed_chat_body,
+)
 
 # Spec section 6: non-thinking is the default; an operator may enable
 # thinking mode through the same chat-template settings.
 NON_THINKING: Mapping[str, object] = MappingProxyType({"enable_thinking": False})
+
+
+def prompt_fields(
+    messages: Sequence[Message],
+    tool_schemas: Sequence[ToolSchema],
+    chat_template_kwargs: Mapping[str, object] | None,
+) -> dict[str, object]:
+    """The fields that shape the templated prompt.
+
+    Messages, offered tools, and chat-template settings. A generation
+    and a token count both build them here, so the count measures the
+    prompt a generation sends (spec section 4.1).
+    """
+    fields = encode_prompt(messages, tool_schemas)
+    if chat_template_kwargs:
+        fields["chat_template_kwargs"] = dict(chat_template_kwargs)
+    return fields
+
+
+def chat_body(fields: Mapping[str, object], options: GenerationOptions) -> dict[str, object]:
+    """A streamed llama-server chat completion body around the prompt fields."""
+    body = streamed_chat_body(fields)
+    if options.max_output_tokens is not None:
+        body["max_tokens"] = options.max_output_tokens
+    if options.temperature is not None:
+        body["temperature"] = options.temperature
+    if options.top_p is not None:
+        body["top_p"] = options.top_p
+    return body
 
 
 def build_chat_request(
@@ -38,17 +75,10 @@ def build_chat_request(
     chat_template_kwargs: Mapping[str, object] | None,
 ) -> dict[str, object]:
     """Map a normalized request onto a llama-server chat completion body."""
-    body = base_chat_body(request)
-    options = request.options
-    if options.max_output_tokens is not None:
-        body["max_tokens"] = options.max_output_tokens
-    if options.temperature is not None:
-        body["temperature"] = options.temperature
-    if options.top_p is not None:
-        body["top_p"] = options.top_p
-    if chat_template_kwargs:
-        body["chat_template_kwargs"] = dict(chat_template_kwargs)
-    return body
+    return chat_body(
+        prompt_fields(request.messages, request.tool_schemas, chat_template_kwargs),
+        request.options,
+    )
 
 
 @dataclass(frozen=True)
@@ -91,14 +121,34 @@ class LlamaCppAdapter(ModelAdapter):
             context_limit=self._config.context_limit,
             reasoning_controls=("enable_thinking",),
             usage_reporting=True,
-            # llama-server has /tokenize, but the adapter exposes no
-            # tokenizer interface yet; advertising one would be
-            # dishonest (RM16). Flip when that interface lands.
-            tokenizer_available=False,
+            # count_tokens measures through the pinned runtime's own
+            # template and tokenizer (spec section 4.1).
+            tokenizer_available=True,
+        )
+
+    def _prompt_fields(
+        self, messages: Sequence[Message], tool_schemas: Sequence[ToolSchema]
+    ) -> dict[str, object]:
+        """The fields that shape the templated prompt.
+
+        generate and count_tokens both build the prompt here, so a
+        subclass that reshapes it reshapes both and the count keeps
+        measuring the prompt a generation sends (spec section 4.1).
+        """
+        return prompt_fields(messages, tool_schemas, self._config.chat_template_kwargs)
+
+    def _chat_body(self, request: GenerationRequest) -> dict[str, object]:
+        """The chat completion body generate sends; subclasses may extend it.
+
+        Fields added here (sampling, response format, cache control) do
+        not shape the prompt; prompt changes belong in _prompt_fields.
+        """
+        return chat_body(
+            self._prompt_fields(request.messages, request.tool_schemas), request.options
         )
 
     async def generate(self, request: GenerationRequest) -> AsyncIterator[AdapterEvent]:
-        body = build_chat_request(request, chat_template_kwargs=self._config.chat_template_kwargs)
+        body = self._chat_body(request)
         cancel_event = self._cancel_events.setdefault(request.generation_id, asyncio.Event())
         try:
             async for event in stream_chat_events(
@@ -111,6 +161,47 @@ class LlamaCppAdapter(ModelAdapter):
                 yield event
         finally:
             self._cancel_events.pop(request.generation_id, None)
+
+    async def count_tokens(
+        self,
+        messages: Sequence[Message],
+        tool_schemas: Sequence[ToolSchema] = (),
+    ) -> int:
+        """Count input tokens with the pinned runtime (spec section 4.1).
+
+        Applies the runtime's chat template with this adapter's
+        chat-template settings and the offered tools (/apply-template),
+        then tokenizes that prompt (/tokenize), so the count is the
+        prompt a generation would send. A runtime failure raises
+        TokenCountError; no estimate is substituted (RM16).
+        """
+        template_body = self._prompt_fields(messages, tool_schemas)
+        prompt = (await self._post_json("/apply-template", template_body)).get("prompt")
+        if not isinstance(prompt, str):
+            raise TokenCountError("llama-server /apply-template returned no prompt")
+        tokens = (
+            await self._post_json(
+                "/tokenize", {"content": prompt, "add_special": True, "parse_special": True}
+            )
+        ).get("tokens")
+        if not isinstance(tokens, list):
+            raise TokenCountError("llama-server /tokenize returned no token list")
+        return len(tokens)
+
+    async def _post_json(self, path: str, body: Mapping[str, object]) -> Mapping[str, object]:
+        try:
+            response = await self._client.post(path, json=body)
+        except httpx.HTTPError as exc:
+            raise TokenCountError(f"llama-server {path} unreachable: {exc}") from exc
+        if response.status_code != 200:
+            raise TokenCountError(f"llama-server {path} returned status {response.status_code}")
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise TokenCountError(f"llama-server {path} returned invalid JSON") from exc
+        if not isinstance(data, Mapping):
+            raise TokenCountError(f"llama-server {path} returned a non-object")
+        return data
 
     async def cancel(self, generation_id: str) -> None:
         event = self._cancel_events.get(generation_id)

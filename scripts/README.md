@@ -43,6 +43,25 @@
   Single pass, sequential, concurrency one: observations, never p50 or
   p95 (spec 12.3).
 
+- `probes/probe_routing.py` — the routing probe spike (issue #48). It
+  launches llama-server like `probe_timing.py`, then asks the pinned
+  model to route the prompts in `probes/m2_routing.json` among the six
+  demo skills with three mechanisms: native function calling (one
+  function per skill), a JSON envelope, and the envelope under
+  grammar-constrained decoding. Each output is judged by the production
+  RouteDecision validator; router input is counted with the local
+  tokenizer, and a prompt over the spec 4.1 cap of 2,048 tokens takes
+  the bypass and is marked. The probe definition states llama-server's
+  `cache_prompt` setting, which the export records. The export backs
+  the routing entry in `docs/EVIDENCE.md`.
+
+  ```bash
+  python scripts/probes/probe_routing.py scripts/probes/m2_routing.json \
+      --out docs/evidence/<date>-m2-routing-<machine>.json
+  ```
+
+  A spike: minimal tests, single pass, observations only (spec 12.3).
+
 ## Planned
 
 Evaluation and benchmark scripts (spec section 12):

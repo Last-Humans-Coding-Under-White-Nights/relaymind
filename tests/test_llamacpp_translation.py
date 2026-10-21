@@ -21,7 +21,7 @@ from relaymind.adapters import (
     Usage,
 )
 from relaymind.adapters.llamacpp import build_chat_request
-from relaymind.adapters.openai_compat import StreamAccumulator
+from relaymind.adapters.openai_compat import StreamAccumulator, streamed_chat_body
 
 
 def make_request(**overrides):
@@ -440,3 +440,12 @@ def test_request_body_with_tools_is_json_serializable():
     # wire body must still serialize (the live smoke caught this).
     body = build_chat_request(make_request(), chat_template_kwargs=None)
     json.dumps(body)
+
+
+def test_streamed_chat_body_always_streams_with_usage():
+    # Spec 12.1: usage is only reported on a stream that asks for it, so
+    # prompt fields must never switch streaming or its options off.
+    body = streamed_chat_body({"model": "m", "stream": False, "stream_options": None})
+    assert body["stream"] is True
+    assert body["stream_options"] == {"include_usage": True}
+    assert body["model"] == "m"
