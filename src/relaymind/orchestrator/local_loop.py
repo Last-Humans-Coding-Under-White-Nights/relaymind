@@ -204,7 +204,7 @@ from relaymind.skills import Skill, SkillRegistry
 from relaymind.skills.predicates import COMPLETION_PREDICATES, Predicate
 from relaymind.store import IdempotencyClaim, RunRecord, RunStore, StaleVersionError, TraceClock
 from relaymind.store.run_store import EventDraft, utc_iso
-from relaymind.store.trace_event import EventType
+from relaymind.store.trace_event import WORKFLOW_BRANCHES, EventType
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry, ToolRejectedError
 from relaymind.tools.executor import Execution, OperationInFlightError, ToolExecutor, ValidatedCall
 from relaymind.tools.registry import SideEffect, ToolResult, ToolStatus
@@ -225,9 +225,7 @@ USER_DENIED = "user_denied"
 WORKFLOW_UNAVAILABLE = "workflow_unavailable"
 PARALLEL_WORKFLOW = "parallel_workflow"
 # The branches of the parallel workflow, as traced (spec 0.25, RM15).
-LOCAL_HEALTH = "local_health"
-EXTERNAL_CHECKLIST = "external_checklist"
-SYNTHESIS = "synthesis"
+LOCAL_HEALTH, EXTERNAL_CHECKLIST, SYNTHESIS = WORKFLOW_BRANCHES
 ROUTING_MECHANISM = "native_function_calling"
 RESUME_MECHANISM = "clarification_resume"
 # Section 5: each waiting state resumes with its own body shape.
@@ -1160,7 +1158,7 @@ class _Run:
             summary["workflow"] = self._workflow_summary(self.workflow)
         return summary
 
-    def _workflow_summary(self, workflow: "_Workflow") -> dict[str, Any]:
+    def _workflow_summary(self, workflow: _Workflow) -> dict[str, Any]:
         """The measurement of the parallel workflow (RM15, RM25, spec 0.25 section 8).
 
         Every figure comes from the monotonic clock or from the run's own
@@ -1912,9 +1910,8 @@ class _Run:
             unfinished = [task for task in (local, draft) if not task.done()]
             if unfinished:
                 self.cancel_generation()
-            for task in unfinished:
-                task.cancel()
-            if unfinished:
+                for task in unfinished:
+                    task.cancel()
                 await asyncio.gather(*unfinished, return_exceptions=True)
         failed = self._failed_branch(local, draft)
         if failed is not None:
@@ -1935,10 +1932,9 @@ class _Run:
     ) -> RunOutcome | None:
         """End the run for the branch that failed, or None when both finished (section 4.4)."""
         for task in (local, draft):
-            if task.cancelled() or task.exception() is None:
+            exc = None if task.cancelled() else task.exception()
+            if exc is None:
                 continue
-            exc = task.exception()
-            assert exc is not None
             if isinstance(exc, ContextLimitExceeded):
                 return self._fail_context(exc.size)
             if task is local:

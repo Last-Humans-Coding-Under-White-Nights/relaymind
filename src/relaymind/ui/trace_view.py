@@ -20,6 +20,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from relaymind.store import EventType, RunRecord, RunStore, TraceEvent
+from relaymind.store.trace_event import WORKFLOW_BRANCHES
 
 __all__ = ["build_trace_view", "trace_view_from"]
 
@@ -116,7 +117,6 @@ def _model_calls(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
     return calls
 
 
-_WORKFLOW_BRANCHES = ("local_health", "external_checklist", "synthesis")
 _WORKFLOW_FIGURES = (
     "branch_wall_ms",
     "local_health_ms",
@@ -138,7 +138,7 @@ def _workflow(
     if not any(call["branch"] for call in calls):
         return None
     stages = []
-    for branch in _WORKFLOW_BRANCHES:
+    for branch in WORKFLOW_BRANCHES:
         own = [call for call in calls if call["branch"] == branch]
         if not own:
             continue

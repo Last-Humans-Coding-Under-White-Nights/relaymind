@@ -264,7 +264,7 @@ class BudgetMeter:
     def time_exhausted(self, external: bool = False) -> BudgetExceededError:
         """The stop for work that ran out of time: the limit that bounded it."""
         key = external or self._external
-        name = self._bounds[key] if self._bounds[key] is not None else self._time_bound(key)[1]
+        name = self._bounds[key] or self._time_bound(key)[1]
         return BudgetExceededError(name, getattr(self.budgets, name))
 
     def check_time(self, external: bool = False) -> None:
