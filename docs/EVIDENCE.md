@@ -1319,7 +1319,7 @@ change; it does not cover a second vendor's API.
 | Credentials | Only the variable names are in the launch files and the export; a scan of the four export files and the tracked tree found no key |
 | Test time | 2026-10-22, 14:24 to 14:29 UTC |
 | Python | 3.14.7, OpenAI SDK 3.36.0, Playwright Chromium |
-| Application | branch `feat/issue-109-ac08-second-provider` at `7b56f19`, clean tree (the export records `head` and `dirty: false`) |
+| Application | branch `feat/issue-109-ac08-second-provider` at `7b56f19`, clean tree (the export records `head` and `dirty: false`). The branch was then rebased onto the rebased #111 base; `7b56f19` became `62b66f1`, with an identical tree |
 | Configuration | Default budgets (RM03); one llama-server shared by eight gateway starts in sequence, each with its own run store and sandbox copy |
 
 Command, from the repository root with the b11785 directory first on
