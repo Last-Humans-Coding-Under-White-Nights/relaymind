@@ -119,6 +119,8 @@ def lifecycle(harness, monkeypatch, tmp_path):
         manifest=str(harness.DEFAULT_MANIFEST),
         out=str(tmp_path / "evidence.json"),
         external_base_url=None,
+        external_model=None,
+        external_context_limit=None,
         second_external_base_url=None,
         second_external_model=None,
         second_external_context_limit=None,
