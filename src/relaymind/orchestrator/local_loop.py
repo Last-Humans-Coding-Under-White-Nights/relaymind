@@ -802,7 +802,9 @@ class LocalOrchestrator:
                 async with asyncio.timeout(PROVIDER_CANCEL_SECONDS):
                     await adapter.cancel(generation_id)
 
-        request = asyncio.Task(ask(), eager_start=True)
+        # The loop is passed explicitly: on CPython 3.12 an eager Task built
+        # without it fails before the loop is resolved.
+        request = asyncio.Task(ask(), loop=asyncio.get_running_loop(), eager_start=True)
         if not request.done():
             self._provider_cancels.add(request)
             request.add_done_callback(self._provider_cancels.discard)
