@@ -10,9 +10,13 @@ Issue #3.
 Run explicitly with: pytest -m live
 Requires llama-server on PATH and the model file from
 models/qwen3-0.6b-q8_0.manifest.json (see models/README.md).
+RELAYMIND_LIVE_MANIFEST may name another manifest, such as
+models/qwen3-0.6b-q4_k_m.manifest.json for the AC08 swap; the suite then
+runs against that manifest's artifact, runtime, and launch settings
+with no code change.
 RELAYMIND_SMOKE_MODEL may point to the artifact elsewhere on disk, but
-it must be the pinned artifact itself (byte-identical, same SHA-256 as
-the manifest); any other file fails verification.
+it must be the manifest's artifact itself (byte-identical, same SHA-256
+as the manifest); any other file fails verification.
 """
 
 import json
@@ -28,9 +32,10 @@ import pytest
 
 from helpers import (
     HEALTH_TOOL,
+    LIVE_MANIFEST_ENV,
     MODELS_DIR,
-    PINNED_MANIFEST_PATH,
     collect_events,
+    live_manifest_path,
     make_request,
     run_closing,
 )
@@ -59,21 +64,14 @@ pytestmark = pytest.mark.live
 MODEL_ENV = "RELAYMIND_SMOKE_MODEL"
 
 
-@pytest.fixture(scope="module", autouse=True)
-def require_llama_server() -> None:
-    # Autouse, so it runs before the manifest fixtures: on a machine
-    # without llama-server the suite skips, even with a broken manifest.
-    if shutil.which("llama-server") is None:
-        pytest.skip("llama-server not on PATH")
-
-
 @pytest.fixture(scope="module")
 def manifest() -> ArtifactManifest:
     # The manifest owns the pinned launch settings (spec section 6); the
     # server argv and the adapter config derive from it. Loaded here, not
     # at import, so a broken manifest never breaks collection of the
-    # default (non-live) suite.
-    return load_manifest(PINNED_MANIFEST_PATH)
+    # default (non-live) suite. RELAYMIND_LIVE_MANIFEST selects another
+    # manifest (AC08).
+    return load_manifest(live_manifest_path(os.environ))
 
 
 def _free_port() -> int:
@@ -101,7 +99,16 @@ def server(tmp_path_factory, manifest, adapter_settings):
         # before the runtime, so a machine without the model skips.
         if override:
             pytest.fail(f"{MODEL_ENV} points to a missing file: {model_path}")
+        # A manifest chosen on purpose (AC08) must run, never skip.
+        if os.environ.get(LIVE_MANIFEST_ENV):
+            pytest.fail(
+                f"{LIVE_MANIFEST_ENV} names a manifest whose artifact is missing: {model_path}"
+            )
         pytest.skip(f"model artifact not found: {model_path}")
+    # Resolve and check explicit selections before a missing runtime can
+    # skip the test. Both live suites share this server fixture.
+    if shutil.which("llama-server") is None:
+        pytest.skip("llama-server not on PATH")
     # RM18: a passing smoke on a different binary does not qualify this pin.
     version = subprocess.run(
         ["llama-server", "--version"], capture_output=True, text=True, check=True
@@ -118,10 +125,10 @@ def server(tmp_path_factory, manifest, adapter_settings):
     except ManifestError as exc:
         if override:
             pytest.fail(
-                f"{MODEL_ENV} must point to the pinned artifact {manifest.file_name} "
+                f"{MODEL_ENV} must point to the manifest's artifact {manifest.file_name} "
                 f"(byte-identical to the manifest); {exc}"
             )
-        pytest.fail(f"pinned artifact {model_path} failed verification: {exc}")
+        pytest.fail(f"artifact {model_path} failed verification: {exc}")
     server_args = launch_settings_argv(manifest.launch_settings)
     port = _free_port()
     # Keep server logs on disk so a startup failure (port conflict,

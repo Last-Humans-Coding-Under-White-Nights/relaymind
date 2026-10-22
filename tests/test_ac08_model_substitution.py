@@ -20,9 +20,10 @@ runs load the same skill root. Only the endpoints are scripted: they
 replay the same model turns over httpx.MockTransport.
 
 Scope: the second local artifact is a configuration value here, a
-model identifier and an endpoint, not a qualified artifact. Only one
-artifact has a manifest (spec section 6), so there is no live variant;
-docs/TESTING.md records that.
+model identifier and an endpoint. The live local swap to the second
+qualified artifact (models/qwen3-0.6b-q4_k_m.manifest.json) runs the
+live suite with RELAYMIND_LIVE_MANIFEST (issue #90); docs/TESTING.md
+and docs/EVIDENCE.md record it.
 """
 
 import asyncio

@@ -24,6 +24,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Second local model artifact and the live AC08 local swap (#90; RM18, AC08,
+  spec sections 6 and 12.3): `models/qwen3-0.6b-q4_k_m.manifest.json`
+  (Qwen3-0.6B Q4_K_M), generated from the artifact, passed the live
+  smoke suite and the English live skill-and-tool runs on llama.cpp
+  b11785. `RELAYMIND_LIVE_MANIFEST` selects the manifest the live suite
+  runs against, so the swap from Q8_0 to Q4_K_M needs no code change;
+  the live trace export names the manifest. The runs are in
+  `docs/EVIDENCE.md`. `models/qwen3-0.6b-q4_0.manifest.json` (Q4_0) is
+  recorded as not qualified: it failed the thinking-mode smoke check.
+  The external half of AC08 stays covered by scripted endpoints only,
+  so AC08 stays open.
 - Chat disconnect cancels the run (#92; RM14, RM17, RM19, RM20, AC12;
   spec 0.24 section 7.4): when the client of `POST /v1/chat/completions`
   leaves before the response is sent, with stream true or false, the run

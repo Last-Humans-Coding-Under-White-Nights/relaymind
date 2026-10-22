@@ -10,8 +10,10 @@ recorded in [`docs/EVIDENCE.md`](docs/EVIDENCE.md) for Apple Silicon
 macOS and native x86-64 Windows. M3 (handoff and confirmation), M4
 (public API and observability), and M5 (parallel workflow and caching)
 are closed on deterministic tests with model doubles only: no live run
-is recorded for their acceptance scenarios. AC08 stays open until a
-second local model artifact is qualified. M6 (evaluation) is next;
+is recorded for their acceptance scenarios. AC08 has a live swap to a
+second local model artifact (Qwen3-0.6B Q4_K_M, #90), but its external
+half has scripted endpoints only, so it stays open. M6 (evaluation) is
+next;
 the missing M5 live evidence is tracked in
 [#104](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/104).
 

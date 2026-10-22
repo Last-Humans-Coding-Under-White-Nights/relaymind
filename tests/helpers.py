@@ -5,7 +5,7 @@ import importlib.util
 import json
 import subprocess
 import sys
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -34,6 +34,21 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 
 # The checked-in candidate manifest (RM18, spec section 6).
 PINNED_MANIFEST_PATH = MODELS_DIR / "qwen3-0.6b-q8_0.manifest.json"
+# The second local artifact, for the AC08 swap (spec section 6: Q4 and
+# Q8 are comparison candidates).
+SECOND_MANIFEST_PATH = MODELS_DIR / "qwen3-0.6b-q4_k_m.manifest.json"
+# Names the manifest the live suite runs against (AC08: a configuration
+# value, so the swap needs no code change).
+LIVE_MANIFEST_ENV = "RELAYMIND_LIVE_MANIFEST"
+
+
+def live_manifest_path(environ: Mapping[str, str]) -> Path:
+    """The manifest the live suite uses: the pinned one unless the
+    environment names another. Relative paths are rooted at the checkout,
+    independent of the directory pytest was started from."""
+    value = environ.get(LIVE_MANIFEST_ENV)
+    return (REPO_ROOT / value).resolve() if value else PINNED_MANIFEST_PATH
+
 
 # The start time of FakeClock, a fixed UTC moment.
 T0 = datetime(2026, 10, 20, 3, 0, 0, tzinfo=UTC)
