@@ -164,6 +164,7 @@
                   "additionalProperties": false
                 }
               },
+              "routing_cache": {"type": "boolean"},
               "answer_options": {
                 "type": "object",
                 "properties": {
@@ -458,7 +459,22 @@
       "then": {
         "properties": {
           "payload": {
-            "properties": {"originating_version": {"type": "string", "pattern": "\\S"}},
+            "properties": {
+              "originating_version": {"type": "string", "pattern": "\\S"},
+              "originating_run_id": {"type": "string", "pattern": "\\S"},
+              "skill": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string", "pattern": "\\S"},
+                  "version": {"type": "string", "pattern": "\\S"},
+                  "content_hash": {"type": "string", "pattern": "\\S"}
+                },
+                "required": ["name", "version", "content_hash"],
+                "additionalProperties": false
+              },
+              "age_ms": {"type": "integer", "minimum": 0},
+              "key": {"type": "string", "pattern": "\\S"}
+            },
             "required": ["originating_version"]
           }
         }

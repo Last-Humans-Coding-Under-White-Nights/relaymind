@@ -797,6 +797,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   branch calls; restart recovery keeps the branch of a settled operation and
   writes no workflow object; the trace shows each stage's duration from the
   terminal workflow object.
+- Specification 0.25 -> 0.26: section 10 specifies the caching policy
+  (#31; RM07, RM24, RM22, AC13). The skill parse cache is keyed by file
+  content hash. The routing-result cache is set by the new launcher table
+  `cache` (section 14.1), off by default and in the benchmark
+  configuration, and is limited to local read-only skill choices with an
+  exact key, a five-minute TTL, and 256 entries. A hit skips only the
+  routing generation: authorization and tools run fresh. Skill or
+  permission changes drop dependent entries. Section 8 defines the
+  cache.hit payload (originating_version and originating_run_id), the
+  routing_cache label of run.accepted, and the routing_cache route
+  mechanism; statistics exports name the cache setting (section 12.1).
+  The key holds the tool calls of assistant turns and a routing prompt
+  version derived from the routing prompt and functions; expired entries
+  are removed as expired before each lookup and store; an unusable hit is
+  counted as a miss; and every route.selected of a cache-enabled run,
+  gateway-made ones included, carries the hit or miss label.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried

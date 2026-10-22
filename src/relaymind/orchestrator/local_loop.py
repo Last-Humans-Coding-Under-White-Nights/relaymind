@@ -190,6 +190,14 @@ from relaymind.orchestrator.route_decision import (
     RouteDecisionError,
 )
 from relaymind.orchestrator.router import Router, Routing, request_language
+from relaymind.orchestrator.routing_cache import (
+    CacheContext,
+    CachedRoute,
+    RoutingCache,
+    is_eligible,
+    key_and_context,
+    routing_prompt_version,
+)
 from relaymind.orchestrator.run_state import (
     CANCEL_REQUESTED,
     TERMINAL_STATES,
@@ -564,8 +572,11 @@ class LocalOrchestrator:
         parallel_in_auto: bool = False,
         external: ConfiguredModel | None = None,
         degraded_mode: bool = False,
+        routing_cache: RoutingCache | None = None,
     ) -> None:
         self.model = model
+        # Spec 0.26 section 10: None (the default) runs without a routing cache.
+        self.routing_cache = routing_cache
         self.external = external
         # Operator policy (section 11): an unavailable local model may
         # route directly to external. Off by default.
@@ -1208,6 +1219,7 @@ class _Run:
                     "model_alias": self.model_alias,
                     "budgets": self.o.budgets.to_json_object(),
                     **self.offered,
+                    **({"routing_cache": True} if self.o.routing_cache is not None else {}),
                     "original_messages": self._original_messages(),
                     "answer_options": self._answer_option_record(),
                 },
@@ -1462,7 +1474,11 @@ class _Run:
         self.emit(
             EventType.ROUTE_SELECTED,
             GATEWAY_ACTOR,
-            {"decision": routing.decision.to_json_object(), "mechanism": RESUME_MECHANISM},
+            {
+                "decision": routing.decision.to_json_object(),
+                "mechanism": RESUME_MECHANISM,
+                **self._cache_label("miss"),
+            },
         )
         return routing
 
@@ -1762,7 +1778,11 @@ class _Run:
         self.emit(
             EventType.ROUTE_SELECTED,
             GATEWAY_ACTOR,
-            {"decision": decision.to_json_object(), "mechanism": "degraded_mode"},
+            {
+                "decision": decision.to_json_object(),
+                "mechanism": "degraded_mode",
+                **self._cache_label("miss"),
+            },
         )
 
     async def _run_external(
@@ -2132,7 +2152,11 @@ class _Run:
             self.emit(
                 EventType.ROUTE_SELECTED,
                 GATEWAY_ACTOR,
-                {"decision": decision.to_json_object(), "mechanism": "execution_mode"},
+                {
+                    "decision": decision.to_json_object(),
+                    "mechanism": "execution_mode",
+                    **self._cache_label("miss"),
+                },
             )
             return Routing(decision)
 
@@ -2142,6 +2166,12 @@ class _Run:
             capabilities.require("tool_calling", "tokenizer_available")
         except UnsupportedCapabilityError as exc:
             raise self._local_unavailable(str(exc)) from exc
+
+        # One key per routing request: the lookup and the store share it.
+        cache_key = self._cache_key() if self.o.routing_cache is not None else None
+        cached = self._cached_routing(cache_key)
+        if cached is not None:
+            return cached
 
         routing_messages = router.routing_messages(self.messages)
         functions = router.functions()
@@ -2160,6 +2190,7 @@ class _Run:
                     "mechanism": "bypass",
                     "input_tokens": input_tokens,
                     "input_cap": self.o.budgets.routing_input_tokens,
+                    **self._cache_label("miss"),
                 },
             )
             return Routing(decision)
@@ -2183,9 +2214,114 @@ class _Run:
                 "call_id": call_id,
                 "input_tokens": input_tokens,
                 "model_language": generation.calls[0].arguments.get("language"),
+                **self._cache_label("miss"),
+            },
+        )
+        self._store_route(routing, cache_key)
+        return routing
+
+    # -- routing cache (spec 0.26 section 10) -------------------------------------
+
+    def _cache_label(self, outcome: str) -> dict[str, str]:
+        """Spec 0.26 Labels: every route.selected of a cache run says hit or miss."""
+        return {} if self.o.routing_cache is None else {"routing_cache": outcome}
+
+    def _cache_key(self) -> tuple[str, CacheContext]:
+        o = self.o
+        return key_and_context(
+            messages=self.messages,
+            language=self._routing_language().value,
+            mode=self.mode.value,
+            offered=[o.skills.get(name) for name in o.router.offered],
+            tools=o.tools,
+            policy=o.policy,
+            caller=o.caller,
+            model_id=o.model.model_id,
+            enabled_workflows=o.enabled_workflows,
+            routing_prompt_version=routing_prompt_version(o.router.functions()),
+        )
+
+    def _routing_language(self) -> Language:
+        return self.language or request_language(self.messages)
+
+    def _cached_routing(self, cache_key: tuple[str, CacheContext] | None) -> Routing | None:
+        """The routing of a cache hit, or None for a miss (no routing generation then ran).
+
+        Only the skill choice is cached. The decision is built again with
+        the gateway rules of a resume, so identifiers and the route come
+        from the current request and registry; anything but a local route
+        is a miss. Authorization and tools are not touched here (RM08).
+        """
+        cache = self.o.routing_cache
+        if cache is None or cache_key is None:
+            return None
+        key, context = cache_key
+        hit = cache.lookup(key, context)
+        if hit is None:
+            return None
+        try:
+            routing = self.o.router.resume_decision(
+                hit.route.skill_id,
+                self.messages,
+                mode=self.mode,
+                language=self._routing_language(),
+            )
+        except RouteDecisionError:
+            routing = None
+        if routing is None or routing.decision.route is not Route.LOCAL:
+            cache.drop(key)
+            return None
+        self.emit(
+            EventType.CACHE_HIT,
+            GATEWAY_ACTOR,
+            {
+                "originating_version": hit.route.skill_version,
+                "originating_run_id": hit.route.run_id,
+                "skill": {
+                    "name": hit.route.skill_id,
+                    "version": hit.route.skill_version,
+                    "content_hash": hit.route.skill_hash,
+                },
+                "age_ms": hit.age_ms,
+                "key": key,
+            },
+        )
+        self.emit(
+            EventType.ROUTE_SELECTED,
+            GATEWAY_ACTOR,
+            {
+                "decision": routing.decision.to_json_object(),
+                "mechanism": "routing_cache",
+                "routing_cache": "hit",
             },
         )
         return routing
+
+    def _store_route(self, routing: Routing, cache_key: tuple[str, CacheContext] | None) -> None:
+        """Keep the skill choice of a local read-only route (spec 0.26: eligibility)."""
+        cache = self.o.routing_cache
+        decision = routing.decision
+        if (
+            cache is None
+            or cache_key is None
+            or decision.route is not Route.LOCAL
+            or decision.skill_id is None
+        ):
+            return
+        skill = self.o.skills.get(decision.skill_id)
+        if not is_eligible(skill, self.o.tools):
+            return
+        key, context = cache_key
+        cache.store(
+            key,
+            context,
+            CachedRoute(
+                skill_id=skill.name,
+                skill_version=skill.version,
+                skill_hash=skill.content_hash,
+                run_id=self.run_id,
+            ),
+        )
 
     # -- generations -------------------------------------------------------------
 

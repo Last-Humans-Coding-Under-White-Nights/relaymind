@@ -15,8 +15,8 @@ local model artifact is qualified. The operator starts the gateway with
 one command, `relaymind serve --config <file>` (see
 [Start the gateway](#start-the-gateway)). Chinese support is best-effort
 (spec 0.7): Chinese live results are recorded but are not a gate. M5
-(caching) and M6 (evaluation) are next; the M5 parallel workflow is
-implemented with model doubles. See
+(parallel workflow and caching) is implemented with model doubles; M6
+(evaluation) is next. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan and the
 open items, and [`CHANGELOG.md`](CHANGELOG.md) for what has landed so
 far.
@@ -55,9 +55,18 @@ See [`AGENTS.md`](AGENTS.md) for the full contributor workflow.
   combines the two. The trace and the UI show each branch and the
   synthesis call as separate actors, with the extra call latency.
 
-Not built yet: skill caching (M5), and the evaluation corpus and latency
-benchmark (M6). The parallel workflow is covered by deterministic tests
-with model doubles only; no live run is recorded for it.
+- Caches skill parsing by content hash, and can cache the routing choice of
+  a repeated local read-only request. The routing cache is off by default
+  and in the benchmark configuration; the operator turns it on with
+  `[cache] routing = true` in the launcher file. A cached route skips only
+  the routing generation: authorization and tools still run fresh, a skill
+  or permission change drops the entries, and the trace records `cache.hit`
+  and labels the run.
+
+Not built yet: the evaluation corpus and latency benchmark (M6). The
+parallel workflow and the caches are covered by deterministic tests with
+model doubles only; no live run is recorded for them, and no cache speedup
+is claimed.
 
 ## Repository layout
 

@@ -370,7 +370,7 @@ Carried forward, not done in M4:
   covered by the native cancel tests only. No production backend
   forwards a live provider stream yet (`LiveAnswer` is tested with a
   backend double).
-- `cache.hit` execution stays with #31. (`parallel_demo` runs the
+- `cache.hit` execution was left to #31 (done in M5). (`parallel_demo` runs the
   workflow since #30; see M5.)
 - The UI has no run listing (runs are opened by ID), and the comparison
   pairing is held by the page, not stored.
@@ -390,8 +390,17 @@ Carried forward, not done in M4:
   `parallel_demo` ready when the workflow is enabled and both models are
   ready. Implemented with model doubles (`tests/test_parallel_workflow.py`);
   not yet run against live models, so no latency figure is claimed.
-- Skill/template caching by content hash; routing cache experiments
-  behind a flag, off by default (#31; RM24).
+- Caching policy (#31; RM07, RM22, RM24, AC13, spec 0.26 section 10):
+  skill parsing and resource text are cached by content hash
+  (`SkillRegistry.reloaded` re-reads the roots; unchanged files are not
+  parsed again). The routing-result cache is behind `cache.routing` in the
+  launcher file, off by default and in the benchmark configuration. It
+  stores only the skill choice of a local read-only route (five minutes,
+  256 entries); a hit skips the routing generation and emits `cache.hit`
+  with the originating version, while authorization and tools run fresh.
+  A skill or permission change drops dependent entries. Runs and exported
+  statistics are labeled cache on or off. Implemented with model doubles;
+  no live run and no speedup is claimed.
 - Operator launcher (#87; RM17, RM18, RM19, RM21, RM23, spec 0.21
   section 14.1): `relaymind serve --config relaymind.toml` replaces the
   hand-written start script. It wires the models, skill roots, sandbox,
