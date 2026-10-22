@@ -1,12 +1,16 @@
-# Testing RelayMind (Milestones 1 and 2)
+# Testing RelayMind (Milestones 1 to 4)
 
-How to verify the M1 and M2 deliverables, by hand on macOS and Windows
+How to verify the M1 to M4 deliverables, by hand on macOS and Windows
 and with the automated suites. M1 qualifies the local model runtime and
-the adapters; M2 adds the bounded local loop (see
-[`ROADMAP.md`](ROADMAP.md)). The gateway's own public API
-(`/v1/chat/completions`, `/relay/v1/runs`) arrives in M4, so manual
-JSON testing targets the llama-server endpoint that the
-`LlamaCppAdapter` talks to.
+the adapters; M2 adds the bounded local loop; M3 adds handoff,
+confirmation, restart recovery, and the error contract; M4 adds the
+gateway's public API and the demo UI (see [`ROADMAP.md`](ROADMAP.md)).
+M3 and M4 are covered by deterministic tests with model doubles only;
+[What is not covered yet](#what-is-not-covered-yet) lists the gaps. The
+manual JSON steps below target the llama-server endpoint that the
+`LlamaCppAdapter` talks to. The gateway has no launcher yet; the
+[README](../README.md#send-a-message) shows a script that starts it and
+the requests to send it.
 
 ## Automated suites
 
@@ -29,7 +33,7 @@ To use the pinned GGUF from another location, set
 `RELAYMIND_SMOKE_MODEL=<path>`. The file must be the pinned artifact
 itself, with the manifest's SHA-256; any other file fails the run.
 
-### Acceptance tests for the local loop (M2)
+### Acceptance and contract tests (M2 to M4)
 
 - AC01, deterministic: `pytest tests/test_ac01_local_health.py` runs a
   simple health request in English and Chinese through the local loop
@@ -64,6 +68,23 @@ itself, with the manifest's SHA-256; any other file fails the run.
   execution slot (429), a textual yes (not an approval), and the same
   flow in the external stage. No live model is run, so there is no live
   AC05 record yet.
+
+- AC06, deterministic: `pytest tests/test_ac06_tool_output_injection.py`
+  plays an injected sandbox log entry to model doubles that obey it. The
+  unallowed `delete_demo_database` call is rejected, caller permissions,
+  the skill allowlist, and the offered tool schemas stay unchanged, and
+  the secret is absent from events, tool operations, model requests, and
+  the SQLite store read back from disk. `tests/test_redaction.py` covers
+  the redaction rules. No live model is run, so there is no live AC06
+  record yet.
+
+- AC07 and the error part of AC16, deterministic:
+  `pytest tests/test_ac07_failure_behavior.py tests/test_error_contract.py
+  tests/test_degraded_mode.py` checks bounded failure with no invented
+  result when the local budget runs out or the external generation
+  fails, one HTTP status and stable code per failure (spec section 11),
+  and degraded mode as an operator policy recorded in the trace. No live
+  model is run, so there is no live AC07 record yet.
 
 - AC12, restart part, deterministic: `pytest tests/test_restart_recovery.py`
   simulates a restart with a new gateway over the same SQLite file. Runs
@@ -192,6 +213,23 @@ itself, with the manifest's SHA-256; any other file fails the run.
   anything is exposed, the three execution modes, and the
   ownership-mixing rejections on both aliases.
   No live model is run, so there is no live AC10 record yet.
+
+### What is not covered yet
+
+- No live-model record exists for AC02, AC05, AC06, AC07, AC09, AC10,
+  AC11, or AC12. Every M3 and M4 test above uses model doubles, which
+  does not satisfy a live-demo requirement (spec section 13).
+- AC08 is not closed: only one local artifact is qualified, so the swap
+  to a second qualified local model cannot run.
+- The demo UI page script (`src/relaymind/ui/static/app.js`) is not run
+  by an automated browser test; the tests cover the server contract it
+  relies on.
+- `parallel_demo` always fails with `workflow_unavailable` until the
+  parallel workflow (#30) lands, so `/readyz` never reports it ready.
+- No production backend forwards a live provider stream yet, so the
+  mid-stream failure path is tested with a backend double.
+- There is no launcher, so no test starts the gateway the way an
+  operator would.
 
 ### Required trace events (RM16, RM22, RM25)
 

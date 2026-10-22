@@ -242,8 +242,8 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   RM17, section 5), moved here from M2 because it only matters once
   mutations exist. Part of AC12, which closes in M4 together with #29.
   Implemented with a new gateway over the same store file
-  (`tests/test_restart_recovery.py`, spec 0.11); the startup call that
-  runs it belongs to the API work (#25).
+  (`tests/test_restart_recovery.py`, spec 0.11). The API work (#25) did
+  not add a startup call; it waits for the launcher (see the M4 status).
 - Prompt-injection test for tool output and secret redaction (#20;
   RM12).
 - Failure behavior and error codes (#21; RM04, section 11): the error
@@ -262,6 +262,33 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   qualified local model, so it stays open until a second artifact is
   qualified (spec section 6) and the swap runs against it.
 - Closes: AC02, AC05, AC06, AC07. AC08 is not closed (see above).
+
+Status (2026-10-22): **M3 closed** (PRs #71 to #76, spec 0.9 to 0.13).
+Handoff (#18), confirmation (#19), restart recovery (#8), tool-output
+injection defenses with repeated-secret redaction (#20), the error
+contract and degraded mode (#21), and the AC08 orchestrator and skill
+swap (#49) are merged. AC02, AC05, AC06, and AC07 pass with model
+doubles (`tests/test_ac02_handoff.py`, `tests/test_ac05_confirmation.py`,
+`tests/test_ac06_tool_output_injection.py`,
+`tests/test_ac07_failure_behavior.py`). The milestone was closed on
+deterministic coverage only: no live run of an M3 acceptance scenario is
+recorded in [`EVIDENCE.md`](EVIDENCE.md), which is less than the rule at
+the top of this page asks.
+
+Carried forward, not done in M3:
+
+- Live-model runs for AC02, AC05, AC06, and AC07. No live external
+  model has been run.
+- AC08 stays open until a second local artifact is qualified and the
+  swap runs against it.
+- Restart recovery exists as `LocalOrchestrator.recover_after_restart`,
+  but nothing calls it at startup yet, because there is no launcher
+  (see M4).
+- Recovery always marks an in-flight write `unknown_outcome`: the MVP
+  has no source to reconcile a write against.
+- One approval race is open: a second process sharing the store could
+  take the execution slot between the slot check and the resume. In one
+  process nothing awaits in that window.
 
 ## M4 — Public API and observability
 
@@ -310,6 +337,42 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   comparison on reset fixtures. The page script is not run by an automated
   browser test, and no live run is recorded.
 - Closes: AC09, AC10, AC11, AC12, AC16.
+
+Status (2026-10-22): **M4 closed** (PRs #79 to #85, spec 0.14 to 0.20).
+The compatible endpoints (#22), the streaming contract (#23), the
+client-owned tools alias (#24), the native run API (#25), idempotency
+keys (#26), cancellation during generation and in-flight writes (#29),
+and the demo trace UI (#28) are merged. AC09, AC10, AC11, AC12 (with
+#8), and the request and error parts of AC16 pass with model doubles;
+[`TESTING.md`](TESTING.md) lists the tests. As in M3, the milestone was
+closed on deterministic coverage only, and no live run is recorded.
+
+Carried forward, not done in M4:
+
+- Live-model runs for AC09, AC10, AC11, and AC12, and a UI session in
+  live mode.
+- An operator launcher. Nothing wires models, store, token,
+  `ChatSettings`, `NativeSettings`, and `UiSettings` into a start
+  command, and `pyproject.toml` has no entry point. The README shows a
+  script that starts the gateway by hand. The launcher must also run
+  restart recovery once at startup.
+- An automated browser test for the UI page script (`app.js`). The
+  browser timestamp of a UI submission is shown but not asserted.
+- The requested answer options (token budget, temperature, top_p) are
+  applied but not recorded in `run.accepted`; that needs a trace schema
+  change.
+- A compatible chat disconnect does not cancel a managed run that is
+  still working (spec section 7.4). Only a live provider stream is
+  closed, and no production backend forwards one yet (`LiveAnswer` is
+  tested with a backend double).
+- `parallel_demo` always fails with `workflow_unavailable`, and
+  `/readyz` never reports it ready, until #30. `cache.hit` execution
+  stays with #31.
+- The UI has no run listing (runs are opened by ID), and the comparison
+  pairing is held by the page, not stored.
+- A write in flight at a cancel is recorded as `unknown_outcome` even if
+  it finishes a moment later; its late result is dropped, not kept as
+  evidence.
 
 ## M5 — Parallel workflow and caching
 
@@ -373,3 +436,8 @@ listed here so the current order can be traced to its reason.
 - 2026-10-22, #49: AC08 no longer closes in M3. The orchestrator and
   skill swap passes with scripted endpoints, but the spec asks for a
   second qualified local model, and only one artifact is qualified.
+- 2026-10-22, M3 and M4 closed: both milestones were closed on
+  deterministic coverage with model doubles, without the live checks
+  the rule at the top of this page asks for. Their live runs, the
+  launcher those runs need, and AC08 are carried forward (see the M3
+  and M4 status paragraphs); M5 and M6 start from that state.

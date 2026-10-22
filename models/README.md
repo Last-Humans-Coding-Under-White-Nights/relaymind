@@ -11,7 +11,11 @@ Regenerate a manifest with `scripts/gen_model_manifest.py` (see
 
 | Manifest | Model | Status |
 |----------|-------|--------|
-| `qwen3-0.6b-q8_0.manifest.json` | Qwen3-0.6B Q8_0 | Candidate. Becomes the default only after the bilingual tool tests (spec section 6). |
+| `qwen3-0.6b-q8_0.manifest.json` | Qwen3-0.6B Q8_0 | Candidate. Becomes the default only after the English tool tests; Chinese results are reported but do not block the choice (spec section 6). |
+
+This is the only qualified local artifact. AC08 asks for a swap to a
+second qualified local model, so it stays open until a second manifest
+is added here and qualified ([`docs/ROADMAP.md`](../docs/ROADMAP.md)).
 
 ## Runtime and reasoning controls
 

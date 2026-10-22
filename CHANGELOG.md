@@ -739,6 +739,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Documentation brought up to date after M3 and M4: the README status,
+  features, layout, and a verified script that starts the gateway by
+  hand (there is no launcher yet); the M3 and M4 status and carried
+  forward items in the roadmap; the open gaps in `docs/TESTING.md` and
+  `docs/EVIDENCE.md`; the API and UI notes in `docs/ARCHITECTURE.md`
+  and `AGENTS.md`; and small fixes in `models/README.md` and
+  `skills/README.md`. No behavior change.
 - Specification 0.17 → 0.18: section 7.4 defines idempotency keys (RM17,
   RM21, AC11, #26): the key format, the caller scope, the request hash,
   that a key is stored with the run it creates, the replay of a native
