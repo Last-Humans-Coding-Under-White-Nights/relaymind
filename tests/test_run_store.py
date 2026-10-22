@@ -1018,8 +1018,12 @@ def test_an_approval_is_not_pending_once_its_run_moved_on(store):
         expected_version=run.version,
         from_state="waiting_confirmation",
         to_state="cancelled",
-        error_code="cancelled",
-        event=(EventType.RUN_CANCELLED, "gateway", dict(TERMINAL_EVIDENCE)),
+        error_code="cancel_requested",
+        event=(
+            EventType.RUN_CANCELLED,
+            "gateway",
+            {"reason": "cancel_requested", **TERMINAL_EVIDENCE},
+        ),
     )
     assert store.get_pending_approval(run.run_id) is None
 

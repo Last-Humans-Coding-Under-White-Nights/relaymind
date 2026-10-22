@@ -654,14 +654,14 @@ def test_a_wait_cancelled_during_its_expiry_is_dropped(tmp_path):
 
     def cancel_now():
         record = gateway.store.get_run(cancelled.run_id)
-        machine.cancel(cancelled.run_id, record.version, reason="user_cancelled")
+        machine.cancel(cancelled.run_id, record.version, reason="cancel_requested")
 
     fail_transition_once(gateway, cancelled.run_id, before=cancel_now)
     gateway.clock.advance(301)
     (expired,) = gateway.orchestrator.expire_waiting()
     assert expired.run_id == other.run_id
     record = gateway.store.get_run(cancelled.run_id)
-    assert (record.state, record.error_code) == ("cancelled", "user_cancelled")
+    assert (record.state, record.error_code) == ("cancelled", "cancel_requested")
     assert cancelled.run_id not in gateway.orchestrator._waiting
     assert not of_type(gateway.store.events(cancelled.run_id), "run.failed")
 
@@ -677,14 +677,14 @@ def test_a_waiting_run_cancelled_elsewhere_is_not_expired(tmp_path):
     gateway.orchestrator.machine.cancel(
         cancelled.run_id,
         record.version,
-        reason="user_cancelled",
+        reason="cancel_requested",
     )
 
     gateway.clock.advance(301)
     (expired,) = gateway.orchestrator.expire_waiting()
     assert expired.run_id == other.run_id
     record = gateway.store.get_run(cancelled.run_id)
-    assert (record.state, record.error_code) == ("cancelled", "user_cancelled")
+    assert (record.state, record.error_code) == ("cancelled", "cancel_requested")
 
 
 def test_every_resume_event_matches_the_published_schema(tmp_path):

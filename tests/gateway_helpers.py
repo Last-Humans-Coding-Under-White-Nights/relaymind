@@ -199,6 +199,24 @@ def assert_needs_external(gateway: Gateway, outcome, events, reason_code: str) -
     assert gateway.store.active_run_id() is None
 
 
+def assert_workflow_unavailable(gateway: Gateway, outcome, events) -> None:
+    """RM21, section 4.4: parallel_demo failed explicitly with workflow_unavailable."""
+    assert outcome.state is RunState.FAILED
+    assert outcome.error_code == "workflow_unavailable"
+    assert outcome.reason_code == "parallel_workflow"
+    assert outcome.answer is None
+    record = gateway.store.get_run(outcome.run_id)
+    assert (record.state, record.error_code) == ("failed", "workflow_unavailable")
+    (failed,) = of_type(events, "run.failed")
+    assert failed.payload["error_code"] == "workflow_unavailable"
+    assert failed.payload["reason_code"] == "parallel_workflow"
+    assert not of_type(events, "answer.delta")
+    # No external call was made, measured on the double when there is one.
+    if isinstance(gateway.external, ScriptedAdapter):
+        assert gateway.external.requests == []
+    assert gateway.store.active_run_id() is None
+
+
 def executed_tools(events) -> list[str]:
     """Tool names that really ran: tool.started is emitted only for executions."""
     return [e.payload["tool_name"] for e in of_type(events, "tool.started")]

@@ -25,8 +25,9 @@ IDs, the allowed tools, and the measured external request (RM13),
 confirmation.required is exactly the approval, tool, proposal,
 canonical redacted arguments, target, bound state_version, UTC
 expires_at, and proposing model, never the token or its hash (RM11),
-run.cancelled may name a reason, and a denied confirmation names
-user_denied and the approval_id (RM11),
+run.cancelled names its reason, user_denied for a denied confirmation
+(with the approval_id; RM11) or cancel_requested for any other cancel
+(with the approval_id of an approval it voided),
 cache.hit names the originating version,
 and skill.loaded names the skill, its version, and its content hash
 (RM06). Timestamps are UTC; elapsed_ms
@@ -355,17 +356,20 @@ def _check_confirmation_payload(payload: Mapping[str, Any]) -> None:
 
 
 # Spec 0.10 section 8: a denied confirmation ends the run as cancelled
-# with this reason and the approval ID (RM11).
-_USER_DENIED = "user_denied"
+# with user_denied and the approval ID (RM11). Spec 0.17 sections 7.4 and
+# 8: every other cancellation is a cancel request, so every run.cancelled
+# names one of these reasons, with or without a voided approval.
+_CANCEL_REASONS = ("user_denied", "cancel_requested")
 
 
 def _check_cancelled_payload(payload: Mapping[str, Any]) -> None:
-    """The section 8 run.cancelled reason and approval_id (RM11, RM17)."""
-    for key in ("reason", "approval_id"):
-        if key in payload and not _is_text(payload[key]):
-            raise TraceEventError(f"'{key}' must be a non-blank string")
-    if "approval_id" in payload and payload.get("reason") != _USER_DENIED:
-        raise TraceEventError(f"a run.cancelled with an approval_id needs 'reason' {_USER_DENIED}")
+    """The section 8 run.cancelled reason and approval_id (RM11, RM17, RM22)."""
+    if payload.get("reason") not in _CANCEL_REASONS:
+        raise TraceEventError(
+            f"run.cancelled payload needs 'reason' {' or '.join(_CANCEL_REASONS)}"
+        )
+    if "approval_id" in payload and not _is_text(payload["approval_id"]):
+        raise TraceEventError("'approval_id' must be a non-blank string")
 
 
 def _check_answered_payload(payload: Mapping[str, Any]) -> None:

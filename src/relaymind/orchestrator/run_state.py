@@ -74,6 +74,11 @@ class RunState(StrEnum):
 
 S = RunState
 
+# Spec 0.17 sections 7.4 and 8: the run.cancelled reason of every cancel
+# that is not a denied confirmation, such as a native cancel request or a
+# compatible chat disconnect.
+CANCEL_REQUESTED = "cancel_requested"
+
 TERMINAL_STATES: frozenset[RunState] = frozenset({S.COMPLETED, S.FAILED, S.CANCELLED})
 WAITING_STATES: frozenset[RunState] = frozenset({S.WAITING_INPUT, S.WAITING_CONFIRMATION})
 ACTIVE_STATES: frozenset[RunState] = frozenset(
@@ -242,20 +247,20 @@ class RunStateMachine:
         run_id: str,
         expected_version: int,
         *,
-        reason: str | None = None,
+        reason: str = CANCEL_REQUESTED,
         event: EventDraft | None = None,
     ) -> RunRecord:
         """Cancel an unfinished run (RM17: stale is 409, terminal never changes).
 
         event is the run.cancelled event (RM22). Without one, the gateway
-        records run.cancelled with measured active/waiting time and the optional reason.
+        records run.cancelled with measured active/waiting time and the
+        reason: user_denied for a denied confirmation, otherwise
+        cancel_requested (spec 0.17 sections 7.4 and 8).
         """
         if event is None:
             # Check the caller's version before doing any timing work (RM17).
             self._current(run_id, expected_version)
-            payload = self.store.state_timings(run_id)
-            if reason:
-                payload = {**payload, "reason": reason}
+            payload = {"reason": reason, **self.store.state_timings(run_id)}
             event = (EventType.RUN_CANCELLED, GATEWAY_ACTOR, payload)
         return self.transition(
             run_id, expected_version, S.CANCELLED, error_code=reason, event=event

@@ -899,17 +899,19 @@ def test_an_admitted_parallel_workflow_is_not_run_as_a_single_external_actor(tmp
 
     The parallel workflow (#30) is not wired yet. Handing the run to the
     external model alone would skip the local branch and complete a
-    parallel decision as a plain external run, so the run ends as
-    needs_external with reason parallel_workflow and no external call.
+    parallel decision as a plain external run, so the run ends with no
+    external call: needs_external with reason parallel_workflow in auto,
+    and workflow_unavailable in parallel_demo (RM21, spec 0.17).
     """
     gateway = build_gateway(
         tmp_path,
         [route_turn("health-and-diagnostic-checklist")],
         enabled_workflows={"health-and-diagnostic-checklist"},
+        parallel_in_auto=True,
         external_turns=[text_turn("staging-api is healthy.")],
     )
     outcome, events = run(
-        gateway, "Run the health checklist for staging-api.", execution_mode="parallel_demo"
+        gateway, "Run the health checklist for staging-api.", execution_mode="auto"
     )
 
     assert of_type(events, "route.selected")[0].payload["decision"]["route"] == "parallel"

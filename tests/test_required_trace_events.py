@@ -47,6 +47,9 @@ def test_terminal_evidence_is_required_at_write_time(kind, missing):
         # Spec sections 5 and 8: an interrupted run.failed also names the
         # interrupted state and the settled operations (RM10, RM17).
         payload |= {"interrupted_state": "local_running", "settled_operations": []}
+    if kind == "run.cancelled":
+        # Spec 0.17 section 8: every run.cancelled names its reason.
+        payload["reason"] = "cancel_requested"
     del payload[missing]
     with RunStore() as store:
         run_id = accepted(store)
@@ -296,4 +299,8 @@ def test_cancellation_timings_survive_reopen_without_counting_downtime(tmp_path)
     clock.advance(1000)
     with RunStore(path, clock=clock) as store:
         RunStateMachine(store).cancel(record.run_id, record.version)
-        assert store.events(record.run_id)[-1].payload == {"active_ms": 2000, "waiting_ms": 2000}
+        assert store.events(record.run_id)[-1].payload == {
+            "reason": "cancel_requested",
+            "active_ms": 2000,
+            "waiting_ms": 2000,
+        }
