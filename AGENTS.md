@@ -29,7 +29,7 @@ codebase.
 | `src/relaymind/schema_util.py` | Shared boundary checks for published, versioned JSON Schemas: closed field sets, exact schema_version, first schema error (spec section 8) |
 | `src/relaymind/redaction.py` | Configured secret-field redaction before anything is persisted (RM12, section 8) |
 | `src/relaymind/stats.py` | Per-generation timing metrics and JSON export for adapter comparisons (RM25, section 12.1) |
-| `src/relaymind/ui/` | Demo UI: decisions and execution evidence (RM23) |
+| `src/relaymind/ui/` | Demo UI: decisions and execution evidence (RM23); the trace view built from stored events (`trace_view.py`), escaped HTML (`render.py`), routes and static page (`routes.py`, `static/`), the comparison on reset fixtures (`comparison.py`), and the declared data mode (`settings.py`) |
 | `models/` | Pinned model artifact manifests (RM18, spec section 6); GGUF files are downloaded per `models/README.md`, never checked in |
 | `skills/` | Demo skill packages, one directory per skill, SKILL.md plus `skill.manifest.json`; the default skill root (operators may configure others, spec section 4.2) |
 | `tests/` | Test suite; `tests/fixtures/` holds sandbox demo data |

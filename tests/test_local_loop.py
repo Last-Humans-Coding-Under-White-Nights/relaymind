@@ -649,8 +649,29 @@ def test_run_accepted_carries_the_section_8_payload(tmp_path):
         "budgets": LocalBudgets().to_json_object(),
         "skill_roots": snapshot["skill_roots"],
         "skills_offered": snapshot["skills_offered"],
+        "original_messages": [{"role": "user", "content": "Is staging-api healthy right now?"}],
     }
     assert outcome.state is RunState.COMPLETED
+
+
+def test_run_accepted_keeps_the_conversation_text_in_order(tmp_path):
+    """Spec 0.20 section 8: system, user, and assistant text, as role and content."""
+    gateway = build_gateway(tmp_path, HEALTH_RUN)
+    messages = (
+        Message(role=Role.SYSTEM, content="Be brief."),
+        Message(role=Role.USER, content="Hello"),
+        Message(role=Role.ASSISTANT, content="Hi."),
+        Message(role=Role.USER, content="Is staging-api healthy right now?"),
+    )
+    outcome = asyncio.run(gateway.orchestrator.run(messages))
+
+    (accepted,) = of_type(gateway.store.events(outcome.run_id), "run.accepted")
+    assert accepted.payload["original_messages"] == [
+        {"role": "system", "content": "Be brief."},
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi."},
+        {"role": "user", "content": "Is staging-api healthy right now?"},
+    ]
 
 
 def test_an_absent_mode_is_recorded_as_null_and_runs_as_auto(tmp_path):

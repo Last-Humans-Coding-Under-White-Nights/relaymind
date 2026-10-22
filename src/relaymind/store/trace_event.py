@@ -38,8 +38,9 @@ run.accepted is the first event of a run (RM22): it has seq 1, and seq
 payload: the requested execution mode (or null), the effective mode,
 the model_alias (relaymind or relaymind-client-tools for a chat run,
 null for a native run; spec 0.6 section 8), the budgets in force
-(RM03), the skill roots in order, and the skills offered with name,
-version, and content_hash.
+(RM03), the skill roots in order, the skills offered with name,
+version, and content_hash, and the original messages as role and text
+(spec 0.20 section 8; the demo UI shows the prompt from them).
 """
 
 import math
@@ -120,6 +121,9 @@ MODEL_ALIASES: tuple[str, ...] = ("relaymind", "relaymind-client-tools")
 
 _SKILL_OFFERED_FIELDS = ("name", "version", "content_hash")
 
+# The roles whose text is kept as the original request (spec 0.20 section 8).
+_MESSAGE_ROLES = ("system", "developer", "user", "assistant")
+
 # The same patterns as the published schema: a UTC RFC 3339 time, and
 # non-blank text (at least one non-space character).
 _UTC_TIMESTAMP = re.compile(
@@ -198,6 +202,7 @@ def _check_accepted_payload(payload: Mapping[str, Any]) -> None:
         "budgets",
         "skill_roots",
         "skills_offered",
+        "original_messages",
     ):
         if key not in payload:
             raise TraceEventError(f"run.accepted payload needs '{key}'")
@@ -223,6 +228,22 @@ def _check_accepted_payload(payload: Mapping[str, Any]) -> None:
         raise TraceEventError(
             "'skills_offered' must be an array of objects with a non-blank"
             f" {', '.join(_SKILL_OFFERED_FIELDS)}"
+        )
+    _check_original_messages(payload["original_messages"])
+
+
+def _check_original_messages(messages: object) -> None:
+    """The conversation roles of the request, as role and text (spec 0.20 section 8)."""
+    if not _is_array(messages) or not all(
+        isinstance(message, Mapping)
+        and set(message) == {"role", "content"}
+        and message["role"] in _MESSAGE_ROLES
+        and isinstance(message["content"], str)
+        for message in messages
+    ):
+        raise TraceEventError(
+            "'original_messages' must be an array of objects with only a role"
+            f" ({', '.join(_MESSAGE_ROLES)}) and a text content"
         )
 
 

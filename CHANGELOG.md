@@ -24,6 +24,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Demo trace UI (#28; RM23, RM25, RM11, RM21; spec 0.20 sections 8 and 9):
+  the gateway serves a static page at `GET /ui` (no token, no run data,
+  a content security policy) that shows a run's original prompt, mode,
+  models, skill, route, tool proposals and operations, failed
+  operations, escalation reason, clarification, confirmation, final
+  answer, and timing. `GET /ui/runs/{id}` renders a trace from the
+  stored events only, with every value escaped. The operator declares
+  the data mode (live, replay, or double); it has no default and is
+  shown in every view. Latency is the first model action, never the
+  completed answer, and the run's active and waiting time are separate
+  fields. Confirmation, denial, clarification, and cancel go through the
+  native resume and cancel endpoints. `POST /ui/comparisons` runs the
+  same input in auto and then external_only, resetting the sandbox before
+  each run and cancelling any run that waits for input; it never resets
+  the sandbox while a run is active, and an arm still active after its
+  cancel is reported and ends the comparison. The run.accepted
+  event now carries `original_messages` (the caller's own text, redacted
+  by field name only, kept with the run's seven-day retention). Tests use
+  model doubles (`tests/test_demo_ui*.py`); the page script is not run by
+  an automated browser test and no live run is recorded.
+- Specification 0.19 → 0.20: section 8 adds `original_messages` to the
+  run.accepted payload, and section 9 defines the demo UI (#28): the
+  static shell, the declared data mode and its label, the trace fields,
+  the model action latency rule, the clarification and confirmation
+  controls, and the comparison on reset fixtures (RM23, RM25).
 - Cancellation during generation and in-flight writes (#29; RM10, RM14,
   RM17, AC12; spec 0.19 section 7.4): a cancel of a running run now asks
   the adapter of the generation in flight, local or external, to cancel

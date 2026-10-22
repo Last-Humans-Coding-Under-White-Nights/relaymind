@@ -486,6 +486,13 @@ def test_run_accepted_needs_every_section_8_payload_field(missing):
         ("skill_roots", [""]),
         ("skill_roots", [3]),
         ("skills_offered", None),
+        ("original_messages", None),
+        ("original_messages", "Is staging-api healthy?"),
+        ("original_messages", ["Is staging-api healthy?"]),
+        ("original_messages", [{"role": "user"}]),
+        ("original_messages", [{"role": "tool", "content": "x"}]),
+        ("original_messages", [{"role": "user", "content": None}]),
+        ("original_messages", [{"role": "user", "content": "x", "extra": 1}]),
         ("skills_offered", ["check-service-health"]),
         ("skills_offered", [{"name": "check-service-health", "version": "1.0.0"}]),
         (
@@ -527,6 +534,10 @@ def test_the_published_schema_states_the_run_accepted_rules():
     assert props["model_alias"] == {"enum": MODEL_ALIASES}
     assert props["budgets"] == {"type": "object"}
     assert props["skill_roots"] == {"type": "array", "items": TEXT}
+    messages = props["original_messages"]
+    assert messages["type"] == "array"
+    assert sorted(messages["items"]["required"]) == ["content", "role"]
+    assert messages["items"]["additionalProperties"] is False
     offered = props["skills_offered"]
     assert offered["type"] == "array"
     assert sorted(offered["items"]["required"]) == ["content_hash", "name", "version"]

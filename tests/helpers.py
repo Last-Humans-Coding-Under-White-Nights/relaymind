@@ -68,6 +68,7 @@ ACCEPTED_PAYLOAD = {
     "skills_offered": [
         {"name": "check-service-health", "version": "1.0.0", "content_hash": "sha256:ab12"}
     ],
+    "original_messages": [{"role": "user", "content": "Is staging-api healthy right now?"}],
 }
 
 # Valid empty terminal evidence for store/state contract fixtures (RM16, RM25).

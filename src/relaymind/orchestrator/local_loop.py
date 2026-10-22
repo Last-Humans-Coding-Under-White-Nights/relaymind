@@ -1100,6 +1100,7 @@ class _Run:
                     "model_alias": self.model_alias,
                     "budgets": self.o.budgets.to_json_object(),
                     **self.offered,
+                    "original_messages": self._original_messages(),
                 },
             ),
             idempotency=self.idempotency,
@@ -1114,6 +1115,20 @@ class _Run:
         except BaseException as exc:
             self._abort(exc)
             raise
+
+    def _original_messages(self) -> list[dict[str, Any]]:
+        """The request's conversation text for run.accepted, redacted (spec 0.20 section 8).
+
+        Tool messages and tool calls are not text of the request, so only
+        the four conversation roles with content are kept.
+        """
+        roles = (Role.SYSTEM, Role.DEVELOPER, Role.USER, Role.ASSISTANT)
+        kept = [
+            {"role": m.role.value, "content": m.content}
+            for m in self.messages
+            if m.role in roles and m.content is not None
+        ]
+        return self.o.redactor.redact(kept)
 
     async def _guarded(self, route: Callable[[], Awaitable[Routing]]) -> RunOutcome:
         """Drive the run; any unexpected exception ends it (RM17, section 5)."""

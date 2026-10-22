@@ -708,7 +708,11 @@ def test_a_secret_confirmation_target_is_redacted_everywhere(tmp_path):
     decide(gateway, waiting)
     assert "demo-orders-db" not in database_ids(gateway)
     events = gateway.store.events(waiting.run_id)
-    assert "demo-orders-db" not in json.dumps([e.to_json_object() for e in events])
+    # Spec 0.20 section 8: original_messages is the caller's own text, written
+    # before any secret value of the run is known, so it is the one place that
+    # keeps the request as typed. Everything the run itself produced is scrubbed.
+    produced = [e.to_json_object() for e in events if e.event_type.value != "run.accepted"]
+    assert "demo-orders-db" not in json.dumps(produced)
 
 
 def test_a_drifted_secret_argument_voids_the_approval(tmp_path):
