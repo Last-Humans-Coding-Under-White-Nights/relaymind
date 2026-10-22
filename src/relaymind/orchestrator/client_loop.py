@@ -50,6 +50,7 @@ from relaymind.orchestrator.local_loop import (
     RunOutcome,
     _Generation,
     _Run,
+    _tool_exchange,
 )
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
@@ -272,13 +273,15 @@ class _ClientRun(_Run):
             reply, problem = self._admit_reply(generation)
             if reply is not None:
                 return reply
+            correction = f"{problem}. Reply again so that the request is met."
+            if generation.calls:
+                # The repair sees the call it proposed, with the reason as its result.
+                conversation += _tool_exchange(generation.calls[0], {"error": correction})
+                continue
             draft = generation.text.strip() or "(no usable reply)"
             conversation += [
                 Message(role=Role.ASSISTANT, content=draft),
-                Message(
-                    role=Role.USER,
-                    content=f"[gateway] {problem}. Reply again so that the request is met.",
-                ),
+                Message(role=Role.USER, content=f"[gateway] {correction}"),
             ]
         raise Escalation("invalid_output", problem)
 
@@ -300,7 +303,12 @@ class _ClientRun(_Run):
         return _Reply(generation), ""
 
     def _unique(self, call: ToolCall) -> ToolCall:
-        """The call with the model's ID, unless that ID was used already (RM19)."""
+        """The call with the model's ID, unless that ID was used already (RM19).
+
+        A blank ID never gets here: ToolCall rejects one, and the adapter
+        gives a call without a usable ID a synthesized one, which this
+        check then keeps unique in the conversation (spec section 7.2).
+        """
         if call.call_id not in self._taken:
             self._taken.add(call.call_id)
             return call

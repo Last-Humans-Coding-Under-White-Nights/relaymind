@@ -24,7 +24,8 @@ from api_helpers import (
 )
 from gateway_helpers import build_gateway, replace_handler, text_turn, tool_turn
 from helpers import make_capabilities, of_type
-from relaymind.adapters import Completed, ToolCall
+from relaymind.adapters import Completed, Role, ToolCall
+from relaymind.adapters.openai_compat import StreamAccumulator
 from relaymind.api.chat import ClientToolsChat
 from relaymind.api.chat_request import CLIENT_TOOLS
 from relaymind.orchestrator.budgets import LocalBudgets
@@ -363,6 +364,26 @@ def test_a_valid_call_after_an_invalid_one_is_returned(tmp_path):
     )
 
 
+def test_a_repair_after_an_invalid_call_keeps_the_proposed_call_in_the_conversation(tmp_path):
+    """RM08, RM19, RM03, AC10, spec 7.2: the repair sees the call it proposed and why it failed."""
+    gateway, app = client_app(
+        tmp_path, [tool_turn("get_weather", call_id="call_bad", city=5), weather_call()]
+    )
+    response = request(app)
+    assert message_of(response)["tool_calls"][0]["id"] == "call_w1"
+    proposed, answer = gateway.adapter.requests[1].messages[-2:]
+    assert proposed.role is Role.ASSISTANT
+    (kept,) = proposed.tool_calls
+    assert (kept.call_id, kept.tool_name, dict(kept.arguments)) == (
+        "call_bad",
+        "get_weather",
+        {"city": 5},
+    )
+    assert answer.role is Role.TOOL
+    assert answer.tool_call_id == "call_bad"
+    assert "invalid" in json.loads(answer.content)["error"]
+
+
 # -- one call per response, and call IDs (RM19) ----------------------------------------------
 
 
@@ -408,6 +429,31 @@ def test_a_call_id_used_earlier_in_the_conversation_is_replaced(tmp_path):
     gateway.adapter._turns.append(text_turn(ANSWER))
     again = post(app, {"model": CLIENT_TOOLS, "tools": [WEATHER], "messages": messages})
     assert again.status_code == 200
+
+
+def streamed_call(call_id):
+    """The events the OpenAI-compatible stream parser makes of one streamed call."""
+    accumulator = StreamAccumulator()
+    fragment = {
+        "index": 0,
+        "id": call_id,
+        "function": {"name": "get_weather", "arguments": json.dumps({"city": "Oslo"})},
+    }
+    events = accumulator.feed({"choices": [{"delta": {"tool_calls": [fragment]}}]})
+    events += accumulator.feed({"choices": [{"delta": {}, "finish_reason": "tool_calls"}]})
+    return events + accumulator.flush()
+
+
+@pytest.mark.parametrize("blank", [" ", "\t\n"], ids=["space", "whitespace"])
+def test_a_blank_call_id_from_the_model_is_replaced(tmp_path, blank):
+    """RM19, AC10, spec 7.2: the gateway replaces a blank call ID instead of failing."""
+    gateway, app = client_app(tmp_path, [streamed_call(blank)])
+    response = request(app)
+    assert response.status_code == 200
+    (exposed,) = message_of(response)["tool_calls"]
+    assert exposed["id"].strip()
+    (proposed,) = of_type(events_of(gateway, response), "tool.proposed")
+    assert proposed.payload["proposal_id"] == exposed["id"]
 
 
 # -- answer options ------------------------------------------------------------------------

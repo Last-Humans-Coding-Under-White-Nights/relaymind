@@ -180,7 +180,8 @@ class StreamAccumulator:
 
     def _absorb_tool_fragment(self, fragment: Mapping[str, object]) -> None:
         partial = self._tool_calls.setdefault(int(fragment.get("index") or 0), _PartialToolCall())
-        if fragment.get("id"):
+        # A blank id counts as omitted; the call gets a synthesized one.
+        if str(fragment.get("id") or "").strip():
             partial.call_id = str(fragment["id"])
         function = fragment.get("function") or {}
         if function.get("name"):
