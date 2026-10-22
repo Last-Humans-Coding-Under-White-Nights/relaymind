@@ -143,10 +143,14 @@ def test_a_changed_skill_or_permission_drops_the_dependent_entries(changed):
 
 
 def test_drop_removes_one_entry():
+    """RM24: removing an entry without a lookup does not invent a hit or miss."""
     cache = RoutingCache(clock=FakeClock().monotonic)
     cache.store("k1", CONTEXT, route())
+    before = cache.counters()
     cache.drop("k1")
+    assert cache.counters() == before
     assert cache.lookup("k1", CONTEXT) is None
+    assert cache.counters() == {**before, "misses": 1}
 
 
 # -- review findings for #31 ------------------------------------------------------
@@ -256,3 +260,81 @@ def test_the_routing_prompt_version_follows_the_prompt_and_the_functions():
     other = (ToolSchema("check-service-health", "Check one service", schema),)
     assert routing_prompt_version(other) != base
     assert routing_prompt_version(functions, system_prompt=SYSTEM_PROMPT) == base
+
+
+def test_dropping_an_unread_entry_keeps_other_entries_hits():
+    """RM24: a drop must not reclassify a successful lookup of another entry."""
+    cache = RoutingCache(clock=FakeClock().monotonic)
+    cache.store("read", CONTEXT, route())
+    cache.store("unread", CONTEXT, route())
+    assert cache.lookup("read", CONTEXT) is not None
+    before = cache.counters()
+    cache.drop("unread")
+    assert cache.counters() == before
+    cache.drop("unread")
+    assert cache.counters() == before
+
+
+def test_replacing_an_entry_does_not_reclassify_its_old_hits():
+    """RM24: a new entry under the same key has no lookup to turn into a miss."""
+    cache = RoutingCache(clock=FakeClock().monotonic)
+    cache.store("k", CONTEXT, route())
+    assert cache.lookup("k", CONTEXT) is not None
+    cache.store("k", CONTEXT, route("run_2"))
+    before = cache.counters()
+    cache.drop("k")
+    assert cache.counters() == before
+
+
+def test_drop_reclassifies_only_one_lookup_and_only_once():
+    """RM24: only the latest unusable lookup becomes a miss, not earlier hits."""
+    cache = RoutingCache(clock=FakeClock().monotonic)
+    cache.store("k", CONTEXT, route())
+    assert cache.lookup("k", CONTEXT) is not None
+    assert cache.lookup("k", CONTEXT) is not None
+    cache.drop("k")
+    assert (cache.hits, cache.misses) == (1, 1)
+    before = cache.counters()
+    cache.drop("k")
+    assert cache.counters() == before
+
+
+def test_cache_age_is_non_negative_when_an_injected_clock_moves_backwards():
+    """RM22, RM24: even a custom clock cannot produce an invalid cache.hit age."""
+    clock = FakeClock()
+    cache = RoutingCache(clock=clock.monotonic)
+    cache.store("k", CONTEXT, route())
+    clock.advance(-0.1)
+    hit = cache.lookup("k", CONTEXT)
+    assert hit is not None and hit.age_ms == 0
+    clock.advance(0.6)
+    assert cache.lookup("k", CONTEXT).age_ms == 500
+
+
+def test_context_keeps_a_snapshot_of_skill_hashes_for_invalidation():
+    """RM07, AC13: editing the source mapping cannot rewrite stored dependencies."""
+    hashes = {"check-service-health": "sha256:aaa"}
+    original = CacheContext(hashes, CONTEXT.permissions, CONTEXT.enabled_tools)
+    cache = RoutingCache(clock=FakeClock().monotonic)
+    cache.store("k", original, route())
+    hashes["check-service-health"] = "sha256:bbb"
+    changed = CacheContext(hashes, CONTEXT.permissions, CONTEXT.enabled_tools)
+    assert cache.lookup("k", changed) is None
+    assert cache.invalidated == 1
+
+
+def test_context_skill_hashes_cannot_be_edited():
+    """RM07: a frozen dependency snapshot cannot be changed through its mapping."""
+    context = CacheContext({"skill": "sha256:a"}, frozenset(), frozenset())
+    with pytest.raises(TypeError):
+        context.skill_hashes["skill"] = "sha256:b"
+
+
+def test_equal_contexts_are_hashable_regardless_of_mapping_order():
+    """RM07: an immutable dependency snapshot has stable value-based hashing."""
+    first = CacheContext({"a": "sha256:a", "b": "sha256:b"}, frozenset(), frozenset())
+    equal = CacheContext({"b": "sha256:b", "a": "sha256:a"}, frozenset(), frozenset())
+    different = CacheContext({"a": "sha256:c", "b": "sha256:b"}, frozenset(), frozenset())
+    contexts = {first: "original"}
+    assert contexts[equal] == "original"
+    assert different not in contexts

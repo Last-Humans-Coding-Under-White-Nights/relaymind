@@ -258,10 +258,12 @@ def _check_cache_hit_payload(payload: Mapping[str, Any]) -> None:
         raise TraceEventError("cache.hit 'age_ms' must be a non-negative integer")
     skill = payload.get("skill")
     if "skill" in payload and not (
-        isinstance(skill, Mapping) and all(_is_text(skill.get(k)) for k in _SKILL_OFFERED_FIELDS)
+        isinstance(skill, Mapping)
+        and set(skill) == set(_SKILL_OFFERED_FIELDS)
+        and all(_is_text(skill[key]) for key in _SKILL_OFFERED_FIELDS)
     ):
         raise TraceEventError(
-            f"cache.hit 'skill' must have a non-blank {', '.join(_SKILL_OFFERED_FIELDS)}"
+            f"cache.hit 'skill' must have exactly a non-blank {', '.join(_SKILL_OFFERED_FIELDS)}"
         )
 
 

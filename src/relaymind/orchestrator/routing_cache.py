@@ -17,7 +17,8 @@ in any case.
 import time
 from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from types import MappingProxyType
 from typing import Any
 
 from relaymind.adapters import Message
@@ -44,6 +45,13 @@ class CacheContext:
     permissions: frozenset[str]
     enabled_tools: frozenset[str]
 
+    def __post_init__(self) -> None:
+        # Keep a snapshot even when the caller later changes its source mapping.
+        object.__setattr__(self, "skill_hashes", MappingProxyType(dict(self.skill_hashes)))
+
+    def __hash__(self) -> int:
+        return hash((frozenset(self.skill_hashes.items()), self.permissions, self.enabled_tools))
+
 
 @dataclass(frozen=True)
 class CachedRoute:
@@ -65,6 +73,7 @@ class CacheHit:
 class _Entry:
     route: CachedRoute
     stored_at: float
+    looked_up: bool = False
 
 
 def _plain(value: Any) -> Any:
@@ -199,7 +208,8 @@ class RoutingCache:
             self.misses += 1
             return None
         self.hits += 1
-        return CacheHit(entry.route, int((now - entry.stored_at) * 1000))
+        self._entries[key] = replace(entry, looked_up=True)
+        return CacheHit(entry.route, max(0, int((now - entry.stored_at) * 1000)))
 
     def store(self, key: str, context: CacheContext, route: CachedRoute) -> None:
         self._invalidate(context)
@@ -213,8 +223,9 @@ class RoutingCache:
             self.evicted += 1
 
     def drop(self, key: str) -> None:
-        """Remove the entry of a hit the gateway could not use; that lookup is a miss."""
-        if self._entries.pop(key, None) is not None:
+        """Remove an entry, reclassifying its latest lookup, if any, as a miss."""
+        entry = self._entries.pop(key, None)
+        if entry is not None and entry.looked_up:
             self.hits -= 1
             self.misses += 1
 

@@ -11,6 +11,7 @@ the registered tools on every load.
 import hashlib
 from collections import OrderedDict
 from collections.abc import Callable
+from copy import deepcopy
 from typing import Any
 
 DEFAULT_MAX_ENTRIES = 1024
@@ -43,7 +44,8 @@ class ContentCache:
         kind separates parses that read the same bytes differently (for
         example a SKILL.md and the directory name it must match). digest
         is the SHA-256 digest of data when the caller already has it, so
-        the bytes are hashed once.
+        the bytes are hashed once. Returned values are caller-owned:
+        nested mutations never alter the cached parse.
         """
         if digest is None:
             digest = hashlib.sha256(data).digest()
@@ -51,10 +53,10 @@ class ContentCache:
         if key in self._entries:
             self._entries.move_to_end(key)
             self.hits += 1
-            return self._entries[key]
+            return deepcopy(self._entries[key])
         self.misses += 1
         value = parse(data)
-        self._entries[key] = value
+        self._entries[key] = deepcopy(value)
         while len(self._entries) > self.max_entries:
             self._entries.popitem(last=False)
         return value

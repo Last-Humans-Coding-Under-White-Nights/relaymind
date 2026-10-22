@@ -168,3 +168,38 @@ def test_reload_keeps_the_registry_class(root, tools):
         [root], tools=tools, predicates=COMPLETION_PREDICATES.keys(), workflows=PARALLEL_WORKFLOWS
     )
     assert type(first.reloaded()) is Custom
+
+
+def test_cached_parse_results_are_isolated_from_nested_mutation():
+    """RM07, RM24: changing a returned parse cannot change what the bytes mean."""
+    cache = ContentCache()
+    parsed = {"allowed_tools": ["get_service_health"], "nested": {"values": [1]}}
+    calls = []
+
+    def parse(data):
+        calls.append(data)
+        return parsed
+
+    first = cache.get_or_parse("manifest", b"same bytes", parse)
+    first["allowed_tools"].clear()
+    parsed["nested"]["values"].append(2)
+    second = cache.get_or_parse("manifest", b"same bytes", parse)
+    assert second == {"allowed_tools": ["get_service_health"], "nested": {"values": [1]}}
+    second["nested"]["values"].clear()
+    third = cache.get_or_parse("manifest", b"same bytes", parse)
+    assert third == {"allowed_tools": ["get_service_health"], "nested": {"values": [1]}}
+    assert calls == [b"same bytes"]
+
+
+def test_mutating_a_cached_manifest_cannot_change_a_reloaded_skill(root, tools):
+    """RM07, RM24: equal file bytes keep the same skill despite mutations by a cache reader."""
+    first = load(root, tools)
+    name = "check-service-health"
+    raw = (root / name / "skill.manifest.json").read_bytes()
+    manifest = first.parse_cache.get_or_parse(f"manifest:{name}", raw, json.loads)
+    manifest["version"] = "tampered"
+    manifest["allowed_tools"].clear()
+    second = first.reloaded()
+    assert second.get(name).version == first.get(name).version
+    assert second.get(name).allowed_tools == first.get(name).allowed_tools
+    assert second.get(name).content_hash == first.get(name).content_hash

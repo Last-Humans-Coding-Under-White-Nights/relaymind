@@ -86,3 +86,17 @@ def test_exported_statistics_name_the_routing_cache_setting(tmp_path):
     export_stats(on, identity=identity, records=[], routing_cache=True)
     assert json.loads(off.read_text("utf-8"))["routing_cache"] == "off"
     assert json.loads(on.read_text("utf-8"))["routing_cache"] == "on"
+
+
+@pytest.mark.parametrize("validator", ["python", "schema"])
+def test_cache_hit_skill_rejects_unknown_fields(validator):
+    """RM22, section 8: cache.hit skill provenance has a closed field set."""
+    payload = copy.deepcopy(HIT)
+    payload["skill"]["unexpected"] = True
+    data = event("cache.hit", payload)
+    if validator == "python":
+        with pytest.raises(TraceEventError):
+            validate_trace_event(data)
+    else:
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.Draft202012Validator(TRACE_EVENT_SCHEMA).validate(data)

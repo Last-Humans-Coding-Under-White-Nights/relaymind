@@ -248,7 +248,7 @@ def _load_package(
         )
     except UnicodeDecodeError as exc:
         raise _fail(package, "SKILL.md is not UTF-8 text") from exc
-    # The cached manifest is only read below, never changed, so it is not copied.
+    # The cache returns an independent manifest, including its nested lists.
     manifest = cache.get_or_parse(
         f"manifest:{package.name}",
         manifest_bytes,

@@ -469,7 +469,8 @@
                   "version": {"type": "string", "pattern": "\\S"},
                   "content_hash": {"type": "string", "pattern": "\\S"}
                 },
-                "required": ["name", "version", "content_hash"]
+                "required": ["name", "version", "content_hash"],
+                "additionalProperties": false
               },
               "age_ms": {"type": "integer", "minimum": 0},
               "key": {"type": "string", "pattern": "\\S"}
