@@ -151,7 +151,8 @@ async def run_client_request(
         final_options,
         idempotency,
     )
-    return await run.execute_client()
+    with orchestrator.owning(run):
+        return await run.execute_client()
 
 
 class _ClientRun(_Run):

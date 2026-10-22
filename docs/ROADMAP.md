@@ -363,10 +363,12 @@ Carried forward, not done in M4:
   applied but not recorded in `run.accepted`; that needed a trace schema
   change (#91). This is now done in M5: spec 0.22 records them (see
   below).
-- A compatible chat disconnect does not cancel a managed run that is
-  still working (spec section 7.4; #92). Only a live provider stream is
-  closed, and no production backend forwards one yet (`LiveAnswer` is
-  tested with a backend double).
+- A chat disconnect now cancels the run the request owns (spec 0.24
+  section 7.4; #92). A write cannot be in flight under a chat request,
+  because a chat reply cannot approve it, so the write settlement is
+  covered by the native cancel tests only. No production backend
+  forwards a live provider stream yet (`LiveAnswer` is tested with a
+  backend double).
 - `parallel_demo` always fails with `workflow_unavailable`, and
   `/readyz` never reports it ready, until #30. `cache.hit` execution
   stays with #31.

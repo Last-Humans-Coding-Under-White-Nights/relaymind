@@ -24,6 +24,7 @@ The app holds no model, tool, or store logic: the orchestrator owns it
 (section 3).
 """
 
+import asyncio
 import functools
 import json
 import logging
@@ -40,6 +41,7 @@ from starlette.types import Receive, Scope, Send
 from relaymind.api.auth import require_bearer_token
 from relaymind.api.chat import (
     ChatBackend,
+    ChatResult,
     ManagedChat,
     collect_live,
     completion_body,
@@ -173,7 +175,11 @@ def create_app(
         stored = check_stored_key(orchestrator.store, claim)
         if stored is None:
             try:
-                result = await backends[chat.alias].complete(replace(chat, idempotency=claim), mode)
+                result = await _until_disconnect(
+                    request,
+                    orchestrator,
+                    backends[chat.alias].complete(replace(chat, idempotency=claim), mode),
+                )
             except IdempotencyKeyTakenError as taken:
                 stored = stored_after_race(orchestrator.store, claim, taken)
         if stored is None:
@@ -347,6 +353,35 @@ class _ClosingStream(StreamingResponse):
             aclose = getattr(self.body_iterator, "aclose", None)
             if aclose is not None:
                 await aclose()
+
+
+async def _until_disconnect(
+    request: Request, orchestrator: LocalOrchestrator, work: Awaitable[ChatResult]
+) -> ChatResult:
+    """Run a chat backend; if the client leaves first, cancel the run it owns.
+
+    The cancel goes through the orchestrator's request cancel, the path
+    of the native cancel (RM14, AC12, spec 0.24 section 7.4). The
+    response of a client that left is never read.
+    """
+    task = asyncio.ensure_future(work)
+
+    async def watch() -> None:
+        while (await request.receive())["type"] != "http.disconnect":
+            pass
+
+    watcher = asyncio.ensure_future(watch())
+    try:
+        await asyncio.wait({task, watcher}, return_when=asyncio.FIRST_COMPLETED)
+        if not task.done():
+            orchestrator.request_cancel(task)
+            await asyncio.wait({task})
+            raise ApiError("run_terminal", "the client disconnected; the run was cancelled")
+        return task.result()
+    finally:
+        watcher.cancel()
+        if not task.done():
+            task.cancel()
 
 
 def _guarded(handler: _Handler) -> _Handler:
