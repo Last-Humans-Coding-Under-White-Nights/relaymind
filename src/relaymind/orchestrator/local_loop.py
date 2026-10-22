@@ -610,10 +610,8 @@ class LocalOrchestrator:
         or whose run has ended, is left alone.
         """
         run = self._owned.get(task)
-        if run is None or task.done():
-            return
-        run.cancel_generation()
-        task.cancel()
+        if run is not None and not task.done():
+            _stop(run, task)
 
     async def resume(self, run_id: str, expected_version: int, text: object) -> RunOutcome:
         """Resume a run waiting for input with explicit new input (section 5, RM17).
@@ -811,12 +809,7 @@ class LocalOrchestrator:
                 "close that request to cancel it"
             )
         run, task = driven
-        # Spec 0.19 section 7.4: the run task cannot dispatch anything
-        # until this call yields, so asking the adapter first still stops
-        # dispatch first, and the adapter is asked while it still knows
-        # the generation (task.cancel() tears its stream down).
-        run.cancel_generation()
-        task.cancel()
+        _stop(run, task)
         await asyncio.wait({task}, timeout=wait_seconds)
         return self.store.get_run(run_id)
 
@@ -2496,6 +2489,18 @@ class _Run:
         ]
         self.o.store.append_events(self.run_id, drafts)
         return published
+
+
+def _stop(run: _Run, task: "asyncio.Task[Any]") -> None:
+    """Stop a run its task is driving, as the native cancel does (RM14, AC12).
+
+    Spec 0.19 section 7.4: the run task cannot dispatch anything until
+    the caller yields, so asking the adapter first still stops dispatch
+    first, and the adapter is asked while it still knows the generation
+    (task.cancel() tears its stream down).
+    """
+    run.cancel_generation()
+    task.cancel()
 
 
 def _correction_exchange(text: str) -> list[Message]:

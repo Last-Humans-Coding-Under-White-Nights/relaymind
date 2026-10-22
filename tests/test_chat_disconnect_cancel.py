@@ -10,6 +10,8 @@ the client leaves; all model output is scripted (spec section 13).
 import asyncio
 import json
 
+import pytest
+
 from api_helpers import make_app, token_of
 from gateway_helpers import build_gateway, health_tail, route_turn
 from helpers import of_type
@@ -82,7 +84,7 @@ async def run_ended(gateway, run_id, timeout=10.0):
         await asyncio.sleep(0.005)
 
 
-def cancelled_run(gateway, adapter, run_id):
+def cancelled_run(gateway, run_id):
     events = gateway.store.events(run_id)
     assert gateway.store.get_run(run_id).state == "cancelled"
     (cancelled,) = of_type(events, "run.cancelled")
@@ -93,13 +95,15 @@ def cancelled_run(gateway, adapter, run_id):
     return events
 
 
-def test_a_chat_disconnect_cancels_the_run_without_stream(tmp_path):
-    """RM14, RM17, RM19, AC12: stream false; the generation is asked to stop, nothing dispatches."""
+@pytest.mark.parametrize("stream", [False, True])
+def test_a_chat_disconnect_cancels_the_run(tmp_path, stream):
+    """RM14, RM17, RM19, RM20, AC12: with or without stream, a run that has not
+    sent a byte is cancelled; the generation is asked to stop, nothing dispatches."""
     gateway, adapter = gated_gateway(tmp_path)
     app = make_app(gateway)
 
     async def go():
-        client = chat_client(app, stream=False).start()
+        client = chat_client(app, stream=stream).start()
         await asyncio.wait_for(adapter.started.wait(), 10)
         run_id = gateway.store.active_run_id()
         await client.leave()
@@ -107,27 +111,9 @@ def test_a_chat_disconnect_cancels_the_run_without_stream(tmp_path):
         return run_id
 
     run_id = asyncio.run(go())
-    cancelled_run(gateway, adapter, run_id)
+    cancelled_run(gateway, run_id)
     assert adapter.cancelled == [f"{run_id}_gen1_routing"]
     assert adapter.late_cancels == []
-
-
-def test_a_chat_disconnect_cancels_the_run_with_stream(tmp_path):
-    """RM14, RM17, RM19, RM20, AC12: stream true; a run that has not sent a byte is cancelled."""
-    gateway, adapter = gated_gateway(tmp_path)
-    app = make_app(gateway)
-
-    async def go():
-        client = chat_client(app, stream=True).start()
-        await asyncio.wait_for(adapter.started.wait(), 10)
-        run_id = gateway.store.active_run_id()
-        await client.leave()
-        await run_ended(gateway, run_id)
-        return run_id
-
-    run_id = asyncio.run(go())
-    cancelled_run(gateway, adapter, run_id)
-    assert adapter.cancelled == [f"{run_id}_gen1_routing"]
 
 
 def test_a_chat_disconnect_during_a_read_settles_it_like_a_cancel(tmp_path):

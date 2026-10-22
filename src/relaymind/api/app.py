@@ -380,8 +380,7 @@ async def _until_disconnect(
         return task.result()
     finally:
         watcher.cancel()
-        if not task.done():
-            task.cancel()
+        task.cancel()
 
 
 def _guarded(handler: _Handler) -> _Handler:
