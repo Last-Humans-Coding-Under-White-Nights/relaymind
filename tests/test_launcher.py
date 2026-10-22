@@ -389,14 +389,14 @@ def test_missing_external_credential_does_not_stop_startup_or_leak(tmp_path, mon
 
 def test_console_script_is_declared():
     """Section 14.1: the start command is the relaymind console script."""
-    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"]
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     assert project["scripts"]["relaymind"] == "relaymind.launcher:cli"
 
 
 def test_documented_command_replaces_the_hand_written_script():
     """Done when: README, TESTING, and ROADMAP name the command."""
     for name in ("README.md", "docs/TESTING.md", "docs/ROADMAP.md"):
-        assert "relaymind serve --config" in (REPO_ROOT / name).read_text(), name
+        assert "relaymind serve --config" in (REPO_ROOT / name).read_text(encoding="utf-8"), name
 
 
 def test_example_config_is_valid():
