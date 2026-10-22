@@ -35,6 +35,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Mapping, Sequence
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -263,84 +264,90 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
     application = harness.application_revision()
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
     work = Path(tempfile.mkdtemp(prefix="relaymind-corpus-"))
-    llama, local_url, cold_start = runtime.launch(work / "llama-server.log")
-    grades, records, traces = [], {}, {}
-    try:
-        for case in cases:
-            for mode in modes:
-                print(f"{case.case_id} {mode}", flush=True)
-                try:
-                    grade, record, events = _run_one(
-                        case,
-                        mode,
-                        runtime=runtime,
-                        local_url=local_url,
-                        external=external,
-                        work=work,
-                    )
-                except Exception as exc:  # noqa: BLE001 - recorded and graded, never dropped
-                    record = {
-                        "run_id": None,
-                        "timed_out": False,
-                        "state": "error",
-                        "error_code": None,
-                        "reason_code": None,
-                        "runner_error": f"{type(exc).__name__}: {exc}",
-                    }
-                    events = []
-                    grade = grade_record(case, mode, record, events, None)
-                grades.append(grade.to_json_object())
-                records[f"{case.case_id}/{mode}"] = record
-                if record["run_id"] is not None:
-                    traces[record["run_id"]] = events
-                print(f"  {'pass' if grade.success else 'fail'} {grade.failures}", flush=True)
-    finally:
-        harness._stop(llama)
-    summary = _summary(grades, corpus)
-    document = {
-        "kind": "relaymind.correctness_corpus",
-        "note": "Live runs of the frozen corpus (spec 0.28 section 12.2). Each case and mode ran "
-        "in a new gateway from the case's seed. A failed grade is a finding, never dropped.",
-        "command": " ".join(["python", "scripts/run_corpus.py", *sys.argv[1:]]),
-        "corpus": {
-            "file": "evaluation/corpus.v1.json",
-            "version": corpus.document["version"],
-            "sha256": corpus.digest,
-            "chinese_review": corpus.document["chinese_review"],
-        },
-        "selection": {
-            "cases": [case.case_id for case in cases],
-            "full_corpus": len(cases) == len(corpus.cases),
-            "modes": list(modes),
-            "not_run": not_run,
-        },
-        "started_at_utc": started_at,
-        "finished_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
-        "machine": machine_manifest(),
-        "application": application,
-        "runtime_banner": runtime.banner,
-        "runtime_devices": runtime_devices(),
-        "llama_server": {"argv": runtime.server_argv, "cold_start_seconds": round(cold_start, 3)},
-        **runtime.model_record(),
-        "external_endpoint": None
-        if external is None
-        else {
-            "base_url": external.base_url,
-            "model": external.model,
-            "context_limit": external.context_limit,
-            "region": args.external_region,
-        },
-        "summary": summary,
-        "grades": grades,
-        "records": records,
-        "traces": traces,
-    }
-    out = Path(args.out)
-    harness.write_json(out, document, work=work)
-    report = render_corpus_markdown(summary, title=f"Correctness corpus: {out.stem}")
-    out.with_suffix(".md").write_text(report, encoding="utf-8")
-    shutil.rmtree(work, ignore_errors=True)
-    return document
+    # The work dir goes on any exit, an interrupt included.
+    with ExitStack() as cleanup:
+        cleanup.callback(shutil.rmtree, work, ignore_errors=True)
+        llama, local_url, cold_start = runtime.launch(work / "llama-server.log")
+        grades, records, traces = [], {}, {}
+        try:
+            for case in cases:
+                for mode in modes:
+                    print(f"{case.case_id} {mode}", flush=True)
+                    try:
+                        grade, record, events = _run_one(
+                            case,
+                            mode,
+                            runtime=runtime,
+                            local_url=local_url,
+                            external=external,
+                            work=work,
+                        )
+                    except Exception as exc:  # noqa: BLE001 - recorded and graded, never dropped
+                        record = {
+                            "run_id": None,
+                            "timed_out": False,
+                            "state": "error",
+                            "error_code": None,
+                            "reason_code": None,
+                            "runner_error": f"{type(exc).__name__}: {exc}",
+                        }
+                        events = []
+                        grade = grade_record(case, mode, record, events, None)
+                    grades.append(grade.to_json_object())
+                    records[f"{case.case_id}/{mode}"] = record
+                    if record["run_id"] is not None:
+                        traces[record["run_id"]] = events
+                    print(f"  {'pass' if grade.success else 'fail'} {grade.failures}", flush=True)
+        finally:
+            harness._stop(llama)
+        summary = _summary(grades, corpus)
+        document = {
+            "kind": "relaymind.correctness_corpus",
+            "note": "Live runs of the frozen corpus (spec 0.28 section 12.2). Each case and mode "
+            "ran in a new gateway from the case's seed. A failed grade is a finding, never "
+            "dropped.",
+            "command": " ".join(["python", "scripts/run_corpus.py", *sys.argv[1:]]),
+            "corpus": {
+                "file": "evaluation/corpus.v1.json",
+                "version": corpus.document["version"],
+                "sha256": corpus.digest,
+                "chinese_review": corpus.document["chinese_review"],
+            },
+            "selection": {
+                "cases": [case.case_id for case in cases],
+                "full_corpus": len(cases) == len(corpus.cases),
+                "modes": list(modes),
+                "not_run": not_run,
+            },
+            "started_at_utc": started_at,
+            "finished_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
+            "machine": machine_manifest(),
+            "application": application,
+            "runtime_banner": runtime.banner,
+            "runtime_devices": runtime_devices(),
+            "llama_server": {
+                "argv": runtime.server_argv,
+                "cold_start_seconds": round(cold_start, 3),
+            },
+            **runtime.model_record(),
+            "external_endpoint": None
+            if external is None
+            else {
+                "base_url": external.base_url,
+                "model": external.model,
+                "context_limit": external.context_limit,
+                "region": args.external_region,
+            },
+            "summary": summary,
+            "grades": grades,
+            "records": records,
+            "traces": traces,
+        }
+        out = Path(args.out)
+        harness.write_json(out, document, work=work)
+        report = render_corpus_markdown(summary, title=f"Correctness corpus: {out.stem}")
+        out.with_suffix(".md").write_text(report, encoding="utf-8")
+        return document
 
 
 def _summary(grades: Sequence[Mapping[str, Any]], corpus: Corpus) -> dict[str, Any]:

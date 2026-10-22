@@ -8,6 +8,7 @@ against the app the launcher builds from the runner's own config file,
 with scripted model doubles in place of the models (section 13).
 """
 
+import argparse
 import asyncio
 import json
 from pathlib import Path
@@ -326,3 +327,34 @@ def test_an_export_is_regraded_from_its_stored_traces(runner, corpus, tmp_path):
 def test_regrading_refuses_another_corpus_digest(runner, corpus):
     with pytest.raises(SystemExit, match="digest"):
         runner.regrade({"corpus": {"sha256": "0" * 64}, "grades": []}, corpus)
+
+
+def test_an_interrupted_run_removes_its_work_dir(runner, tmp_path, monkeypatch):
+    work = tmp_path / "work"
+    work.mkdir()
+    stopped = []
+
+    class FakeRuntime:
+        def launch(self, log):
+            return object(), "http://127.0.0.1:1", 0.0
+
+    def interrupt(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(runner.harness, "check_runtime", lambda manifest: FakeRuntime())
+    monkeypatch.setattr(runner.harness, "application_revision", lambda: {})
+    monkeypatch.setattr(runner.harness, "_stop", stopped.append)
+    monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: str(work))
+    monkeypatch.setattr(runner, "_run_one", interrupt)
+    args = argparse.Namespace(
+        cases=["simple-01"],
+        languages=None,
+        modes=["local_only"],
+        external_base_url=None,
+        manifest="m.json",
+        out=str(tmp_path / "x.json"),
+    )
+    with pytest.raises(KeyboardInterrupt):
+        runner.run_corpus(args)
+    assert not work.exists()
+    assert len(stopped) == 1
