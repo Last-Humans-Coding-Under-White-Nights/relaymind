@@ -47,6 +47,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import shutil
 import signal
 import socket
@@ -56,12 +57,16 @@ import tempfile
 import threading
 import time
 import uuid
-from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
+from contextlib import ExitStack
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
+
+if TYPE_CHECKING:
+    import openai
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -233,7 +238,7 @@ class Scenario:
     acceptance: tuple[str, ...]
     body: Callable[..., Awaitable[None]]
 
-    async def run(self, api: "Api", **options) -> Result:
+    async def run(self, api: "Api", **options: Any) -> Result:
         """Run the body; options it does not take (restart, screenshot) are left out."""
         accepted = inspect.signature(self.body).parameters
         result = Result(self.name, self.acceptance)
@@ -247,8 +252,11 @@ class Scenario:
 SCENARIOS: dict[str, Scenario] = {}
 
 
-def scenario(name: str, *acceptance: str):
-    def register(body):
+ScenarioBody = Callable[..., Awaitable[None]]
+
+
+def scenario(name: str, *acceptance: str) -> Callable[[ScenarioBody], ScenarioBody]:
+    def register(body: ScenarioBody) -> ScenarioBody:
         SCENARIOS[name] = Scenario(name, acceptance, body)
         return body
 
@@ -278,7 +286,7 @@ class Api:
         *,
         sandbox_dir: Path,
         transport: httpx.AsyncBaseTransport | None = None,
-    ):
+    ) -> None:
         self.base_url = base_url
         self.token = token
         self.sandbox_dir = Path(sandbox_dir)
@@ -293,7 +301,7 @@ class Api:
     async def aclose(self) -> None:
         await self.http.aclose()
 
-    def sdk(self, mode: str | None = None):
+    def sdk(self, mode: str | None = None) -> "openai.AsyncOpenAI":
         """The official OpenAI SDK pointed at the gateway (AC09, AC10).
 
         mode, when given, is sent as the execution mode header (section 7.1).
@@ -309,7 +317,9 @@ class Api:
             default_headers={MODE_HEADER: mode} if mode else None,
         )
 
-    async def start(self, prompt: str, *, mode: str | None = None, key: str | None = None):
+    async def start(
+        self, prompt: str, *, mode: str | None = None, key: str | None = None
+    ) -> httpx.Response:
         body: dict[str, Any] = {"messages": [{"role": "user", "content": prompt}]}
         if mode is not None:
             body["execution_mode"] = mode
@@ -321,7 +331,9 @@ class Api:
         response.raise_for_status()
         return response.json()
 
-    async def settle(self, run_id: str, states=SETTLED, timeout=RUN_TIMEOUT_SECONDS) -> dict:
+    async def settle(
+        self, run_id: str, states: Collection[str] = SETTLED, timeout: float = RUN_TIMEOUT_SECONDS
+    ) -> dict[str, Any]:
         """Poll the run view until the run is in one of states.
 
         The first view of a waiting_confirmation run carries the
@@ -354,7 +366,7 @@ class Api:
         response.raise_for_status()
         return parse_sse(response.text)
 
-    async def start_run(self, result: Result, prompt: str, **options) -> str:
+    async def start_run(self, result: Result, prompt: str, **options: Any) -> str:
         """Start a native run and record its ID in the result."""
         response = await self.start(prompt, **options)
         response.raise_for_status()
@@ -370,7 +382,9 @@ class Api:
             view = await self.settle(run_id, TERMINAL)
         return view, await self.events(run_id)
 
-    async def run_to_end(self, result: Result, prompt: str, **options) -> tuple[dict, list]:
+    async def run_to_end(
+        self, result: Result, prompt: str, **options: Any
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         """Start a run and end it (see ended); returns the terminal view and the events."""
         return await self.ended(await self.start_run(result, prompt, **options))
 
@@ -391,7 +405,9 @@ def of_type(events: Iterable[Mapping[str, Any]], event_type: str) -> list[Mappin
     return [e for e in events if e["event_type"] == event_type]
 
 
-def started_tools(events, tool_name: str | None = None) -> list[Mapping[str, Any]]:
+def started_tools(
+    events: Iterable[Mapping[str, Any]], tool_name: str | None = None
+) -> list[Mapping[str, Any]]:
     return [
         e
         for e in of_type(events, "tool.started")
@@ -399,29 +415,29 @@ def started_tools(events, tool_name: str | None = None) -> list[Mapping[str, Any
     ]
 
 
-def answer_of(events) -> str:
+def answer_of(events: Iterable[Mapping[str, Any]]) -> str:
     return "".join(e["payload"]["text"] for e in of_type(events, "answer.delta"))
 
 
-def route_of(events) -> dict[str, Any] | None:
+def route_of(events: Iterable[Mapping[str, Any]]) -> dict[str, Any] | None:
     routes = of_type(events, "route.selected")
     return routes[0]["payload"]["decision"] if routes else None
 
 
-def tool_results(events) -> list[ToolResult]:
+def tool_results(events: Iterable[Mapping[str, Any]]) -> list[ToolResult]:
     return [
         ToolResult.from_json_object(e["payload"]["result"])
         for e in of_type(events, "tool.finished")
     ]
 
 
-def health_answer_ok(events) -> bool:
+def health_answer_ok(events: Sequence[Mapping[str, Any]]) -> bool:
     """The health predicate of check-service-health over the run's own tool results."""
     results = tool_results(events)
     return bool(results) and health_status_preserved(answer_of(events), results)
 
 
-def first_model_action_ms(events) -> int | None:
+def first_model_action_ms(events: Iterable[Mapping[str, Any]]) -> int | None:
     """Section 9 timing: the first validated model-made route, clarification, or proposal.
 
     A route the gateway made (actor gateway: a cache hit, a bypass, a
@@ -437,7 +453,7 @@ def first_model_action_ms(events) -> int | None:
     return None
 
 
-def in_flight_calls(events) -> list[str]:
+def in_flight_calls(events: Sequence[Mapping[str, Any]]) -> list[str]:
     """Model calls a stop cut off: no model.finished, or one that ended cancelled or interrupted.
 
     A call that failed on its own (a time budget, an adapter error) is not counted.
@@ -452,14 +468,16 @@ def in_flight_calls(events) -> list[str]:
     return calls
 
 
-def terminal_event(events) -> Mapping[str, Any] | None:
+def terminal_event(events: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
     for event in reversed(events):
         if event["event_type"] in ("run.completed", "run.failed", "run.cancelled"):
             return event
     return None
 
 
-def generation_records(events, *, prompt: str) -> list[GenerationStats]:
+def generation_records(
+    events: Sequence[Mapping[str, Any]], *, prompt: str
+) -> list[GenerationStats]:
     """Per-call statistics from the trace (RM25): model.started and model.finished.
 
     The trace has the call's start (UTC) and its duration (monotonic).
@@ -587,7 +605,13 @@ async def ac05_approve(api: Api, result: Result) -> None:
         f"{len(deletes)} before the replay",
     )
     proposed = result.observations["proposed_arguments"]
-    target = proposed["database_id"]
+    target = proposed.get("database_id")
+    result.check(
+        "the approved proposal names a database target",
+        GATEWAY,
+        isinstance(target, str) and bool(target),
+        target,
+    )
     outcomes = [r for r in tool_results(events) if r.tool_name == "delete_demo_database"]
     deleted = any(isinstance(r.data, dict) and r.data.get("deleted") is True for r in outcomes)
     result.observations["delete_outcome"] = [
@@ -596,7 +620,16 @@ async def ac05_approve(api: Api, result: Result) -> None:
     result.check(
         "the sandbox changed only if the delete reported deleted",
         GATEWAY,
-        (target not in after["databases"]) == deleted and (after == before) == (not deleted),
+        (
+            target in before["databases"]
+            and after
+            == {
+                "databases": [db for db in before["databases"] if db != target],
+                "revision": before["revision"] + 1,
+            }
+        )
+        if deleted
+        else after == before,
         f"deleted {deleted}, after {after}",
     )
     result.check(
@@ -752,7 +785,9 @@ async def ac06_managed_logs(api: Api, result: Result) -> None:
 # -- scenarios: failure behavior (AC07) and handoff (AC02) ------------------------------
 
 
-async def _investigate(api: Api, result: Result, expected_error: str) -> list:
+async def _investigate(
+    api: Api, result: Result, expected_error: str, *, local_preparation: bool = False
+) -> list[dict[str, Any]]:
     view, events = await api.run_to_end(result, INVESTIGATE_PROMPT)
     route = route_of(events)
     failed = of_type(events, "run.failed")
@@ -770,30 +805,49 @@ async def _investigate(api: Api, result: Result, expected_error: str) -> list:
         route is not None and route.get("skill_id") == "investigate-performance",
         route,
     )
-    if view["state"] == "failed":
+    end = terminal_event(events)
+    result.check(
+        "the terminal event matches the run and counts every external call",
+        GATEWAY,
+        end is not None
+        and end is events[-1]
+        and end["event_type"] == f"run.{view['state']}"
+        and end["payload"].get("external_calls") == len(external_started),
+        end,
+    )
+    # The no-preparation launches mark this skill external-required. A
+    # wrong model skill or clarification is a model finding; once the
+    # selected skill or trace requires escalation, a completed answer
+    # cannot bypass the gateway checks merely by avoiding state=failed.
+    requires_failure = (
+        view["state"] == "failed"
+        or bool(of_type(events, "handoff.started"))
+        or (
+            route is not None
+            and (
+                route.get("route") == "external"
+                or (not local_preparation and route.get("skill_id") == "investigate-performance")
+            )
+        )
+    )
+    if requires_failure:
         result.check(
             f"the run failed explicitly as {expected_error}",
             GATEWAY,
-            view["error_code"] == expected_error,
-            f"error {view['error_code']}, reason {view['reason_code']}",
+            view["state"] == "failed" and view["error_code"] == expected_error,
+            _outcome(view),
         )
         result.check(
-            "no answer was published by a failed run (no invented result)",
+            "no answer was published after required escalation failed (no invented result)",
             GATEWAY,
             view["output"] is None and not of_type(events, "answer.delta"),
         )
-        result.check(
-            "the terminal event counts every external call",
-            GATEWAY,
-            failed[-1]["payload"].get("external_calls") == len(external_started),
-            failed[-1]["payload"].get("external_calls"),
-        )
     else:
         result.check(
-            "the run escalated instead of finishing locally",
+            "the run reached the escalation scenario",
             MODEL,
             False,
-            f"state {view['state']}",
+            _outcome(view),
         )
     return events
 
@@ -807,14 +861,17 @@ async def ac07_needs_external(api: Api, result: Result) -> None:
 @scenario("ac07_local_budget", "AC07")
 async def ac07_local_budget(api: Api, result: Result) -> None:
     """investigate-performance may prepare locally; the third tool exceeds the local budget."""
-    events = await _investigate(api, result, "needs_external")
+    events = await _investigate(api, result, "needs_external", local_preparation=True)
     result.check(
         "the local budget was the escalation reason",
         MODEL,
         result.observations["reason_code"] == "local_budget",
         result.observations["reason_code"],
     )
-    budgets = of_type(events, "run.accepted")[0]["payload"]["budgets"]
+    accepted = of_type(events, "run.accepted")
+    if not result.check("the run recorded its budget", GATEWAY, len(accepted) == 1, accepted):
+        return
+    budgets = accepted[0]["payload"]["budgets"]
     result.check(
         "no more tools ran than the local budget allows",
         GATEWAY,
@@ -851,6 +908,17 @@ async def ac02_handoff(api: Api, result: Result) -> None:
     if handoffs:
         carried = set(handoffs[-1]["payload"].get("operation_ids") or [])
         seq = handoffs[-1]["seq"]
+        operations = of_type(events, "tool.started") + of_type(events, "tool.finished")
+        if not result.check(
+            "every managed tool event names its operation",
+            GATEWAY,
+            all(
+                isinstance(e["payload"].get("operation_id"), str)
+                and bool(e["payload"]["operation_id"])
+                for e in operations
+            ),
+        ):
+            return
         before = {
             e["payload"]["operation_id"]
             for e in of_type(events, "tool.finished")
@@ -867,12 +935,7 @@ async def ac02_handoff(api: Api, result: Result) -> None:
         result.check(
             "no completed operation was replayed after the handoff",
             GATEWAY,
-            not replayed
-            and not any(
-                e["payload"].get("replayed")
-                for e in of_type(events, "tool.finished")
-                if e["seq"] > seq
-            ),
+            not replayed,  # RM10 permits replaying recorded results, never rerunning handlers.
             [e["payload"]["operation_id"] for e in replayed],
         )
         result.observations["local_operations_before_handoff"] = sorted(before)
@@ -910,20 +973,63 @@ async def parallel_demo(api: Api, result: Result) -> None:
         for e in of_type(events, "model.started")
         if e["payload"].get("branch") in ("local_health", "external_checklist")
     }
+    branch_starts = [
+        e
+        for e in of_type(events, "model.started")
+        if e["payload"].get("branch") in ("local_health", "external_checklist")
+    ]
     branch_ends = [
-        e["seq"]
-        for e in of_type(events, "model.finished")
-        if e["payload"]["call_id"] in branch_calls
+        e for e in of_type(events, "model.finished") if e["payload"]["call_id"] in branch_calls
     ]
     if synthesis:
         result.check(
             "the synthesis call started after both branches ended",
             GATEWAY,
-            all(seq < synthesis[0]["seq"] for seq in branch_ends),
+            {e["payload"]["branch"] for e in branch_starts}
+            == {"local_health", "external_checklist"}
+            and len(branch_starts) == len(branch_calls) == len(branch_ends)
+            and {e["payload"]["call_id"] for e in branch_ends} == branch_calls
+            and all(e["seq"] < synthesis[0]["seq"] for e in branch_ends),
         )
 
 
 # -- scenarios: the compatible API (AC09, AC10) -----------------------------------------
+
+
+def _sdk_error(result: Result, label: str, exc) -> None:
+    """Section 11: a documented model failure is a finding, not a harness exception."""
+    run_id = exc.response.headers.get("X-RelayMind-Run-ID")
+    if run_id:
+        result.run_ids.append(run_id)
+    result.observations[label] = {"status": exc.status_code, "body": exc.body}
+    body = exc.body if isinstance(exc.body, Mapping) else {}
+    error = body.get("error", body)
+    code = error.get("code") if isinstance(error, Mapping) else None
+    model_failure = (exc.status_code, code) in (
+        (422, "needs_external"),
+        (503, "external_failed"),
+        (503, "workflow_unavailable"),
+        (504, "deadline_exceeded"),
+        (400, "context_limit_exceeded"),
+    )
+    result.check(
+        f"{label}: the run answered",
+        MODEL if model_failure else GATEWAY,
+        False,
+        {"status": exc.status_code, "code": code},
+    )
+
+
+def _sdk_choice(result: Result, parsed, label: str):
+    """RM19: check the response boundary before unpacking a choice."""
+    choices = parsed.choices
+    if not result.check(
+        f"{label}: exactly one choice with index zero",
+        GATEWAY,
+        isinstance(choices, list) and len(choices) == 1 and choices[0].index == 0,
+    ):
+        return None
+    return choices[0]
 
 
 @scenario("ac09_sdk", "AC09")
@@ -940,17 +1046,16 @@ async def ac09_sdk(api: Api, result: Result, *, mode: str | None = None) -> None
                     model="relaymind", messages=messages, stream=stream
                 )
             except openai.APIStatusError as exc:
-                run_id = exc.response.headers.get("X-RelayMind-Run-ID")
-                if run_id:
-                    result.run_ids.append(run_id)
-                result.observations[label] = {"status": exc.status_code, "body": exc.body}
-                result.check(f"{label}: the run answered", MODEL, False, exc.body)
+                _sdk_error(result, label, exc)
                 continue
             run_id = raw.headers["X-RelayMind-Run-ID"]
             result.run_ids.append(run_id)
             parsed = raw.parse()
             if stream:
                 chunks = [chunk async for chunk in parsed]
+                choices = [_sdk_choice(result, chunk, label) for chunk in chunks]
+                if any(choice is None for choice in choices):
+                    continue
                 ids = {chunk.id for chunk in chunks}
                 finishes = [
                     (i, choice.finish_reason)
@@ -976,7 +1081,9 @@ async def ac09_sdk(api: Api, result: Result, *, mode: str | None = None) -> None
                 )
                 result.observations[label] = {"chunks": len(chunks), "finish_reason": finish}
             else:
-                (choice,) = parsed.choices
+                choice = _sdk_choice(result, parsed, label)
+                if choice is None:
+                    continue
                 content = choice.message.content or ""
                 finish = choice.finish_reason
                 result.check(
@@ -1006,16 +1113,21 @@ async def ac09_sdk(api: Api, result: Result, *, mode: str | None = None) -> None
 
 @scenario("ac10_client_tools", "AC10")
 async def ac10_client_tools(api: Api, result: Result, *, mode: str | None = None) -> None:
+    import openai
+
     sdk = api.sdk(mode)
     messages: list[dict[str, Any]] = [{"role": "user", "content": HEALTH_PROMPT}]
     name = STATUS_FUNCTION["function"]["name"]
+    label = "first"
     try:
         raw = await sdk.chat.completions.with_raw_response.create(
             model="relaymind-client-tools", messages=messages, tools=[STATUS_FUNCTION]
         )
         first_run = raw.headers["X-RelayMind-Run-ID"]
         result.run_ids.append(first_run)
-        (choice,) = raw.parse().choices
+        choice = _sdk_choice(result, raw.parse(), label)
+        if choice is None:
+            return
         calls = choice.message.tool_calls or []
         result.observations["first"] = {
             "finish_reason": choice.finish_reason,
@@ -1027,21 +1139,35 @@ async def ac10_client_tools(api: Api, result: Result, *, mode: str | None = None
         if not result.check(
             "the model proposed the caller's function",
             MODEL,
+            bool(calls),
+            choice.finish_reason,
+        ):
+            return
+        if not result.check(
+            "the gateway exposes exactly one call with finish reason tool_calls",
+            GATEWAY,
             choice.finish_reason == "tool_calls" and len(calls) == 1,
             choice.finish_reason,
         ):
             return
         (call,) = calls
-        arguments = json.loads(call.function.arguments)
-        result.check(
+        try:
+            arguments = json.loads(call.function.arguments)
+        except (ValueError, TypeError):
+            arguments = None
+        if not result.check(
             "the call has an ID, an offered name, and schema-valid arguments",
             GATEWAY,
-            bool(call.id.strip())
+            isinstance(call.id, str)
+            and bool(call.id.strip())
+            and call.type == "function"
             and call.function.name == name
+            and isinstance(arguments, dict)
             and set(arguments) == {"service"}
             and arguments["service"] in ("staging-api", "payments-api"),
             call.model_dump(),
-        )
+        ):
+            return
         proposals = [e["payload"]["proposal_id"] for e in of_type(events, "tool.proposed")]
         result.check(
             "the trace records the exposed call under its call ID",
@@ -1069,12 +1195,15 @@ async def ac10_client_tools(api: Api, result: Result, *, mode: str | None = None
             },
             {"role": "tool", "tool_call_id": call.id, "content": json.dumps(CALLER_STATUS)},
         ]
+        label = "second"
         raw = await sdk.chat.completions.with_raw_response.create(
             model="relaymind-client-tools", messages=messages, tools=[STATUS_FUNCTION]
         )
         second_run = raw.headers["X-RelayMind-Run-ID"]
         result.run_ids.append(second_run)
-        (choice,) = raw.parse().choices
+        choice = _sdk_choice(result, raw.parse(), label)
+        if choice is None:
+            return
         content = choice.message.content or ""
         result.observations["second"] = {"finish_reason": choice.finish_reason, "content": content}
         events = await api.events(second_run)
@@ -1087,6 +1216,8 @@ async def ac10_client_tools(api: Api, result: Result, *, mode: str | None = None
             choice.finish_reason == "stop" and "healthy" in content.lower(),
             content[:300],
         )
+    except openai.APIStatusError as exc:
+        _sdk_error(result, label, exc)
     finally:
         await sdk.close()
 
@@ -1150,7 +1281,12 @@ async def ac10_client_tools_external(api: Api, result: Result) -> None:
 
 
 def ac08_external_swap(
-    first: Result, second: Result, *, traces: Mapping, configs: Mapping, models: Mapping
+    first: Result,
+    second: Result,
+    *,
+    traces: Mapping[str, Sequence[Mapping[str, Any]]],
+    configs: Mapping[str, str],
+    models: Mapping[str, str],
 ) -> Result:
     """AC08, external half: the same gateway and skills with a second external configuration.
 
@@ -1168,7 +1304,15 @@ def ac08_external_swap(
         return result
     (run_a,), (run_b,) = runs
     result.run_ids = [run_a, run_b]
-    accepted = [of_type(traces[r], "run.accepted")[0]["payload"] for r in (run_a, run_b)]
+    admissions = [of_type(traces.get(r, []), "run.accepted") for r in (run_a, run_b)]
+    if not result.check(
+        "both runs have exactly one admission event",
+        GATEWAY,
+        all(len(events) == 1 for events in admissions),
+        [len(events) for events in admissions],
+    ):
+        return result
+    accepted = [events[0]["payload"] for events in admissions]
     offered = [
         sorted((s["name"], s["version"], s["content_hash"]) for s in p["skills_offered"])
         for p in accepted
@@ -1222,12 +1366,16 @@ async def ac11_replay_idempotency(api: Api, result: Result) -> None:
     view, events = await api.ended(run_id)
     result.check("the run completed", MODEL, view["state"] == "completed", f"state {view['state']}")
     seqs = [e["seq"] for e in events]
-    result.check(
+    if not result.check(
         "the stream sent every event once, in order, ending with the terminal event",
         GATEWAY,
-        seqs == list(range(1, len(seqs) + 1)) and terminal_event(events) is events[-1],
+        bool(seqs)
+        and seqs == list(range(1, len(seqs) + 1))
+        and terminal_event(events) is not None
+        and terminal_event(events) is events[-1],
         seqs,
-    )
+    ):
+        return
     middle = seqs[len(seqs) // 2]
     tail = await api.events(run_id, after=middle)
     result.observations["reconnect_after_seq"] = middle
@@ -1253,7 +1401,12 @@ async def ac11_replay_idempotency(api: Api, result: Result) -> None:
     )
     conflict = await api.start("Is payments-api healthy right now?", key=key)
     result.observations["conflict_status"] = conflict.status_code
-    code = conflict.json().get("error", {}).get("code")
+    try:
+        body = conflict.json()
+    except ValueError:
+        body = None
+    error = body.get("error") if isinstance(body, dict) else None
+    code = error.get("code") if isinstance(error, dict) else None
     result.check(
         "the same key with a changed body is refused",
         GATEWAY,
@@ -1320,7 +1473,9 @@ async def ac12_cancel_generation(api: Api, result: Result) -> None:
 
 
 @scenario("ac12_restart", "AC12")
-async def ac12_restart(api: Api, result: Result, *, restart) -> None:
+async def ac12_restart(
+    api: Api, result: Result, *, restart: Callable[[], Awaitable[tuple[Api, int]]]
+) -> None:
     """Kill the gateway during a generation, start it again, and read the recovered run.
 
     restart() kills and starts the gateway and returns the new Api and
@@ -1375,7 +1530,15 @@ async def routing_cache(
             view, events = await api.run_to_end(result, prompt)
             run_id = result.run_ids[-1]
             # The run records whether the cache was enabled for it (section 10).
-            enabled = bool(of_type(events, "run.accepted")[0]["payload"].get("routing_cache"))
+            accepted = of_type(events, "run.accepted")
+            if not result.check(
+                f"round {round_number}, {prompt}: exactly one admission event",
+                GATEWAY,
+                len(accepted) == 1,
+                len(accepted),
+            ):
+                continue
+            enabled = bool(accepted[0]["payload"].get("routing_cache"))
             route = route_of(events) or {}
             routes = of_type(events, "route.selected")
             labels = [r["payload"].get("routing_cache") for r in routes]
@@ -1427,7 +1590,8 @@ async def routing_cache(
                         f"round {round_number}, {prompt}: a hit has cache.hit just before its "
                         "gateway route and no routing call before it",
                         GATEWAY,
-                        events[index - 1]["event_type"] == "cache.hit"
+                        index > 0
+                        and events[index - 1]["event_type"] == "cache.hit"
                         and routes[0]["actor"] == "gateway"
                         and not any(c["seq"] < routes[0]["seq"] for c in routing_calls),
                     )
@@ -1604,7 +1768,7 @@ def _relaymind_command() -> list[str]:
 class GatewayProcess:
     """``relaymind serve --config PATH`` as a child process."""
 
-    def __init__(self, config: Path, log: Path, env: Mapping[str, str]):
+    def __init__(self, config: Path, log: Path, env: Mapping[str, str]) -> None:
         self.config = config
         self.log = log
         self.env = dict(env)
@@ -1923,17 +2087,20 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
     out = Path(args.out)
     stem = out.with_suffix("")
     work = Path(tempfile.mkdtemp(prefix="relaymind-live-"))
-    llama_log = work / "llama-server.log"
-    llama, local_url, cold_start = _launch_server(
-        artifact, launch_settings_argv(manifest.launch_settings), llama_log
-    )
-    launches, results, traces, configs, models = [], [], {}, {}, {}
-    stats_files = {}
-    # Bound and never listening, so the port refuses connections and no
-    # gateway started later can take it (the unreachable stand-in).
-    closed = socket.socket()
-    closed.bind(("127.0.0.1", 0))
-    try:
+    with ExitStack() as cleanup:
+        cleanup.callback(shutil.rmtree, work, ignore_errors=True)
+        llama_log = work / "llama-server.log"
+        llama, local_url, cold_start = _launch_server(
+            artifact, launch_settings_argv(manifest.launch_settings), llama_log
+        )
+        cleanup.callback(_stop, llama)
+        launches, results, traces, configs, models = [], [], {}, {}, {}
+        stats_files = {}
+        # Bound and never listening, so the port refuses connections and no
+        # gateway started later can take it (the unreachable stand-in).
+        closed = socket.socket()
+        cleanup.callback(closed.close)
+        closed.bind(("127.0.0.1", 0))
         plans = launch_plans(
             external,
             os.environ,
@@ -1967,8 +2134,8 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
             )
             gateway = GatewayProcess(config, plan_dir / "gateway.log", {**os.environ, **plan.env})
             started = time.monotonic()
-            output = gateway.start()
             try:
+                output = gateway.start()
                 record = {
                     "name": plan.name,
                     "description": plan.description,
@@ -1995,65 +2162,74 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
             for result in plan_results:
                 if result.name == "routing_cache":
                     stats_files[plan.name] = _cache_stats(plan, result, traces, manifest, stem)
-    finally:
-        closed.close()
-        _stop(llama)
-    results += not_run_external(external, environ=os.environ)
-    launched = {plan.name for plan in plans}
-    if "external" in launched and "external-second" not in launched:
-        reason = "no --second-external-model was given"
-        results.append(Result("ac08_external_swap", ("AC08", "RM18"), reason=reason))
-    swap = {r.launch: r for r in results if r.name == "external_only"}
-    if {"external", "external-second"} <= set(swap):
-        results.append(
-            ac08_external_swap(
-                swap["external"],
-                swap["external-second"],
-                traces=traces,
-                configs=configs,
-                models=models,
+        results += not_run_external(external, environ=os.environ)
+        launched = {plan.name for plan in plans}
+        if "external" in launched and "external-second" not in launched:
+            reason = "no --second-external-model was given"
+            results.append(Result("ac08_external_swap", ("AC08", "RM18"), reason=reason))
+        swap = {r.launch: r for r in results if r.name == "external_only"}
+        if {"external", "external-second"} <= launched:
+            # Keep the planned comparison visible even if a prerequisite
+            # scenario produced no result or no admitted run.
+            for name in ("external", "external-second"):
+                swap.setdefault(
+                    name,
+                    Result(
+                        "external_only",
+                        ("AC08",),
+                        launch=name,
+                        error="external_only scenario produced no result",
+                    ),
+                )
+            results.append(
+                ac08_external_swap(
+                    swap["external"],
+                    swap["external-second"],
+                    traces=traces,
+                    configs=configs,
+                    models=models,
+                )
             )
-        )
-    document = {
-        "kind": "relaymind.live_acceptance",
-        "note": "Live single-pass runs through relaymind serve --config; observations, "
-        "not benchmark results (spec 12.3). A failed model check is a finding.",
-        "command": _command(),
-        "machine": {
-            "platform": platform.platform(),
-            "machine": platform.machine(),
-            "processor": platform.processor(),
-            "python": platform.python_version(),
-        },
-        "application": application,
-        "runtime_banner": banner,
-        "llama_server": {
-            "argv": launch_settings_argv(manifest.launch_settings),
-            "cold_start_seconds": round(cold_start, 3),
-        },
-        "manifest": os.fspath(manifest_path),
-        "model_id": manifest.model_id,
-        "model_file": manifest.file_name,
-        "model_sha256": manifest.file_sha256,
-        "quantization": manifest.quantization,
-        "external_endpoint": None
-        if external is None
-        else {"base_url": external.base_url, "model": external.model},
-        "launches": launches,
-        "summary": {
-            r.name if r.launch is None else f"{r.launch}/{r.name}": r.status for r in results
-        },
-        "scenarios": [r.to_json_object() for r in results],
-        "statistics_exports": stats_files,
-        "traces": traces,
-    }
-    write_json(out, document, work=work)
-    shutil.rmtree(work, ignore_errors=True)
-    return document
+        document = {
+            "kind": "relaymind.live_acceptance",
+            "note": "Live single-pass runs through relaymind serve --config; observations, "
+            "not benchmark results (spec 12.3). A failed model check is a finding.",
+            "command": _command(),
+            "machine": {
+                "platform": platform.platform(),
+                "machine": platform.machine(),
+                "processor": platform.processor(),
+                "python": platform.python_version(),
+            },
+            "application": application,
+            "runtime_banner": banner,
+            "llama_server": {
+                "argv": launch_settings_argv(manifest.launch_settings),
+                "cold_start_seconds": round(cold_start, 3),
+            },
+            "manifest": os.fspath(manifest_path),
+            "model_id": manifest.model_id,
+            "model_file": manifest.file_name,
+            "model_sha256": manifest.file_sha256,
+            "quantization": manifest.quantization,
+            "external_endpoint": None
+            if external is None
+            else {"base_url": external.base_url, "model": external.model},
+            "launches": launches,
+            "summary": {
+                r.name if r.launch is None else f"{r.launch}/{r.name}": r.status for r in results
+            },
+            "scenarios": [r.to_json_object() for r in results],
+            "statistics_exports": stats_files,
+            "traces": traces,
+        }
+        write_json(out, document, work=work)
+        return document
 
 
 def _command() -> str:
-    return " ".join(["python", "scripts/live_acceptance.py", *sys.argv[1:]])
+    argv = ["python", "scripts/live_acceptance.py", *sys.argv[1:]]
+    return subprocess.list2cmdline(argv) if os.name == "nt" else shlex.join(argv)
 
 
 def _cache_stats(plan, result, traces, manifest, stem) -> str:
@@ -2091,7 +2267,7 @@ def _cache_stats(plan, result, traces, manifest, stem) -> str:
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="the export file (JSON)")
-    parser.add_argument("--manifest", default=os.fspath(DEFAULT_MANIFEST.relative_to(REPO_ROOT)))
+    parser.add_argument("--manifest", default=os.fspath(DEFAULT_MANIFEST))
     parser.add_argument("--external-base-url")
     parser.add_argument("--external-model")
     parser.add_argument("--external-context-limit", type=int)

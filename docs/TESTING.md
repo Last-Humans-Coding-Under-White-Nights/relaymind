@@ -312,7 +312,13 @@ failed model check is a finding, never a pass.
 `pytest tests/test_live_acceptance_script.py` (default suite) runs every
 scenario against the launcher's app over model doubles.
 `pytest -m live tests/test_live_acceptance.py` runs the harness against
-the live model and fails only if a gateway check fails.
+the live model and fails if a scenario errors or a gateway check fails.
+Model-quality findings remain recorded without failing that test.
+The default suite also checks malformed SDK responses, missing trace
+evidence, cancel/restart races, and cleanup after startup or export
+failures (`tests/test_live_acceptance_review.py`,
+`tests/test_live_acceptance_sdk_failures.py`, and
+`tests/test_live_acceptance_lifecycle.py`).
 
 - AC13, caching policy, deterministic (#31; RM07, RM22, RM24):
   tested with model doubles only.

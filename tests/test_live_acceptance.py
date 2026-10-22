@@ -4,7 +4,8 @@ Runs scripts/live_acceptance.py end to end: llama-server from the
 manifest, then ``relaymind serve --config`` for each launch plan, the
 scenarios over HTTP, and the demo UI in Chromium. Model-quality results
 are findings and do not fail this test (RM16, section 12.3); every
-gateway-owned check must hold, because those are invariants the code
+scenario must finish without a harness error, and every gateway-owned
+check must hold, because those are invariants the code
 keeps whatever the model does (RM05, RM08 to RM12, RM14, RM17, RM19 to
 RM24).
 
@@ -38,7 +39,9 @@ def test_gateway_checks_hold_on_the_live_model(tmp_path):
     )
     document = harness.run_live(args)
     statuses = {s["status"] for s in document["scenarios"]}
-    assert statuses <= {"passed", "failed", "not_run", "error"}
+    assert statuses <= {"passed", "failed", "not_run"}, [
+        s for s in document["scenarios"] if s["status"] == "error"
+    ]
     broken = [
         f"{s['launch']}/{s['name']}: {c['name']}: {c['detail']}"
         for s in document["scenarios"]
