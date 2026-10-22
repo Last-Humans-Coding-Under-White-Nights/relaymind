@@ -89,6 +89,7 @@ Requires Python 3.12+.
 git clone <repo-url> && cd relaymind
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
+playwright install chromium   # for the demo UI browser test
 ```
 
 Run checks:

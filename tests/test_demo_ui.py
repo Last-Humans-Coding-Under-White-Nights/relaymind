@@ -35,6 +35,7 @@ from ui_helpers import (
     health_gateway,
     run_to_rest,
     timed_gateway,
+    ui_app,
 )
 
 MODE_TEXT = {
@@ -42,10 +43,6 @@ MODE_TEXT = {
     DataMode.DOUBLE: "DOUBLE",
     DataMode.REPLAY: "REPLAY",
 }
-
-
-def ui_app(gateway, mode="double", **ui):
-    return make_app(gateway, ui=UiSettings(mode=mode, **ui))
 
 
 async def create(client, prompt=HEALTH_PROMPT, **fields):

@@ -356,7 +356,8 @@ def _controls(view: Mapping[str, Any], settings: UiSettings) -> str:
             '<button type="submit">Send answer</button></form>'
         )
     elif state is RunState.WAITING_CONFIRMATION and view["confirmation"] is not None:
-        approval = _attrs(data_approval_id=view["confirmation"]["approval_id"])
+        # Disabled until the page script holds the token from the native view (spec 0.27).
+        approval = _attrs(data_approval_id=view["confirmation"]["approval_id"]) + " disabled"
         parts.append(
             f'<button type="button" data-action="approve" {base} {approval}>Approve</button>'
             f'<button type="button" data-action="deny" {base} {approval}>Deny</button>'

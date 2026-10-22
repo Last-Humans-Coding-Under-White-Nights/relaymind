@@ -360,6 +360,7 @@ Carried forward, not done in M4:
   recovery once at startup (see below).
 - An automated browser test for the UI page script (`app.js`; #89).
   The browser timestamp of a UI submission is shown but not asserted.
+  This is now done in M5: spec 0.27 (see below).
 - The requested answer options (token budget, temperature, top_p) were
   applied but not recorded in `run.accepted`; that needed a trace schema
   change (#91). This is now done in M5: spec 0.22 records them (see
@@ -390,6 +391,11 @@ Carried forward, not done in M4:
   `parallel_demo` ready when the workflow is enabled and both models are
   ready. Implemented with model doubles (`tests/test_parallel_workflow.py`);
   not yet run against live models, so no latency figure is claimed.
+- Browser test of the demo UI page script (#89; RM11, RM12, RM21, RM23,
+  RM25, spec 0.27 section 9): `tests/test_demo_ui_browser.py` runs
+  `app.js` in Playwright Chromium against the real app over model
+  doubles. New dev dependency `playwright`; CI installs Chromium on all
+  three runners.
 - Caching policy (#31; RM07, RM22, RM24, AC13, spec 0.26 section 10):
   skill parsing and resource text are cached by content hash
   (`SkillRegistry.reloaded` re-reads the roots; unchanged files are not

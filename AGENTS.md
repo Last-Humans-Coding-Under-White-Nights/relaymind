@@ -33,7 +33,7 @@ codebase.
 | `src/relaymind/ui/` | Demo UI: decisions and execution evidence (RM23); the trace view built from stored events (`trace_view.py`), escaped HTML (`render.py`), routes and static page (`routes.py`, `static/`), the comparison on reset fixtures (`comparison.py`), and the declared data mode (`settings.py`) |
 | `models/` | Pinned model artifact manifests (RM18, spec section 6); GGUF files are downloaded per `models/README.md`, never checked in |
 | `skills/` | Demo skill packages, one directory per skill, SKILL.md plus `skill.manifest.json`; the default skill root (operators may configure others, spec section 4.2) |
-| `tests/` | Test suite; `tests/fixtures/` holds sandbox demo data |
+| `tests/` | Test suite; `tests/fixtures/` holds sandbox demo data; `tests/test_demo_ui_browser.py` runs the UI page script in Chromium (Playwright; `playwright install chromium`) |
 | `scripts/` | Developer scripts: model manifest generation (RM18), evaluation and benchmarks (RM25); `scripts/README.md` lists what exists |
 | `docs/` | Spec, architecture, roadmap, testing guide, live evidence record (`docs/EVIDENCE.md`, raw exports in `docs/evidence/`) |
 

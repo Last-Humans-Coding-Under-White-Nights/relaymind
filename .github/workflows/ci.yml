@@ -31,5 +31,9 @@ jobs:
       - name: Format check
         run: ruff format --check .
 
+      # The browser test of the demo UI page script (#89) needs Chromium.
+      - name: Install browser
+        run: playwright install --with-deps chromium
+
       - name: Test
         run: pytest

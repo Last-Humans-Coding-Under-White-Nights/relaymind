@@ -35,6 +35,8 @@ relaymind = "relaymind.launcher:cli"
 dev = [
     # The standard SDK client of the AC09 round trip.
     "openai>=1.50",
+    # The browser test of the demo UI page script (#89); CI installs Chromium.
+    "playwright>=1.49",
     "pytest>=8.0",
     "ruff>=0.6",
 ]

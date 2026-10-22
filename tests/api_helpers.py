@@ -65,6 +65,11 @@ def call(
     return asyncio.run(go())
 
 
+def chat_body(*, model="relaymind", prompt="Is staging-api healthy right now?", **fields):
+    """The body of one chat completion with a single user message."""
+    return {"model": model, "messages": [{"role": "user", "content": prompt}], **fields}
+
+
 def chat(
     app,
     model="relaymind",
@@ -73,7 +78,7 @@ def chat(
     **fields,
 ):
     headers = fields.pop("headers", None)
-    body = {"model": model, "messages": [{"role": "user", "content": prompt}], **fields}
+    body = chat_body(model=model, prompt=prompt, **fields)
     return call(
         app,
         "POST",
@@ -117,5 +122,9 @@ class RunningServer:
         self.thread.join(timeout=10)
 
     @property
+    def origin(self):
+        return f"http://{self.address[0]}:{self.address[1]}"
+
+    @property
     def base_url(self):
-        return f"http://{self.address[0]}:{self.address[1]}/v1"
+        return self.origin + "/v1"

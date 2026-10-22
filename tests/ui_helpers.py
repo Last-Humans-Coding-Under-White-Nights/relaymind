@@ -9,6 +9,7 @@ import asyncio
 from dataclasses import replace
 from html.parser import HTMLParser
 
+from api_helpers import make_app
 from gateway_helpers import (
     STAGING_OK,
     build_gateway,
@@ -21,6 +22,7 @@ from gateway_helpers import (
 from helpers import FakeClock
 from relaymind.tools import CallerContext
 from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
+from relaymind.ui import UiSettings
 
 GENERATION_SECONDS = 0.25
 HEALTH_PROMPT = "Is staging-api healthy right now?"
@@ -28,6 +30,11 @@ DELETE_PROMPT = "Delete the demo-orders-db sandbox database."
 DELETE_ARGS = {"database_id": "demo-orders-db", "expected_revision": 3}
 DELETE_ANSWER = "Deleted demo-orders-db."
 MUTATING_CALLER = CallerContext(permissions=frozenset({READ_PERMISSION, MUTATE_PERMISSION}))
+
+
+def ui_app(gateway, mode="double", *, native=None, **ui):
+    """The gateway app with the demo UI in the given data mode."""
+    return make_app(gateway, ui=UiSettings(mode=mode, **ui), native=native)
 
 
 def external_health_turns():
