@@ -176,13 +176,7 @@ class RoutingCache:
         self._entries.pop(key, None)
 
     def _invalidate(self, context: CacheContext) -> None:
-        stale = [
-            key
-            for key, entry in self._entries.items()
-            if dict(entry.context.skill_hashes) != dict(context.skill_hashes)
-            or entry.context.permissions != context.permissions
-            or entry.context.enabled_tools != context.enabled_tools
-        ]
+        stale = [key for key, entry in self._entries.items() if entry.context != context]
         for key in stale:
             del self._entries[key]
         self.invalidated += len(stale)

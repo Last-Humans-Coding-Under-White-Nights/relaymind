@@ -191,6 +191,7 @@ from relaymind.orchestrator.route_decision import (
 )
 from relaymind.orchestrator.router import Router, Routing, request_language
 from relaymind.orchestrator.routing_cache import (
+    CacheContext,
     CachedRoute,
     RoutingCache,
     is_eligible,
@@ -2153,7 +2154,9 @@ class _Run:
         except UnsupportedCapabilityError as exc:
             raise self._local_unavailable(str(exc)) from exc
 
-        cached = self._cached_routing()
+        # One key per routing request: the lookup and the store share it.
+        cache_key = self._cache_key() if self.o.routing_cache is not None else None
+        cached = self._cached_routing(cache_key)
         if cached is not None:
             return cached
 
@@ -2200,7 +2203,7 @@ class _Run:
                 **self._cache_label("miss"),
             },
         )
-        self._store_route(routing)
+        self._store_route(routing, cache_key)
         return routing
 
     # -- routing cache (spec 0.26 section 10) -------------------------------------
@@ -2208,11 +2211,11 @@ class _Run:
     def _cache_label(self, outcome: str) -> dict[str, str]:
         return {} if self.o.routing_cache is None else {"routing_cache": outcome}
 
-    def _cache_key(self) -> tuple[str, Any]:
+    def _cache_key(self) -> tuple[str, CacheContext]:
         o = self.o
         return key_and_context(
             messages=self.messages,
-            language=(self.language or request_language(self.messages)).value,
+            language=self._routing_language().value,
             mode=self.mode.value,
             offered=[o.skills.get(name) for name in o.router.offered],
             tools=o.tools,
@@ -2222,7 +2225,10 @@ class _Run:
             enabled_workflows=o.enabled_workflows,
         )
 
-    def _cached_routing(self) -> Routing | None:
+    def _routing_language(self) -> Language:
+        return self.language or request_language(self.messages)
+
+    def _cached_routing(self, cache_key: tuple[str, CacheContext] | None) -> Routing | None:
         """The routing of a cache hit, or None for a miss (no routing generation then ran).
 
         Only the skill choice is cached. The decision is built again with
@@ -2231,9 +2237,9 @@ class _Run:
         is a miss. Authorization and tools are not touched here (RM08).
         """
         cache = self.o.routing_cache
-        if cache is None:
+        if cache is None or cache_key is None:
             return None
-        key, context = self._cache_key()
+        key, context = cache_key
         hit = cache.lookup(key, context)
         if hit is None:
             return None
@@ -2242,7 +2248,7 @@ class _Run:
                 hit.route.skill_id,
                 self.messages,
                 mode=self.mode,
-                language=self.language or request_language(self.messages),
+                language=self._routing_language(),
             )
         except RouteDecisionError:
             routing = None
@@ -2275,16 +2281,21 @@ class _Run:
         )
         return routing
 
-    def _store_route(self, routing: Routing) -> None:
+    def _store_route(self, routing: Routing, cache_key: tuple[str, CacheContext] | None) -> None:
         """Keep the skill choice of a local read-only route (spec 0.26: eligibility)."""
         cache = self.o.routing_cache
         decision = routing.decision
-        if cache is None or decision.route is not Route.LOCAL or decision.skill_id is None:
+        if (
+            cache is None
+            or cache_key is None
+            or decision.route is not Route.LOCAL
+            or decision.skill_id is None
+        ):
             return
         skill = self.o.skills.get(decision.skill_id)
         if not is_eligible(skill, self.o.tools):
             return
-        key, context = self._cache_key()
+        key, context = cache_key
         cache.store(
             key,
             context,
