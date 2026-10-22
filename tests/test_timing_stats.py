@@ -261,6 +261,26 @@ def test_collector_delegates_the_rest_of_the_adapter_contract():
     assert adapter.cancelled == ["gen_9"]
 
 
+def test_a_cancel_after_its_generation_ended_is_not_kept():
+    """RM25, spec 0.19 section 7.4: a late cancel leaves nothing behind.
+
+    The orchestrator may ask to cancel a generation that already ended
+    (best effort). That request must not mark a later generation with
+    the same ID as cancelled, and must not be held forever.
+    """
+    adapter = ScriptedAdapter([TextDelta(text="hi")])  # no terminal event
+    collector = TimingCollector(adapter, clock=scripted_clock(0.0, 0.5, 1.0, 1.5))
+    collect_events(collector, make_request())
+    asyncio.run(collector.cancel("gen_1"))
+    collect_events(collector, make_request())
+
+    assert [r.failure_code for r in collector.records] == [
+        "no_terminal_event",
+        "no_terminal_event",
+    ]
+    assert adapter.cancelled == ["gen_1"]
+
+
 def test_collector_delegates_count_tokens_to_the_wrapped_adapter():
     # RM16, spec section 6: the collector reports the wrapped adapter's
     # tokenizer_available, so it must also hand count_tokens through

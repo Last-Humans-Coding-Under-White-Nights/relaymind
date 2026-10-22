@@ -24,6 +24,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Cancellation during generation and in-flight writes (#29; RM10, RM14,
+  RM17, AC12; spec 0.19 section 7.4): a cancel of a running run now asks
+  the adapter of the generation in flight, local or external, to cancel
+  that generation ID while the generation is still running, before the
+  run ends as cancelled. The run never waits for that request: it is
+  bounded, and its failure is never the run's, also after a time limit
+  stops a generation. A late result of a provider that ignores the cancel
+  is dropped: it proposes, runs, and publishes nothing. The timing
+  collector (RM25) no longer keeps a cancel that arrives after its
+  generation ended. Deterministic tests (`tests/test_ac12_cancellation.py`)
+  cover a cancel during local and external generation (including the real
+  llama-server adapter over a mock transport), a provider that does not
+  stop, a provider cancel that hangs or fails, a cancel during a write
+  (recorded as `unknown_outcome`, never replayed, not rewritten by the
+  late handler result), during a read, and after a write succeeded
+  (outcome kept), and the native cancel endpoint. With restart recovery
+  (#8) this closes the deterministic part of AC12; no live model is run.
+- Specification 0.18 → 0.19: section 7.4 defines cancellation during
+  generation and writes (RM10, RM14, RM17, AC12, #29): the order of
+  stopping dispatch, the best-effort adapter cancel, the dropped late
+  result, how an in-flight tool operation is recorded, and that the
+  cancelled run retains every outcome and is never replayed.
 - Idempotency keys (#26; RM17, RM21, AC11; spec 0.18 section 7.4):
   `POST /relay/v1/runs` and `POST /v1/chat/completions` accept an
   `Idempotency-Key` (1 to 255 printable ASCII characters, sent once; else

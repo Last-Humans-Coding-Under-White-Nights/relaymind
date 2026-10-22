@@ -87,18 +87,41 @@ def parse_sse(text):
 
 
 class GatedAdapter(ScriptedAdapter):
-    """A scripted model whose generations wait for a gate (a run held in flight)."""
+    """A scripted model whose generations wait for a gate (a run held in flight).
+
+    Like the real adapters, it knows a generation only while generate
+    runs: cancelled lists the IDs a cancel reached while their generation
+    was still running, late_cancels the IDs it reached after that
+    generation had already ended, and interrupted the generations that
+    a cancelled consumer closed.
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.gate = asyncio.Event()
         self.started = asyncio.Event()
+        self.live: set[str] = set()
+        self.late_cancels: list[str] = []
+        self.interrupted: list[str] = []
 
     async def generate(self, request):
-        self.started.set()
-        await self.gate.wait()
-        async for event in super().generate(request):
-            yield event
+        self.live.add(request.generation_id)
+        try:
+            self.started.set()
+            await self.gate.wait()
+            async for event in super().generate(request):
+                yield event
+        except asyncio.CancelledError:
+            self.interrupted.append(request.generation_id)
+            raise
+        finally:
+            self.live.discard(request.generation_id)
+
+    async def cancel(self, generation_id: str) -> None:
+        if generation_id in self.live:
+            self.cancelled.append(generation_id)
+        else:
+            self.late_cancels.append(generation_id)
 
 
 def gated_gateway(tmp_path):

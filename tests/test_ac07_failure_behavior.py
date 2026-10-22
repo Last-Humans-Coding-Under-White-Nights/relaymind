@@ -172,6 +172,32 @@ def test_an_external_generation_over_external_seconds_is_504(tmp_path):
     assert "external_seconds" in error.message
 
 
+def test_a_failing_provider_cancel_never_hides_an_exhausted_deadline(tmp_path):
+    """RM03, RM14, section 11, spec 0.19 section 7.4: the cancel after a timeout is
+    best effort; its own error never turns the 504 into an internal error."""
+
+    class StalledFailingCancel(ScriptedAdapter):
+        async def generate(self, request):
+            self.requests.append(request)
+            await asyncio.sleep(1)
+            yield TextDelta(text="too late")
+
+        async def cancel(self, generation_id):
+            await super().cancel(generation_id)
+            raise RuntimeError("provider cancel endpoint unreachable")
+
+    stalled = StalledFailingCancel(locality="external", capabilities=NO_TOKENIZER)
+    gateway = exhausted_local_budget(tmp_path, [], budgets=LocalBudgets(external_seconds=0.05))
+    gateway.orchestrator.external = ConfiguredModel(adapter=stalled, model_id="stalled")
+    outcome, events = run(gateway, PROMPT)
+
+    assert outcome.error_code == "external_failed"
+    assert outcome.budget == "external_seconds"
+    assert error_from_outcome(outcome).code == "deadline_exceeded"
+    (call,) = of_type(events, "model.started")[-1:]
+    assert stalled.cancelled == [call.payload["call_id"]]
+
+
 def test_an_exhausted_entire_run_time_limit_in_the_external_stage_is_504(tmp_path):
     """Section 11: the entire-run active time is a deadline too."""
     gateway = exhausted_local_budget(
