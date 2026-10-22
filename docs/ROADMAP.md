@@ -286,9 +286,10 @@ Carried forward, not done in M3:
   approve that deletes is recorded for AC05.
 - AC08: the second local artifact and the live local swap are done in
   M6 (#90). A live external swap ran (#88): two models of one provider,
-  `glm-4.6` and `glm-4.5-air`, by a one-line configuration change. AC08
-  stays open until it is decided whether that counts as the "second
-  compatible external endpoint" of section 13.
+  `glm-4.6` and `glm-4.5-air`, by a one-line configuration change. Two
+  models behind one endpoint are not the "second compatible external
+  endpoint" of section 13, so AC08 stays open until a swap to a second
+  provider runs live ([#109](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/109)).
 - Restart recovery exists as `LocalOrchestrator.recover_after_restart`,
   but nothing called it at startup, because there was no launcher. The
   operator launcher (#87, see M5) now calls it once before serving.
@@ -461,11 +462,11 @@ against `glm-4.6` (one completed run with an 802 ms local branch, a
 28.0 s external branch, and a 13.9 s synthesis call; one run whose draft
 reached the 30 s external limit), in
 [`EVIDENCE.md`](EVIDENCE.md#2026-10-22--live-acceptance-runs-through-relaymind-serve---config-88-104-apple-silicon-macos).
-Still missing: a launcher start on Windows.
+Still missing: a launcher start on Windows ([#110](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/110)).
 
 Carried forward, not done in M5:
 
-- A launcher start on Windows (#104). The `parallel_demo` runs, the
+- A launcher start on Windows (#110). The `parallel_demo` runs, the
   cache-on run, and the macOS launcher starts are recorded as
   single-pass observations; no latency result or cache speedup is
   claimed from them.
@@ -499,9 +500,9 @@ Carried forward, not done in M5:
   ([`EVIDENCE.md`](EVIDENCE.md)). Q4_0 was tried and is not qualified.
   The external half of AC08 is covered with scripted endpoints (#49),
   and a live swap ran between two models of one provider, `glm-4.6` and
-  `glm-4.5-air` on Z.ai (#88). AC08 stays open until it is decided
-  whether a second model on the same endpoint is the "second compatible
-  external endpoint" of section 13, or a second provider is run.
+  `glm-4.5-air` on Z.ai (#88). A second model on the same endpoint is
+  not the "second compatible external endpoint" of section 13, so AC08
+  stays open until a second provider is run (#109).
 - Closes: AC15 and the release record (section 14).
 
 ## Out of scope for the prototype
@@ -573,5 +574,6 @@ listed here so the current order can be traced to its reason.
   model and a live external endpoint (Z.ai, `glm-4.6`), using a harness
   that records gateway checks and model findings apart
   (`scripts/live_acceptance.py`). Every gateway check held; the model
-  findings are recorded, not counted as passes. A Windows launcher start
-  remains open (#104).
+  findings are recorded, not counted as passes. #104 is closed by this
+  work; its Windows launcher start moves to #110, next to the Windows run
+  of the latency experiment (#33).

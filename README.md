@@ -13,16 +13,15 @@ deterministic tests with model doubles; their acceptance scenarios have
 one live run on macOS through `relaymind serve --config`, with the
 pinned local model and a live external endpoint (#88). AC08 has a live swap to a second local
 model artifact (Qwen3-0.6B Q4_K_M, #90) and a live swap between two
-models of one external provider (#88); it stays open until it is decided
-whether that is the "second compatible external endpoint" the spec asks
-for. The operator starts the gateway with
+models of one external provider (#88); it stays open until a swap to a
+second provider runs live (#109). The operator starts the gateway with
 one command, `relaymind serve --config <file>` (see
 [Start the gateway](#start-the-gateway)). Chinese support is best-effort
 (spec 0.7): Chinese live results are recorded but are not a gate. M5
 (parallel workflow and caching) is closed on deterministic coverage with
 model doubles; live `parallel_demo` runs, a cache-on run, and launcher
 starts with the pinned model are recorded on macOS, and a Windows start
-is still open (#104, M6). M6 (evaluation) is next. See
+is still open (#110, M6). M6 (evaluation) is next. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan and the
 open items, and [`CHANGELOG.md`](CHANGELOG.md) for what has landed so
 far.

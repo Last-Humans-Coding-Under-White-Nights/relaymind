@@ -340,7 +340,7 @@ the live model and fails only if a gateway check fails.
   with one external provider ([`EVIDENCE.md`](EVIDENCE.md)).
 - AC08 is not closed. The local swap runs live (#90), and the external
   swap ran live between two models of one provider (#88); a second
-  provider has not been run.
+  provider has not been run (#109).
 - The browser test of the page script (#89) uses model doubles and a
   disposable sandbox. The one live UI session is a run of the harness,
   not a test of the page against live output.
@@ -353,7 +353,8 @@ the live model and fails only if a gateway check fails.
 - No production backend forwards a live provider stream yet, so the
   mid-stream failure path is tested with a backend double.
 - The launcher (`relaymind serve --config`) has started with the pinned
-  model on macOS only (the harness above); no Windows start is recorded.
+  model on macOS only (the harness above); no Windows start is recorded
+  (#110).
 
 ### Required trace events (RM16, RM22, RM25)
 
