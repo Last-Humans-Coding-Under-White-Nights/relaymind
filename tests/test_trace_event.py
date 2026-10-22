@@ -314,10 +314,14 @@ def test_the_published_schema_states_the_payload_rules():
         payload = rule["then"]["properties"]["payload"]
         for event_type in rule["if"]["properties"]["event_type"]["enum"]:
             special = NON_TEXT_PAYLOAD.get(event_type, {})
-            for key in payload["required"]:
+            # An event type may have more than one rule (tool.finished
+            # also states the recovered rule); their requirements combine.
+            for key in payload.get("required", []):
                 assert payload["properties"][key] == special.get(key, TEXT)
-            required[event_type] = payload["required"]
-            one_of_ids[event_type] = [alt["required"] for alt in payload.get("anyOf", [])]
+            required.setdefault(event_type, []).extend(payload.get("required", []))
+            one_of_ids.setdefault(event_type, []).extend(
+                alt["required"] for alt in payload.get("anyOf", [])
+            )
     assert required == {
         **{event_type: ["model"] for event_type in TOOL_EVENT_TYPES},
         **{event_type: list(payload) for event_type, payload in REQUIRED_PAYLOAD.items()},
@@ -803,6 +807,123 @@ def test_the_handoff_started_payload_names_skill_tools_and_request():
     ):
         with pytest.raises(TraceEventError, match=key):
             validate_trace_event(SAMPLE_EVENTS[name])
+
+
+def recovered_failed_with(**changes):
+    payload = {
+        "error_code": "interrupted",
+        "interrupted_state": "local_running",
+        "settled_operations": [{"operation_id": "op_1", "status": "unknown_outcome"}],
+        **changes,
+    }
+    return terminal_with("run.failed", **payload)
+
+
+def recovered_payload_without(key):
+    data = recovered_failed_with()
+    del data["payload"][key]
+    return data
+
+
+def finished_with(**payload):
+    return with_changes(
+        event_type="tool.finished", payload={"model": "qwen3", "operation_id": "op_1", **payload}
+    )
+
+
+SAMPLE_EVENTS.update(
+    {
+        "recovered-failed": recovered_failed_with(),
+        "recovered-failed-nothing-settled": recovered_failed_with(settled_operations=[]),
+        "recovered-failed-read-settled": recovered_failed_with(
+            interrupted_state="waiting_confirmation",
+            settled_operations=[
+                {"operation_id": "op_1", "status": "unknown_outcome"},
+                {"operation_id": "op_2", "status": "failed"},
+            ],
+        ),
+        "recovered-failed-without-state": recovered_payload_without("interrupted_state"),
+        "recovered-failed-without-operations": recovered_payload_without("settled_operations"),
+        "recovered-failed-terminal-state": recovered_failed_with(interrupted_state="completed"),
+        "recovered-failed-unknown-state": recovered_failed_with(interrupted_state="sleeping"),
+        "recovered-failed-text-operations": recovered_failed_with(settled_operations="op_1"),
+        "recovered-failed-succeeded-operation": recovered_failed_with(
+            settled_operations=[{"operation_id": "op_1", "status": "succeeded"}]
+        ),
+        "recovered-failed-blank-operation": recovered_failed_with(
+            settled_operations=[{"operation_id": " ", "status": "failed"}]
+        ),
+        "recovered-failed-operation-without-status": recovered_failed_with(
+            settled_operations=[{"operation_id": "op_1"}]
+        ),
+        "recovered-failed-operation-extra-field": recovered_failed_with(
+            settled_operations=[{"operation_id": "op_1", "status": "failed", "result": {}}]
+        ),
+        "failed-other-code-with-state": recovered_failed_with(error_code="internal_error"),
+        "failed-other-code-with-operations": terminal_with(
+            "run.failed", error_code="internal_error", settled_operations=[]
+        ),
+        "finished-recovered": finished_with(
+            status="unknown_outcome", replayed=False, recovered=True
+        ),
+        "finished-not-recovered": finished_with(replayed=True, recovered=False),
+        "finished-recovered-replayed": finished_with(replayed=True, recovered=True),
+        "finished-recovered-without-replayed": finished_with(recovered=True),
+        "finished-text-recovered": finished_with(replayed=False, recovered="yes"),
+    }
+)
+
+RECOVERED_FAILED_ACCEPTED = (
+    "recovered-failed",
+    "recovered-failed-nothing-settled",
+    "recovered-failed-read-settled",
+)
+RECOVERED_FAILED_REJECTED = (
+    ("recovered-failed-without-state", "interrupted_state"),
+    ("recovered-failed-without-operations", "settled_operations"),
+    ("recovered-failed-terminal-state", "interrupted_state"),
+    ("recovered-failed-unknown-state", "interrupted_state"),
+    ("recovered-failed-text-operations", "settled_operations"),
+    ("recovered-failed-succeeded-operation", "settled_operations"),
+    ("recovered-failed-blank-operation", "settled_operations"),
+    ("recovered-failed-operation-without-status", "settled_operations"),
+    ("recovered-failed-operation-extra-field", "settled_operations"),
+    ("failed-other-code-with-state", "interrupted_state"),
+    ("failed-other-code-with-operations", "settled_operations"),
+)
+
+
+def test_a_recovered_run_failed_names_its_state_and_settled_operations():
+    """RM10, RM17, RM22, AC12, spec sections 5 and 8: a run.failed with
+    error_code interrupted names interrupted_state (the non-terminal
+    state the run was in) and settled_operations (closed objects of a
+    non-blank operation_id and a status of unknown_outcome or failed).
+    Both fields are required with interrupted and allowed only with it.
+    The validator and the published schema both reject other shapes."""
+    for name in RECOVERED_FAILED_ACCEPTED:
+        validate_trace_event(SAMPLE_EVENTS[name])
+        assert SCHEMA_VALIDATOR.is_valid(SAMPLE_EVENTS[name])
+    for name, key in RECOVERED_FAILED_REJECTED:
+        with pytest.raises(TraceEventError, match=key):
+            validate_trace_event(SAMPLE_EVENTS[name])
+        assert not SCHEMA_VALIDATOR.is_valid(SAMPLE_EVENTS[name]), name
+
+
+def test_a_recovered_tool_finished_is_never_a_replay():
+    """RM10, RM22, AC12, spec sections 5 and 8: tool.finished declares
+    recovered as a boolean, and a recovered result has replayed false.
+    The validator and the published schema both reject other shapes."""
+    for name in ("finished-recovered", "finished-not-recovered"):
+        validate_trace_event(SAMPLE_EVENTS[name])
+        assert SCHEMA_VALIDATOR.is_valid(SAMPLE_EVENTS[name])
+    for name, key in (
+        ("finished-recovered-replayed", "replayed"),
+        ("finished-recovered-without-replayed", "replayed"),
+        ("finished-text-recovered", "recovered"),
+    ):
+        with pytest.raises(TraceEventError, match=key):
+            validate_trace_event(SAMPLE_EVENTS[name])
+        assert not SCHEMA_VALIDATOR.is_valid(SAMPLE_EVENTS[name]), name
 
 
 def validator_accepts(data):

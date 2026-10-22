@@ -8,7 +8,9 @@ that does not match the schema never reaches SQLite.
 Payload rules per event type come from RM22 and RM16: every tool event
 names its operation or proposal ID and its originating model, model
 events name the call and the model, run.completed names the
-final-answer model, run.failed keeps an error code (section 5),
+final-answer model, run.failed keeps an error code (section 5) and, when restart recovery
+ends the run, the interrupted state and the settled operations,
+tool.finished from recovery is recovered and never replayed,
 clarification.required names its question, language, reason code,
 missing input, the clarify decision's skill_id (non-blank, or null when
 no skill was chosen), and the positive waiting_seconds limit in force
@@ -265,6 +267,64 @@ def _check_terminal_payload(event_type: EventType, payload: Mapping[str, Any]) -
             )
 
 
+# Spec sections 5 and 8 (RM10, RM17): a run that restart recovery ends
+# has error_code interrupted, the non-terminal state it was in, and the
+# operations it settled, each unknown_outcome or failed.
+_INTERRUPTED = "interrupted"
+_RECOVERY_FIELDS = ("interrupted_state", "settled_operations")
+_INTERRUPTED_STATES = (
+    "accepted",
+    "routing",
+    "local_running",
+    "external_running",
+    "parallel_running",
+    "waiting_input",
+    "waiting_confirmation",
+)
+_SETTLED_STATUSES = ("unknown_outcome", "failed")
+
+
+def _check_failed_payload(payload: Mapping[str, Any]) -> None:
+    """The section 8 run.failed recovery fields (RM10, RM17, AC12).
+
+    They are required when error_code is interrupted, and allowed only then.
+    """
+    interrupted = payload.get("error_code") == _INTERRUPTED
+    for key in _RECOVERY_FIELDS:
+        if interrupted and key not in payload:
+            raise TraceEventError(f"an interrupted run.failed payload needs '{key}'")
+        if not interrupted and key in payload:
+            raise TraceEventError(f"'{key}' needs error_code {_INTERRUPTED}")
+    if not interrupted:
+        return
+    if payload["interrupted_state"] not in _INTERRUPTED_STATES:
+        raise TraceEventError(
+            f"'interrupted_state' must be one of {', '.join(_INTERRUPTED_STATES)}"
+        )
+    operations = payload["settled_operations"]
+    if not _is_array(operations) or not all(
+        isinstance(op, Mapping)
+        and set(op) == {"operation_id", "status"}
+        and _is_text(op["operation_id"])
+        and op["status"] in _SETTLED_STATUSES
+        for op in operations
+    ):
+        raise TraceEventError(
+            "'settled_operations' must be an array of objects with exactly a non-blank"
+            f" operation_id and a status of {' or '.join(_SETTLED_STATUSES)}"
+        )
+
+
+def _check_recovered_result(payload: Mapping[str, Any]) -> None:
+    """A tool.finished from restart recovery is never a replay (section 5; RM10)."""
+    if "recovered" not in payload:
+        return
+    if type(payload["recovered"]) is not bool:
+        raise TraceEventError("'recovered' must be a boolean")
+    if payload["recovered"] and payload.get("replayed") is not False:
+        raise TraceEventError("a recovered tool.finished needs 'replayed' false")
+
+
 # Spec 0.10 section 8 (RM11, RM12): the confirmation.required payload is
 # exactly these fields, so the token and its hash never reach the trace.
 _CONFIRMATION_FIELDS = (
@@ -397,6 +457,10 @@ def _check_payload(event_type: EventType, payload: Mapping[str, Any]) -> None:
         _check_confirmation_payload(payload)
     if event_type is EventType.RUN_CANCELLED:
         _check_cancelled_payload(payload)
+    if event_type is EventType.RUN_FAILED:
+        _check_failed_payload(payload)
+    if event_type is EventType.TOOL_FINISHED:
+        _check_recovered_result(payload)
     if event_type in (EventType.RUN_COMPLETED, EventType.RUN_FAILED, EventType.RUN_CANCELLED):
         _check_terminal_payload(event_type, payload)
     if event_type in _TOOL_EVENTS:
