@@ -23,7 +23,7 @@ NATIVE_VIEW = re.compile(r"^/relay/v1/runs/[^/]+$")
 
 @contextmanager
 def served(gateway, *, mode="double", **ui):
-    """The app on a loopback port: yields (base_url, application_token)."""
+    """The app on a loopback port: yields (origin, application_token)."""
     app = ui_app(gateway, mode, native=NativeSettings(cancel_wait_seconds=0.5), **ui)
     with RunningServer(app) as server:
         yield server.origin, token_of(app)
@@ -34,13 +34,13 @@ class Seen:
     """What the page asked the gateway for while a test ran."""
 
     posts: list[dict] = field(default_factory=list)  # every POST to the API: path and body
-    views: list = field(default_factory=list)  # responses of GET /relay/v1/runs/{id}
+    views: list[dict] = field(default_factory=list)  # decoded native run views
 
     def issued_tokens(self):
         """The approval tokens the native run view returned to the page (it returns each once)."""
         tokens = []
-        for response in self.views:
-            pending = response.json().get("pending_approval") or {}
+        for view in self.views:
+            pending = view.get("pending_approval") or {}
             if pending.get("token"):
                 tokens.append(pending["token"])
         return tokens
@@ -63,7 +63,7 @@ def browser_page(browser):
         def on_response(response):
             request = response.request
             if request.method == "GET" and NATIVE_VIEW.match(urlsplit(request.url).path):
-                seen.views.append(response)
+                seen.views.append(response.json())
 
         page.on("request", on_request)
         page.on("response", on_response)
@@ -86,6 +86,8 @@ def open_run(page, run_id):
 def chat_run_id(base, token, prompt, **fields):
     """Make one chat completion over HTTP; return the run it owned."""
     with httpx.Client(base_url=base, headers={"Authorization": f"Bearer {token}"}) as client:
-        response = client.post("/v1/chat/completions", json=chat_body(prompt, **fields), timeout=30)
+        response = client.post(
+            "/v1/chat/completions", json=chat_body(prompt=prompt, **fields), timeout=30
+        )
     assert response.status_code == 200, response.text
     return response.headers[RUN_ID_HEADER]

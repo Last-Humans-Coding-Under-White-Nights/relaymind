@@ -65,7 +65,7 @@ def call(
     return asyncio.run(go())
 
 
-def chat_body(prompt="Is staging-api healthy right now?", model="relaymind", **fields):
+def chat_body(*, model="relaymind", prompt="Is staging-api healthy right now?", **fields):
     """The body of one chat completion with a single user message."""
     return {"model": model, "messages": [{"role": "user", "content": prompt}], **fields}
 
@@ -78,7 +78,7 @@ def chat(
     **fields,
 ):
     headers = fields.pop("headers", None)
-    body = chat_body(prompt, model, **fields)
+    body = chat_body(model=model, prompt=prompt, **fields)
     return call(
         app,
         "POST",

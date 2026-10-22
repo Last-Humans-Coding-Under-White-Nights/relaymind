@@ -75,7 +75,7 @@ def trace(page, state=None):
 def assert_mode_label_on_every_view(page, mode="DOUBLE"):
     """RM23: the shell label and the label of each trace in view are visible."""
     labels = page.locator(".mode-label")
-    assert labels.count() == 1 + page.locator(".trace").count()
+    expect(labels).to_have_count(1 + page.locator(".trace").count())
     for index in range(labels.count()):
         expect(labels.nth(index)).to_be_visible()
         expect(labels.nth(index)).to_contain_text(mode)
@@ -172,13 +172,20 @@ def test_approve_goes_to_the_native_endpoint_and_runs_the_mutation_once(tmp_path
         expect(trace(page, "completed")).to_be_visible()
         assert_mode_label_on_every_view(page)
         expect(page.locator(".trace .confirmation")).to_contain_text("approved")
-        issued = seen.issued_tokens()
+    # RM11: captured approval evidence remains usable after the browser context closes.
+    issued = seen.issued_tokens()
     (resume,) = [c for c in seen.posts if c["path"].endswith("/resume")]
     run_id, approval_id, version = ids
-    assert resume["path"] == f"/relay/v1/runs/{run_id}/resume"
-    body = resume["body"]
-    assert issued and body.pop("token") == issued[0]  # the token the native view gave once
-    assert body == {"expected_version": version, "approval_id": approval_id, "approve": True}
+    assert len(issued) == 1
+    assert resume == {
+        "path": f"/relay/v1/runs/{run_id}/resume",
+        "body": {
+            "expected_version": version,
+            "approval_id": approval_id,
+            "token": issued[0],
+            "approve": True,
+        },
+    }
     assert "demo-orders-db" not in database_ids(gateway)
 
 
@@ -189,6 +196,7 @@ def test_deny_goes_to_the_native_endpoint_and_mutates_nothing(tmp_path, browser)
         open_ui(page, base, token)
         start_from_page(page, DELETE_PROMPT)
         waiting = trace(page, "waiting_confirmation")
+        expect(waiting).to_be_visible()
         deny = waiting.locator('[data-action="deny"]')
         expect(deny).to_be_enabled()
         ids = (
@@ -200,9 +208,10 @@ def test_deny_goes_to_the_native_endpoint_and_mutates_nothing(tmp_path, browser)
         expect(trace(page, "cancelled")).to_be_visible()
         assert_mode_label_on_every_view(page)
         expect(page.locator(".trace .confirmation")).to_contain_text("denied")
-        issued = seen.issued_tokens()
+    # RM11: captured approval evidence remains usable after the browser context closes.
+    issued = seen.issued_tokens()
     run_id, approval_id, version = ids
-    assert issued
+    assert len(issued) == 1
     assert [c for c in seen.posts if c["path"].endswith("/resume")] == [
         {
             "path": f"/relay/v1/runs/{run_id}/resume",
@@ -349,7 +358,15 @@ def test_approve_and_deny_stay_disabled_until_the_token_is_read(tmp_path, browse
         page.unroute_all()
         expect(approve).to_be_enabled()
         expect(deny).to_be_enabled()
-        assert seen.posts == [{"path": "/relay/v1/runs", "body": seen.posts[0]["body"]}]
+        assert seen.posts == [
+            {
+                "path": "/relay/v1/runs",
+                "body": {
+                    "messages": [{"role": "user", "content": DELETE_PROMPT}],
+                    "execution_mode": "auto",
+                },
+            }
+        ]
 
 
 def test_replay_mode_opens_a_run_with_the_label_and_no_controls(tmp_path, browser):
