@@ -70,7 +70,8 @@ starts its own llama-server.
   `context_limit_exceeded` before any external call, and the local actor
   cannot dispatch after the handoff. `tests/test_handoff_envelope.py`
   checks the published schema against the validator. No live external
-  model is run, so there is no live AC02 record yet.
+  model is run here; the live AC02 run is in the live acceptance harness
+  (below), which runs it only when an external endpoint is configured.
 - AC03 and AC04, deterministic: `pytest tests/test_ac03_clarification.py`
   (clarification and resume) and `pytest tests/test_ac04_invalid_proposals.py`
   (invalid proposals never execute) run with scripted model doubles in
@@ -83,8 +84,7 @@ starts its own llama-server.
   minutes (`approval_expired`), a changed target or arguments, a changed
   fixture revision, a wrong token (403), a malformed body (400), a busy
   execution slot (429), a textual yes (not an approval), and the same
-  flow in the external stage. No live model is run, so there is no live
-  AC05 record yet.
+  flow in the external stage. The live run is in the live acceptance harness (below).
 
 - AC06, deterministic: `pytest tests/test_ac06_tool_output_injection.py`
   plays an injected sandbox log entry to model doubles that obey it. The
@@ -92,16 +92,15 @@ starts its own llama-server.
   the skill allowlist, and the offered tool schemas stay unchanged, and
   the secret is absent from events, tool operations, model requests, and
   the SQLite store read back from disk. `tests/test_redaction.py` covers
-  the redaction rules. No live model is run, so there is no live AC06
-  record yet.
+  the redaction rules. The live run is in the live acceptance harness (below).
 
 - AC07 and the error part of AC16, deterministic:
   `pytest tests/test_ac07_failure_behavior.py tests/test_error_contract.py
   tests/test_degraded_mode.py` checks bounded failure with no invented
   result when the local budget runs out or the external generation
   fails, one HTTP status and stable code per failure (spec section 11),
-  and degraded mode as an operator policy recorded in the trace. No live
-  model is run, so there is no live AC07 record yet.
+  and degraded mode as an operator policy recorded in the trace. The
+  live run is in the live acceptance harness (below).
 
 - AC12, restart part, deterministic: `pytest tests/test_restart_recovery.py`
   simulates a restart with a new gateway over the same SQLite file. Runs
@@ -120,8 +119,9 @@ starts its own llama-server.
   `unknown_outcome`, never run again, not rewritten when the abandoned
   handler finishes; the test joins the handler thread), during an
   in-flight read (`failed`), and after a write succeeded (the
-  `succeeded` outcome stays). The native cancel endpoint is covered. No
-  live model is run, so there is no live AC12 record yet.
+  `succeeded` outcome stays). The native cancel endpoint is covered. A
+  live cancel during a generation and a live restart during a generation
+  (not during a write) are in the live acceptance harness (below).
 - AC12, chat disconnect, deterministic:
   `pytest tests/test_chat_disconnect_cancel.py` drives the app as raw ASGI
   and checks that a client that leaves a managed chat request, with
@@ -168,8 +168,8 @@ starts its own llama-server.
   and deny stay disabled until the page holds the token, and a replay-mode
   view with no controls. Install
   the browser once with `playwright install chromium`; a machine without
-  it fails the test. CI installs it on ubuntu, macOS, and Windows. No live
-  run is recorded for the UI.
+  it fails the test. CI installs it on ubuntu, macOS, and Windows. One
+  live UI session is in the live acceptance harness (below).
 
 - AC08, deterministic: `pytest tests/test_ac08_model_substitution.py`
   runs one managed scenario (a local skill and two local tools, a local
@@ -199,8 +199,9 @@ starts its own llama-server.
   `tests/test_local_loop_live.py` checks that every model call in a run
   names the configured artifact, and the export names the manifest, so
   each trace shows which model ran. `EVIDENCE.md` records both runs. The
-  external half of the swap is covered by the deterministic test only:
-  no live external endpoint has been run (#88).
+  external half ran live once through the harness below
+  (`--second-external-model`): the same file with only
+  `[external_model] model` changed, between two models of one provider.
 
 - AC09 and the request part of AC16, deterministic (issue #22, spec 0.14
   section 7.1): `pytest tests/test_chat_request.py` checks the parameter
@@ -215,8 +216,7 @@ starts its own llama-server.
   loopback socket; `tests/test_api_binding.py` checks the loopback bind
   rule and the generated token. The client-owned alias is checked at the
   API seam there, with a backend double; its real backend is covered
-  below (issue #24). No live model is run, so there is no live AC09
-  record yet.
+  below (issue #24). The live SDK round trip is in the live acceptance harness (below).
 
 - The streaming contract, deterministic (issue #23, spec 0.15 section 7.3):
   `pytest tests/test_streaming_contract.py` checks the stream framing for
@@ -255,8 +255,8 @@ starts its own llama-server.
   external call, `parallel_demo` failing with `workflow_unavailable` when
   its configuration is missing, and
   `/healthz` and `/readyz` with explicit model warm state. One test
-  reads a live stream over a loopback socket across a clarification. No
-  live model is run, so there is no live record.
+  reads a live stream over a loopback socket across a clarification.
+  The live AC11 run is in the live acceptance harness (below).
 
 - AC10 and the client-owned alias, deterministic (issue #24, RM08, RM19,
   spec 0.16 section 7.2): `pytest tests/test_client_owned_tools.py` runs
@@ -273,7 +273,52 @@ starts its own llama-server.
   the stop reason of an external stage, external fallback only before
   anything is exposed, the three execution modes, and the
   ownership-mixing rejections on both aliases.
-  No live model is run, so there is no live AC10 record yet.
+  The live AC10 run is in the live acceptance harness (below).
+
+### Live acceptance harness (#88, #104)
+
+`scripts/live_acceptance.py` runs the M3 to M5 scenarios against the
+pinned model the way an operator starts the gateway. It verifies the
+runtime banner and the artifact, starts llama-server from the manifest,
+and then, for each launch plan, writes a TOML file and runs
+`relaymind serve --config` as a child process. It reads the bind URL
+and the token from the launcher output (the token is never recorded),
+checks `/readyz`, drives the scenarios over HTTP (the native run API,
+the chat endpoint through the OpenAI SDK, and the demo UI in Chromium),
+stops the gateway, and reads the traces back from the run store.
+
+```bash
+python scripts/live_acceptance.py \
+    --out docs/evidence/<date>-live-acceptance-<machine>.json
+```
+
+The scenarios: AC05 deny and approve (with a replayed approval), AC06
+through a caller's tool result and through a sandbox log entry, AC07
+without an external model, after the local budget runs out, and with an
+unreachable external endpoint, AC09 with `stream` false and true, AC10
+call and result, AC11 replay and idempotent resubmission, AC12 cancel
+during a generation and a gateway kill and restart during a generation,
+one demo UI session in live mode, and the cache-off and cache-on runs of
+the AC01 prompts (two rounds each), which also write one statistics
+export per setting. With `--external-base-url`, `--external-model`,
+`--external-context-limit`, and `RELAYMIND_EXTERNAL_API_KEY`, three more
+launches run AC02, `parallel_demo`, `external_only`, AC09 and AC10 with
+the `external_only` header, and AC06 through the external model; with
+`--second-external-model` one more launch runs the AC08 external swap.
+Without them those scenarios are recorded as not run. Every check has an owner: a gateway check is an invariant the code
+keeps whatever the model does, and a model check is a capability. A
+failed model check is a finding, never a pass.
+
+`pytest tests/test_live_acceptance_script.py` (default suite) runs every
+scenario against the launcher's app over model doubles.
+`pytest -m live tests/test_live_acceptance.py` runs the harness against
+the live model and fails if a scenario errors or a gateway check fails.
+Model-quality findings remain recorded without failing that test.
+The default suite also checks malformed SDK responses, missing trace
+evidence, cancel/restart races, and cleanup after startup or export
+failures (`tests/test_live_acceptance_review.py`,
+`tests/test_live_acceptance_sdk_failures.py`, and
+`tests/test_live_acceptance_lifecycle.py`).
 
 - AC13, caching policy, deterministic (#31; RM07, RM22, RM24):
   tested with model doubles only.
@@ -297,26 +342,25 @@ starts its own llama-server.
 
 ### What is not covered yet
 
-- No live-model record exists for AC02, AC05, AC06, AC07, AC09, AC10,
-  AC11, AC12, AC13, or AC14. Every M3 to M5 test above uses model
-  doubles, which does not satisfy a live-demo requirement (spec section
-  13). The missing M5 live runs (AC13 and AC14) are tracked in
-  [#104](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/104)
-  for M6.
-- AC08 is not closed. The local swap runs live (#90), but the external
-  swap uses scripted endpoints only (#49); no live external endpoint has
-  been run (#88).
+- The M3 to M5 scenarios ran live once, on Apple Silicon macOS only,
+  with one external provider ([`EVIDENCE.md`](EVIDENCE.md)).
+- AC08 is not closed. The local swap runs live (#90), and the external
+  swap ran live between two models of one provider (#88); a second
+  provider has not been run (#109).
 - The browser test of the page script (#89) uses model doubles and a
-  disposable sandbox; it is not a live UI session (#88).
-- No live model has run the parallel workflow (AC14), and the extra
-  call latency is not measured on real hardware (#104 in M6).
-- No cache speedup has been measured (AC13); a cache-on measurement is
-  a separate, labeled experiment and none has been run (#104 in M6).
+  disposable sandbox. The one live UI session is a run of the harness,
+  not a test of the page against live output.
+- The parallel workflow (AC14) ran live twice against one external
+  model (one completed, one draft over the 30 s limit); two single runs
+  are not a latency measurement.
+- No test measures a cache speedup (AC13). One cache-on run of the AC01
+  prompts is recorded next to its cache-off run (single pass, macOS
+  only).
 - No production backend forwards a live provider stream yet, so the
   mid-stream failure path is tested with a backend double.
-- The launcher (`relaymind serve --config`) is tested with model doubles
-  only (`tests/test_launcher.py`); no test starts a real server and model
-  the way an operator would.
+- The launcher (`relaymind serve --config`) has started with the pinned
+  model on macOS only (the harness above); no Windows start is recorded
+  (#110).
 
 ### Required trace events (RM16, RM22, RM25)
 

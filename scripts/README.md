@@ -62,6 +62,24 @@
 
   A spike: minimal tests, single pass, observations only (spec 12.3).
 
+- `live_acceptance.py` — the live acceptance harness (#88, #104). It
+  starts llama-server from the manifest, then starts the gateway with
+  `relaymind serve --config` once per launch plan, runs the M3 to M5
+  acceptance scenarios over HTTP (native run API, chat endpoint with the
+  OpenAI SDK, demo UI in Chromium), and writes one export with the
+  launcher output (token not recorded), each scenario's checks and
+  findings, and the full traces, plus a statistics export per routing
+  cache setting. Scenarios that need a real external endpoint run only
+  when one is configured; otherwise they are recorded as not run.
+
+  ```bash
+  python scripts/live_acceptance.py \
+      --out docs/evidence/<date>-live-acceptance-<machine>.json
+  ```
+
+  Single pass, sequential: observations, never benchmark results (spec
+  12.3). See `docs/TESTING.md` for the scenario list.
+
 ## Planned
 
 Evaluation and benchmark scripts (spec section 12):

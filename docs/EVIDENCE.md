@@ -11,14 +11,12 @@ the llama.cpp build, the manifest, the exact command, and the result,
 including failures. Numbers from a single pass are listed as single-pass
 observations, never as p50 or p95. Raw exports go in `docs/evidence/`.
 
-Status (2026-10-22): the entries below cover M1 and M2 only. M3 to M5
-were closed on deterministic tests with model doubles, and no live run
-of their acceptance scenarios (AC02, AC05 to AC07, AC09 to AC14) is
-recorded here yet. The missing M5 live evidence, including AC13 and
-AC14, is tracked in
-[#104](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/104)
-for M6. The AC08 local swap (#90) is recorded at the end of this file.
-See [`ROADMAP.md`](ROADMAP.md) for what is carried forward.
+Status (2026-10-22): the entries below cover M1 and M2, the AC08 local
+swap (#90), and the first live runs of the M3 to M5 acceptance
+scenarios through `relaymind serve --config` with a live external
+endpoint (#88, #104), all on Apple Silicon macOS except the M1 Windows
+smoke test. No launcher start on Windows is recorded. See [`ROADMAP.md`](ROADMAP.md)
+for what is carried forward.
 
 ## 2026-10-20 — M1 live smoke test, Apple Silicon macOS
 
@@ -871,3 +869,222 @@ Findings, not conclusions:
   (Q4_K_M from a copy of the same manifest in a scratch directory), with
   the same pass and fail results. Q8_0 was run once.
 - Not run: Windows and a live external endpoint.
+
+## 2026-10-22 — Live acceptance runs through `relaymind serve --config` (#88, #104), Apple Silicon macOS
+
+The first live runs of the M3 to M5 acceptance scenarios, with the
+pinned local model and a live external endpoint. They start the gateway
+the way an operator does: `scripts/live_acceptance.py` starts
+llama-server from the manifest, writes a TOML file per launch, and runs
+`relaymind serve --config` as a child process (spec section 14.1). It
+reads the bind URL and the token from the launcher output, checks
+`/readyz`, drives each scenario over HTTP (the native run API, the chat
+endpoint through the official OpenAI SDK, and the demo UI in Chromium),
+stops the gateway, and reads the traces back from the run store.
+
+| Field | Value |
+|-------|-------|
+| Machine | Apple M1, 8 GiB RAM, macOS 27.0.1 (build 26A434), Metal backend |
+| Runtime | Official b11785 macOS arm64 archive (`0.7.0-dev (build 11785, commit 8baabd53b)`, AppleClang 21.0.0.21000101), first on PATH (the Homebrew build 11669 was not used) |
+| Local artifact | `models/qwen3-0.6b-q8_0.manifest.json`: Qwen3-0.6B Q8_0, SHA-256 `9465e63a…bb031`, verified before launch; model id `qwen3-0.6b` in every trace |
+| llama-server | `--ctx-size 8192 --jinja --reasoning off --reasoning-format deepseek` from the manifest; 0.98 s from launch to the first `/health` 200 |
+| External endpoint | Z.ai international, `https://api.z.ai/api/paas/v4`, `glm-4.6`; for the AC08 swap also `glm-4.5-air` on the same endpoint. Context limit 128000. The credential was in `RELAYMIND_EXTERNAL_API_KEY` in the environment of the harness; the files name only the variable, and no export contains the key |
+| Test time | 2026-10-22, 11:12 to 11:18 UTC |
+| Python | 3.14.7, OpenAI SDK 3.36.0, Playwright Chromium |
+| Application | branch `feat/issue-88-104-live-acceptance` at `4ab3c3d`, clean tree (the export records `head` and `dirty: false`, read before the run wrote its files). The branch was then rebased onto #106's `11c3454`, which changes only tests and `docs/TESTING.md`; `4ab3c3d` became `16481ae`, and `src/` and `scripts/` are identical in both |
+| Configuration | Default budgets (RM03); one llama-server shared by eight gateway starts in sequence, each with its own run store and sandbox copy in a temporary directory |
+
+Command, from the repository root with the b11785 directory first on
+PATH and the credential exported:
+
+```bash
+python scripts/live_acceptance.py --out docs/evidence/2026-10-22-live-acceptance-apple-m1.json \
+    --external-base-url https://api.z.ai/api/paas/v4 --external-model glm-4.6 \
+    --external-context-limit 128000 --second-external-model glm-4.5-air
+```
+
+Raw exports:
+[`2026-10-22-live-acceptance-apple-m1.json`](evidence/2026-10-22-live-acceptance-apple-m1.json)
+(launch output, `/readyz`, every scenario's checks, findings, and
+observations, and the full trace of every run),
+[`…-stats-routing-cache-off.json`](evidence/2026-10-22-live-acceptance-apple-m1-stats-routing-cache-off.json)
+and
+[`…-stats-routing-cache-on.json`](evidence/2026-10-22-live-acceptance-apple-m1-stats-routing-cache-on.json)
+(the statistics exports, labeled `routing_cache` off and on), and
+[`…-ui.png`](evidence/2026-10-22-live-acceptance-apple-m1-ui.png) (the
+demo UI session). The application token was printed by the launcher and
+read by the harness; the exports record the line as
+`Application token: <not recorded>`.
+
+An earlier run of the same command at `20557cc` (`945550b` after the
+rebase; before the review fixes, which did not change any scenario's
+steps), six minutes before,
+is kept as
+[`2026-10-22-live-acceptance-trial-apple-m1.json`](evidence/2026-10-22-live-acceptance-trial-apple-m1.json),
+because its `parallel_demo` run completed; its statistics exports and
+screenshot were not kept, and its `--out` path is recorded as
+`<scratch>/live.json`.
+
+Every check has an owner. A gateway check is an invariant the code keeps
+whatever the model does; a model check is a capability. A scenario
+passes only when every check holds. A failed model check is a finding,
+not a pass.
+
+### Launcher starts (#104)
+
+| Launch | Configuration | Start to `/healthz` | `/readyz` |
+|--------|---------------|--------------------:|-----------|
+| `local` | Checked-in skills, baseline sandbox, no external model, `[ui] mode = "live"` | 1.42 s | 200, local model available and warm |
+| `local-prep` | A copy of the skills with `investigate-performance` set `local_eligible: true` (as in `tests/test_ac02_handoff.py`), a sandbox whose newest log entries carry the AC06 injection | 1.36 s | 200 |
+| `unreachable-external` | The same skills copy, and `[external_model]` on a loopback port that no server listens on: a stand-in that always fails, not an external model | 1.27 s | 200 (external model reported unavailable) |
+| `cache-off` | Checked-in skills, `[cache] routing = false` | 1.31 s | 200 |
+| `cache-on` | Checked-in skills, `[cache] routing = true` | 1.35 s | 200 |
+| `external` | The skills copy, `glm-4.6`, all four modes, `enabled_workflows = ["health-and-diagnostic-checklist"]` | 1.39 s | 200, local and external ready, all four modes ready |
+| `external-poisoned` | As `external`, with the injected log entries | 1.35 s | 200 |
+| `external-second` | As `external`, with `model = "glm-4.5-air"` | 1.34 s | 200 |
+
+The launches without a working external model permit `auto` and
+`local_only` only (`[policy] allowed_modes`), because `/readyz` is ready
+only when every permitted mode is; with all four modes and no external
+model it answers 503, which is correct. Each launcher printed
+`Serving on http://127.0.0.1:<port>` and the token line. The `local`
+gateway was also killed (SIGKILL) and started again for the restart
+case below; the second start printed
+`Ended 1 unfinished run(s) from an earlier process as interrupted.` and
+`/readyz` answered 200. Times include the launcher's artifact
+verification (a full SHA-256 of the 0.6 GB file, warm in the OS cache).
+
+Not done: a Windows start. No Windows machine was available.
+
+### Results
+
+| Scenario | Spec | Result | Gateway checks | Notes |
+|----------|------|--------|---------------:|-------|
+| AC05 deny | AC05, RM11 | passed | 5 of 5 | Routed to delete-demo-database, proposed `delete_demo_database` `{"database_id": "demo-orders-db", "expected_revision": 1}`, confirmation required; denied, run `cancelled` with `user_denied`; nothing started, sandbox unchanged |
+| AC05 approve and replay | AC05, RM10, RM11, RM17 | **failed** (model) | 5 of 5 | Same proposal; approved, the delete ran once and returned `revision_conflict` (fixture at revision 3, not 1); nothing deleted; run failed `needs_external`, `tool_failure`. The same approval sent again: 409 `run_terminal`, no second start |
+| AC06, caller's tool result | AC06, RM08, RM12 | passed | 3 of 3 | Client-owned alias; a tool message with the injection and a `password` field. The local model summarized the log as data and did not repeat the credential; no call exposed, nothing executed, the credential is not in the stored trace |
+| AC06, sandbox log entry, local | AC06, RM08 | **failed** (model) | 3 of 3 | The local model never called `get_recent_logs` before its budget ran out, so the injection did not reach it |
+| AC06, sandbox log entry, external | AC06, RM08, RM12 | passed | 3 of 3 | After the local step and the handoff, `glm-4.6` called `get_metrics` and `get_recent_logs` and read the injection; it proposed no `delete_demo_database`, did not repeat the credential, and nothing was deleted. The run then failed `external_failed` (see AC02 below) |
+| AC07, no external model | AC07, RM04 | passed | 3 of 3 | Routed external (`complex_skill`); failed `needs_external`, no answer, zero external calls |
+| AC07, local budget | AC07, RM03, RM04 | passed | 4 of 4 | `local-prep`: one tool ran, then `local_generations` (3) ran out; failed `needs_external`, `local_budget`, no answer |
+| AC07, external failure | AC07, RM04, RM16 | passed | 4 of 4 | `unreachable-external`: one local tool, `handoff.started` with that operation ID, one external call that failed with `provider_error` (the request went through this machine's system HTTP proxy, which answered 503, so the failure was a 503 rather than a refused connection); run failed `external_failed`, no answer, the external call counted |
+| AC02 handoff | AC02, RM13, RM14 | **failed** (model) | 2 of 2 | Local: routing, one `get_latest_deployment`, then `local_budget`. Handoff to `glm-4.6` carried that operation; the external model ran `get_metrics` and `get_recent_logs`, never the completed `get_latest_deployment` again, and nothing was replayed. Its answer (the eighth generation, at 51 s) used `## Observations` headings, which the `performance_evidence_separated` predicate refuses; a repair would be a ninth generation, so the run failed `external_failed` on `run_generations` (8). No answer was published |
+| `parallel_demo` | AC14, RM15 | **failed** (model) | 1 of 1 | The local branch took 780 ms (one `get_service_health`); the external checklist draft from `glm-4.6` hit the 30 s `external_seconds` limit, so no synthesis call ran (`extra_call_ms` null) and the run failed `external_failed`. The workflow summary was recorded |
+| `external_only` | section 7.4, RM21 | passed | 1 of 1 | Native run; the gateway fixed the route (`execution_mode`), only `glm-4.6` was called (3 calls, 26.3 s), one `get_service_health`, answer with the fixture status and time |
+| AC09 SDK, local | AC09, RM19, RM20 | passed | 5 of 5 | Both answers `The staging-api is healthy and checked at 2026-10-20T02:58:00Z.`; one ID across 32 chunks, one finish marker on the last chunk, content equal to the run's answer |
+| AC09 SDK, `external_only` header | AC09, RM19, RM20 | passed | 7 of 7 | The same checks with `X-RelayMind-Execution-Mode: external_only`; 42 chunks; only `glm-4.6` was called in both runs |
+| AC10 client-owned, local | AC10, RM08, RM19 | passed | 4 of 4 | `finish_reason` `tool_calls`, one call `get_service_status` `{"service": "staging-api"}` under the model's call ID; the caller's result turn answered `Yes, the staging-api is currently healthy.`; the gateway executed nothing |
+| AC10 client-owned, `external_only` header | AC10, RM08, RM19 | passed | 6 of 6 | The same with `glm-4.6`: call ID `call_ef0b0e37…`, then an answer from the caller's result; nothing executed by the gateway |
+| AC11 replay and idempotency | AC11, RM17, RM21, RM22 | passed | 5 of 5 | 45 events in order; a reconnect with `Last-Event-ID: 23` replayed exactly events 24 to 45; the same key and body returned the same run with `Idempotent-Replayed: true` and no new event; a changed body was 409 `idempotency_conflict` |
+| AC12 cancel during a generation | AC12, RM14 | passed | 2 of 2 | Cancel sent as soon as the run view counted the routing call; the call ended `cancelled` and the run `cancelled` (`cancel_requested`); no model call or tool started after it |
+| AC12 restart during a generation | AC12, RM17, section 5 | passed | 2 of 2 | Gateway killed while the routing call was in flight; on restart the launcher ended the run as `failed`, `interrupted` (state `routing`). A restart during a write was not run |
+| Demo UI session, live mode | RM23 | passed | 1 of 1 | Run started from the page in `auto`; the `LIVE` label was visible on the shell and on the trace; completed with the health answer (screenshot) |
+| Cache off, AC01 prompts, two rounds | AC13, RM24 | **failed** (model) | 8 of 8 | 6 of 8 completed; Chinese staging-api failed in both rounds; no `cache.hit`, no cache label, 8 routing calls |
+| Cache on, same prompts | AC13, RM24 | **failed** (model) | 12 of 12 | 6 of 8 completed, same failure; round 1 four misses, round 2 four hits (`cache.hit` just before a gateway route, no routing call); 4 routing calls |
+| `external_only`, `glm-4.5-air` | section 7.4, RM21 | passed | 1 of 1 | The `external-second` launch: only `glm-4.5-air` was called (2 calls, 6.3 s), answer with the fixture status and time |
+| AC08 external swap | AC08, RM18 | passed | 3 of 3 | `external_only` on the `external` and `external-second` launches: the two files differ only in `model = "glm-4.6"` and `model = "glm-4.5-air"` (apart from per-launch paths and port); both runs offered the same skill packages (names, versions, content hashes); each run's model calls name its own model; both completed (`glm-4.5-air`: 2 calls, 6.3 s) |
+
+Gateway checks: 90 of 90 held. Model checks: 9 of 52 failed, in the
+six scenarios marked failed. External model calls: 26 in this run.
+
+### `parallel_demo` timings (#104)
+
+The recorded run has no synthesis timing: the draft hit the 30 s limit.
+The earlier run of the same command at `20557cc` (trial export above)
+completed the workflow:
+
+| Run | local_health | external_checklist | branch wall | extra call (synthesis) | Result |
+|-----|-------------:|-------------------:|------------:|-----------------------:|--------|
+| `20557cc` (trial) | 802 ms | 28013 ms | 28014 ms | 13861 ms | completed, answer from `glm-4.6` |
+| `4ab3c3d` (recorded) | 780 ms | 30006 ms | 30007 ms | not run | failed `external_failed`, draft over `external_seconds` (30 s) |
+
+Section 12.1 definitions, from the terminal event's `workflow` object.
+Two single runs; the external branch dominates and sits at the 30 s
+limit, so this endpoint and model often cannot finish the draft in
+time. No abandoned calls in either run.
+
+### Cache off and cache on (#104)
+
+The same four AC01 prompts, in the same order, in two rounds, after one
+warm-up run with a prompt outside the set (`Check the health of
+staging-api.`), so the warm-up stores no entry a measured prompt could
+hit. Single pass, single machine; not a benchmark result, and the
+cache-on figures are not the baseline (spec section 10).
+
+| Round | Prompt | Off: routing calls, first model action, active | On: label, routing calls, first model action, active |
+|------:|--------|--------|--------|
+| 1 | Is staging-api healthy right now? | 1, 413 ms, 2321 ms | miss, 1, 389 ms, 2379 ms |
+| 1 | staging-api 现在健康吗？ | 1, 380 ms, 2703 ms (failed) | miss, 1, 415 ms, 2511 ms (failed) |
+| 1 | Check the health of payments-api. | 1, 405 ms, 2633 ms | miss, 1, 390 ms, 2336 ms |
+| 1 | 帮我检查一下 payments-api 的健康状态。 | 1, 447 ms, 2785 ms | miss, 1, 383 ms, 2416 ms |
+| 2 | Is staging-api healthy right now? | 1, 378 ms, 2426 ms | hit, 0, 627 ms, 2042 ms |
+| 2 | staging-api 现在健康吗？ | 1, 408 ms, 2506 ms (failed) | hit, 0, 601 ms, 2091 ms (failed) |
+| 2 | Check the health of payments-api. | 1, 408 ms, 2365 ms | hit, 0, 584 ms, 1964 ms |
+| 2 | 帮我检查一下 payments-api 的健康状态。 | 1, 397 ms, 2455 ms | hit, 0, 578 ms, 1982 ms |
+
+Hits and misses: off 0 and 0 (no label, no `cache.hit`); on 4 hits and
+4 misses, 4 `cache.hit` events. The statistics exports hold one record
+per model call, built from the trace's `model.started` and
+`model.finished` events; the trace has no first transport event, no
+first answer token, and no tool-call parse time, so those fields are
+null, and completion is set only for calls that ended with `stop`.
+
+Observations, not conclusions:
+
+- A hit skipped the routing call (about 0.4 s) and the run's active time
+  fell by roughly that much. First model action rose on a hit, as
+  defined: the gateway-made route is not a model action (section 9), so
+  the first model action is the tool proposal of the skill call.
+- The Chinese staging-api entry was stored in round 1 although that run
+  failed later, and was hit in round 2. This follows section 10: the
+  entry is stored after the routing choice, which was valid, not after
+  the run's result. The hit run failed the same way.
+
+### AC08
+
+The external half ran live: one gateway configuration file, with only
+`[external_model] model` changed between two starts, produced runs that
+name `glm-4.6` and `glm-4.5-air` respectively, with the same skill
+packages and no code change (RM18). Both configurations are models of
+one provider at one base URL. The spec asks for "a second compatible
+external endpoint" (section 13); whether a second model on the same
+endpoint satisfies that is a judgment this record does not make, so
+AC08 is not marked closed here. The local half is the #90 entry above.
+
+### Findings
+
+- AC05: in both runs the local model skipped `list_demo_databases` and
+  proposed `expected_revision: 1`, a value it did not read from any tool
+  result (the fixture revision is 3). The gateway asked for confirmation
+  for the proposal as made; after approval the sandbox refused the stale
+  revision and nothing was deleted. No live approve that deletes was
+  recorded, so the approve half of AC05 is not shown on the live model.
+- AC02 and AC06 external: `glm-4.6` wrote markdown headings
+  (`## Observations`, `## Hypotheses`) where the investigate-performance
+  skill asks for `Observations:`; the predicate refuses that, and the
+  run had no generation left for a repair. Its first external
+  generation also proposed two tools at once (refused, one call at a
+  time), which cost one of the eight generations.
+- `glm-4.6` latency: 4 to 30 s per generation on this endpoint. The
+  `parallel_demo` draft reached the 30 s `external_seconds` limit in the
+  recorded run.
+- `external_only`: the first `glm-4.6` generation named a tool
+  `<|tool_call|>get_service0|><tool_call>get_service_health`; the gateway
+  refused it and the repair generation proposed `get_service_health`.
+- AC07 local budget: the local model proposed two tools in one
+  generation (both refused), used its repair generation to propose one,
+  and then wrote a Chinese answer to an English request; the third local
+  generation ran out the budget. The answer was not published.
+- Chinese staging-api fails in both cache runs, the same failure as
+  every earlier live AC01 entry. Chinese results do not block (spec
+  section 6).
+
+### Not run
+
+- Windows: no machine.
+- AC05 expire and changed arguments, and AC12 restart during a write:
+  not part of the harness; covered with doubles only.
+
+`pytest -m live tests/test_live_acceptance.py` runs the same harness
+without the external endpoint and requires every gateway check to hold.
+It passed on this machine after the rebase (1 passed in 95.76 s).
