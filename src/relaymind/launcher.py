@@ -15,6 +15,7 @@ written nowhere else.
 """
 
 import argparse
+import sqlite3
 import sys
 import tomllib
 from collections.abc import Callable, Iterable, Mapping
@@ -27,6 +28,7 @@ from fastapi import FastAPI
 from relaymind.adapters import ModelAdapter
 from relaymind.adapters.chat_completions import ChatCompletionsAdapter, ChatCompletionsConfig
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
+from relaymind.adapters.local_http import is_loopback_url
 from relaymind.adapters.manifest import (
     ManifestError,
     launch_adapter_settings,
@@ -64,6 +66,7 @@ DEFAULT_LOCAL_URL = "http://127.0.0.1:8033"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8080
 DEFAULT_PERMISSIONS = (READ_PERMISSION, MUTATE_PERMISSION)
+KNOWN_PERMISSIONS = frozenset(DEFAULT_PERMISSIONS)
 
 _TABLES: dict[str, frozenset[str]] = {
     "server": frozenset({"host", "port"}),
@@ -154,6 +157,13 @@ def _required(table: Mapping[str, Any], name: str, key: str, kind: type | tuple)
     return value
 
 
+def _positive(table: Mapping[str, Any], name: str, key: str, kind: type | tuple, default=None):
+    value = _value(table, name, key, kind, default)
+    if value is not None and not value > 0:
+        raise LaunchError(f"[{name}] {key} must be positive")
+    return value
+
+
 def _strings(table: Mapping[str, Any], name: str, key: str, default: list[str]) -> list[str]:
     value = _value(table, name, key, list, default)
     if not all(isinstance(item, str) and item.strip() for item in value):
@@ -162,8 +172,8 @@ def _strings(table: Mapping[str, Any], name: str, key: str, default: list[str]) 
 
 
 def _seconds(table: Mapping[str, Any], name: str, keys: Iterable[str]) -> dict[str, float]:
-    """The duration keys present in the table, as floats."""
-    return {key: float(_value(table, name, key, (int, float))) for key in keys if key in table}
+    """The duration keys present in the table, as positive floats."""
+    return {key: float(_positive(table, name, key, (int, float))) for key in keys if key in table}
 
 
 def _settings(name: str, build: Callable[[], Any]) -> Any:
@@ -179,7 +189,8 @@ def load_config(path: Path | str) -> LauncherConfig:
     try:
         raw = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError) as exc:
-        raise LaunchError(f"cannot read {path}: {exc.strerror or exc}") from exc
+        reason = getattr(exc, "strerror", None) or exc
+        raise LaunchError(f"cannot read {path}: {reason}") from exc
     except tomllib.TOMLDecodeError as exc:
         raise LaunchError(f"{path} is not valid TOML: {exc}") from exc
     unknown = sorted(set(raw) - set(_TABLES))
@@ -196,7 +207,7 @@ def load_config(path: Path | str) -> LauncherConfig:
         raise LaunchError(f"[policy] allowed_modes: {exc}") from exc
     options = _strings(chat, "chat", "supported_options", sorted(SAMPLING_OPTIONS))
     chat_args: dict[str, Any] = {"allowed_modes": allowed, "supported_options": frozenset(options)}
-    if (limit := _value(chat, "chat", "max_completion_tokens", int)) is not None:
+    if (limit := _positive(chat, "chat", "max_completion_tokens", int)) is not None:
         chat_args["max_completion_tokens"] = limit
     native_args = _seconds(native, "native", _TABLES["native"])
 
@@ -204,18 +215,22 @@ def load_config(path: Path | str) -> LauncherConfig:
     if "ui" in raw:
         ui_table = tables["ui"]
         ui_args = _seconds(ui_table, "ui", ("arm_wait_seconds", "poll_seconds"))
-        if "mode" not in ui_table:
-            raise LaunchError("[ui] mode is required: declare live, replay, or double")
-        ui = _settings(
-            "ui", lambda: UiSettings(mode=_required(ui_table, "ui", "mode", str), **ui_args)
-        )
+        mode = _required(ui_table, "ui", "mode", str)
+        ui = _settings("ui", lambda: UiSettings(mode=mode, **ui_args))
+
+    port = _value(server, "server", "port", int, DEFAULT_PORT)
+    if not 1 <= port <= 65535:
+        raise LaunchError("[server] port must be between 1 and 65535")
+    permissions = frozenset(_strings(policy, "policy", "permissions", list(DEFAULT_PERMISSIONS)))
+    if unknown_permissions := sorted(permissions - KNOWN_PERMISSIONS):
+        raise LaunchError(f"[policy] permissions names unknown: {', '.join(unknown_permissions)}")
 
     return LauncherConfig(
         manifest=Path(_required(local, "local_model", "manifest", str)),
         artifact=Path(_required(local, "local_model", "artifact", str)),
-        local_url=_value(local, "local_model", "base_url", str, DEFAULT_LOCAL_URL),
+        local_url=_local_url(local),
         host=_value(server, "server", "host", str, DEFAULT_HOST),
-        port=_value(server, "server", "port", int, DEFAULT_PORT),
+        port=port,
         store_path=Path(_value(tables["store"], "store", "path", str, DEFAULT_STORE_PATH)),
         skill_roots=tuple(
             _strings(tables["skills"], "skills", "roots", list(default_skill_roots()))
@@ -227,11 +242,23 @@ def load_config(path: Path | str) -> LauncherConfig:
         external=_external(tables["external_model"]) if "external_model" in raw else None,
         degraded_mode=_value(policy, "policy", "degraded_mode", bool, False),
         enabled_workflows=frozenset(_strings(policy, "policy", "enabled_workflows", [])),
-        permissions=frozenset(_strings(policy, "policy", "permissions", list(DEFAULT_PERMISSIONS))),
+        permissions=permissions,
         chat=_settings("chat", lambda: ChatSettings(**chat_args)),
         native=_settings("native", lambda: NativeSettings(**native_args)),
         ui=ui,
     )
+
+
+def _local_url(table: Mapping[str, Any]) -> str:
+    """The llama-server URL; a remote one would break the local-first evidence (RM01)."""
+    url = _value(table, "local_model", "base_url", str, DEFAULT_LOCAL_URL)
+    try:
+        loopback = is_loopback_url(url)
+    except ValueError:  # httpx.InvalidURL is a ValueError
+        loopback = False
+    if not loopback:
+        raise LaunchError("[local_model] base_url must be a URL on localhost or a loopback address")
+    return url
 
 
 def _external(table: Mapping[str, Any]) -> ChatCompletionsConfig:
@@ -240,6 +267,7 @@ def _external(table: Mapping[str, Any]) -> ChatCompletionsConfig:
         "model": _required(table, "external_model", "model", str),
         "context_limit": _required(table, "external_model", "context_limit", int),
     }
+    _positive(table, "external_model", "context_limit", int)
     if (env := _value(table, "external_model", "api_key_env", str)) is not None:
         args["api_key_env"] = env
     if "supported_options" in table:
@@ -299,7 +327,7 @@ def build_app(
     tools = ToolRegistry()
     try:
         sandbox = SandboxDataService(config.sandbox_seed, work_dir=config.sandbox_dir)
-    except (OSError, SandboxFixtureError) as exc:
+    except (OSError, ValueError, SandboxFixtureError) as exc:  # JSONDecodeError is a ValueError
         raise LaunchError(f"sandbox: {exc}") from exc
     register_demo_tools(tools, sandbox)
     try:
@@ -311,24 +339,30 @@ def build_app(
         )
     except SkillConfigError as exc:
         raise LaunchError(f"skills: {exc}") from exc
-    config.store_path.parent.mkdir(parents=True, exist_ok=True)
-    store = RunStore(config.store_path)
-    orchestrator = LocalOrchestrator(
-        local,
-        skills=skills,
-        tools=tools,
-        store=store,
-        policy=OperatorPolicy(enabled_tools=DEMO_TOOL_NAMES),
-        caller=CallerContext(permissions=config.permissions),
-        enabled_workflows=config.enabled_workflows,
-        external=external,
-        degraded_mode=config.degraded_mode,
-    )
     try:
+        config.store_path.parent.mkdir(parents=True, exist_ok=True)
+        store = RunStore(config.store_path)
+    except (OSError, sqlite3.Error) as exc:
+        raise LaunchError(f"run store {config.store_path}: {exc}") from exc
+    try:
+        orchestrator = LocalOrchestrator(
+            local,
+            skills=skills,
+            tools=tools,
+            store=store,
+            policy=OperatorPolicy(enabled_tools=DEMO_TOOL_NAMES),
+            caller=CallerContext(permissions=config.permissions),
+            enabled_workflows=config.enabled_workflows,
+            external=external,
+            degraded_mode=config.degraded_mode,
+        )
         report = orchestrator.recover_after_restart()
     except RecoveryError as exc:
         store.close()
         raise LaunchError(f"restart recovery failed: {exc}") from exc
+    except BaseException:
+        store.close()
+        raise
     ui = None if config.ui is None else replace(config.ui, fixtures=sandbox)
     app = create_app(
         orchestrator=orchestrator,
@@ -344,11 +378,24 @@ def build_app(
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="relaymind", description="The RelayMind gateway.")
+    parser = argparse.ArgumentParser(
+        prog="relaymind", description="The RelayMind gateway.", allow_abbrev=False
+    )
     commands = parser.add_subparsers(dest="command", required=True)
-    start = commands.add_parser("serve", help="start the gateway on a loopback address")
+    start = commands.add_parser(
+        "serve", help="start the gateway on a loopback address", allow_abbrev=False
+    )
     start.add_argument("--config", required=True, type=Path, help="path of the TOML config file")
     return parser
+
+
+def _parse(argv: list[str] | None) -> argparse.Namespace:
+    """Parse the command line without echoing a refused argument (it may be a credential)."""
+    parser = _parser()
+    args, extra = parser.parse_known_args(argv)
+    if extra:
+        parser.error("unrecognized arguments: the command accepts only --config PATH")
+    return args
 
 
 def _out(line: str) -> None:
@@ -373,7 +420,7 @@ def main(
     The keyword arguments are test seams: a server function and output
     sinks, and model doubles for the adapters.
     """
-    args = _parser().parse_args(argv)
+    args = _parse(argv)
     try:
         config = load_config(args.config)
         launched = build_app(config, local_adapter=local_adapter, external_adapter=external_adapter)
@@ -385,7 +432,8 @@ def main(
             f"Ended {launched.recovered} unfinished run(s) from an earlier process as interrupted."
         )
     host = validate_bind_host(config.host)
-    stdout(f"Serving on http://{host}:{config.port}")
+    url_host = f"[{host}]" if ":" in host else host
+    stdout(f"Serving on http://{url_host}:{config.port}")
     # The one place the token is written (RM12, section 14.1).
     stdout(f"Application token: {launched.app.state.application_token}")
     serve_fn(launched.app, host=config.host, port=config.port)
