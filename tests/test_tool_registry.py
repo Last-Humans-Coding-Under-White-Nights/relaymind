@@ -645,3 +645,48 @@ def test_registered_schemas_cannot_drift_from_the_schema_hash():
     assert ok.status is ToolStatus.SUCCEEDED
     rehashed = ToolRegistry().register(dataclasses.replace(declared)).schema_hash
     assert rehashed == expected_hash
+
+
+# --- RM11: the argument that names a mutating tool's target ----------------------
+
+
+def test_a_tool_declares_no_confirmation_target_by_default():
+    """RM11: only a tool that names its target can be confirmed."""
+    tool = registry_with(make_tool_declaration()).get("echo_service")
+    assert tool.declaration.confirmation_target is None
+    assert tool.confirmation_target is None
+
+
+def test_a_declared_confirmation_target_is_kept():
+    declaration = make_tool_declaration(
+        side_effect=SideEffect.MUTATING, confirmation_target="service"
+    )
+    assert registry_with(declaration).get("echo_service").confirmation_target == "service"
+
+
+@pytest.mark.parametrize(
+    "target", ["", "  ", 7, "region"], ids=["empty", "blank", "int", "unknown"]
+)
+def test_a_confirmation_target_must_be_a_declared_input_field(target):
+    """RM11: the target is read from validated arguments, so it must be an input field."""
+    with pytest.raises(ToolRegistrationError, match="confirmation_target"):
+        registry_with(make_tool_declaration(confirmation_target=target))
+
+
+def test_the_confirmation_target_is_part_of_the_schema_hash():
+    """RM07, RM11: moving the target changes what a confirmation binds, so it changes the hash."""
+    plain = registry_with(make_tool_declaration()).get("echo_service").schema_hash
+    named = registry_with(make_tool_declaration(confirmation_target="service"))
+    assert named.get("echo_service").schema_hash != plain
+
+
+def test_a_confirmation_target_must_be_a_required_input_field():
+    """RM11: the gateway reads the target from every admitted call, so it cannot be optional."""
+    schema = {
+        "type": "object",
+        "properties": {"service": {"type": "string"}, "region": {"type": "string"}},
+        "required": ["service"],
+        "additionalProperties": False,
+    }
+    with pytest.raises(ToolRegistrationError, match="confirmation_target"):
+        registry_with(make_tool_declaration(input_schema=schema, confirmation_target="region"))

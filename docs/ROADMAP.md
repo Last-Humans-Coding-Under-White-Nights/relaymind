@@ -235,6 +235,8 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   completed operations.
 - Confirmation flow for the mutating demo tool (#19; RM11), including
   deny, replay, expiry, and altered-arguments cases.
+  Implemented with model doubles (`tests/test_ac05_confirmation.py`,
+  spec 0.10); no live run.
 - Restart recovery: interrupted runs and unknown outcomes (#8; RM10,
   RM17, section 5), moved here from M2 because it only matters once
   mutations exist. Part of AC12, which closes in M4 together with #29.

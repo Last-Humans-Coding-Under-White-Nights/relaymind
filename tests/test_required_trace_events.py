@@ -216,9 +216,14 @@ def test_future_flow_event_contracts_persist_in_state_scenarios(scenario, tmp_pa
             if scenario == "confirmation":
                 kind = EventType.CONFIRMATION_REQUIRED
                 payload = {
+                    "approval_id": "approval_1",
                     "proposal_id": "p1",
                     "model": "local-model",
                     "tool_name": "delete_demo_database",
+                    "arguments": {"database_id": "demo-orders-db", "expected_revision": 1},
+                    "target": "demo-orders-db",
+                    "state_version": record.version + 1,
+                    "expires_at": "2026-10-20T03:05:00.000000Z",
                 }
                 state = "waiting_confirmation"
             else:

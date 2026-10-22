@@ -55,16 +55,27 @@ itself, with the manifest's SHA-256; any other file fails the run.
   (invalid proposals never execute) run with scripted model doubles in
   the default suite. There is no live AC03 or AC04 test yet.
 
+- AC05, deterministic: `pytest tests/test_ac05_confirmation.py` runs the
+  delete-demo-database confirmation with scripted model doubles on a
+  disposable sandbox copy: approve (executes once), deny (cancelled with
+  `user_denied`), replay of a used token, an approval older than five
+  minutes (`approval_expired`), a changed target or arguments, a changed
+  fixture revision, a wrong token (403), a malformed body (400), a busy
+  execution slot (429), a textual yes (not an approval), and the same
+  flow in the external stage. No live model is run, so there is no live
+  AC05 record yet.
+
 ### Required trace events (RM16, RM22, RM25)
 
 `pytest tests/test_required_trace_events.py tests/test_trace_artifacts.py`
 checks completed local runs, clarification/resume, failed and cancelled
 calls, monotonic durations despite UTC clock changes, and large-result
 persistence. Completed traces identify every actual model request, the
-final-answer model, and the external call count. Confirmation and
-cache-hit scenarios exercise the state/store event contracts; their
-execution remains in #19 and #31. The handoff flow runs in
-`tests/test_ac02_handoff.py` (#18).
+final-answer model, and the external call count. The cache-hit
+scenario exercises the state/store event contract; its execution
+remains in #31. The handoff flow runs in `tests/test_ac02_handoff.py`
+(#18) and the confirmation flow in `tests/test_ac05_confirmation.py`
+(#19).
 
 The published `src/relaymind/store/schemas/trace_event.v1.json` and the
 write-time validator require terminal timing and completed/failed call

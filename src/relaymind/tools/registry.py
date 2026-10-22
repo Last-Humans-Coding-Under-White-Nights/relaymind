@@ -150,6 +150,11 @@ class ToolDeclaration:
     required_permission is the authorization rule: the caller permission
     a call needs. The registered declaration holds deep, read-only copies
     of both schemas (RM07), so they cannot drift from its schema hash.
+
+    confirmation_target (RM11) names the input argument that identifies
+    what a mutating call changes, for example database_id. The
+    confirmation flow binds its value into the approval; a mutating tool
+    without one cannot be confirmed, so the gateway never runs it.
     """
 
     name: str
@@ -160,6 +165,7 @@ class ToolDeclaration:
     side_effect: SideEffect
     handler: Handler
     required_permission: str
+    confirmation_target: str | None = None
 
 
 @dataclass(frozen=True)
@@ -182,6 +188,10 @@ class RegisteredTool:
     @property
     def side_effect(self) -> SideEffect:
         return self.declaration.side_effect
+
+    @property
+    def confirmation_target(self) -> str | None:
+        return self.declaration.confirmation_target
 
 
 @dataclass(frozen=True)
@@ -309,6 +319,22 @@ def _check_declaration(declaration: ToolDeclaration) -> None:
     permission = declaration.required_permission
     if not isinstance(permission, str) or not permission.strip():
         raise ToolRegistrationError("'required_permission' must be a non-blank string")
+    target = declaration.confirmation_target
+    if target is not None:
+        schema = declaration.input_schema
+        properties = schema.get("properties", {}) if isinstance(schema, Mapping) else {}
+        required = schema.get("required", []) if isinstance(schema, Mapping) else []
+        # The gateway reads the target from every admitted call, so a call
+        # that validates must always carry it.
+        if (
+            not isinstance(target, str)
+            or not target.strip()
+            or target not in properties
+            or target not in required
+        ):
+            raise ToolRegistrationError(
+                "'confirmation_target' must name a required property of 'input_schema' (RM11)"
+            )
 
 
 class ToolRegistry:
@@ -344,19 +370,20 @@ class ToolRegistry:
             raise ToolRegistrationError("'output_schema' must be an object schema")
         if declaration.name in self._tools:
             raise ToolRegistrationError(f"tool {declaration.name!r} is already registered")
-        digest = hashlib.sha256(
-            canonical_json(
-                {
-                    "name": declaration.name,
-                    "description": declaration.description,
-                    "input_schema": declaration.input_schema,
-                    "output_schema": declaration.output_schema,
-                    "timeout_seconds": declaration.timeout_seconds,
-                    "side_effect": declaration.side_effect.value,
-                    "required_permission": declaration.required_permission,
-                }
-            ).encode("utf-8")
-        ).hexdigest()
+        identity = {
+            "name": declaration.name,
+            "description": declaration.description,
+            "input_schema": declaration.input_schema,
+            "output_schema": declaration.output_schema,
+            "timeout_seconds": declaration.timeout_seconds,
+            "side_effect": declaration.side_effect.value,
+            "required_permission": declaration.required_permission,
+        }
+        if declaration.confirmation_target is not None:
+            # RM11: it changes what a confirmation binds. A tool without one
+            # keeps the hash it had before the confirmation flow existed.
+            identity["confirmation_target"] = declaration.confirmation_target
+        digest = hashlib.sha256(canonical_json(identity).encode("utf-8")).hexdigest()
         registered = RegisteredTool(
             declaration=declaration,
             schema_hash=f"sha256:{digest}",

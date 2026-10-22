@@ -90,6 +90,13 @@ def test_only_delete_demo_database_is_mutating(registry):
     assert mutating == {"delete_demo_database"}
 
 
+def test_the_delete_tool_names_database_id_as_its_confirmation_target(registry):
+    """RM11, section 9: the approval binds the database ID; reads have no target."""
+    targets = {name: registry.get(name).confirmation_target for name in SECTION_9_TOOLS}
+    assert targets.pop("delete_demo_database") == "database_id"
+    assert set(targets.values()) == {None}
+
+
 def test_mutating_and_read_tools_need_different_caller_permissions(registry):
     """RM08: a read-only caller cannot reach the mutating tool."""
     reader = CallerContext(permissions=frozenset({"demo.read"}))

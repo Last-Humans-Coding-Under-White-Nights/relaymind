@@ -82,9 +82,17 @@
               "active_ms": {"type": "integer", "minimum": 0},
               "waiting_ms": {"type": "integer", "minimum": 0},
               "external_calls": {"type": "integer", "minimum": 0},
-              "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}}
+              "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}},
+              "reason": {"type": "string", "pattern": "\\S"},
+              "approval_id": {"type": "string", "pattern": "\\S"}
             },
-            "required": ["active_ms", "waiting_ms"]
+            "required": ["active_ms", "waiting_ms"],
+            "dependentSchemas": {
+              "approval_id": {
+                "properties": {"reason": {"const": "user_denied"}},
+                "required": ["reason"]
+              }
+            }
           }
         }
       }
@@ -256,6 +264,40 @@
               "waited_ms": {"type": "integer", "minimum": 0}
             },
             "required": ["input", "missing", "waited_ms"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["confirmation.required"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "approval_id": {"type": "string", "pattern": "\\S"},
+              "tool_name": {"type": "string", "pattern": "\\S"},
+              "proposal_id": {"type": "string", "pattern": "\\S"},
+              "arguments": {"type": "object"},
+              "target": {"type": "string", "pattern": "\\S"},
+              "state_version": {"type": "integer", "minimum": 1},
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,6})?Z$"
+              },
+              "model": {"type": "string", "pattern": "\\S"}
+            },
+            "required": [
+              "approval_id",
+              "tool_name",
+              "proposal_id",
+              "arguments",
+              "target",
+              "state_version",
+              "expires_at",
+              "model"
+            ],
+            "additionalProperties": false
           }
         }
       }

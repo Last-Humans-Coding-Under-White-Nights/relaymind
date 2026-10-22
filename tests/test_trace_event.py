@@ -94,6 +94,19 @@ REQUIRED_PAYLOAD = {
     # Spec 0.6 section 8: the redacted resume input, the input it
     # answers, and the monotonic waiting time (RM25).
     "clarification.answered": {"input": "staging-api", "missing": "service", "waited_ms": 1200},
+    # Spec 0.10 section 8 (RM11, AC05): the approval, the tool, the
+    # proposal, the canonical redacted arguments, the target, the bound
+    # run version, the UTC expiry, and the proposing model.
+    "confirmation.required": {
+        "approval_id": "approval_1",
+        "tool_name": "delete_demo_database",
+        "proposal_id": "proposal_1",
+        "arguments": {"database_id": "demo-orders-db", "expected_revision": 3},
+        "target": "demo-orders-db",
+        "state_version": 4,
+        "expires_at": "2026-10-20T03:05:00.000000Z",
+        "model": "qwen3-0.6b-q8_0",
+    },
     # Spec 0.9 section 8 (RM13): the RM04 reason, the external model, the
     # selected skill (or null), the completed operations the handoff
     # envelope carries, the allowed tools, and the measured request.
@@ -133,6 +146,13 @@ NON_TEXT_PAYLOAD = {
         "waiting_seconds": {"type": "number", "exclusiveMinimum": 0},
     },
     "clarification.answered": {"waited_ms": {"type": "integer", "minimum": 0}},
+    # Spec 0.10 section 8 (RM11): the canonical arguments, the bound run
+    # version, and the UTC expiry.
+    "confirmation.required": {
+        "arguments": {"type": "object"},
+        "state_version": {"type": "integer", "minimum": 1},
+        "expires_at": TRACE_EVENT_SCHEMA["properties"]["timestamp"],
+    },
     "handoff.started": {
         "skill": {
             "type": ["object", "null"],
@@ -668,6 +688,94 @@ SAMPLE_EVENTS.update(
 
 
 HANDOFF_ACCEPTED = ("handoff-no-skill", "handoff-no-tools", "handoff-tokenizer-request")
+
+
+def cancelled_with(**changes):
+    return terminal_with("run.cancelled", **changes)
+
+
+def confirmation_with(**changes):
+    return terminal_with("confirmation.required", **changes)
+
+
+SAMPLE_EVENTS.update(
+    {
+        "confirmation-redacted-arguments": confirmation_with(
+            arguments={"database_id": "[REDACTED]"}, target="[REDACTED]"
+        ),
+        "confirmation-text-arguments": confirmation_with(arguments="database_id=demo-orders-db"),
+        "confirmation-zero-version": confirmation_with(state_version=0),
+        "confirmation-float-version": confirmation_with(state_version=4.5),
+        "confirmation-boolean-version": confirmation_with(state_version=True),
+        "confirmation-text-version": confirmation_with(state_version="4"),
+        "confirmation-local-expiry": confirmation_with(expires_at="2026-10-20T11:05:00+08:00"),
+        "confirmation-word-expiry": confirmation_with(expires_at="in five minutes"),
+        "confirmation-blank-proposal": confirmation_with(proposal_id=" "),
+        "confirmation-blank-model": confirmation_with(model=" "),
+        "confirmation-with-token": confirmation_with(token="plaintext-token"),
+        "confirmation-with-token-hash": confirmation_with(token_hash="sha256:ab12"),
+        "confirmation-extra-field": confirmation_with(reasoning="hidden"),
+        "cancelled-denied": cancelled_with(reason="user_denied", approval_id="approval_1"),
+        "cancelled-with-reason": cancelled_with(reason="user_denied"),
+        "cancelled-blank-reason": cancelled_with(reason=" "),
+        "cancelled-integer-reason": cancelled_with(reason=1),
+        "cancelled-blank-approval": cancelled_with(reason="user_denied", approval_id=" "),
+        "cancelled-approval-without-reason": cancelled_with(approval_id="approval_1"),
+        "cancelled-approval-other-reason": cancelled_with(
+            reason="cancelled", approval_id="approval_1"
+        ),
+    }
+)
+
+
+def test_the_confirmation_required_payload_is_the_section_8_contract():
+    """RM11, RM22, AC05, spec 0.10 section 8: confirmation.required names
+    the approval, tool, proposal, canonical redacted arguments (an
+    object), target, the bound run version (a positive integer), the
+    UTC expiry, and the proposing model. A payload of another shape is
+    rejected at write time, by the key it breaks."""
+    validate_trace_event(SAMPLE_EVENTS["confirmation-redacted-arguments"])
+    for name, key in (
+        ("confirmation-text-arguments", "arguments"),
+        ("confirmation-zero-version", "state_version"),
+        ("confirmation-float-version", "state_version"),
+        ("confirmation-boolean-version", "state_version"),
+        ("confirmation-text-version", "state_version"),
+        ("confirmation-local-expiry", "expires_at"),
+        ("confirmation-word-expiry", "expires_at"),
+        ("confirmation-blank-proposal", "proposal_id"),
+        ("confirmation-blank-model", "model"),
+    ):
+        with pytest.raises(TraceEventError, match=key):
+            validate_trace_event(SAMPLE_EVENTS[name])
+
+
+@pytest.mark.parametrize("key", ["token", "token_hash", "reasoning"])
+def test_the_confirmation_required_payload_never_carries_the_token(key):
+    """RM11, RM12, spec 0.10 section 8: the payload is a closed set of
+    fields, so neither the token nor its hash, nor any other field, is
+    ever written to the trace."""
+    name = {"token": "confirmation-with-token", "token_hash": "confirmation-with-token-hash"}
+    data = SAMPLE_EVENTS[name.get(key, "confirmation-extra-field")]
+    with pytest.raises(TraceEventError, match=f"unknown fields: {key}"):
+        validate_trace_event(data)
+
+
+def test_a_denied_confirmation_cancels_with_its_reason_and_approval():
+    """RM11, RM17, RM22, AC05, spec 0.10 section 8: run.cancelled may carry
+    a non-blank reason; a denied confirmation carries reason user_denied
+    and the approval_id. An approval_id without user_denied is rejected."""
+    for name in ("cancelled-denied", "cancelled-with-reason"):
+        validate_trace_event(SAMPLE_EVENTS[name])
+    for name, key in (
+        ("cancelled-blank-reason", "reason"),
+        ("cancelled-integer-reason", "reason"),
+        ("cancelled-blank-approval", "approval_id"),
+        ("cancelled-approval-without-reason", "reason"),
+        ("cancelled-approval-other-reason", "reason"),
+    ):
+        with pytest.raises(TraceEventError, match=key):
+            validate_trace_event(SAMPLE_EVENTS[name])
 
 
 def test_the_handoff_started_payload_names_skill_tools_and_request():

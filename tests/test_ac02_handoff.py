@@ -614,17 +614,17 @@ def test_a_local_dispatch_after_the_handoff_is_refused(tmp_path, local_prep_skil
     from relaymind.orchestrator.handoff import DispatchRevokedError
     from relaymind.orchestrator.local_loop import _Run
 
-    async def stray_local_dispatch(self, conversation, schemas, available, skill, capabilities):
+    async def stray_local_dispatch(self, loop):
         call = self.o.executor.validate(
             self.run_id,
             "get_recent_logs",
             {"service": "staging-api", "limit": 3},
-            available=available,
+            available=loop.available,
         )
         await self._dispatch(call, "proposal_stray", "local")
         raise AssertionError("the local actor dispatched after the handoff")
 
-    monkeypatch.setattr(_Run, "_external", stray_local_dispatch)
+    monkeypatch.setattr(_Run, "_external_loop", stray_local_dispatch)
     gateway = after_local_collection(tmp_path, local_prep_skills, logs_then_answer())
     with pytest.raises(DispatchRevokedError, match="local"):
         run(gateway, PROMPT)
@@ -778,11 +778,11 @@ def test_external_capabilities_are_fetched_once_per_handoff(tmp_path, local_prep
 
 
 def test_a_mutating_tool_that_needs_confirmation_does_not_hand_off(tmp_path):
-    """RM11, RM04, section 4.4: the external stage cannot run the mutation either.
+    """RM11, RM04, section 5: a mutation waits for its confirmation, locally.
 
-    The local loop stops on confirmation_required. A handoff would send
-    the same proposal to the external model, which the gateway rejects
-    the same way, so the run ends as needs_external with no external call.
+    The local loop holds the proposal in waiting_confirmation. Nothing is
+    handed to the external model, because the local actor can ask the
+    caller to confirm; the run is neither failed nor escalated.
     """
     gateway = build_gateway(
         tmp_path,
@@ -801,8 +801,9 @@ def test_a_mutating_tool_that_needs_confirmation_does_not_hand_off(tmp_path):
     )
     outcome, events = run(gateway, "Delete the demo-orders-db sandbox database.")
 
-    assert_needs_external(gateway, outcome, events, "capability_missing")
+    assert outcome.state is RunState.WAITING_CONFIRMATION
     assert not of_type(events, "handoff.started")
+    assert gateway.external.requests == []
     assert "delete_demo_database" not in executed_tools(events)
 
 

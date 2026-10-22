@@ -145,6 +145,15 @@ class ToolExecutor:
         digest = hashlib.sha256(canonical_json(identity).encode("utf-8")).hexdigest()
         return f"op_{digest[:32]}"
 
+    def has_operation(self, call: ValidatedCall) -> bool:
+        """Whether this call's first attempt has a record, pending or finished (RM10).
+
+        A recorded call is a replay or an operation in flight, never a new
+        execution, so the confirmation flow asks nothing for it (RM11).
+        """
+        operation_id = self.operation_id(call.run_id, call.tool_name, call.arguments)
+        return self.store.get_tool_operation(operation_id) is not None
+
     def validate(
         self, run_id: str, tool_name: object, arguments: object, *, available: Collection[str]
     ) -> ValidatedCall:
