@@ -108,8 +108,8 @@ llama-server -m models/Qwen3-0.6B-Q8_0.gguf \
 There is no launcher or command-line entry point yet (open work,
 issue #87). Until it exists, this script wires the local model, the
 checked-in demo skills, the sandbox demo data, and a SQLite run store
-into the gateway and serves it on loopback. Save it as `start_gateway.py` and run it from the checkout
-root:
+into the gateway and serves it on loopback. Save it as
+`start_gateway.py` and run it from the checkout root:
 
 ```python
 from pathlib import Path
@@ -125,10 +125,12 @@ from relaymind.store import RunStore
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry
 from relaymind.tools.sandbox import (
     DEMO_TOOL_NAMES,
+    MUTATE_PERMISSION,
     READ_PERMISSION,
     SandboxDataService,
     register_demo_tools,
 )
+from relaymind.ui import DataMode, UiSettings
 
 work = Path("demo-run")
 tools = ToolRegistry()
@@ -152,10 +154,13 @@ orchestrator = LocalOrchestrator(
     tools=tools,
     store=RunStore(work / "runs.sqlite3"),
     policy=OperatorPolicy(enabled_tools=DEMO_TOOL_NAMES),
-    caller=CallerContext(permissions=frozenset({READ_PERMISSION})),
+    caller=CallerContext(permissions=frozenset({READ_PERMISSION, MUTATE_PERMISSION})),
 )
 orchestrator.recover_after_restart()  # once, before any run (spec section 5)
-app = create_app(orchestrator=orchestrator)
+app = create_app(
+    orchestrator=orchestrator,
+    ui=UiSettings(mode=DataMode.LIVE, fixtures=sandbox),
+)
 print("RELAYMIND_TOKEN=" + app.state.application_token, flush=True)
 serve(app, host="127.0.0.1", port=8080)
 ```
@@ -164,8 +169,12 @@ It prints the application token the gateway generated at start; keep
 it in `RELAYMIND_TOKEN` for the requests below. The run store and the
 sandbox copy go to `demo-run/`; delete that directory when you are
 done. This script configures no external model, so a request that
-needs one ends with `needs_external`, and it does not enable the demo
-UI (that needs `UiSettings` with a declared data mode, spec section 9).
+needs one ends with `needs_external`. The caller can read and mutate
+the sandbox; each mutation still requires a fresh confirmation (RM11).
+The demo UI is at `http://127.0.0.1:8080/ui`; enter the application
+token there to create runs and view traces. Its `LIVE` label describes
+decisions from the local model; the tool data is the sandbox fixture
+(spec section 9).
 
 ### 3. Talk to the gateway
 
@@ -177,7 +186,7 @@ and proposes the tool call; the gateway runs it and escalates to the
 external model only if the local run cannot finish.
 
 ```bash
-curl -s http://127.0.0.1:8080/v1/chat/completions \
+curl -i -s http://127.0.0.1:8080/v1/chat/completions \
   -H "Authorization: Bearer $RELAYMIND_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"model": "relaymind",
@@ -194,7 +203,7 @@ fails with `workflow_unavailable`, because the parallel workflow
 (spec section 4.4) is planned for M5.
 
 ```bash
-curl -s http://127.0.0.1:8080/v1/chat/completions \
+curl -i -s http://127.0.0.1:8080/v1/chat/completions \
   -H "Authorization: Bearer $RELAYMIND_TOKEN" \
   -H "Content-Type: application/json" \
   -H "X-RelayMind-Execution-Mode: local_only" \

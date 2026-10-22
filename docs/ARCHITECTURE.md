@@ -93,8 +93,11 @@ A module imports only from layers below it.
 
 The demo UI sits beside the API layer. `api/app.py` installs the UI
 routes, and `ui/routes.py` reuses the API's token check, error contract,
-and native request parsing. The rest of `ui/` reads from the
-orchestrator and the store only.
+and native request parsing. `ui/trace_view.py` builds views from
+stored events, and `ui/render.py` renders them. `ui/comparison.py`
+also imports `Message` from the adapters; it starts runs and requests
+cancellation through the orchestrator, reads run state from the store,
+and resets the configured sandbox fixtures before each comparison run.
 
 Lower layers must not import higher ones. The store must not depend on
 adapters. Adapters must not depend on SQLite.
