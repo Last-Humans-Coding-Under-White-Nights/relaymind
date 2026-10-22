@@ -6,12 +6,12 @@ Playwright's Chromium; install it with ``playwright install chromium``.
 A machine without the browser fails the test, it does not skip it.
 """
 
-import json
 from contextlib import contextmanager
+from urllib.parse import urlsplit
 
 import httpx
 
-from api_helpers import RunningServer, make_app, token_of
+from api_helpers import RUN_ID_HEADER, RunningServer, make_app, token_of
 from relaymind.api.native import NativeSettings
 from relaymind.ui import UiSettings
 
@@ -44,14 +44,9 @@ def browser_page():
             page.set_default_timeout(WAIT_MS)
 
             def record(request):
-                path = request.url.split("/", 3)[3]
-                if path.startswith(("relay/", "ui/comparisons")) and request.method == "POST":
-                    calls.append(
-                        {
-                            "path": "/" + path,
-                            "body": json.loads(request.post_data) if request.post_data else None,
-                        }
-                    )
+                path = urlsplit(request.url).path
+                if request.method == "POST" and path.startswith(("/relay/", "/ui/comparisons")):
+                    calls.append({"path": path, "body": request.post_data_json})
 
             page.on("request", record)
             yield page, calls
@@ -62,6 +57,12 @@ def browser_page():
 def open_ui(page, base, token):
     page.goto(base + "/ui")
     page.fill("#token", token)
+
+
+def open_run(page, run_id):
+    """Open a stored run by its ID from the page form."""
+    page.fill("#open-id", run_id)
+    page.click("#open-form button[type=submit]")
 
 
 def chat_run_id(base, token, prompt, **fields):
@@ -77,4 +78,4 @@ def chat_run_id(base, token, prompt, **fields):
             timeout=30,
         )
     assert response.status_code == 200, response.text
-    return response.headers["X-RelayMind-Run-ID"]
+    return response.headers[RUN_ID_HEADER]

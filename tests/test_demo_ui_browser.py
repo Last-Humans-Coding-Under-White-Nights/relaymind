@@ -14,7 +14,7 @@ import pytest
 pytest.importorskip("playwright")
 from playwright.sync_api import expect  # noqa: E402
 
-from browser_helpers import browser_page, chat_run_id, open_ui, served  # noqa: E402
+from browser_helpers import browser_page, chat_run_id, open_run, open_ui, served  # noqa: E402
 from gateway_helpers import (  # noqa: E402
     STAGING_OK,
     build_gateway,
@@ -76,8 +76,7 @@ def test_open_a_run_by_id_shows_the_label_and_escapes_once(tmp_path):
         run_id = chat_run_id(base, token, hostile)
         open_ui(page, base, token)
         assert_mode_label_on_every_view(page)
-        page.fill("#open-id", run_id)
-        page.click("#open-form button[type=submit]")
+        open_run(page, run_id)
         expect(trace(page, "completed")).to_be_visible()
         assert_mode_label_on_every_view(page)
         shown = page.locator(".trace .prompt q").inner_text()
@@ -93,8 +92,7 @@ def test_the_recorded_answer_options_are_shown(tmp_path):
     with served(gateway) as (base, token), browser_page() as (page, _):
         run_id = chat_run_id(base, token, HEALTH_PROMPT, max_completion_tokens=60)
         open_ui(page, base, token)
-        page.fill("#open-id", run_id)
-        page.click("#open-form button[type=submit]")
+        open_run(page, run_id)
         expect(page.locator(".trace .options")).to_contain_text("Token budget: 60.")
         assert_mode_label_on_every_view(page)
 
@@ -201,11 +199,7 @@ def test_a_waiting_run_is_cancelled_through_the_native_cancel_endpoint(tmp_path)
 
 def test_the_comparison_runs_both_modes_and_shows_the_label_in_each_arm(tmp_path):
     """RM23, RM25: the page posts the messages only and shows both arms and their timestamps."""
-    gateway = timed_gateway(
-        tmp_path,
-        [route_turn("check-service-health"), *health_tail()],
-        external_turns=external_health_turns(),
-    )
+    gateway = health_gateway(tmp_path, external_turns=external_health_turns())
     with (
         served(gateway, fixtures=gateway.sandbox) as (base, token),
         browser_page() as (page, calls),
@@ -285,7 +279,6 @@ def test_the_label_follows_the_declared_mode(tmp_path):
     with served(gateway, mode="live") as (base, token), browser_page() as (page, _):
         run_id = chat_run_id(base, token, HEALTH_PROMPT)
         open_ui(page, base, token)
-        page.fill("#open-id", run_id)
-        page.click("#open-form button[type=submit]")
+        open_run(page, run_id)
         expect(trace(page, "completed")).to_be_visible()
         assert_mode_label_on_every_view(page, "LIVE")
