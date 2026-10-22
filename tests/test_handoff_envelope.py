@@ -187,6 +187,26 @@ def test_a_completed_operation_is_listed_once():
         parse_handoff_envelope(data)
 
 
+def test_every_completed_operation_has_evidence():
+    """RM13, RM14, section 8: a completed operation without its evidence is refused.
+
+    Without the check the envelope passes and external_messages fails
+    later with a KeyError, so the external model never gets the result.
+    """
+    data = valid_envelope()
+    data["evidence"] = []
+    with pytest.raises(HandoffEnvelopeError, match="op_1 has no evidence"):
+        parse_handoff_envelope(data)
+
+
+def test_an_operation_has_one_evidence_entry():
+    """RM13, RM14, section 8: duplicate evidence for one operation is refused."""
+    data = valid_envelope()
+    data["evidence"].append(copy.deepcopy(data["evidence"][0]))
+    with pytest.raises(HandoffEnvelopeError, match="evidence for op_1 is listed more than once"):
+        parse_handoff_envelope(data)
+
+
 def test_a_tool_call_proposal_names_its_tool_and_arguments():
     """RM13: a proposal entry is complete, so it cannot pass for a result."""
     data = valid_envelope()

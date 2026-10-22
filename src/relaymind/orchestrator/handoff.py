@@ -2,9 +2,9 @@
 
 The HandoffEnvelope (spec section 8) is published next to this module as
 ``schemas/handoff_envelope.v1.json``; ``parse_handoff_envelope`` enforces
-it at the boundary, plus the rules a schema cannot state: evidence
-belongs to a listed completed operation, and an operation is listed
-once.
+it at the boundary, plus the rules a schema cannot state: an operation
+is listed once, and each listed operation has exactly one evidence
+entry, so evidence and completed operations match one to one.
 
 ``build_handoff_envelope`` builds the envelope from the run store's tool
 operations, not from model memory. It refuses an operation that is
@@ -125,15 +125,21 @@ def parse_handoff_envelope(data: object) -> HandoffEnvelope:
         if operation_id in seen:
             raise HandoffEnvelopeError(f"operation {operation_id} is listed more than once")
         seen.add(operation_id)
+    evidenced: set[str] = set()
     for entry in data["evidence"]:
-        if entry["operation_id"] not in seen:
-            raise HandoffEnvelopeError(
-                f"evidence for {entry['operation_id']} has no completed operation"
-            )
+        operation_id = entry["operation_id"]
+        if operation_id not in seen:
+            raise HandoffEnvelopeError(f"evidence for {operation_id} has no completed operation")
+        if operation_id in evidenced:
+            raise HandoffEnvelopeError(f"evidence for {operation_id} is listed more than once")
+        evidenced.add(operation_id)
         try:
             validate_tool_result(entry["result"])
         except ValueError as exc:
             raise HandoffEnvelopeError(str(exc)) from exc
+    for operation in data["completed_operations"]:
+        if operation["operation_id"] not in evidenced:
+            raise HandoffEnvelopeError(f"operation {operation['operation_id']} has no evidence")
     return HandoffEnvelope(freeze_json(data))
 
 
