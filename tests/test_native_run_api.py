@@ -1017,6 +1017,31 @@ def test_a_cancel_before_the_background_task_starts_still_ends_the_run(tmp_path)
     assert started.run_id not in orchestrator._driven
 
 
+@pytest.mark.parametrize("yield_first", [False, True], ids=["before-start", "while-running"])
+def test_a_run_task_cancelled_directly_records_reason_cancel_requested(tmp_path, yield_first):
+    """RM17, RM21, RM22, AC11, AC12, spec 0.17 sections 7.4 and 8: a cancel
+    that reaches the run task without a recorded reason, such as the event
+    loop cancelling it, is a cancel request: run.cancelled names reason
+    cancel_requested, and the slot is released."""
+    gateway = healthy_gateway(tmp_path)
+    orchestrator = gateway.orchestrator
+    messages = [Message(role=Role.USER, content="Is staging-api healthy right now?")]
+
+    async def go():
+        started = orchestrator.start(messages)
+        if yield_first:
+            await asyncio.sleep(0)
+        started.task.cancel()
+        await asyncio.gather(started.task, return_exceptions=True)
+        return started
+
+    started = asyncio.run(go())
+    assert gateway.store.get_run(started.run_id).state == "cancelled"
+    (event,) = of_type(gateway.store.events(started.run_id), "run.cancelled")
+    assert event.payload["reason"] == "cancel_requested"
+    assert gateway.store.active_run_id() is None
+
+
 def test_a_run_owned_by_a_chat_request_is_not_cancelled_by_the_native_endpoint(tmp_path):
     """Spec 0.17 section 7.4: a chat run is cancelled by closing its request."""
     gateway, adapter = gated_gateway(tmp_path)

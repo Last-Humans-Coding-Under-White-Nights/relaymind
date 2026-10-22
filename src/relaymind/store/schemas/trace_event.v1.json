@@ -92,16 +92,10 @@
               "waiting_ms": {"type": "integer", "minimum": 0},
               "external_calls": {"type": "integer", "minimum": 0},
               "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}},
-              "reason": {"type": "string", "pattern": "\\S"},
+              "reason": {"enum": ["user_denied", "cancel_requested"]},
               "approval_id": {"type": "string", "pattern": "\\S"}
             },
-            "required": ["active_ms", "waiting_ms"],
-            "dependentSchemas": {
-              "approval_id": {
-                "properties": {"reason": {"enum": ["user_denied", "cancel_requested"]}},
-                "required": ["reason"]
-              }
-            }
+            "required": ["reason", "active_ms", "waiting_ms"]
           }
         }
       }

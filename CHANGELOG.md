@@ -43,7 +43,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `invalid_resume_input`, and a bad token is 403 `approval_invalid`.
   Cancel ends a waiting run at once (reason `cancel_requested`, pending
   approval voided in the same transaction) and asks a running run to
-  stop; a run owned by a chat request is 409 `invalid_state`. `/healthz`
+  stop; a run owned by a chat request is 409 `invalid_state`. Every
+  `run.cancelled` names its reason: `user_denied` for a denied
+  confirmation, otherwise `cancel_requested`, also when the run task is
+  cancelled with no recorded reason (a chat disconnect or the event
+  loop); the published schema and the write-time validator require it
+  (RM22, spec 0.17 section 8). `/healthz`
   and `/readyz` report liveness and, for each permitted mode, whether
   its models are available and warm. The execution modes share the
   chat endpoint's operator policy (`ChatSettings.allowed_modes`).

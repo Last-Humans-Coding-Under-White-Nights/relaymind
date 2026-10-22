@@ -1024,7 +1024,9 @@ def test_a_cancelled_run_ends_cancelled_and_frees_the_slot(tmp_path):
         run(gateway)
     run_id = only_run_id(gateway)
     assert gateway.store.get_run(run_id).state == "cancelled"
-    assert of_type(gateway.store.events(run_id), "run.cancelled")
+    # RM22, spec 0.17 sections 7.4 and 8: an unlabelled cancel is a cancel request.
+    (event,) = of_type(gateway.store.events(run_id), "run.cancelled")
+    assert event.payload["reason"] == "cancel_requested"
     assert gateway.store.active_run_id() is None
 
 

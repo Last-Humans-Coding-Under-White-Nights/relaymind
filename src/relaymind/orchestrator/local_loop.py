@@ -170,6 +170,7 @@ from relaymind.orchestrator.route_decision import (
 )
 from relaymind.orchestrator.router import Router, Routing, request_language
 from relaymind.orchestrator.run_state import (
+    CANCEL_REQUESTED,
     TERMINAL_STATES,
     WAITING_STATES,
     InvalidTransitionError,
@@ -201,7 +202,6 @@ CONFIRMATION_UNSUPPORTED = "confirmation_unsupported"
 APPROVAL_EXPIRED = "approval_expired"
 APPROVAL_INVALID = "approval_invalid"
 USER_DENIED = "user_denied"
-CANCEL_REQUESTED = "cancel_requested"
 WORKFLOW_UNAVAILABLE = "workflow_unavailable"
 PARALLEL_WORKFLOW = "parallel_workflow"
 ROUTING_MECHANISM = "native_function_calling"
@@ -765,7 +765,6 @@ class LocalOrchestrator:
                 "close that request to cancel it"
             )
         run, task = driven
-        run.cancel_reason = CANCEL_REQUESTED
         task.cancel()
         await asyncio.wait({task}, timeout=wait_seconds)
         return self.store.get_run(run_id)
@@ -951,8 +950,6 @@ class _Run:
         self.model_alias = model_alias
         self.meter = BudgetMeter(owner.budgets, clock=owner.clock)
         self.model_calls: list[dict[str, str]] = []
-        # Set when a cancel request stops the run (run.cancelled reason).
-        self.cancel_reason: str | None = None
         self.record: RunRecord
         self.decision: RouteDecision | None = None
         # Fixed by the first RouteDecision and kept across resumes (section 5).
@@ -1374,12 +1371,15 @@ class _Run:
             if RunState(self.record.state) in TERMINAL_STATES:
                 return
             if isinstance(exc, asyncio.CancelledError):
-                reason = {} if self.cancel_reason is None else {"reason": self.cancel_reason}
+                # A cancel that reaches the task, from the native cancel,
+                # a chat disconnect, or the event loop, is a cancel
+                # request (spec 0.17 sections 7.4 and 8).
+                payload = {"reason": CANCEL_REQUESTED, **self._summary()}
                 self.record = self.o.machine.cancel(
                     self.run_id,
                     self.record.version,
-                    reason=self.cancel_reason,
-                    event=(EventType.RUN_CANCELLED, GATEWAY_ACTOR, {**reason, **self._summary()}),
+                    reason=CANCEL_REQUESTED,
+                    event=(EventType.RUN_CANCELLED, GATEWAY_ACTOR, payload),
                 )
                 return
             self.move(

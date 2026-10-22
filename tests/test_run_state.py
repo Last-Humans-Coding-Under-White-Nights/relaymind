@@ -107,7 +107,11 @@ def terminal_event(state, error_code=None):
         )
     if state is S.FAILED:
         return (EventType.RUN_FAILED, "gateway", {"error_code": error_code, **TERMINAL_EVIDENCE})
-    return (EventType.RUN_CANCELLED, "gateway", {"active_ms": 0, "waiting_ms": 0})
+    return (
+        EventType.RUN_CANCELLED,
+        "gateway",
+        {"reason": "cancel_requested", "active_ms": 0, "waiting_ms": 0},
+    )
 
 
 def end(machine, run, terminal, error_code=None):
@@ -304,13 +308,15 @@ def test_cancel_records_its_reason_and_event(machine, store):
 
 
 def test_cancel_without_an_event_records_a_default_run_cancelled(machine, store):
-    """RM21, RM22: cancel(run_id, version) records run.cancelled by itself,
-    with the reason when one is given."""
+    """RM21, RM22, spec 0.17 sections 7.4 and 8: cancel(run_id, version)
+    records run.cancelled by itself, with reason cancel_requested unless
+    another reason (user_denied) is given."""
     run = walk(machine, start(machine), S.ROUTING)
     cancelled = machine.cancel(run.run_id, run.version)
-    assert cancelled.state == S.CANCELLED
+    assert (cancelled.state, cancelled.error_code) == (S.CANCELLED, "cancel_requested")
     last = store.events(run.run_id)[-1]
     assert (last.event_type, last.actor) == (EventType.RUN_CANCELLED, "gateway")
+    assert last.payload["reason"] == "cancel_requested"
     assert last.payload["waiting_ms"] == 0
     assert last.payload["active_ms"] >= 0
     other = walk(machine, start(machine), S.ROUTING, S.LOCAL_RUNNING, S.WAITING_CONFIRMATION)

@@ -73,7 +73,8 @@ REQUIRED_PAYLOAD = {
     "model.finished": {"call_id": "call_1", "model": "qwen3"},
     "run.completed": {"final_answer_model": "qwen3", **TERMINAL_EVIDENCE},
     "run.failed": {"error_code": "x", **TERMINAL_EVIDENCE},
-    "run.cancelled": {"active_ms": 0, "waiting_ms": 0},
+    # Spec 0.17 section 8: every run.cancelled names its reason.
+    "run.cancelled": {"reason": "cancel_requested", "active_ms": 0, "waiting_ms": 0},
     "cache.hit": {"originating_version": "v1"},
     # RM06: every load emits skill.loaded with the name, version, and hash.
     "skill.loaded": {
@@ -130,17 +131,18 @@ TEXT = {"type": "string", "pattern": "\\S"}
 # Payload keys whose published schema is not plain non-blank text.
 # Spec 0.6 section 8: clarification.required carries the clarify
 # decision's skill_id (or null) and the section 11 waiting limit.
-NON_TEXT_PAYLOAD = {
+TERMINAL_FIELDS = {
+    "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}},
     **{
-        kind: {
-            "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}},
-            **{
-                key: {"type": "integer", "minimum": 0}
-                for key in ("active_ms", "waiting_ms", "external_calls")
-            },
-        }
-        for kind in ("run.completed", "run.failed", "run.cancelled")
+        key: {"type": "integer", "minimum": 0}
+        for key in ("active_ms", "waiting_ms", "external_calls")
     },
+}
+NON_TEXT_PAYLOAD = {
+    "run.completed": TERMINAL_FIELDS,
+    "run.failed": TERMINAL_FIELDS,
+    # Spec 0.17 section 8: run.cancelled names one of two reasons.
+    "run.cancelled": {**TERMINAL_FIELDS, "reason": {"enum": ["user_denied", "cancel_requested"]}},
     "clarification.required": {
         "skill_id": {"type": ["string", "null"], "pattern": "\\S"},
         "waiting_seconds": {"type": "number", "exclusiveMinimum": 0},
@@ -738,13 +740,20 @@ SAMPLE_EVENTS.update(
         "cancelled-blank-reason": cancelled_with(reason=" "),
         "cancelled-integer-reason": cancelled_with(reason=1),
         "cancelled-blank-approval": cancelled_with(reason="user_denied", approval_id=" "),
-        "cancelled-approval-without-reason": cancelled_with(approval_id="approval_1"),
+        "cancelled-approval-without-reason": with_changes(
+            event_type="run.cancelled",
+            payload={"approval_id": "approval_1", "active_ms": 0, "waiting_ms": 0},
+        ),
         "cancelled-requested-with-approval": cancelled_with(
             reason="cancel_requested", approval_id="approval_1"
         ),
         "cancelled-approval-other-reason": cancelled_with(
             reason="cancelled", approval_id="approval_1"
         ),
+        "cancelled-without-reason": with_changes(
+            event_type="run.cancelled", payload={"active_ms": 0, "waiting_ms": 0}
+        ),
+        "cancelled-unknown-reason": cancelled_with(reason="user_cancelled"),
     }
 )
 
@@ -789,10 +798,20 @@ def test_a_native_cancel_of_a_waiting_run_names_its_voided_approval():
     validate_trace_event(SAMPLE_EVENTS["cancelled-requested-with-approval"])
 
 
+@pytest.mark.parametrize("name", ["cancelled-without-reason", "cancelled-unknown-reason"])
+def test_a_run_cancelled_needs_reason_user_denied_or_cancel_requested(name):
+    """RM17, RM21, RM22, AC11, AC12, spec 0.17 sections 7.4 and 8: every
+    run.cancelled names its reason, user_denied for a denied confirmation
+    or cancel_requested for a cancel request. A payload without reason,
+    or with another value, is rejected at write time."""
+    with pytest.raises(TraceEventError, match="reason"):
+        validate_trace_event(SAMPLE_EVENTS[name])
+
+
 def test_a_denied_confirmation_cancels_with_its_reason_and_approval():
-    """RM11, RM17, RM22, AC05, spec 0.10 section 8: run.cancelled may carry
-    a non-blank reason; a denied confirmation carries reason user_denied
-    and the approval_id. An approval_id without user_denied is rejected."""
+    """RM11, RM17, RM22, AC05, spec 0.10 section 8: a denied confirmation
+    carries reason user_denied and the approval_id. An approval_id without
+    reason user_denied or cancel_requested is rejected."""
     for name in ("cancelled-denied", "cancelled-with-reason"):
         validate_trace_event(SAMPLE_EVENTS[name])
     for name, key in (
