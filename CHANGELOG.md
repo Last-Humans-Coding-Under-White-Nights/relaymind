@@ -24,6 +24,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Live acceptance harness and the first live runs of the M3 to M5
+  scenarios (#88, #104; RM04, RM08 to RM25, spec sections 10, 12.1, 13,
+  and 14.1): `scripts/live_acceptance.py` starts llama-server from the
+  manifest and the gateway with `relaymind serve --config`, and runs
+  AC02, AC05, AC06, AC07, AC09, AC10, AC11, AC12 (cancel and restart
+  during a generation), `external_only`, `parallel_demo`, the AC08
+  external swap, a demo UI session in live mode, and cache-off and
+  cache-on runs of the AC01 prompts over HTTP. It records gateway checks
+  and model findings apart; scenarios that need an external endpoint
+  are recorded as not run without one. The macOS run with Z.ai `glm-4.6`
+  is in `docs/EVIDENCE.md`: all 90 gateway checks held; 9 model checks
+  failed and are recorded as findings. Deterministic coverage over model
+  doubles is `tests/test_live_acceptance_script.py`;
+  `tests/test_live_acceptance.py` is the `live` variant. No Windows
+  machine was available. AC08 stays open: its external swap ran between
+  two models of one provider.
+
 - Second local model artifact and the live AC08 local swap (#90; RM18, AC08,
   spec sections 6 and 12.3): `models/qwen3-0.6b-q4_k_m.manifest.json`
   (Qwen3-0.6B Q4_K_M), generated from the artifact, passed the live

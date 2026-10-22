@@ -278,10 +278,17 @@ the top of this page asks.
 
 Carried forward, not done in M3:
 
-- Live-model runs for AC02, AC05, AC06, and AC07 (#88). No live
-  external model has been run.
+- Live-model runs for AC02, AC05, AC06, and AC07 (#88). These now ran
+  live on macOS with a live external endpoint
+  ([`EVIDENCE.md`](EVIDENCE.md#2026-10-22--live-acceptance-runs-through-relaymind-serve---config-88-104-apple-silicon-macos)).
+  Gateway checks held; the AC02 run failed on a model finding (the
+  external answer missed the skill's section labels), and no live
+  approve that deletes is recorded for AC05.
 - AC08: the second local artifact and the live local swap are done in
-  M6 (#90). AC08 stays open until a live external swap runs (#88).
+  M6 (#90). A live external swap ran (#88): two models of one provider,
+  `glm-4.6` and `glm-4.5-air`, by a one-line configuration change. AC08
+  stays open until it is decided whether that counts as the "second
+  compatible external endpoint" of section 13.
 - Restart recovery exists as `LocalOrchestrator.recover_after_restart`,
   but nothing called it at startup, because there was no launcher. The
   operator launcher (#87, see M5) now calls it once before serving.
@@ -352,7 +359,8 @@ closed on deterministic coverage only, and no live run is recorded.
 Carried forward, not done in M4:
 
 - Live-model runs for AC09, AC10, AC11, and AC12, and a UI session in
-  live mode (#88).
+  live mode (#88). These now ran live on macOS
+  ([`EVIDENCE.md`](EVIDENCE.md#2026-10-22--live-acceptance-runs-through-relaymind-serve---config-88-104-apple-silicon-macos)).
 - An operator launcher (#87). Nothing wired models, store, token,
   `ChatSettings`, `NativeSettings`, and `UiSettings` into a start
   command, and `pyproject.toml` had no entry point. This is now done in
@@ -445,14 +453,22 @@ and AC14 pass with model doubles (`tests/test_routing_cache*.py`,
 milestone was closed on deterministic coverage only: no live run of an
 M5 scenario is recorded in [`EVIDENCE.md`](EVIDENCE.md), which is less
 than the rule at the top of this page asks. The live evidence is #104
-in M6.
+in M6. Update (2026-10-22, #104): the launcher started with the pinned
+model on macOS eight times and once more after a kill; a cache-on run
+of the AC01 prompts is recorded next to its cache-off run (4 hits and 4
+misses, each hit without a routing call); and `parallel_demo` ran twice
+against `glm-4.6` (one completed run with an 802 ms local branch, a
+28.0 s external branch, and a 13.9 s synthesis call; one run whose draft
+reached the 30 s external limit), in
+[`EVIDENCE.md`](EVIDENCE.md#2026-10-22--live-acceptance-runs-through-relaymind-serve---config-88-104-apple-silicon-macos).
+Still missing: a launcher start on Windows.
 
 Carried forward, not done in M5:
 
-- Live runs: the parallel workflow against live models, a cache-on
-  measurement next to the cache-off baseline, and a launcher start with
-  the pinned model on both platforms (#104). No latency figure for the
-  synthesis call and no cache speedup is claimed.
+- A launcher start on Windows (#104). The `parallel_demo` runs, the
+  cache-on run, and the macOS launcher starts are recorded as
+  single-pass observations; no latency result or cache speedup is
+  claimed from them.
 - The launcher reads the external credential from the environment
   variable the config file names; it does not read an OS credential
   store directly (#87).
@@ -481,10 +497,11 @@ Carried forward, not done in M5:
   suite and the English live skill-and-tool runs, and the live suite ran
   from Q8_0 to Q4_K_M with only `RELAYMIND_LIVE_MANIFEST` changed
   ([`EVIDENCE.md`](EVIDENCE.md)). Q4_0 was tried and is not qualified.
-  The external half of AC08 is covered with scripted endpoints (#49);
-  no live external endpoint has been run (#88). Doubles alone do not
-  satisfy a live requirement (spec section 13), so AC08 stays open until
-  a live swap to a second external endpoint is recorded.
+  The external half of AC08 is covered with scripted endpoints (#49),
+  and a live swap ran between two models of one provider, `glm-4.6` and
+  `glm-4.5-air` on Z.ai (#88). AC08 stays open until it is decided
+  whether a second model on the same endpoint is the "second compatible
+  external endpoint" of section 13, or a second provider is run.
 - Closes: AC15 and the release record (section 14).
 
 ## Out of scope for the prototype
@@ -548,5 +565,13 @@ listed here so the current order can be traced to its reason.
   Qwen3-0.6B Q4_K_M from `unsloth/Qwen3-0.6B-GGUF`, because the Qwen
   repository publishes only Q8_0. Q4_0 from `ggml-org/Qwen3-0.6B-GGUF`
   was tried first and failed the thinking-mode smoke check. The local
-  swap ran live; the external swap rests on scripted endpoints only, so
-  AC08 stays open until a live external swap runs (#88).
+  swap ran live; the external swap rested on scripted endpoints only, so
+  AC08 stayed open until a live external swap ran (#88; see the next
+  entry).
+- 2026-10-22, #88 and #104: the M3 to M5 acceptance scenarios ran live
+  through `relaymind serve --config` on macOS, with the pinned local
+  model and a live external endpoint (Z.ai, `glm-4.6`), using a harness
+  that records gateway checks and model findings apart
+  (`scripts/live_acceptance.py`). Every gateway check held; the model
+  findings are recorded, not counted as passes. A Windows launcher start
+  remains open (#104).
