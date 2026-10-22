@@ -1350,12 +1350,11 @@ def ac08_external_swap(
         sorted((s["name"], s["version"], s["content_hash"]) for s in p["skills_offered"])
         for p in accepted
     ]
-    result.check("both runs offered the same skill packages", GATEWAY, offered[0] == offered[1])
     result.check(
-        "both runs had the same budgets",
-        GATEWAY,
-        accepted[0]["budgets"] == accepted[1]["budgets"],
+        "both runs offered the same skill packages", GATEWAY, offered[0] == offered[1], offered
     )
+    budgets = [p["budgets"] for p in accepted]
+    result.check("both runs had the same budgets", GATEWAY, budgets[0] == budgets[1], budgets)
     seen = [
         sorted({e["payload"]["model"] for e in of_type(traces[r], "model.started")})
         for r in (run_a, run_b)
@@ -1369,12 +1368,7 @@ def ac08_external_swap(
     )
     tables = [_launch_tables(configs[first.launch]), _launch_tables(configs[second.launch])]
     changed = sorted(t for t in {*tables[0], *tables[1]} if tables[0].get(t) != tables[1].get(t))
-    external_a, external_b = (t.get("external_model", {}) for t in tables)
-    result.observations["config_difference"] = {
-        key: [external_a.get(key), external_b.get(key)]
-        for key in sorted({*external_a, *external_b})
-        if external_a.get(key) != external_b.get(key)
-    }
+    result.observations["config_difference"] = _config_difference(tables, changed)
     result.check(
         "the two files differ only in the [external_model] table",
         GATEWAY,
@@ -1399,13 +1393,37 @@ PER_LAUNCH_KEYS = {
 }
 
 
-def _launch_tables(text: str) -> dict[str, dict[str, Any]]:
+def _launch_tables(text: str) -> dict[str, Any]:
     """A launch file's tables, without the per-launch paths and port."""
     tables = tomllib.loads(text)
     for table, keys in PER_LAUNCH_KEYS.items():
-        for key in keys:
-            tables.get(table, {}).pop(key, None)
+        target = tables.get(table)
+        if isinstance(target, dict):
+            for key in keys:
+                target.pop(key, None)
     return tables
+
+
+def _config_difference(
+    tables: Sequence[Mapping[str, Any]], changed: Sequence[str]
+) -> dict[str, list[Any]]:
+    """The values that differ between two launch files, as [first, second].
+
+    A key of [external_model] is named by itself; a key of any other table
+    as table.key. A table that is missing or not a table on one side is
+    named by itself, with both whole values.
+    """
+    difference: dict[str, list[Any]] = {}
+    for table in changed:
+        a, b = tables[0].get(table), tables[1].get(table)
+        if not (isinstance(a, dict) and isinstance(b, dict)):
+            difference[table] = [a, b]
+            continue
+        prefix = "" if table == "external_model" else f"{table}."
+        for key in sorted({*a, *b}):
+            if a.get(key) != b.get(key):
+                difference[prefix + key] = [a.get(key), b.get(key)]
+    return difference
 
 
 # -- scenarios: native replay and cancel (AC11, AC12) -----------------------------------
@@ -2420,12 +2438,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         parser.error("the --second-external options need --second-external-model")
     if args.second_external_base_url and args.second_external_context_limit is None:
         parser.error("--second-external-base-url needs --second-external-context-limit")
-    if args.second_external_model and not all(external_args):
-        parser.error("--second-external-model needs the external endpoint options")
     if any(external_args) and not all(external_args):
         parser.error(
             "--external-base-url, --external-model, and --external-context-limit go together"
         )
+    if args.second_external_model and not all(external_args):
+        parser.error("--second-external-model needs the external endpoint options")
     document = run_live(args)
     for name, status in document["summary"].items():
         print(f"{status:8} {name}")

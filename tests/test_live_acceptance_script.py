@@ -647,9 +647,9 @@ def test_ac09_and_ac10_run_with_the_external_only_header(harness, tmp_path):
     assert result.status == "passed", result.to_json_object()
 
 
-def _swap_trace(model, content_hash="sha256:a"):
+def _swap_trace(model, content_hash="sha256:a", budgets=8):
     skills = [{"name": "s", "version": "1", "content_hash": content_hash}]
-    budgets = {"run_generations": 8}
+    budgets = {"run_generations": budgets}
     return [
         {"event_type": "run.accepted", "payload": {"skills_offered": skills, "budgets": budgets}},
         {"event_type": "model.started", "payload": {"model": model}},
@@ -733,6 +733,41 @@ def test_ac08_external_swap_fails_when_a_table_outside_external_model_changes(ha
     failed = [c for c in result.checks if not c.ok]
     assert [c.name for c in failed] == ["the two files differ only in the [external_model] table"]
     assert failed[0].detail == "['cache', 'external_model']"
+    difference = result.observations["config_difference"]
+    assert difference["cache.routing"] == [False, True]
+    assert difference["model"] == ["model-a", "model-b"]
+
+
+def test_ac08_external_swap_records_a_difference_outside_external_model(harness, tmp_path):
+    """AC08: the failure names the other table's change, not an empty difference."""
+    endpoints = _second_provider(harness)
+    configs = _swap_configs(harness, tmp_path, endpoints)
+    configs["external-second"] = configs["external"] + '\n[extra]\nnote = "x"\n'
+    result = _swap(harness, tmp_path, endpoints, configs=configs)
+    assert [c.name for c in result.checks if not c.ok] == [
+        "the two files differ only in the [external_model] table"
+    ]
+    assert result.observations["config_difference"] == {"extra": [None, {"note": "x"}]}
+
+
+def test_ac08_external_swap_survives_a_scalar_external_model(harness, tmp_path):
+    """AC08: a malformed [external_model] (not a table) fails the check, it does not crash."""
+    endpoints = _second_provider(harness)
+    configs = _swap_configs(harness, tmp_path, endpoints)
+    configs["external-second"] = 'external_model = "plain"\n'
+    result = _swap(harness, tmp_path, endpoints, configs=configs)
+    assert "the two files differ only in the [external_model] table" in [
+        c.name for c in result.checks if not c.ok
+    ]
+    assert result.observations["config_difference"]["external_model"][1] == "plain"
+
+
+def test_launch_tables_skips_a_per_launch_key_that_is_not_a_table(harness):
+    """AC08: a scalar where a per-launch table is expected is compared, not a crash."""
+    assert harness._launch_tables('server = "x"\nsandbox = 123\n') == {
+        "server": "x",
+        "sandbox": 123,
+    }
 
 
 def test_ac08_external_swap_fails_on_other_skill_packages_or_models(harness, tmp_path):
@@ -748,6 +783,25 @@ def test_ac08_external_swap_fails_on_other_skill_packages_or_models(harness, tmp
     assert [c.name for c in result.checks if not c.ok] == [
         "each run's model calls name its own configured external model"
     ]
+
+
+def test_ac08_external_swap_fails_on_other_budgets(harness, tmp_path):
+    """AC08: both runs keep the same budgets; a failure shows both sets."""
+    endpoints = _second_provider(harness)
+    traces = {"r1": _swap_trace("model-a"), "r2": _swap_trace("model-b", budgets=10)}
+    result = _swap(harness, tmp_path, endpoints, traces=traces)
+    failed = [c for c in result.checks if not c.ok]
+    assert [c.name for c in failed] == ["both runs had the same budgets"]
+    assert failed[0].detail == "[{'run_generations': 8}, {'run_generations': 10}]"
+
+
+def test_ac08_external_swap_shows_the_skill_packages_that_differ(harness, tmp_path):
+    """AC08: a skill package failure shows both offered sets."""
+    endpoints = _second_provider(harness)
+    traces = {"r1": _swap_trace("model-a"), "r2": _swap_trace("model-b", "sha256:b")}
+    result = _swap(harness, tmp_path, endpoints, traces=traces)
+    (failed,) = [c for c in result.checks if not c.ok]
+    assert "sha256:a" in failed.detail and "sha256:b" in failed.detail
 
 
 def test_a_swap_at_the_same_base_url_is_not_counted_for_ac08(harness, tmp_path):
@@ -823,6 +877,24 @@ def test_the_second_endpoint_options_need_a_model_and_the_first_endpoint(harness
                 "model-b",
             ]
         )
+
+
+def test_incomplete_external_options_are_named_before_the_second_model(harness, capsys):
+    """AC08: a missing --external-context-limit gets the go-together error first."""
+    with pytest.raises(SystemExit, match="^2$"):
+        harness.main(
+            [
+                "--out",
+                "x.json",
+                "--external-base-url",
+                "https://api.one.invalid/v1",
+                "--external-model",
+                "model-a",
+                "--second-external-model",
+                "model-b",
+            ]
+        )
+    assert "go together" in capsys.readouterr().err
 
 
 def test_one_endpoint_written_two_ways_is_not_a_second_endpoint(harness):
