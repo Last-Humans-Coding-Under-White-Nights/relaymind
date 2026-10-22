@@ -76,11 +76,13 @@ def gateway(server, manifest, adapter_settings, tmp_path_factory):  # noqa: F811
         )
     )
     model_id = manifest.file_name
-    # A recording external double: RM01 is measured on it, not assumed.
+    # A recording external double that is not configured on the gateway:
+    # with an external model configured, an escalation would dispatch to it
+    # (RM13), and these live runs measure the local path. The trace count
+    # of external calls is what proves RM01 here.
     external = ScriptedAdapter(turns=[], locality="external")
     orchestrator = LocalOrchestrator(
         ConfiguredModel(adapter=adapter, model_id=model_id),
-        external=ConfiguredModel(adapter=external, model_id="unused-external"),
         skills=skills,
         tools=tools,
         store=store,
@@ -186,8 +188,9 @@ def test_check_service_health_completes_locally(gateway, case):
     # The correct final status (RM16): the registered predicate holds.
     assert health_status_preserved(outcome.answer, results)
 
-    # Zero external calls (RM01): measured on the external double, and
-    # the trace labels every call with the adapter's locality.
+    # Zero external calls (RM01): the gateway has no external model here,
+    # so the trace is the proof: every call is labelled with the adapter's
+    # locality and run.completed counts no external call.
     assert external.requests == []
     started = by_type["model.started"]
     assert all(e.actor == "local" and e.payload["model"] == model_id for e in started)

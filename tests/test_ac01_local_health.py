@@ -72,6 +72,9 @@ def run_case(tmp_path, case):
             text_turn(answer),  # finalize proposal (section 7.3)
             text_turn(answer[:12], answer[12:]),  # final generation, tools disabled
         ],
+        # RM01: an external model is configured, with nothing scripted, so
+        # zero external calls is measured, not guaranteed by its absence.
+        external_turns=[],
     )
     outcome, events = run(gateway, prompt)
     return gateway, outcome, events
@@ -187,6 +190,9 @@ def test_the_budgets_and_their_use_are_recorded(tmp_path, case):
             "run_tool_executions": 6,
             "waiting_seconds": 300.0,
             "clarification_rounds": 2,
+            # Spec 0.9 section 11: the external stage limits.
+            "external_generations": 6,
+            "external_seconds": 30.0,
         }
     )
     offered = accepted.payload["skills_offered"]

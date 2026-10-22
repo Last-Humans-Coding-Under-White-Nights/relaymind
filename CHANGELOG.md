@@ -24,6 +24,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Handoff envelope and escalation to the external model (#18; RM13,
+  RM14, AC02; spec 0.9 sections 4.4, 8, 11): the HandoffEnvelope is
+  published as `relaymind/orchestrator/schemas/handoff_envelope.v1.json`
+  and validated at the boundary (`relaymind.orchestrator.handoff`). It is
+  built from the run store's tool operations and keeps the original
+  messages, the skill version, completed operation IDs with their
+  structured results, pending work, permitted tools, remaining budgets,
+  and language; rejected local proposals and draft answers travel only
+  as `local_proposals`, each labeled a proposal. An escalation with
+  external dispatch permitted records `handoff.started`, moves the run
+  to `external_running`, and revokes the local actor's dispatch
+  authority; the external model proposes tools through the same
+  validation, identifier provenance check, and executor, and a repeated
+  completed operation gets its recorded result and runs no handler. One
+  actor owns the final answer. The whole external request is measured
+  against the external context limit (the adapter's tokenizer, or the
+  UTF-8 byte length as an upper bound) before dispatch and before every
+  external generation; over the limit the run fails with
+  `context_limit_exceeded` and no external call. An operation with no
+  known outcome blocks handoff, and so does a stop the external stage
+  could not resolve either (a mutation that needs confirmation, or a
+  skill with no permitted tool): those end as `needs_external` with
+  `capability_missing` and no external call. An admitted parallel route
+  (the workflow is not wired yet) and an unavailable local model (no
+  operator policy permits degraded mode yet) do not hand off either. An
+  `external_failed` run keeps an RM04 reason code. A timed-out generation is
+  traced with the limit that bounded it, never as local time. New budgets `external_generations` (6)
+  and `external_seconds` (30) are recorded in each run. External failures
+  end as `external_failed`; without a configured external model, in
+  `local_only`, or with no run budget left, the run still ends as
+  `needs_external`. `handoff.started` now requires `reason_code`,
+  `model`, and `operation_ids`. Deterministic coverage is
+  `tests/test_ac02_handoff.py`; no live external model was run, and
+  external skill selection when no skill was chosen (`external_only`)
+  hands over the catalog and tools but does not load a skill body.
 - Live AC01 record on the pinned llama.cpp b11785 runtime in
   `docs/EVIDENCE.md` (raw export
   `docs/evidence/2026-10-21-m2-local-trace-b11785-apple-m1.json`; RM01,
@@ -414,6 +449,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   from answer content. Non-thinking remains the default; operator-enabled
   thinking remains supported. Record both live runs separately from the
   historical runtime evidence and add a Windows runtime smoke workflow.
+- Specification 0.8 → 0.9: sections 4.4, 8, and 11 define the handoff
+  (RM13, RM14, #18): how the HandoffEnvelope is built from the run
+  store and sent as normalized messages, the context measurement and the
+  `context_limit_exceeded` failure, what blocks a handoff (including a
+  mutation that needs confirmation, a skill with no permitted tool, an
+  admitted parallel route, and an unavailable local model),
+  the external stage and its limits, the `handoff.started` payload, and
+  the `external_failed` error code.
 - Specification 0.7 → 0.8: section 6 uses the selected runtime's
   supported reasoning controls (RM18, #58). llama.cpp b11785 uses
   `--reasoning off/on` at launch and the supported HTTP template boolean

@@ -41,6 +41,8 @@ def test_defaults_are_the_rm03_and_section_11_values():
         "run_tool_executions": 6,
         "waiting_seconds": 300.0,
         "clarification_rounds": 2,
+        "external_generations": 6,
+        "external_seconds": 30.0,
     }
 
 
@@ -184,6 +186,7 @@ def test_usage_reports_every_counter_and_elapsed_time():
         "local_generations": 2,
         "repair_generations": 1,
         "tool_calls": 1,
+        "external_generations": 0,
         "active_ms": 250,
         "stages": 1,
     }

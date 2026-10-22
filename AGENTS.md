@@ -20,7 +20,7 @@ codebase.
 | Path | Purpose |
 |------|---------|
 | `src/relaymind/api/` | API layer: request validation, chat contract, native run API, auth (RM19–RM21) |
-| `src/relaymind/orchestrator/` | State transitions, budgets, routing, handoff, cancellation, final-answer ownership (RM01–RM05, RM13–RM17); the RouteDecision schema and validator (`route_decision.py`, `schemas/route_decision.v1.json`; RM02); the router (`router.py`; native function calling; RM01, RM02), the bounded local loop (`local_loop.py`), budgets (`budgets.py`; RM03, RM04, section 11), and identifier provenance (`identifiers.py`; RM05) |
+| `src/relaymind/orchestrator/` | State transitions, budgets, routing, handoff, cancellation, final-answer ownership (RM01–RM05, RM13–RM17); the RouteDecision schema and validator (`route_decision.py`, `schemas/route_decision.v1.json`; RM02); the router (`router.py`; native function calling; RM01, RM02), the bounded local loop (`local_loop.py`), budgets (`budgets.py`; RM03, RM04, section 11), identifier provenance (`identifiers.py`; RM05), and the handoff envelope, dispatch authority, and external request (`handoff.py`, `schemas/handoff_envelope.v1.json`; RM13, RM14) |
 | `src/relaymind/adapters/` | Model adapters: normalized messages and events per provider (RM18) |
 | `src/relaymind/skills/` | Skill registry: package validation, instruction loading (RM06, RM07); completion predicates (`predicates.py`; RM06, section 9) |
 | `src/relaymind/tools/` | Tool registry and executor: argument validation, permissions, side effects (RM08–RM12); the sandbox demo data service and the seven demo tools (`sandbox.py`, `schemas/demo/`; RM23, section 9); the executor (`executor.py`: operation IDs, replay, retry, timeouts; RM10, RM14) |

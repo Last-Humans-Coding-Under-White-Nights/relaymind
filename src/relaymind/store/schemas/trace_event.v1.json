@@ -261,6 +261,49 @@
       }
     },
     {
+      "if": {"properties": {"event_type": {"enum": ["handoff.started"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "reason_code": {"type": "string", "pattern": "\\S"},
+              "model": {"type": "string", "pattern": "\\S"},
+              "skill": {
+                "type": ["object", "null"],
+                "properties": {
+                  "name": {"type": "string", "pattern": "\\S"},
+                  "version": {"type": "string", "pattern": "\\S"},
+                  "content_hash": {"type": "string", "pattern": "\\S"}
+                },
+                "required": ["name", "version", "content_hash"],
+                "additionalProperties": false
+              },
+              "operation_ids": {"type": "array", "items": {"type": "string", "pattern": "\\S"}},
+              "allowed_tools": {"type": "array", "items": {"type": "string", "pattern": "\\S"}},
+              "request": {
+                "type": "object",
+                "properties": {
+                  "size": {"type": "integer", "minimum": 0},
+                  "limit": {"type": "integer", "minimum": 1},
+                  "method": {"enum": ["tokenizer", "utf8_bytes"]}
+                },
+                "required": ["size", "limit", "method"],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "reason_code",
+              "model",
+              "skill",
+              "operation_ids",
+              "allowed_tools",
+              "request"
+            ]
+          }
+        }
+      }
+    },
+    {
       "if": {"properties": {"event_type": {"enum": ["cache.hit"]}}, "required": ["event_type"]},
       "then": {
         "properties": {
