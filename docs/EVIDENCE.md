@@ -1323,7 +1323,10 @@ change; it does not cover a second vendor's API.
 | Configuration | Default budgets (RM03); one llama-server shared by eight gateway starts in sequence, each with its own run store and sandbox copy |
 
 What changed in `src/` and `scripts/` after the recorded run (checked
-with `git diff` from `7b56f19`): the gateway code is unchanged. The
+with `git diff` from `7b56f19`): the gateway code is unchanged except
+the demo UI trace view, which now reads back a tool result stored by
+reference (spec 0.30). Every tool result of this run was stored inline
+(the export has no `result_ref`), so that change does not touch it. The
 review fixes of #111 changed the evaluation corpus, metrics, and
 environment modules and the corpus and latency scripts; the live
 harness uses none of them (it imports only
