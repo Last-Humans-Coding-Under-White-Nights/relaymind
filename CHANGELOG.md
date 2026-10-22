@@ -894,6 +894,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a cold request apart, and the runtime's prefix cache and sampling
   settings recorded. `docs/RELEASE.md` is the release record of
   section 14.
+- Specification 0.29 -> 0.30: the demo UI trace view (section 9;
+  RM22, RM23) reads a tool result stored by reference back from its
+  artifact and marks it as stored by reference, with its size. When
+  the artifact is no longer retained, the operation shows the status
+  of its tool.finished event, the reference, and that the result is
+  not retained, with no result data. Before this, a run whose tool
+  result was over the inline limit could not be shown (KeyError).
 - Specification 0.28 -> 0.29: AC08 defines a second compatible external
   endpoint (#109; RM18, section 12.3): it has its own base URL, and the
   launch file names its own credential variable (it may hold the same
