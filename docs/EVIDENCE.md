@@ -11,6 +11,13 @@ the llama.cpp build, the manifest, the exact command, and the result,
 including failures. Numbers from a single pass are listed as single-pass
 observations, never as p50 or p95. Raw exports go in `docs/evidence/`.
 
+Status (2026-10-22): the entries below cover M1 and M2 only. M3 and M4
+were closed on deterministic tests with model doubles, and no live run
+of their acceptance scenarios (AC02, AC05 to AC07, AC09 to AC12) is
+recorded here yet. AC08 has no live entry, because only one local
+artifact is qualified. See [`ROADMAP.md`](ROADMAP.md) for what is
+carried forward.
+
 ## 2026-10-20 — M1 live smoke test, Apple Silicon macOS
 
 | Field | Value |

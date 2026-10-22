@@ -4,16 +4,21 @@
 tasks with skills and tools. Complex work is transferred to an external model.
 Every routing decision, tool call, and model call is visible in a trace.
 
-Status: **M1 (adapter and protocol qualification) complete.** Live smoke
-results for Apple Silicon macOS and native x86-64 Windows are recorded in
-[`docs/EVIDENCE.md`](docs/EVIDENCE.md). **M2 (local skill-and-tool loop)
-is in review, not closed:** AC01, AC03, and AC04 pass with model
-doubles. The spec 0.6 revision (#60) and the earlier M2 pull requests
-are merged. Chinese support is best-effort (spec 0.7): Chinese live
-results are recorded but are not a gate. The open items are listed in
-the roadmap. See
-[`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan and
-[`CHANGELOG.md`](CHANGELOG.md) for what has landed so far.
+Status: **M1 to M4 are closed.** M1 (adapter and protocol
+qualification) and M2 (local skill-and-tool loop) have live runs
+recorded in [`docs/EVIDENCE.md`](docs/EVIDENCE.md) for Apple Silicon
+macOS and native x86-64 Windows. M3 (handoff and confirmation) and M4
+(public API and observability) are implemented and covered by
+deterministic tests with model doubles only: no live run is recorded
+for their acceptance scenarios, and AC08 stays open until a second
+local model artifact is qualified. There is no launcher or command-line
+entry point yet; the gateway starts from a short Python script (see
+[Send a message](#send-a-message)). Chinese support is best-effort
+(spec 0.7): Chinese live results are recorded but are not a gate. M5
+(parallel workflow and caching) and M6 (evaluation) are next. See
+[`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan and the
+open items, and [`CHANGELOG.md`](CHANGELOG.md) for what has landed so
+far.
 
 ## How this project works
 
@@ -26,18 +31,27 @@ the roadmap. See
 
 See [`AGENTS.md`](AGENTS.md) for the full contributor workflow.
 
-## What the prototype will do
+## What the prototype does
 
-- Accept requests through an OpenAI-compatible API (`/v1/chat/completions`)
-  and a native run API (`/relay/v1/runs`).
-- Let a small local model (initial candidate: Qwen3-0.6B via llama.cpp)
+- Accepts requests through an OpenAI-compatible API (`/v1/models`,
+  `/v1/chat/completions`) and a native run API (`/relay/v1/runs`, with
+  SSE events, resume, and cancel).
+- Lets a small local model (initial candidate: Qwen3-0.6B via llama.cpp)
   select a skill, call registered tools, and finish simple tasks locally
   with zero external calls.
-- Escalate complex tasks to an external model, handing over the original
+- Escalates complex tasks to an external model, handing over the original
   request, tool evidence, and remaining budgets.
-- Show every decision in a trace UI: selected skill, tool arguments,
-  execution results, escalation reason, final answer, and timing.
-- Work in English, with best-effort Chinese, on macOS and Windows.
+- Asks for a fresh, single-use confirmation before the mutating demo
+  action runs.
+- Shows every decision in a demo trace UI (`/ui`): selected skill, tool
+  arguments, execution results, escalation reason, final answer, and
+  timing.
+- Works in English, with best-effort Chinese, on macOS and Windows.
+
+Not built yet: the one bounded parallel workflow and skill caching
+(M5), and the evaluation corpus and latency benchmark (M6). Until the
+workflow exists, the `parallel_demo` execution mode always fails with
+`workflow_unavailable`.
 
 ## Repository layout
 
@@ -46,7 +60,7 @@ See [`AGENTS.md`](AGENTS.md) for the full contributor workflow.
 | `docs/SPECIFICATION.md` | The spec. Single source of truth. |
 | `docs/ARCHITECTURE.md` | How components map to the code layout. |
 | `docs/ROADMAP.md` | Implementation milestones with requirement IDs. |
-| `src/relaymind/` | Gateway source (Python; FastAPI API layer planned for M4). |
+| `src/relaymind/` | Gateway source (Python): the FastAPI API layer (`api/`), orchestrator, adapters, skill and tool registries, run store, and demo UI (`ui/`). |
 | `models/` | Pinned model artifact manifests; the GGUF files are downloaded, not checked in. |
 | `skills/` | Demo skill packages (SKILL.md plus skill.manifest.json). |
 | `tests/` | Test suite and sandbox fixtures. |
@@ -78,9 +92,10 @@ terminal on macOS and Windows.
 
 ## Send a message
 
-The gateway API (`/v1/chat/completions`, `/relay/v1/runs`) arrives in
-M4. Until then, talk to the local model through the adapter. Start the
-pinned runtime first:
+### 1. Start the local runtime
+
+Start the pinned runtime first (install it as described in
+[`models/README.md`](models/README.md)):
 
 ```bash
 llama-server -m models/Qwen3-0.6B-Q8_0.gguf \
@@ -88,7 +103,134 @@ llama-server -m models/Qwen3-0.6B-Q8_0.gguf \
   --jinja --reasoning off --reasoning-format deepseek
 ```
 
-Then send a message and print the answer as it streams:
+### 2. Start the gateway
+
+There is no launcher or command-line entry point yet (open work,
+issue #87). Until it exists, this script wires the local model, the
+checked-in demo skills, the sandbox demo data, and a SQLite run store
+into the gateway and serves it on loopback. Save it as
+`start_gateway.py` and run it from the checkout root:
+
+```python
+from pathlib import Path
+
+from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
+from relaymind.api.app import create_app
+from relaymind.api.server import serve
+from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
+from relaymind.orchestrator.workflows import PARALLEL_WORKFLOWS
+from relaymind.skills import SkillRegistry
+from relaymind.skills.predicates import COMPLETION_PREDICATES
+from relaymind.store import RunStore
+from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry
+from relaymind.tools.sandbox import (
+    DEMO_TOOL_NAMES,
+    MUTATE_PERMISSION,
+    READ_PERMISSION,
+    SandboxDataService,
+    register_demo_tools,
+)
+from relaymind.ui import DataMode, UiSettings
+
+work = Path("demo-run")
+tools = ToolRegistry()
+sandbox = SandboxDataService(
+    Path("tests/fixtures/sandbox/baseline.json"), work_dir=work / "sandbox", reset=True
+)
+register_demo_tools(tools, sandbox)
+skills = SkillRegistry.load(
+    [Path("skills")],
+    tools=tools,
+    predicates=COMPLETION_PREDICATES.keys(),
+    workflows=PARALLEL_WORKFLOWS,
+)
+local = ConfiguredModel(
+    adapter=LlamaCppAdapter(LlamaCppConfig(base_url="http://127.0.0.1:8033", context_limit=8192)),
+    model_id="qwen3-0.6b-q8_0",
+)
+orchestrator = LocalOrchestrator(
+    local,
+    skills=skills,
+    tools=tools,
+    store=RunStore(work / "runs.sqlite3"),
+    policy=OperatorPolicy(enabled_tools=DEMO_TOOL_NAMES),
+    caller=CallerContext(permissions=frozenset({READ_PERMISSION, MUTATE_PERMISSION})),
+)
+orchestrator.recover_after_restart()  # once, before any run (spec section 5)
+app = create_app(
+    orchestrator=orchestrator,
+    ui=UiSettings(mode=DataMode.LIVE, fixtures=sandbox),
+)
+print("RELAYMIND_TOKEN=" + app.state.application_token, flush=True)
+serve(app, host="127.0.0.1", port=8080)
+```
+
+It prints the application token the gateway generated at start; keep
+it in `RELAYMIND_TOKEN` for the requests below. The run store and the
+sandbox copy go to `demo-run/`; delete that directory when you are
+done. This script configures no external model, so a request that
+needs one ends with `needs_external`. The caller can read and mutate
+the sandbox; each mutation still requires a fresh confirmation (RM11).
+The demo UI is at `http://127.0.0.1:8080/ui`; enter the application
+token there to create runs and view traces. Its `LIVE` label describes
+decisions from the local model; the tool data is the sandbox fixture
+(spec section 9).
+
+### 3. Talk to the gateway
+
+The gateway speaks the OpenAI Chat Completions shape, so any OpenAI
+client works once pointed at `http://127.0.0.1:8080/v1`. Every request
+carries the application token. You do not pick a model: the alias
+`relaymind` means "route it for me". The local model selects a skill
+and proposes the tool call; the gateway runs it and escalates to the
+external model only if the local run cannot finish.
+
+```bash
+curl -i -s http://127.0.0.1:8080/v1/chat/completions \
+  -H "Authorization: Bearer $RELAYMIND_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "relaymind",
+       "messages": [{"role": "user", "content": "Is staging-api healthy right now?"}]}'
+```
+
+To force where inference runs, add one header with `auto`,
+`local_only`, `external_only`, or `parallel_demo`. Operator policy
+decides which values a caller may use; the trace always shows which
+model answered. `local_only` answers with HTTP 422 and code
+`needs_external` when the local model cannot finish. `parallel_demo`
+works only with the `relaymind` alias, and in this build it always
+fails with `workflow_unavailable`, because the parallel workflow
+(spec section 4.4) is planned for M5.
+
+```bash
+curl -i -s http://127.0.0.1:8080/v1/chat/completions \
+  -H "Authorization: Bearer $RELAYMIND_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "X-RelayMind-Execution-Mode: local_only" \
+  -d '{"model": "relaymind",
+       "messages": [{"role": "user", "content": "Is staging-api healthy right now?"}]}'
+```
+
+The response header `X-RelayMind-Run-ID` names the run. The native run
+API shows it and its trace:
+
+```bash
+curl -s http://127.0.0.1:8080/relay/v1/runs/<run id> \
+  -H "Authorization: Bearer $RELAYMIND_TOKEN"
+curl -s http://127.0.0.1:8080/relay/v1/runs/<run id>/events \
+  -H "Authorization: Bearer $RELAYMIND_TOKEN"
+```
+
+`POST /relay/v1/runs` with a `messages` body starts a run without
+waiting for it and answers 202 with its `run_id` and `events_url`.
+Resume, cancel, `Idempotency-Key`, `/healthz`, and `/readyz` are
+described in spec section 7.4; [`docs/TESTING.md`](docs/TESTING.md)
+lists the tests that cover them.
+
+### Talk to the local model without the gateway
+
+To check the runtime alone, send a message through the adapter and
+print the answer as it streams:
 
 ```python
 import asyncio
@@ -123,45 +265,6 @@ curl -s http://127.0.0.1:8033/v1/chat/completions \
 
 The answer is in `choices[0].message.content`. Windows commands and
 tool-call requests are in [`docs/TESTING.md`](docs/TESTING.md).
-
-### From M4: talking to the gateway
-
-This is the planned contract (spec section 7), not something that runs
-yet. The gateway speaks the OpenAI Chat Completions shape, so any
-OpenAI client works once pointed at it. Every request carries the
-application token the gateway generates at start (spec section 3);
-the examples below keep it in `RELAYMIND_TOKEN`. You do not pick a
-model: the alias `relaymind` means "route it for me". The local model
-selects a skill and proposes the tool call; the gateway runs it and
-escalates to the external model only if the local run cannot finish.
-
-```bash
-curl -s http://127.0.0.1:8080/v1/chat/completions \
-  -H "Authorization: Bearer $RELAYMIND_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "relaymind",
-       "messages": [{"role": "user", "content": "Is staging-api healthy right now?"}]}'
-```
-
-To force where inference runs, add one header with `auto`,
-`local_only`, `external_only`, or `parallel_demo`. Operator policy
-decides which values a caller may use; the trace always shows which
-model answered. `parallel_demo` runs the one fixed parallel workflow
-(spec section 4.4, planned for M5), works only with the `relaymind`
-alias, and only when operator configuration enables the workflow. `local_only` answers with HTTP 422 and code `needs_external`
-when the local model cannot finish.
-
-```bash
-curl -s http://127.0.0.1:8080/v1/chat/completions \
-  -H "Authorization: Bearer $RELAYMIND_TOKEN" \
-  -H "Content-Type: application/json" \
-  -H "X-RelayMind-Execution-Mode: external_only" \
-  -d '{"model": "relaymind",
-       "messages": [{"role": "user", "content": "Is staging-api healthy right now?"}]}'
-```
-
-The response header `X-RelayMind-Run-ID` names the run; its trace is
-available from the native API at `/relay/v1/runs/{id}`.
 
 ## License
 

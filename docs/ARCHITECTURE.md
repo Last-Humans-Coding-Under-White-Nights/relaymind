@@ -40,6 +40,11 @@ client ──► FastAPI (api) ──► orchestrator ──► adapters ──�
 ```
 
 - The gateway binds to loopback and requires a generated application token.
+- There is no launcher or command-line entry point yet. An operator
+  builds the orchestrator in Python and starts it with `create_app` and
+  `serve`; the README shows a script that does this.
+- The demo UI is served by the same FastAPI app under `/ui` when the
+  operator passes `UiSettings`.
 - Local inference runs in a separate llama.cpp server process, also on
   loopback.
 - External credentials stay server-side (environment variables or OS
@@ -85,6 +90,14 @@ A module imports only from layers below it.
   `canonical.py`; the orchestrator, skills, store, and tools use
   `schema_util.py`; the orchestrator and the tool executor use
   `redaction.py`.
+
+The demo UI sits beside the API layer. `api/app.py` installs the UI
+routes, and `ui/routes.py` reuses the API's token check, error contract,
+and native request parsing. `ui/trace_view.py` builds views from
+stored events, and `ui/render.py` renders them. `ui/comparison.py`
+also imports `Message` from the adapters; it starts runs and requests
+cancellation through the orchestrator, reads run state from the store,
+and resets the configured sandbox fixtures before each comparison run.
 
 Lower layers must not import higher ones. The store must not depend on
 adapters. Adapters must not depend on SQLite.

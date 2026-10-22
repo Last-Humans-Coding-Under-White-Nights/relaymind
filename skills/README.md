@@ -41,6 +41,10 @@ Each package contains:
 | delete-demo-database | list_demo_databases, delete_demo_database | Confirmation required | true | deletion_outcome_reported |
 | health-and-diagnostic-checklist | get_service_health | Parallel demo workflow, external synthesis | false | health_checklist_separated |
 
+The parallel workflow that health-and-diagnostic-checklist joins is not
+implemented yet (#30). Until it is, `parallel_demo` fails with
+`workflow_unavailable`; the other modes follow spec section 4.4.
+
 Changing a package changes its content hash; bump `version` in
 `skill.manifest.json` as well (RM07).
 
