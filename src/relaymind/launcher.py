@@ -17,7 +17,7 @@ written nowhere else.
 import argparse
 import sys
 import tomllib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -61,6 +61,9 @@ DEFAULT_SANDBOX_SEED = "tests/fixtures/sandbox/baseline.json"
 DEFAULT_SANDBOX_DIR = ".relaymind/sandbox"
 DEFAULT_STORE_PATH = "relaymind.sqlite3"
 DEFAULT_LOCAL_URL = "http://127.0.0.1:8033"
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 8080
+DEFAULT_PERMISSIONS = (READ_PERMISSION, MUTATE_PERMISSION)
 
 _TABLES: dict[str, frozenset[str]] = {
     "server": frozenset({"host", "port"}),
@@ -90,8 +93,8 @@ class LauncherConfig:
 
     manifest: Path
     artifact: Path
-    host: str = "127.0.0.1"
-    port: int = 8080
+    host: str = DEFAULT_HOST
+    port: int = DEFAULT_PORT
     store_path: Path = Path(DEFAULT_STORE_PATH)
     skill_roots: tuple[str, ...] = field(default_factory=default_skill_roots)
     sandbox_seed: Path = Path(DEFAULT_SANDBOX_SEED)
@@ -100,7 +103,7 @@ class LauncherConfig:
     external: ChatCompletionsConfig | None = None
     degraded_mode: bool = False
     enabled_workflows: frozenset[str] = frozenset()
-    permissions: frozenset[str] = frozenset({READ_PERMISSION, MUTATE_PERMISSION})
+    permissions: frozenset[str] = frozenset(DEFAULT_PERMISSIONS)
     chat: ChatSettings = field(default_factory=ChatSettings)
     native: NativeSettings = field(default_factory=NativeSettings)
     ui: UiSettings | None = None
@@ -137,11 +140,9 @@ def _value(table: Mapping[str, Any], name: str, key: str, kind: type | tuple, de
     value = table.get(key, default)
     if value is None:
         return None
+    kinds = kind if isinstance(kind, tuple) else (kind,)
     # bool is an int subclass; a flag is never a number.
-    wrong_bool = isinstance(value, bool) and bool not in (
-        kind if isinstance(kind, tuple) else (kind,)
-    )
-    if wrong_bool or not isinstance(value, kind):
+    if (isinstance(value, bool) and bool not in kinds) or not isinstance(value, kinds):
         raise LaunchError(f"[{name}] {key} has the wrong type")
     return value
 
@@ -158,6 +159,11 @@ def _strings(table: Mapping[str, Any], name: str, key: str, default: list[str]) 
     if not all(isinstance(item, str) and item.strip() for item in value):
         raise LaunchError(f"[{name}] {key} must be a list of non-blank strings")
     return value
+
+
+def _seconds(table: Mapping[str, Any], name: str, keys: Iterable[str]) -> dict[str, float]:
+    """The duration keys present in the table, as floats."""
+    return {key: float(_value(table, name, key, (int, float))) for key in keys if key in table}
 
 
 def _settings(name: str, build: Callable[[], Any]) -> Any:
@@ -192,20 +198,12 @@ def load_config(path: Path | str) -> LauncherConfig:
     chat_args: dict[str, Any] = {"allowed_modes": allowed, "supported_options": frozenset(options)}
     if (limit := _value(chat, "chat", "max_completion_tokens", int)) is not None:
         chat_args["max_completion_tokens"] = limit
-    native_args = {
-        key: float(_value(native, "native", key, (int, float)))
-        for key in native
-        if _value(native, "native", key, (int, float)) is not None
-    }
+    native_args = _seconds(native, "native", _TABLES["native"])
 
     ui = None
     if "ui" in raw:
         ui_table = tables["ui"]
-        ui_args = {
-            key: float(_value(ui_table, "ui", key, (int, float)))
-            for key in ("arm_wait_seconds", "poll_seconds")
-            if key in ui_table
-        }
+        ui_args = _seconds(ui_table, "ui", ("arm_wait_seconds", "poll_seconds"))
         if "mode" not in ui_table:
             raise LaunchError("[ui] mode is required: declare live, replay, or double")
         ui = _settings(
@@ -216,8 +214,8 @@ def load_config(path: Path | str) -> LauncherConfig:
         manifest=Path(_required(local, "local_model", "manifest", str)),
         artifact=Path(_required(local, "local_model", "artifact", str)),
         local_url=_value(local, "local_model", "base_url", str, DEFAULT_LOCAL_URL),
-        host=_value(server, "server", "host", str, "127.0.0.1"),
-        port=_value(server, "server", "port", int, 8080),
+        host=_value(server, "server", "host", str, DEFAULT_HOST),
+        port=_value(server, "server", "port", int, DEFAULT_PORT),
         store_path=Path(_value(tables["store"], "store", "path", str, DEFAULT_STORE_PATH)),
         skill_roots=tuple(
             _strings(tables["skills"], "skills", "roots", list(default_skill_roots()))
@@ -229,9 +227,7 @@ def load_config(path: Path | str) -> LauncherConfig:
         external=_external(tables["external_model"]) if "external_model" in raw else None,
         degraded_mode=_value(policy, "policy", "degraded_mode", bool, False),
         enabled_workflows=frozenset(_strings(policy, "policy", "enabled_workflows", [])),
-        permissions=frozenset(
-            _strings(policy, "policy", "permissions", [READ_PERMISSION, MUTATE_PERMISSION])
-        ),
+        permissions=frozenset(_strings(policy, "policy", "permissions", list(DEFAULT_PERMISSIONS))),
         chat=_settings("chat", lambda: ChatSettings(**chat_args)),
         native=_settings("native", lambda: NativeSettings(**native_args)),
         ui=ui,
