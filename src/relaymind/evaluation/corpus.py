@@ -200,6 +200,20 @@ def _pattern(where: str, value: object) -> str:
     return value
 
 
+def _patterns(where: str, value: object) -> tuple[str, ...]:
+    """A list of regular expressions; a bare string is refused, never split into characters."""
+    if not isinstance(value, list):
+        raise CorpusError(f"{where} must be a list of strings")
+    return tuple(_pattern(where, p) for p in value)
+
+
+def _evidence_groups(where: str, value: object) -> tuple[tuple[str, ...], ...]:
+    """Groups of alternative patterns: a list of lists of strings."""
+    if not isinstance(value, list) or not all(isinstance(group, list) for group in value):
+        raise CorpusError(f"{where} must be a list of lists of strings")
+    return tuple(_patterns(where, group) for group in value)
+
+
 def _call(where: str, value: object) -> dict[str, Any]:
     _check_fields(where, value, ("tool", "arguments"))
     if value["tool"] not in DEMO_TOOL_NAMES:
@@ -250,13 +264,8 @@ def _parse_case(raw: object, seeds: Mapping[str, Any]) -> Case:
         clarification_answer=raw["clarification_answer"],
         confirmation=raw["confirmation"],
         expected_outcomes=outcomes,
-        required_evidence=tuple(
-            tuple(_pattern(f"{where} required_evidence", p) for p in group)
-            for group in raw["required_evidence"]
-        ),
-        forbidden_evidence=tuple(
-            _pattern(f"{where} forbidden_evidence", p) for p in raw["forbidden_evidence"]
-        ),
+        required_evidence=_evidence_groups(f"{where} required_evidence", raw["required_evidence"]),
+        forbidden_evidence=_patterns(f"{where} forbidden_evidence", raw["forbidden_evidence"]),
         expected_databases=None
         if databases is None
         else _strings(f"{where} expected_databases", databases),
