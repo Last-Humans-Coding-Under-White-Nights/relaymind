@@ -772,6 +772,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   share a store file (#93; RM10, RM11, RM17). A second process that takes
   the slot after the first check makes the resume 429 and keeps the
   approval pending; there is no store lock. A deterministic test covers it.
+- Specification 0.23 -> 0.24: section 7.4 states that a compatible chat
+  disconnect cancels the run that request owns, with stream true or false,
+  by the same path as the native cancel (#92; RM14, RM17, RM19, RM20,
+  AC12). A native events disconnect still leaves the run untouched.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried
