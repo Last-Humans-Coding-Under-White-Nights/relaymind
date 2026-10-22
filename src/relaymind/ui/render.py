@@ -254,7 +254,25 @@ def _operation(op: Mapping[str, Any]) -> str:
     return (
         f'<li class="op {_t(op["status"])}"><strong>{_t(op["tool_name"])}</strong> '
         f'<span class="status">{_t(op["status"])}</span>{replay}{_branch(op)}, '
-        f"{_t(op['duration_ms'])} ms, source {_t(op['source_ref'])}{error}{data}</li>"
+        f"{_duration(op)}, source {_t(op['source_ref'])}"
+        f"{_reference(op)}{error}{data}</li>"
+    )
+
+
+def _duration(op: Mapping[str, Any]) -> str:
+    ms = op["duration_ms"]
+    return "duration not recorded" if ms is None else f"{_t(ms)} ms"
+
+
+def _reference(op: Mapping[str, Any]) -> str:
+    """A result stored by reference, with its size (spec 0.30 section 9)."""
+    ref = op.get("result_ref")
+    if not ref:
+        return ""
+    kept = "" if op["result_retained"] else "; the stored result is not retained"
+    return (
+        f"<p>Result stored by reference: {_t(ref['artifact_id'])}, "
+        f"{_t(ref['size_bytes'])} bytes{kept}</p>"
     )
 
 
