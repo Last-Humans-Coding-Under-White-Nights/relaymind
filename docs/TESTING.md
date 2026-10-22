@@ -202,8 +202,10 @@ starts its own llama-server.
   external half ran live once through the harness below
   (`--second-external-model`): the same file with only
   `[external_model] model` changed, between two models of one provider.
-  Under spec 0.29 that is not a second compatible endpoint; the AC08
-  external swap needs `--second-external-base-url` (#109).
+  Under spec 0.29 that is not a second compatible endpoint. The AC08
+  external swap ran live with `--second-external-base-url` (#109), from
+  Z.ai international to Zhipu bigmodel.cn, both `glm-4.6`; `EVIDENCE.md`
+  records it.
 
 - AC09 and the request part of AC16, deterministic (issue #22, spec 0.14
   section 7.1): `pytest tests/test_chat_request.py` checks the parameter
@@ -386,9 +388,8 @@ their results are in [`EVIDENCE.md`](EVIDENCE.md).
 
 - The M3 to M5 scenarios ran live once, on Apple Silicon macOS only,
   with one external provider ([`EVIDENCE.md`](EVIDENCE.md)).
-- AC08 is not closed. The local swap runs live (#90), and the external
-  swap ran live between two models of one provider (#88); a second
-  provider has not been run (#109).
+- AC08 is closed by the live local swap (#90) and the live external
+  swap from Z.ai to bigmodel.cn (#109), but both endpoints are Zhipu's (international and mainland China platforms), so a second vendor's API is not covered.
 - The browser test of the page script (#89) uses model doubles and a
   disposable sandbox. The one live UI session is a run of the harness,
   not a test of the page against live output.

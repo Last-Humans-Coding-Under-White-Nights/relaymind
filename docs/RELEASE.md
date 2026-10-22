@@ -42,6 +42,7 @@ Q8_0 (plus Q4_K_M for the AC08 local swap). Details are in
 |------|------|--------|
 | 2026-10-20, 2026-10-21 | M1 smoke tests (macOS and native x86-64 Windows), M2 routing probe and local traces | `docs/evidence/2026-10-2*-m1-*`, `…-m2-*` |
 | 2026-10-22 | AC08 local swap, Q8_0 to Q4_K_M (#90) | `docs/evidence/2026-10-22-ac08-local-trace-*` |
+| 2026-10-22 | AC08 external swap, Z.ai to bigmodel.cn, both `glm-4.6` (#109): the swap passed; all 195 gateway checks of the run held, 9 model checks failed. Both endpoints are Zhipu's, so a second vendor's API is not covered | `docs/evidence/2026-10-22-live-acceptance-ac08-external-apple-m1*` |
 | 2026-10-22 | M3 to M5 live acceptance through `relaymind serve --config`, with Z.ai `glm-4.6` (#88, #104): all 90 gateway checks held, 9 model checks failed | `docs/evidence/2026-10-22-live-acceptance-apple-m1*.json` |
 | 2026-10-22 | Correctness corpus, all 52 cases in auto, external_only, and local_only (156 runs, 246 external calls) (#32) | `docs/evidence/2026-10-22-corpus-apple-m1.json` |
 | 2026-10-22 | Latency benchmark, local path, 120 measured requests (#33) | `docs/evidence/2026-10-22-latency-apple-m1.json` |
@@ -71,8 +72,6 @@ Key measured numbers (Apple M1 only):
 - Reproducible benchmark report from both target platforms (section
   12.3, AC15): **not run** on x86-64 Windows. AC15 stays open (#110,
   which carries the Windows benchmark and launcher start).
-- AC08: the second compatible external endpoint has not been run; only
-  two models of one provider were swapped (#109).
 - Native review of the Chinese material: not done (not required, spec
   section 9).
 - Monetary cost: not estimated (optional in section 12.2; no dated rate

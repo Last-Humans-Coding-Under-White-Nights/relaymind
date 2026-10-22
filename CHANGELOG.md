@@ -58,6 +58,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   machine was available. AC08 stays open: its external swap ran between
   two models of one provider.
 
+- Live AC08 external swap to a second endpoint (#109; RM18, AC08, spec
+  0.29): the live acceptance harness ran with Z.ai international
+  (`https://api.z.ai/api/paas/v4`) and then Zhipu bigmodel.cn
+  (`https://open.bigmodel.cn/api/paas/v4`), both `glm-4.6`, with only the
+  `[external_model]` table changed. The swap passed and every gateway
+  check of the run held; the run is in `docs/EVIDENCE.md`. AC08 is
+  closed. Both endpoints are Zhipu's (international and mainland China
+  platforms), so a second vendor's API is not covered.
 - Second local model artifact and the live AC08 local swap (#90; RM18, AC08,
   spec sections 6 and 12.3): `models/qwen3-0.6b-q4_k_m.manifest.json`
   (Qwen3-0.6B Q4_K_M), generated from the artifact, passed the live
