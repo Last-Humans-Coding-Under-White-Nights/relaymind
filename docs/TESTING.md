@@ -340,7 +340,42 @@ failures (`tests/test_live_acceptance_review.py`,
   and cancel (native and chat disconnect) and restart during a branch. The
   branches overlap in a test that blocks each on the other.
 
+### Evaluation: correctness corpus and latency benchmark (#32, #33)
+
+Deterministic tests over model doubles:
+
+- `pytest tests/test_evaluation_corpus.py`: the frozen corpus has 40
+  English cases in the section 12.2 classes, every required field, valid
+  seeds and patterns, best-effort Chinese versions linked to English
+  cases, no development example among its prompts, and the digest of
+  `evaluation/corpus.v1.lock.json`; a changed case or seed breaks it.
+- `pytest tests/test_evaluation_grading.py`: task success, local
+  completion, tool correctness and schema validity, escalation (auto
+  only), missed mandatory confirmations, permissions, sandbox state, and
+  provider calls, from synthetic traces.
+- `pytest tests/test_evaluation_metrics.py`: nearest-rank p50 and p95,
+  exact numerators and denominators per mode, language, and class,
+  timeouts kept in the denominators, the section 12.3 targets, the 500 ms
+  hypothesis, and the reports.
+- `pytest tests/test_run_corpus_script.py` and
+  `pytest tests/test_latency_benchmark_script.py`: the runners against
+  the launcher's app built from their own config files, over doubles:
+  clarification answers, approve and deny, a wrong call denied, timeouts,
+  the seeded order, the cold and warm-up samples, and the client and
+  trace timings.
+- `pytest tests/test_evaluation_environment.py`: the machine manifest and
+  the runtime log facts (threads, slots, model load time).
+
+The live runs are scripts, not tests: `scripts/run_corpus.py` and
+`scripts/latency_benchmark.py` (see [`scripts/README.md`](../scripts/README.md));
+their results are in [`EVIDENCE.md`](EVIDENCE.md).
+
 ### What is not covered yet
+
+- The correctness corpus and the latency benchmark ran once, on Apple
+  Silicon macOS only (#32, #33). The x86-64 Windows run is open (#110),
+  so AC15 is not closed. The latency benchmark measures the local path
+  only; no external first-transport timing was taken.
 
 - The M3 to M5 scenarios ran live once, on Apple Silicon macOS only,
   with one external provider ([`EVIDENCE.md`](EVIDENCE.md)).

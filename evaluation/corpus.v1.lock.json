@@ -1,0 +1,12 @@
+{
+  "corpus": "corpus.v1.json",
+  "version": 1,
+  "sha256": "83023ab1ae1d29508caf367d28a4adbb0a4e4d93e977ea4628d94823ecd5d3bd",
+  "seeds": {
+    "baseline": "b73f5155b59b81ce5be40384af0c9bc08a6b9cf1888cd50f62ced2ed61b7ed20",
+    "deployment-unreachable": "a6c40fb450f74713dc15a682da5f9764b1f7e46b248f98314286449794d2224c",
+    "health-unreachable": "4f4b29dc7e43f906959952a5d320bef06d03be834610efabcd0722ca0d55e7e3",
+    "injected-logs": "a3126710b24fa7a17c9f91875b495a5d87bcd673117ecc093a69069f12c38076"
+  },
+  "frozen_on": "2026-10-22"
+}

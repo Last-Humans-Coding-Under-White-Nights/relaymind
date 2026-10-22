@@ -80,15 +80,46 @@
   Single pass, sequential: observations, never benchmark results (spec
   12.3). See `docs/TESTING.md` for the scenario list.
 
-## Planned
+- `run_corpus.py` — the correctness corpus runner (#32, spec 0.28
+  section 12.2). It refuses a corpus that no longer matches
+  `evaluation/corpus.v1.lock.json`, starts llama-server from the
+  manifest, and for every case and mode (auto, external_only,
+  local_only) starts a new gateway with `relaymind serve --config` from
+  the case's sandbox seed and permissions, routing cache off. It answers
+  a clarification with the case's answer, approves a confirmation only
+  when the case says approve and the pending call is acceptable, grades
+  the run from its trace (`relaymind.evaluation.grading`), and writes one
+  export with every grade and trace plus a Markdown report with exact
+  numerators and denominators per mode, language, and class. Without an
+  external endpoint only local_only runs.
 
-Evaluation and benchmark scripts (spec section 12):
+  ```bash
+  source ~/.config/relaymind/external.env   # exports the endpoint and the key
+  python scripts/run_corpus.py --out docs/evidence/<date>-corpus-<machine>.json \
+      --external-base-url "$RELAYMIND_EXTERNAL_BASE_URL" \
+      --external-model "$RELAYMIND_EXTERNAL_MODEL" --external-context-limit 128000
+  ```
 
-- Correctness corpus runner: 40 bilingual scenario pairs against frozen
-  fixture snapshots, in auto, external_only, and local_only modes.
-- Latency experiment runner: warmed, short-context, concurrency-one runs;
-  reports p50, p95, sample count, and timeout fraction per platform.
-- Benchmark report generator with the full environment manifest (OS, CPU,
-  GPU, RAM, backend, model hashes, quantization, runtime revisions).
+  `--cases`, `--modes`, and `--languages` run a subset; the export
+  records the selection and whether it is the full corpus.
+- `latency_benchmark.py` — the latency experiment (#33, spec 0.28
+  section 12.2) on the local path: one gateway started with
+  `relaymind serve --config`, routing cache off, no external model,
+  concurrency one. It sends the twelve prompts of
+  `evaluation/latency_prompts.v1.json` over the compatible chat stream:
+  a cold request, three warm-ups, then ten runs per prompt in a seeded
+  random order. First transport event and first answer token come from
+  the client's clock, first model action and first useful content from
+  the trace. Errors and timeouts are kept. The export has the
+  environment manifest (machine, backend devices, runtime log facts,
+  llama-server `/props`, model hashes, revisions, test time), the prefix
+  cache record, every sample, and p50, p95, sample count, and timeout
+  fraction; a Markdown report is written next to it.
 
-Scripts are added together with their tests, following TDD.
+  ```bash
+  python scripts/latency_benchmark.py \
+      --out docs/evidence/<date>-latency-<machine>.json [--seed N]
+  ```
+
+  Both runners reuse the live acceptance harness for the runtime check,
+  the launch plan, and the trace read-back.

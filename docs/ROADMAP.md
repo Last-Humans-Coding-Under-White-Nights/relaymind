@@ -490,9 +490,16 @@ Carried forward, not done in M5:
 
 - Correctness corpus: 40 English scenarios, with best-effort Chinese
   versions reported per language, frozen before comparison (#32;
-  section 12.2, spec 0.7).
+  section 12.2, spec 0.7 and 0.28). Built and run: the frozen corpus,
+  its runner, and one full live run on Apple Silicon macOS (156 runs in
+  three modes, [`EVIDENCE.md`](EVIDENCE.md)). Local completion on the
+  English simple subset is 4/12, below the 80 % target; no mandatory
+  confirmation was missed.
 - Latency experiment on both target platforms; benchmark report with
-  full environment manifest (#33; RM25, section 12.3).
+  full environment manifest (#33; RM25, section 12.3). Built and run on
+  Apple Silicon macOS: p95 first model action 508 ms, so the 500 ms
+  hypothesis is not met there. #33 is closed with the macOS run; the
+  x86-64 Windows run moves to #110, so AC15 is not closed.
 - Second local artifact and the AC08 local swap (#90; RM18, sections 6
   and 12.3): Qwen3-0.6B Q4_K_M has a manifest, passed the live smoke
   suite and the English live skill-and-tool runs, and the live suite ran
@@ -503,7 +510,8 @@ Carried forward, not done in M5:
   `glm-4.5-air` on Z.ai (#88). A second model on the same endpoint is
   not the "second compatible external endpoint" of section 13, so AC08
   stays open until a second provider is run (#109).
-- Closes: AC15 and the release record (section 14).
+- Release record (section 14): [`RELEASE.md`](RELEASE.md).
+- Closes: AC15 (open until the Windows run) and the release record.
 
 ## Out of scope for the prototype
 
