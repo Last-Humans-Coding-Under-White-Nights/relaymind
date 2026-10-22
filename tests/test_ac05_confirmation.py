@@ -766,8 +766,10 @@ def test_a_second_orchestrator_taking_the_slot_mid_approval_does_not_lose_it(tmp
     first one's slot check and before its transaction. The approval must
     survive the 429 and work once the slot is free again.
     """
-    first, waiting, _ = waiting_gateway(tmp_path, *APPROVED_TAIL)
-    second = RunStateMachine(RunStore(tmp_path / "runs.sqlite3", clock=first.clock))
+    first, waiting, events = waiting_gateway(tmp_path, *APPROVED_TAIL)
+    version = first.store.get_run(waiting.run_id).version
+    second_store = RunStore(tmp_path / "runs.sqlite3", clock=first.clock)
+    second = RunStateMachine(second_store)
     other = {}
     machine = first.orchestrator.machine
     real_active = machine.active_run_id
@@ -779,15 +781,22 @@ def test_a_second_orchestrator_taking_the_slot_mid_approval_does_not_lose_it(tmp
         other["run_id"] = run.run_id
         return answer
 
-    monkeypatch.setattr(machine, "active_run_id", check_then_lose_the_slot)
-    with pytest.raises(SlotUnavailableError):
-        decide(first, waiting)
-    monkeypatch.setattr(machine, "active_run_id", real_active)
+    try:
+        monkeypatch.setattr(machine, "active_run_id", check_then_lose_the_slot)
+        with pytest.raises(SlotUnavailableError):
+            decide(first, waiting)
+        monkeypatch.setattr(machine, "active_run_id", real_active)
 
-    assert first.store.get_run(waiting.run_id).state == "waiting_confirmation"
-    assert first.store.get_pending_approval(waiting.run_id) is not None
-    assert "demo-orders-db" in database_ids(first)
-    second.delete_run(other["run_id"])
+        # The rollback left the run, its trace, and the approval as they were.
+        record = first.store.get_run(waiting.run_id)
+        assert record.state == "waiting_confirmation"
+        assert record.version == version
+        assert first.store.events(waiting.run_id) == events
+        assert first.store.get_pending_approval(waiting.run_id) is not None
+        assert "demo-orders-db" in database_ids(first)
+        second.delete_run(other["run_id"])
+    finally:
+        second_store.close()
     outcome = decide(first, waiting)
     assert outcome.state is RunState.COMPLETED
     assert "demo-orders-db" not in database_ids(first)
