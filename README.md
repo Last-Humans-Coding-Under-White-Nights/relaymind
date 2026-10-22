@@ -22,7 +22,8 @@ one command, `relaymind serve --config <file>` (see
 model doubles; live `parallel_demo` runs, a cache-on run, and launcher
 starts with the pinned model are recorded on macOS, and a Windows start
 is still open (#110, M6). M6 (evaluation) has its corpus and latency
-benchmark built and run once on macOS; the Windows run (AC15) is open.
+benchmark built and run once on macOS (#32, #33); the Windows run (AC15)
+is open (#110).
 See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan and the
 open items, and [`CHANGELOG.md`](CHANGELOG.md) for what has landed so

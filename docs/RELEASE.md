@@ -69,8 +69,8 @@ Key measured numbers (Apple M1 only):
 - 500 ms hypothesis, p95 first model action (section 12.1): **not met**
   on Apple M1 (p95 508 ms; 30 of 120 samples had no model action).
 - Reproducible benchmark report from both target platforms (section
-  12.3, AC15): **not run** on x86-64 Windows. AC15 stays open (#33,
-  #110); no Windows launcher start is recorded either (#110).
+  12.3, AC15): **not run** on x86-64 Windows. AC15 stays open (#110,
+  which carries the Windows benchmark and launcher start).
 - AC08: the second compatible external endpoint has not been run; only
   two models of one provider were swapped (#109).
 - Native review of the Chinese material: not done (not required, spec

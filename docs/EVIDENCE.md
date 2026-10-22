@@ -1097,8 +1097,8 @@ The first runs of the spec 0.28 section 12.2 experiment. Both runners
 start the gateway the way an operator does (`relaymind serve --config`)
 and reuse the live acceptance harness for the runtime check, the launch,
 and the trace read-back. These are the section 12.2 measurements for
-this one machine. No Windows run is recorded, so AC15 stays open (#33,
-#110).
+this one machine. No Windows run is recorded, so AC15 stays open
+(#110).
 
 | Field | Value |
 |-------|-------|

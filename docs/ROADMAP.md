@@ -498,8 +498,8 @@ Carried forward, not done in M5:
 - Latency experiment on both target platforms; benchmark report with
   full environment manifest (#33; RM25, section 12.3). Built and run on
   Apple Silicon macOS: p95 first model action 508 ms, so the 500 ms
-  hypothesis is not met there. The x86-64 Windows run is still open
-  (#33, #110), so AC15 is not closed.
+  hypothesis is not met there. #33 is closed with the macOS run; the
+  x86-64 Windows run moves to #110, so AC15 is not closed.
 - Second local artifact and the AC08 local swap (#90; RM18, sections 6
   and 12.3): Qwen3-0.6B Q4_K_M has a manifest, passed the live smoke
   suite and the English live skill-and-tool runs, and the live suite ran
