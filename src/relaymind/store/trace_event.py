@@ -386,7 +386,8 @@ def _check_handoff_payload(payload: Mapping[str, Any]) -> None:
 
     The selected skill (name, version, content_hash) or null, the
     completed operations the envelope carries, the allowed tools, and
-    the measured external request.
+    the measured external request. In degraded mode (spec section 11)
+    the flag and its local cause go together.
     """
     for key in ("skill", "operation_ids", "allowed_tools", "request"):
         if key not in payload:
@@ -417,6 +418,14 @@ def _check_handoff_payload(payload: Mapping[str, Any]) -> None:
             "'request' must be an object with exactly a non-negative integer size,"
             f" a positive integer limit, and a method of {' or '.join(_REQUEST_METHODS)}"
         )
+    # Spec 0.13 section 11: degraded mode and its cause go together.
+    if ("degraded_mode" in payload) != ("local_failure" in payload):
+        raise TraceEventError("'degraded_mode' and 'local_failure' go together")
+    if "degraded_mode" in payload:
+        if payload["degraded_mode"] is not True:
+            raise TraceEventError("'degraded_mode' must be true when present")
+        if not _is_text(payload["local_failure"]):
+            raise TraceEventError("'local_failure' must be non-blank text")
 
 
 def _check_result_reference(payload: Mapping[str, Any]) -> None:
