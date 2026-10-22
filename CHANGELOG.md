@@ -783,6 +783,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   disconnect cancels the run that request owns, with stream true or false,
   by the same path as the native cancel (#92; RM14, RM17, RM19, RM20,
   AC12). A native events disconnect still leaves the run untouched.
+- Specification 0.24 -> 0.25: section 4.4 specifies the bounded parallel
+  workflow (#30; RM14, RM15, RM16, RM22, RM23, AC14). The "not implemented"
+  cause of workflow_unavailable is removed; the workflow runs a local_health
+  branch and an external_checklist branch, joins them, and hands final
+  ownership to a new synthesis call. Section 8 adds the branch field and the
+  workflow summary of terminal events, section 9 the workflow part of the
+  trace, section 12.1 the extra call latency, and section 7.4 the readiness
+  of parallel_demo. The workflow checks room for both external generations
+  before its branches start and again at the join, measures the draft
+  request before parallel_running, and passes the draft to the synthesis
+  as a JSON-encoded data message. abandoned_calls lists only parallel
+  branch calls; restart recovery keeps the branch of a settled operation and
+  writes no workflow object; the trace shows each stage's duration from the
+  terminal workflow object.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried

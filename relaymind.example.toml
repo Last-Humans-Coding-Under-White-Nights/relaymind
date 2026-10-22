@@ -34,6 +34,8 @@ base_url = "http://127.0.0.1:8033"   # the llama-server from models/README.md
 [policy]
 degraded_mode = false
 enabled_workflows = []
+# To run parallel_demo (needs [external_model]):
+# enabled_workflows = ["health-and-diagnostic-checklist"]
 # allowed_modes = ["auto", "local_only", "external_only", "parallel_demo"]
 
 # Optional. Without this table the demo UI is not served. The mode is a

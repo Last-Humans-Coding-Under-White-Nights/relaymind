@@ -297,7 +297,7 @@ Carried forward, not done in M3:
   (#22, #23, #24; RM19, RM20), including the `X-RelayMind-Execution-Mode`
   header that selects auto, local_only, external_only, or parallel_demo
   from a standard chat client (spec 0.4, section 7.1). parallel_demo
-  only has a workflow to run once M5 lands.
+  runs the parallel workflow since M5 (#30).
   #22 is implemented with model doubles (`tests/test_chat_request.py`,
   `tests/test_chat_endpoint.py`, `tests/test_openai_sdk.py`, spec 0.14):
   the two endpoints, the parameter table, the execution mode header and
@@ -320,7 +320,8 @@ Carried forward, not done in M3:
   #25 is implemented with model doubles (`tests/test_native_run_api.py`,
   spec 0.17): the six endpoints, `/healthz` and `/readyz`, Last-Event-ID
   replay that reads the store only, and `parallel_demo` failing with
-  `workflow_unavailable` until #30. In-flight write cancellation is #29.
+  `workflow_unavailable` when its configuration is missing (the workflow
+  itself is #30). In-flight write cancellation is #29.
   #26 is implemented with model doubles (`tests/test_idempotency.py`,
   spec 0.18): `Idempotency-Key` on native creation and chat, stored with
   the run in one transaction, with 409 for a changed payload, the stored
@@ -369,9 +370,8 @@ Carried forward, not done in M4:
   covered by the native cancel tests only. No production backend
   forwards a live provider stream yet (`LiveAnswer` is tested with a
   backend double).
-- `parallel_demo` always fails with `workflow_unavailable`, and
-  `/readyz` never reports it ready, until #30. `cache.hit` execution
-  stays with #31.
+- `cache.hit` execution stays with #31. (`parallel_demo` runs the
+  workflow since #30; see M5.)
 - The UI has no run listing (runs are opened by ID), and the comparison
   pairing is held by the page, not stored.
 - A write in flight at a cancel is recorded as `unknown_outcome` even if
@@ -380,7 +380,16 @@ Carried forward, not done in M4:
 
 ## M5 — Parallel workflow and caching
 
-- The one bounded parallel workflow with read-only branches (#30; RM15).
+- The one bounded parallel workflow with read-only branches (#30; RM14,
+  RM15, RM16, RM22, RM23; spec 0.25 section 4.4): `parallel_demo` runs a
+  local health branch and an external checklist branch, joins them, and
+  hands final ownership to a new external call. Branches are attributable
+  in the trace and the UI, the extra call latency is reported in the
+  terminal event, abandoned calls count in the external usage, and cancel
+  and restart settle both branches and the synthesis. `/readyz` reports
+  `parallel_demo` ready when the workflow is enabled and both models are
+  ready. Implemented with model doubles (`tests/test_parallel_workflow.py`);
+  not yet run against live models, so no latency figure is claimed.
 - Skill/template caching by content hash; routing cache experiments
   behind a flag, off by default (#31; RM24).
 - Operator launcher (#87; RM17, RM18, RM19, RM21, RM23, spec 0.21

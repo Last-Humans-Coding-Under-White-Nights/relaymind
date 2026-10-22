@@ -713,8 +713,10 @@ def test_external_only_records_a_gateway_decision_without_a_generation(tmp_path)
 def test_an_admitted_parallel_workflow_routes_parallel_in_auto(tmp_path):
     """Section 4.4 (spec 0.6): enabled workflow, declaring skill, admitting mode.
 
-    The parallel workflow itself (#30) is not wired into this loop, so the
-    run ends as needs_external with reason parallel_workflow.
+    With no external model configured the workflow cannot run (spec 0.25:
+    its draft and synthesis calls are external), so the run ends as
+    needs_external with reason parallel_workflow, without a handoff. With
+    one, the workflow runs: tests/test_parallel_workflow.py.
     """
     gateway = build_gateway(
         tmp_path,
@@ -730,26 +732,33 @@ def test_an_admitted_parallel_workflow_routes_parallel_in_auto(tmp_path):
     assert executed_tools(events) == []
 
 
-def test_an_admitted_parallel_route_in_parallel_demo_fails_as_workflow_unavailable(tmp_path):
-    """RM15, RM21, section 4.4 (spec 0.17): parallel_demo fails explicitly.
+def test_an_admitted_parallel_route_in_parallel_demo_runs_the_workflow(tmp_path):
+    """RM15, RM21, section 4.4 (spec 0.25): parallel_demo runs the workflow.
 
-    The workflow (#30) is not implemented, so a parallel route in
-    parallel_demo ends as failed with workflow_unavailable, never as a
-    quiet needs_external or a single-actor handoff.
+    The parallel route no longer ends as workflow_unavailable. The full
+    workflow, its branches, and its failures are in
+    tests/test_parallel_workflow.py.
     """
+    answer = (
+        "Observation: staging-api is healthy (checked at 2026-10-20T02:58:00Z).\n\n"
+        "Diagnostic checklist (draft, not log-backed):\n- Check the upstream dependencies."
+    )
     gateway = build_gateway(
         tmp_path,
-        [route_turn("health-and-diagnostic-checklist")],
+        [
+            route_turn("health-and-diagnostic-checklist"),
+            tool_turn("get_service_health", service="staging-api"),
+        ],
         enabled_workflows={"health-and-diagnostic-checklist"},
-        external_turns=[],
+        external_turns=[text_turn("- Check logs."), text_turn(answer)],
     )
     outcome, events = run(
         gateway, "Run the health checklist for staging-api.", execution_mode="parallel_demo"
     )
     assert of_type(events, "route.selected")[0].payload["decision"]["route"] == "parallel"
-    assert_workflow_unavailable(gateway, outcome, events)
-    assert executed_tools(events) == []
-    assert not of_type(events, "handoff.started")
+    assert outcome.state is RunState.COMPLETED
+    assert outcome.error_code is None
+    assert executed_tools(events) == ["get_service_health"]
 
 
 @pytest.mark.parametrize(

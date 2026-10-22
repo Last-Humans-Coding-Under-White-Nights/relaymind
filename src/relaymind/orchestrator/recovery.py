@@ -163,8 +163,19 @@ def _settle(
     }
     if operation["proposal_id"] is not None:
         payload["proposal_id"] = operation["proposal_id"]
+    branch = _branch_of(store, operation)
+    if branch is not None:
+        payload["branch"] = branch
     store.append_event(operation["run_id"], EventType.TOOL_FINISHED, GATEWAY_ACTOR, payload)
     return SettledOperation(operation["operation_id"], result.status.value)
+
+
+def _branch_of(store: RunStore, operation: Mapping[str, Any]) -> str | None:
+    """The workflow branch the operation's tool.started named, if any (spec 0.25 section 8)."""
+    for event in store.events(operation["run_id"], event_type=EventType.TOOL_STARTED):
+        if event.payload.get("operation_id") == operation["operation_id"]:
+            return event.payload.get("branch")
+    return None
 
 
 def model_calls(store: RunStore, run_id: str) -> list[dict[str, Any]]:

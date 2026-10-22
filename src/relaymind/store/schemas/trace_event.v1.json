@@ -60,6 +60,26 @@
       },
       "required": ["call_id", "model", "actor", "purpose"]
     },
+    "workflow_summary": {
+      "type": "object",
+      "properties": {
+        "workflow_id": {"type": "string", "pattern": "\\S"},
+        "branch_wall_ms": {"type": "integer", "minimum": 0},
+        "local_health_ms": {"type": "integer", "minimum": 0},
+        "external_checklist_ms": {"type": "integer", "minimum": 0},
+        "extra_call_ms": {"type": ["integer", "null"], "minimum": 0},
+        "abandoned_calls": {"type": "array", "items": {"type": "string", "pattern": "\\S"}}
+      },
+      "required": [
+        "workflow_id",
+        "branch_wall_ms",
+        "local_health_ms",
+        "external_checklist_ms",
+        "extra_call_ms",
+        "abandoned_calls"
+      ],
+      "additionalProperties": false
+    },
     "settled_operation": {
       "type": "object",
       "properties": {
@@ -388,7 +408,8 @@
                 "additionalProperties": false
               },
               "degraded_mode": {"const": true},
-              "local_failure": {"type": "string", "pattern": "\\S"}
+              "local_failure": {"type": "string", "pattern": "\\S"},
+              "workflow": {"type": "string", "pattern": "\\S"}
             },
             "required": [
               "reason_code",
@@ -404,6 +425,32 @@
             }
           }
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": ["model.started", "model.finished", "tool.proposed", "tool.started", "tool.finished"]
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {"branch": {"enum": ["local_health", "external_checklist", "synthesis"]}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"event_type": {"enum": ["run.completed", "run.failed", "run.cancelled"]}},
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {"payload": {"properties": {"workflow": {"$ref": "#/$defs/workflow_summary"}}}}
       }
     },
     {

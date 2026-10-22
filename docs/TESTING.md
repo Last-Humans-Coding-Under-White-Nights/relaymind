@@ -214,7 +214,8 @@ itself, with the manifest's SHA-256; any other file fails the run.
   alone, resume and cancel with stale, wrong-state, and wrong-token
   cases, the once-only confirmation token, operator policy over the
   execution modes, `local_only` returning `needs_external` with no
-  external call, `parallel_demo` failing with `workflow_unavailable`, and
+  external call, `parallel_demo` failing with `workflow_unavailable` when
+  its configuration is missing, and
   `/healthz` and `/readyz` with explicit model warm state. One test
   reads a live stream over a loopback socket across a clarification. No
   live model is run, so there is no live record.
@@ -246,8 +247,15 @@ itself, with the manifest's SHA-256; any other file fails the run.
 - The demo UI page script (`src/relaymind/ui/static/app.js`) is not run
   by an automated browser test; the tests cover the server contract it
   relies on.
-- `parallel_demo` always fails with `workflow_unavailable` until the
-  parallel workflow (#30) lands, so `/readyz` never reports it ready.
+- The parallel workflow (#30, AC14) is tested with model doubles only
+  (`tests/test_parallel_workflow.py`): both branches and the synthesis,
+  branch attribution in the trace and the UI, provenance of an
+  unavailable service and of the draft label, the extra call latency,
+  abandoned calls in the external usage counts, failure of either branch,
+  and cancel (native and chat disconnect) and restart during a branch. The
+  branches overlap in a test that blocks each on the other. No live model
+  has run the workflow, and the extra call latency is not measured on real
+  hardware.
 - No production backend forwards a live provider stream yet, so the
   mid-stream failure path is tested with a backend double.
 - The launcher (`relaymind serve --config`) is tested with model doubles

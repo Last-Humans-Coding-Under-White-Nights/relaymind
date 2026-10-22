@@ -15,7 +15,8 @@ local model artifact is qualified. The operator starts the gateway with
 one command, `relaymind serve --config <file>` (see
 [Start the gateway](#start-the-gateway)). Chinese support is best-effort
 (spec 0.7): Chinese live results are recorded but are not a gate. M5
-(parallel workflow and caching) and M6 (evaluation) are next. See
+(caching) and M6 (evaluation) are next; the M5 parallel workflow is
+implemented with model doubles. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan and the
 open items, and [`CHANGELOG.md`](CHANGELOG.md) for what has landed so
 far.
@@ -48,10 +49,15 @@ See [`AGENTS.md`](AGENTS.md) for the full contributor workflow.
   timing.
 - Works in English, with best-effort Chinese, on macOS and Windows.
 
-Not built yet: the one bounded parallel workflow and skill caching
-(M5), and the evaluation corpus and latency benchmark (M6). Until the
-workflow exists, the `parallel_demo` execution mode always fails with
-`workflow_unavailable`.
+- Runs one bounded parallel workflow, `health-and-diagnostic-checklist`,
+  in `parallel_demo` mode: the local model reads service health while the
+  external model drafts a diagnostic checklist, then a new external call
+  combines the two. The trace and the UI show each branch and the
+  synthesis call as separate actors, with the extra call latency.
+
+Not built yet: skill caching (M5), and the evaluation corpus and latency
+benchmark (M6). The parallel workflow is covered by deterministic tests
+with model doubles only; no live run is recorded for it.
 
 ## Repository layout
 
@@ -165,9 +171,13 @@ decides which values a caller may use; the trace always shows which
 model answered. `local_only` answers with HTTP 422 and code
 `needs_external` when the local model cannot finish. `parallel_demo`
 works only with the `relaymind` alias and only when operator
-configuration enables the workflow. In this build it always fails with
-`workflow_unavailable`, because the parallel workflow (spec section 4.4)
-is planned for M5.
+configuration enables the workflow (`enabled_workflows =
+["health-and-diagnostic-checklist"]` in the `[policy]` table) and an
+external model is configured. It then runs the parallel workflow (spec
+section 4.4): a local health branch and an external checklist branch,
+joined by a new external call that writes the answer. Without the
+workflow or the external endpoint it fails with `workflow_unavailable`,
+and `/readyz` does not report the mode ready.
 
 ```bash
 curl -i -s http://127.0.0.1:8080/v1/chat/completions \

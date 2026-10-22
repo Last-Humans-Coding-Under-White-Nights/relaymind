@@ -52,7 +52,12 @@ GENERATION_CHARGES: Mapping[str, tuple[str, ...]] = {
     "final": ("local_generations",),
     # Only the entire-run limit and external_generations (section 11).
     "external": (),
+    # The checklist draft of the parallel workflow (spec 0.25, RM15): an
+    # external generation made before the handoff.
+    "draft": (),
 }
+# Purposes that run on the external model.
+EXTERNAL_PURPOSES = ("external", "draft")
 
 # The time limits, kept as floats in the recorded budgets.
 _SECONDS_LIMITS = ("active_seconds", "run_active_seconds", "waiting_seconds", "external_seconds")
@@ -165,8 +170,10 @@ class BudgetMeter:
         self._run = dict.fromkeys(_RUN_LIMITS, 0)
         self._external = False
         self._external_generations = 0
-        # The time limit that bounded the last timed work (remaining_seconds).
-        self._bound: str | None = None
+        # The time limit that bounded the last timed work (remaining_seconds),
+        # kept for local and for external work apart: the parallel workflow
+        # times a local and an external generation at once (spec 0.25).
+        self._bounds: dict[bool, str | None] = {False: None, True: None}
 
     # -- stages ------------------------------------------------------------
 
@@ -182,23 +189,30 @@ class BudgetMeter:
         self._stages += 1
         self._stage_started = self._clock.monotonic()
         self._stage = dict.fromkeys(_STAGE_COUNTERS, 0)
-        self._bound = None
+        self._bounds = {False: None, True: None}
 
     # -- the external stage ---------------------------------------------------
 
     def start_external(self) -> None:
         """Switch to the external phase after a handoff (section 11)."""
         self._external = True
-        self._bound = None
+        self._bounds = {False: None, True: None}
 
-    def external_room(self) -> BudgetExceededError | None:
-        """The limit that stops an external stage from starting, or None.
+    def external_room(
+        self, external_generations: int = 1, local_generations: int = 0
+    ) -> BudgetExceededError | None:
+        """The limit that stops external work from starting, or None.
 
-        An external stage needs one more generation and some active time
-        inside the entire-run limits.
+        An external stage needs one more external generation and some
+        active time inside the entire-run limits. The parallel workflow
+        asks for more before its branches start: the draft and the
+        synthesis, plus the local branch generation (spec 0.25, section 11).
         """
-        if self._run["generations"] + 1 > self.budgets.run_generations:
+        needed = self._run["generations"] + external_generations + local_generations
+        if needed > self.budgets.run_generations:
             return BudgetExceededError("run_generations", self.budgets.run_generations)
+        if self._external_generations + external_generations > self.budgets.external_generations:
+            return BudgetExceededError("external_generations", self.budgets.external_generations)
         if self.active_seconds() >= self.budgets.run_active_seconds:
             return BudgetExceededError("run_active_seconds", self.budgets.run_active_seconds)
         return None
@@ -231,10 +245,10 @@ class BudgetMeter:
         """Active seconds over every stage of the run; waiting is excluded."""
         return self._closed_active + self.elapsed_seconds()
 
-    def _time_bound(self) -> tuple[float, str]:
+    def _time_bound(self, external: bool = False) -> tuple[float, str]:
         """The seconds left under the tighter time limit, and that limit's name."""
         run_left = self.budgets.run_active_seconds - self.active_seconds()
-        if self._external:
+        if self._external or external:
             name, left = "external_seconds", float(self.budgets.external_seconds)
         else:
             name, left = "active_seconds", self.budgets.active_seconds - self.elapsed_seconds()
@@ -242,7 +256,7 @@ class BudgetMeter:
             return run_left, "run_active_seconds"
         return left, name
 
-    def remaining_seconds(self) -> float:
+    def remaining_seconds(self, external: bool = False) -> float:
         """The tighter of the stage and the entire-run time budgets.
 
         In the external phase: external_seconds, or the entire-run time
@@ -251,28 +265,37 @@ class BudgetMeter:
         external generation's bound is fixed, while the run's time left
         keeps shrinking (RM03, RM16).
         """
-        seconds, self._bound = self._time_bound()
+        seconds, self._bounds[external or self._external] = self._time_bound(external)
         return seconds
 
-    def time_exhausted(self) -> BudgetExceededError:
+    def time_exhausted(self, external: bool = False) -> BudgetExceededError:
         """The stop for work that ran out of time: the limit that bounded it."""
-        name = self._bound if self._bound is not None else self._time_bound()[1]
+        key = external or self._external
+        name = self._bounds[key] or self._time_bound(key)[1]
         return BudgetExceededError(name, getattr(self.budgets, name))
 
-    def check_time(self) -> None:
-        """Raise once the stage or the entire-run active time budget is spent."""
-        if not self._external and self.elapsed_seconds() > self.budgets.active_seconds:
+    def check_time(self, external: bool = False) -> None:
+        """Raise once the stage or the entire-run active time budget is spent.
+
+        external is work on the external model before the handoff, such as
+        the draft of the parallel workflow: the per-stage local time limit
+        does not bound it.
+        """
+        if (
+            not (self._external or external)
+            and self.elapsed_seconds() > self.budgets.active_seconds
+        ):
             raise BudgetExceededError("active_seconds", self.budgets.active_seconds)
         if self.active_seconds() > self.budgets.run_active_seconds:
             raise BudgetExceededError("run_active_seconds", self.budgets.run_active_seconds)
 
     # -- counts ------------------------------------------------------------
 
-    def _charge(self, names: tuple[str, ...], run_counter: str) -> None:
-        self.check_time()
+    def _charge(self, names: tuple[str, ...], run_counter: str, external: bool = False) -> None:
+        self.check_time(external)
         # The per-stage limits do not apply to the external stage, but
         # what it uses still counts in the run's usage (RM03, RM16).
-        checked = () if self._external else names
+        checked = () if self._external or external else names
         for name in checked:
             limit = getattr(self.budgets, name)
             if self._stage[name] + 1 > limit:
@@ -292,10 +315,10 @@ class BudgetMeter:
             names = GENERATION_CHARGES[purpose]
         except KeyError:
             raise ValueError(f"unknown generation purpose {purpose!r}") from None
-        external = purpose == "external"
+        external = purpose in EXTERNAL_PURPOSES
         if external and self._external_generations + 1 > self.budgets.external_generations:
             raise BudgetExceededError("external_generations", self.budgets.external_generations)
-        self._charge(names, "generations")
+        self._charge(names, "generations", external)
         if external:
             self._external_generations += 1
 

@@ -288,6 +288,36 @@ def test_policy_reaches_the_orchestrator_and_the_api(tmp_path):
     assert refused.status_code == 403
 
 
+def test_enabling_the_workflow_makes_parallel_demo_ready(tmp_path):
+    """RM15, RM21, spec 0.25 section 7.4: enabled_workflows makes parallel_demo ready."""
+    extra = (
+        EXTERNAL
+        + "\n[policy]\nenabled_workflows = ['health-and-diagnostic-checklist']\n"
+        + "allowed_modes = ['parallel_demo']\n"
+    )
+    external = ScriptedAdapter(turns=[], locality="external")
+    built = build_app(
+        load_config(write_config(tmp_path, extra)),
+        local_adapter=ScriptedAdapter(turns=[]),
+        external_adapter=external,
+    )
+    response = call(built.app, "GET", "/readyz")
+    assert response.status_code == 200
+    assert response.json()["modes"]["parallel_demo"] == {"ready": True, "reason": None}
+    # Without the workflow named, the same gateway reports it not ready.
+    (tmp_path / "bare").mkdir()
+    bare = build_app(
+        load_config(
+            write_config(
+                tmp_path / "bare", EXTERNAL + "\n[policy]\nallowed_modes = ['parallel_demo']\n"
+            )
+        ),
+        local_adapter=ScriptedAdapter(turns=[]),
+        external_adapter=ScriptedAdapter(turns=[], locality="external"),
+    )
+    assert call(bare.app, "GET", "/readyz").status_code == 503
+
+
 def test_real_adapters_are_built_from_the_manifest_and_config(tmp_path):
     """RM18: the local adapter uses the manifest's context size; the external one the file."""
     built = build_app(load_config(write_config(tmp_path, EXTERNAL)))

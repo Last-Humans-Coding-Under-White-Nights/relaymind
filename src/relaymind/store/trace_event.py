@@ -503,7 +503,43 @@ def _check_result_reference(payload: Mapping[str, Any]) -> None:
         raise TraceEventError("result_ref 'truncated' must be a boolean")
 
 
+# Spec 0.25 section 8 (RM15, RM22): the branches of the parallel workflow
+# and the summary its terminal events carry.
+WORKFLOW_BRANCHES: tuple[str, ...] = ("local_health", "external_checklist", "synthesis")
+_BRANCH_EVENTS = (EventType.MODEL_STARTED, EventType.MODEL_FINISHED, *_TOOL_EVENTS)
+_WORKFLOW_MS_FIELDS = ("branch_wall_ms", "local_health_ms", "external_checklist_ms")
+_WORKFLOW_FIELDS = ("workflow_id", *_WORKFLOW_MS_FIELDS, "extra_call_ms", "abandoned_calls")
+_TERMINAL_EVENTS = (EventType.RUN_COMPLETED, EventType.RUN_FAILED, EventType.RUN_CANCELLED)
+
+
+def _check_workflow_fields(event_type: EventType, payload: Mapping[str, Any]) -> None:
+    """The optional branch of a model or tool event, and the workflow of a terminal event."""
+    if event_type in _BRANCH_EVENTS and "branch" in payload:
+        if payload["branch"] not in WORKFLOW_BRANCHES:
+            raise TraceEventError(f"'branch' must be one of {', '.join(WORKFLOW_BRANCHES)}")
+    if event_type is EventType.HANDOFF_STARTED and "workflow" in payload:
+        if not _is_text(payload["workflow"]):
+            raise TraceEventError("'workflow' must be a non-blank string")
+    if event_type in _TERMINAL_EVENTS and "workflow" in payload:
+        summary = check_closed_fields(
+            payload["workflow"], _WORKFLOW_FIELDS, TraceEventError, kind="workflow"
+        )
+        if not _is_text(summary["workflow_id"]):
+            raise TraceEventError("workflow 'workflow_id' must be a non-blank string")
+        for key in _WORKFLOW_MS_FIELDS:
+            if not _is_count(summary[key], 0):
+                raise TraceEventError(f"workflow '{key}' must be a non-negative integer")
+        if summary["extra_call_ms"] is not None and not _is_count(summary["extra_call_ms"], 0):
+            raise TraceEventError("workflow 'extra_call_ms' must be a non-negative integer or null")
+        abandoned = summary["abandoned_calls"]
+        if not _is_array(abandoned) or not all(_is_text(call) for call in abandoned):
+            raise TraceEventError(
+                "workflow 'abandoned_calls' must be an array of non-blank strings"
+            )
+
+
 def _check_payload(event_type: EventType, payload: Mapping[str, Any]) -> None:
+    _check_workflow_fields(event_type, payload)
     if event_type is EventType.RUN_ACCEPTED:
         _check_accepted_payload(payload)
     if event_type is EventType.CLARIFICATION_REQUIRED:

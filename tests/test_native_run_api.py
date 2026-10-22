@@ -1120,14 +1120,39 @@ def test_a_permitted_mode_without_its_model_is_not_ready(tmp_path):
     assert body["modes"]["auto"]["ready"] is True
 
 
-def test_parallel_demo_is_not_ready_while_the_workflow_is_not_implemented(tmp_path):
-    """RM21, RM15: readiness agrees with the run behavior (workflow_unavailable, #30)."""
+def test_parallel_demo_is_ready_when_the_workflow_and_its_external_model_are_available(tmp_path):
+    """RM21, RM15, #30: readiness agrees with the run behavior."""
     gateway = build_gateway(
         tmp_path,
         [],
         external_turns=[],
         enabled_workflows={"health-and-diagnostic-checklist"},
     )
+    app = make_app(
+        gateway, settings=ChatSettings(allowed_modes=frozenset({ExecutionMode.PARALLEL_DEMO}))
+    )
+
+    response = readyz(app)
+    assert response.status_code == 200
+    assert response.json()["modes"]["parallel_demo"] == {"ready": True, "reason": None}
+
+
+def test_parallel_demo_is_not_ready_without_an_enabled_workflow(tmp_path):
+    """RM21, RM15: no enabled workflow means workflow_unavailable, so not ready."""
+    gateway = build_gateway(tmp_path, [], external_turns=[])
+    app = make_app(
+        gateway, settings=ChatSettings(allowed_modes=frozenset({ExecutionMode.PARALLEL_DEMO}))
+    )
+
+    response = readyz(app)
+    assert response.status_code == 503
+    mode = response.json()["modes"]["parallel_demo"]
+    assert mode == {"ready": False, "reason": "no workflow is enabled"}
+
+
+def test_parallel_demo_is_not_ready_without_its_external_model(tmp_path):
+    """RM21, RM15: the workflow needs the external model; its absence is reported."""
+    gateway = build_gateway(tmp_path, [], enabled_workflows={"health-and-diagnostic-checklist"})
     app = make_app(
         gateway, settings=ChatSettings(allowed_modes=frozenset({ExecutionMode.PARALLEL_DEMO}))
     )

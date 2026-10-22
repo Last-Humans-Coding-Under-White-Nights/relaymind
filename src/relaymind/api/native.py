@@ -32,7 +32,6 @@ from relaymind.orchestrator.run_state import (
     WAITING_STATES,
     RunState,
 )
-from relaymind.orchestrator.workflows import PARALLEL_WORKFLOW_IMPLEMENTED
 from relaymind.store import EventType, RunNotFoundError, TraceEvent
 
 __all__ = [
@@ -363,11 +362,8 @@ async def readiness(
     external_ready = external is not None and external.available and external.warm
 
     def reason_not_ready(mode: ExecutionMode) -> str | None:
-        if mode is ExecutionMode.PARALLEL_DEMO:
-            if not PARALLEL_WORKFLOW_IMPLEMENTED:
-                return "the parallel workflow is not implemented in this build"
-            if not orchestrator.enabled_workflows:
-                return "no workflow is enabled"
+        if mode is ExecutionMode.PARALLEL_DEMO and not orchestrator.enabled_workflows:
+            return "no workflow is enabled"
         if (
             mode in (ExecutionMode.EXTERNAL_ONLY, ExecutionMode.PARALLEL_DEMO)
             and not external_ready

@@ -20,6 +20,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from relaymind.store import EventType, RunRecord, RunStore, TraceEvent
+from relaymind.store.trace_event import WORKFLOW_BRANCHES
 
 __all__ = ["build_trace_view", "trace_view_from"]
 
@@ -72,6 +73,7 @@ def trace_view_from(record: RunRecord, events: Sequence[TraceEvent]) -> dict[str
             "effective": accepted_payload.get("effective_execution_mode"),
         },
         "model_calls": model_calls,
+        "workflow": _workflow(events, model_calls, terminal),
         "active_model": _active_model(events, model_calls, terminal),
         "skill": _skill(events),
         "route": _route(events),
@@ -105,6 +107,7 @@ def _model_calls(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
                 "model": event.payload["model"],
                 "actor": event.payload.get("actor", event.actor),
                 "purpose": event.payload.get("purpose"),
+                "branch": event.payload.get("branch"),
                 "finished": done is not None,
                 "duration_ms": None if done is None else done.get("duration_ms"),
                 "finish_reason": None if done is None else done.get("finish_reason"),
@@ -112,6 +115,65 @@ def _model_calls(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
             }
         )
     return calls
+
+
+_WORKFLOW_FIGURES = (
+    "branch_wall_ms",
+    "local_health_ms",
+    "external_checklist_ms",
+    "extra_call_ms",
+    "abandoned_calls",
+)
+# The workflow figure that is each stage's duration.
+_STAGE_FIGURES = {
+    "local_health": "local_health_ms",
+    "external_checklist": "external_checklist_ms",
+    "synthesis": "extra_call_ms",
+}
+
+
+def _workflow(
+    events: Sequence[TraceEvent], calls: Sequence[Mapping[str, Any]], terminal: TraceEvent | None
+) -> dict[str, Any] | None:
+    """The parallel workflow of the run as separate actors, or None (spec 0.25, RM23).
+
+    One stage for each branch that made a model call. The figures,
+    stage durations included, are the terminal event's workflow object,
+    so they are known when the run ends: a branch's time covers its tool
+    run, not only its model calls. Nothing is computed from the clock
+    here. A run that restart recovery ended has no workflow object.
+    """
+    if not any(call["branch"] for call in calls):
+        return None
+    summary: Mapping[str, Any] = {}
+    if terminal is not None and isinstance(terminal.payload.get("workflow"), Mapping):
+        summary = terminal.payload["workflow"]
+    stages = []
+    for branch in WORKFLOW_BRANCHES:
+        own = [call for call in calls if call["branch"] == branch]
+        if not own:
+            continue
+        stages.append(
+            {
+                "branch": branch,
+                "actor": own[0]["actor"],
+                "model": own[0]["model"],
+                "call_ids": [c["call_id"] for c in own],
+                "finished": all(c["finished"] for c in own),
+                "duration_ms": summary.get(_STAGE_FIGURES[branch]),
+                "outcome": own[-1]["error"] or own[-1]["finish_reason"],
+            }
+        )
+    handoffs = _of(events, EventType.HANDOFF_STARTED)
+    workflow_id = summary.get("workflow_id") or next(
+        (h.payload["workflow"] for h in handoffs if "workflow" in h.payload), None
+    )
+    return {
+        "workflow_id": workflow_id,
+        "ended": terminal is not None,
+        "stages": stages,
+        **{key: summary.get(key) for key in _WORKFLOW_FIGURES},
+    }
 
 
 def _active_model(
@@ -146,7 +208,15 @@ def _proposals(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
         {
             **_pick(
                 e.payload,
-                ("proposal_id", "tool_name", "arguments", "model", "admissible", "rejection"),
+                (
+                    "proposal_id",
+                    "tool_name",
+                    "arguments",
+                    "model",
+                    "admissible",
+                    "rejection",
+                    "branch",
+                ),
             ),
             "actor": e.actor,
         }
@@ -160,7 +230,15 @@ def _operations(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
         {
             **_pick(
                 e.payload,
-                ("operation_id", "proposal_id", "tool_name", "model", "attempt", "approval_id"),
+                (
+                    "operation_id",
+                    "proposal_id",
+                    "tool_name",
+                    "model",
+                    "attempt",
+                    "approval_id",
+                    "branch",
+                ),
             ),
             "replayed": bool(e.payload.get("replayed")),
             **_pick(
