@@ -767,6 +767,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   without options records an empty object, and a run stored before this
   revision has no field, which the trace and the demo UI report as not
   recorded. Section 9 adds the options to the run trace.
+- Specification 0.22 -> 0.23: section 5 states that the approval and the
+  execution slot are one store transaction when two gateway processes
+  share a store file (#93; RM10, RM11, RM17). A second process that takes
+  the slot after the first check makes the resume 429 and keeps the
+  approval pending; there is no store lock. A deterministic test covers it.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried

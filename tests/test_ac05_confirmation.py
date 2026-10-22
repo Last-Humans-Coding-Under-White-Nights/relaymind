@@ -34,11 +34,12 @@ from relaymind.orchestrator.handoff import DispatchRevokedError
 from relaymind.orchestrator.local_loop import ApprovalRejectedError, ResumeInputError
 from relaymind.orchestrator.run_state import (
     RunState,
+    RunStateMachine,
     SlotUnavailableError,
     TerminalStateError,
 )
 from relaymind.redaction import REDACTED, Redactor
-from relaymind.store import StaleVersionError
+from relaymind.store import RunStore, StaleVersionError
 from relaymind.store.run_store import utc_iso
 from relaymind.store.trace_event import validate_trace_event
 from relaymind.tools import CallerContext
@@ -752,3 +753,41 @@ def test_confirmation_required_expires_at_is_the_stored_expiry(tmp_path):
     pending = gateway.store.get_pending_approval(waiting.run_id)
     assert required.payload["expires_at"] == utc_iso(pending["expires_at"])
     assert waiting.confirmation.expires_at == pending["expires_at"]
+
+
+# --- two orchestrators over one store file (#93) --------------------------------------
+
+
+def test_a_second_orchestrator_taking_the_slot_mid_approval_does_not_lose_it(tmp_path):
+    """RM10, RM11, RM17, section 5: the slot check and the approval are one store transaction.
+
+    Two processes share one store file; the second has its own store
+    connection and state machine. It takes the execution slot after the
+    first one's slot check and before its transaction. The approval must survive the 429 and work once the
+    slot is free again.
+    """
+    first, waiting, _ = waiting_gateway(tmp_path, *APPROVED_TAIL)
+    second = RunStateMachine(RunStore(tmp_path / "runs.sqlite3", clock=first.clock))
+    other = {}
+    machine = first.orchestrator.machine
+    real_active = machine.active_run_id
+
+    def check_then_lose_the_slot():
+        answer = real_active()
+        run = second.create()
+        second.transition(run.run_id, run.version, RunState.ROUTING)
+        other["run_id"] = run.run_id
+        return answer
+
+    machine.active_run_id = check_then_lose_the_slot
+    with pytest.raises(SlotUnavailableError):
+        decide(first, waiting)
+    machine.active_run_id = real_active
+
+    assert first.store.get_run(waiting.run_id).state == "waiting_confirmation"
+    assert first.store.get_pending_approval(waiting.run_id) is not None
+    assert "demo-orders-db" in database_ids(first)
+    second.delete_run(other["run_id"])
+    outcome = decide(first, waiting)
+    assert outcome.state is RunState.COMPLETED
+    assert "demo-orders-db" not in database_ids(first)
