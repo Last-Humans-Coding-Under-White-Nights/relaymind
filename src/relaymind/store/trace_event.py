@@ -193,10 +193,14 @@ def _is_array(value: object) -> bool:
     return isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray)
 
 
-_ANSWER_OPTION_RANGES: dict[str, Callable[[float], bool]] = {
-    "max_completion_tokens": lambda v: v > 0,
-    "temperature": lambda v: 0 <= v <= 2,
-    "top_p": lambda v: 0 < v <= 1,
+def _is_finite_number(value: object) -> bool:
+    return type(value) in (int, float) and math.isfinite(value)
+
+
+_ANSWER_OPTION_CHECKS: dict[str, Callable[[Any], bool]] = {
+    "max_completion_tokens": lambda v: _is_count(v, 1),
+    "temperature": lambda v: _is_finite_number(v) and 0 <= v <= 2,
+    "top_p": lambda v: _is_finite_number(v) and 0 < v <= 1,
 }
 
 
@@ -244,14 +248,12 @@ def _check_accepted_payload(payload: Mapping[str, Any]) -> None:
 
 def _check_answer_options(options: object) -> None:
     """The answer options a run applied, only the keys that apply (spec 0.22 section 8)."""
-    if not isinstance(options, Mapping) or not set(options) <= set(_ANSWER_OPTION_RANGES):
+    if not isinstance(options, Mapping) or not set(options) <= set(_ANSWER_OPTION_CHECKS):
         raise TraceEventError(
-            f"'answer_options' must be an object with only {', '.join(_ANSWER_OPTION_RANGES)}"
+            f"'answer_options' must be an object with only {', '.join(_ANSWER_OPTION_CHECKS)}"
         )
     for name, value in options.items():
-        is_int = name == "max_completion_tokens"
-        valid_type = type(value) is int if is_int else type(value) in (int, float)
-        if not valid_type or not math.isfinite(value) or not _ANSWER_OPTION_RANGES[name](value):
+        if not _ANSWER_OPTION_CHECKS[name](value):
             raise TraceEventError(f"'answer_options' has an invalid '{name}'")
 
 
