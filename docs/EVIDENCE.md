@@ -1319,8 +1319,21 @@ change; it does not cover a second vendor's API.
 | Credentials | Only the variable names are in the launch files and the export; a scan of the four export files and the tracked tree found no key |
 | Test time | 2026-10-22, 14:24 to 14:29 UTC |
 | Python | 3.14.7, OpenAI SDK 3.36.0, Playwright Chromium |
-| Application | branch `feat/issue-109-ac08-second-provider` at `7b56f19`, clean tree (the export records `head` and `dirty: false`). The branch was then rebased onto the rebased #111 base; `7b56f19` became `62b66f1`, with an identical tree |
+| Application | branch `feat/issue-109-ac08-second-provider` at `7b56f19` ("Pass the configured endpoints to the swap checks in the lifecycle and review tests of the live harness"), clean tree (the export records `head` and `dirty: false`). That commit is rewritten when the branch is rebased; the note below says what changed since |
 | Configuration | Default budgets (RM03); one llama-server shared by eight gateway starts in sequence, each with its own run store and sandbox copy |
+
+What changed in `src/` and `scripts/` after the recorded run (checked
+with `git diff` from `7b56f19`): the gateway code is unchanged. The
+review fixes of #111 changed the evaluation corpus, metrics, and
+environment modules and the corpus and latency scripts; the live
+harness uses none of them (it imports only
+`relaymind.evaluation.grading`, which is unchanged). The review fixes
+of #109 changed `scripts/live_acceptance.py`: a failed skill package or
+budget check now shows both compared values, `config_difference` also
+names keys of other tables that differ, and incomplete `--external-*`
+options get their own error first. For a swap that passes, a rerun
+would only add the compared values to the detail of those two checks.
+The harness was not rerun after these changes.
 
 Command, from the repository root with the b11785 directory first on
 PATH, `~/.config/relaymind/external.env` sourced, and
