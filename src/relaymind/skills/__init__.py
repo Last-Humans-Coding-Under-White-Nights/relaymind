@@ -4,6 +4,7 @@ registered completion predicates (RM06, RM07; spec section 9).
 See AGENTS.md (repository map) and docs/ARCHITECTURE.md.
 """
 
+from relaymind.skills.cache import ContentCache
 from relaymind.skills.registry import (
     MANIFEST_FILENAME,
     SKILL_FILENAME,
@@ -20,6 +21,7 @@ from relaymind.skills.registry import (
 )
 
 __all__ = [
+    "ContentCache",
     "MANIFEST_FILENAME",
     "SKILL_FILENAME",
     "SKILL_MANIFEST_SCHEMA",
