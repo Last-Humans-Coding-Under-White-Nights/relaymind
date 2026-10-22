@@ -279,6 +279,9 @@ class RunOutcome:
     decision: RouteDecision | None = None
     # The limit that stopped a failed run, when one did (RM03, section 11).
     budget: str | None = None
+    # The client-owned calls a completed run returned to its caller (RM08);
+    # the gateway executed none of them.
+    tool_calls: tuple[ToolCall, ...] = ()
 
 
 # The attribute that marks an exception raised by a run's own work (section 11).
@@ -785,6 +788,11 @@ class _Run:
     # -- the run ---------------------------------------------------------------
 
     async def execute(self) -> RunOutcome:
+        self.open()
+        return await self._guarded(self._route)
+
+    def open(self) -> None:
+        """Take the execution slot, record run.accepted, and enter routing."""
         if self.o.machine.active_run_id() is not None:
             raise SlotUnavailableError("another run holds the execution slot (section 11)")
         # Section 5: from here on restart recovery must not run.
@@ -815,7 +823,6 @@ class _Run:
         except BaseException as exc:
             self._abort(exc)
             raise
-        return await self._guarded(self._route)
 
     async def _guarded(self, route: Callable[[], Awaitable[Routing]]) -> RunOutcome:
         """Drive the run; any unexpected exception ends it (RM17, section 5)."""

@@ -24,6 +24,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Client-owned tools alias (#24; RM08, RM19, AC10; spec 0.16 section 7.2):
+  `relaymind-client-tools` now has a backend (`ClientToolsChat`,
+  `relaymind.orchestrator.client_loop`). Each request is its own run with
+  no routing generation: the gateway records its own decision (local, or
+  external in `external_only`). The model is offered only the functions
+  the caller supplied, narrowed by `tool_choice` (`none` offers none, a
+  named function offers only that one), and the gateway installs and
+  executes no tool: the trace has `tool.proposed` for the exposed call and
+  never `tool.started` or `tool.finished`. A generation is admissible as
+  non-blank text, or as a call to an offered function whose arguments pass
+  the supplied schema (the strict RM09 check); `required` and a named
+  function need a call and `none` needs text. Invalid output gets one
+  repair generation, then an escalation. One call is exposed per response,
+  and a call ID is kept unless it was used earlier in the conversation.
+  The reply is buffered, so external fallback happens only before anything
+  is exposed, `local_only` returns 422 `needs_external`, and `external_only`
+  skips the local model. A function whose `parameters` is not a valid JSON
+  Schema, or has a `$ref` that does not resolve inside it, is
+  `invalid_request`; the gateway never retrieves a remote schema.
+  Invalid output with no room left for the repair stops as
+  `invalid_output`, the repair exchange is measured against the context
+  limit before the next generation, `max_completion_tokens` bounds every
+  generation of the run, and an external stage that stops on invalid
+  output records `invalid_output`. `RunOutcome.tool_calls` carries the
+  calls.
+  `tests/test_client_owned_tools.py` covers the round trip (in process and
+  with the OpenAI SDK over a loopback socket), the no-execution rule, the
+  modes, and the ownership-mixing rejections on both aliases. This backend
+  buffers its generation, so it does not return a `LiveAnswer`; no
+  production backend forwards a live provider stream yet (spec section
+  7.3 now says so). No live model is run.
 - Streaming contract (#23; RM20, AC09; spec 0.15 section 7.3): the
   stream of the managed alias is the replay of the run's `answer.delta`
   events, so content is append-only and nothing but framing is added. A
