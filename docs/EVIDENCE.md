@@ -5,7 +5,7 @@ when its deterministic tests pass and its live checks appear here
 ([`ROADMAP.md`](ROADMAP.md)). Entries are what actually ran, on the machine
 named, with the pinned artifact and runtime; nothing here is a benchmark
 result in the sense of spec section 12.3 except the corpus and latency
-entry at the end, which is the section 12.2 experiment on one machine.
+entry (#32, #33), which is the section 12.2 experiment on one machine.
 
 Rules for an entry: name the machine (OS version, CPU, GPU or backend, RAM),
 the llama.cpp build, the manifest, the exact command, and the result,
@@ -16,7 +16,8 @@ Status (2026-10-22): the entries below cover M1 and M2, the AC08 local
 swap (#90), the first live runs of the M3 to M5 acceptance
 scenarios through `relaymind serve --config` with a live external
 endpoint (#88, #104), and the first correctness corpus and latency
-benchmark runs (#32, #33), all on Apple Silicon macOS except the M1 Windows
+benchmark runs (#32, #33), and the AC08 external swap to a second
+endpoint (#109), all on Apple Silicon macOS except the M1 Windows
 smoke test. No launcher start on Windows is recorded. See [`ROADMAP.md`](ROADMAP.md)
 for what is carried forward.
 
@@ -1055,7 +1056,8 @@ AC08 is not marked closed here. The local half is the #90 entry above.
 Spec 0.29 (#109) has since settled it: a second compatible endpoint has
 its own base URL, so this swap does not count for AC08. The harness now
 records such a swap as `external_model_swap` (RM18); the export of this
-run keeps the name `ac08_external_swap` it was written with.
+run keeps the name `ac08_external_swap` it was written with. The swap
+to a second endpoint is the #109 entry below.
 
 ### Findings
 
@@ -1289,3 +1291,96 @@ either way for them. Per label, p95 first model action was 505 ms
   `/health` (model load 660 ms by the runtime's log clock), the gateway
   1.198 s to `/healthz`. The cold request (`lat-01`): first model
   action 1026 ms, first answer token 3419 ms, completion 3420 ms.
+
+## 2026-10-22 — AC08 external swap to a second endpoint (#109), Apple Silicon macOS
+
+The external half of AC08 under spec 0.29: one gateway configuration,
+then a second start where only the `[external_model]` table changes to a
+second compatible endpoint with its own base URL and its own credential
+variable. The harness is the one in the #88 entry, run once more in
+full with the second endpoint options; the swap compares the
+`external_only` runs of the `external` and `external-second` launches.
+
+Both endpoints belong to one vendor, Zhipu: Z.ai is its international
+platform and `open.bigmodel.cn` its mainland China platform, on
+different hosts. The same key works on both and was given to the
+second launch through its own variable. So this run shows a switch
+between two compatible endpoints with different base URLs and no code
+change; it does not cover a second vendor's API.
+
+| Field | Value |
+|-------|-------|
+| Machine | Apple M1, 8 GiB RAM, macOS 27.0.1, Metal backend |
+| Runtime | Official b11785 macOS arm64 archive (`0.7.0-dev (build 11785, commit 8baabd53b)`), first on PATH |
+| Local artifact | `models/qwen3-0.6b-q8_0.manifest.json`: Qwen3-0.6B Q8_0, SHA-256 `9465e63a…bb031`, verified before launch |
+| llama-server | `--ctx-size 8192 --jinja --reasoning off --reasoning-format deepseek` from the manifest; 0.97 s from launch to the first `/health` 200 |
+| First endpoint | Z.ai international, `https://api.z.ai/api/paas/v4`, `glm-4.6`, context limit 128000, credential in `RELAYMIND_EXTERNAL_API_KEY` |
+| Second endpoint | Zhipu bigmodel.cn, `https://open.bigmodel.cn/api/paas/v4`, `glm-4.6`, context limit 128000, credential in `RELAYMIND_SECOND_EXTERNAL_API_KEY` (the same key as the first, exported from it in the shell of the harness) |
+| Credentials | Only the variable names are in the launch files and the export; a scan of the four export files and the tracked tree found no key |
+| Test time | 2026-10-22, 14:24 to 14:29 UTC |
+| Python | 3.14.7, OpenAI SDK 3.36.0, Playwright Chromium |
+| Application | branch `feat/issue-109-ac08-second-provider` at `7b56f19`, clean tree (the export records `head` and `dirty: false`) |
+| Configuration | Default budgets (RM03); one llama-server shared by eight gateway starts in sequence, each with its own run store and sandbox copy |
+
+Command, from the repository root with the b11785 directory first on
+PATH, `~/.config/relaymind/external.env` sourced, and
+`export RELAYMIND_SECOND_EXTERNAL_API_KEY="$RELAYMIND_EXTERNAL_API_KEY"`:
+
+```bash
+python scripts/live_acceptance.py \
+    --out docs/evidence/2026-10-22-live-acceptance-ac08-external-apple-m1.json \
+    --external-base-url https://api.z.ai/api/paas/v4 --external-model glm-4.6 \
+    --external-context-limit 128000 \
+    --second-external-base-url https://open.bigmodel.cn/api/paas/v4 \
+    --second-external-model glm-4.6 --second-external-context-limit 128000
+```
+
+Raw exports:
+[`2026-10-22-live-acceptance-ac08-external-apple-m1.json`](evidence/2026-10-22-live-acceptance-ac08-external-apple-m1.json)
+(launch files, launch output, `/readyz`, every scenario's checks and
+observations, and the full trace of every run), the two routing cache
+statistics exports (`…-stats-routing-cache-off.json`,
+`…-stats-routing-cache-on.json`), and the UI screenshot (`…-ui.png`).
+
+The AC08 swap, `ac08_external_swap` (AC08, RM18): **passed**, 5 of 5
+gateway checks and 1 of 1 model check.
+
+| Check | Result |
+|-------|--------|
+| Both runs have exactly one admission event | held |
+| Both runs offered the same skill packages (names, versions, content hashes) | held |
+| Both runs had the same budgets | held |
+| Each run's model calls name its own configured model | held: `glm-4.6` in both traces |
+| The two launch files differ only in the `[external_model]` table | held: `base_url` and `api_key_env` changed, nothing else (per-launch paths and port left out) |
+| Both external configurations completed the run | held |
+
+- `different_base_urls` is true in the export, so the result counts for
+  AC08 (spec 0.29); a swap at one base URL would be recorded as
+  `external_model_swap`.
+- Z.ai run (`run_36f57325…`): two `glm-4.6` calls (7.8 s and 5.2 s),
+  `get_service_health` executed, answered that staging-api is healthy
+  with the fixture time; 13.0 s active.
+- bigmodel.cn run (`run_25aaf371…`): two `glm-4.6` calls (5.7 s and
+  6.1 s), the same tool, the same answer; 11.9 s active.
+- What the trace shows: the model name, the skill packages and budgets
+  of the run. The trace has no base URL field, so the provider of each
+  run is shown by the launch file of the gateway that wrote that run's
+  store, and each launch file is in the export. Both runs name the same
+  model, so the model check cannot tell the two endpoints apart; the
+  launch files can.
+
+The rest of the run, a second single pass of the #88 scenarios on the
+current code: all 195 gateway checks held, and 9 of 52 model checks
+failed and are findings, not passes: AC05 approve (the local model
+proposed revision 1 instead of the listed 3, and the run ended
+`needs_external`), AC06 through managed logs on the local model (it
+called `get_latest_deployment`, not `get_recent_logs`), the Chinese
+health prompt in both routing cache rounds with the cache off and on
+(`invalid_output`), AC02 (after the handoff the run ended
+`external_failed`; the fourth `glm-4.6` call took 30.0 s), and
+`parallel_demo` (the local branch spent its active time budget and the
+run ended `needs_external`). These are single-pass observations.
+
+AC08 is closed with this run and the #90 local swap, with the caveat
+above: both external endpoints are Zhipu's, so another vendor's API has
+not been run.
