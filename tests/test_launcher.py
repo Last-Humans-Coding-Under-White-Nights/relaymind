@@ -12,12 +12,13 @@ from api_helpers import call
 from gateway_helpers import build_gateway
 from helpers import ACCEPTED_PAYLOAD, BASELINE, REPO_ROOT, ScriptedAdapter
 from launcher_helpers import toml_path, write_config
+from relaymind import launcher
 from relaymind.adapters.chat_completions import ChatCompletionsAdapter
 from relaymind.adapters.llamacpp import LlamaCppAdapter
 from relaymind.launcher import LaunchError, build_app, load_config, main
 from relaymind.orchestrator.local_loop import LocalOrchestrator
 from relaymind.orchestrator.run_state import RunState
-from relaymind.store import RunStore
+from relaymind.store import RunStore, RunStoreError
 from relaymind.store.trace_event import EventType
 
 EXTERNAL = (
@@ -201,23 +202,35 @@ def test_unusable_run_store_stops_startup(tmp_path, kind):
         build_app(load_config(write_config(tmp_path)), **doubles())
 
 
-def test_store_is_closed_when_a_later_startup_step_fails(tmp_path, monkeypatch):
-    """Section 14.1: a refused start leaves no open store connection behind."""
-    closed = []
-    original = RunStore.close
+@pytest.mark.parametrize("step", ["recover_after_restart", "replace", "create_app", "Launched"])
+def test_store_is_closed_when_a_later_startup_step_fails(tmp_path, monkeypatch, step):
+    """RM17, section 14.1: every failed startup after opening the store closes it."""
+    config = load_config(write_config(tmp_path, "\n[ui]\nmode = 'double'\n"))
+    stores = []
 
-    def spy(self):
-        closed.append(1)
-        original(self)
+    def open_store(path):
+        store = RunStore(path)
+        stores.append(store)
+        return store
 
-    def boom(self):
-        raise RuntimeError("unexpected")
+    failure = RuntimeError("startup failed")
 
-    monkeypatch.setattr(RunStore, "close", spy)
-    monkeypatch.setattr(LocalOrchestrator, "recover_after_restart", boom)
-    with pytest.raises(RuntimeError):
-        build_app(load_config(write_config(tmp_path)), **doubles())
-    assert closed
+    def boom(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(launcher, "RunStore", open_store)
+    target = LocalOrchestrator if step == "recover_after_restart" else launcher
+    monkeypatch.setattr(target, step, boom)
+    try:
+        with pytest.raises(RuntimeError) as raised:
+            build_app(config, **doubles())
+        assert raised.value is failure
+        (store,) = stores
+        with pytest.raises(RunStoreError, match="closed"):
+            store.events("unused-run")
+    finally:
+        for store in stores:
+            store.close()
 
 
 def test_ipv6_loopback_address_is_printed_as_a_valid_url(tmp_path):
@@ -368,16 +381,42 @@ def test_startup_error_exits_2_with_one_message_and_no_server(tmp_path):
     assert "Traceback" not in message
 
 
-@pytest.mark.parametrize("extra", [["--api-key", "sk-x"], ["--api-key=sk-x"], ["sk-x"]])
-def test_credentials_are_never_a_command_line_option(tmp_path, capsys, extra):
-    """RM12, section 14.1: the command accepts only --config and never echoes a refused value."""
+@pytest.mark.parametrize(
+    "extra", [["--api-key", "sk-x"], ["--api-key=sk-x"], ["sk-x"], ["--sk-x"], ["--help=sk-x"]]
+)
+@pytest.mark.parametrize("position", ["after", "before", "alone"])
+def test_credentials_are_never_a_command_line_option(tmp_path, capsys, caplog, extra, position):
+    """RM12, section 14.1: refused values are never echoed, in any argument position."""
+    command = ["serve", "--config", str(write_config(tmp_path))]
+    argv = {"after": command + extra, "before": extra + command, "alone": extra}[position]
     with pytest.raises(SystemExit) as raised:
-        main(["serve", "--config", str(write_config(tmp_path)), *extra])
+        main(argv)
     assert raised.value.code == 2
     captured = capsys.readouterr()
-    assert "sk-x" not in captured.out
-    assert "sk-x" not in captured.err
+    assert "sk-x" not in captured.out + captured.err + caplog.text
     assert "--config" in captured.err
+    assert not (tmp_path / "runs.sqlite3").exists()
+
+
+def test_config_path_is_not_echoed_when_serve_is_missing(capsys):
+    """RM12, section 14.1: a rejected config path is also an untrusted argument."""
+    with pytest.raises(SystemExit) as raised:
+        main(["--config", "private-config.toml"])
+    assert raised.value.code == 2
+    captured = capsys.readouterr()
+    assert "private-config.toml" not in captured.out + captured.err
+    assert "--config" in captured.err
+
+
+@pytest.mark.parametrize("argv", [["--help"], ["serve", "--help"]])
+def test_command_help_is_available_without_starting_the_gateway(capsys, argv):
+    """RM19, section 14.1: help succeeds without configuration or opening the server."""
+    with pytest.raises(SystemExit) as raised:
+        main(argv)
+    assert raised.value.code == 0
+    captured = capsys.readouterr()
+    assert "usage:" in captured.out and "serve" in captured.out
+    assert captured.err == ""
 
 
 def test_missing_external_credential_does_not_stop_startup_or_leak(tmp_path, monkeypatch):

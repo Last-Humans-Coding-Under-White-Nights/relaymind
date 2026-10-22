@@ -21,7 +21,7 @@ import tomllib
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from fastapi import FastAPI
 
@@ -357,28 +357,37 @@ def build_app(
             degraded_mode=config.degraded_mode,
         )
         report = orchestrator.recover_after_restart()
+        ui = None if config.ui is None else replace(config.ui, fixtures=sandbox)
+        app = create_app(
+            orchestrator=orchestrator,
+            client_tools=ClientToolsChat(orchestrator),
+            settings=config.chat,
+            native=config.native,
+            ui=ui,
+        )
+        return Launched(app=app, orchestrator=orchestrator, recovered=len(report.runs))
     except RecoveryError as exc:
         store.close()
         raise LaunchError(f"restart recovery failed: {exc}") from exc
     except BaseException:
         store.close()
         raise
-    ui = None if config.ui is None else replace(config.ui, fixtures=sandbox)
-    app = create_app(
-        orchestrator=orchestrator,
-        client_tools=ClientToolsChat(orchestrator),
-        settings=config.chat,
-        native=config.native,
-        ui=ui,
-    )
-    return Launched(app=app, orchestrator=orchestrator, recovered=len(report.runs))
 
 
 # -- the command --------------------------------------------------------------------
 
 
+class _ArgumentParser(argparse.ArgumentParser):
+    """Keep argparse diagnostics from echoing untrusted argument values (RM12)."""
+
+    def error(self, message: str) -> NoReturn:
+        # Both this parser and its subparsers use this handler, including
+        # errors argparse raises before returning any parsed arguments.
+        super().error("invalid arguments: use relaymind serve --config PATH")
+
+
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _ArgumentParser(
         prog="relaymind", description="The RelayMind gateway.", allow_abbrev=False
     )
     commands = parser.add_subparsers(dest="command", required=True)
@@ -392,10 +401,7 @@ def _parser() -> argparse.ArgumentParser:
 def _parse(argv: list[str] | None) -> argparse.Namespace:
     """Parse the command line without echoing a refused argument (it may be a credential)."""
     parser = _parser()
-    args, extra = parser.parse_known_args(argv)
-    if extra:
-        parser.error("unrecognized arguments: the command accepts only --config PATH")
-    return args
+    return parser.parse_args(argv)
 
 
 def _out(line: str) -> None:
