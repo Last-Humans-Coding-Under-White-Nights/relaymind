@@ -61,6 +61,7 @@ import sys
 import tempfile
 import threading
 import time
+import tomllib
 import uuid
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import ExitStack
@@ -1274,32 +1275,39 @@ async def ac10_client_tools_external(api: Api, result: Result) -> None:
     await _check_external_only(api, result)
 
 
+def swap_identity(
+    first: "ExternalEndpoint", second: "ExternalEndpoint"
+) -> tuple[str, tuple[str, ...]]:
+    """The result name and IDs of a swap: only a second base URL counts for AC08 (spec 0.29)."""
+    if first.base_url != second.base_url:
+        return "ac08_external_swap", ("AC08", "RM18")
+    return "external_model_swap", ("RM18",)
+
+
 def ac08_external_swap(
     first: Result,
     second: Result,
     *,
     traces: Mapping[str, Sequence[Mapping[str, Any]]],
     configs: Mapping[str, str],
-    endpoints: Mapping[str, Mapping[str, str]],
+    endpoints: Mapping[str, "ExternalEndpoint"],
 ) -> Result:
     """AC08, external half: the same gateway and skills with a second external configuration.
 
     first and second are the external_only results of two launches whose
     files differ only in the [external_model] table (and per-launch paths
     and port); configs and endpoints map each launch name to its file
-    text and its configured endpoint (base_url, model, api_key_env).
-    Only a second base URL is a second compatible endpoint (spec 0.29);
-    a swap at one base URL is recorded as external_model_swap, not AC08.
+    text and its ExternalEndpoint. A swap at one base URL is recorded as
+    external_model_swap, not as AC08 (swap_identity).
     """
-    pair = [endpoints[first.launch], endpoints[second.launch]]
-    different = pair[0]["base_url"] != pair[1]["base_url"]
-    name, acceptance = (
-        ("ac08_external_swap", ("AC08", "RM18"))
-        if different
-        else ("external_model_swap", ("RM18",))
+    endpoint_a, endpoint_b = endpoints[first.launch], endpoints[second.launch]
+    result = Result(
+        *swap_identity(endpoint_a, endpoint_b), launch=f"{first.launch}+{second.launch}"
     )
-    result = Result(name, acceptance, launch=f"{first.launch}+{second.launch}")
-    result.observations.update(endpoints=pair, different_base_urls=different)
+    result.observations.update(
+        endpoints=[_endpoint_record(endpoint_a), _endpoint_record(endpoint_b)],
+        different_base_urls=endpoint_a.base_url != endpoint_b.base_url,
+    )
     runs = [first.run_ids[:1], second.run_ids[:1]]
     if not all(runs):
         result.error = "a launch made no external_only run"
@@ -1333,16 +1341,21 @@ def ac08_external_swap(
     result.check(
         "each run's model calls name its own configured external model",
         GATEWAY,
-        seen == [[endpoint["model"]] for endpoint in pair],
+        seen == [[endpoint_a.model], [endpoint_b.model]],
         seen,
     )
-    lines = [_config_lines(configs[first.launch]), _config_lines(configs[second.launch])]
-    changed = sorted(set(lines[0]) ^ set(lines[1]))
-    result.observations["config_difference"] = [line for _, line in changed]
+    tables = [_launch_tables(configs[first.launch]), _launch_tables(configs[second.launch])]
+    changed = sorted(t for t in {*tables[0], *tables[1]} if tables[0].get(t) != tables[1].get(t))
+    external_a, external_b = (t.get("external_model", {}) for t in tables)
+    result.observations["config_difference"] = {
+        key: [external_a.get(key), external_b.get(key)]
+        for key in sorted({*external_a, *external_b})
+        if external_a.get(key) != external_b.get(key)
+    }
     result.check(
         "the two files differ only in the [external_model] table",
         GATEWAY,
-        changed and all(table == "external_model" for table, _ in changed),
+        changed == ["external_model"],
         changed,
     )
     result.check(
@@ -1354,15 +1367,22 @@ def ac08_external_swap(
     return result
 
 
-def _config_lines(text: str) -> list[tuple[str, str]]:
-    """A launch file's lines with their table, without the per-launch paths and port."""
-    lines, table = [], ""
-    for line in text.splitlines():
-        if line.startswith("["):
-            table = line.strip("[]")
-        elif not line.startswith(("port = ", "path = ", "roots = ", "seed = ", "work_dir = ")):
-            lines.append((table, line))
-    return lines
+# The keys gateway_config fills per launch (paths and port), left out of the comparison.
+PER_LAUNCH_KEYS = {
+    "server": ("port",),
+    "store": ("path",),
+    "skills": ("roots",),
+    "sandbox": ("seed", "work_dir"),
+}
+
+
+def _launch_tables(text: str) -> dict[str, dict[str, Any]]:
+    """A launch file's tables, without the per-launch paths and port."""
+    tables = tomllib.loads(text)
+    for table, keys in PER_LAUNCH_KEYS.items():
+        for key in keys:
+            tables.get(table, {}).pop(key, None)
+    return tables
 
 
 # -- scenarios: native replay and cancel (AC11, AC12) -----------------------------------
@@ -1678,6 +1698,8 @@ class ExternalEndpoint:
     base_url: str
     model: str
     context_limit: int
+    # The environment variable that holds the credential; the files name only this.
+    key_env: str = EXTERNAL_KEY_ENV
 
 
 def _toml(value: object) -> str:
@@ -1695,7 +1717,6 @@ def gateway_config(
     port: int,
     routing_cache: bool = False,
     external: ExternalEndpoint | None = None,
-    key_env: str = EXTERNAL_KEY_ENV,
     workflows: Sequence[str] = (),
     modes: Sequence[str] = LOCAL_MODES,
     ui: bool = False,
@@ -1736,7 +1757,7 @@ def gateway_config(
             f"base_url = {_toml(external.base_url)}",
             f"model = {_toml(external.model)}",
             f"context_limit = {external.context_limit}",
-            f"api_key_env = {_toml(key_env)}",
+            f"api_key_env = {_toml(external.key_env)}",
         ]
     if ui:
         lines += ["[ui]", 'mode = "live"']
@@ -1866,7 +1887,6 @@ class LaunchPlan:
     description: str
     routing_cache: bool = False
     external: ExternalEndpoint | None = None
-    key_env: str = EXTERNAL_KEY_ENV
     workflows: tuple[str, ...] = ()
     modes: tuple[str, ...] = LOCAL_MODES
     ui: bool = False
@@ -1899,7 +1919,7 @@ def launch_plans(
     with only its [external_model] table changed to the second endpoint.
     """
     unreachable = ExternalEndpoint(
-        f"http://127.0.0.1:{closed_port}/v1", "unreachable-stand-in", 32768
+        f"http://127.0.0.1:{closed_port}/v1", "unreachable-stand-in", 32768, UNREACHABLE_KEY_ENV
     )
     plans = [
         LaunchPlan(
@@ -1934,7 +1954,6 @@ def launch_plans(
             "investigate-performance allowed to prepare locally, and an external endpoint on "
             "a closed loopback port: a stand-in that always fails, not an external model.",
             external=unreachable,
-            key_env=UNREACHABLE_KEY_ENV,
             local_prep=True,
             env={UNREACHABLE_KEY_ENV: "not-a-credential"},
         ),
@@ -1972,8 +1991,7 @@ def launch_plans(
             poisoned=True,
         )
     )
-    if second is not None and swap_not_run_reason(external, second, environ) is None:
-        key_env = second_key_env(external, second)
+    if second is not None and environ.get(second.key_env):
         plans.append(
             replace(
                 external_plan,
@@ -1981,42 +1999,36 @@ def launch_plans(
                 scenarios=("external_only",),
                 description=f"As external, with [external_model] base_url = {second.base_url}, "
                 f"model = {second.model}, context_limit = {second.context_limit}, "
-                f"api_key_env = {key_env}.",
+                f"api_key_env = {second.key_env}.",
                 external=second,
-                key_env=key_env,
             )
         )
     return plans
 
 
-def second_key_env(external: ExternalEndpoint, second: ExternalEndpoint) -> str:
-    """The credential variable of the second endpoint: its own unless it is the same base URL."""
-    return EXTERNAL_KEY_ENV if second.base_url == external.base_url else SECOND_EXTERNAL_KEY_ENV
-
-
-def swap_not_run_reason(
-    external: ExternalEndpoint | None,
-    second: ExternalEndpoint | None,
-    environ: Mapping[str, str],
-) -> str | None:
-    """Why the AC08 swap launch cannot run, or None when it can (given the external launch)."""
+def swap_not_run_reason(second: ExternalEndpoint | None) -> str:
+    """Why the swap launch did not run beside the external launch."""
     if second is None:
         return "no --second-external-model was given"
-    if external is not None and not environ.get(second_key_env(external, second)):
-        return f"{SECOND_EXTERNAL_KEY_ENV} is not set, so the second endpoint cannot be called"
-    return None
+    return f"{second.key_env} is not set, so the second endpoint cannot be called"
 
 
 def second_endpoint(
     args: argparse.Namespace, external: ExternalEndpoint | None
 ) -> ExternalEndpoint | None:
-    """The second external endpoint of the options; base URL and limit default to the first's."""
+    """The second external endpoint of the options.
+
+    Base URL and context limit default to the first endpoint's. A second
+    base URL reads its credential from its own variable (spec 0.29).
+    """
     if external is None or not args.second_external_model:
         return None
+    base_url = args.second_external_base_url or external.base_url
     return ExternalEndpoint(
-        args.second_external_base_url or external.base_url,
+        base_url,
         args.second_external_model,
         args.second_external_context_limit or external.context_limit,
+        external.key_env if base_url == external.base_url else SECOND_EXTERNAL_KEY_ENV,
     )
 
 
@@ -2208,7 +2220,6 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
                     port=_free_port(),
                     routing_cache=plan.routing_cache,
                     external=plan.external,
-                    key_env=plan.key_env,
                     workflows=plan.workflows,
                     modes=plan.modes,
                     ui=plan.ui,
@@ -2240,7 +2251,7 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
             launches.append(record)
             configs[plan.name] = record["config"]
             if plan.external is not None:
-                endpoints[plan.name] = _endpoint_record(plan.external, plan.key_env)
+                endpoints[plan.name] = plan.external
             results += plan_results
             run_ids = [run_id for r in plan_results for run_id in r.run_ids]
             traces.update(_traces(plan_dir / "runs.sqlite3", run_ids))
@@ -2252,8 +2263,13 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
         results += not_run_external(external, environ=os.environ)
         launched = {plan.name for plan in plans}
         if "external" in launched and "external-second" not in launched:
-            reason = swap_not_run_reason(external, second, os.environ)
-            results.append(Result("ac08_external_swap", ("AC08", "RM18"), reason=reason))
+            name, acceptance = (
+                swap_identity(external, second)
+                if second
+                else ("ac08_external_swap", ("AC08", "RM18"))
+            )
+            reason = swap_not_run_reason(second)
+            results.append(Result(name, acceptance, reason=reason))
         swap = {r.launch: r for r in results if r.name == "external_only"}
         if {"external", "external-second"} <= launched:
             # Keep the planned comparison visible even if a prerequisite
@@ -2295,12 +2311,8 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
                 "cold_start_seconds": round(cold_start, 3),
             },
             **runtime.model_record(),
-            "external_endpoint": None
-            if external is None
-            else _endpoint_record(external, EXTERNAL_KEY_ENV),
-            "second_external_endpoint": None
-            if external is None or second is None
-            else _endpoint_record(second, second_key_env(external, second)),
+            "external_endpoint": external and _endpoint_record(external),
+            "second_external_endpoint": second and _endpoint_record(second),
             "launches": launches,
             "summary": {
                 r.name if r.launch is None else f"{r.launch}/{r.name}": r.status for r in results
@@ -2313,9 +2325,14 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
         return document
 
 
-def _endpoint_record(endpoint: ExternalEndpoint, key_env: str) -> dict[str, Any]:
+def _endpoint_record(endpoint: ExternalEndpoint) -> dict[str, Any]:
     """An endpoint for the export: the credential's variable name, never its value."""
-    return {"base_url": endpoint.base_url, "model": endpoint.model, "api_key_env": key_env}
+    return {
+        "base_url": endpoint.base_url,
+        "model": endpoint.model,
+        "context_limit": endpoint.context_limit,
+        "api_key_env": endpoint.key_env,
+    }
 
 
 def _command() -> str:
@@ -2375,8 +2392,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
     external_args = (args.external_base_url, args.external_model, args.external_context_limit)
-    second_args = (args.second_external_base_url, args.second_external_context_limit)
-    if any(second_args) and not args.second_external_model:
+    second_options = args.second_external_base_url or args.second_external_context_limit
+    if second_options and not args.second_external_model:
         parser.error("the --second-external options need --second-external-model")
     if args.second_external_model and not all(external_args):
         parser.error("--second-external-model needs the external endpoint options")
