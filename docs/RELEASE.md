@@ -1,13 +1,14 @@
 # Release record
 
-The release record of spec section 14 (spec 0.28). It keeps four things
+The release record of spec section 14 (spec 0.30). It keeps four things
 apart: what is implemented, what the deterministic tests show, what was
 measured live, and which targets are unmet or not measured. A passing
 model-double test is never a live result, and a live result on one
 machine is never a result for another (section 12.1).
 
-State as of 2026-10-22, branch `feat/issue-32-33-evaluation` (stacked on
-#107). Nothing here is a production reliability claim (section 12.3).
+State as of 2026-10-23, branch `feat/issue-109-ac08-second-provider`
+(on master after #111). Nothing here is a production reliability claim
+(section 12.3).
 
 ## Implemented behavior
 

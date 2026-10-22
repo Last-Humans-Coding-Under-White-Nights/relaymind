@@ -445,7 +445,8 @@ Carried forward, not done in M4:
 - Closes: AC13, AC14.
 
 Status (2026-10-22): **M5 closed** (PRs #97, #95, #96, #99, #100, #101,
-and #102, spec 0.21 to 0.27). The operator launcher (#87), the recorded
+and #102, spec 0.21 to 0.27). The GitHub milestone is closed
+(2026-10-23), with all 16 of its issues closed. The operator launcher (#87), the recorded
 answer options (#91), the approval resume race (#93), the chat
 disconnect cancel (#92), the parallel workflow (#30), the caching policy
 (#31), and the browser test of the page script (#89) are merged. AC13
