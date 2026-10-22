@@ -1108,6 +1108,7 @@ this one machine. No Windows run is recorded, so AC15 stays open (#33,
 | llama-server | `--ctx-size 8192 --jinja --reasoning off --reasoning-format deepseek` from the manifest; `n_ctx` 8192, 4 slots, 4 threads (runtime log); default sampling from `/props`: temperature 0.8, top_k 40, top_p 0.95, min_p 0.05 (the gateway sets no answer options on these runs) |
 | External endpoint | Z.ai international, `https://api.z.ai/api/paas/v4`, `glm-4.6`, context limit 128000; region not published by the provider. The credential was in `RELAYMIND_EXTERNAL_API_KEY`; no file or export contains it |
 | Python | 3.14.7 |
+| Application | Both runs were made on this branch before it was rebased onto #107's review fixes (`2f26da6`). The commits named below became `1c641ea` (for `c3aa77a`) and `af12dde` (for `68ae4c3`) after that rebase. The rebase changed only `scripts/live_acceptance.py` (its failure handling and cleanup) and its tests; `src/`, `evaluation/`, and the two runners are identical |
 
 ### Correctness corpus (#32)
 
