@@ -23,7 +23,7 @@ _LOADED = "llama_server: model loaded"
 
 def _run(*argv: str) -> str | None:
     try:
-        result = subprocess.run(argv, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(argv, capture_output=True, text=True, errors="replace", timeout=30)
     except (OSError, subprocess.TimeoutExpired):
         return None
     return result.stdout.strip() if result.returncode == 0 else None

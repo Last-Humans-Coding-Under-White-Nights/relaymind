@@ -6,8 +6,11 @@ parameters, runtime and application revisions, external endpoint region
 if known, and test time. Cold startup is reported with model load time.
 """
 
+import sys
+
 import pytest
 
+from relaymind.evaluation import environment
 from relaymind.evaluation.environment import machine_manifest, parse_runtime_log
 
 LOG = """\
@@ -53,3 +56,9 @@ def test_the_machine_manifest_names_the_section_12_2_fields():
     for key in ("os", "os_version", "machine", "cpu", "cpu_count", "ram_bytes", "gpu", "python"):
         assert key in manifest
     assert manifest["cpu_count"] >= 1
+
+
+def test_command_output_that_does_not_decode_is_kept_with_replacements():
+    """A system tool may print bytes the locale cannot decode; the manifest still builds."""
+    script = "import sys; sys.stdout.buffer.write(b'\\xff\\xfe GPU')"
+    assert environment._run(sys.executable, "-c", script).endswith(" GPU")
