@@ -13,7 +13,8 @@ status (the completion predicate), and zero external calls in the trace
 Run explicitly with: pytest -m live tests/test_local_loop_live.py
 Set RELAYMIND_TRACE_OUT=<file.json> to write the full traces, the
 warm-up run included, for docs/EVIDENCE.md. Nothing is written
-otherwise.
+otherwise. RELAYMIND_LIVE_MANIFEST selects another manifest (AC08; see
+tests/test_llamacpp_live_smoke.py); the export names the manifest used.
 """
 
 import asyncio
@@ -25,7 +26,14 @@ from pathlib import Path
 
 import pytest
 
-from helpers import BASELINE, ScriptedAdapter, make_demo_skills
+from helpers import (
+    BASELINE,
+    LIVE_MANIFEST_ENV,
+    REPO_ROOT,
+    ScriptedAdapter,
+    live_manifest_path,
+    make_demo_skills,
+)
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
 from relaymind.orchestrator.run_state import RunState
@@ -41,7 +49,6 @@ from relaymind.tools.sandbox import (
 from test_llamacpp_live_smoke import (  # noqa: F401 - shared live fixtures
     adapter_settings,
     manifest,
-    require_llama_server,
     server,
 )
 
@@ -134,24 +141,31 @@ def _write_export(artifact) -> None:
     target = os.environ.get(TRACE_ENV)
     if not target:
         return
+    selected = os.environ.get(LIVE_MANIFEST_ENV)
+    prefix = f"{LIVE_MANIFEST_ENV}={selected} " if selected else ""
+    manifest_path = live_manifest_path(os.environ)
     export = {
         "kind": "relaymind.live_local_trace",
         "note": "Live single-pass traces; observations, not benchmark results (spec 12.3).",
-        "command": f"{TRACE_ENV}={target} pytest -m live tests/test_local_loop_live.py",
+        "command": f"{prefix}{TRACE_ENV}={target} pytest -m live tests/test_local_loop_live.py",
         "machine": {
             "platform": platform.platform(),
             "machine": platform.machine(),
             "python": platform.python_version(),
         },
         "runtime_banner": _runtime_banner(),
+        "manifest": manifest_path.resolve().as_posix(),
         "model_file": artifact.file_name,
+        "model_sha256": artifact.file_sha256,
+        "quantization": artifact.quantization,
         "runs": _records,
     }
     # Skill roots are recorded as absolute paths; keep the checkout's own
     # location out of a file that is committed.
-    text = json.dumps(export, indent=2, ensure_ascii=False).replace(
-        str(Path(__file__).resolve().parent.parent), "<repo>"
-    )
+    text = json.dumps(export, indent=2, ensure_ascii=False)
+    # JSON escapes Windows backslashes; the manifest uses portable slashes.
+    text = text.replace(json.dumps(str(REPO_ROOT), ensure_ascii=False)[1:-1], "<repo>")
+    text = text.replace(REPO_ROOT.as_posix(), "<repo>")
     path = Path(target)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text + "\n", encoding="utf-8")

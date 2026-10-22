@@ -9,17 +9,30 @@ mismatch is an explicit failure, never a silent substitution.
 Regenerate a manifest with `scripts/gen_model_manifest.py` (see
 `scripts/README.md`).
 
-| Manifest | Model | Status |
-|----------|-------|--------|
-| `qwen3-0.6b-q8_0.manifest.json` | Qwen3-0.6B Q8_0 | Candidate. Becomes the default only after the English tool tests; Chinese results are reported but do not block the choice (spec section 6). |
+| Manifest | Model and source | Status |
+|----------|------------------|--------|
+| `qwen3-0.6b-q8_0.manifest.json` | Qwen3-0.6B Q8_0, from `Qwen/Qwen3-0.6B-GGUF` | Pinned candidate, used by the live suite by default. Becomes the default only after the English tool tests; Chinese results are reported but do not block the choice (spec section 6). |
+| `qwen3-0.6b-q4_k_m.manifest.json` | Qwen3-0.6B Q4_K_M, from `unsloth/Qwen3-0.6B-GGUF` | Second qualified local artifact, for the AC08 swap (#90). Not the default. |
+| `qwen3-0.6b-q4_0.manifest.json` | Qwen3-0.6B Q4_0, from `ggml-org/Qwen3-0.6B-GGUF` | Not qualified: it failed the thinking-mode smoke check (#90). Kept so the recorded run names a real file. |
 
-This is the only local artifact qualified for runtime execution by
-the M1 smoke/protocol checks and M2 live skill-and-tool runs recorded
-in [`docs/EVIDENCE.md`](../docs/EVIDENCE.md). It remains a candidate
-for the default model until the M6 English tool evaluation passes
-(spec section 6). AC08 asks for a swap to a second qualified local
-model, so it stays open until a second manifest is added here and
-qualified ([`docs/ROADMAP.md`](../docs/ROADMAP.md)).
+The Q8_0 artifact is qualified for runtime execution by the M1
+smoke/protocol checks and M2 live skill-and-tool runs recorded in
+[`docs/EVIDENCE.md`](../docs/EVIDENCE.md). It remains a candidate for
+the default model until the M6 English tool evaluation passes (spec
+section 6).
+
+The Qwen repository publishes only the Q8_0 file, so both Q4 artifacts
+come from other publishers of the same model. They are Q4 quantizations
+of Qwen3-0.6B, labeled as such, never as Q8_0 (spec section 12.3); their
+GGUF metadata differs from the Q8_0 file
+([`docs/EVIDENCE.md`](../docs/EVIDENCE.md)). Q4_K_M was qualified on
+Apple Silicon macOS only. To run the live suite against another
+manifest, set `RELAYMIND_LIVE_MANIFEST`
+([`docs/TESTING.md`](../docs/TESTING.md)).
+
+Download each GGUF from its manifest's `source_url` at
+`source_revision` into `models/`, for example
+`https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/<source_revision>/Qwen3-0.6B-Q4_K_M.gguf`.
 
 ## Runtime and reasoning controls
 

@@ -37,6 +37,19 @@ To use the pinned GGUF from another location, set
 `RELAYMIND_SMOKE_MODEL=<path>`. The file must be the pinned artifact
 itself, with the manifest's SHA-256; any other file fails the run.
 
+The live suite runs against `models/qwen3-0.6b-q8_0.manifest.json` by
+default. Relative `RELAYMIND_LIVE_MANIFEST` paths are resolved from the
+repository root, regardless of the current directory; absolute paths are
+also accepted. Set `RELAYMIND_LIVE_MANIFEST=<manifest path>` to run it against
+another manifest, for example the second local artifact
+`models/qwen3-0.6b-q4_k_m.manifest.json` (AC08). The suite then checks
+that manifest's runtime banner, verifies its artifact (from `models/`,
+or from `RELAYMIND_SMOKE_MODEL`), and launches llama-server with its
+launch settings. No code changes between the two runs. The variable
+plays the part of `local_model.manifest` in the launcher config
+(`relaymind serve --config`), which the live suite does not use: it
+starts its own llama-server.
+
 ### Acceptance and contract tests (M2 to M5)
 
 - AC01, deterministic: `pytest tests/test_ac01_local_health.py` runs a
@@ -171,11 +184,23 @@ itself, with the manifest's SHA-256; any other file fails the run.
   traces name their own models and are otherwise equal: routing, tool
   proposals, results, handoff content, and the request the external
   model received. The adapter layer is `tests/test_model_substitution.py`.
-  There is no live AC08 variant: only one local artifact has a manifest
-  (`models/`, spec section 6), so a swap to a second qualified artifact
-  cannot be run yet. The second local model in the deterministic test is
-  a configuration value, not a qualified artifact, so AC08 stays open
-  (`docs/ROADMAP.md`).
+  In this test the second local model is a configuration value.
+- AC08, live (#90): the local swap runs the same live suite twice, first
+  with the default manifest (Qwen3-0.6B Q8_0), then with
+  `RELAYMIND_LIVE_MANIFEST=models/qwen3-0.6b-q4_k_m.manifest.json`
+  (Qwen3-0.6B Q4_K_M), on the same runtime build, code, and skill root:
+
+  ```bash
+  RELAYMIND_TRACE_OUT=a.json pytest -m live
+  RELAYMIND_LIVE_MANIFEST=models/qwen3-0.6b-q4_k_m.manifest.json \
+      RELAYMIND_TRACE_OUT=b.json pytest -m live
+  ```
+
+  `tests/test_local_loop_live.py` checks that every model call in a run
+  names the configured artifact, and the export names the manifest, so
+  each trace shows which model ran. `EVIDENCE.md` records both runs. The
+  external half of the swap is covered by the deterministic test only:
+  no live external endpoint has been run (#88).
 
 - AC09 and the request part of AC16, deterministic (issue #22, spec 0.14
   section 7.1): `pytest tests/test_chat_request.py` checks the parameter
@@ -278,8 +303,9 @@ itself, with the manifest's SHA-256; any other file fails the run.
   13). The missing M5 live runs (AC13 and AC14) are tracked in
   [#104](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/104)
   for M6.
-- AC08 is not closed: only one local artifact is qualified, so the swap
-  to a second qualified local model cannot run.
+- AC08 is not closed. The local swap runs live (#90), but the external
+  swap uses scripted endpoints only (#49); no live external endpoint has
+  been run (#88).
 - The browser test of the page script (#89) uses model doubles and a
   disposable sandbox; it is not a live UI session (#88).
 - No live model has run the parallel workflow (AC14), and the extra

@@ -17,8 +17,8 @@ of their acceptance scenarios (AC02, AC05 to AC07, AC09 to AC14) is
 recorded here yet. The missing M5 live evidence, including AC13 and
 AC14, is tracked in
 [#104](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/104)
-for M6. AC08 has no live entry, because only one local artifact is
-qualified. See [`ROADMAP.md`](ROADMAP.md) for what is carried forward.
+for M6. The AC08 local swap (#90) is recorded at the end of this file.
+See [`ROADMAP.md`](ROADMAP.md) for what is carried forward.
 
 ## 2026-10-20 — M1 live smoke test, Apple Silicon macOS
 
@@ -755,3 +755,119 @@ Observations, not conclusions:
   routing generations took 350 to 497 ms.
 - No live clarification (AC03) or invalid-proposal (AC04) run is
   recorded. Both are checked with model doubles only.
+
+## 2026-10-22 — Second local artifact and the AC08 local swap (#90), Apple Silicon macOS
+
+The same live suite (`tests/test_llamacpp_live_smoke.py` and
+`tests/test_local_loop_live.py`) was run against three manifests, one
+after the other, on the same machine, runtime, code, and skill root.
+Only `RELAYMIND_LIVE_MANIFEST` changed between runs. The Q8_0 run is
+configuration A of the AC08 swap and the Q4_K_M run is configuration B.
+Q4_0 was tried first and is recorded because it failed.
+
+| Field | Value |
+|-------|-------|
+| Machine | Apple M1, 8 GiB RAM, macOS 27.0.1 (build 26A434), Metal backend |
+| Runtime | Official b11785 macOS arm64 archive (`0.7.0-dev (build 11785, commit 8baabd53b)`, AppleClang 21.0.0.21000101), SHA-256 `55729a3b…b28dc` verified against `models/README.md` before use, put first on PATH (the Homebrew build 11669 on this machine was not used) |
+| Python | 3.14.7, pytest 9.1.1 |
+| Launch | derived from each manifest, identical in all three: `--ctx-size 8192 --jinja --reasoning off --reasoning-format deepseek` |
+| Application | branch `feat/issue-90-second-local-model` (on #105): the Q8_0 and Q4_0 runs used the code of `e62c5d3`, the Q4_K_M run that of `4576c3a`, which only adds the Q4_K_M manifest and lists it for the default suite. Each run used these files before they were committed |
+| Configuration | Default budgets (RM03), temperature 0, a recording external double that is not wired and received no request |
+
+| Manifest | Artifact | Source and revision | SHA-256 (verified before launch) |
+|----------|----------|---------------------|---------------------------------|
+| `models/qwen3-0.6b-q8_0.manifest.json` | Qwen3-0.6B Q8_0 | `Qwen/Qwen3-0.6B-GGUF` `23749fef` | `9465e63a…bb031` |
+| `models/qwen3-0.6b-q4_k_m.manifest.json` | Qwen3-0.6B Q4_K_M | `unsloth/Qwen3-0.6B-GGUF` `50968a44` | `ac2d9771…d524a` |
+| `models/qwen3-0.6b-q4_0.manifest.json` | Qwen3-0.6B Q4_0 | `ggml-org/Qwen3-0.6B-GGUF` `13ac0662` | `da2572f1…417d4` |
+
+Each SHA-256 also matches the LFS object id the source repository
+lists for that file at that revision. The two Q4 manifests were
+generated from the downloaded files with `scripts/gen_model_manifest.py`.
+
+Commands (from the repository root):
+
+```bash
+RELAYMIND_TRACE_OUT=docs/evidence/2026-10-22-ac08-local-trace-q8_0-apple-m1.json \
+    pytest -m live -v -s tests/test_llamacpp_live_smoke.py tests/test_local_loop_live.py
+RELAYMIND_LIVE_MANIFEST=models/qwen3-0.6b-q4_k_m.manifest.json \
+    RELAYMIND_TRACE_OUT=docs/evidence/2026-10-22-ac08-local-trace-q4_k_m-apple-m1.json \
+    pytest -m live -v -s tests/test_llamacpp_live_smoke.py tests/test_local_loop_live.py
+RELAYMIND_LIVE_MANIFEST=models/qwen3-0.6b-q4_0.manifest.json \
+    RELAYMIND_TRACE_OUT=docs/evidence/2026-10-22-ac08-local-trace-q4_0-apple-m1.json \
+    pytest -m live -v -s tests/test_llamacpp_live_smoke.py tests/test_local_loop_live.py
+```
+
+Raw exports:
+[`q8_0`](evidence/2026-10-22-ac08-local-trace-q8_0-apple-m1.json),
+[`q4_k_m`](evidence/2026-10-22-ac08-local-trace-q4_k_m-apple-m1.json),
+[`q4_0`](evidence/2026-10-22-ac08-local-trace-q4_0-apple-m1.json). Each
+names its manifest, artifact file, SHA-256, and quantization.
+
+Results:
+
+| Check | Q8_0 (A) | Q4_K_M (B) | Q4_0 |
+|-------|----------|------------|------|
+| Smoke: non-thinking answer, no reasoning | passed (`pong`) | passed (`pong`) | passed (`pong`) |
+| Smoke: thinking answer, reasoning kept out of the answer | passed (`pong`) | passed (`pong`) | **failed**: no answer text |
+| Smoke: tool proposal | passed, `get_service_health` `{"service": "staging-api"}` | passed, same | passed, same |
+| Smoke: local token count equals the runtime count (en, zh, en-tools, zh-tools) | 4 passed | 4 passed | 4 passed |
+| AC01 live, Is staging-api healthy right now? | completed, 2053 ms | completed, 1694 ms | completed, 1522 ms |
+| AC01 live, staging-api 现在健康吗？ | **failed**, final answer refused by the predicate | **failed**, same shape | **failed**, routing produced no function call |
+| AC01 live, Check the health of payments-api. | completed, 2527 ms | completed, 2269 ms | completed, 2173 ms |
+| AC01 live, 帮我检查一下 payments-api 的健康状态。 | completed, 2675 ms | completed, 2268 ms | completed, 2232 ms |
+| Total | 10 passed, 1 failed in 29.33 s | 10 passed, 1 failed in 18.55 s | 9 passed, 2 failed in 18.59 s |
+
+Times are active time per run (single pass, after one warm-up run), not
+latency results (spec 12.3).
+
+The AC08 local swap (configuration A to configuration B):
+
+- Same code and skill packages. Both exports record the same
+  `skills_offered` (six packages, version 0.1.1, identical content
+  hashes) and the same skill root `<repo>/skills` in every
+  `run.accepted`. The run commands differ only in
+  `RELAYMIND_LIVE_MANIFEST`. No source or live-test file changed between
+  run A and run B: the files `4576c3a` adds are the Q4_K_M manifest and
+  the default-suite check that lists it.
+- Each trace names its own model. Every `model.started` and every
+  `model_calls` entry names `Qwen3-0.6B-Q8_0.gguf` in run A and
+  `Qwen3-0.6B-Q4_K_M.gguf` in run B, and the test asserts it.
+- Zero external calls in every run of both configurations (RM01).
+- The routing decisions and tool proposals were the same in both runs
+  (local, check-service-health, one `get_service_health` call with the
+  requested service, the same decision language). One routing argument
+  differed: for the Chinese payments-api prompt the model's own
+  `language` argument was `zh` on Q8_0 and `en` on Q4_K_M; the decision
+  language comes from the conversation (zh) in both. The answer wording
+  differs, which is expected from a different artifact.
+- Only the local half of AC08 ran live. The external half (a second
+  external endpoint) is covered by `tests/test_ac08_model_substitution.py`
+  with scripted endpoints; no live external endpoint was run, because no
+  external credential is available on this machine.
+
+Findings, not conclusions:
+
+- Q4_0 thinking mode: the 512-token limit of the smoke test ran out
+  inside the reasoning (`finish_reason` `length`, empty answer). A
+  manual request outside the suite with `max_tokens` 4096 finished after
+  969 tokens with the answer `pong` and the reasoning only in
+  `reasoning_content`. So the reasoning did not leak into the answer;
+  the model reasoned in a loop for too long. The test limit was not
+  raised to make it pass. Q4_0 is not qualified.
+- Q4_0, Chinese staging-api: the routing generation answered in plain
+  text (`The staging API is currently healthy.`) instead of calling a
+  routing function, so the run stopped with `needs_external`,
+  `invalid_output`, after one call.
+- Chinese staging-api fails on Q8_0 and Q4_K_M with the same shape as
+  every earlier M2 entry: the skill stage wrote English, and the final
+  generation translated `healthy` to 健康, which the predicate refuses.
+  Chinese results are reported and do not block the choice (spec
+  section 6).
+- The Qwen repository publishes only Q8_0. The Q4 files come from other
+  publishers, and their chat template hashes (and, for Q4_K_M, the
+  tokenizer hash) differ from Q8_0. The token count check still passed
+  on both.
+- Repeats: Q4_0 and Q4_K_M were each run once more without an export
+  (Q4_K_M from a copy of the same manifest in a scratch directory), with
+  the same pass and fail results. Q8_0 was run once.
+- Not run: Windows and a live external endpoint.

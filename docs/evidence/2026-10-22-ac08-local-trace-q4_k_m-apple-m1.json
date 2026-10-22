@@ -1,0 +1,3830 @@
+{
+  "kind": "relaymind.live_local_trace",
+  "note": "Live single-pass traces; observations, not benchmark results (spec 12.3).",
+  "command": "RELAYMIND_LIVE_MANIFEST=models/qwen3-0.6b-q4_k_m.manifest.json RELAYMIND_TRACE_OUT=docs/evidence/2026-10-22-ac08-local-trace-q4_k_m-apple-m1.json pytest -m live tests/test_local_loop_live.py",
+  "machine": {
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "python": "3.14.7"
+  },
+  "runtime_banner": "version: 0.7.0-dev (build 11785, commit 8baabd53b)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64",
+  "manifest": "<repo>/models/qwen3-0.6b-q4_k_m.manifest.json",
+  "model_file": "Qwen3-0.6B-Q4_K_M.gguf",
+  "model_sha256": "ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a",
+  "quantization": "Q4_K_M",
+  "runs": [
+    {
+      "prompt": "Is staging-api healthy right now?",
+      "warmup": true,
+      "outcome": {
+        "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+        "state": "completed",
+        "answer": "The staging-api is healthy and checked at 2026-10-20T02:58:00Z.",
+        "error_code": null,
+        "reason_code": null
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 1,
+          "timestamp": "2026-10-22T10:06:48.478207Z",
+          "elapsed_ms": 0,
+          "event_type": "run.accepted",
+          "actor": "gateway",
+          "payload": {
+            "answer_options": {},
+            "budgets": {
+              "active_seconds": 4.0,
+              "clarification_rounds": 2,
+              "external_generations": 6,
+              "external_seconds": 30.0,
+              "local_generations": 3,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "routing_input_tokens": 2048,
+              "routing_output_tokens": 128,
+              "run_active_seconds": 60.0,
+              "run_generations": 8,
+              "run_tool_executions": 6,
+              "tool_calls": 2,
+              "waiting_seconds": 300.0
+            },
+            "effective_execution_mode": "auto",
+            "model_alias": null,
+            "original_messages": [
+              {
+                "content": "Is staging-api healthy right now?",
+                "role": "user"
+              }
+            ],
+            "requested_execution_mode": null,
+            "skill_roots": [
+              "<repo>/skills"
+            ],
+            "skills_offered": [
+              {
+                "content_hash": "sha256:4c0d9173e65b2898af85d869c5b53cd0bbdb3396aae93680c326c125ce672f01",
+                "name": "check-service-health",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:48bb2adc3dc3c1227d5f4a246405dc6d6f6ba048c3e2215d0ba0afbafab9f49f",
+                "name": "delete-demo-database",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:e9fd19e0d0fde212f2a03054ffaaa15eaafb7dc00d277d1fb684983b67f19ae3",
+                "name": "health-and-diagnostic-checklist",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:1650c5de3c8b36ca3159fa2d0951ca994535e44690da95095bb57a38d9d6df34",
+                "name": "investigate-performance",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:fbf30f28e558ca01cba52acf169003afcb769e18a93e84c0d7534b43e8cc49f0",
+                "name": "lookup-latest-deployment",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:860a2a6a37ee3271c1152053b408d18e89cd0fcd049b4209bf1c13aca66dcd3f",
+                "name": "summarize-incident-counts",
+                "version": "0.1.1"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 2,
+          "timestamp": "2026-10-22T10:06:48.487342Z",
+          "elapsed_ms": 9,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_43213e9c8b9f41c1a28b39d134b4631b_gen1_routing",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "routing",
+            "tools_offered": [
+              "check-service-health",
+              "delete-demo-database",
+              "health-and-diagnostic-checklist",
+              "investigate-performance",
+              "lookup-latest-deployment",
+              "summarize-incident-counts",
+              "request_clarification"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 3,
+          "timestamp": "2026-10-22T10:06:49.479357Z",
+          "elapsed_ms": 1001,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_43213e9c8b9f41c1a28b39d134b4631b_gen1_routing",
+            "duration_ms": 992,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "language": "en"
+                },
+                "tool_name": "check-service-health"
+              }
+            ],
+            "purpose": "routing",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 962,
+              "output_tokens": 21
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 4,
+          "timestamp": "2026-10-22T10:06:49.479808Z",
+          "elapsed_ms": 1002,
+          "event_type": "route.selected",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_43213e9c8b9f41c1a28b39d134b4631b_gen1_routing",
+            "decision": {
+              "clarification": null,
+              "language": "en",
+              "reason_code": "simple_skill",
+              "route": "local",
+              "schema_version": 1,
+              "skill_id": "check-service-health"
+            },
+            "input_tokens": 962,
+            "mechanism": "native_function_calling",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "model_language": "en"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 5,
+          "timestamp": "2026-10-22T10:06:49.480075Z",
+          "elapsed_ms": 1002,
+          "event_type": "skill.loaded",
+          "actor": "gateway",
+          "payload": {
+            "content_hash": "sha256:4c0d9173e65b2898af85d869c5b53cd0bbdb3396aae93680c326c125ce672f01",
+            "name": "check-service-health",
+            "version": "0.1.1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 6,
+          "timestamp": "2026-10-22T10:06:49.480216Z",
+          "elapsed_ms": 1002,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_43213e9c8b9f41c1a28b39d134b4631b_gen2_skill",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 7,
+          "timestamp": "2026-10-22T10:06:50.174053Z",
+          "elapsed_ms": 1696,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_43213e9c8b9f41c1a28b39d134b4631b_gen2_skill",
+            "duration_ms": 694,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "service": "staging-api"
+                },
+                "tool_name": "get_service_health"
+              }
+            ],
+            "purpose": "skill",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 561,
+              "output_tokens": 23
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 8,
+          "timestamp": "2026-10-22T10:06:50.174705Z",
+          "elapsed_ms": 1697,
+          "event_type": "tool.proposed",
+          "actor": "local",
+          "payload": {
+            "admissible": true,
+            "arguments": {
+              "service": "staging-api"
+            },
+            "call_id": "tdoVcgEINumYfDXhfZs7OYZodC46Wnrm",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposal_id": "proposal_23a72b7a17ac4d97",
+            "rejection": null,
+            "run_state_version": 3,
+            "skill_id": "check-service-health",
+            "skill_version": "0.1.1",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 9,
+          "timestamp": "2026-10-22T10:06:50.175212Z",
+          "elapsed_ms": 1697,
+          "event_type": "tool.started",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "operation_id": "op_a532e53b8889b10e5b7ea46d46f9e560",
+            "proposal_id": "proposal_23a72b7a17ac4d97",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 10,
+          "timestamp": "2026-10-22T10:06:50.177773Z",
+          "elapsed_ms": 1700,
+          "event_type": "tool.finished",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "operation_id": "op_a532e53b8889b10e5b7ea46d46f9e560",
+            "proposal_id": "proposal_23a72b7a17ac4d97",
+            "replayed": false,
+            "result": {
+              "data": {
+                "checked_at": "2026-10-20T02:58:00Z",
+                "fixture": {
+                  "observed_at": "2026-10-22T10:06:50Z",
+                  "scenario": "baseline"
+                },
+                "service": "staging-api",
+                "status": "healthy"
+              },
+              "duration_ms": 0,
+              "error": null,
+              "observed_at": "2026-10-22T10:06:50Z",
+              "operation_id": "op_a532e53b8889b10e5b7ea46d46f9e560",
+              "source_ref": "tool:get_service_health/op_a532e53b8889b10e5b7ea46d46f9e560",
+              "status": "succeeded",
+              "tool_name": "get_service_health",
+              "truncated": false
+            },
+            "status": "succeeded",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 11,
+          "timestamp": "2026-10-22T10:06:50.177998Z",
+          "elapsed_ms": 1700,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_43213e9c8b9f41c1a28b39d134b4631b_gen3_skill",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 12,
+          "timestamp": "2026-10-22T10:06:50.753249Z",
+          "elapsed_ms": 2275,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_43213e9c8b9f41c1a28b39d134b4631b_gen3_skill",
+            "duration_ms": 575,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [],
+            "purpose": "skill",
+            "text": "The staging-api is healthy and checked at 2026-10-20T02:58:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 817,
+              "output_tokens": 31
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 13,
+          "timestamp": "2026-10-22T10:06:50.753971Z",
+          "elapsed_ms": 2276,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_43213e9c8b9f41c1a28b39d134b4631b_gen4_final",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "final",
+            "tools_offered": []
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 14,
+          "timestamp": "2026-10-22T10:06:51.625964Z",
+          "elapsed_ms": 3148,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_43213e9c8b9f41c1a28b39d134b4631b_gen4_final",
+            "duration_ms": 872,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [],
+            "purpose": "final",
+            "text": "The staging-api is healthy and checked at 2026-10-20T02:58:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 645,
+              "output_tokens": 31
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 15,
+          "timestamp": "2026-10-22T10:06:51.626245Z",
+          "elapsed_ms": 3148,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "The"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 16,
+          "timestamp": "2026-10-22T10:06:51.626301Z",
+          "elapsed_ms": 3148,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " staging"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 17,
+          "timestamp": "2026-10-22T10:06:51.626342Z",
+          "elapsed_ms": 3148,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "-api"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 18,
+          "timestamp": "2026-10-22T10:06:51.626379Z",
+          "elapsed_ms": 3148,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " is"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 19,
+          "timestamp": "2026-10-22T10:06:51.626413Z",
+          "elapsed_ms": 3148,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " healthy"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 20,
+          "timestamp": "2026-10-22T10:06:51.626447Z",
+          "elapsed_ms": 3148,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " and"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 21,
+          "timestamp": "2026-10-22T10:06:51.626481Z",
+          "elapsed_ms": 3148,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " checked"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 22,
+          "timestamp": "2026-10-22T10:06:51.626525Z",
+          "elapsed_ms": 3148,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " at"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 23,
+          "timestamp": "2026-10-22T10:06:51.626560Z",
+          "elapsed_ms": 3148,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " "
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 24,
+          "timestamp": "2026-10-22T10:06:51.626593Z",
+          "elapsed_ms": 3148,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 25,
+          "timestamp": "2026-10-22T10:06:51.626626Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 26,
+          "timestamp": "2026-10-22T10:06:51.626659Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 27,
+          "timestamp": "2026-10-22T10:06:51.626692Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "6"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 28,
+          "timestamp": "2026-10-22T10:06:51.626730Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "-"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 29,
+          "timestamp": "2026-10-22T10:06:51.626763Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 30,
+          "timestamp": "2026-10-22T10:06:51.626804Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 31,
+          "timestamp": "2026-10-22T10:06:51.626837Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "-"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 32,
+          "timestamp": "2026-10-22T10:06:51.626870Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 33,
+          "timestamp": "2026-10-22T10:06:51.626903Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 34,
+          "timestamp": "2026-10-22T10:06:51.626940Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "T"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 35,
+          "timestamp": "2026-10-22T10:06:51.626977Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 36,
+          "timestamp": "2026-10-22T10:06:51.627015Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 37,
+          "timestamp": "2026-10-22T10:06:51.627046Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": ":"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 38,
+          "timestamp": "2026-10-22T10:06:51.627079Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "5"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 39,
+          "timestamp": "2026-10-22T10:06:51.627110Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "8"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 40,
+          "timestamp": "2026-10-22T10:06:51.627141Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": ":"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 41,
+          "timestamp": "2026-10-22T10:06:51.627173Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 42,
+          "timestamp": "2026-10-22T10:06:51.627204Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 43,
+          "timestamp": "2026-10-22T10:06:51.627236Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "Z"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 44,
+          "timestamp": "2026-10-22T10:06:51.627267Z",
+          "elapsed_ms": 3149,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "."
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_43213e9c8b9f41c1a28b39d134b4631b",
+          "seq": 45,
+          "timestamp": "2026-10-22T10:06:51.627617Z",
+          "elapsed_ms": 3149,
+          "event_type": "run.completed",
+          "actor": "gateway",
+          "payload": {
+            "active_ms": 3150,
+            "answer": "The staging-api is healthy and checked at 2026-10-20T02:58:00Z.",
+            "budget_usage": {
+              "active_ms": 3150,
+              "external_generations": 0,
+              "local_generations": 3,
+              "repair_generations": 0,
+              "routing_generations": 1,
+              "stages": 1,
+              "tool_calls": 1
+            },
+            "external_calls": 0,
+            "final_answer_model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "model_calls": [
+              {
+                "actor": "local",
+                "call_id": "run_43213e9c8b9f41c1a28b39d134b4631b_gen1_routing",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "routing"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_43213e9c8b9f41c1a28b39d134b4631b_gen2_skill",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_43213e9c8b9f41c1a28b39d134b4631b_gen3_skill",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_43213e9c8b9f41c1a28b39d134b4631b_gen4_final",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "final"
+              }
+            ],
+            "waiting_ms": 0
+          }
+        }
+      ]
+    },
+    {
+      "prompt": "Is staging-api healthy right now?",
+      "warmup": false,
+      "outcome": {
+        "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+        "state": "completed",
+        "answer": "The staging-api is healthy and checked at 2026-10-20T02:58:00Z.",
+        "error_code": null,
+        "reason_code": null
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 1,
+          "timestamp": "2026-10-22T10:06:51.630174Z",
+          "elapsed_ms": 0,
+          "event_type": "run.accepted",
+          "actor": "gateway",
+          "payload": {
+            "answer_options": {},
+            "budgets": {
+              "active_seconds": 4.0,
+              "clarification_rounds": 2,
+              "external_generations": 6,
+              "external_seconds": 30.0,
+              "local_generations": 3,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "routing_input_tokens": 2048,
+              "routing_output_tokens": 128,
+              "run_active_seconds": 60.0,
+              "run_generations": 8,
+              "run_tool_executions": 6,
+              "tool_calls": 2,
+              "waiting_seconds": 300.0
+            },
+            "effective_execution_mode": "auto",
+            "model_alias": null,
+            "original_messages": [
+              {
+                "content": "Is staging-api healthy right now?",
+                "role": "user"
+              }
+            ],
+            "requested_execution_mode": null,
+            "skill_roots": [
+              "<repo>/skills"
+            ],
+            "skills_offered": [
+              {
+                "content_hash": "sha256:4c0d9173e65b2898af85d869c5b53cd0bbdb3396aae93680c326c125ce672f01",
+                "name": "check-service-health",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:48bb2adc3dc3c1227d5f4a246405dc6d6f6ba048c3e2215d0ba0afbafab9f49f",
+                "name": "delete-demo-database",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:e9fd19e0d0fde212f2a03054ffaaa15eaafb7dc00d277d1fb684983b67f19ae3",
+                "name": "health-and-diagnostic-checklist",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:1650c5de3c8b36ca3159fa2d0951ca994535e44690da95095bb57a38d9d6df34",
+                "name": "investigate-performance",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:fbf30f28e558ca01cba52acf169003afcb769e18a93e84c0d7534b43e8cc49f0",
+                "name": "lookup-latest-deployment",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:860a2a6a37ee3271c1152053b408d18e89cd0fcd049b4209bf1c13aca66dcd3f",
+                "name": "summarize-incident-counts",
+                "version": "0.1.1"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 2,
+          "timestamp": "2026-10-22T10:06:51.639388Z",
+          "elapsed_ms": 9,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_b907426706d241cca80a1d0982ae7b32_gen1_routing",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "routing",
+            "tools_offered": [
+              "check-service-health",
+              "delete-demo-database",
+              "health-and-diagnostic-checklist",
+              "investigate-performance",
+              "lookup-latest-deployment",
+              "summarize-incident-counts",
+              "request_clarification"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 3,
+          "timestamp": "2026-10-22T10:06:51.879778Z",
+          "elapsed_ms": 250,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_b907426706d241cca80a1d0982ae7b32_gen1_routing",
+            "duration_ms": 240,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "language": "en"
+                },
+                "tool_name": "check-service-health"
+              }
+            ],
+            "purpose": "routing",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 962,
+              "output_tokens": 21
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 4,
+          "timestamp": "2026-10-22T10:06:51.879990Z",
+          "elapsed_ms": 250,
+          "event_type": "route.selected",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_b907426706d241cca80a1d0982ae7b32_gen1_routing",
+            "decision": {
+              "clarification": null,
+              "language": "en",
+              "reason_code": "simple_skill",
+              "route": "local",
+              "schema_version": 1,
+              "skill_id": "check-service-health"
+            },
+            "input_tokens": 962,
+            "mechanism": "native_function_calling",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "model_language": "en"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 5,
+          "timestamp": "2026-10-22T10:06:51.880187Z",
+          "elapsed_ms": 250,
+          "event_type": "skill.loaded",
+          "actor": "gateway",
+          "payload": {
+            "content_hash": "sha256:4c0d9173e65b2898af85d869c5b53cd0bbdb3396aae93680c326c125ce672f01",
+            "name": "check-service-health",
+            "version": "0.1.1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 6,
+          "timestamp": "2026-10-22T10:06:51.880311Z",
+          "elapsed_ms": 250,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_b907426706d241cca80a1d0982ae7b32_gen2_skill",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 7,
+          "timestamp": "2026-10-22T10:06:52.166849Z",
+          "elapsed_ms": 537,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_b907426706d241cca80a1d0982ae7b32_gen2_skill",
+            "duration_ms": 286,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "service": "staging-api"
+                },
+                "tool_name": "get_service_health"
+              }
+            ],
+            "purpose": "skill",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 561,
+              "output_tokens": 23
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 8,
+          "timestamp": "2026-10-22T10:06:52.167091Z",
+          "elapsed_ms": 537,
+          "event_type": "tool.proposed",
+          "actor": "local",
+          "payload": {
+            "admissible": true,
+            "arguments": {
+              "service": "staging-api"
+            },
+            "call_id": "HdTtQr1xJGguncBSotMuvdnoxOpm8uC1",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposal_id": "proposal_1efb13a0ec81446d",
+            "rejection": null,
+            "run_state_version": 3,
+            "skill_id": "check-service-health",
+            "skill_version": "0.1.1",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 9,
+          "timestamp": "2026-10-22T10:06:52.167223Z",
+          "elapsed_ms": 537,
+          "event_type": "tool.started",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "operation_id": "op_467957b7bb1be09d86e4bdd9d6df6d0e",
+            "proposal_id": "proposal_1efb13a0ec81446d",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 10,
+          "timestamp": "2026-10-22T10:06:52.168137Z",
+          "elapsed_ms": 538,
+          "event_type": "tool.finished",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "operation_id": "op_467957b7bb1be09d86e4bdd9d6df6d0e",
+            "proposal_id": "proposal_1efb13a0ec81446d",
+            "replayed": false,
+            "result": {
+              "data": {
+                "checked_at": "2026-10-20T02:58:00Z",
+                "fixture": {
+                  "observed_at": "2026-10-22T10:06:52Z",
+                  "scenario": "baseline"
+                },
+                "service": "staging-api",
+                "status": "healthy"
+              },
+              "duration_ms": 0,
+              "error": null,
+              "observed_at": "2026-10-22T10:06:52Z",
+              "operation_id": "op_467957b7bb1be09d86e4bdd9d6df6d0e",
+              "source_ref": "tool:get_service_health/op_467957b7bb1be09d86e4bdd9d6df6d0e",
+              "status": "succeeded",
+              "tool_name": "get_service_health",
+              "truncated": false
+            },
+            "status": "succeeded",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 11,
+          "timestamp": "2026-10-22T10:06:52.168266Z",
+          "elapsed_ms": 538,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_b907426706d241cca80a1d0982ae7b32_gen3_skill",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 12,
+          "timestamp": "2026-10-22T10:06:52.767615Z",
+          "elapsed_ms": 1137,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_b907426706d241cca80a1d0982ae7b32_gen3_skill",
+            "duration_ms": 599,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [],
+            "purpose": "skill",
+            "text": "Staging-api is healthy right now. The checked at time is 2026-10-20T02:58:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 811,
+              "output_tokens": 36
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 13,
+          "timestamp": "2026-10-22T10:06:52.767842Z",
+          "elapsed_ms": 1138,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_b907426706d241cca80a1d0982ae7b32_gen4_final",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "final",
+            "tools_offered": []
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 14,
+          "timestamp": "2026-10-22T10:06:53.322743Z",
+          "elapsed_ms": 1693,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_b907426706d241cca80a1d0982ae7b32_gen4_final",
+            "duration_ms": 555,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [],
+            "purpose": "final",
+            "text": "The staging-api is healthy and checked at 2026-10-20T02:58:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 639,
+              "output_tokens": 31
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 15,
+          "timestamp": "2026-10-22T10:06:53.322996Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "The"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 16,
+          "timestamp": "2026-10-22T10:06:53.323029Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " staging"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 17,
+          "timestamp": "2026-10-22T10:06:53.323058Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "-api"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 18,
+          "timestamp": "2026-10-22T10:06:53.323080Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " is"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 19,
+          "timestamp": "2026-10-22T10:06:53.323104Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " healthy"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 20,
+          "timestamp": "2026-10-22T10:06:53.323125Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " and"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 21,
+          "timestamp": "2026-10-22T10:06:53.323148Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " checked"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 22,
+          "timestamp": "2026-10-22T10:06:53.323169Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " at"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 23,
+          "timestamp": "2026-10-22T10:06:53.323190Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " "
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 24,
+          "timestamp": "2026-10-22T10:06:53.323212Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 25,
+          "timestamp": "2026-10-22T10:06:53.323232Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 26,
+          "timestamp": "2026-10-22T10:06:53.323253Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 27,
+          "timestamp": "2026-10-22T10:06:53.323275Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "6"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 28,
+          "timestamp": "2026-10-22T10:06:53.323295Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "-"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 29,
+          "timestamp": "2026-10-22T10:06:53.323317Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 30,
+          "timestamp": "2026-10-22T10:06:53.323339Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 31,
+          "timestamp": "2026-10-22T10:06:53.323359Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "-"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 32,
+          "timestamp": "2026-10-22T10:06:53.323381Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 33,
+          "timestamp": "2026-10-22T10:06:53.323402Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 34,
+          "timestamp": "2026-10-22T10:06:53.323422Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "T"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 35,
+          "timestamp": "2026-10-22T10:06:53.323443Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 36,
+          "timestamp": "2026-10-22T10:06:53.323463Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 37,
+          "timestamp": "2026-10-22T10:06:53.323483Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": ":"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 38,
+          "timestamp": "2026-10-22T10:06:53.323505Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "5"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 39,
+          "timestamp": "2026-10-22T10:06:53.323525Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "8"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 40,
+          "timestamp": "2026-10-22T10:06:53.323546Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": ":"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 41,
+          "timestamp": "2026-10-22T10:06:53.323567Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 42,
+          "timestamp": "2026-10-22T10:06:53.323589Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 43,
+          "timestamp": "2026-10-22T10:06:53.323609Z",
+          "elapsed_ms": 1693,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "Z"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 44,
+          "timestamp": "2026-10-22T10:06:53.323629Z",
+          "elapsed_ms": 1694,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "."
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_b907426706d241cca80a1d0982ae7b32",
+          "seq": 45,
+          "timestamp": "2026-10-22T10:06:53.323873Z",
+          "elapsed_ms": 1694,
+          "event_type": "run.completed",
+          "actor": "gateway",
+          "payload": {
+            "active_ms": 1694,
+            "answer": "The staging-api is healthy and checked at 2026-10-20T02:58:00Z.",
+            "budget_usage": {
+              "active_ms": 1694,
+              "external_generations": 0,
+              "local_generations": 3,
+              "repair_generations": 0,
+              "routing_generations": 1,
+              "stages": 1,
+              "tool_calls": 1
+            },
+            "external_calls": 0,
+            "final_answer_model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "model_calls": [
+              {
+                "actor": "local",
+                "call_id": "run_b907426706d241cca80a1d0982ae7b32_gen1_routing",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "routing"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_b907426706d241cca80a1d0982ae7b32_gen2_skill",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_b907426706d241cca80a1d0982ae7b32_gen3_skill",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_b907426706d241cca80a1d0982ae7b32_gen4_final",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "final"
+              }
+            ],
+            "waiting_ms": 0
+          }
+        }
+      ]
+    },
+    {
+      "prompt": "staging-api 现在健康吗？",
+      "warmup": false,
+      "outcome": {
+        "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+        "state": "failed",
+        "answer": null,
+        "error_code": "needs_external",
+        "reason_code": "invalid_output"
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 1,
+          "timestamp": "2026-10-22T10:06:53.326487Z",
+          "elapsed_ms": 0,
+          "event_type": "run.accepted",
+          "actor": "gateway",
+          "payload": {
+            "answer_options": {},
+            "budgets": {
+              "active_seconds": 4.0,
+              "clarification_rounds": 2,
+              "external_generations": 6,
+              "external_seconds": 30.0,
+              "local_generations": 3,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "routing_input_tokens": 2048,
+              "routing_output_tokens": 128,
+              "run_active_seconds": 60.0,
+              "run_generations": 8,
+              "run_tool_executions": 6,
+              "tool_calls": 2,
+              "waiting_seconds": 300.0
+            },
+            "effective_execution_mode": "auto",
+            "model_alias": null,
+            "original_messages": [
+              {
+                "content": "staging-api 现在健康吗？",
+                "role": "user"
+              }
+            ],
+            "requested_execution_mode": null,
+            "skill_roots": [
+              "<repo>/skills"
+            ],
+            "skills_offered": [
+              {
+                "content_hash": "sha256:4c0d9173e65b2898af85d869c5b53cd0bbdb3396aae93680c326c125ce672f01",
+                "name": "check-service-health",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:48bb2adc3dc3c1227d5f4a246405dc6d6f6ba048c3e2215d0ba0afbafab9f49f",
+                "name": "delete-demo-database",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:e9fd19e0d0fde212f2a03054ffaaa15eaafb7dc00d277d1fb684983b67f19ae3",
+                "name": "health-and-diagnostic-checklist",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:1650c5de3c8b36ca3159fa2d0951ca994535e44690da95095bb57a38d9d6df34",
+                "name": "investigate-performance",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:fbf30f28e558ca01cba52acf169003afcb769e18a93e84c0d7534b43e8cc49f0",
+                "name": "lookup-latest-deployment",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:860a2a6a37ee3271c1152053b408d18e89cd0fcd049b4209bf1c13aca66dcd3f",
+                "name": "summarize-incident-counts",
+                "version": "0.1.1"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 2,
+          "timestamp": "2026-10-22T10:06:53.333970Z",
+          "elapsed_ms": 7,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_343f0dfadec24255b5f8376144e70c65_gen1_routing",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "routing",
+            "tools_offered": [
+              "check-service-health",
+              "delete-demo-database",
+              "health-and-diagnostic-checklist",
+              "investigate-performance",
+              "lookup-latest-deployment",
+              "summarize-incident-counts",
+              "request_clarification"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 3,
+          "timestamp": "2026-10-22T10:06:53.609797Z",
+          "elapsed_ms": 283,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_343f0dfadec24255b5f8376144e70c65_gen1_routing",
+            "duration_ms": 276,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "language": "en"
+                },
+                "tool_name": "check-service-health"
+              }
+            ],
+            "purpose": "routing",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 965,
+              "output_tokens": 21
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 4,
+          "timestamp": "2026-10-22T10:06:53.609983Z",
+          "elapsed_ms": 284,
+          "event_type": "route.selected",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_343f0dfadec24255b5f8376144e70c65_gen1_routing",
+            "decision": {
+              "clarification": null,
+              "language": "zh",
+              "reason_code": "simple_skill",
+              "route": "local",
+              "schema_version": 1,
+              "skill_id": "check-service-health"
+            },
+            "input_tokens": 965,
+            "mechanism": "native_function_calling",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "model_language": "en"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 5,
+          "timestamp": "2026-10-22T10:06:53.610178Z",
+          "elapsed_ms": 284,
+          "event_type": "skill.loaded",
+          "actor": "gateway",
+          "payload": {
+            "content_hash": "sha256:4c0d9173e65b2898af85d869c5b53cd0bbdb3396aae93680c326c125ce672f01",
+            "name": "check-service-health",
+            "version": "0.1.1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 6,
+          "timestamp": "2026-10-22T10:06:53.610284Z",
+          "elapsed_ms": 284,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_343f0dfadec24255b5f8376144e70c65_gen2_skill",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 7,
+          "timestamp": "2026-10-22T10:06:54.140678Z",
+          "elapsed_ms": 814,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_343f0dfadec24255b5f8376144e70c65_gen2_skill",
+            "duration_ms": 530,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "service": "staging-api"
+                },
+                "tool_name": "get_service_health"
+              }
+            ],
+            "purpose": "skill",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 564,
+              "output_tokens": 23
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 8,
+          "timestamp": "2026-10-22T10:06:54.141006Z",
+          "elapsed_ms": 815,
+          "event_type": "tool.proposed",
+          "actor": "local",
+          "payload": {
+            "admissible": true,
+            "arguments": {
+              "service": "staging-api"
+            },
+            "call_id": "60SyyL3KhkNXfhahj8G3pEJ7we4X2wLV",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposal_id": "proposal_e0cc61b5f6de432a",
+            "rejection": null,
+            "run_state_version": 3,
+            "skill_id": "check-service-health",
+            "skill_version": "0.1.1",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 9,
+          "timestamp": "2026-10-22T10:06:54.141204Z",
+          "elapsed_ms": 815,
+          "event_type": "tool.started",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "operation_id": "op_4f72b35d8280f2540cf7779b5adaf9dd",
+            "proposal_id": "proposal_e0cc61b5f6de432a",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 10,
+          "timestamp": "2026-10-22T10:06:54.142743Z",
+          "elapsed_ms": 816,
+          "event_type": "tool.finished",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "operation_id": "op_4f72b35d8280f2540cf7779b5adaf9dd",
+            "proposal_id": "proposal_e0cc61b5f6de432a",
+            "replayed": false,
+            "result": {
+              "data": {
+                "checked_at": "2026-10-20T02:58:00Z",
+                "fixture": {
+                  "observed_at": "2026-10-22T10:06:54Z",
+                  "scenario": "baseline"
+                },
+                "service": "staging-api",
+                "status": "healthy"
+              },
+              "duration_ms": 0,
+              "error": null,
+              "observed_at": "2026-10-22T10:06:54Z",
+              "operation_id": "op_4f72b35d8280f2540cf7779b5adaf9dd",
+              "source_ref": "tool:get_service_health/op_4f72b35d8280f2540cf7779b5adaf9dd",
+              "status": "succeeded",
+              "tool_name": "get_service_health",
+              "truncated": false
+            },
+            "status": "succeeded",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 11,
+          "timestamp": "2026-10-22T10:06:54.142956Z",
+          "elapsed_ms": 816,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_343f0dfadec24255b5f8376144e70c65_gen3_skill",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 12,
+          "timestamp": "2026-10-22T10:06:54.749563Z",
+          "elapsed_ms": 1423,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_343f0dfadec24255b5f8376144e70c65_gen3_skill",
+            "duration_ms": 606,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [],
+            "purpose": "skill",
+            "text": "The staging-api is currently healthy with a checked_at of 2026-10-20T02:58:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 816,
+              "output_tokens": 34
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 13,
+          "timestamp": "2026-10-22T10:06:54.749843Z",
+          "elapsed_ms": 1423,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_343f0dfadec24255b5f8376144e70c65_gen4_final",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "final",
+            "tools_offered": []
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 14,
+          "timestamp": "2026-10-22T10:06:55.597903Z",
+          "elapsed_ms": 2271,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_343f0dfadec24255b5f8376144e70c65_gen4_final",
+            "duration_ms": 848,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [],
+            "purpose": "final",
+            "text": "staging-api 现在健康。检查时间是 2026-10-20T02:58:00Z。",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 645,
+              "output_tokens": 35
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_343f0dfadec24255b5f8376144e70c65",
+          "seq": 15,
+          "timestamp": "2026-10-22T10:06:55.598159Z",
+          "elapsed_ms": 2272,
+          "event_type": "run.failed",
+          "actor": "gateway",
+          "payload": {
+            "active_ms": 2272,
+            "budget_usage": {
+              "active_ms": 2272,
+              "external_generations": 0,
+              "local_generations": 3,
+              "repair_generations": 0,
+              "routing_generations": 1,
+              "stages": 1,
+              "tool_calls": 1
+            },
+            "detail": "the final answer does not meet the completion criteria",
+            "error_code": "needs_external",
+            "external_calls": 0,
+            "model_calls": [
+              {
+                "actor": "local",
+                "call_id": "run_343f0dfadec24255b5f8376144e70c65_gen1_routing",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "routing"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_343f0dfadec24255b5f8376144e70c65_gen2_skill",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_343f0dfadec24255b5f8376144e70c65_gen3_skill",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_343f0dfadec24255b5f8376144e70c65_gen4_final",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "final"
+              }
+            ],
+            "reason_code": "invalid_output",
+            "waiting_ms": 0
+          }
+        }
+      ]
+    },
+    {
+      "prompt": "Check the health of payments-api.",
+      "warmup": false,
+      "outcome": {
+        "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+        "state": "completed",
+        "answer": "The payments-api is unavailable. Checked at 2026-10-20T02:59:00Z.",
+        "error_code": null,
+        "reason_code": null
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 1,
+          "timestamp": "2026-10-22T10:06:55.620196Z",
+          "elapsed_ms": 0,
+          "event_type": "run.accepted",
+          "actor": "gateway",
+          "payload": {
+            "answer_options": {},
+            "budgets": {
+              "active_seconds": 4.0,
+              "clarification_rounds": 2,
+              "external_generations": 6,
+              "external_seconds": 30.0,
+              "local_generations": 3,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "routing_input_tokens": 2048,
+              "routing_output_tokens": 128,
+              "run_active_seconds": 60.0,
+              "run_generations": 8,
+              "run_tool_executions": 6,
+              "tool_calls": 2,
+              "waiting_seconds": 300.0
+            },
+            "effective_execution_mode": "auto",
+            "model_alias": null,
+            "original_messages": [
+              {
+                "content": "Check the health of payments-api.",
+                "role": "user"
+              }
+            ],
+            "requested_execution_mode": null,
+            "skill_roots": [
+              "<repo>/skills"
+            ],
+            "skills_offered": [
+              {
+                "content_hash": "sha256:4c0d9173e65b2898af85d869c5b53cd0bbdb3396aae93680c326c125ce672f01",
+                "name": "check-service-health",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:48bb2adc3dc3c1227d5f4a246405dc6d6f6ba048c3e2215d0ba0afbafab9f49f",
+                "name": "delete-demo-database",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:e9fd19e0d0fde212f2a03054ffaaa15eaafb7dc00d277d1fb684983b67f19ae3",
+                "name": "health-and-diagnostic-checklist",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:1650c5de3c8b36ca3159fa2d0951ca994535e44690da95095bb57a38d9d6df34",
+                "name": "investigate-performance",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:fbf30f28e558ca01cba52acf169003afcb769e18a93e84c0d7534b43e8cc49f0",
+                "name": "lookup-latest-deployment",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:860a2a6a37ee3271c1152053b408d18e89cd0fcd049b4209bf1c13aca66dcd3f",
+                "name": "summarize-incident-counts",
+                "version": "0.1.1"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 2,
+          "timestamp": "2026-10-22T10:06:55.626183Z",
+          "elapsed_ms": 6,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_3a3810740e5b43eeba241683232ac4c3_gen1_routing",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "routing",
+            "tools_offered": [
+              "check-service-health",
+              "delete-demo-database",
+              "health-and-diagnostic-checklist",
+              "investigate-performance",
+              "lookup-latest-deployment",
+              "summarize-incident-counts",
+              "request_clarification"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 3,
+          "timestamp": "2026-10-22T10:06:55.884568Z",
+          "elapsed_ms": 264,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_3a3810740e5b43eeba241683232ac4c3_gen1_routing",
+            "duration_ms": 258,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "language": "en"
+                },
+                "tool_name": "check-service-health"
+              }
+            ],
+            "purpose": "routing",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 962,
+              "output_tokens": 21
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 4,
+          "timestamp": "2026-10-22T10:06:55.884863Z",
+          "elapsed_ms": 265,
+          "event_type": "route.selected",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_3a3810740e5b43eeba241683232ac4c3_gen1_routing",
+            "decision": {
+              "clarification": null,
+              "language": "en",
+              "reason_code": "simple_skill",
+              "route": "local",
+              "schema_version": 1,
+              "skill_id": "check-service-health"
+            },
+            "input_tokens": 962,
+            "mechanism": "native_function_calling",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "model_language": "en"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 5,
+          "timestamp": "2026-10-22T10:06:55.885051Z",
+          "elapsed_ms": 265,
+          "event_type": "skill.loaded",
+          "actor": "gateway",
+          "payload": {
+            "content_hash": "sha256:4c0d9173e65b2898af85d869c5b53cd0bbdb3396aae93680c326c125ce672f01",
+            "name": "check-service-health",
+            "version": "0.1.1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 6,
+          "timestamp": "2026-10-22T10:06:55.885145Z",
+          "elapsed_ms": 265,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_3a3810740e5b43eeba241683232ac4c3_gen2_skill",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 7,
+          "timestamp": "2026-10-22T10:06:56.383273Z",
+          "elapsed_ms": 763,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_3a3810740e5b43eeba241683232ac4c3_gen2_skill",
+            "duration_ms": 498,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "service": "payments-api"
+                },
+                "tool_name": "get_service_health"
+              }
+            ],
+            "purpose": "skill",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 561,
+              "output_tokens": 22
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 8,
+          "timestamp": "2026-10-22T10:06:56.383641Z",
+          "elapsed_ms": 763,
+          "event_type": "tool.proposed",
+          "actor": "local",
+          "payload": {
+            "admissible": true,
+            "arguments": {
+              "service": "payments-api"
+            },
+            "call_id": "Xl7moESRoriH1ZFSPvCc9r8gFuE2PXNG",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposal_id": "proposal_4147f2e434924e8e",
+            "rejection": null,
+            "run_state_version": 3,
+            "skill_id": "check-service-health",
+            "skill_version": "0.1.1",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 9,
+          "timestamp": "2026-10-22T10:06:56.383872Z",
+          "elapsed_ms": 764,
+          "event_type": "tool.started",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "operation_id": "op_1145744e1df0e7c6d3319f87d94d8ddb",
+            "proposal_id": "proposal_4147f2e434924e8e",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 10,
+          "timestamp": "2026-10-22T10:06:56.385657Z",
+          "elapsed_ms": 765,
+          "event_type": "tool.finished",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "operation_id": "op_1145744e1df0e7c6d3319f87d94d8ddb",
+            "proposal_id": "proposal_4147f2e434924e8e",
+            "replayed": false,
+            "result": {
+              "data": {
+                "checked_at": "2026-10-20T02:59:00Z",
+                "fixture": {
+                  "observed_at": "2026-10-22T10:06:56Z",
+                  "scenario": "baseline"
+                },
+                "service": "payments-api",
+                "status": "unavailable"
+              },
+              "duration_ms": 0,
+              "error": null,
+              "observed_at": "2026-10-22T10:06:56Z",
+              "operation_id": "op_1145744e1df0e7c6d3319f87d94d8ddb",
+              "source_ref": "tool:get_service_health/op_1145744e1df0e7c6d3319f87d94d8ddb",
+              "status": "succeeded",
+              "tool_name": "get_service_health",
+              "truncated": false
+            },
+            "status": "succeeded",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 11,
+          "timestamp": "2026-10-22T10:06:56.385899Z",
+          "elapsed_ms": 766,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_3a3810740e5b43eeba241683232ac4c3_gen3_skill",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 12,
+          "timestamp": "2026-10-22T10:06:57.035835Z",
+          "elapsed_ms": 1416,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_3a3810740e5b43eeba241683232ac4c3_gen3_skill",
+            "duration_ms": 650,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [],
+            "purpose": "skill",
+            "text": "The health status of the payments-api is \"unavailable\" and checked at \"2026-10-20T02:59:00Z\".",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 814,
+              "output_tokens": 38
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 13,
+          "timestamp": "2026-10-22T10:06:57.036342Z",
+          "elapsed_ms": 1416,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_3a3810740e5b43eeba241683232ac4c3_gen4_final",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "final",
+            "tools_offered": []
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 14,
+          "timestamp": "2026-10-22T10:06:57.887579Z",
+          "elapsed_ms": 2267,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_3a3810740e5b43eeba241683232ac4c3_gen4_final",
+            "duration_ms": 851,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [],
+            "purpose": "final",
+            "text": "The payments-api is unavailable. Checked at 2026-10-20T02:59:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 642,
+              "output_tokens": 31
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 15,
+          "timestamp": "2026-10-22T10:06:57.887824Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "The"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 16,
+          "timestamp": "2026-10-22T10:06:57.887873Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " payments"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 17,
+          "timestamp": "2026-10-22T10:06:57.887911Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "-api"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 18,
+          "timestamp": "2026-10-22T10:06:57.887945Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " is"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 19,
+          "timestamp": "2026-10-22T10:06:57.887976Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " unavailable"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 20,
+          "timestamp": "2026-10-22T10:06:57.888008Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "."
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 21,
+          "timestamp": "2026-10-22T10:06:57.888042Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " Checked"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 22,
+          "timestamp": "2026-10-22T10:06:57.888074Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " at"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 23,
+          "timestamp": "2026-10-22T10:06:57.888104Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " "
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 24,
+          "timestamp": "2026-10-22T10:06:57.888134Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 25,
+          "timestamp": "2026-10-22T10:06:57.888164Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 26,
+          "timestamp": "2026-10-22T10:06:57.888194Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 27,
+          "timestamp": "2026-10-22T10:06:57.888224Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "6"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 28,
+          "timestamp": "2026-10-22T10:06:57.888256Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "-"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 29,
+          "timestamp": "2026-10-22T10:06:57.888286Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 30,
+          "timestamp": "2026-10-22T10:06:57.888317Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 31,
+          "timestamp": "2026-10-22T10:06:57.888347Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "-"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 32,
+          "timestamp": "2026-10-22T10:06:57.888377Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 33,
+          "timestamp": "2026-10-22T10:06:57.888406Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 34,
+          "timestamp": "2026-10-22T10:06:57.888435Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "T"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 35,
+          "timestamp": "2026-10-22T10:06:57.888463Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 36,
+          "timestamp": "2026-10-22T10:06:57.888492Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 37,
+          "timestamp": "2026-10-22T10:06:57.888520Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": ":"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 38,
+          "timestamp": "2026-10-22T10:06:57.888550Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "5"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 39,
+          "timestamp": "2026-10-22T10:06:57.888579Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "9"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 40,
+          "timestamp": "2026-10-22T10:06:57.888607Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": ":"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 41,
+          "timestamp": "2026-10-22T10:06:57.888636Z",
+          "elapsed_ms": 2268,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 42,
+          "timestamp": "2026-10-22T10:06:57.888664Z",
+          "elapsed_ms": 2269,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 43,
+          "timestamp": "2026-10-22T10:06:57.888693Z",
+          "elapsed_ms": 2269,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "Z"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 44,
+          "timestamp": "2026-10-22T10:06:57.888720Z",
+          "elapsed_ms": 2269,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "."
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_3a3810740e5b43eeba241683232ac4c3",
+          "seq": 45,
+          "timestamp": "2026-10-22T10:06:57.889032Z",
+          "elapsed_ms": 2269,
+          "event_type": "run.completed",
+          "actor": "gateway",
+          "payload": {
+            "active_ms": 2269,
+            "answer": "The payments-api is unavailable. Checked at 2026-10-20T02:59:00Z.",
+            "budget_usage": {
+              "active_ms": 2269,
+              "external_generations": 0,
+              "local_generations": 3,
+              "repair_generations": 0,
+              "routing_generations": 1,
+              "stages": 1,
+              "tool_calls": 1
+            },
+            "external_calls": 0,
+            "final_answer_model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "model_calls": [
+              {
+                "actor": "local",
+                "call_id": "run_3a3810740e5b43eeba241683232ac4c3_gen1_routing",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "routing"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_3a3810740e5b43eeba241683232ac4c3_gen2_skill",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_3a3810740e5b43eeba241683232ac4c3_gen3_skill",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_3a3810740e5b43eeba241683232ac4c3_gen4_final",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "final"
+              }
+            ],
+            "waiting_ms": 0
+          }
+        }
+      ]
+    },
+    {
+      "prompt": "帮我检查一下 payments-api 的健康状态。",
+      "warmup": false,
+      "outcome": {
+        "run_id": "run_55c0111dd47d45df932e01e473537960",
+        "state": "completed",
+        "answer": "payments-api 的当前健康状态为 unavailable，检查时间是 2026-10-20T02:59:00Z。",
+        "error_code": null,
+        "reason_code": null
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 1,
+          "timestamp": "2026-10-22T10:06:57.891395Z",
+          "elapsed_ms": 0,
+          "event_type": "run.accepted",
+          "actor": "gateway",
+          "payload": {
+            "answer_options": {},
+            "budgets": {
+              "active_seconds": 4.0,
+              "clarification_rounds": 2,
+              "external_generations": 6,
+              "external_seconds": 30.0,
+              "local_generations": 3,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "routing_input_tokens": 2048,
+              "routing_output_tokens": 128,
+              "run_active_seconds": 60.0,
+              "run_generations": 8,
+              "run_tool_executions": 6,
+              "tool_calls": 2,
+              "waiting_seconds": 300.0
+            },
+            "effective_execution_mode": "auto",
+            "model_alias": null,
+            "original_messages": [
+              {
+                "content": "帮我检查一下 payments-api 的健康状态。",
+                "role": "user"
+              }
+            ],
+            "requested_execution_mode": null,
+            "skill_roots": [
+              "<repo>/skills"
+            ],
+            "skills_offered": [
+              {
+                "content_hash": "sha256:4c0d9173e65b2898af85d869c5b53cd0bbdb3396aae93680c326c125ce672f01",
+                "name": "check-service-health",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:48bb2adc3dc3c1227d5f4a246405dc6d6f6ba048c3e2215d0ba0afbafab9f49f",
+                "name": "delete-demo-database",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:e9fd19e0d0fde212f2a03054ffaaa15eaafb7dc00d277d1fb684983b67f19ae3",
+                "name": "health-and-diagnostic-checklist",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:1650c5de3c8b36ca3159fa2d0951ca994535e44690da95095bb57a38d9d6df34",
+                "name": "investigate-performance",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:fbf30f28e558ca01cba52acf169003afcb769e18a93e84c0d7534b43e8cc49f0",
+                "name": "lookup-latest-deployment",
+                "version": "0.1.1"
+              },
+              {
+                "content_hash": "sha256:860a2a6a37ee3271c1152053b408d18e89cd0fcd049b4209bf1c13aca66dcd3f",
+                "name": "summarize-incident-counts",
+                "version": "0.1.1"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 2,
+          "timestamp": "2026-10-22T10:06:57.898596Z",
+          "elapsed_ms": 7,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_55c0111dd47d45df932e01e473537960_gen1_routing",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "routing",
+            "tools_offered": [
+              "check-service-health",
+              "delete-demo-database",
+              "health-and-diagnostic-checklist",
+              "investigate-performance",
+              "lookup-latest-deployment",
+              "summarize-incident-counts",
+              "request_clarification"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 3,
+          "timestamp": "2026-10-22T10:06:58.167063Z",
+          "elapsed_ms": 276,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_55c0111dd47d45df932e01e473537960_gen1_routing",
+            "duration_ms": 268,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "language": "en"
+                },
+                "tool_name": "check-service-health"
+              }
+            ],
+            "purpose": "routing",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 964,
+              "output_tokens": 21
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 4,
+          "timestamp": "2026-10-22T10:06:58.167250Z",
+          "elapsed_ms": 276,
+          "event_type": "route.selected",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_55c0111dd47d45df932e01e473537960_gen1_routing",
+            "decision": {
+              "clarification": null,
+              "language": "zh",
+              "reason_code": "simple_skill",
+              "route": "local",
+              "schema_version": 1,
+              "skill_id": "check-service-health"
+            },
+            "input_tokens": 964,
+            "mechanism": "native_function_calling",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "model_language": "en"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 5,
+          "timestamp": "2026-10-22T10:06:58.167420Z",
+          "elapsed_ms": 276,
+          "event_type": "skill.loaded",
+          "actor": "gateway",
+          "payload": {
+            "content_hash": "sha256:4c0d9173e65b2898af85d869c5b53cd0bbdb3396aae93680c326c125ce672f01",
+            "name": "check-service-health",
+            "version": "0.1.1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 6,
+          "timestamp": "2026-10-22T10:06:58.167516Z",
+          "elapsed_ms": 276,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_55c0111dd47d45df932e01e473537960_gen2_skill",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 7,
+          "timestamp": "2026-10-22T10:06:58.711065Z",
+          "elapsed_ms": 820,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_55c0111dd47d45df932e01e473537960_gen2_skill",
+            "duration_ms": 543,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "service": "payments-api"
+                },
+                "tool_name": "get_service_health"
+              }
+            ],
+            "purpose": "skill",
+            "text": null,
+            "tool_calls": 1,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 563,
+              "output_tokens": 22
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 8,
+          "timestamp": "2026-10-22T10:06:58.711359Z",
+          "elapsed_ms": 820,
+          "event_type": "tool.proposed",
+          "actor": "local",
+          "payload": {
+            "admissible": true,
+            "arguments": {
+              "service": "payments-api"
+            },
+            "call_id": "6x4VUfna9DQ0Oih8lVUOXfoaD6f5O9uS",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposal_id": "proposal_61417c4aa3e145dc",
+            "rejection": null,
+            "run_state_version": 3,
+            "skill_id": "check-service-health",
+            "skill_version": "0.1.1",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 9,
+          "timestamp": "2026-10-22T10:06:58.711539Z",
+          "elapsed_ms": 820,
+          "event_type": "tool.started",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "operation_id": "op_5eae4471706e0a587711d88b5c3d0dbd",
+            "proposal_id": "proposal_61417c4aa3e145dc",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 10,
+          "timestamp": "2026-10-22T10:06:58.712981Z",
+          "elapsed_ms": 822,
+          "event_type": "tool.finished",
+          "actor": "gateway",
+          "payload": {
+            "attempt": 1,
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "operation_id": "op_5eae4471706e0a587711d88b5c3d0dbd",
+            "proposal_id": "proposal_61417c4aa3e145dc",
+            "replayed": false,
+            "result": {
+              "data": {
+                "checked_at": "2026-10-20T02:59:00Z",
+                "fixture": {
+                  "observed_at": "2026-10-22T10:06:58Z",
+                  "scenario": "baseline"
+                },
+                "service": "payments-api",
+                "status": "unavailable"
+              },
+              "duration_ms": 0,
+              "error": null,
+              "observed_at": "2026-10-22T10:06:58Z",
+              "operation_id": "op_5eae4471706e0a587711d88b5c3d0dbd",
+              "source_ref": "tool:get_service_health/op_5eae4471706e0a587711d88b5c3d0dbd",
+              "status": "succeeded",
+              "tool_name": "get_service_health",
+              "truncated": false
+            },
+            "status": "succeeded",
+            "tool_name": "get_service_health"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 11,
+          "timestamp": "2026-10-22T10:06:58.713169Z",
+          "elapsed_ms": 822,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_55c0111dd47d45df932e01e473537960_gen3_skill",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "skill",
+            "tools_offered": [
+              "get_service_health"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 12,
+          "timestamp": "2026-10-22T10:06:59.297021Z",
+          "elapsed_ms": 1406,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_55c0111dd47d45df932e01e473537960_gen3_skill",
+            "duration_ms": 584,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [],
+            "purpose": "skill",
+            "text": "The payments-api is unavailable. Checked at 2026-10-20T02:59:00Z.",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 818,
+              "output_tokens": 31
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 13,
+          "timestamp": "2026-10-22T10:06:59.297367Z",
+          "elapsed_ms": 1406,
+          "event_type": "model.started",
+          "actor": "local",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_55c0111dd47d45df932e01e473537960_gen4_final",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "purpose": "final",
+            "tools_offered": []
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 14,
+          "timestamp": "2026-10-22T10:07:00.157418Z",
+          "elapsed_ms": 2266,
+          "event_type": "model.finished",
+          "actor": "local",
+          "payload": {
+            "call_id": "run_55c0111dd47d45df932e01e473537960_gen4_final",
+            "duration_ms": 860,
+            "error": null,
+            "finish_reason": "stop",
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "proposed_calls": [],
+            "purpose": "final",
+            "text": "payments-api 的当前健康状态为 unavailable，检查时间是 2026-10-20T02:59:00Z。",
+            "tool_calls": 0,
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 647,
+              "output_tokens": 35
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 15,
+          "timestamp": "2026-10-22T10:07:00.157675Z",
+          "elapsed_ms": 2266,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "payments"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 16,
+          "timestamp": "2026-10-22T10:07:00.157725Z",
+          "elapsed_ms": 2266,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "-api"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 17,
+          "timestamp": "2026-10-22T10:07:00.157765Z",
+          "elapsed_ms": 2266,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " 的"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 18,
+          "timestamp": "2026-10-22T10:07:00.157800Z",
+          "elapsed_ms": 2266,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "当前"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 19,
+          "timestamp": "2026-10-22T10:07:00.157835Z",
+          "elapsed_ms": 2266,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "健康"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 20,
+          "timestamp": "2026-10-22T10:07:00.157866Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "状态"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 21,
+          "timestamp": "2026-10-22T10:07:00.157898Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "为"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 22,
+          "timestamp": "2026-10-22T10:07:00.157930Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " unavailable"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 23,
+          "timestamp": "2026-10-22T10:07:00.157970Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "，"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 24,
+          "timestamp": "2026-10-22T10:07:00.158000Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "检查"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 25,
+          "timestamp": "2026-10-22T10:07:00.158030Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "时间"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 26,
+          "timestamp": "2026-10-22T10:07:00.158060Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "是"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 27,
+          "timestamp": "2026-10-22T10:07:00.158089Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": " "
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 28,
+          "timestamp": "2026-10-22T10:07:00.158119Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 29,
+          "timestamp": "2026-10-22T10:07:00.158149Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 30,
+          "timestamp": "2026-10-22T10:07:00.158181Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 31,
+          "timestamp": "2026-10-22T10:07:00.158210Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "6"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 32,
+          "timestamp": "2026-10-22T10:07:00.158239Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "-"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 33,
+          "timestamp": "2026-10-22T10:07:00.158271Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 34,
+          "timestamp": "2026-10-22T10:07:00.158300Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 35,
+          "timestamp": "2026-10-22T10:07:00.158329Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "-"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 36,
+          "timestamp": "2026-10-22T10:07:00.158360Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 37,
+          "timestamp": "2026-10-22T10:07:00.158390Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 38,
+          "timestamp": "2026-10-22T10:07:00.158419Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "T"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 39,
+          "timestamp": "2026-10-22T10:07:00.158451Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 40,
+          "timestamp": "2026-10-22T10:07:00.158480Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 41,
+          "timestamp": "2026-10-22T10:07:00.158509Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": ":"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 42,
+          "timestamp": "2026-10-22T10:07:00.158538Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "5"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 43,
+          "timestamp": "2026-10-22T10:07:00.158575Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "9"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 44,
+          "timestamp": "2026-10-22T10:07:00.158605Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": ":"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 45,
+          "timestamp": "2026-10-22T10:07:00.158634Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 46,
+          "timestamp": "2026-10-22T10:07:00.158662Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "0"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 47,
+          "timestamp": "2026-10-22T10:07:00.158691Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "Z"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 48,
+          "timestamp": "2026-10-22T10:07:00.158720Z",
+          "elapsed_ms": 2267,
+          "event_type": "answer.delta",
+          "actor": "local",
+          "payload": {
+            "model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "text": "。"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "run_55c0111dd47d45df932e01e473537960",
+          "seq": 49,
+          "timestamp": "2026-10-22T10:07:00.159122Z",
+          "elapsed_ms": 2268,
+          "event_type": "run.completed",
+          "actor": "gateway",
+          "payload": {
+            "active_ms": 2268,
+            "answer": "payments-api 的当前健康状态为 unavailable，检查时间是 2026-10-20T02:59:00Z。",
+            "budget_usage": {
+              "active_ms": 2268,
+              "external_generations": 0,
+              "local_generations": 3,
+              "repair_generations": 0,
+              "routing_generations": 1,
+              "stages": 1,
+              "tool_calls": 1
+            },
+            "external_calls": 0,
+            "final_answer_model": "Qwen3-0.6B-Q4_K_M.gguf",
+            "model_calls": [
+              {
+                "actor": "local",
+                "call_id": "run_55c0111dd47d45df932e01e473537960_gen1_routing",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "routing"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_55c0111dd47d45df932e01e473537960_gen2_skill",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_55c0111dd47d45df932e01e473537960_gen3_skill",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "skill"
+              },
+              {
+                "actor": "local",
+                "call_id": "run_55c0111dd47d45df932e01e473537960_gen4_final",
+                "model": "Qwen3-0.6B-Q4_K_M.gguf",
+                "purpose": "final"
+              }
+            ],
+            "waiting_ms": 0
+          }
+        }
+      ]
+    }
+  ]
+}

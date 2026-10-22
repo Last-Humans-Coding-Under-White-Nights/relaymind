@@ -12,7 +12,14 @@ import json
 
 import pytest
 
-from helpers import PINNED_MANIFEST_PATH
+from helpers import (
+    LIVE_MANIFEST_ENV,
+    MODELS_DIR,
+    PINNED_MANIFEST_PATH,
+    REPO_ROOT,
+    SECOND_MANIFEST_PATH,
+    live_manifest_path,
+)
 from relaymind.adapters.manifest import (
     ArtifactManifest,
     ManifestError,
@@ -116,12 +123,57 @@ def test_load_rejects_launch_settings_that_do_not_render(tmp_path):
         load_manifest(path)
 
 
-def test_the_checked_in_candidate_manifest_is_valid():
-    manifest = load_manifest(PINNED_MANIFEST_PATH)
+@pytest.mark.parametrize("path", sorted(MODELS_DIR.glob("*.manifest.json")), ids=lambda p: p.name)
+def test_the_checked_in_manifests_are_valid(path):
+    manifest = load_manifest(path)
     assert manifest.schema_version == 1
+
+
+@pytest.mark.parametrize(
+    "path", sorted(MODELS_DIR.glob("qwen3-0.6b-*.manifest.json")), ids=lambda p: p.name
+)
+def test_qwen_manifests_keep_their_artifact_names_and_launch_settings(path):
+    # RM18, spec section 6: these naming and reasoning settings belong to
+    # this candidate; other models still pass the general validation above.
+    manifest = load_manifest(path)
     assert manifest.model_id == "qwen3-0.6b"
     assert manifest.launch_settings["reasoning"] == "off"
     assert manifest.launch_settings["reasoning_format"] == "deepseek"
+    # Spec section 6: never relabeled. The file and the manifest name the
+    # quantization the file holds.
+    assert manifest.file_name == f"Qwen3-0.6B-{manifest.quantization}.gguf"
+    assert path.name == f"qwen3-0.6b-{manifest.quantization.lower()}.manifest.json"
+
+
+def test_the_second_artifact_differs_only_in_the_artifact():
+    """AC08, RM18: the second local artifact is a different file of the same
+    model, on the same runtime and launch settings, so swapping the two
+    is a configuration change only."""
+    first = load_manifest(PINNED_MANIFEST_PATH)
+    second = load_manifest(SECOND_MANIFEST_PATH)
+    assert second.model_id == first.model_id
+    assert second.quantization != first.quantization
+    assert second.file_sha256 != first.file_sha256
+    assert second.runtime == first.runtime
+    assert second.runtime_version == first.runtime_version
+    assert second.launch_settings == first.launch_settings
+
+
+@pytest.mark.parametrize(
+    ("environ", "expected"),
+    [
+        ({}, PINNED_MANIFEST_PATH),
+        ({LIVE_MANIFEST_ENV: ""}, PINNED_MANIFEST_PATH),
+        (
+            {LIVE_MANIFEST_ENV: "elsewhere/other.manifest.json"},
+            REPO_ROOT / "elsewhere/other.manifest.json",
+        ),
+    ],
+)
+def test_the_live_suite_manifest_is_a_configuration_value(environ, expected):
+    # AC08: the live suite runs against the pinned manifest unless the
+    # variable names another, with no code change.
+    assert live_manifest_path(environ) == expected
 
 
 def test_verify_accepts_matching_artifact(tmp_path):

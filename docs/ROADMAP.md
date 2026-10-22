@@ -280,8 +280,8 @@ Carried forward, not done in M3:
 
 - Live-model runs for AC02, AC05, AC06, and AC07 (#88). No live
   external model has been run.
-- AC08 stays open until a second local artifact is qualified and the
-  swap runs against it (#90).
+- AC08: the second local artifact and the live local swap are done in
+  M6 (#90). AC08 stays open until a live external swap runs (#88).
 - Restart recovery exists as `LocalOrchestrator.recover_after_restart`,
   but nothing called it at startup, because there was no launcher. The
   operator launcher (#87, see M5) now calls it once before serving.
@@ -476,6 +476,15 @@ Carried forward, not done in M5:
   section 12.2, spec 0.7).
 - Latency experiment on both target platforms; benchmark report with
   full environment manifest (#33; RM25, section 12.3).
+- Second local artifact and the AC08 local swap (#90; RM18, sections 6
+  and 12.3): Qwen3-0.6B Q4_K_M has a manifest, passed the live smoke
+  suite and the English live skill-and-tool runs, and the live suite ran
+  from Q8_0 to Q4_K_M with only `RELAYMIND_LIVE_MANIFEST` changed
+  ([`EVIDENCE.md`](EVIDENCE.md)). Q4_0 was tried and is not qualified.
+  The external half of AC08 is covered with scripted endpoints (#49);
+  no live external endpoint has been run (#88). Doubles alone do not
+  satisfy a live requirement (spec section 13), so AC08 stays open until
+  a live swap to a second external endpoint is recorded.
 - Closes: AC15 and the release record (section 14).
 
 ## Out of scope for the prototype
@@ -535,3 +544,9 @@ listed here so the current order can be traced to its reason.
   M5 next to #30 and #31. M5 was closed on deterministic coverage with
   model doubles, like M3 and M4; its live evidence (#104) joins the M6
   latency experiment (#33).
+- 2026-10-22, #90: the local half of AC08 runs live in M6. The second local artifact is
+  Qwen3-0.6B Q4_K_M from `unsloth/Qwen3-0.6B-GGUF`, because the Qwen
+  repository publishes only Q8_0. Q4_0 from `ggml-org/Qwen3-0.6B-GGUF`
+  was tried first and failed the thinking-mode smoke check. The local
+  swap ran live; the external swap rests on scripted endpoints only, so
+  AC08 stays open until a live external swap runs (#88).

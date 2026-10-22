@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "model_id": "qwen3-0.6b",
+  "source_url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF",
+  "source_revision": "50968a4468ef4233ed78cd7c3de230dd1d61a56b",
+  "file_name": "Qwen3-0.6B-Q4_K_M.gguf",
+  "file_sha256": "ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a",
+  "quantization": "Q4_K_M",
+  "tokenizer_hash": "ee28b958b28c088fc6713ddeb2257bbadacc406eb2b3cf76e395c1bfd1c2a54d",
+  "chat_template_hash": "5da44855ab7e0641774d5ed0ff0b4f89671d01df7d316e54d06557a962211cb4",
+  "runtime": "llama.cpp",
+  "runtime_version": "0.7.0-dev (build 11785, commit 8baabd53b)",
+  "launch_settings": {
+    "ctx_size": 8192,
+    "jinja": true,
+    "reasoning": "off",
+    "reasoning_format": "deepseek"
+  },
+  "license": "Apache-2.0"
+}
