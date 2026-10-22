@@ -6,52 +6,70 @@ Playwright's Chromium; install it with ``playwright install chromium``.
 A machine without the browser fails the test, it does not skip it.
 """
 
+import re
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
 import httpx
 
-from api_helpers import RUN_ID_HEADER, RunningServer, make_app, token_of
+from api_helpers import RUN_ID_HEADER, RunningServer, chat_body, token_of
 from relaymind.api.native import NativeSettings
-from relaymind.ui import UiSettings
+from ui_helpers import ui_app
 
 WAIT_MS = 30_000  # Windows runners are slow
+NATIVE_VIEW = re.compile(r"^/relay/v1/runs/[^/]+$")
 
 
 @contextmanager
 def served(gateway, *, mode="double", **ui):
     """The app on a loopback port: yields (base_url, application_token)."""
-    app = make_app(
-        gateway,
-        ui=UiSettings(mode=mode, **ui),
-        native=NativeSettings(cancel_wait_seconds=0.5),
-    )
+    app = ui_app(gateway, mode, native=NativeSettings(cancel_wait_seconds=0.5), **ui)
     with RunningServer(app) as server:
-        host, port = server.address[:2]
-        yield f"http://{host}:{port}", token_of(app)
+        yield server.origin, token_of(app)
+
+
+@dataclass
+class Seen:
+    """What the page asked the gateway for while a test ran."""
+
+    posts: list[dict] = field(default_factory=list)  # every POST to the API: path and body
+    views: list = field(default_factory=list)  # responses of GET /relay/v1/runs/{id}
+
+    def issued_tokens(self):
+        """The approval tokens the native run view returned to the page (it returns each once)."""
+        tokens = []
+        for response in self.views:
+            pending = response.json().get("pending_approval") or {}
+            if pending.get("token"):
+                tokens.append(pending["token"])
+        return tokens
 
 
 @contextmanager
-def browser_page():
-    """A fresh page; yields (page, calls) where calls lists every API request it made."""
-    from playwright.sync_api import sync_playwright
+def browser_page(browser):
+    """A fresh page in its own context of a shared browser; yields (page, seen)."""
+    seen = Seen()
+    context = browser.new_context()
+    try:
+        page = context.new_page()
+        page.set_default_timeout(WAIT_MS)
 
-    calls: list[dict] = []
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
-        try:
-            page = browser.new_page()
-            page.set_default_timeout(WAIT_MS)
+        def on_request(request):
+            path = urlsplit(request.url).path
+            if request.method == "POST" and path.startswith(("/relay/", "/ui/comparisons")):
+                seen.posts.append({"path": path, "body": request.post_data_json})
 
-            def record(request):
-                path = urlsplit(request.url).path
-                if request.method == "POST" and path.startswith(("/relay/", "/ui/comparisons")):
-                    calls.append({"path": path, "body": request.post_data_json})
+        def on_response(response):
+            request = response.request
+            if request.method == "GET" and NATIVE_VIEW.match(urlsplit(request.url).path):
+                seen.views.append(response)
 
-            page.on("request", record)
-            yield page, calls
-        finally:
-            browser.close()
+        page.on("request", on_request)
+        page.on("response", on_response)
+        yield page, seen
+    finally:
+        context.close()
 
 
 def open_ui(page, base, token):
@@ -68,14 +86,6 @@ def open_run(page, run_id):
 def chat_run_id(base, token, prompt, **fields):
     """Make one chat completion over HTTP; return the run it owned."""
     with httpx.Client(base_url=base, headers={"Authorization": f"Bearer {token}"}) as client:
-        response = client.post(
-            "/v1/chat/completions",
-            json={
-                "model": "relaymind",
-                "messages": [{"role": "user", "content": prompt}],
-                **fields,
-            },
-            timeout=30,
-        )
+        response = client.post("/v1/chat/completions", json=chat_body(prompt, **fields), timeout=30)
     assert response.status_code == 200, response.text
     return response.headers[RUN_ID_HEADER]

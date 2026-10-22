@@ -149,7 +149,9 @@ itself, with the manifest's SHA-256; any other file fails the run.
   denies, cancels a waiting run, and runs the comparison; it asserts the
   native calls and their values, the data mode label in the shell and in
   every trace, single escaping, the shown browser timestamp, the answer
-  options, the parallel workflow actors, and a routing cache route. Install
+  options, the parallel workflow actors, a routing cache route, that approve
+  and deny stay disabled until the page holds the token, and a replay-mode
+  view with no controls. Install
   the browser once with `playwright install chromium`; a machine without
   it fails the test. CI installs it on ubuntu, macOS, and Windows. No live
   run is recorded for the UI.

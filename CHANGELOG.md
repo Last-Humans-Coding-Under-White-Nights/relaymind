@@ -818,7 +818,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   AC12). The test runs the page against the app over model doubles and
   checks the native endpoint calls, the data mode label on every view, single
   escaping, and the shown browser timestamp. The browser is a development
-  dependency installed in CI on all three platforms.
+  dependency installed in CI on all three platforms. The approve and deny
+  controls are rendered disabled and the page enables them only once it
+  holds the approval token, so an early click cannot send a resume without
+  it. A replay-mode view is also run in the browser.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried
