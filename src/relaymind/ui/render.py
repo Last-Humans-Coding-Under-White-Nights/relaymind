@@ -254,14 +254,9 @@ def _operation(op: Mapping[str, Any]) -> str:
     return (
         f'<li class="op {_t(op["status"])}"><strong>{_t(op["tool_name"])}</strong> '
         f'<span class="status">{_t(op["status"])}</span>{replay}{_branch(op)}, '
-        f"{_duration(op)}, source {_t(op['source_ref'])}"
+        f"{_ms(op['duration_ms'], 'duration not recorded')}, source {_t(op['source_ref'])}"
         f"{_reference(op)}{error}{data}</li>"
     )
-
-
-def _duration(op: Mapping[str, Any]) -> str:
-    ms = op["duration_ms"]
-    return "duration not recorded" if ms is None else f"{_t(ms)} ms"
 
 
 def _reference(op: Mapping[str, Any]) -> str:

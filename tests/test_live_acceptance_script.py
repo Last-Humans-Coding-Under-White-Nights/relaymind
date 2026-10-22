@@ -42,14 +42,14 @@ def harness():
     return load_script_module("live_acceptance")
 
 
-def config_text(harness, tmp_path, **options):
+def config_text(harness, tmp_path, *, work="work", port=8099, **options):
     manifest, artifact = make_artifact(tmp_path)
     return harness.gateway_config(
-        work=tmp_path / "work",
+        work=tmp_path / work,
         manifest=manifest,
         artifact=artifact,
         local_url="http://127.0.0.1:8033",
-        port=8099,
+        port=port,
         **options,
     )
 
@@ -686,15 +686,8 @@ def _swap_trace(model, content_hash="sha256:a", budgets=8):
 
 def _swap_config(harness, tmp_path, work, endpoint, **options):
     """The harness's own launch file over one shared model artifact, as run_live writes it."""
-    manifest, artifact = make_artifact(tmp_path)
-    return harness.gateway_config(
-        work=tmp_path / work,
-        manifest=manifest,
-        artifact=artifact,
-        local_url="http://127.0.0.1:8033",
-        port=8000 + len(work),
-        external=endpoint,
-        **options,
+    return config_text(
+        harness, tmp_path, work=work, port=8000 + len(work), external=endpoint, **options
     )
 
 
@@ -799,13 +792,16 @@ def test_launch_tables_skips_a_per_launch_key_that_is_not_a_table(harness):
 
 
 def test_ac08_external_swap_fails_on_other_skill_packages_or_models(harness, tmp_path):
-    """Same skill content hashes; each trace names its own configured model."""
+    """Same skill content hashes; each trace names its own configured model.
+
+    A skill package failure shows both offered sets.
+    """
     endpoints = _second_provider(harness)
     traces = {"r1": _swap_trace("model-a"), "r2": _swap_trace("model-b", "sha256:b")}
     result = _swap(harness, tmp_path, endpoints, traces=traces)
-    assert [c.name for c in result.checks if not c.ok] == [
-        "both runs offered the same skill packages"
-    ]
+    (failed,) = [c for c in result.checks if not c.ok]
+    assert failed.name == "both runs offered the same skill packages"
+    assert "sha256:a" in failed.detail and "sha256:b" in failed.detail
     traces = {"r1": _swap_trace("model-a"), "r2": _swap_trace("model-a")}
     result = _swap(harness, tmp_path, endpoints, traces=traces)
     assert [c.name for c in result.checks if not c.ok] == [
@@ -821,15 +817,6 @@ def test_ac08_external_swap_fails_on_other_budgets(harness, tmp_path):
     failed = [c for c in result.checks if not c.ok]
     assert [c.name for c in failed] == ["both runs had the same budgets"]
     assert failed[0].detail == "[{'run_generations': 8}, {'run_generations': 10}]"
-
-
-def test_ac08_external_swap_shows_the_skill_packages_that_differ(harness, tmp_path):
-    """AC08: a skill package failure shows both offered sets."""
-    endpoints = _second_provider(harness)
-    traces = {"r1": _swap_trace("model-a"), "r2": _swap_trace("model-b", "sha256:b")}
-    result = _swap(harness, tmp_path, endpoints, traces=traces)
-    (failed,) = [c for c in result.checks if not c.ok]
-    assert "sha256:a" in failed.detail and "sha256:b" in failed.detail
 
 
 def test_a_swap_at_the_same_base_url_is_not_counted_for_ac08(harness, tmp_path):
@@ -883,50 +870,47 @@ def test_a_second_endpoint_uses_its_own_credential_variable(harness, tmp_path):
     assert "second-secret-value" not in plan.description
 
 
-def test_the_second_endpoint_options_need_a_model_and_the_first_endpoint(harness):
-    """AC08: a second base URL needs its model and its own context limit."""
-    first = [
-        "--out",
-        "x.json",
-        "--external-base-url",
-        "https://api.one.invalid/v1",
-        "--external-model",
-        "model-a",
-        "--external-context-limit",
-        "32768",
-    ]
-    with pytest.raises(SystemExit, match="^2$"):
-        harness.main([*first, "--second-external-base-url", "https://api.two.invalid/v1"])
-    with pytest.raises(SystemExit, match="^2$"):
-        harness.main(["--out", "x.json", "--second-external-model", "model-b"])
-    with pytest.raises(SystemExit, match="^2$"):
-        harness.main(
-            [
-                *first,
-                "--second-external-base-url",
-                "https://api.two.invalid/v1",
-                "--second-external-model",
-                "model-b",
-            ]
-        )
+FIRST_ENDPOINT_ARGS = (
+    "--external-base-url",
+    "https://api.one.invalid/v1",
+    "--external-model",
+    "model-a",
+    "--external-context-limit",
+    "32768",
+)
+SECOND_URL_ARGS = ("--second-external-base-url", "https://api.two.invalid/v1")
 
 
-def test_incomplete_external_options_are_named_before_the_second_model(harness, capsys):
-    """AC08: a missing --external-context-limit gets the go-together error first."""
+@pytest.mark.parametrize(
+    "argv,error",
+    [
+        # AC08: a second base URL needs its model and its own context limit.
+        (
+            [*FIRST_ENDPOINT_ARGS, *SECOND_URL_ARGS],
+            "the --second-external options need --second-external-model",
+        ),
+        (
+            ["--second-external-model", "model-b"],
+            "--second-external-model needs the external endpoint options",
+        ),
+        (
+            [*FIRST_ENDPOINT_ARGS, *SECOND_URL_ARGS, "--second-external-model", "model-b"],
+            "--second-external-base-url needs --second-external-context-limit",
+        ),
+        # A missing --external-context-limit gets the go-together error first.
+        (
+            [*FIRST_ENDPOINT_ARGS[:4], "--second-external-model", "model-b"],
+            "go together",
+        ),
+    ],
+)
+def test_the_second_endpoint_options_need_a_model_and_the_first_endpoint(
+    harness, capsys, argv, error
+):
+    """AC08: incomplete endpoint options stop the run with a usage error that names them."""
     with pytest.raises(SystemExit, match="^2$"):
-        harness.main(
-            [
-                "--out",
-                "x.json",
-                "--external-base-url",
-                "https://api.one.invalid/v1",
-                "--external-model",
-                "model-a",
-                "--second-external-model",
-                "model-b",
-            ]
-        )
-    assert "go together" in capsys.readouterr().err
+        harness.main(["--out", "x.json", *argv])
+    assert error in capsys.readouterr().err
 
 
 def test_one_endpoint_written_two_ways_is_not_a_second_endpoint(harness):

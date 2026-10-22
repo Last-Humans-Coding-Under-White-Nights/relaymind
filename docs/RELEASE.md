@@ -26,7 +26,7 @@ State as of 2026-10-23, branch `feat/issue-109-ac08-second-provider`
 
 ## Passing deterministic tests
 
-- `pytest` (model doubles, no live model): 3061 passed, 12 deselected
+- `pytest` (model doubles, no live model): 3066 passed, 12 deselected
   (the `live` tests), on Apple Silicon macOS, Python 3.14.7, at the head
   of this branch. `ruff check .` and `ruff format --check .` pass.
 - CI runs the same suite on the three platforms of the workflow; the CI
