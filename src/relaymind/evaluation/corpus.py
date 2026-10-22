@@ -245,12 +245,18 @@ def _parse_case(raw: object, seeds: Mapping[str, Any]) -> Case:
     outcomes = _strings(f"{where} expected_outcomes", raw["expected_outcomes"], OUTCOMES)
     if not outcomes:
         raise CorpusError(f"{where}: expected_outcomes must name at least one outcome")
+    for name in ("best_effort", "expect_clarification"):
+        if not isinstance(raw[name], bool):
+            raise CorpusError(f"{where}: {name} must be a boolean")
+    for name in ("english_case", "clarification_answer"):
+        if raw[name] is not None and not isinstance(raw[name], str):
+            raise CorpusError(f"{where}: {name} must be a string or null")
     databases = raw["expected_databases"]
     return Case(
         case_id=raw["id"],
         case_class=raw["class"],
         language=raw["language"],
-        best_effort=bool(raw["best_effort"]),
+        best_effort=raw["best_effort"],
         english_case=raw["english_case"],
         prompt=raw["prompt"],
         fixture=raw["fixture"],
@@ -269,7 +275,7 @@ def _parse_case(raw: object, seeds: Mapping[str, Any]) -> Case:
         expected_databases=None
         if databases is None
         else _strings(f"{where} expected_databases", databases),
-        expect_clarification=bool(raw["expect_clarification"]),
+        expect_clarification=raw["expect_clarification"],
         rubric=raw["rubric"],
     )
 
