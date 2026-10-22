@@ -10,6 +10,7 @@ errors and timeouts are recorded, never dropped. These tests drive the
 runner against the launcher's app over scripted model doubles.
 """
 
+import argparse
 import asyncio
 import json
 from collections import Counter
@@ -330,3 +331,30 @@ def test_a_malformed_stream_line_is_recorded_as_an_error(bench):
     sample = measure(bench, api, "Is staging-api healthy?")
     assert sample["http_status"] == 200 and sample["timed_out"] is False
     assert sample["error"].startswith("stream: JSONDecodeError")
+
+
+class _FakeRuntime:
+    """A runtime whose llama-server launch is a stand-in (no process)."""
+
+    def launch(self, log):
+        return object(), "http://127.0.0.1:1", 0.0
+
+
+def test_an_interrupted_benchmark_removes_its_work_dir(bench, tmp_path, monkeypatch):
+    work = tmp_path / "work"
+    work.mkdir()
+    stopped = []
+
+    def interrupt(url):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(bench.harness, "check_runtime", lambda manifest: _FakeRuntime())
+    monkeypatch.setattr(bench.harness, "application_revision", lambda: {})
+    monkeypatch.setattr(bench.harness, "_stop", stopped.append)
+    monkeypatch.setattr(bench.tempfile, "mkdtemp", lambda prefix: str(work))
+    monkeypatch.setattr(bench, "_props", interrupt)
+    args = argparse.Namespace(manifest="m.json", seed=1, runs=1, timeout=1.0, out="x.json")
+    with pytest.raises(KeyboardInterrupt):
+        bench.run_benchmark(args)
+    assert not work.exists()
+    assert len(stopped) == 1

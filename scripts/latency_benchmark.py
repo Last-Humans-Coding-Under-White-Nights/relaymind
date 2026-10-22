@@ -38,6 +38,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -288,99 +289,101 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     seed = args.seed if args.seed is not None else random.SystemRandom().randrange(2**31)
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
     work = Path(tempfile.mkdtemp(prefix="relaymind-latency-"))
-    llama_log = work / "llama-server.log"
-    llama, local_url, cold_start = runtime.launch(llama_log)
-    try:
-        props = _props(local_url)
-        config = work / "relaymind.toml"
-        config.write_text(
-            benchmark_config(
-                work=work,
-                manifest=runtime.manifest_path.resolve(),
-                artifact=runtime.artifact,
-                local_url=local_url,
-                port=harness._free_port(),
-            ),
-            encoding="utf-8",
-        )
-        gateway = harness.GatewayProcess(config, work / "gateway.log", os.environ)
-        gateway_started = time.monotonic()
-        output = gateway.start()
-        gateway_ready = time.monotonic() - gateway_started
-        api = harness.Api(output.url, output.token, sandbox_dir=work / "sandbox")
-
-        async def drive():
-            try:
-                return await run_samples(
-                    api, prompts, seed=seed, runs=args.runs, timeout=args.timeout
-                )
-            finally:
-                await api.aclose()
-
+    # The work dir goes on any exit, an interrupt included.
+    with ExitStack() as cleanup:
+        cleanup.callback(shutil.rmtree, work, ignore_errors=True)
+        llama_log = work / "llama-server.log"
+        llama, local_url, cold_start = runtime.launch(llama_log)
         try:
-            samples = asyncio.run(drive())
+            props = _props(local_url)
+            config = work / "relaymind.toml"
+            config.write_text(
+                benchmark_config(
+                    work=work,
+                    manifest=runtime.manifest_path.resolve(),
+                    artifact=runtime.artifact,
+                    local_url=local_url,
+                    port=harness._free_port(),
+                ),
+                encoding="utf-8",
+            )
+            gateway = harness.GatewayProcess(config, work / "gateway.log", os.environ)
+            gateway_started = time.monotonic()
+            output = gateway.start()
+            gateway_ready = time.monotonic() - gateway_started
+            api = harness.Api(output.url, output.token, sandbox_dir=work / "sandbox")
+
+            async def drive():
+                try:
+                    return await run_samples(
+                        api, prompts, seed=seed, runs=args.runs, timeout=args.timeout
+                    )
+                finally:
+                    await api.aclose()
+
+            try:
+                samples = asyncio.run(drive())
+            finally:
+                gateway.stop()
         finally:
-            gateway.stop()
-    finally:
-        harness._stop(llama)
-    runtime_log = parse_runtime_log(llama_log.read_text("utf-8", errors="replace"))
-    measured = samples["measured"]
-    summary = summarize_latency(measured)
-    calls = [call for sample in measured for call in sample["model_calls"]]
-    document = {
-        "kind": "relaymind.latency_benchmark",
-        "note": "Spec 0.28 section 12.2 latency experiment on the local path, concurrency one, "
-        "routing cache off. First transport event and first answer token are client times; "
-        "first model action and first useful content are trace times (elapsed_ms from "
-        "run.accepted). The two clocks are never subtracted. Errors and timeouts are kept.",
-        "command": " ".join(["python", "scripts/latency_benchmark.py", *sys.argv[1:]]),
-        "started_at_utc": started_at,
-        "finished_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
-        "prompts": {
-            "file": "evaluation/latency_prompts.v1.json",
-            "sha256": canonical_digest(prompts),
-            "language": "en",
-        },
-        "design": {
-            "seed": seed,
-            "warmups": len(samples["warmups"]),
-            "runs_per_prompt": args.runs,
-            "request_timeout_seconds": args.timeout,
-            "concurrency": 1,
-            "routing_cache": False,
-            "external_model": None,
-            "path": "POST /v1/chat/completions, stream true, model relaymind",
-        },
-        "environment": {
-            "machine": machine_manifest(),
-            "application": application,
-            "runtime_banner": runtime.banner,
-            "runtime_devices": runtime_devices(),
-            "runtime_log": runtime_log,
-            "llama_server_argv": runtime.server_argv,
-            "llama_server_props": props,
-            **runtime.model_record(),
-            "context": {"ctx_size": runtime.manifest.launch_settings.get("ctx_size")},
-            "external_endpoint_region": None,
-        },
-        "cold_start": {
-            "llama_server_start_to_healthy_seconds": round(cold_start, 3),
-            "model_load_ms": runtime_log["model_load_ms"],
-            "gateway_start_to_healthy_seconds": round(gateway_ready, 3),
-            "gateway_config": config.read_text("utf-8"),
-            "cold_request": samples["cold"],
-        },
-        "prefix_cache": prefix_cache_record(calls),
-        "summary": summary,
-        "warmups": samples["warmups"],
-        "samples": measured,
-    }
-    out = Path(args.out)
-    harness.write_json(out, document, work=work)
-    report = render_latency_markdown(summary, title=f"Latency benchmark: {out.stem}")
-    out.with_suffix(".md").write_text(report, encoding="utf-8")
-    shutil.rmtree(work, ignore_errors=True)
-    return document
+            harness._stop(llama)
+        runtime_log = parse_runtime_log(llama_log.read_text("utf-8", errors="replace"))
+        measured = samples["measured"]
+        summary = summarize_latency(measured)
+        calls = [call for sample in measured for call in sample["model_calls"]]
+        document = {
+            "kind": "relaymind.latency_benchmark",
+            "note": "Spec 0.28 section 12.2 latency experiment on the local path, concurrency one, "
+            "routing cache off. First transport event and first answer token are client times; "
+            "first model action and first useful content are trace times (elapsed_ms from "
+            "run.accepted). The two clocks are never subtracted. Errors and timeouts are kept.",
+            "command": " ".join(["python", "scripts/latency_benchmark.py", *sys.argv[1:]]),
+            "started_at_utc": started_at,
+            "finished_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
+            "prompts": {
+                "file": "evaluation/latency_prompts.v1.json",
+                "sha256": canonical_digest(prompts),
+                "language": "en",
+            },
+            "design": {
+                "seed": seed,
+                "warmups": len(samples["warmups"]),
+                "runs_per_prompt": args.runs,
+                "request_timeout_seconds": args.timeout,
+                "concurrency": 1,
+                "routing_cache": False,
+                "external_model": None,
+                "path": "POST /v1/chat/completions, stream true, model relaymind",
+            },
+            "environment": {
+                "machine": machine_manifest(),
+                "application": application,
+                "runtime_banner": runtime.banner,
+                "runtime_devices": runtime_devices(),
+                "runtime_log": runtime_log,
+                "llama_server_argv": runtime.server_argv,
+                "llama_server_props": props,
+                **runtime.model_record(),
+                "context": {"ctx_size": runtime.manifest.launch_settings.get("ctx_size")},
+                "external_endpoint_region": None,
+            },
+            "cold_start": {
+                "llama_server_start_to_healthy_seconds": round(cold_start, 3),
+                "model_load_ms": runtime_log["model_load_ms"],
+                "gateway_start_to_healthy_seconds": round(gateway_ready, 3),
+                "gateway_config": config.read_text("utf-8"),
+                "cold_request": samples["cold"],
+            },
+            "prefix_cache": prefix_cache_record(calls),
+            "summary": summary,
+            "warmups": samples["warmups"],
+            "samples": measured,
+        }
+        out = Path(args.out)
+        harness.write_json(out, document, work=work)
+        report = render_latency_markdown(summary, title=f"Latency benchmark: {out.stem}")
+        out.with_suffix(".md").write_text(report, encoding="utf-8")
+        return document
 
 
 def main(argv: Sequence[str] | None = None) -> None:
