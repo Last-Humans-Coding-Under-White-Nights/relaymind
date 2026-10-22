@@ -1692,8 +1692,13 @@ def gateway_config(
     ui: bool = False,
     seed: Path = BASELINE_SEED,
     skill_root: Path = SKILLS_ROOT,
+    permissions: Sequence[str] | None = None,
 ) -> str:
-    """The operator's TOML file for one launch (spec section 14.1); it holds no credential."""
+    """The operator's TOML file for one launch (spec section 14.1); it holds no credential.
+
+    permissions, when given, are the caller permissions of [policy];
+    otherwise the launcher default (demo.read and demo.mutate) applies.
+    """
     lines = [
         "[server]",
         'host = "127.0.0.1"',
@@ -1712,6 +1717,7 @@ def gateway_config(
         "[policy]",
         f"enabled_workflows = {_toml(list(workflows))}",
         f"allowed_modes = {_toml(list(modes))}",
+        *([] if permissions is None else [f"permissions = {_toml(list(permissions))}"]),
         "[cache]",
         f"routing = {'true' if routing_cache else 'false'}",
     ]
@@ -2064,8 +2070,35 @@ async def _run_plan(
     return results
 
 
-def run_live(args: argparse.Namespace) -> dict[str, Any]:
-    manifest_path = Path(args.manifest)
+@dataclass(frozen=True)
+class Runtime:
+    """The pinned local model, checked against its manifest, and the runtime banner."""
+
+    manifest_path: Path
+    manifest: Any
+    artifact: Path
+    banner: str
+
+    @property
+    def server_argv(self) -> list[str]:
+        return launch_settings_argv(self.manifest.launch_settings)
+
+    def launch(self, log: Path) -> tuple[subprocess.Popen, str, float]:
+        """Start llama-server from the manifest's launch settings (models/README.md)."""
+        return _launch_server(self.artifact, self.server_argv, log)
+
+    def model_record(self) -> dict[str, Any]:
+        return {
+            "manifest": os.fspath(self.manifest_path),
+            "model_id": self.manifest.model_id,
+            "model_file": self.manifest.file_name,
+            "model_sha256": self.manifest.file_sha256,
+            "quantization": self.manifest.quantization,
+        }
+
+
+def check_runtime(manifest_path: Path) -> Runtime:
+    """The runtime banner must name the manifest's version, and the artifact its hash."""
     manifest = load_manifest(manifest_path)
     artifact = REPO_ROOT / "models" / manifest.file_name
     banner = _runtime_banner()
@@ -2074,11 +2107,19 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
     ]:
         raise SystemExit(f"llama-server on PATH is not {manifest.runtime_version}: {banner}")
     verify_artifact(manifest, artifact)
-    # Read before this run writes its own exports into the checkout.
-    application = {
-        "head": _git("rev-parse", "HEAD"),
-        "dirty": bool(_git("status", "--porcelain")),
-    }
+    return Runtime(Path(manifest_path), manifest, artifact, banner)
+
+
+def application_revision() -> dict[str, Any]:
+    """The checkout's revision; read it before a run writes its exports into the checkout."""
+    return {"head": _git("rev-parse", "HEAD"), "dirty": bool(_git("status", "--porcelain"))}
+
+
+def run_live(args: argparse.Namespace) -> dict[str, Any]:
+    runtime = check_runtime(Path(args.manifest))
+    manifest_path, manifest, artifact = runtime.manifest_path, runtime.manifest, runtime.artifact
+    banner = runtime.banner
+    application = application_revision()
     external = None
     if args.external_base_url:
         external = ExternalEndpoint(
@@ -2090,9 +2131,7 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
     with ExitStack() as cleanup:
         cleanup.callback(shutil.rmtree, work, ignore_errors=True)
         llama_log = work / "llama-server.log"
-        llama, local_url, cold_start = _launch_server(
-            artifact, launch_settings_argv(manifest.launch_settings), llama_log
-        )
+        llama, local_url, cold_start = runtime.launch(llama_log)
         cleanup.callback(_stop, llama)
         launches, results, traces, configs, models = [], [], {}, {}, {}
         stats_files = {}
@@ -2204,14 +2243,10 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
             "application": application,
             "runtime_banner": banner,
             "llama_server": {
-                "argv": launch_settings_argv(manifest.launch_settings),
+                "argv": runtime.server_argv,
                 "cold_start_seconds": round(cold_start, 3),
             },
-            "manifest": os.fspath(manifest_path),
-            "model_id": manifest.model_id,
-            "model_file": manifest.file_name,
-            "model_sha256": manifest.file_sha256,
-            "quantization": manifest.quantization,
+            **runtime.model_record(),
             "external_endpoint": None
             if external is None
             else {"base_url": external.base_url, "model": external.model},
