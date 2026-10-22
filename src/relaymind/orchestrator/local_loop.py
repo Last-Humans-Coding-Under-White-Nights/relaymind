@@ -113,7 +113,7 @@ import json
 import secrets
 import uuid
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from typing import Any
 
@@ -510,16 +510,23 @@ class LocalOrchestrator:
         *,
         execution_mode: str | None = None,
         model_alias: str | None = None,
+        final_options: GenerationOptions | None = None,
     ) -> RunOutcome:
         """Run one managed request to a terminal or waiting state.
 
         execution_mode is the requested mode (None means auto, section
         7.4); operator policy checks belong to the API layer. model_alias
         is the chat request's virtual alias, or None for a native run.
+        final_options are the caller's token budget and sampling for the
+        generations that write the answer: the local final generation and
+        the external generations (spec 0.14 section 7.1). An external
+        generation offered tools may propose a tool call, so it takes the
+        sampling but keeps its own token budget. Routing, skill, and
+        repair generations keep their controlled settings (RM03).
         Raises SlotUnavailableError (429) when another run holds the
         execution slot; no run is created then.
         """
-        run = _Run(self, tuple(messages), execution_mode, model_alias)
+        run = _Run(self, tuple(messages), execution_mode, model_alias, final_options)
         return self._keep_if_waiting(run, await run.execute())
 
     async def resume(self, run_id: str, expected_version: int, text: object) -> RunOutcome:
@@ -688,8 +695,11 @@ class _Run:
         messages: tuple[Message, ...],
         requested_mode: str | None,
         model_alias: str | None,
+        final_options: GenerationOptions | None = None,
     ) -> None:
         self.o = owner
+        # The caller's answer options, laid over each answer generation's defaults.
+        self.final_options = final_options or GenerationOptions()
         self.messages = messages
         self.requested_mode = requested_mode
         self.mode = ExecutionMode(requested_mode or ExecutionMode.AUTO)
@@ -1337,7 +1347,10 @@ class _Run:
         """
         while True:
             _, generation = await self._generate(
-                "external", loop.conversation, loop.schemas, EXTERNAL_OPTIONS
+                "external",
+                loop.conversation,
+                loop.schemas,
+                self._answer_options(EXTERNAL_OPTIONS, tools_offered=bool(loop.schemas)),
             )
             if generation.calls:
                 call, admitted, rejection, proposal_id = self._tool_turn(
@@ -1996,6 +2009,7 @@ class _Run:
                 Message(role=Role.SYSTEM, content=f"{FINAL_INSTRUCTION}\n{language_line}"),
             ),
             (),
+            self._answer_options(LOCAL_OPTIONS),
         )
         if generation.calls:
             raise Escalation("invalid_output", "the final generation proposed a tool call")
@@ -2006,6 +2020,22 @@ class _Run:
                 "invalid_output", "the final answer does not meet the completion criteria"
             )
         return self._publish(generation, LOCAL_ACTOR)
+
+    def _answer_options(
+        self, defaults: GenerationOptions, *, tools_offered: bool = False
+    ) -> GenerationOptions:
+        """The caller's options laid over an answer generation's defaults.
+
+        A generation offered tools may propose a tool call instead of the
+        answer, so the caller's token budget, a final-response budget, is
+        not applied to it: it would cut off the call (spec 0.14 section 7.1).
+        """
+        requested = {
+            name: value for name, value in asdict(self.final_options).items() if value is not None
+        }
+        if tools_offered:
+            requested.pop("max_output_tokens", None)
+        return replace(defaults, **requested)
 
     def _publish(self, generation: _Generation, role: str) -> str:
         """Publish a validated answer as answer.delta events, once (RM14, RM20).

@@ -270,6 +270,13 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   header that selects auto, local_only, external_only, or parallel_demo
   from a standard chat client (spec 0.4, section 7.1). parallel_demo
   only has a workflow to run once M5 lands.
+  #22 is implemented with model doubles (`tests/test_chat_request.py`,
+  `tests/test_chat_endpoint.py`, `tests/test_openai_sdk.py`, spec 0.14):
+  the two endpoints, the parameter table, the execution mode header and
+  policy, the loopback bind, and the generated token. The
+  `relaymind-client-tools` alias is served only when a client-owned
+  backend is configured, which is #24, so the gateway lists only what it
+  can run. `Idempotency-Key` is rejected until #26 implements it.
 - Native run API: runs, events SSE, resume, cancel, idempotency (#25,
   #26; RM21). SSE exposes the events recorded since M2.
 - Cancellation during generation and in-flight writes (#29; RM10, RM14,

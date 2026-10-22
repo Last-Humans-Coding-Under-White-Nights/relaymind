@@ -92,6 +92,21 @@ itself, with the manifest's SHA-256; any other file fails the run.
   a configuration value, not a qualified artifact, so AC08 stays open
   (`docs/ROADMAP.md`).
 
+- AC09 and the request part of AC16, deterministic (issue #22, spec 0.14
+  section 7.1): `pytest tests/test_chat_request.py` checks the parameter
+  table row by row, with an accept test and a reject test each, and the
+  named `unsupported_parameter` errors; `tests/test_chat_endpoint.py`
+  checks `GET /v1/models` and `POST /v1/chat/completions` over HTTP
+  against the real orchestrator and model doubles (response shape, the
+  `X-RelayMind-Run-ID` header, stream framing, the execution mode header
+  and its policy, the 400, 401, 403, 409, 422, 429, and 500 statuses the
+  endpoint can reach); `tests/test_openai_sdk.py` runs the official OpenAI
+  Python SDK with `stream` true and false, in process and over a real
+  loopback socket; `tests/test_api_binding.py` checks the loopback bind
+  rule and the generated token. The client-owned alias is checked only
+  at the API seam, with a backend double, because its execution is
+  issue #24. No live model is run, so there is no live AC09 record yet.
+
 ### Required trace events (RM16, RM22, RM25)
 
 `pytest tests/test_required_trace_events.py tests/test_trace_artifacts.py`

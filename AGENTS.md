@@ -19,7 +19,7 @@ codebase.
 
 | Path | Purpose |
 |------|---------|
-| `src/relaymind/api/` | API layer: request validation, chat contract, native run API, auth (RM19–RM21); the error contract (`errors.py`: stable codes, one status each, failed-run mapping; section 11) and the bearer token check (`auth.py`) |
+| `src/relaymind/api/` | API layer: request validation, chat contract, native run API, auth (RM19–RM21); the error contract (`errors.py`: stable codes, one status each, failed-run mapping; section 11) the bearer token check (`auth.py`), chat request validation (`chat_request.py`), the chat backends and response bodies (`chat.py`), the FastAPI app (`app.py`), and the loopback-only server (`server.py`; RM19, section 7.1) |
 | `src/relaymind/orchestrator/` | State transitions, budgets, routing, handoff, cancellation, final-answer ownership (RM01–RM05, RM13–RM17); the RouteDecision schema and validator (`route_decision.py`, `schemas/route_decision.v1.json`; RM02); the router (`router.py`; native function calling; RM01, RM02), the bounded local loop (`local_loop.py`), budgets (`budgets.py`; RM03, RM04, section 11), identifier provenance (`identifiers.py`; RM05), and the handoff envelope, dispatch authority, and external request (`handoff.py`, `schemas/handoff_envelope.v1.json`; RM13, RM14), and restart recovery (`recovery.py`; RM10, RM17, section 5) |
 | `src/relaymind/adapters/` | Model adapters: normalized messages and events per provider (RM18) |
 | `src/relaymind/skills/` | Skill registry: package validation, instruction loading (RM06, RM07); completion predicates (`predicates.py`; RM06, section 9) |
