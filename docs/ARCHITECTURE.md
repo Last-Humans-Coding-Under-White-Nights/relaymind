@@ -99,6 +99,8 @@ stored events, and `ui/render.py` renders them. `ui/comparison.py`
 also imports `Message` from the adapters; it starts runs and requests
 cancellation through the orchestrator, reads run state from the store,
 and resets the configured sandbox fixtures before each comparison run.
+A chat disconnect asks the orchestrator to cancel the run the request
+owns (`request_cancel`), the same path as the native cancel (section 7.4).
 
 Lower layers must not import higher ones. The store must not depend on
 adapters. Adapters must not depend on SQLite.

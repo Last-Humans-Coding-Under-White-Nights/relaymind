@@ -122,7 +122,7 @@ import hmac
 import json
 import secrets
 import uuid
-from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from typing import Any
@@ -543,6 +543,9 @@ class LocalOrchestrator:
         # whose token has not been read yet (RM11, spec 0.17).
         self._driven: dict[str, tuple[_Run, asyncio.Task[RunOutcome]]] = {}
         self._issued: dict[str, ConfirmationRequest] = {}
+        # Runs a request owns, by the task that awaits them, so a chat
+        # disconnect can cancel one as the native cancel does (section 7.4).
+        self._owned: dict[asyncio.Task[Any], _Run] = {}
         # Requests to adapters to cancel a generation, still in progress;
         # held so a pending one is not garbage collected (section 7.4).
         self._provider_cancels: set[asyncio.Task[None]] = set()
@@ -581,7 +584,37 @@ class LocalOrchestrator:
         execution slot; no run is created then.
         """
         run = _Run(self, tuple(messages), execution_mode, model_alias, final_options, idempotency)
-        return self._keep_if_waiting(run, await run.execute())
+        with self.owning(run):
+            return self._keep_if_waiting(run, await run.execute())
+
+    @contextlib.contextmanager
+    def owning(self, run: "_Run") -> Iterator[None]:
+        """Mark run as owned by the task awaiting it, for request_cancel."""
+        task = asyncio.current_task()
+        assert task is not None  # only called from a coroutine
+        self._owned[task] = run
+        try:
+            yield
+        finally:
+            self._owned.pop(task, None)
+
+    def request_cancel(self, task: "asyncio.Task[Any]") -> str | None:
+        """Cancel the run a request task owns, as the native cancel does (RM14, AC12).
+
+        A chat disconnect uses this (spec 0.24 section 7.4): dispatch
+        stops, the adapter of a generation in flight is asked to cancel
+        it, and the task is cancelled so the run ends as cancelled with
+        its in-flight tool operations settled. A task that owns no run
+        is still cancelled, so its work stops too. Returns the ID of the
+        owned run, when it has one.
+        """
+        run = self._owned.get(task)
+        if run is None:
+            task.cancel()
+            return None
+        _stop(run, task)
+        record = getattr(run, "record", None)
+        return None if record is None else record.run_id
 
     async def resume(self, run_id: str, expected_version: int, text: object) -> RunOutcome:
         """Resume a run waiting for input with explicit new input (section 5, RM17).
@@ -779,12 +812,7 @@ class LocalOrchestrator:
                 "close that request to cancel it"
             )
         run, task = driven
-        # Spec 0.19 section 7.4: the run task cannot dispatch anything
-        # until this call yields, so asking the adapter first still stops
-        # dispatch first, and the adapter is asked while it still knows
-        # the generation (task.cancel() tears its stream down).
-        run.cancel_generation()
-        task.cancel()
+        _stop(run, task)
         await asyncio.wait({task}, timeout=wait_seconds)
         return self.store.get_run(run_id)
 
@@ -2464,6 +2492,18 @@ class _Run:
         ]
         self.o.store.append_events(self.run_id, drafts)
         return published
+
+
+def _stop(run: _Run, task: "asyncio.Task[Any]") -> None:
+    """Stop a run its task is driving, as the native cancel does (RM14, AC12).
+
+    Spec 0.19 section 7.4: the run task cannot dispatch anything until
+    the caller yields, so asking the adapter first still stops dispatch
+    first, and the adapter is asked while it still knows the generation
+    (task.cancel() tears its stream down).
+    """
+    run.cancel_generation()
+    task.cancel()
 
 
 def _correction_exchange(text: str) -> list[Message]:

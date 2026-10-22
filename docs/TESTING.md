@@ -107,6 +107,17 @@ itself, with the manifest's SHA-256; any other file fails the run.
   in-flight read (`failed`), and after a write succeeded (the
   `succeeded` outcome stays). The native cancel endpoint is covered. No
   live model is run, so there is no live AC12 record yet.
+- AC12, chat disconnect, deterministic:
+  `pytest tests/test_chat_disconnect_cancel.py` drives the app as raw ASGI
+  and checks that a client that leaves a managed chat request, with
+  stream true or false, ends the run as `cancelled` with the generation
+  asked to cancel, that an in-flight read is settled as `failed`, that a
+  client that stays gets its answer, and that a native events
+  disconnect leaves the run alone. It also covers the client-owned
+  alias, a backend that owns no run, the bounded wait for the cancel, a
+  request the server cancels, a live answer collected without stream, a
+  receive that fails (not a disconnect), and a stored Idempotency-Key
+  reply. No live model is run.
 
 - Answer options in run.accepted, deterministic (issue #91, RM19, RM22,
   RM25, spec 0.22 sections 8 and 9): `tests/test_trace_event.py` checks the

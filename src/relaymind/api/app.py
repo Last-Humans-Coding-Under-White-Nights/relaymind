@@ -24,6 +24,7 @@ The app holds no model, tool, or store logic: the orchestrator owns it
 (section 3).
 """
 
+import asyncio
 import functools
 import json
 import logging
@@ -40,6 +41,7 @@ from starlette.types import Receive, Scope, Send
 from relaymind.api.auth import require_bearer_token
 from relaymind.api.chat import (
     ChatBackend,
+    ChatResult,
     ManagedChat,
     collect_live,
     completion_body,
@@ -50,6 +52,7 @@ from relaymind.api.chat_request import (
     MANAGED,
     MAX_COMPLETION_TOKENS,
     SAMPLING_OPTIONS,
+    ChatRequest,
     parse_chat_request,
 )
 from relaymind.api.errors import ApiError, error_from_exception
@@ -173,7 +176,12 @@ def create_app(
         stored = check_stored_key(orchestrator.store, claim)
         if stored is None:
             try:
-                result = await backends[chat.alias].complete(replace(chat, idempotency=claim), mode)
+                result = await _until_disconnect(
+                    request,
+                    orchestrator,
+                    _produce(backends[chat.alias], replace(chat, idempotency=claim), mode),
+                    native.cancel_wait_seconds,
+                )
             except IdempotencyKeyTakenError as taken:
                 stored = stored_after_race(orchestrator.store, claim, taken)
         if stored is None:
@@ -196,7 +204,6 @@ def create_app(
                 media_type="text/event-stream",
                 headers={**headers, "Cache-Control": "no-cache"},
             )
-        result = await collect_live(result)
         return JSONResponse(completion_body(chat.alias, result, created), headers=headers)
 
     # -- the native run API (RM21, spec 0.17 section 7.4) ---------------------
@@ -347,6 +354,63 @@ class _ClosingStream(StreamingResponse):
             aclose = getattr(self.body_iterator, "aclose", None)
             if aclose is not None:
                 await aclose()
+
+
+async def _produce(backend: ChatBackend, chat: ChatRequest, mode: ExecutionMode) -> ChatResult:
+    """A backend's result; without stream, with a live answer already collected.
+
+    Collecting is part of the watched work, so a client that leaves
+    while a live answer is collected still cancels it (section 7.4).
+    """
+    result = await backend.complete(chat, mode)
+    return result if chat.stream else await collect_live(result)
+
+
+async def _until_disconnect(
+    request: Request,
+    orchestrator: LocalOrchestrator,
+    work: Awaitable[ChatResult],
+    wait_seconds: float,
+) -> ChatResult:
+    """Run a chat backend; if the client leaves first, cancel the run it owns.
+
+    The cancel goes through the orchestrator's request cancel, the path
+    of the native cancel, and its wait is bounded the same way (RM14,
+    AC12, spec 0.24 section 7.4). Only http.disconnect counts: a receive
+    that fails leaves the run alone. A request cancelled from outside
+    (a server shutdown) takes the same cancel path.
+    """
+    task = asyncio.ensure_future(work)
+    watcher = asyncio.ensure_future(_disconnect(request))
+    try:
+        await asyncio.wait({task, watcher}, return_when=asyncio.FIRST_COMPLETED)
+        if not task.done() and _left(watcher):
+            run_id = orchestrator.request_cancel(task)
+            await asyncio.wait({task}, timeout=wait_seconds)
+            if not task.done() or task.cancelled():
+                raise ApiError(
+                    "run_terminal",
+                    "the client disconnected; the run was cancelled",
+                    run_id=run_id,
+                )
+        # Done, or the watcher failed: the work's own result or error.
+        await asyncio.wait({task})
+        return task.result()
+    finally:
+        watcher.cancel()
+        if not task.done():
+            orchestrator.request_cancel(task)
+
+
+async def _disconnect(request: Request) -> None:
+    """Return when the client has disconnected."""
+    while (await request.receive())["type"] != "http.disconnect":
+        pass
+
+
+def _left(watcher: "asyncio.Future[None]") -> bool:
+    """Whether the watcher saw a disconnect; its failure is retrieved, not raised."""
+    return watcher.done() and not watcher.cancelled() and watcher.exception() is None
 
 
 def _guarded(handler: _Handler) -> _Handler:

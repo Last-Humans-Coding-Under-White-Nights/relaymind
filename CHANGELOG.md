@@ -24,6 +24,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Chat disconnect cancels the run (#92; RM14, RM17, RM19, RM20, AC12;
+  spec 0.24 section 7.4): when the client of `POST /v1/chat/completions`
+  leaves before the response is sent, with stream true or false, the run
+  the request owns is cancelled through the same path as the native
+  cancel (adapter asked to cancel, in-flight tool operation settled, run
+  `cancelled`). A native events disconnect still leaves the run alone.
+  Tests: `tests/test_chat_disconnect_cancel.py`.
 - Operator launcher (#87; RM12, RM17, RM18, RM19, RM21, RM23; spec 0.21
   section 14.1): `relaymind serve --config relaymind.toml` starts the
   gateway on macOS and Windows. The TOML file wires the local and
@@ -772,6 +779,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   share a store file (#93; RM10, RM11, RM17). A second process that takes
   the slot after the first check makes the resume 429 and keeps the
   approval pending; there is no store lock. A deterministic test covers it.
+- Specification 0.23 -> 0.24: section 7.4 states that a compatible chat
+  disconnect cancels the run that request owns, with stream true or false,
+  by the same path as the native cancel (#92; RM14, RM17, RM19, RM20,
+  AC12). A native events disconnect still leaves the run untouched.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried
