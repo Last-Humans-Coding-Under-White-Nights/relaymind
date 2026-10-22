@@ -68,6 +68,31 @@ def test_artifact_and_event_roll_back_together(tmp_path):
         assert len(store.artifact_refs(run_id)) == 1
 
 
+def test_the_store_reads_a_tool_result_inline_or_by_reference(tmp_path):
+    """RM22, spec 0.30 section 9: one accessor for an inline, kept, or deleted result."""
+    with RunStore(tmp_path / "runs.db", max_inline_result_bytes=40) as store:
+        run_id = store.create_run(
+            "accepted", accepted=(EventType.RUN_ACCEPTED, "gateway", ACCEPTED_PAYLOAD)
+        ).run_id
+
+        def finished(result):
+            payload = {"operation_id": "op", "model": "local", "result": result}
+            draft = (EventType.TOOL_FINISHED, "gateway", payload)
+            return store.append_events(run_id, [draft])[0].payload
+
+        small = {"data": "ok", "truncated": False}
+        inline = store.tool_result(finished(small))
+        assert (inline.result, inline.result_ref, inline.retained) == (small, None, True)
+        large = {"data": "证据" * 100, "truncated": False}
+        payload = finished(large)
+        ref = payload["result_ref"]
+        kept = store.tool_result(payload)
+        assert (kept.result, kept.result_ref, kept.retained) == (large, ref, True)
+        store.delete_run(run_id)
+        gone = store.tool_result(payload)
+        assert (gone.result, gone.result_ref, gone.retained) == (None, ref, False)
+
+
 @pytest.mark.parametrize(
     "predicate,answer,result",
     [

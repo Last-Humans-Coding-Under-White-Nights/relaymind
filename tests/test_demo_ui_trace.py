@@ -21,7 +21,7 @@ from gateway_helpers import (
     text_turn,
     tool_turn,
 )
-from helpers import ACCEPTED_PAYLOAD
+from helpers import ACCEPTED_PAYLOAD, of_type
 from relaymind.adapters import GenerationOptions
 from relaymind.store import RunRecord, RunStore, TraceEvent
 from relaymind.store.trace_event import EventType, validate_trace_event
@@ -505,7 +505,7 @@ def _offloaded_run(tmp_path):
     gateway.store.max_inline_result_bytes = 1
     outcome = run_to_rest(gateway, execution_mode="local_only")
     events = gateway.store.events(outcome.run_id)
-    (finished,) = [e for e in events if e.event_type is EventType.TOOL_FINISHED]
+    (finished,) = of_type(events, "tool.finished")
     assert "result" not in finished.payload
     return gateway, outcome, events, finished.payload["result_ref"]
 
@@ -539,6 +539,22 @@ def test_an_offloaded_result_that_is_not_retained_shows_its_status_and_reference
         assert operation["result_retained"] is False
         html = render_trace(view, UiSettings(mode=DataMode.DOUBLE))
         assert "stored by reference" in html and "not retained" in html
+
+
+def test_a_stored_result_is_read_once_per_view(tmp_path):
+    """Spec 0.30 section 9: each distinct artifact is read back once for one view."""
+    gateway, outcome, events, ref = _offloaded_run(tmp_path)
+    reads = []
+
+    def read(artifact_id):
+        reads.append(artifact_id)
+        return gateway.store.read_artifact(artifact_id)
+
+    (finished,) = of_type(events, "tool.finished")
+    record = gateway.store.get_run(outcome.run_id)
+    view = trace_view_from(record, [*events, finished], read_artifact=read)
+    assert [op["result_retained"] for op in view["operations"]] == [True, True]
+    assert reads == [ref["artifact_id"]]
 
 
 def test_an_inline_tool_result_has_no_reference(tmp_path):

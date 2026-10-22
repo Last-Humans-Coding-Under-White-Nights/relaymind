@@ -20,9 +20,11 @@ import pytest
 
 from gateway_helpers import (
     STAGING_OK,
+    build_gateway,
     clarify_turn,
     health_tail,
     route_turn,
+    run,
     text_turn,
     tool_turn,
 )
@@ -366,6 +368,30 @@ def test_external_scenarios_need_the_credential_too(harness):
     results = harness.not_run_external(endpoint, environ={})
     assert all(r.status == "not_run" for r in results)
     assert harness.not_run_external(endpoint, environ={harness.EXTERNAL_KEY_ENV: "k"}) == []
+
+
+def test_a_tool_result_stored_by_reference_is_read_without_a_crash(harness, tmp_path):
+    """RM22, spec 0.30 section 8: an exported trace holds result_ref, not the result.
+
+    The native event stream has no artifact reader, so the offloaded result
+    is not retained there: it is left out, never a KeyError.
+    """
+    gateway = build_gateway(tmp_path, [route_turn("check-service-health"), *health_tail()])
+    gateway.store.max_inline_result_bytes = 1
+    _, events = run(gateway)
+    exported = [e.to_json_object() for e in events]
+    (finished,) = [e for e in exported if e["event_type"] == "tool.finished"]
+    assert "result_ref" in finished["payload"]
+    assert harness.tool_results(exported) == []
+    assert harness.health_answer_ok(exported) is False
+
+
+def test_an_inline_tool_result_is_read_from_its_event(harness, tmp_path):
+    """RM22: a result kept in its event is read as before."""
+    gateway = build_gateway(tmp_path, [route_turn("check-service-health"), *health_tail()])
+    _, events = run(gateway)
+    (result,) = harness.tool_results([e.to_json_object() for e in events])
+    assert result.data["status"] == "healthy"
 
 
 def test_stats_records_come_from_the_trace(harness):

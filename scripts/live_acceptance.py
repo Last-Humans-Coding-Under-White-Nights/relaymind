@@ -88,7 +88,7 @@ from relaymind.evaluation.grading import answer_text as answer_of  # noqa: E402
 from relaymind.evaluation.grading import of_type, terminal_event  # noqa: E402
 from relaymind.skills.predicates import health_status_preserved  # noqa: E402
 from relaymind.stats import AdapterIdentity, GenerationStats, export_stats  # noqa: E402
-from relaymind.store import RunStore  # noqa: E402
+from relaymind.store import RunStore, read_tool_result  # noqa: E402
 from relaymind.tools import ToolResult  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -428,10 +428,13 @@ def route_of(events: Iterable[Mapping[str, Any]]) -> dict[str, Any] | None:
 
 
 def tool_results(events: Iterable[Mapping[str, Any]]) -> list[ToolResult]:
-    return [
-        ToolResult.from_json_object(e["payload"]["result"])
-        for e in of_type(events, "tool.finished")
-    ]
+    """The retained tool results of exported events (spec 0.30 section 8).
+
+    The native event stream has no artifact reader, so a result stored by
+    reference is not retained here and is left out.
+    """
+    views = [read_tool_result(e["payload"]) for e in of_type(events, "tool.finished")]
+    return [ToolResult.from_json_object(v.result) for v in views if v.retained]
 
 
 def health_answer_ok(events: Sequence[Mapping[str, Any]]) -> bool:

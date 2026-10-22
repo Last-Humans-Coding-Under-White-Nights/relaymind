@@ -20,7 +20,7 @@ separate fields, and are not answer latency.
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from relaymind.store import EventType, RunRecord, RunStore, TraceEvent
+from relaymind.store import EventType, RunRecord, RunStore, TraceEvent, read_tool_result
 from relaymind.store.trace_event import WORKFLOW_BRANCHES
 
 __all__ = ["build_trace_view", "trace_view_from"]
@@ -250,22 +250,34 @@ def _result_of(
     payload: Mapping[str, Any], read_artifact: Callable[[str], Any | None] | None
 ) -> dict[str, Any]:
     """The result fields of a tool.finished event, read back when stored by reference."""
-    ref = payload.get("result_ref")
-    result = payload.get("result")
-    if result is None and ref is not None and read_artifact is not None:
-        result = read_artifact(ref["artifact_id"])
-    if result is None:
-        # Not retained: the event's own status, and nothing invented (RM23).
-        fields = {**dict.fromkeys(_RESULT_FIELDS), "status": payload.get("status")}
-    else:
-        fields = _pick(result, _RESULT_FIELDS)
-    return {**fields, "result_ref": ref, "result_retained": result is not None}
+    view = read_tool_result(payload, read_artifact)
+    # Not retained: the event's own status, and nothing invented (RM23).
+    result = view.result if view.retained else {"status": payload.get("status")}
+    return {
+        **_pick(result, _RESULT_FIELDS),
+        "result_ref": view.result_ref,
+        "result_retained": view.retained,
+    }
+
+
+def _once(read_artifact: Callable[[str], Any | None]) -> Callable[[str], Any | None]:
+    """read_artifact that reads each distinct artifact once."""
+    seen: dict[str, Any | None] = {}
+
+    def read(artifact_id: str) -> Any | None:
+        if artifact_id not in seen:
+            seen[artifact_id] = read_artifact(artifact_id)
+        return seen[artifact_id]
+
+    return read
 
 
 def _operations(
     events: Sequence[TraceEvent], read_artifact: Callable[[str], Any | None] | None
 ) -> list[dict[str, Any]]:
     """Each finished tool operation, in order, with the model that proposed it."""
+    if read_artifact is not None:
+        read_artifact = _once(read_artifact)
     return [
         {
             **_pick(

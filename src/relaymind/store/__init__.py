@@ -17,7 +17,9 @@ from relaymind.store.run_store import (
     RunStoreError,
     SlotUnavailableError,
     StaleVersionError,
+    ToolResultView,
     TraceClock,
+    read_tool_result,
 )
 from relaymind.store.trace_event import (
     EventType,
@@ -41,8 +43,10 @@ __all__ = [
     "RunStoreError",
     "SlotUnavailableError",
     "StaleVersionError",
+    "ToolResultView",
     "TraceClock",
     "TraceEvent",
     "TraceEventError",
+    "read_tool_result",
     "validate_trace_event",
 ]
