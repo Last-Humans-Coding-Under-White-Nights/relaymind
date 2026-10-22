@@ -256,6 +256,17 @@ itself, with the manifest's SHA-256; any other file fails the run.
   branches overlap in a test that blocks each on the other. No live model
   has run the workflow, and the extra call latency is not measured on real
   hardware.
+- The caches (#31, AC13, RM07, RM24) are tested with model doubles only.
+  `tests/test_skill_parse_cache.py` covers the content-hash parse cache,
+  `tests/test_routing_cache.py` the key, TTL, size bound, and invalidation,
+  `tests/test_routing_cache_orchestrator.py` the gateway behavior (off by
+  default, a hit skips the routing generation, fresh tools and current
+  authorization on a hit, skill and permission changes, mutating and
+  non-local routes never stored), `tests/test_routing_cache_trace.py` the
+  `cache.hit` and `run.accepted` contract and the labeled statistics
+  export, and `tests/test_launcher_cache.py` the `cache.routing` setting.
+  No test measures a speedup; a cache-on measurement is a separate,
+  labeled experiment and none has been run.
 - No production backend forwards a live provider stream yet, so the
   mid-stream failure path is tested with a backend double.
 - The launcher (`relaymind serve --config`) is tested with model doubles

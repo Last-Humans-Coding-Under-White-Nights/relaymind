@@ -38,6 +38,14 @@ enabled_workflows = []
 # enabled_workflows = ["health-and-diagnostic-checklist"]
 # allowed_modes = ["auto", "local_only", "external_only", "parallel_demo"]
 
+# The routing-result cache (spec 0.26 section 10). Off by default and in the
+# benchmark configuration: leave it false for any measurement you report as the
+# baseline. When true, a repeated local read-only request skips only the routing
+# generation (five-minute TTL, 256 entries); authorization and tools still run
+# fresh, and the trace labels the run.
+[cache]
+routing = false
+
 # Optional. Without this table the demo UI is not served. The mode is a
 # declaration: live, replay, or double. It has no default.
 [ui]

@@ -242,6 +242,7 @@ def export_stats(
     identity: AdapterIdentity,
     records: Sequence[GenerationStats],
     run_info: Mapping[str, object] | None = None,
+    routing_cache: bool = False,
 ) -> None:
     """Write one machine-readable JSON export for one adapter config.
 
@@ -250,13 +251,16 @@ def export_stats(
     working data, never publishable results (spec 12.3). run_info, when
     given, is written under "run": what produced the numbers (the
     command, prompts, cold start, warm-ups), so an evidence entry can
-    point at the file alone (RM16, section 12).
+    point at the file alone (RM16, section 12). routing_cache names the
+    routing-cache setting of the run as "on" or "off" (spec 0.26 section
+    10): the baseline is off, and cache-on figures are reported apart.
     """
     document: dict[str, object] = {
         "schema_version": 1,
         "status": "engineering_instrumentation",
         "exported_at_utc": datetime.now(UTC).isoformat(),
         "adapter": asdict(identity),
+        "routing_cache": "on" if routing_cache else "off",
         "generations": [asdict(record) for record in records],
     }
     if run_info is not None:

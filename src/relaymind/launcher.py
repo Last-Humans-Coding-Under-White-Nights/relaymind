@@ -42,6 +42,7 @@ from relaymind.api.server import serve, validate_bind_host
 from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
 from relaymind.orchestrator.recovery import RecoveryError
 from relaymind.orchestrator.route_decision import ExecutionMode
+from relaymind.orchestrator.routing_cache import RoutingCache
 from relaymind.orchestrator.workflows import PARALLEL_WORKFLOWS
 from relaymind.skills import SkillConfigError, SkillRegistry, default_skill_roots
 from relaymind.skills.predicates import COMPLETION_PREDICATES
@@ -78,6 +79,7 @@ _TABLES: dict[str, frozenset[str]] = {
         {"base_url", "model", "context_limit", "api_key_env", "supported_options"}
     ),
     "policy": frozenset({"degraded_mode", "enabled_workflows", "allowed_modes", "permissions"}),
+    "cache": frozenset({"routing"}),
     "chat": frozenset({"max_completion_tokens", "supported_options"}),
     "native": frozenset(
         {"poll_seconds", "heartbeat_seconds", "sweep_seconds", "cancel_wait_seconds"}
@@ -106,6 +108,8 @@ class LauncherConfig:
     external: ChatCompletionsConfig | None = None
     degraded_mode: bool = False
     enabled_workflows: frozenset[str] = frozenset()
+    # Spec 0.26 section 10: the routing-result cache; off by default and in the benchmark.
+    routing_cache: bool = False
     permissions: frozenset[str] = frozenset(DEFAULT_PERMISSIONS)
     chat: ChatSettings = field(default_factory=ChatSettings)
     native: NativeSettings = field(default_factory=NativeSettings)
@@ -241,6 +245,7 @@ def load_config(path: Path | str) -> LauncherConfig:
         ),
         external=_external(tables["external_model"]) if "external_model" in raw else None,
         degraded_mode=_value(policy, "policy", "degraded_mode", bool, False),
+        routing_cache=_value(tables["cache"], "cache", "routing", bool, False),
         enabled_workflows=frozenset(_strings(policy, "policy", "enabled_workflows", [])),
         permissions=permissions,
         chat=_settings("chat", lambda: ChatSettings(**chat_args)),
@@ -355,6 +360,7 @@ def build_app(
             enabled_workflows=config.enabled_workflows,
             external=external,
             degraded_mode=config.degraded_mode,
+            routing_cache=RoutingCache() if config.routing_cache else None,
         )
         report = orchestrator.recover_after_restart()
         ui = None if config.ui is None else replace(config.ui, fixtures=sandbox)

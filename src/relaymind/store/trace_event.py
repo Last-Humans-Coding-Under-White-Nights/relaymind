@@ -244,6 +244,25 @@ def _check_accepted_payload(payload: Mapping[str, Any]) -> None:
     # Spec 0.22: optional, because a run stored before it has no field.
     if "answer_options" in payload:
         _check_answer_options(payload["answer_options"])
+    # Spec 0.26: optional label of a run with the routing cache enabled.
+    if "routing_cache" in payload and type(payload["routing_cache"]) is not bool:
+        raise TraceEventError("'routing_cache' must be a boolean")
+
+
+def _check_cache_hit_payload(payload: Mapping[str, Any]) -> None:
+    """The optional provenance fields of cache.hit (spec 0.26 section 8)."""
+    for key in ("originating_run_id", "key"):
+        if key in payload and not _is_text(payload[key]):
+            raise TraceEventError(f"cache.hit '{key}' must be non-blank text")
+    if "age_ms" in payload and not _is_count(payload["age_ms"], 0):
+        raise TraceEventError("cache.hit 'age_ms' must be a non-negative integer")
+    skill = payload.get("skill")
+    if "skill" in payload and not (
+        isinstance(skill, Mapping) and all(_is_text(skill.get(k)) for k in _SKILL_OFFERED_FIELDS)
+    ):
+        raise TraceEventError(
+            f"cache.hit 'skill' must have a non-blank {', '.join(_SKILL_OFFERED_FIELDS)}"
+        )
 
 
 def _check_answer_options(options: object) -> None:
@@ -542,6 +561,8 @@ def _check_payload(event_type: EventType, payload: Mapping[str, Any]) -> None:
     _check_workflow_fields(event_type, payload)
     if event_type is EventType.RUN_ACCEPTED:
         _check_accepted_payload(payload)
+    if event_type is EventType.CACHE_HIT:
+        _check_cache_hit_payload(payload)
     if event_type is EventType.CLARIFICATION_REQUIRED:
         _check_clarification_payload(payload)
     if event_type is EventType.CLARIFICATION_ANSWERED:
