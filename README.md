@@ -21,7 +21,9 @@ one command, `relaymind serve --config <file>` (see
 (parallel workflow and caching) is closed on deterministic coverage with
 model doubles; live `parallel_demo` runs, a cache-on run, and launcher
 starts with the pinned model are recorded on macOS, and a Windows start
-is still open (#110, M6). M6 (evaluation) is next. See
+is still open (#110, M6). M6 (evaluation) has its corpus and latency
+benchmark built and run once on macOS; the Windows run (AC15) is open.
+See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan and the
 open items, and [`CHANGELOG.md`](CHANGELOG.md) for what has landed so
 far.
@@ -68,10 +70,17 @@ See [`AGENTS.md`](AGENTS.md) for the full contributor workflow.
   or permission change drops the entries, and the trace records `cache.hit`
   and labels the run.
 
-Not built yet: the evaluation corpus and latency benchmark (M6). The
-parallel workflow and the caches are covered by deterministic tests with
-model doubles only; no live run is recorded for them, and no cache speedup
-is claimed.
+- Evaluates itself (M6, spec section 12.2): a frozen correctness corpus
+  of 40 English cases (best-effort Chinese versions reported apart), run
+  in auto, external_only, and local_only (`scripts/run_corpus.py`), and
+  a latency benchmark on the local path (`scripts/latency_benchmark.py`).
+  The first runs, on Apple Silicon macOS only, are in
+  [`docs/EVIDENCE.md`](docs/EVIDENCE.md); the release record
+  [`docs/RELEASE.md`](docs/RELEASE.md) lists the unmet targets (local
+  completion 4/12 against 80 %, p95 first model action 508 ms against
+  500 ms) and the missing Windows run (#110).
+
+No cache speedup is claimed.
 
 ## Repository layout
 
@@ -80,8 +89,10 @@ is claimed.
 | `docs/SPECIFICATION.md` | The spec. Single source of truth. |
 | `docs/ARCHITECTURE.md` | How components map to the code layout. |
 | `docs/ROADMAP.md` | Implementation milestones with requirement IDs. |
-| `src/relaymind/` | Gateway source (Python): the FastAPI API layer (`api/`), orchestrator, adapters, skill and tool registries, run store, and demo UI (`ui/`). |
+| `src/relaymind/` | Gateway source (Python): the FastAPI API layer (`api/`), orchestrator, adapters, skill and tool registries, run store, demo UI (`ui/`), and evaluation (`evaluation/`). |
 | `models/` | Pinned model artifact manifests; the GGUF files are downloaded, not checked in. |
+| `evaluation/` | The frozen correctness corpus, its digest lock, and the latency prompts. |
+| `docs/RELEASE.md` | The release record: implemented, tested, measured, and unmet. |
 | `skills/` | Demo skill packages (SKILL.md plus skill.manifest.json). |
 | `tests/` | Test suite and sandbox fixtures. |
 | `scripts/` | Developer scripts; see `scripts/README.md` for what each one does. |

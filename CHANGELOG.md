@@ -24,6 +24,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Correctness corpus and latency benchmark (#32, #33; RM25, spec 0.28
+  sections 12.1 to 12.3 and 14): the frozen corpus
+  `evaluation/corpus.v1.json` (40 English cases in the section 12.2
+  classes and 12 best-effort Chinese simple cases, three new sandbox
+  seeds, digest lock `evaluation/corpus.v1.lock.json`);
+  `relaymind.evaluation` (corpus checks, grading from the trace,
+  summaries with exact numerators and denominators, nearest-rank
+  percentiles, the environment manifest); `scripts/run_corpus.py` (each
+  case and mode in a new gateway from `relaymind serve --config`, with a
+  `--regrade` option for stored traces); `scripts/latency_benchmark.py`
+  (the compatible stream, a cold request, three warm-ups, ten runs per
+  prompt in a seeded order); and `docs/RELEASE.md`. The sandbox now
+  publishes its tool permission table (`DEMO_TOOL_PERMISSIONS`). The
+  first runs on Apple Silicon macOS are in `docs/EVIDENCE.md`: local
+  completion 4/12 on the English simple subset, no missed confirmation in
+  156 runs, and p95 first model action 508 ms, so the 500 ms hypothesis
+  is not met there. No Windows run is recorded (AC15 open, #110).
 - Live acceptance harness and the first live runs of the M3 to M5
   scenarios (#88, #104; RM04, RM08 to RM25, spec sections 10, 12.1, 13,
   and 14.1): `scripts/live_acceptance.py` starts llama-server from the

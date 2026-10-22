@@ -372,6 +372,11 @@ their results are in [`EVIDENCE.md`](EVIDENCE.md).
 
 ### What is not covered yet
 
+- The correctness corpus and the latency benchmark ran once, on Apple
+  Silicon macOS only (#32, #33). The x86-64 Windows run is open (#110),
+  so AC15 is not closed. The latency benchmark measures the local path
+  only; no external first-transport timing was taken.
+
 - The M3 to M5 scenarios ran live once, on Apple Silicon macOS only,
   with one external provider ([`EVIDENCE.md`](EVIDENCE.md)).
 - AC08 is not closed. The local swap runs live (#90), and the external
