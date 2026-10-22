@@ -105,11 +105,10 @@ llama-server -m models/Qwen3-0.6B-Q8_0.gguf \
 
 ### 2. Start the gateway
 
-There is no launcher or command-line entry point yet (open work, see
-[`docs/ROADMAP.md`](docs/ROADMAP.md)). Until it exists, this script
-wires the local model, the checked-in demo skills, the sandbox demo
-data, and a SQLite run store into the gateway and serves it on
-loopback. Save it as `start_gateway.py` and run it from the checkout
+There is no launcher or command-line entry point yet (open work,
+issue #87). Until it exists, this script wires the local model, the
+checked-in demo skills, the sandbox demo data, and a SQLite run store
+into the gateway and serves it on loopback. Save it as `start_gateway.py` and run it from the checkout
 root:
 
 ```python

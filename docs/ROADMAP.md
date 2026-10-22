@@ -277,18 +277,18 @@ the top of this page asks.
 
 Carried forward, not done in M3:
 
-- Live-model runs for AC02, AC05, AC06, and AC07. No live external
-  model has been run.
+- Live-model runs for AC02, AC05, AC06, and AC07 (#88). No live
+  external model has been run.
 - AC08 stays open until a second local artifact is qualified and the
-  swap runs against it.
+  swap runs against it (#90).
 - Restart recovery exists as `LocalOrchestrator.recover_after_restart`,
   but nothing calls it at startup yet, because there is no launcher
-  (see M4).
+  (#87, see M4).
 - Recovery always marks an in-flight write `unknown_outcome`: the MVP
   has no source to reconcile a write against.
-- One approval race is open: a second process sharing the store could
-  take the execution slot between the slot check and the resume. In one
-  process nothing awaits in that window.
+- One approval race is open (#93): a second process sharing the store
+  could take the execution slot between the slot check and the resume.
+  In one process nothing awaits in that window.
 
 ## M4 — Public API and observability
 
@@ -350,19 +350,19 @@ closed on deterministic coverage only, and no live run is recorded.
 Carried forward, not done in M4:
 
 - Live-model runs for AC09, AC10, AC11, and AC12, and a UI session in
-  live mode.
-- An operator launcher. Nothing wires models, store, token,
+  live mode (#88).
+- An operator launcher (#87). Nothing wires models, store, token,
   `ChatSettings`, `NativeSettings`, and `UiSettings` into a start
   command, and `pyproject.toml` has no entry point. The README shows a
   script that starts the gateway by hand. The launcher must also run
   restart recovery once at startup.
-- An automated browser test for the UI page script (`app.js`). The
-  browser timestamp of a UI submission is shown but not asserted.
+- An automated browser test for the UI page script (`app.js`; #89).
+  The browser timestamp of a UI submission is shown but not asserted.
 - The requested answer options (token budget, temperature, top_p) are
   applied but not recorded in `run.accepted`; that needs a trace schema
-  change.
+  change (#91).
 - A compatible chat disconnect does not cancel a managed run that is
-  still working (spec section 7.4). Only a live provider stream is
+  still working (spec section 7.4; #92). Only a live provider stream is
   closed, and no production backend forwards one yet (`LiveAnswer` is
   tested with a backend double).
 - `parallel_demo` always fails with `workflow_unavailable`, and
