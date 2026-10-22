@@ -763,8 +763,8 @@ def test_a_second_orchestrator_taking_the_slot_mid_approval_does_not_lose_it(tmp
 
     Two processes share one store file; the second has its own store
     connection and state machine. It takes the execution slot after the
-    first one's slot check and before its transaction. The approval must survive the 429 and work once the
-    slot is free again.
+    first one's slot check and before its transaction. The approval must survive the 429 and work
+    once the slot is free again.
     """
     first, waiting, _ = waiting_gateway(tmp_path, *APPROVED_TAIL)
     second = RunStateMachine(RunStore(tmp_path / "runs.sqlite3", clock=first.clock))
