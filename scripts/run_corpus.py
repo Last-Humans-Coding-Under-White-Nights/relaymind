@@ -59,7 +59,8 @@ LOCK = REPO_ROOT / "evaluation" / "corpus.v1.lock.json"
 SEED_DIR = REPO_ROOT / "tests" / "fixtures" / "sandbox"
 # A run that does not come to rest in this time is cancelled and graded as a timeout.
 RUN_TIMEOUT_SECONDS = 300.0
-MAX_CLARIFICATIONS = 3
+# Resumes per run (answers and decisions); a refused resume ends the driving.
+MAX_RESUMES = 4
 
 
 def load_frozen_corpus(path: Path = CORPUS) -> Corpus:
@@ -121,18 +122,16 @@ async def run_case(api: harness.Api, case: Case, mode: str, *, timeout: float) -
     run_id = response.json()["run_id"]
     record: dict[str, Any] = {"run_id": run_id, "timed_out": False, "actions": []}
     deadline = time.monotonic() + timeout
-    clarifications = 0
+    resumes = 0
     view = None
     try:
         while True:
             view = await api.settle(run_id, timeout=max(deadline - time.monotonic(), 0.01))
             state = view["state"]
-            if (
-                state == "waiting_input"
-                and case.clarification_answer
-                and (clarifications < MAX_CLARIFICATIONS)
-            ):
-                clarifications += 1
+            if resumes >= MAX_RESUMES:
+                break
+            if state == "waiting_input" and case.clarification_answer:
+                resumes += 1
                 body = {
                     "expected_version": view["state_version"],
                     "input": case.clarification_answer,
@@ -141,9 +140,12 @@ async def run_case(api: harness.Api, case: Case, mode: str, *, timeout: float) -
                 record["actions"].append(
                     {"answer": case.clarification_answer, "status": answered.status_code}
                 )
+                if answered.status_code != 202:
+                    break
                 continue
             if state == "waiting_confirmation" and view["pending_approval"] is not None:
                 pending = view["pending_approval"]
+                resumes += 1
                 approve = case.confirmation == "approve" and _acceptable(case, pending)
                 decision = {
                     "expected_version": view["state_version"],
@@ -160,6 +162,8 @@ async def run_case(api: harness.Api, case: Case, mode: str, *, timeout: float) -
                         "status": decided.status_code,
                     }
                 )
+                if decided.status_code != 202:
+                    break
                 continue
             break
     except TimeoutError:
@@ -251,6 +255,9 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
             args.external_base_url, args.external_model, args.external_context_limit
         )
     modes, not_run = select_modes(args.modes, external=external)
+    if not_run:
+        # Without a usable endpoint the gateways are started without one.
+        external = None
     runtime = harness.check_runtime(Path(args.manifest))
     application = harness.application_revision()
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
@@ -261,12 +268,30 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
         for case in cases:
             for mode in modes:
                 print(f"{case.case_id} {mode}", flush=True)
-                grade, record, events = _run_one(
-                    case, mode, runtime=runtime, local_url=local_url, external=external, work=work
-                )
+                try:
+                    grade, record, events = _run_one(
+                        case,
+                        mode,
+                        runtime=runtime,
+                        local_url=local_url,
+                        external=external,
+                        work=work,
+                    )
+                except Exception as exc:  # noqa: BLE001 - recorded and graded, never dropped
+                    record = {
+                        "run_id": None,
+                        "timed_out": False,
+                        "state": "error",
+                        "error_code": None,
+                        "reason_code": None,
+                        "runner_error": f"{type(exc).__name__}: {exc}",
+                    }
+                    events = []
+                    grade = grade_record(case, mode, record, events, None)
                 grades.append(grade.to_json_object())
                 records[f"{case.case_id}/{mode}"] = record
-                traces[record["run_id"]] = events
+                if record["run_id"] is not None:
+                    traces[record["run_id"]] = events
                 print(f"  {'pass' if grade.success else 'fail'} {grade.failures}", flush=True)
     finally:
         harness._stop(llama)

@@ -272,3 +272,18 @@ def test_the_prefix_cache_setting_is_read_from_the_adapter(bench):
     record = bench.prefix_cache_record([{"cached_tokens": 0}, {"cached_tokens": 512}])
     assert record["adapter_sets_cache_prompt"] is False
     assert record["calls"] == 2 and record["calls_with_cached_tokens"] == 1
+
+
+def test_an_error_status_without_a_run_is_an_error(bench):
+    """Section 12.2: an error status the label does not expect is recorded as an error."""
+
+    def handler(request):
+        return httpx.Response(503, json={"error": {"code": "unavailable"}})
+
+    api = bench.harness.Api(
+        "http://127.0.0.1", "token", sandbox_dir=Path("."), transport=httpx.MockTransport(handler)
+    )
+    sample = measure(bench, api, "Is staging-api healthy?")
+    assert sample["http_status"] == 503
+    assert sample["error"] == "no run ID in the response (status 503)"
+    assert sample["first_model_action_ms"] is None

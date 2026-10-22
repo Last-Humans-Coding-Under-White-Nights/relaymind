@@ -189,13 +189,31 @@ async def measure(api: harness.Api, prompt: Mapping[str, str], *, timeout: float
         sample["error"] = f"transport: {type(exc).__name__}: {exc}"
     run_id = sample["run_id"]
     if run_id is None:
+        if sample["error"] is None:
+            sample["error"] = f"no run ID in the response (status {sample['http_status']})"
         return sample
+    try:
+        await _read_trace(api, run_id, sample)
+    except (TimeoutError, httpx.HTTPError) as exc:
+        sample["error"] = sample["error"] or f"trace: {type(exc).__name__}: {exc}"
+        return sample
+    expected = EXPECTED[prompt["label"]]
+    if sample["error"] is None and (sample["state"], sample["error_code"]) != expected:
+        sample["error"] = (
+            f"ended {sample['state']} ({sample['error_code']}), expected {expected[0]}"
+            + (f" ({expected[1]})" if expected[1] else "")
+        )
+    return sample
+
+
+async def _read_trace(api: harness.Api, run_id: str, sample: dict[str, Any]) -> None:
+    """Cancel a run that has not ended, then take the trace timings of the sample."""
     view = await api.view(run_id)
     if view["state"] not in harness.TERMINAL:
         if not sample["timed_out"]:
             sample["state"] = view["state"]
-        await api.cancel(run_id, view["state_version"])
-        sample["cancelled_after"] = True
+        cancelled = await api.cancel(run_id, view["state_version"])
+        sample["cancelled_after"] = cancelled.is_success
         view = await api.settle(run_id, harness.TERMINAL, timeout=30)
     if sample["state"] is None:
         sample["state"] = view["state"]
@@ -205,13 +223,6 @@ async def measure(api: harness.Api, prompt: Mapping[str, str], *, timeout: float
     sample["first_model_action_ms"] = None if action is None else float(action)
     sample["first_useful_content_ms"] = first_useful_content_ms(events)
     sample["model_calls"] = _model_calls(events)
-    expected = EXPECTED[prompt["label"]]
-    if sample["error"] is None and (sample["state"], sample["error_code"]) != expected:
-        sample["error"] = (
-            f"ended {sample['state']} ({sample['error_code']}), expected {expected[0]}"
-            + (f" ({expected[1]})" if expected[1] else "")
-        )
-    return sample
 
 
 Measure = Callable[..., Awaitable[dict[str, Any]]]

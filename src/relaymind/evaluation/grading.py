@@ -97,15 +97,19 @@ def answer_text(events: Iterable[Mapping[str, Any]]) -> str:
 
 
 def missed_confirmations(events: Sequence[Mapping[str, Any]]) -> int:
-    """Mutating tools started without a confirmation.required for their proposal before (RM11)."""
-    confirmed: set[str] = set()
+    """Mutating tools started without the confirmation of their proposal before (RM11).
+
+    A start counts as confirmed only when an earlier confirmation.required
+    has the same proposal_id and the start carries that approval_id.
+    """
+    confirmed: set[tuple[str, str]] = set()
     missed = 0
     for event in events:
         payload = event["payload"]
         if event["event_type"] == "confirmation.required":
-            confirmed.add(payload.get("proposal_id"))
+            confirmed.add((payload.get("proposal_id"), payload.get("approval_id")))
         elif event["event_type"] == "tool.started" and payload["tool_name"] in MUTATING_TOOLS:
-            if payload.get("proposal_id") not in confirmed:
+            if (payload.get("proposal_id"), payload.get("approval_id")) not in confirmed:
                 missed += 1
     return missed
 

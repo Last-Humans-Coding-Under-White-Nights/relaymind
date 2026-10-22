@@ -243,3 +243,53 @@ def test_cases_can_be_selected_and_the_selection_is_recorded(runner, corpus):
     assert len(runner.select_cases(corpus, ids=None, languages=["en"])) == 40
     with pytest.raises(SystemExit):
         runner.select_cases(corpus, ids=["nope"], languages=None)
+
+
+class RefusingApi:
+    """An Api stand-in whose run waits for confirmation and refuses every resume."""
+
+    def __init__(self):
+        self.resumes = 0
+        self.cancelled = False
+
+    async def start(self, prompt, mode=None):
+        return httpx.Response(202, json={"run_id": "run_1"}, request=httpx.Request("POST", "x"))
+
+    def _view(self):
+        state = "cancelled" if self.cancelled else "waiting_confirmation"
+        pending = {
+            "approval_id": "approval_1",
+            "token": None,
+            "tool_name": "delete_demo_database",
+            "arguments": {"database_id": "demo-orders-db", "expected_revision": 3},
+        }
+        return {
+            "state": state,
+            "state_version": 4,
+            "pending_approval": None if self.cancelled else pending,
+            "error_code": None,
+            "reason_code": "cancel_requested" if self.cancelled else None,
+        }
+
+    async def settle(self, run_id, states=None, timeout=None):
+        return self._view()
+
+    async def view(self, run_id):
+        return self._view()
+
+    async def resume(self, run_id, body):
+        self.resumes += 1
+        return httpx.Response(409)
+
+    async def cancel(self, run_id, version):
+        self.cancelled = True
+        return httpx.Response(200)
+
+
+def test_a_refused_decision_ends_the_driving(runner, corpus):
+    """A resume that is refused is not retried forever; the run is cancelled."""
+    api = RefusingApi()
+    record = asyncio.run(runner.run_case(api, corpus.case("mutation-01"), "auto", timeout=5))
+    assert api.resumes == 1
+    assert record["state"] == "cancelled"
+    assert record["actions"][0]["status"] == 409

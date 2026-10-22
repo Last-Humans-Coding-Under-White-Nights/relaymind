@@ -248,6 +248,18 @@ def test_the_hypothesis_is_not_met_when_runs_timed_out_without_an_action():
     assert summarize_latency(samples)["hypothesis"]["met"] is False
 
 
+def test_the_hypothesis_is_not_met_when_a_sample_has_no_action():
+    samples = [sample(first_model_action_ms=100.0), sample(error="transport: ConnectError")]
+    assert summarize_latency(samples)["hypothesis"]["met"] is False
+
+
+def test_a_missed_confirmation_in_chinese_fails_the_target():
+    grades = [grade("simple-01-zh", "auto", language="zh", missed_confirmations=1)]
+    grades.append(grade("simple-01", "auto"))
+    target = summarize_corpus(grades)["targets"]["auto"]["no_missed_confirmation"]
+    assert target == {"missed": 1, "met": False}
+
+
 def test_the_hypothesis_is_undetermined_without_samples():
     assert summarize_latency([])["hypothesis"]["met"] is None
 

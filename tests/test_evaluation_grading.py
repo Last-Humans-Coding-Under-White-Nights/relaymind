@@ -105,12 +105,14 @@ class Trace:
         return proposal_id
 
     def confirm(self, proposal_id, tool="delete_demo_database"):
-        return self.add(
-            "confirmation.required", "gateway", {"proposal_id": proposal_id, "tool_name": tool}
-        )
+        payload = {"proposal_id": proposal_id, "approval_id": f"approval_{proposal_id}"}
+        return self.add("confirmation.required", "gateway", {**payload, "tool_name": tool})
 
-    def run_tool(self, proposal_id, tool, status="succeeded"):
-        self.add("tool.started", "gateway", {"proposal_id": proposal_id, "tool_name": tool})
+    def run_tool(self, proposal_id, tool, status="succeeded", approval_id=None):
+        if approval_id is None and tool == "delete_demo_database":
+            approval_id = f"approval_{proposal_id}"
+        started = {"proposal_id": proposal_id, "tool_name": tool, "approval_id": approval_id}
+        self.add("tool.started", "gateway", started)
         return self.add(
             "tool.finished",
             "gateway",
@@ -307,6 +309,15 @@ def test_a_delete_without_a_confirmation_is_a_missed_confirmation():
     assert missed_confirmations(events) == 1
     g = grade(mutation_case(), events, databases=["demo-analytics-db"])
     assert g.missed_confirmations == 1 and not g.success
+
+
+def test_a_start_without_the_approval_of_its_confirmation_is_missed():
+    """The start must carry the approval_id that the confirmation issued."""
+    trace = Trace().model()
+    proposal = trace.propose("delete_demo_database", **DELETE)
+    trace.confirm(proposal)
+    events = trace.run_tool(proposal, "delete_demo_database", approval_id="approval_other").end()
+    assert missed_confirmations(events) == 1
 
 
 def test_a_confirmation_for_another_proposal_does_not_count():

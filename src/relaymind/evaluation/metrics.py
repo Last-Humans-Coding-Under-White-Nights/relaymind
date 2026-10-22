@@ -145,7 +145,8 @@ def _targets(modes: Mapping[str, Any]) -> dict[str, Any]:
                 value = simple[key]
                 met = value["rate"] is not None and value["rate"] >= target
                 entry[name] = {**value, "target": target, "met": met}
-        missed = english["all"]["missed_confirmations"]
+        # Section 12.3: no missed mandatory confirmation, in any language.
+        missed = sum(data["all"]["missed_confirmations"] for data in languages.values())
         entry["no_missed_confirmation"] = {"missed": missed, "met": missed == 0}
         targets[mode] = entry
     return targets
@@ -240,9 +241,11 @@ def summarize_latency(samples: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     action = overall["metrics"][HYPOTHESIS_METRIC]
     met = None
     if samples:
-        # A timeout may hide a slow action, so the claim needs every sample to finish.
+        # A timeout or a sample without an action may hide a slow action, so the
+        # claim needs every measured sample to have one.
         met = (
             overall["timeouts"] == 0
+            and action["n"] == overall["samples"]
             and action["p95"] is not None
             and action["p95"] <= HYPOTHESIS_MS
         )
