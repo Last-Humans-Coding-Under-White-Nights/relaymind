@@ -203,7 +203,7 @@ def test_first_useful_content_needs_evidence_or_a_question(bench):
             "event_type": "tool.finished",
             "elapsed_ms": 10,
             "actor": "gateway",
-            "payload": {"result": {"status": "succeeded"}},
+            "payload": {"status": "succeeded", "result": {"status": "succeeded"}},
         },
         {
             "event_type": "answer.delta",
@@ -230,7 +230,7 @@ def test_a_failed_tool_result_is_not_evidence(bench):
             "event_type": "tool.finished",
             "elapsed_ms": 10,
             "actor": "gateway",
-            "payload": {"result": {"status": "failed"}},
+            "payload": {"status": "failed", "result": {"status": "failed"}},
         },
         {
             "event_type": "answer.delta",
@@ -240,6 +240,33 @@ def test_a_failed_tool_result_is_not_evidence(bench):
         },
     ]
     assert bench.first_useful_content_ms(events) is None
+
+
+def test_an_offloaded_tool_result_is_read_by_its_status(bench):
+    """A large result is stored as result_ref (section 8); the event status still counts."""
+    events = [
+        {
+            "event_type": "tool.finished",
+            "elapsed_ms": 10,
+            "actor": "gateway",
+            "payload": {
+                "status": "succeeded",
+                "result_ref": {
+                    "artifact_id": "artifact_x",
+                    "uri": "sqlite:artifact/artifact_x",
+                    "size_bytes": 70000,
+                    "truncated": False,
+                },
+            },
+        },
+        {
+            "event_type": "answer.delta",
+            "elapsed_ms": 12,
+            "actor": "local",
+            "payload": {"text": "x"},
+        },
+    ]
+    assert bench.first_useful_content_ms(events) == 12.0
 
 
 def test_the_run_keeps_cold_warmup_and_measured_samples_apart(bench):

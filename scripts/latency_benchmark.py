@@ -118,7 +118,8 @@ def first_useful_content_ms(events: Sequence[Mapping[str, Any]]) -> float | None
         kind = event["event_type"]
         if kind == "clarification.required":
             return float(event["elapsed_ms"])
-        if kind == "tool.finished" and event["payload"]["result"]["status"] == "succeeded":
+        # The event's own status: a large result is stored as result_ref, not inline.
+        if kind == "tool.finished" and event["payload"].get("status") == "succeeded":
             evidence = True
         if kind == "answer.delta" and evidence and event["payload"]["text"]:
             return float(event["elapsed_ms"])
