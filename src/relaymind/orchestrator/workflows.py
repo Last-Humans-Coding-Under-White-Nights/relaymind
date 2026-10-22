@@ -16,9 +16,3 @@ router sends it external with reason parallel_workflow.
 """
 
 PARALLEL_WORKFLOWS: frozenset[str] = frozenset({"health-and-diagnostic-checklist"})
-
-# Whether this build can run a registered workflow (issue #30). It can
-# since spec 0.25. Were it False, parallel_demo would fail with
-# workflow_unavailable and /readyz would not report parallel_demo as
-# ready (RM15, RM21, section 4.4).
-PARALLEL_WORKFLOW_IMPLEMENTED = True

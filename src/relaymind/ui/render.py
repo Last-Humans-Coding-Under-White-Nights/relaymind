@@ -169,26 +169,31 @@ def _models(view: Mapping[str, Any]) -> str:
 def _workflow(view: Mapping[str, Any]) -> str:
     """The parallel workflow: each branch and the synthesis call as its own actor (RM23)."""
     workflow = view["workflow"]
+    # The figures come from the terminal event; a run ended without them
+    # (restart recovery) shows that they were not recorded (section 12).
+    unknown = "not recorded" if workflow["ended"] else "known when the run ends"
+    recorded = workflow["branch_wall_ms"] is not None
+    no_synthesis = "no synthesis call" if recorded else unknown
     rows = "".join(
         f'<tr data-branch="{_t(s["branch"])}"><td>{_t(s["branch"])}</td><td>{_t(s["actor"])}</td>'
         f"<td>{_t(s['model'])}</td>"
         f"<td>{'finished' if s['finished'] else 'running'}"
         + (f", {_error(s['outcome'])}" if s["outcome"] else "")
-        + f"</td><td>{_ms(s['duration_ms'], 'not finished')}</td></tr>"
+        + f"</td><td>{_ms(s['duration_ms'], unknown)}</td></tr>"
         for s in workflow["stages"]
     )
     abandoned = workflow["abandoned_calls"]
     figures = (
         "<dl>"
-        f"<dt>Extra call latency</dt><dd>{_ms(workflow['extra_call_ms'], 'no synthesis call')}"
+        f"<dt>Extra call latency</dt><dd>{_ms(workflow['extra_call_ms'], no_synthesis)}"
         "</dd>"
-        f"<dt>Parallel stage</dt><dd>{_ms(workflow['branch_wall_ms'], 'known when the run ends')}"
+        f"<dt>Parallel stage</dt><dd>{_ms(workflow['branch_wall_ms'], unknown)}"
         "</dd>"
         f"<dt>Abandoned calls</dt><dd>{_t(', '.join(abandoned)) if abandoned else 'none'}</dd>"
         "</dl>"
     )
     return (
-        f"<p>Workflow: <strong>{_t(workflow['workflow_id'])}</strong></p>"
+        f"<p>Workflow: <strong>{_t(workflow['workflow_id'] or 'not recorded')}</strong></p>"
         "<table><thead><tr><th>Stage</th><th>Actor</th><th>Model</th><th>State</th>"
         f"<th>Duration</th></tr></thead><tbody>{rows}</tbody></table>{figures}"
         '<p class="note">The extra call latency is the added cost of the second external '

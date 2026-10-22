@@ -198,14 +198,21 @@ class BudgetMeter:
         self._external = True
         self._bounds = {False: None, True: None}
 
-    def external_room(self) -> BudgetExceededError | None:
-        """The limit that stops an external stage from starting, or None.
+    def external_room(
+        self, external_generations: int = 1, local_generations: int = 0
+    ) -> BudgetExceededError | None:
+        """The limit that stops external work from starting, or None.
 
-        An external stage needs one more generation and some active time
-        inside the entire-run limits.
+        An external stage needs one more external generation and some
+        active time inside the entire-run limits. The parallel workflow
+        asks for more before its branches start: the draft and the
+        synthesis, plus the local branch generation (spec 0.25, section 11).
         """
-        if self._run["generations"] + 1 > self.budgets.run_generations:
+        needed = self._run["generations"] + external_generations + local_generations
+        if needed > self.budgets.run_generations:
             return BudgetExceededError("run_generations", self.budgets.run_generations)
+        if self._external_generations + external_generations > self.budgets.external_generations:
+            return BudgetExceededError("external_generations", self.budgets.external_generations)
         if self.active_seconds() >= self.budgets.run_active_seconds:
             return BudgetExceededError("run_active_seconds", self.budgets.run_active_seconds)
         return None

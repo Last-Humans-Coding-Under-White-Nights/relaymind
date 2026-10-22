@@ -9,6 +9,8 @@ checklist. All model output comes from scripted doubles (spec section
 """
 
 import asyncio
+import json
+import shutil
 import threading
 
 import pytest
@@ -21,14 +23,16 @@ from gateway_helpers import (
     text_turn,
     tool_turn,
 )
-from helpers import ACCEPTED_PAYLOAD, FakeClock, ScriptedAdapter, of_type
+from helpers import ACCEPTED_PAYLOAD, DEMO_SKILLS_ROOT, FakeClock, ScriptedAdapter, of_type
 from native_helpers import GatedAdapter
 from relaymind.adapters import GenerationFailed, Message, Role
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel
 from relaymind.orchestrator.run_state import RunState
 from relaymind.store.trace_event import EventType, validate_trace_event
+from relaymind.tools import CallerContext
 from relaymind.tools.executor import ToolExecutor
+from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
 from relaymind.ui.render import render_trace
 from relaymind.ui.settings import DataMode, UiSettings
 from relaymind.ui.trace_view import trace_view_from
@@ -244,13 +248,17 @@ def test_the_synthesis_gets_the_observation_as_data_and_the_draft_as_provisional
     assert "2026-10-20T02:58:00Z" in tool_messages[0].content
     (finished,) = of_type(events, "tool.finished")
     assert tool_messages[0].tool_call_id == finished.payload["operation_id"]
-    text = "\n".join(m.content or "" for m in synthesis.messages if m.role is Role.SYSTEM)
-    assert DRAFT in text
-    assert "provisional" in text.lower()
-    assert "not log-backed" in text.lower()
-    # The draft is the second part of the request: after the observation.
-    assert synthesis.messages[-1].role is Role.SYSTEM
-    assert DRAFT in synthesis.messages[-1].content
+    # The draft is the second part of the request: after the observation. It
+    # is untrusted model text, so it is a data message, never a system one
+    # (RM12), and it is JSON-encoded, so it cannot close its own fence.
+    last = synthesis.messages[-1]
+    assert last.role is Role.USER
+    header, _, body = last.content.partition("\n")
+    assert "provisional" in header.lower()
+    assert "not log-backed" in header.lower()
+    assert json.loads(body) == {"provisional_draft": DRAFT}
+    system = "\n".join(m.content or "" for m in synthesis.messages if m.role is Role.SYSTEM)
+    assert DRAFT not in system
 
 
 # --- provenance (RM16) ------------------------------------------------------------------
@@ -411,6 +419,11 @@ def test_an_external_request_over_the_context_limit_fails_before_any_call(tmp_pa
 
     assert outcome.error_code == "context_limit_exceeded"
     assert gateway.external.requests == []
+    # The draft request is measured before parallel_running: the local
+    # branch never starts for a run that cannot dispatch it.
+    assert len(gateway.adapter.requests) == 1
+    assert executed_tools(events) == []
+    assert "parallel_running" not in [e.payload.get("to_state") for e in events]
 
 
 # --- cancel and restart (AC12, #29, #8) ----------------------------------------------------
@@ -525,6 +538,8 @@ def test_cancel_during_the_synthesis_stops_the_external_call(tmp_path):
     synthesis = [e for e in of_type(events, "model.finished") if e.payload["purpose"] == "external"]
     assert synthesis[0].payload["error"]["code"] == "cancelled"
     assert external.cancelled == [synthesis[0].payload["call_id"]]
+    # The synthesis is not a parallel branch call: it is not abandoned (section 8).
+    assert cancelled.payload["workflow"]["abandoned_calls"] == []
     assert gateway.store.active_run_id() is None
 
 
@@ -827,3 +842,163 @@ def test_the_demo_form_can_start_a_parallel_demo_run():
     page = render_shell(UiSettings(mode=DataMode.DOUBLE))
 
     assert '<option value="parallel_demo">parallel_demo</option>' in page
+
+
+# --- review findings (#30) --------------------------------------------------------------------
+
+
+def test_no_room_for_two_external_generations_ends_before_any_branch(tmp_path):
+    """RM03, RM04, section 11: the draft and the synthesis each need an external generation.
+
+    With external_generations=1 the workflow cannot finish, so the run
+    ends as needs_external with the budget named before any branch starts.
+    """
+    gateway = parallel_gateway(tmp_path, budgets=LocalBudgets(external_generations=1))
+
+    outcome, events = run_parallel(gateway)
+
+    assert outcome.error_code == "needs_external"
+    (failed,) = of_type(events, "run.failed")
+    assert failed.payload["dispatch_blocked"] == "external_generations"
+    assert gateway.external.requests == []
+    assert executed_tools(events) == []
+    assert of_type(events, "handoff.started") == []
+
+
+def test_no_room_at_the_join_ends_without_a_handoff(tmp_path):
+    """RM03, RM04, RM14: the room is checked again at the join, before handoff.started.
+
+    The local branch spends a repair generation, so the entire-run
+    generation limit leaves nothing for the synthesis. The run ends as
+    needs_external with the budget named; authority never moves.
+    """
+    local = [
+        route_turn(WORKFLOW),
+        text_turn("staging-api looks fine"),
+        tool_turn("get_service_health", service="staging-api"),
+    ]
+    gateway = parallel_gateway(tmp_path, local=local, budgets=LocalBudgets(run_generations=4))
+
+    outcome, events = run_parallel(gateway)
+
+    assert outcome.error_code == "needs_external"
+    (failed,) = of_type(events, "run.failed")
+    assert failed.payload["dispatch_blocked"] == "run_generations"
+    assert executed_tools(events) == ["get_service_health"]
+    assert of_type(events, "handoff.started") == []
+    assert len(gateway.external.requests) == 1
+    assert "workflow" in failed.payload
+
+
+def test_the_trace_shows_each_branch_time_from_the_terminal_event(tmp_path):
+    """RM16, RM23, section 12: a branch's duration includes its tool run, not only its calls."""
+    gateway = parallel_gateway(tmp_path)
+    original = gateway.tools.get("get_service_health").declaration.handler
+
+    def handler(arguments):
+        gateway.clock.advance(1.5)
+        return original(arguments)
+
+    replace_handler(gateway, "get_service_health", handler, timeout_seconds=30.0)
+    outcome, events = run_parallel(gateway)
+
+    (completed,) = of_type(events, "run.completed")
+    figures = completed.payload["workflow"]
+    assert figures["local_health_ms"] >= 1500
+    view = view_of(gateway, outcome.run_id)
+    stages = {s["branch"]: s for s in view["workflow"]["stages"]}
+    assert stages["local_health"]["duration_ms"] == figures["local_health_ms"]
+    assert stages["external_checklist"]["duration_ms"] == figures["external_checklist_ms"]
+    assert stages["synthesis"]["duration_ms"] == figures["extra_call_ms"]
+
+
+def test_restart_recovery_names_the_branch_of_the_settled_operation(tmp_path):
+    """RM10, RM22, section 8: a settled branch operation keeps its branch in tool.finished.
+
+    The interrupted run.failed has no workflow object: its monotonic
+    figures ended with the process (spec 0.25 section 4.4). The trace
+    still shows the workflow from the branch calls.
+    """
+    old = parallel_gateway(tmp_path, external=[])
+    machine = old.orchestrator.machine
+    record = machine.create(accepted=(EventType.RUN_ACCEPTED, "gateway", ACCEPTED_PAYLOAD))
+    for state in (RunState.ROUTING, RunState.PARALLEL_RUNNING):
+        record = machine.transition(record.run_id, record.version, state)
+    run_id = record.run_id
+    old.store.append_event(
+        run_id,
+        EventType.MODEL_STARTED,
+        "local",
+        {
+            "call_id": f"{run_id}_gen2_skill",
+            "model": "m",
+            "actor": "local",
+            "purpose": "skill",
+            "branch": "local_health",
+        },
+    )
+    arguments = {"service": "staging-api"}
+    operation_id = ToolExecutor.operation_id(run_id, "get_service_health", arguments)
+    old.store.record_tool_operation(
+        run_id,
+        operation_id=operation_id,
+        proposal_id="prop_health",
+        tool_name="get_service_health",
+        model="double-qwen3-0.6b",
+        arguments=arguments,
+    )
+    old.store.append_event(
+        run_id,
+        EventType.TOOL_STARTED,
+        "local",
+        {
+            "operation_id": operation_id,
+            "proposal_id": "prop_health",
+            "tool_name": "get_service_health",
+            "model": "double-qwen3-0.6b",
+            "branch": "local_health",
+        },
+    )
+    old.store.close()
+
+    new = parallel_gateway(tmp_path, local=[], external=[], clock=old.clock)
+    new.orchestrator.recover_after_restart()
+
+    events = new.store.events(run_id)
+    (finished,) = of_type(events, "tool.finished")
+    assert finished.payload["branch"] == "local_health"
+    validate_trace_event(finished.to_json_object())
+    (failed,) = of_type(events, "run.failed")
+    assert "workflow" not in failed.payload
+    view = view_of(new, run_id)
+    assert view["workflow"]["workflow_id"] is None
+    html = render_trace(view, UiSettings(mode=DataMode.DOUBLE))
+    assert "not recorded" in html
+
+
+def test_the_local_branch_prompt_names_only_its_read_only_tools(tmp_path):
+    """RM08, RM11, spec 0.25 section 4.4: a mutating tool is never offered to a branch.
+
+    The skill instruction is built from the read-only tools only, so the
+    gateway's own prompt never asks for a tool the branch rejects.
+    """
+    root = tmp_path / "skills"
+    shutil.copytree(DEMO_SKILLS_ROOT, root)
+    manifest = root / WORKFLOW / "skill.manifest.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["allowed_tools"] = ["get_service_health", "delete_demo_database"]
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    gateway = parallel_gateway(
+        tmp_path,
+        skill_roots=[root],
+        caller=CallerContext(permissions=frozenset({READ_PERMISSION, MUTATE_PERMISSION})),
+    )
+
+    outcome, _ = run_parallel(gateway)
+
+    assert outcome.state is RunState.COMPLETED
+    branch_request = gateway.adapter.requests[1]
+    assert [t.name for t in branch_request.tool_schemas] == ["get_service_health"]
+    text = "\n".join(m.content or "" for m in branch_request.messages if m.role is Role.SYSTEM)
+    assert "get_service_health" in text
+    assert "delete_demo_database" not in text

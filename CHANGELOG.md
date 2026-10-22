@@ -790,7 +790,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   ownership to a new synthesis call. Section 8 adds the branch field and the
   workflow summary of terminal events, section 9 the workflow part of the
   trace, section 12.1 the extra call latency, and section 7.4 the readiness
-  of parallel_demo.
+  of parallel_demo. The workflow checks room for both external generations
+  before its branches start and again at the join, measures the draft
+  request before parallel_running, and passes the draft to the synthesis
+  as a JSON-encoded data message. abandoned_calls lists only parallel
+  branch calls; restart recovery keeps the branch of a settled operation and
+  writes no workflow object; the trace shows each stage's duration from the
+  terminal workflow object.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried

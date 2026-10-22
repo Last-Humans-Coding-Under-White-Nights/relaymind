@@ -169,6 +169,7 @@ from relaymind.orchestrator.handoff import (
     EXTERNAL_ACTOR,
     LOCAL_ACTOR,
     DispatchAuthority,
+    HandoffEnvelope,
     RequestSize,
     build_handoff_envelope,
     external_messages,
@@ -461,6 +462,10 @@ class _Workflow:
     started: float
     joined: float | None = None
     branch_ms: dict[str, int] = field(default_factory=dict)
+    # The duration_ms of each synthesis call (extra_call_ms).
+    synthesis_ms: list[int] = field(default_factory=list)
+    # The call IDs of branch calls that ended cancelled.
+    abandoned: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -1161,24 +1166,17 @@ class _Run:
     def _workflow_summary(self, workflow: _Workflow) -> dict[str, Any]:
         """The measurement of the parallel workflow (RM15, RM25, spec 0.25 section 8).
 
-        Every figure comes from the monotonic clock or from the run's own
-        model.finished events; nothing is estimated.
+        Every figure comes from the monotonic clock, recorded as the
+        branches and calls ran; nothing is estimated.
         """
         stage_end = workflow.joined if workflow.joined is not None else self.o.clock.monotonic()
-        finished = self.o.store.events(self.run_id, event_type=EventType.MODEL_FINISHED)
-        extra = [e.payload["duration_ms"] for e in finished if e.payload.get("branch") == SYNTHESIS]
-        abandoned = [
-            e.payload["call_id"]
-            for e in finished
-            if e.payload.get("branch") and (e.payload.get("error") or {}).get("code") == "cancelled"
-        ]
         return {
             "workflow_id": workflow.workflow_id,
             "branch_wall_ms": round((stage_end - workflow.started) * 1000),
             "local_health_ms": workflow.branch_ms.get(LOCAL_HEALTH, 0),
             "external_checklist_ms": workflow.branch_ms.get(EXTERNAL_CHECKLIST, 0),
-            "extra_call_ms": sum(extra) if extra else None,
-            "abandoned_calls": abandoned,
+            "extra_call_ms": sum(workflow.synthesis_ms) if workflow.synthesis_ms else None,
+            "abandoned_calls": list(workflow.abandoned),
         }
 
     # -- the run ---------------------------------------------------------------
@@ -1601,25 +1599,10 @@ class _Run:
         external = self.o.external
         if external is None or self.mode is ExecutionMode.LOCAL_ONLY or not stop.hand_off:
             return self._needs_external(stop)
-        room = self.meter.external_room()
-        if room is not None:
-            return self._needs_external(
-                Escalation(
-                    stop.reason_code, stop.detail, **{**stop.extra, "dispatch_blocked": room.budget}
-                )
-            )
         operations = self.o.store.tool_operations(self.run_id)
-        unsettled = unsettled_operations(operations)
-        if unsettled:
-            blocker = unsettled[0]
-            return self._needs_external(
-                Escalation(
-                    "tool_failure",
-                    f"operation {blocker['operation_id']} has no known outcome; it blocks handoff",
-                    operation_id=blocker["operation_id"],
-                    tool_status=blocker["status"],
-                )
-            )
+        blocked = self._handoff_blocked(stop, operations)
+        if blocked is not None:
+            return blocked
         if stop.degraded:
             self._record_degraded_route()
         # The external stage works from the recorded evidence the envelope
@@ -1674,11 +1657,65 @@ class _Run:
                 answer_instruction=ANSWER_LANGUAGE[language],
             )
         )
+        predicate = None if skill is None else COMPLETION_PREDICATES[skill.completion_predicate]
+        loop = _Loop(conversation, schemas, available, skill, predicate, actor=EXTERNAL_ACTOR)
+        degraded = (
+            {"degraded_mode": True, "local_failure": self.scrub(stop.detail)}
+            if stop.degraded
+            else {}
+        )
+        return await self._hand_off(external, envelope, loop, stop, degraded)
+
+    def _handoff_blocked(
+        self, stop: Escalation, operations: Sequence[Mapping[str, Any]]
+    ) -> RunOutcome | None:
+        """End the run as needs_external when handoff cannot start, or return None (RM04, RM14).
+
+        Handoff needs room in the entire-run limits; an operation with no
+        known outcome blocks it.
+        """
+        room = self.meter.external_room()
+        if room is not None:
+            return self._needs_external(
+                Escalation(
+                    stop.reason_code, stop.detail, **{**stop.extra, "dispatch_blocked": room.budget}
+                )
+            )
+        unsettled = unsettled_operations(operations)
+        if unsettled:
+            blocker = unsettled[0]
+            return self._needs_external(
+                Escalation(
+                    "tool_failure",
+                    f"operation {blocker['operation_id']} has no known outcome; it blocks handoff",
+                    operation_id=blocker["operation_id"],
+                    tool_status=blocker["status"],
+                )
+            )
+        return None
+
+    async def _hand_off(
+        self,
+        external: ConfiguredModel,
+        envelope: HandoffEnvelope,
+        loop: _Loop,
+        stop: Escalation,
+        extra: Mapping[str, Any],
+        capabilities: AdapterCapabilities | None = None,
+    ) -> RunOutcome:
+        """Measure the request, record handoff.started, and run the external stage (RM13, RM14).
+
+        The request is measured against the external context limit before
+        anything is sent. extra adds payload fields to handoff.started.
+        """
         try:
-            capabilities = await external.adapter.capabilities()
-            if schemas:
+            if capabilities is None:
+                capabilities = await external.adapter.capabilities()
+            if loop.schemas:
                 capabilities.require("tool_calling")
-            size = await measure_request(external.adapter, capabilities, conversation, schemas)
+            size = await measure_request(
+                external.adapter, capabilities, loop.conversation, loop.schemas
+            )
         except (UnsupportedCapabilityError, TokenCountError) as exc:
             return self._fail(
                 EXTERNAL_FAILED,
@@ -1687,7 +1724,6 @@ class _Run:
             )
         if not size.fits:
             return self._fail_context(size)
-
         self.move(
             RunState.EXTERNAL_RUNNING,
             event=(
@@ -1700,21 +1736,15 @@ class _Run:
                     "operation_ids": list(envelope.operation_ids),
                     "allowed_tools": list(envelope.allowed_tools),
                     "request": size.to_json_object(),
-                    **(
-                        {"degraded_mode": True, "local_failure": self.scrub(stop.detail)}
-                        if stop.degraded
-                        else {}
-                    ),
+                    **extra,
                 },
             ),
         )
         # RM14: from here only the external actor dispatches or answers.
         self.authority.hand_off_to_external()
         self.meter.start_external()
-        predicate = None if skill is None else COMPLETION_PREDICATES[skill.completion_predicate]
-        loop = _Loop(
-            conversation, schemas, available, skill, predicate, capabilities, actor=EXTERNAL_ACTOR
-        )
+        self.tool_branch = None
+        loop.capabilities = capabilities
         return await self._run_external(loop, stop)
 
     def _record_degraded_route(self) -> None:
@@ -1867,24 +1897,13 @@ class _Run:
         external = self.o.external
         if external is None:
             raise Escalation(PARALLEL_WORKFLOW, "no external model is configured", hand_off=False)
-        loop = self._local_setup(decision)
+        # Branches are read-only (spec 0.25): a mutating tool is never offered to them.
+        loop = self._local_setup(decision, read_only=True)
         skill = loop.skill
         assert skill is not None and skill.parallel_workflow is not None
-        # Branches are read-only (spec 0.25): a mutating tool is never offered to them.
-        read_only = frozenset(
-            name
-            for name in loop.available
-            if self.o.tools.get(name).side_effect is not SideEffect.MUTATING
-        )
-        loop.available = read_only
-        loop.schemas = tuple(schema for schema in loop.schemas if schema.name in read_only)
-        if not loop.schemas:
-            raise Escalation(
-                "capability_missing",
-                f"no permitted read-only tools for skill {skill.name!r}",
-                hand_off=False,
-            )
-        room = self.meter.external_room()
+        # The workflow needs the local branch generation and two external
+        # generations, the draft and the synthesis (section 11).
+        room = self.meter.external_room(external_generations=2, local_generations=1)
         if room is not None:
             raise Escalation(
                 room.reason_code,
@@ -1893,6 +1912,25 @@ class _Run:
                 budget=room.budget,
                 dispatch_blocked=room.budget,
             )
+        # The draft request is measured before any branch starts (RM13).
+        assert self.language is not None
+        draft_messages = (
+            Message(
+                role=Role.SYSTEM, content=f"{DRAFT_INSTRUCTION}\n{ANSWER_LANGUAGE[self.language]}"
+            ),
+            *self.messages,
+        )
+        try:
+            capabilities = await external.adapter.capabilities()
+            size = await measure_request(external.adapter, capabilities, draft_messages, ())
+        except (UnsupportedCapabilityError, TokenCountError) as exc:
+            return self._fail(
+                EXTERNAL_FAILED,
+                detail=f"the draft request could not be measured: {exc}",
+                reason_code=PARALLEL_WORKFLOW,
+            )
+        if not size.fits:
+            return self._fail_context(size)
         self.move(RunState.PARALLEL_RUNNING)
         workflow = self.workflow = _Workflow(skill.parallel_workflow, self.o.clock.monotonic())
         self.tool_branch = LOCAL_HEALTH
@@ -1901,7 +1939,9 @@ class _Run:
             self._timed_branch(workflow, LOCAL_HEALTH, self._local_health_branch(loop, tool_names))
         )
         draft = asyncio.create_task(
-            self._timed_branch(workflow, EXTERNAL_CHECKLIST, self._checklist_branch(external))
+            self._timed_branch(
+                workflow, EXTERNAL_CHECKLIST, self._checklist_branch(external, draft_messages)
+            )
         )
         try:
             await asyncio.wait({local, draft}, return_when=asyncio.FIRST_EXCEPTION)
@@ -1917,7 +1957,7 @@ class _Run:
         if failed is not None:
             return failed
         workflow.joined = self.o.clock.monotonic()
-        return await self._synthesize(skill, draft.result(), external)
+        return await self._synthesize(skill, draft.result(), external, capabilities)
 
     async def _timed_branch(self, workflow: _Workflow, branch: str, work: Awaitable[Any]) -> Any:
         """Await one branch and record how long it ran, however it ended (RM25)."""
@@ -1997,27 +2037,15 @@ class _Run:
                 Message(role=Role.USER, content=BRANCH_CORRECTION.format(tools=tool_names)),
             ]
 
-    async def _checklist_branch(self, external: ConfiguredModel) -> str:
+    async def _checklist_branch(
+        self, external: ConfiguredModel, messages: Sequence[Message]
+    ) -> str:
         """The external branch: a provisional checklist drafted from the request alone (RM15).
 
-        The request is measured against the external context limit like
-        any external request (RM13). The draft is not tool evidence and is
-        never published as the answer.
+        The caller measured the request against the external context
+        limit before the branches started (RM13). The draft is not tool
+        evidence and is never published as the answer.
         """
-        assert self.language is not None
-        messages = (
-            Message(
-                role=Role.SYSTEM, content=f"{DRAFT_INSTRUCTION}\n{ANSWER_LANGUAGE[self.language]}"
-            ),
-            *self.messages,
-        )
-        try:
-            capabilities = await external.adapter.capabilities()
-            size = await measure_request(external.adapter, capabilities, messages, ())
-        except (UnsupportedCapabilityError, TokenCountError) as exc:
-            raise ExternalFailure(f"the draft request could not be measured: {exc}") from exc
-        if not size.fits:
-            raise ContextLimitExceeded(size)
         _, generation = await self._generate(
             "draft", messages, (), EXTERNAL_OPTIONS, model=external, branch=EXTERNAL_CHECKLIST
         )
@@ -2025,25 +2053,26 @@ class _Run:
             raise ExternalFailure("the checklist draft was blank or proposed a tool call")
         return self.scrub(generation.text)
 
-    async def _synthesize(self, skill: Skill, draft: str, external: ConfiguredModel) -> RunOutcome:
+    async def _synthesize(
+        self,
+        skill: Skill,
+        draft: str,
+        external: ConfiguredModel,
+        capabilities: AdapterCapabilities,
+    ) -> RunOutcome:
         """The join: transfer final ownership and run the new external call (RM14, RM15, RM20).
 
         The request has the health tool result as data and the draft as an
-        unverified provisional proposal; the answer must meet the skill's
-        completion predicate (RM16).
+        unverified provisional proposal in a data message, JSON-encoded so
+        its text cannot pass for gateway rules (RM12); the answer must meet
+        the skill's completion predicate (RM16).
         """
         assert skill.parallel_workflow is not None
+        stop = Escalation(PARALLEL_WORKFLOW, "synthesis of the parallel workflow", hand_off=False)
         operations = self.o.store.tool_operations(self.run_id)
-        unsettled = unsettled_operations(operations)
-        if unsettled:
-            return self._needs_external(
-                Escalation(
-                    "tool_failure",
-                    f"operation {unsettled[0]['operation_id']} has no known outcome",
-                    hand_off=False,
-                    operation_id=unsettled[0]["operation_id"],
-                )
-            )
+        blocked = self._handoff_blocked(stop, operations)
+        if blocked is not None:
+            return blocked
         language = self.language or request_language(self.messages)
         envelope = build_handoff_envelope(
             run_id=self.run_id,
@@ -2074,51 +2103,25 @@ class _Run:
                 content=SYNTHESIS_INSTRUCTION.format(workflow=skill.parallel_workflow),
             ),
             *base[1:],
-            Message(role=Role.SYSTEM, content=f"{DRAFT_HEADER}\n---\n{draft}\n---"),
-        ]
-        stop = Escalation(PARALLEL_WORKFLOW, "synthesis of the parallel workflow")
-        try:
-            capabilities = await external.adapter.capabilities()
-            size = await measure_request(external.adapter, capabilities, conversation, ())
-        except (UnsupportedCapabilityError, TokenCountError) as exc:
-            return self._fail(
-                EXTERNAL_FAILED,
-                detail=f"the synthesis request could not be measured: {exc}",
-                reason_code=PARALLEL_WORKFLOW,
-            )
-        if not size.fits:
-            return self._fail_context(size)
-        self.move(
-            RunState.EXTERNAL_RUNNING,
-            event=(
-                EventType.HANDOFF_STARTED,
-                GATEWAY_ACTOR,
-                {
-                    "reason_code": PARALLEL_WORKFLOW,
-                    "model": external.model_id,
-                    "skill": dict(envelope.skill) if envelope.skill is not None else None,
-                    "operation_ids": list(envelope.operation_ids),
-                    "allowed_tools": [],
-                    "request": size.to_json_object(),
-                    "workflow": skill.parallel_workflow,
-                },
+            Message(
+                role=Role.USER,
+                content=DRAFT_HEADER
+                + "\n"
+                + json.dumps({"provisional_draft": draft}, ensure_ascii=False),
             ),
-        )
-        # RM14: from here only the external actor dispatches or answers.
-        self.authority.hand_off_to_external()
-        self.meter.start_external()
-        self.tool_branch = None
+        ]
         loop = _Loop(
             conversation,
             (),
             frozenset(),
             skill,
             COMPLETION_PREDICATES[skill.completion_predicate],
-            capabilities,
             actor=EXTERNAL_ACTOR,
             branch=SYNTHESIS,
         )
-        return await self._run_external(loop, stop)
+        return await self._hand_off(
+            external, envelope, loop, stop, {"workflow": skill.parallel_workflow}, capabilities
+        )
 
     # -- routing ---------------------------------------------------------------
 
@@ -2275,6 +2278,9 @@ class _Run:
             raise
         finally:
             self.generating.pop(call_id, None)
+            duration_ms = round((self.o.clock.monotonic() - started) * 1000)
+            if self.workflow is not None and branch is not None:
+                self._measure_workflow_call(self.workflow, branch, call_id, duration_ms, failure)
             self.emit(
                 EventType.MODEL_FINISHED,
                 actor,
@@ -2283,7 +2289,7 @@ class _Run:
                     "model": model_id,
                     "purpose": purpose,
                     **label,
-                    "duration_ms": round((self.o.clock.monotonic() - started) * 1000),
+                    "duration_ms": duration_ms,
                     "finish_reason": finish,
                     "tool_calls": len(generation.calls),
                     "proposed_calls": [
@@ -2314,6 +2320,25 @@ class _Run:
         self.meter.check_time(on_external)
         return call_id, generation
 
+    @staticmethod
+    def _measure_workflow_call(
+        workflow: _Workflow,
+        branch: str,
+        call_id: str,
+        duration_ms: int,
+        failure: GenerationFailed | None,
+    ) -> None:
+        """Record a workflow call for the terminal summary (RM15, RM25, section 8).
+
+        A synthesis call adds to the extra call latency; a parallel branch
+        call that ended cancelled is abandoned. The synthesis is not a
+        parallel branch call, so it is never abandoned.
+        """
+        if branch == SYNTHESIS:
+            workflow.synthesis_ms.append(duration_ms)
+        elif failure is not None and failure.code == "cancelled":
+            workflow.abandoned.append(call_id)
+
     # -- local skill loop ----------------------------------------------------------
 
     def _permitted_tools(
@@ -2335,11 +2360,23 @@ class _Run:
             content_hash=pinned["content_hash"],
         )
 
-    def _local_setup(self, decision: RouteDecision) -> _Loop:
-        """Load the skill and build the first local conversation (RM06, RM08)."""
+    def _local_setup(self, decision: RouteDecision, *, read_only: bool = False) -> _Loop:
+        """Load the skill and build the first local conversation (RM06, RM08).
+
+        read_only keeps only the tools without side effects: the branches
+        of the parallel workflow never get a mutating tool, and the
+        instruction names only the tools offered (spec 0.25 section 4.4).
+        """
         assert decision.skill_id is not None
         skill = self.skill = self._load_skill(decision.skill_id)
         available, schemas = self._permitted_tools(skill.allowed_tools)
+        if read_only:
+            available = frozenset(
+                name
+                for name in available
+                if self.o.tools.get(name).side_effect is not SideEffect.MUTATING
+            )
+            schemas = tuple(schema for schema in schemas if schema.name in available)
         if not schemas:
             # RM08: nothing the skill allows is available to this caller,
             # nor to the external stage, which gets the same tools (section 4.4).
