@@ -293,3 +293,36 @@ def test_a_refused_decision_ends_the_driving(runner, corpus):
     assert api.resumes == 1
     assert record["state"] == "cancelled"
     assert record["actions"][0]["status"] == 409
+
+
+def test_an_export_is_regraded_from_its_stored_traces(runner, corpus, tmp_path):
+    """The grades of a recorded run can be recomputed from its traces, with no model call."""
+    case = corpus.case("simple-01")
+    turns = [route_turn("check-service-health"), *health_tail("payments-api", PAYMENTS_OK)]
+    api, _ = serve(runner, tmp_path, case, turns)
+
+    async def go():
+        try:
+            record = await runner.run_case(api, case, "local_only", timeout=30)
+            return record, await api.events(record["run_id"]), api.sandbox()["databases"]
+        finally:
+            await api.aclose()
+
+    record, events, databases = asyncio.run(go())
+    stale = runner.grade_record(case, "local_only", record, events, databases).to_json_object()
+    stale["success"] = False
+    document = {
+        "corpus": {"sha256": corpus.digest},
+        "grades": [stale],
+        "records": {"simple-01/local_only": record},
+        "traces": {record["run_id"]: events},
+    }
+    regraded = runner.regrade(document, corpus)
+    assert regraded["grades"][0]["success"] is True
+    assert regraded["summary"]["modes"]["local_only"]["en"]["all"]["success"]["numerator"] == 1
+    assert regraded["regraded_with"]["application"]["head"]
+
+
+def test_regrading_refuses_another_corpus_digest(runner, corpus):
+    with pytest.raises(SystemExit, match="digest"):
+        runner.regrade({"corpus": {"sha256": "0" * 64}, "grades": []}, corpus)

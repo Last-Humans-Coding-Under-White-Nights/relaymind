@@ -28,6 +28,7 @@ Usage:
 
 import argparse
 import asyncio
+import json
 import os
 import shutil
 import sys
@@ -295,8 +296,7 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
                 print(f"  {'pass' if grade.success else 'fail'} {grade.failures}", flush=True)
     finally:
         harness._stop(llama)
-    routes = {case.case_id: case.expected_route for case in corpus.cases}
-    summary = summarize_corpus(grades, expected_routes=routes)
+    summary = _summary(grades, corpus)
     document = {
         "kind": "relaymind.correctness_corpus",
         "note": "Live runs of the frozen corpus (spec 0.28 section 12.2). Each case and mode ran "
@@ -343,6 +343,33 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
     return document
 
 
+def _summary(grades: Sequence[Mapping[str, Any]], corpus: Corpus) -> dict[str, Any]:
+    routes = {case.case_id: case.expected_route for case in corpus.cases}
+    return summarize_corpus(grades, expected_routes=routes)
+
+
+def regrade(document: dict[str, Any], corpus: Corpus) -> dict[str, Any]:
+    """Recompute the grades and summary of an export from its stored traces (no model call).
+
+    The sandbox state after each run is taken from the stored grade.
+    The export records the revision that regraded it.
+    """
+    if document["corpus"]["sha256"] != corpus.digest:
+        raise SystemExit("the export was made with another corpus digest; it cannot be regraded")
+    grades = []
+    for old in document["grades"]:
+        case, mode = corpus.case(old["case_id"]), old["mode"]
+        record = document["records"][f"{case.case_id}/{mode}"]
+        events = document["traces"].get(record["run_id"], [])
+        grades.append(grade_record(case, mode, record, events, old["databases"]).to_json_object())
+    return {
+        **document,
+        "grades": grades,
+        "summary": _summary(grades, corpus),
+        "regraded_with": {"application": harness.application_revision()},
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="the export file (JSON); the report is .md")
@@ -356,7 +383,21 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--external-model")
     parser.add_argument("--external-context-limit", type=int)
     parser.add_argument("--external-region", help="the endpoint region, if known")
+    parser.add_argument(
+        "--regrade",
+        action="store_true",
+        help="recompute the grades of the export named by --out from its traces, in place",
+    )
     args = parser.parse_args(argv)
+    if args.regrade:
+        out = Path(args.out)
+        document = regrade(json.loads(out.read_text("utf-8")), load_frozen_corpus())
+        harness.write_json(out, document)
+        report = render_corpus_markdown(
+            document["summary"], title=f"Correctness corpus: {out.stem}"
+        )
+        out.with_suffix(".md").write_text(report, encoding="utf-8")
+        return
     external_args = (args.external_base_url, args.external_model, args.external_context_limit)
     if any(external_args) and not all(external_args):
         parser.error(
