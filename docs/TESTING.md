@@ -202,6 +202,8 @@ starts its own llama-server.
   external half ran live once through the harness below
   (`--second-external-model`): the same file with only
   `[external_model] model` changed, between two models of one provider.
+  Under spec 0.29 that is not a second compatible endpoint; the AC08
+  external swap needs `--second-external-base-url` (#109).
 
 - AC09 and the request part of AC16, deterministic (issue #22, spec 0.14
   section 7.1): `pytest tests/test_chat_request.py` checks the parameter
@@ -306,7 +308,7 @@ launches run AC02, `parallel_demo`, `external_only`, AC09 and AC10 with
 the `external_only` header, and AC06 through the external model; with
 `--second-external-model` one more launch runs the external swap. Only a
 second base URL counts for AC08 (spec 0.29): `--second-external-base-url`
-(with `--second-external-context-limit` if it differs) and the second
+with `--second-external-context-limit`, and the second
 credential in `RELAYMIND_SECOND_EXTERNAL_API_KEY`; the launch file names
 only the variable. A swap at the same base URL is recorded as
 `external_model_swap` (RM18), not as AC08.

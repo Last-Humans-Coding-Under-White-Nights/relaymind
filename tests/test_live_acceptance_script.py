@@ -722,6 +722,7 @@ def test_ac08_external_swap_to_a_second_endpoint(harness, tmp_path):
 
 
 def test_ac08_external_swap_fails_when_a_table_outside_external_model_changes(harness, tmp_path):
+    """AC08, RM18: configuration changes only, and only in the external_model table."""
     endpoints = _second_provider(harness)
     configs = _swap_configs(harness, tmp_path, endpoints)
     configs["external-second"] = _swap_config(
@@ -762,6 +763,7 @@ def test_a_swap_at_the_same_base_url_is_not_counted_for_ac08(harness, tmp_path):
 
 
 def test_a_second_external_model_adds_a_swap_plan_at_the_same_endpoint(harness):
+    """RM18: a second model at the same base URL still runs, with the first credential."""
     endpoint = harness.ExternalEndpoint(*ENDPOINT_FIELDS)
     second = harness.ExternalEndpoint(endpoint.base_url, "model-y", endpoint.context_limit)
     plans = harness.launch_plans(endpoint, {harness.EXTERNAL_KEY_ENV: "k"}, second)
@@ -796,6 +798,7 @@ def test_a_second_endpoint_uses_its_own_credential_variable(harness, tmp_path):
 
 
 def test_the_second_endpoint_options_need_a_model_and_the_first_endpoint(harness):
+    """AC08: a second base URL needs its model and its own context limit."""
     first = [
         "--out",
         "x.json",
@@ -806,10 +809,55 @@ def test_the_second_endpoint_options_need_a_model_and_the_first_endpoint(harness
         "--external-context-limit",
         "32768",
     ]
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit, match="^2$"):
         harness.main([*first, "--second-external-base-url", "https://api.two.invalid/v1"])
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit, match="^2$"):
         harness.main(["--out", "x.json", "--second-external-model", "model-b"])
+    with pytest.raises(SystemExit, match="^2$"):
+        harness.main(
+            [
+                *first,
+                "--second-external-base-url",
+                "https://api.two.invalid/v1",
+                "--second-external-model",
+                "model-b",
+            ]
+        )
+
+
+def test_one_endpoint_written_two_ways_is_not_a_second_endpoint(harness):
+    """AC08 (spec 0.29): case, a default port, or a trailing slash do not make a second URL."""
+    first = harness.ExternalEndpoint("https://api.one.invalid/v1", "model-a", 32768)
+    for url in ("https://API.one.invalid/v1/", "https://api.one.invalid:443/v1"):
+        second = harness.ExternalEndpoint(url, "model-b", 32768, harness.SECOND_EXTERNAL_KEY_ENV)
+        assert harness.swap_identity(first, second) == ("external_model_swap", ("RM18",))
+        args = harness.argparse.Namespace(
+            second_external_base_url=url,
+            second_external_model="model-b",
+            second_external_context_limit=32768,
+        )
+        assert harness.second_endpoint(args, first).key_env == harness.EXTERNAL_KEY_ENV
+
+
+def test_a_second_base_url_without_its_own_credential_variable_is_not_ac08(harness):
+    """AC08 (spec 0.29): a second endpoint has its own base URL and its own variable."""
+    first = harness.ExternalEndpoint("https://api.one.invalid/v1", "model-a", 32768)
+    shared = harness.ExternalEndpoint("https://api.two.invalid/v1", "model-b", 32768)
+    assert harness.swap_identity(first, shared) == ("external_model_swap", ("RM18",))
+    own = harness.ExternalEndpoint(
+        "https://api.two.invalid/v1", "model-b", 32768, harness.SECOND_EXTERNAL_KEY_ENV
+    )
+    assert harness.swap_identity(first, own) == ("ac08_external_swap", ("AC08", "RM18"))
+
+
+def test_a_swap_that_did_not_run_keeps_the_name_of_its_configuration(harness):
+    """AC08: a same-URL swap not run is external_model_swap, never an AC08 attempt."""
+    endpoint = harness.ExternalEndpoint(*ENDPOINT_FIELDS)
+    same = harness.ExternalEndpoint(endpoint.base_url, "model-y", endpoint.context_limit)
+    names = {r.name for r in harness.not_run_external(endpoint, same, environ={})}
+    assert "external_model_swap" in names and "ac08_external_swap" not in names
+    names = {r.name for r in harness.not_run_external(endpoint, None, environ={})}
+    assert "ac08_external_swap" in names
 
 
 def test_the_second_endpoint_defaults_to_the_first_base_url_limit_and_key(harness):

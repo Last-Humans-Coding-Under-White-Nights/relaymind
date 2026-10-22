@@ -984,7 +984,7 @@ Not done: a Windows start. No Windows machine was available.
 | Cache off, AC01 prompts, two rounds | AC13, RM24 | **failed** (model) | 8 of 8 | 6 of 8 completed; Chinese staging-api failed in both rounds; no `cache.hit`, no cache label, 8 routing calls |
 | Cache on, same prompts | AC13, RM24 | **failed** (model) | 12 of 12 | 6 of 8 completed, same failure; round 1 four misses, round 2 four hits (`cache.hit` just before a gateway route, no routing call); 4 routing calls |
 | `external_only`, `glm-4.5-air` | section 7.4, RM21 | passed | 1 of 1 | The `external-second` launch: only `glm-4.5-air` was called (2 calls, 6.3 s), answer with the fixture status and time |
-| AC08 external swap | AC08, RM18 | passed | 3 of 3 | `external_only` on the `external` and `external-second` launches: the two files differ only in `model = "glm-4.6"` and `model = "glm-4.5-air"` (apart from per-launch paths and port); both runs offered the same skill packages (names, versions, content hashes); each run's model calls name its own model; both completed (`glm-4.5-air`: 2 calls, 6.3 s) |
+| AC08 external swap (a same-URL model swap; not AC08 under spec 0.29) | RM18 | passed | 3 of 3 | `external_only` on the `external` and `external-second` launches: the two files differ only in `model = "glm-4.6"` and `model = "glm-4.5-air"` (apart from per-launch paths and port); both runs offered the same skill packages (names, versions, content hashes); each run's model calls name its own model; both completed (`glm-4.5-air`: 2 calls, 6.3 s) |
 
 Gateway checks: 90 of 90 held. Model checks: 9 of 52 failed, in the
 six scenarios marked failed. External model calls: 26 in this run.
@@ -1052,6 +1052,10 @@ one provider at one base URL. The spec asks for "a second compatible
 external endpoint" (section 13); whether a second model on the same
 endpoint satisfies that is a judgment this record does not make, so
 AC08 is not marked closed here. The local half is the #90 entry above.
+Spec 0.29 (#109) has since settled it: a second compatible endpoint has
+its own base URL, so this swap does not count for AC08. The harness now
+records such a swap as `external_model_swap` (RM18); the export of this
+run keeps the name `ac08_external_swap` it was written with.
 
 ### Findings
 

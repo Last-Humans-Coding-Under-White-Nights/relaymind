@@ -896,9 +896,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `--second-external-base-url`, `--second-external-model`, and
   `--second-external-context-limit`, reads the second credential from
   `RELAYMIND_SECOND_EXTERNAL_API_KEY` (the launch file names only the
-  variable), and records the swap as `ac08_external_swap` only when the
-  two base URLs differ; a swap at one base URL is recorded as
-  `external_model_swap` (RM18) and does not count for AC08.
+  variable; a second base URL needs its own context limit), and records
+  the swap as `ac08_external_swap` only when the two base URLs differ
+  (ignoring case, a default port, and a final slash) and the second
+  names its own credential variable; any other swap is recorded as
+  `external_model_swap` (RM18) and does not count for AC08. The #88
+  same-URL swap in `docs/EVIDENCE.md` is marked as not AC08.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried

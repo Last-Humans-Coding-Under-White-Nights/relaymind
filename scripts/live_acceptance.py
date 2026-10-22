@@ -62,6 +62,7 @@ import tempfile
 import threading
 import time
 import tomllib
+import urllib.parse
 import uuid
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import ExitStack
@@ -1275,11 +1276,33 @@ async def ac10_client_tools_external(api: Api, result: Result) -> None:
     await _check_external_only(api, result)
 
 
+def same_base_url(a: str, b: str) -> bool:
+    """One endpoint, whatever the case of scheme and host, a default port, or a final slash."""
+
+    def key(url: str) -> tuple:
+        parts = urllib.parse.urlsplit(url)
+        scheme = parts.scheme.lower()
+        port = parts.port or {"https": 443, "http": 80}.get(scheme)
+        return scheme, (parts.hostname or "").lower(), port, parts.path.rstrip("/")
+
+    return key(a) == key(b)
+
+
 def swap_identity(
-    first: "ExternalEndpoint", second: "ExternalEndpoint"
+    first: "ExternalEndpoint | None", second: "ExternalEndpoint | None"
 ) -> tuple[str, tuple[str, ...]]:
-    """The result name and IDs of a swap: only a second base URL counts for AC08 (spec 0.29)."""
-    if first.base_url != second.base_url:
+    """The result name and IDs of the external swap.
+
+    Only a second compatible endpoint counts for AC08 (spec 0.29): its
+    own base URL and its own credential variable. Any other swap is
+    external_model_swap (RM18). Without both endpoints it is the AC08 swap
+    that was not run.
+    """
+    if (
+        first is None
+        or second is None
+        or (not same_base_url(first.base_url, second.base_url) and first.key_env != second.key_env)
+    ):
         return "ac08_external_swap", ("AC08", "RM18")
     return "external_model_swap", ("RM18",)
 
@@ -1306,7 +1329,7 @@ def ac08_external_swap(
     )
     result.observations.update(
         endpoints=[_endpoint_record(endpoint_a), _endpoint_record(endpoint_b)],
-        different_base_urls=endpoint_a.base_url != endpoint_b.base_url,
+        different_base_urls=not same_base_url(endpoint_a.base_url, endpoint_b.base_url),
     )
     runs = [first.run_ids[:1], second.run_ids[:1]]
     if not all(runs):
@@ -2024,16 +2047,20 @@ def second_endpoint(
     if external is None or not args.second_external_model:
         return None
     base_url = args.second_external_base_url or external.base_url
+    limit = args.second_external_context_limit
     return ExternalEndpoint(
         base_url,
         args.second_external_model,
-        args.second_external_context_limit or external.context_limit,
-        external.key_env if base_url == external.base_url else SECOND_EXTERNAL_KEY_ENV,
+        external.context_limit if limit is None else limit,
+        external.key_env if same_base_url(base_url, external.base_url) else SECOND_EXTERNAL_KEY_ENV,
     )
 
 
 def not_run_external(
-    external: ExternalEndpoint | None, *, environ: Mapping[str, str]
+    external: ExternalEndpoint | None,
+    second: ExternalEndpoint | None = None,
+    *,
+    environ: Mapping[str, str],
 ) -> list[Result]:
     """The scenarios that need a real external endpoint, recorded as not run when there is none."""
     if external is None:
@@ -2048,7 +2075,7 @@ def not_run_external(
             *(("external", name) for name in EXTERNAL_SCENARIOS),
             ("external-poisoned", "ac06_managed_logs"),
         )
-    ] + [Result("ac08_external_swap", ("AC08", "RM18"), reason=reason)]
+    ] + [Result(*swap_identity(external, second), reason=reason)]
 
 
 def local_prep_skills(work: Path) -> Path:
@@ -2260,16 +2287,11 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
                     stats_files[plan.name] = _cache_stats(
                         plan, result, traces, runtime.manifest, stem
                     )
-        results += not_run_external(external, environ=os.environ)
+        results += not_run_external(external, second, environ=os.environ)
         launched = {plan.name for plan in plans}
         if "external" in launched and "external-second" not in launched:
-            name, acceptance = (
-                swap_identity(external, second)
-                if second
-                else ("ac08_external_swap", ("AC08", "RM18"))
-            )
             reason = swap_not_run_reason(second)
-            results.append(Result(name, acceptance, reason=reason))
+            results.append(Result(*swap_identity(external, second), reason=reason))
         swap = {r.launch: r for r in results if r.name == "external_only"}
         if {"external", "external-second"} <= launched:
             # Keep the planned comparison visible even if a prerequisite
@@ -2388,13 +2410,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--second-external-context-limit",
         type=int,
-        help="the second endpoint's context limit (default: the first's)",
+        help="the second endpoint's context limit (needed with --second-external-base-url; "
+        "default at the same base URL: the first's)",
     )
     args = parser.parse_args(argv)
     external_args = (args.external_base_url, args.external_model, args.external_context_limit)
-    second_options = args.second_external_base_url or args.second_external_context_limit
-    if second_options and not args.second_external_model:
+    second_options = (args.second_external_base_url, args.second_external_context_limit)
+    if any(o is not None for o in second_options) and not args.second_external_model:
         parser.error("the --second-external options need --second-external-model")
+    if args.second_external_base_url and args.second_external_context_limit is None:
+        parser.error("--second-external-base-url needs --second-external-context-limit")
     if args.second_external_model and not all(external_args):
         parser.error("--second-external-model needs the external endpoint options")
     if any(external_args) and not all(external_args):
