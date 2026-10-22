@@ -98,7 +98,7 @@
             "required": ["active_ms", "waiting_ms"],
             "dependentSchemas": {
               "approval_id": {
-                "properties": {"reason": {"const": "user_denied"}},
+                "properties": {"reason": {"enum": ["user_denied", "cancel_requested"]}},
                 "required": ["reason"]
               }
             }

@@ -739,6 +739,9 @@ SAMPLE_EVENTS.update(
         "cancelled-integer-reason": cancelled_with(reason=1),
         "cancelled-blank-approval": cancelled_with(reason="user_denied", approval_id=" "),
         "cancelled-approval-without-reason": cancelled_with(approval_id="approval_1"),
+        "cancelled-requested-with-approval": cancelled_with(
+            reason="cancel_requested", approval_id="approval_1"
+        ),
         "cancelled-approval-other-reason": cancelled_with(
             reason="cancelled", approval_id="approval_1"
         ),
@@ -777,6 +780,13 @@ def test_the_confirmation_required_payload_never_carries_the_token(key):
     data = SAMPLE_EVENTS[name.get(key, "confirmation-extra-field")]
     with pytest.raises(TraceEventError, match=f"unknown fields: {key}"):
         validate_trace_event(data)
+
+
+def test_a_native_cancel_of_a_waiting_run_names_its_voided_approval():
+    """RM11, RM17, RM21, spec 0.17 sections 7.4 and 8: a native cancel of a
+    run in waiting_confirmation voids the pending approval, and its
+    run.cancelled carries reason cancel_requested with that approval_id."""
+    validate_trace_event(SAMPLE_EVENTS["cancelled-requested-with-approval"])
 
 
 def test_a_denied_confirmation_cancels_with_its_reason_and_approval():

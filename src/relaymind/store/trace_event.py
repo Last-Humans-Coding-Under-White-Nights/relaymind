@@ -356,7 +356,8 @@ def _check_confirmation_payload(payload: Mapping[str, Any]) -> None:
 
 # Spec 0.10 section 8: a denied confirmation ends the run as cancelled
 # with this reason and the approval ID (RM11).
-_USER_DENIED = "user_denied"
+# Spec 0.17 section 8: the reasons a run.cancelled may name a voided approval with.
+_APPROVAL_CANCEL_REASONS = ("user_denied", "cancel_requested")
 
 
 def _check_cancelled_payload(payload: Mapping[str, Any]) -> None:
@@ -364,8 +365,11 @@ def _check_cancelled_payload(payload: Mapping[str, Any]) -> None:
     for key in ("reason", "approval_id"):
         if key in payload and not _is_text(payload[key]):
             raise TraceEventError(f"'{key}' must be a non-blank string")
-    if "approval_id" in payload and payload.get("reason") != _USER_DENIED:
-        raise TraceEventError(f"a run.cancelled with an approval_id needs 'reason' {_USER_DENIED}")
+    if "approval_id" in payload and payload.get("reason") not in _APPROVAL_CANCEL_REASONS:
+        raise TraceEventError(
+            "a run.cancelled with an approval_id needs 'reason'"
+            f" {' or '.join(_APPROVAL_CANCEL_REASONS)}"
+        )
 
 
 def _check_answered_payload(payload: Mapping[str, Any]) -> None:
