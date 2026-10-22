@@ -20,6 +20,11 @@ external_calls, active_ms, and waiting_ms as non-negative
 integers (section 8, 12.1), handoff.started names the reason code, the
 external model, the selected skill (or null), the completed operation
 IDs, the allowed tools, and the measured external request (RM13),
+confirmation.required is exactly the approval, tool, proposal,
+canonical redacted arguments, target, bound state_version, UTC
+expires_at, and proposing model, never the token or its hash (RM11),
+run.cancelled may name a reason, and a denied confirmation names
+user_denied and the approval_id (RM11),
 cache.hit names the originating version,
 and skill.loaded names the skill, its version, and its content hash
 (RM06). Timestamps are UTC; elapsed_ms
@@ -97,8 +102,9 @@ _REQUIRED_PAYLOAD: dict[EventType, tuple[str, ...]] = {
     # Spec 0.6 section 8: the input the run waits for is never blank.
     EventType.CLARIFICATION_REQUIRED: ("question", "language", "reason_code", "missing"),
     EventType.CLARIFICATION_ANSWERED: ("input", "missing"),
-    # Spec 0.10 section 8 (RM11): the approval, the tool, and its target.
-    EventType.CONFIRMATION_REQUIRED: ("approval_id", "tool_name", "target"),
+    # Spec 0.10 section 8 (RM11): the approval, the tool, the proposal,
+    # the target, and the proposing model.
+    EventType.CONFIRMATION_REQUIRED: ("approval_id", "tool_name", "proposal_id", "target", "model"),
     # Spec 0.9 section 8 (RM13): the escalation reason and the external model.
     EventType.HANDOFF_STARTED: ("reason_code", "model"),
 }
@@ -164,16 +170,14 @@ def _is_count(value: object, minimum: int) -> bool:
     return type(value) is int and value >= minimum
 
 
-_TIMESTAMP_ERROR = "'timestamp' must be a UTC time such as 2026-10-20T03:00:00Z"
-
-
-def _check_timestamp(value: object) -> str:
+def _check_timestamp(value: object, name: str = "timestamp") -> str:
+    error = f"'{name}' must be a UTC time such as 2026-10-20T03:00:00Z"
     if not isinstance(value, str) or not _UTC_TIMESTAMP.fullmatch(value):
-        raise TraceEventError(_TIMESTAMP_ERROR)
+        raise TraceEventError(error)
     try:
         datetime.fromisoformat(value)
     except ValueError:
-        raise TraceEventError(_TIMESTAMP_ERROR) from None
+        raise TraceEventError(error) from None
     return value
 
 
@@ -261,6 +265,49 @@ def _check_terminal_payload(event_type: EventType, payload: Mapping[str, Any]) -
             )
 
 
+# Spec 0.10 section 8 (RM11, RM12): the confirmation.required payload is
+# exactly these fields, so the token and its hash never reach the trace.
+_CONFIRMATION_FIELDS = (
+    "approval_id",
+    "tool_name",
+    "proposal_id",
+    "arguments",
+    "target",
+    "state_version",
+    "expires_at",
+    "model",
+)
+
+
+def _check_confirmation_payload(payload: Mapping[str, Any]) -> None:
+    """The section 8 confirmation.required fields that are not plain text (RM11).
+
+    The canonical redacted arguments, the run version the approval is
+    bound to, and the UTC expiry; no other field, never the token or
+    its hash.
+    """
+    check_closed_fields(payload, _CONFIRMATION_FIELDS, TraceEventError, kind="payload")
+    if not isinstance(payload["arguments"], Mapping):
+        raise TraceEventError("'arguments' must be a JSON object")
+    if not _is_count(payload["state_version"], 1):
+        raise TraceEventError("'state_version' must be an integer of at least 1")
+    _check_timestamp(payload["expires_at"], "expires_at")
+
+
+# Spec 0.10 section 8: a denied confirmation ends the run as cancelled
+# with this reason and the approval ID (RM11).
+_USER_DENIED = "user_denied"
+
+
+def _check_cancelled_payload(payload: Mapping[str, Any]) -> None:
+    """The section 8 run.cancelled reason and approval_id (RM11, RM17)."""
+    for key in ("reason", "approval_id"):
+        if key in payload and not _is_text(payload[key]):
+            raise TraceEventError(f"'{key}' must be a non-blank string")
+    if "approval_id" in payload and payload.get("reason") != _USER_DENIED:
+        raise TraceEventError(f"a run.cancelled with an approval_id needs 'reason' {_USER_DENIED}")
+
+
 def _check_answered_payload(payload: Mapping[str, Any]) -> None:
     """The section 8 clarification.answered waiting time (spec 0.6; RM25)."""
     if "waited_ms" not in payload:
@@ -346,6 +393,10 @@ def _check_payload(event_type: EventType, payload: Mapping[str, Any]) -> None:
         _check_answered_payload(payload)
     if event_type is EventType.HANDOFF_STARTED:
         _check_handoff_payload(payload)
+    if event_type is EventType.CONFIRMATION_REQUIRED:
+        _check_confirmation_payload(payload)
+    if event_type is EventType.RUN_CANCELLED:
+        _check_cancelled_payload(payload)
     if event_type in (EventType.RUN_COMPLETED, EventType.RUN_FAILED, EventType.RUN_CANCELLED):
         _check_terminal_payload(event_type, payload)
     if event_type in _TOOL_EVENTS:
