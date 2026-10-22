@@ -4,19 +4,21 @@
 tasks with skills and tools. Complex work is transferred to an external model.
 Every routing decision, tool call, and model call is visible in a trace.
 
-Status: **M1 to M4 are closed.** M1 (adapter and protocol
+Status: **M1 to M5 are closed.** M1 (adapter and protocol
 qualification) and M2 (local skill-and-tool loop) have live runs
 recorded in [`docs/EVIDENCE.md`](docs/EVIDENCE.md) for Apple Silicon
-macOS and native x86-64 Windows. M3 (handoff and confirmation) and M4
-(public API and observability) are implemented and covered by
-deterministic tests with model doubles only: no live run is recorded
-for their acceptance scenarios, and AC08 stays open until a second
-local model artifact is qualified. The operator starts the gateway with
-one command, `relaymind serve --config <file>` (see
+macOS and native x86-64 Windows. M3 (handoff and confirmation), M4
+(public API and observability), and M5 (parallel workflow and caching)
+are closed on deterministic tests with model doubles only: no live run
+is recorded for their acceptance scenarios. AC08 stays open until a
+second local model artifact is qualified. M6 (evaluation) is next;
+the missing M5 live evidence is tracked in
+[#104](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/104).
+
+The operator starts the gateway with one command,
+`relaymind serve --config <file>` (see
 [Start the gateway](#start-the-gateway)). Chinese support is best-effort
-(spec 0.7): Chinese live results are recorded but are not a gate. M5
-(parallel workflow and caching) is implemented with model doubles; M6
-(evaluation) is next. See
+(spec 0.7): Chinese live results are recorded but are not a gate. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan and the
 open items, and [`CHANGELOG.md`](CHANGELOG.md) for what has landed so
 far.

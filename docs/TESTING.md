@@ -1,11 +1,13 @@
-# Testing RelayMind (Milestones 1 to 4)
+# Testing RelayMind (Milestones 1 to 5)
 
-How to verify the M1 to M4 deliverables, by hand on macOS and Windows
+How to verify the M1 to M5 deliverables, by hand on macOS and Windows
 and with the automated suites. M1 qualifies the local model runtime and
 the adapters; M2 adds the bounded local loop; M3 adds handoff,
 confirmation, restart recovery, and the error contract; M4 adds the
-gateway's public API and the demo UI (see [`ROADMAP.md`](ROADMAP.md)).
-M3 and M4 are covered by deterministic tests with model doubles only;
+gateway's public API and the demo UI; M5 adds the launcher, the parallel
+workflow, the caches, and the browser test of the page script (see
+[`ROADMAP.md`](ROADMAP.md)). M3 to M5 are covered by deterministic tests
+with model doubles only;
 [What is not covered yet](#what-is-not-covered-yet) lists the gaps. The
 gateway's public API (`/v1/chat/completions`, `/relay/v1/runs`) is
 started with `relaymind serve --config` (see
@@ -35,7 +37,7 @@ To use the pinned GGUF from another location, set
 `RELAYMIND_SMOKE_MODEL=<path>`. The file must be the pinned artifact
 itself, with the manifest's SHA-256; any other file fails the run.
 
-### Acceptance and contract tests (M2 to M4)
+### Acceptance and contract tests (M2 to M5)
 
 - AC01, deterministic: `pytest tests/test_ac01_local_health.py` runs a
   simple health request in English and Chinese through the local loop
@@ -248,25 +250,8 @@ itself, with the manifest's SHA-256; any other file fails the run.
   ownership-mixing rejections on both aliases.
   No live model is run, so there is no live AC10 record yet.
 
-### What is not covered yet
-
-- No live-model record exists for AC02, AC05, AC06, AC07, AC09, AC10,
-  AC11, or AC12. Every M3 and M4 test above uses model doubles, which
-  does not satisfy a live-demo requirement (spec section 13).
-- AC08 is not closed: only one local artifact is qualified, so the swap
-  to a second qualified local model cannot run.
-- The browser test of the page script (#89) uses model doubles and a
-  disposable sandbox; it is not a live UI session (#88).
-- The parallel workflow (#30, AC14) is tested with model doubles only
-  (`tests/test_parallel_workflow.py`): both branches and the synthesis,
-  branch attribution in the trace and the UI, provenance of an
-  unavailable service and of the draft label, the extra call latency,
-  abandoned calls in the external usage counts, failure of either branch,
-  and cancel (native and chat disconnect) and restart during a branch. The
-  branches overlap in a test that blocks each on the other. No live model
-  has run the workflow, and the extra call latency is not measured on real
-  hardware.
-- The caches (#31, AC13, RM07, RM24) are tested with model doubles only.
+- AC13, caching policy, deterministic (#31; RM07, RM22, RM24):
+  tested with model doubles only.
   `tests/test_skill_parse_cache.py` covers the content-hash parse cache,
   `tests/test_routing_cache.py` the key, TTL, size bound, and invalidation,
   `tests/test_routing_cache_orchestrator.py` the gateway behavior (off by
@@ -275,8 +260,32 @@ itself, with the manifest's SHA-256; any other file fails the run.
   non-local routes never stored), `tests/test_routing_cache_trace.py` the
   `cache.hit` and `run.accepted` contract and the labeled statistics
   export, and `tests/test_launcher_cache.py` the `cache.routing` setting.
-  No test measures a speedup; a cache-on measurement is a separate,
-  labeled experiment and none has been run.
+
+- AC14, parallel workflow, deterministic (#30; RM14, RM15, RM16,
+  RM22, RM23): `tests/test_parallel_workflow.py` uses model doubles to
+  cover both branches and the synthesis,
+  branch attribution in the trace and the UI, provenance of an
+  unavailable service and of the draft label, the extra call latency,
+  abandoned calls in the external usage counts, failure of either branch,
+  and cancel (native and chat disconnect) and restart during a branch. The
+  branches overlap in a test that blocks each on the other.
+
+### What is not covered yet
+
+- No live-model record exists for AC02, AC05, AC06, AC07, AC09, AC10,
+  AC11, AC12, AC13, or AC14. Every M3 to M5 test above uses model
+  doubles, which does not satisfy a live-demo requirement (spec section
+  13). The missing M5 live runs (AC13 and AC14) are tracked in
+  [#104](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/104)
+  for M6.
+- AC08 is not closed: only one local artifact is qualified, so the swap
+  to a second qualified local model cannot run.
+- The browser test of the page script (#89) uses model doubles and a
+  disposable sandbox; it is not a live UI session (#88).
+- No live model has run the parallel workflow (AC14), and the extra
+  call latency is not measured on real hardware (#104 in M6).
+- No cache speedup has been measured (AC13); a cache-on measurement is
+  a separate, labeled experiment and none has been run (#104 in M6).
 - No production backend forwards a live provider stream yet, so the
   mid-stream failure path is tested with a backend double.
 - The launcher (`relaymind serve --config`) is tested with model doubles
@@ -289,10 +298,11 @@ itself, with the manifest's SHA-256; any other file fails the run.
 checks completed local runs, clarification/resume, failed and cancelled
 calls, monotonic durations despite UTC clock changes, and large-result
 persistence. Completed traces identify every actual model request, the
-final-answer model, and the external call count. The cache-hit
-scenario exercises the state/store event contract; its execution
-remains in #31. The handoff flow runs in `tests/test_ac02_handoff.py`
-(#18) and the confirmation flow in `tests/test_ac05_confirmation.py`
+final-answer model, and the external call count. Cache-hit execution is
+covered by `tests/test_routing_cache_orchestrator.py`;
+`tests/test_routing_cache_trace.py` checks the `cache.hit` and
+`run.accepted` event contract and the labeled statistics export (#31).
+The handoff flow runs in `tests/test_ac02_handoff.py` (#18) and the confirmation flow in `tests/test_ac05_confirmation.py`
 (#19).
 
 The published `src/relaymind/store/schemas/trace_event.v1.json` and the

@@ -419,7 +419,55 @@ Carried forward, not done in M4:
   budget, temperature, and top_p of the answer; a run without options and
   a native run record none; a run stored earlier shows as not recorded in
   the demo UI. Implemented with model doubles; no live run.
+- Approval resume race (#93; RM10, RM11, RM17, spec 0.23 section 5):
+  consuming the approval and taking the execution slot share one store
+  transaction. If another gateway takes the slot, the resume returns
+  429 without consuming the approval; the same approval works once the
+  slot is free. Covered with two store connections and model doubles in
+  `tests/test_ac05_confirmation.py`.
+- Chat disconnect cancellation (#92; RM14, RM17, RM21, spec 0.24
+  section 7.4): a disconnect cancels the run that the chat request owns,
+  including during buffered generation. It leaves unrelated native runs
+  alone; a native SSE disconnect does not cancel its run. Implemented
+  with model doubles (`tests/test_chat_disconnect_cancel.py`); no live
+  run is recorded.
 - Closes: AC13, AC14.
+
+Status (2026-10-22): **M5 closed** (PRs #97, #95, #96, #99, #100, #101,
+and #102, spec 0.21 to 0.27). The operator launcher (#87), the recorded
+answer options (#91), the approval resume race (#93), the chat
+disconnect cancel (#92), the parallel workflow (#30), the caching policy
+(#31), and the browser test of the page script (#89) are merged. AC13
+and AC14 pass with model doubles (`tests/test_routing_cache*.py`,
+`tests/test_skill_parse_cache.py`, `tests/test_launcher_cache.py`,
+`tests/test_parallel_workflow.py`);
+[`TESTING.md`](TESTING.md) lists the tests. As in M3 and M4, the
+milestone was closed on deterministic coverage only: no live run of an
+M5 scenario is recorded in [`EVIDENCE.md`](EVIDENCE.md), which is less
+than the rule at the top of this page asks. The live evidence is #104
+in M6.
+
+Carried forward, not done in M5:
+
+- Live runs: the parallel workflow against live models, a cache-on
+  measurement next to the cache-off baseline, and a launcher start with
+  the pinned model on both platforms (#104). No latency figure for the
+  synthesis call and no cache speedup is claimed.
+- The launcher reads the external credential from the environment
+  variable the config file names; it does not read an OS credential
+  store directly (#87).
+- Runs stored before spec 0.22 have no `answer_options`; the store was
+  not migrated, and the reader treats the field as optional (#91).
+- The approval resume race is closed by the single store transaction;
+  no lock refuses a second gateway on the same store file (#93).
+- A chat disconnect during an in-flight write is covered by the native
+  cancel tests only; there is no chat-level test for an in-flight write
+  (#92). Both chat aliases have dedicated disconnect tests in
+  `tests/test_chat_disconnect_cancel.py`.
+- The skill parse cache is process-local and used on registry load and
+  `SkillRegistry.reloaded()` only; a running gateway does not watch
+  skill files (#31).
+- The browser test drives Chromium only (#89).
 
 ## M6 — Evaluation
 
@@ -481,3 +529,9 @@ listed here so the current order can be traced to its reason.
   the rule at the top of this page asks for. Their live runs, the
   launcher those runs need, and AC08 are carried forward (see the M3
   and M4 status paragraphs); M5 and M6 start from that state.
+- 2026-10-22, M5 closed: the M4 carry-forward items (the launcher #87,
+  the browser test #89, the recorded answer options #91, the chat
+  disconnect cancel #92) and the approval resume race (#93) were done in
+  M5 next to #30 and #31. M5 was closed on deterministic coverage with
+  model doubles, like M3 and M4; its live evidence (#104) joins the M6
+  latency experiment (#33).
