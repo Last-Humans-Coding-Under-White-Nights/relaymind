@@ -24,6 +24,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Operator launcher (#87; RM12, RM17, RM18, RM19, RM21, RM23; spec 0.21
+  section 14.1): `relaymind serve --config relaymind.toml` starts the
+  gateway on macOS and Windows. The TOML file wires the local and
+  external models, skill roots, sandbox, run store, chat and native
+  settings, the degraded-mode policy, enabled workflows, and the UI data
+  mode. Startup refuses a public bind address, a manifest hash mismatch,
+  an invalid skill package, an undeclared data mode, an unknown key, and a
+  credential in the file, with one message and exit status 2. Restart
+  recovery runs once before the server accepts a run, and the token is
+  printed once to standard output only. `relaymind.example.toml` is the
+  template; the README, `docs/TESTING.md`, and `docs/ROADMAP.md` use the
+  command. Tests use model doubles (`tests/test_launcher.py`); no live run
+  is recorded.
 - Specification 0.20 → 0.21: section 14.1 defines the operator launcher
   (#87; RM12, RM17, RM18, RM19, RM21, RM23): the `relaymind serve --config`
   command, the TOML tables, credentials from the environment only, the

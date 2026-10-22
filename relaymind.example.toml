@@ -1,0 +1,42 @@
+# Example configuration for `relaymind serve --config relaymind.example.toml`
+# (spec 0.21 section 14.1). Copy it and edit. Relative paths resolve against
+# the directory you start the command in. No credential belongs in this file.
+
+[server]
+host = "127.0.0.1"          # loopback only; any other address stops startup
+port = 8080
+
+[store]
+path = "relaymind.sqlite3"
+
+[skills]
+roots = ["skills"]
+
+[sandbox]
+seed = "tests/fixtures/sandbox/baseline.json"
+work_dir = ".relaymind/sandbox"
+
+[local_model]
+manifest = "models/qwen3-0.6b-q8_0.manifest.json"
+artifact = "models/Qwen3-0.6B-Q8_0.gguf"
+base_url = "http://127.0.0.1:8033"   # the llama-server from models/README.md
+
+# Optional. Without this table no external model is configured. Export the
+# credential into the environment of the shell that starts the gateway:
+#   macOS / Linux:  export RELAYMIND_EXTERNAL_API_KEY=...
+#   Windows:        $env:RELAYMIND_EXTERNAL_API_KEY = "..."
+# [external_model]
+# base_url = "https://api.example.com/v1"
+# model = "your-model-id"
+# context_limit = 128000
+# api_key_env = "RELAYMIND_EXTERNAL_API_KEY"
+
+[policy]
+degraded_mode = false
+enabled_workflows = []
+# allowed_modes = ["auto", "local_only", "external_only", "parallel_demo"]
+
+# Optional. Without this table the demo UI is not served. The mode is a
+# declaration: live, replay, or double. It has no default.
+[ui]
+mode = "live"

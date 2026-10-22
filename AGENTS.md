@@ -25,6 +25,7 @@ codebase.
 | `src/relaymind/skills/` | Skill registry: package validation, instruction loading (RM06, RM07); completion predicates (`predicates.py`; RM06, section 9) |
 | `src/relaymind/tools/` | Tool registry and executor: argument validation, permissions, side effects (RM08–RM12); the sandbox demo data service and the seven demo tools (`sandbox.py`, `schemas/demo/`; RM23, section 9); the executor (`executor.py`: operation IDs, replay, retry, timeouts; RM10, RM14) |
 | `src/relaymind/store/` | Run store: SQLite events, tool outcomes, approvals, versioned state (RM17, RM22); every event is validated against the published TraceEvent schema before it is written (`trace_event.py`, `schemas/trace_event.v1.json`; RM22, section 8) |
+| `src/relaymind/launcher.py` | The operator launcher, `relaymind serve --config` (`relaymind.example.toml`): config file, startup checks, restart recovery once, token handover (RM12, RM17–RM19, section 14.1) |
 | `src/relaymind/canonical.py` | One canonical JSON text form, and its SHA-256 (`canonical_digest`), for tool schema hashes (RM07), operation IDs (RM10), approval binding (RM11), and idempotency request hashes (RM17) |
 | `src/relaymind/schema_util.py` | Shared boundary checks for published, versioned JSON Schemas: closed field sets, exact schema_version, first schema error (spec section 8) |
 | `src/relaymind/redaction.py` | Configured secret-field redaction before anything is persisted (RM12, section 8) |

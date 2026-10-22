@@ -316,6 +316,13 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
 - The one bounded parallel workflow with read-only branches (#30; RM15).
 - Skill/template caching by content hash; routing cache experiments
   behind a flag, off by default (#31; RM24).
+- Operator launcher (#87; RM17, RM18, RM19, RM21, RM23, spec 0.21
+  section 14.1): `relaymind serve --config relaymind.toml` replaces the
+  hand-written start script. It wires the models, skill roots, sandbox,
+  run store, settings, and policy, refuses an invalid configuration
+  before any socket opens, runs restart recovery once, and prints the
+  application token once. Implemented with model doubles
+  (`tests/test_launcher.py`); not yet run against a live model.
 - Closes: AC13, AC14.
 
 ## M6 — Evaluation

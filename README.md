@@ -76,11 +76,18 @@ and see `models/README.md` for fetching and verifying the model).
 [`docs/TESTING.md`](docs/TESTING.md) covers manual testing from a
 terminal on macOS and Windows.
 
-## Send a message
+## Start the gateway
 
-The gateway API (`/v1/chat/completions`, `/relay/v1/runs`) arrives in
-M4. Until then, talk to the local model through the adapter. Start the
-pinned runtime first:
+One command starts the gateway on macOS and Windows (PowerShell or
+Terminal). It needs a config file; copy
+[`relaymind.example.toml`](relaymind.example.toml) and edit it:
+
+```bash
+relaymind serve --config relaymind.toml
+```
+
+Start the pinned local runtime first (install llama.cpp and see
+`models/README.md` for fetching and verifying the model):
 
 ```bash
 llama-server -m models/Qwen3-0.6B-Q8_0.gguf \
@@ -88,32 +95,26 @@ llama-server -m models/Qwen3-0.6B-Q8_0.gguf \
   --jinja --reasoning off --reasoning-format deepseek
 ```
 
-Then send a message and print the answer as it streams:
+The command checks the whole configuration before it opens a socket. It
+refuses a public bind address, a model file that does not match its
+manifest, an invalid skill package, and a `[ui]` table without a declared
+data mode, and it prints one explicit error (exit status 2). Then it ends
+any run an earlier process left unfinished as `interrupted` (spec section
+5), starts serving on loopback, and prints the application token once:
 
-```python
-import asyncio
-
-from relaymind.adapters import GenerationRequest, Message, Role, TextDelta
-from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
-
-
-async def main() -> None:
-    config = LlamaCppConfig(base_url="http://127.0.0.1:8033", context_limit=8192)
-    request = GenerationRequest(
-        generation_id="hello_1",
-        messages=(Message(role=Role.USER, content="Reply with exactly one word: pong"),),
-    )
-    async with LlamaCppAdapter(config) as adapter:
-        async for event in adapter.generate(request):
-            if isinstance(event, TextDelta):
-                print(event.text, end="", flush=True)
-    print()
-
-
-asyncio.run(main())  # prints: pong
+```
+Serving on http://127.0.0.1:8080
+Application token: <token>
 ```
 
-Or skip Python and ask llama-server directly:
+Keep the token in `RELAYMIND_TOKEN` for the examples below. It is not
+written to a log or a file. The external model's credential is never in
+the config file or on the command line: the file names an environment
+variable (`api_key_env`), and you export it in the shell that starts the
+gateway. The configuration format is spec section 14.1.
+
+To talk to the local model alone, without the gateway, ask llama-server
+directly:
 
 ```bash
 curl -s http://127.0.0.1:8033/v1/chat/completions \
@@ -124,10 +125,9 @@ curl -s http://127.0.0.1:8033/v1/chat/completions \
 The answer is in `choices[0].message.content`. Windows commands and
 tool-call requests are in [`docs/TESTING.md`](docs/TESTING.md).
 
-### From M4: talking to the gateway
+### Talking to the gateway
 
-This is the planned contract (spec section 7), not something that runs
-yet. The gateway speaks the OpenAI Chat Completions shape, so any
+The gateway speaks the OpenAI Chat Completions shape, so any
 OpenAI client works once pointed at it. Every request carries the
 application token the gateway generates at start (spec section 3);
 the examples below keep it in `RELAYMIND_TOKEN`. You do not pick a

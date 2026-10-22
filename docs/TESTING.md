@@ -4,9 +4,9 @@ How to verify the M1 and M2 deliverables, by hand on macOS and Windows
 and with the automated suites. M1 qualifies the local model runtime and
 the adapters; M2 adds the bounded local loop (see
 [`ROADMAP.md`](ROADMAP.md)). The gateway's own public API
-(`/v1/chat/completions`, `/relay/v1/runs`) arrives in M4, so manual
-JSON testing targets the llama-server endpoint that the
-`LlamaCppAdapter` talks to.
+(`/v1/chat/completions`, `/relay/v1/runs`) is started with
+`relaymind serve --config` (below); the manual JSON steps target the
+llama-server endpoint that the `LlamaCppAdapter` talks to.
 
 ## Automated suites
 
@@ -297,6 +297,26 @@ discovery and transport doubles, without a real proxy or model. The #56
 Windows run predates this fix. The #58 hosted native Windows run now
 passes without those overrides (see the new evidence entry); it does not
 reproduce the earlier contributor's corporate proxy environment.
+
+## Starting the gateway
+
+The same command starts the gateway on macOS (Terminal) and Windows
+(PowerShell 5.1+). Copy `relaymind.example.toml` to `relaymind.toml`,
+start the pinned runtime as in step 1 below, then run:
+
+```bash
+relaymind serve --config relaymind.toml
+```
+
+It prints the application token once as `Application token: <token>`;
+use it as the bearer token. A public bind address, a model file that does
+not match its manifest, an invalid skill package, or a `[ui]` table with no
+data mode stops it with a message on standard error and exit status 2.
+`pytest tests/test_launcher.py` checks these paths and the single restart
+recovery call with model doubles (spec 0.21 section 14.1); it does not
+start a real server or model. On Windows, set the external credential with
+`$env:RELAYMIND_EXTERNAL_API_KEY = "..."` in the same shell; never pass it
+on the command line.
 
 ## Manual JSON testing from a terminal
 

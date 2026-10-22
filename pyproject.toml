@@ -28,6 +28,9 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
+[project.scripts]
+relaymind = "relaymind.launcher:cli"
+
 [project.optional-dependencies]
 dev = [
     # The standard SDK client of the AC09 round trip.
