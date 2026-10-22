@@ -218,11 +218,26 @@ def test_latency_summary_reports_p50_p95_counts_and_timeouts():
     overall = summary["overall"]
     assert overall["samples"] == 11
     assert overall["timeouts"] == 1
-    assert overall["errors"] == 1
+    # Section 12.2 names a timeout and an error apart, so a timeout is not also an error.
+    assert overall["errors"] == 0
     assert math.isclose(overall["timeout_fraction"], 1 / 11)
     action = overall["metrics"]["first_model_action_ms"]
     assert action == {"n": 10, "p50": 500.0, "p95": 1000.0}
     assert overall["metrics"]["first_answer_token_ms"] == {"n": 0, "p50": None, "p95": None}
+
+
+def test_timeouts_and_errors_are_counted_apart():
+    """Section 12.2: a timeout, or a transport error or unexpected end (an error)."""
+    samples = [
+        sample(timed_out=True, error="timeout"),
+        sample(error="transport: ConnectError: refused"),
+        sample(error="ended failed (needs_external), expected completed"),
+        sample(first_model_action_ms=100.0),
+    ]
+    overall = summarize_latency(samples)["overall"]
+    assert (overall["samples"], overall["timeouts"], overall["errors"]) == (4, 1, 2)
+    text = render_latency_markdown(summarize_latency(samples), title="Latency")
+    assert "1 timeouts (fraction 0.250), 2 other errors" in text
 
 
 def test_latency_summary_is_also_given_per_label():

@@ -1,6 +1,6 @@
 # Latency benchmark: 2026-10-22-latency-apple-m1
 
-## all: 120 samples, 0 timeouts (fraction 0.000), 50 errors
+## all: 120 samples, 0 timeouts (fraction 0.000), 50 other errors
 
 | metric | n | p50 ms | p95 ms |
 |---|---|---|---|
@@ -10,7 +10,7 @@
 | first_answer_token_ms | 40 | 553 | 2345 |
 | completion_ms | 120 | 553 | 2517 |
 
-## clarification: 30 samples, 0 timeouts (fraction 0.000), 10 errors
+## clarification: 30 samples, 0 timeouts (fraction 0.000), 10 other errors
 
 | metric | n | p50 ms | p95 ms |
 |---|---|---|---|
@@ -20,7 +20,7 @@
 | first_answer_token_ms | 20 | 442 | 543 |
 | completion_ms | 30 | 429 | 543 |
 
-## routing: 30 samples, 0 timeouts (fraction 0.000), 0 errors
+## routing: 30 samples, 0 timeouts (fraction 0.000), 0 other errors
 
 | metric | n | p50 ms | p95 ms |
 |---|---|---|---|
@@ -30,7 +30,7 @@
 | first_answer_token_ms | 0 | - | - |
 | completion_ms | 30 | 440 | 1084 |
 
-## simple: 60 samples, 0 timeouts (fraction 0.000), 40 errors
+## simple: 60 samples, 0 timeouts (fraction 0.000), 40 other errors
 
 | metric | n | p50 ms | p95 ms |
 |---|---|---|---|

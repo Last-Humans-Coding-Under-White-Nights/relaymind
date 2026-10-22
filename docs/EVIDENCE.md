@@ -1268,6 +1268,10 @@ either way for them. Per label, p95 first model action was 505 ms
   `lat-05`, `lat-06`) and all 10 of the clarification prompt `lat-07`
   ended `needs_external`. The samples do not record the reason code. The
   outcome was the same in all ten runs of each prompt.
+- Timeouts and errors are counted apart (section 12.2): a timeout is no
+  longer also counted as an error. The report was rendered again from
+  the stored samples, and its per-block lines now say "other errors".
+  The run had no timeouts, so no number changed.
 - Three prompts (`lat-07`, `lat-10`, `lat-12`) produced no validated
   model action in any of their runs.
 - First transport event equals completion on this path: the compatible

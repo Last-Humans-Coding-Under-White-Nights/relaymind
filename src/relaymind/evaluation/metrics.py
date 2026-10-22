@@ -3,7 +3,7 @@
 Corpus summaries keep exact numerators and denominators per mode,
 language, and class, and never merge Chinese into English. Latency
 summaries give nearest-rank p50 and p95, the sample count of each
-metric, and the timeout fraction; errors and timeouts are counted,
+metric, and the timeout fraction; timeouts and other errors are counted apart,
 never dropped.
 """
 
@@ -229,7 +229,8 @@ def _latency_block(samples: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return {
         "samples": len(samples),
         "timeouts": timeouts,
-        "errors": sum(s["error"] is not None for s in samples),
+        # A timeout is counted under timeouts only (section 12.2 names the two apart).
+        "errors": sum(s["error"] is not None and not s["timed_out"] for s in samples),
         "timeout_fraction": None if not samples else timeouts / len(samples),
         "metrics": metrics,
     }
@@ -277,7 +278,7 @@ def render_latency_markdown(summary: Mapping[str, Any], *, title: str) -> str:
         shown = "-" if fraction is None else f"{fraction:.3f}"
         lines += [
             f"## {name}: {block['samples']} samples, {block['timeouts']} timeouts "
-            f"(fraction {shown}), {block['errors']} errors",
+            f"(fraction {shown}), {block['errors']} other errors",
             "",
             "| metric | n | p50 ms | p95 ms |",
             "|---|---|---|---|",
