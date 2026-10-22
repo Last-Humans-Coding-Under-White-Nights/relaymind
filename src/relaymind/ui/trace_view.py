@@ -65,6 +65,8 @@ def trace_view_from(record: RunRecord, events: Sequence[TraceEvent]) -> dict[str
         "cancel_reason": None if cancelled is None else cancelled.payload.get("reason"),
         "accepted_at": None if accepted is None else accepted.timestamp,
         "prompt": _prompt(accepted_payload),
+        # None: a run stored before spec 0.22. {}: a run without options.
+        "answer_options": accepted_payload.get("answer_options"),
         "execution_mode": {
             "requested": accepted_payload.get("requested_execution_mode"),
             "effective": accepted_payload.get("effective_execution_mode"),

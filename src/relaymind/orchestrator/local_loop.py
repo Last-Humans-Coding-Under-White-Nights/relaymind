@@ -1101,6 +1101,7 @@ class _Run:
                     "budgets": self.o.budgets.to_json_object(),
                     **self.offered,
                     "original_messages": self._original_messages(),
+                    "answer_options": self._answer_option_record(),
                 },
             ),
             idempotency=self.idempotency,
@@ -1115,6 +1116,16 @@ class _Run:
         except BaseException as exc:
             self._abort(exc)
             raise
+
+    def _answer_option_record(self) -> dict[str, Any]:
+        """The caller's answer options as applied, for run.accepted (spec 0.22 section 8)."""
+        options = self.final_options
+        record = {
+            "max_completion_tokens": options.max_output_tokens,
+            "temperature": options.temperature,
+            "top_p": options.top_p,
+        }
+        return {name: value for name, value in record.items() if value is not None}
 
     def _original_messages(self) -> list[dict[str, Any]]:
         """The request's conversation text for run.accepted, redacted (spec 0.20 section 8).

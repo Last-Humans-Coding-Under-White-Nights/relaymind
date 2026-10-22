@@ -108,6 +108,15 @@ itself, with the manifest's SHA-256; any other file fails the run.
   `succeeded` outcome stays). The native cancel endpoint is covered. No
   live model is run, so there is no live AC12 record yet.
 
+- Answer options in run.accepted, deterministic (issue #91, RM19, RM22,
+  RM25, spec 0.22 sections 8 and 9): `tests/test_trace_event.py` checks the
+  optional `answer_options` object in the validator and the published
+  schema; `tests/test_chat_endpoint.py`, `tests/test_client_owned_tools.py`,
+  and `tests/test_native_run_api.py` check what each endpoint records (the
+  legacy `max_tokens` under `max_completion_tokens`, none for a run without
+  options or a native run); `tests/test_demo_ui_trace.py` and
+  `tests/test_demo_ui.py` check that the trace shows them and that a run
+  stored earlier stays readable and shows as not recorded.
 - The demo UI, deterministic (issue #28, RM23, RM25, spec 0.20 section 9):
   `pytest tests/test_demo_ui_trace.py tests/test_demo_ui.py
   tests/test_demo_ui_comparison.py` run the real orchestrator over model

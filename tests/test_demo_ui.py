@@ -261,6 +261,28 @@ def test_tool_output_and_prompts_are_escaped_not_markup(tmp_path):
     assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in page
 
 
+def test_the_fragment_shows_the_recorded_answer_options(tmp_path):
+    """RM23, RM25, spec 0.22 section 9: options, none, and not recorded are told apart."""
+    gateway = health_gateway(tmp_path)
+    view = build_trace_view(gateway.store, run_to_rest(gateway).run_id)
+    settings = UiSettings(mode="double")
+
+    view["answer_options"] = {"max_completion_tokens": 60, "temperature": 0.4, "top_p": 0.9}
+    page = render_trace(view, settings)
+    assert "Answer options" in page
+    assert "Token budget: 60." in page
+    assert "Temperature: 0.4." in page
+    assert "Top p: 0.9." in page
+
+    view["answer_options"] = {}
+    assert "No answer options were requested." in render_trace(view, settings)
+
+    view["answer_options"] = None
+    older = render_trace(view, settings)
+    assert "Not recorded: this run was stored before answer options were recorded." in older
+    assert "Token budget" not in older
+
+
 def test_a_failed_operation_is_inspectable_in_the_fragment(tmp_path):
     """RM23: a user can inspect failed operations."""
     gateway = health_gateway(tmp_path, external_turns=None)

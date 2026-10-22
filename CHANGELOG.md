@@ -761,6 +761,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.21 -> 0.22: section 8 adds `answer_options` to the
+  run.accepted payload (#91; RM19, RM22, RM25): the effective token
+  budget, temperature, and top_p applied to the answer generations. A run
+  without options records an empty object, and a run stored before this
+  revision has no field, which the trace and the demo UI report as not
+  recorded. Section 9 adds the options to the run trace.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried

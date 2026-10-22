@@ -143,6 +143,15 @@
                   "required": ["role", "content"],
                   "additionalProperties": false
                 }
+              },
+              "answer_options": {
+                "type": "object",
+                "properties": {
+                  "max_completion_tokens": {"type": "integer", "minimum": 1},
+                  "temperature": {"type": "number", "minimum": 0, "maximum": 2},
+                  "top_p": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+                },
+                "additionalProperties": false
               }
             },
             "required": [

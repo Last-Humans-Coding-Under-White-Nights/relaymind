@@ -359,9 +359,10 @@ Carried forward, not done in M4:
   recovery once at startup (see below).
 - An automated browser test for the UI page script (`app.js`; #89).
   The browser timestamp of a UI submission is shown but not asserted.
-- The requested answer options (token budget, temperature, top_p) are
-  applied but not recorded in `run.accepted`; that needs a trace schema
-  change (#91).
+- The requested answer options (token budget, temperature, top_p) were
+  applied but not recorded in `run.accepted`; that needed a trace schema
+  change (#91). This is now done in M5: spec 0.22 records them (see
+  below).
 - A compatible chat disconnect does not cancel a managed run that is
   still working (spec section 7.4; #92). Only a live provider stream is
   closed, and no production backend forwards one yet (`LiveAnswer` is
@@ -387,6 +388,11 @@ Carried forward, not done in M4:
   before any socket opens, runs restart recovery once, and prints the
   application token once. Implemented with model doubles
   (`tests/test_launcher.py`); not yet run against a live model.
+- Requested answer options in `run.accepted` (#91; RM19, RM22, RM25,
+  spec 0.22 section 8): both chat aliases record the effective token
+  budget, temperature, and top_p of the answer; a run without options and
+  a native run record none; a run stored earlier shows as not recorded in
+  the demo UI. Implemented with model doubles; no live run.
 - Closes: AC13, AC14.
 
 ## M6 — Evaluation

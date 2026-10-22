@@ -507,6 +507,64 @@ def test_run_accepted_payload_values_are_checked(field, value):
         validate_trace_event(accepted_with(**{field: value}))
 
 
+@pytest.mark.parametrize(
+    "options",
+    [
+        {},
+        {"max_completion_tokens": 64},
+        {"max_completion_tokens": 64, "temperature": 0.2, "top_p": 0.9},
+        {"temperature": 0, "top_p": 1},
+    ],
+)
+def test_run_accepted_answer_options_validate(options):
+    """RM22, spec 0.22 section 8: answer_options holds only the applied options."""
+    validate_trace_event(accepted_with(answer_options=options))
+
+
+def test_run_accepted_without_answer_options_is_a_run_stored_before_0_22():
+    """Spec 0.22 section 8: the field is absent in older runs, which stay valid."""
+    assert "answer_options" not in ACCEPTED_PAYLOAD
+    validate_trace_event(ACCEPTED)
+
+
+BAD_ANSWER_OPTIONS = [
+    None,
+    [],
+    "64",
+    {"max_tokens": 64},
+    {"max_completion_tokens": 0},
+    {"max_completion_tokens": True},
+    {"max_completion_tokens": 1.5},
+    {"temperature": "hot"},
+    {"temperature": True},
+    {"temperature": -1},
+    {"top_p": 0},
+    {"top_p": 1.5},
+    {"top_p": None},
+]
+
+
+@pytest.mark.parametrize("options", BAD_ANSWER_OPTIONS)
+def test_run_accepted_answer_options_are_checked(options):
+    """RM22, spec 0.22 section 8: other keys and values are rejected by name."""
+    with pytest.raises(TraceEventError, match="answer_options"):
+        validate_trace_event(accepted_with(answer_options=options))
+
+
+def test_the_published_schema_states_the_answer_options():
+    """The JSON Schema carries answer_options as an optional, closed object."""
+    payload = next(
+        rule["then"]["properties"]["payload"]
+        for rule in TRACE_EVENT_SCHEMA["allOf"]
+        if rule["if"]["properties"].get("event_type", {}).get("enum") == ["run.accepted"]
+    )
+    assert "answer_options" not in payload["required"]
+    options = payload["properties"]["answer_options"]
+    assert options["type"] == "object"
+    assert options["additionalProperties"] is False
+    assert sorted(options["properties"]) == ["max_completion_tokens", "temperature", "top_p"]
+
+
 def test_run_accepted_is_the_first_event_of_a_run():
     """RM22: run.accepted is the first event (seq 1), and seq 1 is only run.accepted."""
     with pytest.raises(TraceEventError, match="seq"):
@@ -608,6 +666,14 @@ SAMPLE_EVENTS = {
     "answered-blank-input": answered_with(input=" "),
     "client-tools-alias": accepted_with(model_alias="relaymind-client-tools", skills_offered=[]),
     "unknown-alias": accepted_with(model_alias="gpt-4o"),
+    "answer-options": accepted_with(
+        answer_options={"max_completion_tokens": 64, "temperature": 0.2, "top_p": 0.9}
+    ),
+    "no-answer-options": accepted_with(answer_options={}),
+    **{
+        f"bad-answer-options-{i}": accepted_with(answer_options=o)
+        for i, o in enumerate(BAD_ANSWER_OPTIONS)
+    },
 }
 
 
