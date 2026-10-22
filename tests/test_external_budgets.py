@@ -165,3 +165,33 @@ def test_external_tool_executions_are_reported_in_the_usage():
     meter.charge_tool_call()
     meter.charge_tool_call()
     assert meter.usage()["tool_calls"] == 3
+
+
+# -- The checklist draft of the parallel workflow (spec 0.25; RM03, RM15) ---------
+
+
+def test_a_draft_before_the_handoff_is_an_external_generation_without_stage_limits():
+    """RM03, RM15, section 11: the draft counts as external, not as a local generation."""
+    clock = FakeClock()
+    meter = BudgetMeter(LocalBudgets(local_generations=1, external_generations=1), clock=clock)
+    meter.charge_generation("draft")
+    usage = meter.usage()
+    assert (usage["external_generations"], usage["local_generations"]) == (1, 0)
+    with pytest.raises(BudgetExceededError) as stop:
+        meter.charge_generation("external")
+    assert stop.value.budget == "external_generations"
+
+
+def test_a_draft_is_bound_by_external_seconds_not_the_local_stage_time():
+    """Section 11: the local stage time does not bound external work started before the join."""
+    clock = FakeClock()
+    meter = BudgetMeter(LocalBudgets(active_seconds=4, external_seconds=30), clock=clock)
+    assert meter.remaining_seconds(external=True) == 30
+    assert meter.remaining_seconds() == 4
+    clock.advance(10)
+    meter.check_time(external=True)
+    with pytest.raises(BudgetExceededError) as stop:
+        meter.check_time()
+    assert stop.value.budget == "active_seconds"
+    # Each kind of work names its own limit, even when both are timed at once.
+    assert meter.time_exhausted(external=True).budget == "external_seconds"

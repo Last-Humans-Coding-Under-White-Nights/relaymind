@@ -1156,3 +1156,76 @@ def test_the_store_package_exports_the_trace_event_api():
         assert name in store.__all__
     assert store.TraceEvent is TraceEvent
     assert store.validate_trace_event is validate_trace_event
+
+
+# -- Parallel workflow fields (spec 0.25 section 8; RM15, RM22, #30) -------------
+
+WORKFLOW_SUMMARY = {
+    "workflow_id": "health-and-diagnostic-checklist",
+    "branch_wall_ms": 2000,
+    "local_health_ms": 10,
+    "external_checklist_ms": 2000,
+    "extra_call_ms": 1500,
+    "abandoned_calls": [],
+}
+
+
+def branch_event(event_type, **extra):
+    payload = {
+        **REQUIRED_PAYLOAD.get(event_type, {"model": "qwen3", "operation_id": "op_1"}),
+        **extra,
+    }
+    return with_changes(event_type=event_type, payload=payload)
+
+
+WORKFLOW_ACCEPTED = {
+    "model-started-branch": branch_event("model.started", branch="local_health"),
+    "model-finished-branch": branch_event("model.finished", branch="synthesis"),
+    "tool-started-branch": branch_event("tool.started", branch="local_health"),
+    "run-completed-workflow": branch_event("run.completed", workflow=WORKFLOW_SUMMARY),
+    "run-failed-workflow": branch_event("run.failed", workflow=WORKFLOW_SUMMARY),
+    "run-cancelled-workflow": branch_event(
+        "run.cancelled", workflow={**WORKFLOW_SUMMARY, "extra_call_ms": None}
+    ),
+    "handoff-workflow": branch_event("handoff.started", workflow="health-and-diagnostic-checklist"),
+}
+WORKFLOW_REJECTED = {
+    "unknown-branch": (branch_event("model.started", branch="left"), "branch"),
+    "blank-branch": (branch_event("tool.finished", branch=" "), "branch"),
+    "text-workflow-summary": (branch_event("run.completed", workflow="yes"), "workflow"),
+    "negative-ms": (
+        branch_event("run.completed", workflow={**WORKFLOW_SUMMARY, "branch_wall_ms": -1}),
+        "branch_wall_ms",
+    ),
+    "missing-id": (
+        branch_event(
+            "run.completed",
+            workflow={k: v for k, v in WORKFLOW_SUMMARY.items() if k != "workflow_id"},
+        ),
+        "workflow_id",
+    ),
+    "extra-field": (
+        branch_event("run.completed", workflow={**WORKFLOW_SUMMARY, "guess": 1}),
+        "guess",
+    ),
+    "blank-abandoned": (
+        branch_event("run.completed", workflow={**WORKFLOW_SUMMARY, "abandoned_calls": [" "]}),
+        "abandoned_calls",
+    ),
+    "blank-handoff-workflow": (branch_event("handoff.started", workflow=" "), "workflow"),
+}
+
+
+def test_workflow_fields_are_validated_and_published():
+    """RM15, RM22, spec 0.25 section 8: branch and the workflow summary are checked.
+
+    The validator and the published schema both accept the valid shapes
+    and reject the others.
+    """
+    for name, data in WORKFLOW_ACCEPTED.items():
+        validate_trace_event(data)
+        assert SCHEMA_VALIDATOR.is_valid(data), name
+    for name, (data, key) in WORKFLOW_REJECTED.items():
+        with pytest.raises(TraceEventError, match=key):
+            validate_trace_event(data)
+        assert not SCHEMA_VALIDATOR.is_valid(data), name

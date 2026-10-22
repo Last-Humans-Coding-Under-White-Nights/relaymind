@@ -895,28 +895,40 @@ def test_an_external_generation_timeout_is_not_traced_as_local_time(tmp_path, lo
 
 
 def test_an_admitted_parallel_workflow_is_not_run_as_a_single_external_actor(tmp_path):
-    """RM15, RM04, section 4.4: route=parallel is not a single-actor handoff.
+    """RM15, RM04, RM14, section 4.4: route=parallel is not a plain handoff.
 
-    The parallel workflow (#30) is not wired yet. Handing the run to the
-    external model alone would skip the local branch and complete a
-    parallel decision as a plain external run, so the run ends with no
-    external call: needs_external with reason parallel_workflow in auto,
-    and workflow_unavailable in parallel_demo (RM21, spec 0.17).
+    Handing the run to the external model alone would skip the local
+    branch and complete a parallel decision as a plain external run. The
+    workflow runs both branches (spec 0.25), so the one handoff.started
+    is the join, with reason parallel_workflow and the local tool result
+    carried as evidence; and without an external model the run ends as
+    needs_external with no handoff.
     """
+    answer = (
+        "Observation: staging-api is healthy (checked at 2026-10-20T02:58:00Z).\n\n"
+        "Diagnostic checklist (draft, not log-backed):\n- Check logs."
+    )
     gateway = build_gateway(
         tmp_path,
-        [route_turn("health-and-diagnostic-checklist")],
+        [
+            route_turn("health-and-diagnostic-checklist"),
+            tool_turn("get_service_health", service="staging-api"),
+        ],
         enabled_workflows={"health-and-diagnostic-checklist"},
         parallel_in_auto=True,
-        external_turns=[text_turn("staging-api is healthy.")],
+        external_turns=[text_turn("- Check logs."), text_turn(answer)],
     )
     outcome, events = run(
         gateway, "Run the health checklist for staging-api.", execution_mode="auto"
     )
 
     assert of_type(events, "route.selected")[0].payload["decision"]["route"] == "parallel"
-    assert_needs_external(gateway, outcome, events, "parallel_workflow")
-    assert not of_type(events, "handoff.started")
+    assert outcome.answer == answer
+    (handoff,) = of_type(events, "handoff.started")
+    assert handoff.payload["reason_code"] == "parallel_workflow"
+    assert handoff.payload["workflow"] == "health-and-diagnostic-checklist"
+    assert len(handoff.payload["operation_ids"]) == 1
+    assert executed_tools(events) == ["get_service_health"]
 
 
 @pytest.mark.parametrize(

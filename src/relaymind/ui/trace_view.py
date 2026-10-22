@@ -72,6 +72,7 @@ def trace_view_from(record: RunRecord, events: Sequence[TraceEvent]) -> dict[str
             "effective": accepted_payload.get("effective_execution_mode"),
         },
         "model_calls": model_calls,
+        "workflow": _workflow(events, model_calls, terminal),
         "active_model": _active_model(events, model_calls, terminal),
         "skill": _skill(events),
         "route": _route(events),
@@ -105,6 +106,7 @@ def _model_calls(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
                 "model": event.payload["model"],
                 "actor": event.payload.get("actor", event.actor),
                 "purpose": event.payload.get("purpose"),
+                "branch": event.payload.get("branch"),
                 "finished": done is not None,
                 "duration_ms": None if done is None else done.get("duration_ms"),
                 "finish_reason": None if done is None else done.get("finish_reason"),
@@ -112,6 +114,58 @@ def _model_calls(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
             }
         )
     return calls
+
+
+_WORKFLOW_BRANCHES = ("local_health", "external_checklist", "synthesis")
+_WORKFLOW_FIGURES = (
+    "branch_wall_ms",
+    "local_health_ms",
+    "external_checklist_ms",
+    "extra_call_ms",
+    "abandoned_calls",
+)
+
+
+def _workflow(
+    events: Sequence[TraceEvent], calls: Sequence[Mapping[str, Any]], terminal: TraceEvent | None
+) -> dict[str, Any] | None:
+    """The parallel workflow of the run as separate actors, or None (spec 0.25, RM23).
+
+    One stage for each branch that made a model call. The figures are the
+    terminal event's workflow object, so they are known when the run
+    ends; nothing is computed from the clock here.
+    """
+    if not any(call["branch"] for call in calls):
+        return None
+    stages = []
+    for branch in _WORKFLOW_BRANCHES:
+        own = [call for call in calls if call["branch"] == branch]
+        if not own:
+            continue
+        durations = [c["duration_ms"] for c in own if c["duration_ms"] is not None]
+        stages.append(
+            {
+                "branch": branch,
+                "actor": own[0]["actor"],
+                "model": own[0]["model"],
+                "call_ids": [c["call_id"] for c in own],
+                "finished": all(c["finished"] for c in own),
+                "duration_ms": sum(durations) if durations else None,
+                "outcome": own[-1]["error"] or own[-1]["finish_reason"],
+            }
+        )
+    summary = {}
+    if terminal is not None and isinstance(terminal.payload.get("workflow"), Mapping):
+        summary = terminal.payload["workflow"]
+    handoffs = _of(events, EventType.HANDOFF_STARTED)
+    workflow_id = summary.get("workflow_id") or next(
+        (h.payload["workflow"] for h in handoffs if "workflow" in h.payload), None
+    )
+    return {
+        "workflow_id": workflow_id,
+        "stages": stages,
+        **{key: summary.get(key) for key in _WORKFLOW_FIGURES},
+    }
 
 
 def _active_model(
@@ -146,7 +200,15 @@ def _proposals(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
         {
             **_pick(
                 e.payload,
-                ("proposal_id", "tool_name", "arguments", "model", "admissible", "rejection"),
+                (
+                    "proposal_id",
+                    "tool_name",
+                    "arguments",
+                    "model",
+                    "admissible",
+                    "rejection",
+                    "branch",
+                ),
             ),
             "actor": e.actor,
         }
@@ -160,7 +222,15 @@ def _operations(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
         {
             **_pick(
                 e.payload,
-                ("operation_id", "proposal_id", "tool_name", "model", "attempt", "approval_id"),
+                (
+                    "operation_id",
+                    "proposal_id",
+                    "tool_name",
+                    "model",
+                    "attempt",
+                    "approval_id",
+                    "branch",
+                ),
             ),
             "replayed": bool(e.payload.get("replayed")),
             **_pick(

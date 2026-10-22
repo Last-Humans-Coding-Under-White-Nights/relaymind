@@ -2,7 +2,8 @@
 
 The prototype supports one trusted workflow with independent read-only
 branches. A skill manifest may name only an ID listed here. The
-workflow itself is run by the orchestrator (issue #30).
+workflow itself is run by the orchestrator (``local_loop``; spec 0.25
+section 4.4, issue #30).
 
 This set lists the workflows that exist, not the ones that run. Section
 4.4 (spec 0.6): operator configuration names the enabled workflow ID,
@@ -16,7 +17,8 @@ router sends it external with reason parallel_workflow.
 
 PARALLEL_WORKFLOWS: frozenset[str] = frozenset({"health-and-diagnostic-checklist"})
 
-# Whether this build can run a registered workflow (issue #30). While it
-# cannot, parallel_demo fails with workflow_unavailable and /readyz does
-# not report parallel_demo as ready (RM15, RM21, spec 0.17 section 4.4).
-PARALLEL_WORKFLOW_IMPLEMENTED = False
+# Whether this build can run a registered workflow (issue #30). It can
+# since spec 0.25. Were it False, parallel_demo would fail with
+# workflow_unavailable and /readyz would not report parallel_demo as
+# ready (RM15, RM21, section 4.4).
+PARALLEL_WORKFLOW_IMPLEMENTED = True

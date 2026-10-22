@@ -21,7 +21,7 @@ __all__ = ["render_shell", "render_trace"]
 
 _ESCAPE = html.escape
 _NONE = '<p class="none">{}</p>'
-_EXECUTION_MODES = ("auto", "local_only", "external_only")
+_EXECUTION_MODES = ("auto", "local_only", "external_only", "parallel_demo")
 
 
 def _t(value: object) -> str:
@@ -150,15 +150,50 @@ def _models(view: Mapping[str, Any]) -> str:
     head = f"<p>Active model: <strong>{_t(active) if active else 'none yet'}</strong></p>"
     if not view["model_calls"]:
         return head + _NONE.format("No model call yet.")
+    branched = view["workflow"] is not None
     rows = "".join(
         "<tr>"
-        f"<td>{_t(c['purpose'])}</td><td>{_t(c['actor'])}</td><td>{_t(c['model'])}</td>"
+        f"<td>{_t(c['purpose'])}</td>"
+        + (f"<td>{_t(c['branch'])}</td>" if branched else "")
+        + f"<td>{_t(c['actor'])}</td><td>{_t(c['model'])}</td>"
         f"<td>{_call_status(c)}</td></tr>"
         for c in view["model_calls"]
     )
+    branch_head = "<th>Branch</th>" if branched else ""
     return (
-        f"{head}<table><thead><tr><th>Purpose</th><th>Actor</th><th>Model</th>"
+        f"{head}<table><thead><tr><th>Purpose</th>{branch_head}<th>Actor</th><th>Model</th>"
         f"<th>Result</th></tr></thead><tbody>{rows}</tbody></table>"
+    )
+
+
+def _workflow(view: Mapping[str, Any]) -> str:
+    """The parallel workflow: each branch and the synthesis call as its own actor (RM23)."""
+    workflow = view["workflow"]
+    rows = "".join(
+        f'<tr data-branch="{_t(s["branch"])}"><td>{_t(s["branch"])}</td><td>{_t(s["actor"])}</td>'
+        f"<td>{_t(s['model'])}</td>"
+        f"<td>{'finished' if s['finished'] else 'running'}"
+        + (f", {_error(s['outcome'])}" if s["outcome"] else "")
+        + f"</td><td>{_ms(s['duration_ms'], 'not finished')}</td></tr>"
+        for s in workflow["stages"]
+    )
+    abandoned = workflow["abandoned_calls"]
+    figures = (
+        "<dl>"
+        f"<dt>Extra call latency</dt><dd>{_ms(workflow['extra_call_ms'], 'no synthesis call')}"
+        "</dd>"
+        f"<dt>Parallel stage</dt><dd>{_ms(workflow['branch_wall_ms'], 'known when the run ends')}"
+        "</dd>"
+        f"<dt>Abandoned calls</dt><dd>{_t(', '.join(abandoned)) if abandoned else 'none'}</dd>"
+        "</dl>"
+    )
+    return (
+        f"<p>Workflow: <strong>{_t(workflow['workflow_id'])}</strong></p>"
+        "<table><thead><tr><th>Stage</th><th>Actor</th><th>Model</th><th>State</th>"
+        f"<th>Duration</th></tr></thead><tbody>{rows}</tbody></table>{figures}"
+        '<p class="note">The extra call latency is the added cost of the second external '
+        "call, measured on the gateway's monotonic clock. It is not a saving against a "
+        "sequential run.</p>"
     )
 
 
@@ -185,6 +220,11 @@ def _skill_and_route(view: Mapping[str, Any]) -> str:
     )
 
 
+def _branch(item: Mapping[str, Any]) -> str:
+    """The workflow branch of a proposal or operation, when it has one (spec 0.25)."""
+    return f", branch {_t(item['branch'])}" if item.get("branch") else ""
+
+
 def _proposals(view: Mapping[str, Any]) -> str:
     if not view["proposals"]:
         return _NONE.format("No tool proposed.")
@@ -197,7 +237,7 @@ def _proposals(view: Mapping[str, Any]) -> str:
         )
         items.append(
             f"<li><strong>{_t(p['tool_name'])}</strong> proposed by {_t(p['model'])} "
-            f"({_t(p['actor'])}), {verdict}<pre>{_json(p['arguments'])}</pre></li>"
+            f"({_t(p['actor'])}){_branch(p)}, {verdict}<pre>{_json(p['arguments'])}</pre></li>"
         )
     return f"<ul>{''.join(items)}</ul>"
 
@@ -208,7 +248,7 @@ def _operation(op: Mapping[str, Any]) -> str:
     data = f"<pre>{_json(op['data'])}</pre>" if op["data"] is not None else ""
     return (
         f'<li class="op {_t(op["status"])}"><strong>{_t(op["tool_name"])}</strong> '
-        f'<span class="status">{_t(op["status"])}</span>{replay}, '
+        f'<span class="status">{_t(op["status"])}</span>{replay}{_branch(op)}, '
         f"{_t(op['duration_ms'])} ms, source {_t(op['source_ref'])}{error}{data}</li>"
     )
 
@@ -343,6 +383,11 @@ def render_trace(view: Mapping[str, Any], settings: UiSettings) -> str:
         _section("Execution mode", _mode(view), "mode"),
         _section("Answer options", _answer_options(view), "options"),
         _section("Models", _models(view), "models"),
+        *(
+            [_section("Parallel workflow", _workflow(view), "workflow")]
+            if view["workflow"] is not None
+            else []
+        ),
         _section("Skill and route", _skill_and_route(view), "skill"),
         _section("Tool proposals", _proposals(view), "proposals"),
         _section("Tool operations", _operations(view), "operations"),
