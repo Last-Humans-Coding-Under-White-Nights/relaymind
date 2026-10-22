@@ -277,6 +277,10 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   `relaymind-client-tools` alias is served only when a client-owned
   backend is configured, which is #24, so the gateway lists only what it
   can run. `Idempotency-Key` is rejected until #26 implements it.
+  #23 is implemented with model doubles (`tests/test_streaming_contract.py`,
+  spec 0.15): append-only buffered streams, a live-stream seam
+  (`LiveAnswer`) and its mid-stream failure behavior. The backend that
+  forwards a live provider stream and records `run.failed` is #24.
 - Native run API: runs, events SSE, resume, cancel, idempotency (#25,
   #26; RM21). SSE exposes the events recorded since M2.
 - Cancellation during generation and in-flight writes (#29; RM10, RM14,

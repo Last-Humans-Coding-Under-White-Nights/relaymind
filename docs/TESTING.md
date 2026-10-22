@@ -107,6 +107,19 @@ itself, with the manifest's SHA-256; any other file fails the run.
   at the API seam, with a backend double, because its execution is
   issue #24. No live model is run, so there is no live AC09 record yet.
 
+- The streaming contract, deterministic (issue #23, spec 0.15 section 7.3):
+  `pytest tests/test_streaming_contract.py` checks the stream framing for
+  both aliases and both terminal paths, append-only content equal to the
+  run's `answer.delta` events, the final generation with tools disabled,
+  an unmet evidence predicate that cannot finalize, and a provider
+  failure after the first chunk (an error event, no finish chunk, no
+  `[DONE]`, no replacement answer), in process and with the OpenAI SDK
+  over a loopback socket. It also checks that a provider failure before
+  any answer text, or in a request without stream, is a normal 503
+  `external_failed` response, and that a client disconnect closes the
+  provider stream without recording a failure. The failing provider is a
+  backend double; the production live backend is issue #24.
+
 ### Required trace events (RM16, RM22, RM25)
 
 `pytest tests/test_required_trace_events.py tests/test_trace_artifacts.py`

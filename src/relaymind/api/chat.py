@@ -12,10 +12,19 @@ The functions at the end build the JSON bodies. The stream is framing
 plus answer content only (RM20): a role chunk, one content chunk for
 each ``answer.delta`` of the run, a finish chunk, and ``[DONE]``. No
 progress text is added to it.
+
+A backend may also return a ``LiveAnswer``, text forwarded while the
+provider generates it. The stream starts only with the first answer
+text, so a provider that fails before it is a normal error response.
+If that provider fails after the first chunk, the stream sends one
+fixed error event and closes the connection with no finish chunk and
+no ``[DONE]``. A request without stream collects the whole live
+answer first (spec 0.15 section 7.3).
 """
 
 import json
-from collections.abc import Iterator, Mapping
+import logging
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -30,13 +39,47 @@ from relaymind.store import EventType
 __all__ = [
     "ChatBackend",
     "ChatResult",
+    "LiveAnswer",
     "ManagedChat",
+    "StreamAborted",
+    "collect_live",
     "completion_body",
+    "open_stream",
     "stream_chunks",
 ]
 
 STOP = "stop"
 TOOL_CALLS = "tool_calls"
+STREAM_FAILED_CODE = "external_failed"
+STREAM_FAILED_MESSAGE = "the answer provider failed; no answer was completed"
+
+logger = logging.getLogger(__name__)
+
+
+class StreamAborted(Exception):
+    """Raised after the error event of a failed stream, to close the connection.
+
+    The status line is gone by then, so the only honest signal left is
+    to end the response without a finish chunk and without [DONE]
+    (RM20, section 11).
+    """
+
+
+@dataclass(frozen=True)
+class LiveAnswer:
+    """Answer text that a backend forwards while the provider still generates it.
+
+    pieces yields the answer text in the order received. fail records
+    the run as failed (run.failed); the gateway calls it once, when the
+    provider fails (RM20, spec 0.15 section 7.3). When the client goes
+    away first, the gateway closes pieces (aclose), which is the
+    cancellation request of a chat disconnect (section 7.4); fail is
+    not called then. The managed alias has no live answer: its run has
+    finished before the first byte.
+    """
+
+    pieces: AsyncIterator[str]
+    fail: Callable[[], None]
 
 
 @dataclass(frozen=True)
@@ -45,7 +88,9 @@ class ChatResult:
 
     content is the assistant text (None when the reply is tool calls).
     pieces are the answer deltas in the order the run published them,
-    when they are known; their join is content. tool_calls are
+    when they are known; their join is content. live, when set, is
+    answer text still being generated; it replaces content and pieces
+    in a stream. tool_calls are
     client-owned calls the caller executes (RM08); the gateway never
     runs them.
     """
@@ -55,6 +100,12 @@ class ChatResult:
     finish_reason: str = STOP
     tool_calls: tuple[ToolCall, ...] = ()
     pieces: tuple[str, ...] = ()
+    live: LiveAnswer | None = None
+
+    def __post_init__(self) -> None:
+        # A stream has one terminal path; a live answer must never be dropped silently.
+        if self.live is not None and self.tool_calls:
+            raise ValueError("a chat result has either tool_calls or a live answer, not both")
 
     @property
     def stream_pieces(self) -> tuple[str, ...]:
@@ -161,8 +212,60 @@ def completion_body(alias: str, result: ChatResult, created: int) -> dict[str, A
     }
 
 
-def stream_chunks(alias: str, result: ChatResult, created: int) -> Iterator[str]:
-    """The SSE lines of a finished result: framing and answer content only (RM20)."""
+async def collect_live(result: ChatResult) -> ChatResult:
+    """The whole answer of a live result, for a request without stream.
+
+    A provider failure is a normal error response, external_failed
+    with the run ID; no partial text is returned as an answer (RM20,
+    spec 0.15 section 7.3). A result that is not live is returned as is.
+    """
+    live = result.live
+    if live is None:
+        return result
+    try:
+        text = "".join([piece async for piece in live.pieces])
+    except Exception as exc:
+        raise _failed(result.run_id, live, exc) from None
+    finally:
+        await _close(live.pieces)
+    return ChatResult(result.run_id, text, finish_reason=result.finish_reason)
+
+
+async def open_stream(alias: str, result: ChatResult, created: int) -> AsyncIterator[str]:
+    """The SSE lines of a result, started before the status line is sent.
+
+    The first line is produced here. For a live result that means the
+    first answer text has arrived, so a provider that fails before it
+    raises ApiError external_failed, a normal error response with its
+    status (section 11). Closing the returned stream closes the
+    provider stream.
+    """
+    lines = stream_chunks(alias, result, created)
+    first = await anext(lines)
+    return _resumed(first, lines)
+
+
+async def _resumed(first: str, lines: AsyncGenerator[str]) -> AsyncIterator[str]:
+    try:
+        yield first
+        async for line in lines:
+            yield line
+    finally:
+        await lines.aclose()
+
+
+async def stream_chunks(alias: str, result: ChatResult, created: int) -> AsyncGenerator[str]:
+    """The SSE lines of a result: framing and answer content only (RM20).
+
+    A finished result is replayed. A live result is forwarded piece by
+    piece, and the role chunk waits for its first non-empty piece: a
+    provider failure before it raises ApiError external_failed before
+    any line is produced. If the provider fails later, the run is
+    recorded as failed, one error event is sent, and StreamAborted
+    closes the connection with no finish chunk and no [DONE] (spec 0.15
+    section 7.3). However the stream ends, the provider stream is
+    closed.
+    """
 
     def chunk(delta: Mapping[str, Any], finish: str | None = None) -> str:
         body = {
@@ -174,6 +277,7 @@ def stream_chunks(alias: str, result: ChatResult, created: int) -> Iterator[str]
         }
         return f"data: {json.dumps(body)}\n\n"
 
+    live = result.live
     if result.tool_calls:
         yield chunk({"role": "assistant", "content": None})
         calls = [
@@ -181,9 +285,57 @@ def stream_chunks(alias: str, result: ChatResult, created: int) -> Iterator[str]
             for index, call in enumerate(result.tool_calls)
         ]
         yield chunk({"tool_calls": calls})
+    elif live is not None:
+        try:
+            try:
+                first = await _first_text(live.pieces)
+            except Exception as exc:
+                raise _failed(result.run_id, live, exc) from None
+            yield chunk({"role": "assistant", "content": ""})
+            if first is not None:
+                yield chunk({"content": first})
+                try:
+                    async for piece in live.pieces:
+                        if piece:
+                            yield chunk({"content": piece})
+                except Exception as exc:
+                    error = _failed(result.run_id, live, exc)
+                    yield f"data: {json.dumps(error.body())}\n\n"
+                    raise StreamAborted from None
+        finally:
+            await _close(live.pieces)
     else:
         yield chunk({"role": "assistant", "content": ""})
         for piece in result.stream_pieces:
             yield chunk({"content": piece})
     yield chunk({}, result.finish_reason)
     yield "data: [DONE]\n\n"
+
+
+async def _first_text(pieces: AsyncIterator[str]) -> str | None:
+    """The first non-empty piece, or None when the provider ends without text."""
+    async for piece in pieces:
+        if piece:
+            return piece
+    return None
+
+
+async def _close(pieces: AsyncIterator[str]) -> None:
+    """Close the provider stream; for an unfinished one this requests cancellation."""
+    aclose = getattr(pieces, "aclose", None)
+    if aclose is not None:
+        await aclose()
+
+
+def _failed(run_id: str, live: LiveAnswer, exc: Exception) -> ApiError:
+    """Record the failed run and return its fixed error (RM20, section 11).
+
+    The message is fixed: provider text never reaches the client
+    (RM12). The operator log names the failure type only.
+    """
+    logger.error("answer stream of %s failed: %s", run_id, type(exc).__name__)
+    try:
+        live.fail()
+    except Exception as recorder:
+        logger.error("could not record run.failed for %s: %s", run_id, type(recorder).__name__)
+    return ApiError(STREAM_FAILED_CODE, STREAM_FAILED_MESSAGE, run_id=run_id)

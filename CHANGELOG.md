@@ -24,6 +24,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Streaming contract (#23; RM20, AC09; spec 0.15 section 7.3): the
+  stream of the managed alias is the replay of the run's `answer.delta`
+  events, so content is append-only and nothing but framing is added. A
+  backend can return a `LiveAnswer` (`relaymind.api.chat`) that forwards
+  provider text as it arrives. The role chunk waits for the first answer
+  text, so a provider failure before it, or in a request without stream
+  (which collects the whole live answer), is a normal 503
+  `external_failed` response. If the provider fails after the first
+  chunk, the stream asks the backend to record `run.failed`, sends one
+  `error` event with fixed text (`external_failed`, the run ID, no
+  provider text), and closes the connection with no finish chunk and no
+  `[DONE]`; no replacement answer is sent, and the server does not log
+  that expected abort as a crash. A client disconnect closes the
+  provider stream, which requests cancellation. A result cannot carry
+  both client tool calls and a live answer. `tests/test_streaming_contract.py`
+  covers the framing of both aliases and both terminal paths (`stop`,
+  `tool_calls`), append-only content, the final generation with tools
+  disabled, the mid-stream failure in process and over a loopback socket
+  with the OpenAI SDK, and an unmet evidence predicate that cannot
+  finalize. The production client-owned backend that returns a
+  `LiveAnswer` and records `run.failed` is issue #24.
 - OpenAI-compatible endpoints (#22; RM19, AC09, AC16 request part; spec
   0.14 section 7.1): `GET /v1/models` and `POST /v1/chat/completions` on a
   FastAPI app (`relaymind.api.app`) over the orchestrator. The request
@@ -583,6 +604,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   from answer content. Non-thinking remains the default; operator-enabled
   thinking remains supported. Record both live runs separately from the
   historical runtime evidence and add a Windows runtime smoke workflow.
+- Specification 0.14 → 0.15: section 7.3 defines the streaming contract
+  (RM20, AC09, #23): the buffered stream of the managed alias as a replay of
+  the run's `answer.delta` events, the live stream of a backend that forwards
+  provider text, append-only content chunks, and the mid-stream failure
+  behavior (run recorded as failed, one fixed `error` data event, the
+  connection closed with no finish chunk and no `[DONE]`). A failure
+  before any answer text, or of a request without stream, is a normal
+  503 `external_failed` response, and a client disconnect closes the
+  provider stream.
 - Specification 0.13 → 0.14: section 7.1 defines request validation for the
   compatible chat endpoint (RM19, AC16, #22): the order of the checks, which
   fields and message shapes are supported, the named `unsupported_parameter`
