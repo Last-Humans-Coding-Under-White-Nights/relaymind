@@ -48,7 +48,6 @@ claim exactly-once delivery to external services (RM10).
 """
 
 import asyncio
-import hashlib
 import sqlite3
 import threading
 from collections.abc import Callable, Collection, Mapping
@@ -56,7 +55,7 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any
 
-from relaymind.canonical import canonical_json
+from relaymind.canonical import canonical_digest
 from relaymind.redaction import Redactor, redact_text, scrub
 from relaymind.store import RunStore, TraceClock
 from relaymind.tools.registry import (
@@ -149,7 +148,7 @@ class ToolExecutor:
         }
         if attempt != 1:
             identity["attempt"] = attempt
-        digest = hashlib.sha256(canonical_json(identity).encode("utf-8")).hexdigest()
+        digest = canonical_digest(identity)
         return f"op_{digest[:32]}"
 
     def has_operation(self, call: ValidatedCall) -> bool:

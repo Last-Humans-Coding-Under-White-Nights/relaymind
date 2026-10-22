@@ -182,7 +182,7 @@ from relaymind.orchestrator.run_state import (
 from relaymind.redaction import Redactor, redact_text
 from relaymind.skills import Skill, SkillRegistry
 from relaymind.skills.predicates import COMPLETION_PREDICATES, Predicate
-from relaymind.store import RunRecord, RunStore, StaleVersionError, TraceClock
+from relaymind.store import IdempotencyClaim, RunRecord, RunStore, StaleVersionError, TraceClock
 from relaymind.store.run_store import EventDraft, utc_iso
 from relaymind.store.trace_event import EventType
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry, ToolRejectedError
@@ -553,6 +553,7 @@ class LocalOrchestrator:
         execution_mode: str | None = None,
         model_alias: str | None = None,
         final_options: GenerationOptions | None = None,
+        idempotency: IdempotencyClaim | None = None,
     ) -> RunOutcome:
         """Run one managed request to a terminal or waiting state.
 
@@ -565,10 +566,13 @@ class LocalOrchestrator:
         generation offered tools may propose a tool call, so it takes the
         sampling but keeps its own token budget. Routing, skill, and
         repair generations keep their controlled settings (RM03).
+        idempotency is the caller's key, stored with the run when it is
+        created (spec 0.18 section 7.4); the API layer answers a stored
+        key before it gets here.
         Raises SlotUnavailableError (429) when another run holds the
         execution slot; no run is created then.
         """
-        run = _Run(self, tuple(messages), execution_mode, model_alias, final_options)
+        run = _Run(self, tuple(messages), execution_mode, model_alias, final_options, idempotency)
         return self._keep_if_waiting(run, await run.execute())
 
     async def resume(self, run_id: str, expected_version: int, text: object) -> RunOutcome:
@@ -709,6 +713,7 @@ class LocalOrchestrator:
         execution_mode: str | None = None,
         model_alias: str | None = None,
         final_options: GenerationOptions | None = None,
+        idempotency: IdempotencyClaim | None = None,
     ) -> StartedRun:
         """Accept a managed request and run it in a background task (RM21).
 
@@ -716,9 +721,10 @@ class LocalOrchestrator:
         is taken or SlotUnavailableError (429) is raised and nothing is
         created. The work then continues without the caller, so a
         disconnect of whoever asked does not stop it. Call it inside a
-        running event loop.
+        running event loop. idempotency is stored with the run as run()
+        stores it.
         """
-        run = _Run(self, tuple(messages), execution_mode, model_alias, final_options)
+        run = _Run(self, tuple(messages), execution_mode, model_alias, final_options, idempotency)
         run.open()
         return self._start(run, run.drive)
 
@@ -940,8 +946,10 @@ class _Run:
         requested_mode: str | None,
         model_alias: str | None,
         final_options: GenerationOptions | None = None,
+        idempotency: IdempotencyClaim | None = None,
     ) -> None:
         self.o = owner
+        self.idempotency = idempotency
         # The caller's answer options, laid over each answer generation's defaults.
         self.final_options = final_options or GenerationOptions()
         self.messages = messages
@@ -1056,7 +1064,8 @@ class _Run:
                     "budgets": self.o.budgets.to_json_object(),
                     **self.offered,
                 },
-            )
+            ),
+            idempotency=self.idempotency,
         )
         try:
             self.move(RunState.ROUTING)

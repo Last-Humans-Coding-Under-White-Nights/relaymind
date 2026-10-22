@@ -276,7 +276,7 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   policy, the loopback bind, and the generated token. The
   `relaymind-client-tools` alias is served only when a client-owned
   backend is configured, which is #24, so the gateway lists only what it
-  can run. `Idempotency-Key` is rejected until #26 implements it.
+  can run. `Idempotency-Key` was rejected until #26 implemented it.
   #23 is implemented with model doubles (`tests/test_streaming_contract.py`,
   spec 0.15): append-only buffered streams, a live-stream seam
   (`LiveAnswer`) and its mid-stream failure behavior. The backend that
@@ -292,8 +292,13 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   #25 is implemented with model doubles (`tests/test_native_run_api.py`,
   spec 0.17): the six endpoints, `/healthz` and `/readyz`, Last-Event-ID
   replay that reads the store only, and `parallel_demo` failing with
-  `workflow_unavailable` until #30. Idempotency (#26) and in-flight
-  write cancellation (#29) are not part of it.
+  `workflow_unavailable` until #30. In-flight write cancellation (#29)
+  is not part of it.
+  #26 is implemented with model doubles (`tests/test_idempotency.py`,
+  spec 0.18): `Idempotency-Key` on native creation and chat, stored with
+  the run in one transaction, with 409 for a changed payload, the stored
+  response (also as stream chunks) for a completed chat duplicate, and
+  keys leaving with their run at the seven-day limit.
 - Cancellation during generation and in-flight writes (#29; RM10, RM14,
   RM17); closes AC12 together with #8.
 - Demo trace UI (#28; RM23), including the visual timing view over the

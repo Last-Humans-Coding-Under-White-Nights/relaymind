@@ -29,7 +29,6 @@ module records the declared timeout; the executor enforces it.
 
 import copy
 import dataclasses
-import hashlib
 import math
 import re
 from collections.abc import Callable, Collection, Iterable, Mapping
@@ -47,7 +46,7 @@ from referencing.exceptions import Unresolvable
 from referencing.jsonschema import DRAFT202012, specification_with
 
 from relaymind.adapters.base import ToolSchema
-from relaymind.canonical import canonical_json
+from relaymind.canonical import canonical_digest
 from relaymind.schema_util import first_schema_error, freeze_json, load_packaged_schema
 from relaymind.store import TraceClock
 
@@ -429,7 +428,7 @@ class ToolRegistry:
             # RM11: it changes what a confirmation binds. A tool without one
             # keeps the hash it had before the confirmation flow existed.
             identity["confirmation_target"] = declaration.confirmation_target
-        digest = hashlib.sha256(canonical_json(identity).encode("utf-8")).hexdigest()
+        digest = canonical_digest(identity)
         registered = RegisteredTool(
             declaration=declaration,
             schema_hash=f"sha256:{digest}",

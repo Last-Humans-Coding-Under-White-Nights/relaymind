@@ -24,6 +24,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Idempotency keys (#26; RM17, RM21, AC11; spec 0.18 section 7.4):
+  `POST /relay/v1/runs` and `POST /v1/chat/completions` accept an
+  `Idempotency-Key` (1 to 255 printable ASCII characters, sent once; else
+  400 `invalid_request`) instead of refusing it. The key is stored with
+  the run it creates, in the same store transaction (new
+  `idempotency_keys` table, schema version 3), scoped to the caller and
+  bound to a SHA-256 of the canonical request (endpoint, decoded body,
+  and for chat the execution mode header). A duplicate never reaches the
+  orchestrator, so it makes no model call and runs no tool. A native
+  duplicate returns 202 with the existing run reference and the header
+  `Idempotent-Replayed: true`, even while the run is active or the
+  execution slot is taken. A chat duplicate of a completed run returns
+  the stored response (answer or client-owned tool calls), as the stored
+  `answer.delta` chunks when streaming; a duplicate of an unfinished run
+  is 409 `idempotency_conflict` with its run ID, and one of a failed or
+  cancelled run is 409 `run_terminal`. A changed payload is 409
+  `idempotency_conflict`; a request that loses a race for the key after
+  the lookup is answered the same way. A duplicate first ends an expired
+  wait, so it never answers from a run waiting past its limit. A request
+  refused before a run exists stores no key, and a request without a key
+  is not hashed. Keys leave with their run at the seven-day retention
+  limit or on deletion; a key whose run is past that limit is unknown
+  even before a purge. Client-owned `function.arguments` are sent with
+  sorted keys, as the store keeps them, so a replay sends the same text.
+  `tests/test_idempotency.py` covers it with model doubles;
+  the old tests that expected the header to be refused are removed.
 - Native run API (#25; RM21, AC11; spec 0.17 section 7.4):
   `POST /relay/v1/runs` accepts messages and an optional
   `execution_mode` and answers 202 with `run_id`, `state`,
@@ -57,8 +83,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   no external model is configured or its health check says it is not
   available (checked before routing), or the run routes to the workflow,
   which is not implemented until #30; auto and `local_only` keep their
-  rules. `Idempotency-Key` is still refused until #26, and cancel during
-  an in-flight write is #29. `tests/test_native_run_api.py` covers it
+  rules. `Idempotency-Key` was refused until #26 (now implemented, see
+  above), and cancel during an in-flight write is #29. `tests/test_native_run_api.py` covers it
   with model doubles, including one loopback-socket test of a stream
   that stays open across a wait; no live model is run.
 - Client-owned tools alias (#24; RM08, RM19, AC10; spec 0.16 section 7.2):
@@ -140,7 +166,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   frames, never its text. `fastapi` and
   `uvicorn` join the runtime dependencies and `openai` the dev ones.
   The `relaymind-client-tools` alias is served only when a client-owned
-  backend is configured (#24), and `Idempotency-Key` is refused until #26.
+  backend is configured (#24), and `Idempotency-Key` was refused until #26.
   `tests/test_chat_request.py`, `tests/test_chat_endpoint.py`,
   `tests/test_final_options.py`, `tests/test_api_binding.py`, and
   `tests/test_openai_sdk.py` (the official SDK, in process and over a
@@ -666,6 +692,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.17 → 0.18: section 7.4 defines idempotency keys (RM17,
+  RM21, AC11, #26): the key format, the caller scope, the request hash,
+  that a key is stored with the run it creates, the replay of a native
+  creation (202 for the existing run) and of a stored chat response
+  (also as chunks), 409 `idempotency_conflict` for a changed payload or
+  an unfinished chat duplicate, 409 `run_terminal` for a failed or
+  cancelled one, and the key leaving with its run at the retention limit.
+  Section 7.1 replaces the refusal of `Idempotency-Key` with its format
+  check and the check order, and section 11 widens the 409 row.
 - Specification 0.16 → 0.17: section 7.4 defines the native run bodies and
   views (RM21, AC11, #25): the creation checks and 202 body, the run view
   and the once-only confirmation token, the SSE stream (event ID is the

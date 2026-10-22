@@ -36,7 +36,7 @@ from relaymind.orchestrator.client_loop import ToolOffer, run_client_request
 from relaymind.orchestrator.local_loop import LocalOrchestrator, RunOutcome
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
-from relaymind.store import EventType
+from relaymind.store import EventType, RunStore
 
 __all__ = [
     "ChatBackend",
@@ -45,6 +45,7 @@ __all__ = [
     "LiveAnswer",
     "ManagedChat",
     "StreamAborted",
+    "answer_pieces",
     "collect_live",
     "completion_body",
     "open_stream",
@@ -135,7 +136,8 @@ class _RunChat:
                 # Client-owned calls: the caller executes them, never the gateway (RM08).
                 return ChatResult(run_id, None, TOOL_CALLS, tool_calls=outcome.tool_calls)
             case RunState.COMPLETED if outcome.answer is not None:
-                pieces = self._pieces(outcome) if stream else ()
+                store = self.orchestrator.store
+                pieces = answer_pieces(store, run_id, outcome.answer) if stream else ()
                 return ChatResult(run_id, outcome.answer, pieces=pieces)
             case RunState.WAITING_INPUT if outcome.clarification is not None:
                 # The question is the reply; the run waits for native resume or a new request.
@@ -160,11 +162,12 @@ class _RunChat:
         # A state this endpoint cannot report must not look like an answer.
         raise ApiError("internal_error", "an internal error occurred", run_id=run_id)
 
-    def _pieces(self, outcome: RunOutcome) -> tuple[str, ...]:
-        """The run's answer.delta texts, in order, when they are the answer; else ()."""
-        events = self.orchestrator.store.events(outcome.run_id, event_type=EventType.ANSWER_DELTA)
-        pieces = tuple(e.payload["text"] for e in events)
-        return pieces if "".join(pieces) == outcome.answer else ()
+
+def answer_pieces(store: RunStore, run_id: str, answer: str) -> tuple[str, ...]:
+    """The run's answer.delta texts, in order, when they are the answer; else ()."""
+    events = store.events(run_id, event_type=EventType.ANSWER_DELTA)
+    pieces = tuple(e.payload["text"] for e in events)
+    return pieces if "".join(pieces) == answer else ()
 
 
 class ManagedChat(_RunChat):
@@ -176,6 +179,7 @@ class ManagedChat(_RunChat):
             execution_mode=mode.value,
             model_alias=MANAGED,
             final_options=request.final_options,
+            idempotency=request.idempotency,
         )
         return self._result(outcome, stream=request.stream)
 
@@ -202,6 +206,7 @@ class ClientToolsChat(_RunChat):
             execution_mode=mode.value,
             model_alias=CLIENT_TOOLS,
             final_options=request.final_options,
+            idempotency=request.idempotency,
         )
         return self._result(outcome, stream=request.stream)
 
@@ -226,11 +231,20 @@ def request_id(result: ChatResult) -> str:
     return f"chatcmpl-{result.run_id}"
 
 
+def _arguments_text(arguments: Mapping[str, Any]) -> str:
+    """function.arguments with sorted keys, as the store keeps them (spec 0.18 section 7.4).
+
+    The store writes tool.proposed with sorted keys, so a replay of the
+    stored call (``relaymind.api.idempotency``) sends the same text.
+    """
+    return json.dumps(dict(arguments), sort_keys=True)
+
+
 def _tool_call_json(call: ToolCall) -> dict[str, Any]:
     return {
         "id": call.call_id,
         "type": "function",
-        "function": {"name": call.tool_name, "arguments": json.dumps(dict(call.arguments))},
+        "function": {"name": call.tool_name, "arguments": _arguments_text(call.arguments)},
     }
 
 

@@ -123,6 +123,15 @@ itself, with the manifest's SHA-256; any other file fails the run.
   validates its generation, so no production backend forwards a live
   provider stream yet.
 
+- Idempotency keys, deterministic (issue #26, RM17, RM21, AC11, spec 0.18
+  section 7.4): `pytest tests/test_idempotency.py` runs the real
+  orchestrator over model doubles. A duplicate is proved to create no new
+  work by the model double seeing no further request and the store
+  holding one run. It checks the key format, the same key and payload on
+  native creation and on chat (stored response, also as stream chunks,
+  and client-owned tool calls), a changed payload, an unfinished or
+  failed chat duplicate, a refused request that stores no key, retention
+  and deletion removing the key, and the unique-key guard.
 - The native run API, deterministic (issue #25, RM21, AC11, spec 0.17
   section 7.4): `pytest tests/test_native_run_api.py` runs the real
   orchestrator over model doubles inside one event loop, because a native

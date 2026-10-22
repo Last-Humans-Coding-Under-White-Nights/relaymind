@@ -13,7 +13,9 @@ from contextlib import asynccontextmanager
 import httpx
 
 from api_helpers import token_of
+from gateway_helpers import build_gateway, health_tail, route_turn
 from helpers import ScriptedAdapter
+from relaymind.orchestrator.local_loop import ConfiguredModel
 
 SETTLED = frozenset({"completed", "failed", "cancelled", "waiting_input", "waiting_confirmation"})
 
@@ -29,10 +31,11 @@ async def session(app, *, auth=True):
         yield client
 
 
-async def start_run(client, prompt="Is staging-api healthy right now?", **fields):
+async def start_run(client, prompt="Is staging-api healthy right now?", *, headers=None, **fields):
     return await client.post(
         "/relay/v1/runs",
         json={"messages": [{"role": "user", "content": prompt}], **fields},
+        headers=headers,
     )
 
 
@@ -96,3 +99,15 @@ class GatedAdapter(ScriptedAdapter):
         await self.gate.wait()
         async for event in super().generate(request):
             yield event
+
+
+def gated_gateway(tmp_path):
+    """A health run whose local model waits for adapter.gate, so the run stays in flight."""
+    adapter = GatedAdapter(turns=[route_turn("check-service-health"), *health_tail()])
+    gateway = build_gateway(
+        tmp_path,
+        None,
+        local_model=ConfiguredModel(adapter=adapter, model_id="gated"),
+        external_turns=[],
+    )
+    return gateway, adapter
