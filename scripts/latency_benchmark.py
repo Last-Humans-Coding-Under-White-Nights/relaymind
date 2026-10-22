@@ -188,6 +188,9 @@ async def measure(api: harness.Api, prompt: Mapping[str, str], *, timeout: float
         sample["error"] = "timeout"
     except httpx.HTTPError as exc:
         sample["error"] = f"transport: {type(exc).__name__}: {exc}"
+    except json.JSONDecodeError as exc:
+        # A malformed chunk is this sample's error, never the end of the benchmark.
+        sample["error"] = f"stream: {type(exc).__name__}: {exc}"
     run_id = sample["run_id"]
     if run_id is None:
         if sample["error"] is None:

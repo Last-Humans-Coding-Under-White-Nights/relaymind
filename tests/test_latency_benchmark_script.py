@@ -314,3 +314,19 @@ def test_an_error_status_without_a_run_is_an_error(bench):
     assert sample["http_status"] == 503
     assert sample["error"] == "no run ID in the response (status 503)"
     assert sample["first_model_action_ms"] is None
+
+
+def test_a_malformed_stream_line_is_recorded_as_an_error(bench):
+    """Section 12.2: errors are recorded with their sample; one bad chunk ends no benchmark."""
+
+    def handler(request):
+        return httpx.Response(
+            200, text="data: {not json\n\n", headers={"content-type": "text/event-stream"}
+        )
+
+    api = bench.harness.Api(
+        "http://127.0.0.1", "token", sandbox_dir=Path("."), transport=httpx.MockTransport(handler)
+    )
+    sample = measure(bench, api, "Is staging-api healthy?")
+    assert sample["http_status"] == 200 and sample["timed_out"] is False
+    assert sample["error"].startswith("stream: JSONDecodeError")
