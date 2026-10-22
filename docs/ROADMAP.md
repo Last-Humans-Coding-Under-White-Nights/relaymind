@@ -243,7 +243,8 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
   mutations exist. Part of AC12, which closes in M4 together with #29.
   Implemented with a new gateway over the same store file
   (`tests/test_restart_recovery.py`, spec 0.11). The API work (#25) did
-  not add a startup call; it waits for the launcher (see the M4 status).
+  not add a startup call; the operator launcher (#87, see M5) runs it
+  once at startup.
 - Prompt-injection test for tool output and secret redaction (#20;
   RM12).
 - Failure behavior and error codes (#21; RM04, section 11): the error
@@ -282,8 +283,8 @@ Carried forward, not done in M3:
 - AC08 stays open until a second local artifact is qualified and the
   swap runs against it (#90).
 - Restart recovery exists as `LocalOrchestrator.recover_after_restart`,
-  but nothing calls it at startup yet, because there is no launcher
-  (#87, see M4).
+  but nothing called it at startup, because there was no launcher. The
+  operator launcher (#87, see M5) now calls it once before serving.
 - Recovery always marks an in-flight write `unknown_outcome`: the MVP
   has no source to reconcile a write against.
 - One approval race is open (#93): a second process sharing the store
@@ -351,11 +352,11 @@ Carried forward, not done in M4:
 
 - Live-model runs for AC09, AC10, AC11, and AC12, and a UI session in
   live mode (#88).
-- An operator launcher (#87). Nothing wires models, store, token,
+- An operator launcher (#87). Nothing wired models, store, token,
   `ChatSettings`, `NativeSettings`, and `UiSettings` into a start
-  command, and `pyproject.toml` has no entry point. The README shows a
-  script that starts the gateway by hand. The launcher must also run
-  restart recovery once at startup.
+  command, and `pyproject.toml` had no entry point. This is now done in
+  M5: `relaymind serve --config` starts the gateway and runs restart
+  recovery once at startup (see below).
 - An automated browser test for the UI page script (`app.js`; #89).
   The browser timestamp of a UI submission is shown but not asserted.
 - The requested answer options (token budget, temperature, top_p) are
@@ -379,6 +380,13 @@ Carried forward, not done in M4:
 - The one bounded parallel workflow with read-only branches (#30; RM15).
 - Skill/template caching by content hash; routing cache experiments
   behind a flag, off by default (#31; RM24).
+- Operator launcher (#87; RM17, RM18, RM19, RM21, RM23, spec 0.21
+  section 14.1): `relaymind serve --config relaymind.toml` replaces the
+  hand-written start script. It wires the models, skill roots, sandbox,
+  run store, settings, and policy, refuses an invalid configuration
+  before any socket opens, runs restart recovery once, and prints the
+  application token once. Implemented with model doubles
+  (`tests/test_launcher.py`); not yet run against a live model.
 - Closes: AC13, AC14.
 
 ## M6 — Evaluation

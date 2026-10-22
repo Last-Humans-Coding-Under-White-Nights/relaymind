@@ -15,6 +15,7 @@ spec is the source of truth; this page only explains where things live.
 | Tool registry and executor | `src/relaymind/tools/` | Validate arguments and permissions; execute registered functions; record outcomes. `sandbox.py` holds the sandbox demo data service and the seven demo tools (spec section 9). |
 | Run store | `src/relaymind/store/` | Persist ordered events, tool outcomes, pending approvals, and versioned state in SQLite. |
 | Demo UI | `src/relaymind/ui/` | Display model decisions and execution evidence; collect clarification and confirmation; compare modes. `trace_view.py` builds the evidence of one run from its stored events only; `render.py` renders it as escaped HTML with the persistent data mode label; `routes.py` serves the static page and the rendered traces; `comparison.py` runs auto and external_only on reset fixtures; `settings.py` holds the operator's declared data mode (live, replay, or double). The page is a thin client of the native run API (RM23, spec 0.20 section 9). |
+| Launcher | `src/relaymind/launcher.py` | The `relaymind serve --config` command: reads the TOML file, checks it all before any socket opens, wires models, skills, sandbox, store, settings, and policy, runs restart recovery once, and prints the application token once (spec 0.21 section 14.1). |
 | Redaction | `src/relaymind/redaction.py` | Redact configured secret fields before events and tool outcomes are persisted (RM12, section 8). |
 | Canonical JSON | `src/relaymind/canonical.py` | One canonical JSON text form for tool schema hashes (RM07), operation IDs (RM10), and approval binding (RM11). |
 | Schema boundary checks | `src/relaymind/schema_util.py` | Shared checks for published, versioned JSON Schemas (closed field sets, exact schema_version, first schema error; spec section 8). |
@@ -40,9 +41,9 @@ client ──► FastAPI (api) ──► orchestrator ──► adapters ──�
 ```
 
 - The gateway binds to loopback and requires a generated application token.
-- There is no launcher or command-line entry point yet. An operator
-  builds the orchestrator in Python and starts it with `create_app` and
-  `serve`; the README shows a script that does this.
+- The operator starts the gateway with `relaymind serve --config <file>`
+  (the launcher above, spec section 14.1). One TOML file wires the
+  models, skills, sandbox, store, settings, policy, and UI data mode.
 - The demo UI is served by the same FastAPI app under `/ui` when the
   operator passes `UiSettings`.
 - Local inference runs in a separate llama.cpp server process, also on
