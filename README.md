@@ -15,8 +15,10 @@ pinned local model and a live external endpoint (#88). AC08 is closed:
 a live swap to a second local model artifact (Qwen3-0.6B Q4_K_M, #90)
 and a live swap between two compatible external endpoints with
 different base URLs, Z.ai and bigmodel.cn, with configuration changes
-only (#109). Caveat: both endpoints are Zhipu's (international and mainland China platforms), so a second vendor's API is not covered. The operator starts the gateway with
-one command, `relaymind serve --config <file>` (see
+only (#109). Caveat: both endpoints are Zhipu's (international and
+mainland China platforms), so a second vendor's API is not covered.
+The operator starts the gateway with one command,
+`relaymind serve --config <file>` (see
 [Start the gateway](#start-the-gateway)). Chinese support is best-effort
 (spec 0.7): Chinese live results are recorded but are not a gate. M5
 (parallel workflow and caching) is closed on deterministic coverage with

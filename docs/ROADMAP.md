@@ -290,7 +290,8 @@ Carried forward, not done in M3:
   swap to a second compatible endpoint, Z.ai to bigmodel.cn with only
   the `[external_model]` table changed, ran live in M6 and closes AC08
   ([#109](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/109)).
-  Caveat: both endpoints are Zhipu's (international and mainland China platforms), so a second vendor's API is not covered.
+  Caveat: both endpoints are Zhipu's (international and mainland
+  China platforms), so a second vendor's API is not covered.
 - Restart recovery exists as `LocalOrchestrator.recover_after_restart`,
   but nothing called it at startup, because there was no launcher. The
   operator launcher (#87, see M5) now calls it once before serving.
@@ -513,7 +514,9 @@ Carried forward, not done in M5:
   (`https://open.bigmodel.cn/api/paas/v4`), both `glm-4.6`, with only the
   `[external_model]` table changed; both traces show the same skill
   packages and budgets, and every gateway check held
-  ([`EVIDENCE.md`](EVIDENCE.md)). Caveat: both endpoints are Zhipu's (international and mainland China platforms), so a second vendor's API is not covered.
+  ([`EVIDENCE.md`](EVIDENCE.md)). Caveat: both endpoints are Zhipu's
+  (international and mainland China platforms), so a second vendor's
+  API is not covered.
 - Release record (section 14): [`RELEASE.md`](RELEASE.md).
 - Closes: AC08 (#90, #109), AC15 (open until the Windows run), and the
   release record.

@@ -389,7 +389,9 @@ their results are in [`EVIDENCE.md`](EVIDENCE.md).
 - The M3 to M5 scenarios ran live once, on Apple Silicon macOS only,
   with one external provider ([`EVIDENCE.md`](EVIDENCE.md)).
 - AC08 is closed by the live local swap (#90) and the live external
-  swap from Z.ai to bigmodel.cn (#109), but both endpoints are Zhipu's (international and mainland China platforms), so a second vendor's API is not covered.
+  swap from Z.ai to bigmodel.cn (#109), but both endpoints are
+  Zhipu's (international and mainland China platforms), so a second
+  vendor's API is not covered.
 - The browser test of the page script (#89) uses model doubles and a
   disposable sandbox. The one live UI session is a run of the harness,
   not a test of the page against live output.
