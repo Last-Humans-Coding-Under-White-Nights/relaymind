@@ -887,8 +887,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   settings recorded. `docs/RELEASE.md` is the release record of
   section 14.
 - Specification 0.28 -> 0.29: AC08 defines a second compatible external
-  endpoint (#109; RM18, section 12.3): it has its own base URL and its
-  own credential, and another model behind the same base URL is not one.
+  endpoint (#109; RM18, section 12.3): it has its own base URL, and the
+  launch file names its own credential variable (it may hold the same
+  key when one vendor serves both base URLs); another model behind the
+  same base URL is not one.
   For the external switch only the external_model table of the launch
   file changes. The live acceptance harness takes
   `--second-external-base-url`, `--second-external-model`, and
