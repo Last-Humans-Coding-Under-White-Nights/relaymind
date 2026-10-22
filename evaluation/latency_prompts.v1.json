@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "note": "The twelve short English prompts of the latency experiment (spec 0.28 section 12.2). simple: a simple tool task, expected to complete; clarification: a missing service, expected to wait for input; routing: a complex request, expected to route external (without an external model it ends as needs_external after the local routing decision).",
+  "prompts": [
+    {"id": "lat-01", "label": "simple", "prompt": "Is staging-api healthy?"},
+    {"id": "lat-02", "label": "simple", "prompt": "Health of payments-api?"},
+    {"id": "lat-03", "label": "simple", "prompt": "Latest staging-api deployment?"},
+    {"id": "lat-04", "label": "simple", "prompt": "Last deployment of payments-api?"},
+    {"id": "lat-05", "label": "simple", "prompt": "staging-api incidents in the last hour?"},
+    {"id": "lat-06", "label": "simple", "prompt": "payments-api incidents, last 15 minutes?"},
+    {"id": "lat-07", "label": "clarification", "prompt": "Is it healthy?"},
+    {"id": "lat-08", "label": "clarification", "prompt": "Show the latest deployment."},
+    {"id": "lat-09", "label": "clarification", "prompt": "How many incidents today?"},
+    {"id": "lat-10", "label": "routing", "prompt": "Why is payments-api failing?"},
+    {"id": "lat-11", "label": "routing", "prompt": "Diagnose staging-api latency."},
+    {"id": "lat-12", "label": "routing", "prompt": "Explain the payments-api error spike."}
+  ]
+}
