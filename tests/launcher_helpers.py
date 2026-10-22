@@ -1,5 +1,6 @@
 """Builders for launcher tests: a config file over a tiny artifact and the checked-in skills."""
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -28,9 +29,7 @@ def make_artifact(directory: Path) -> tuple[Path, Path]:
         license="Apache-2.0",
     )
     path = directory / "tiny.manifest.json"
-    path.write_text(
-        json.dumps({**manifest.__dict__, "launch_settings": dict(manifest.launch_settings)})
-    )
+    path.write_text(json.dumps(dataclasses.asdict(manifest)))
     return path, artifact
 
 
