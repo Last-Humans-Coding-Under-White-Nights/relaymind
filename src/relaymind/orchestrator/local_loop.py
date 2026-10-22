@@ -591,27 +591,30 @@ class LocalOrchestrator:
     def owning(self, run: "_Run") -> Iterator[None]:
         """Mark run as owned by the task awaiting it, for request_cancel."""
         task = asyncio.current_task()
-        if task is None:
-            yield
-            return
+        assert task is not None  # only called from a coroutine
         self._owned[task] = run
         try:
             yield
         finally:
             self._owned.pop(task, None)
 
-    def request_cancel(self, task: "asyncio.Task[Any]") -> None:
+    def request_cancel(self, task: "asyncio.Task[Any]") -> str | None:
         """Cancel the run a request task owns, as the native cancel does (RM14, AC12).
 
         A chat disconnect uses this (spec 0.24 section 7.4): dispatch
         stops, the adapter of a generation in flight is asked to cancel
         it, and the task is cancelled so the run ends as cancelled with
-        its in-flight tool operations settled. A task that owns no run,
-        or whose run has ended, is left alone.
+        its in-flight tool operations settled. A task that owns no run
+        is still cancelled, so its work stops too. Returns the ID of the
+        owned run, when it has one.
         """
         run = self._owned.get(task)
-        if run is not None and not task.done():
-            _stop(run, task)
+        if run is None:
+            task.cancel()
+            return None
+        _stop(run, task)
+        record = getattr(run, "record", None)
+        return None if record is None else record.run_id
 
     async def resume(self, run_id: str, expected_version: int, text: object) -> RunOutcome:
         """Resume a run waiting for input with explicit new input (section 5, RM17).
