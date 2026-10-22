@@ -24,6 +24,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.20 → 0.21: section 14.1 defines the operator launcher
+  (#87; RM12, RM17, RM18, RM19, RM21, RM23): the `relaymind serve --config`
+  command, the TOML tables, credentials from the environment only, the
+  all-or-nothing startup order, restart recovery once before serving, and
+  the explicit startup errors.
 - Demo trace UI (#28; RM23, RM25, RM11, RM21; spec 0.20 sections 8 and 9):
   the gateway serves a static page at `GET /ui` (no token, no run data,
   a content security policy) that shows a run's original prompt, mode,
