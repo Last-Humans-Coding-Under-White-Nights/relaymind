@@ -1,9 +1,10 @@
 """The evidence of one run, as the demo UI shows it (RM23, RM25, spec 0.20 section 9).
 
-``build_trace_view`` reads a run's stored events and run record and
-returns plain JSON data. It holds nothing the events do not: a field
-the events do not contain is ``None`` (or an empty list), never a guess,
-and no reasoning is inferred (spec section 3). Tool results in the
+``build_trace_view`` reads a run's stored events, the tool results they
+store by reference (spec 0.30), and the run record, and returns plain
+JSON data. It holds nothing the stored evidence does not: a field the
+events do not contain is ``None`` (or an empty list), never a guess, and
+no reasoning is inferred (spec section 3). Tool results in the
 events are already redacted (RM12); the renderer escapes them.
 
 Latency is model action latency only: the elapsed time of the first
@@ -16,10 +17,10 @@ The run's active and waiting time come from its terminal event, as
 separate fields, and are not answer latency.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from relaymind.store import EventType, RunRecord, RunStore, TraceEvent
+from relaymind.store import EventType, RunRecord, RunStore, TraceEvent, read_tool_result
 from relaymind.store.trace_event import WORKFLOW_BRANCHES
 
 __all__ = ["build_trace_view", "trace_view_from"]
@@ -36,7 +37,7 @@ _FAILED = ("failed", "unknown_outcome")
 def build_trace_view(store: RunStore, run_id: str) -> dict[str, Any]:
     """The trace view of a stored run (RunNotFoundError for an unknown one)."""
     record = store.get_run(run_id)
-    return trace_view_from(record, store.events(run_id))
+    return trace_view_from(record, store.events(run_id), read_artifact=store.read_artifact)
 
 
 def _of(events: Sequence[TraceEvent], event_type: EventType) -> list[TraceEvent]:
@@ -47,14 +48,24 @@ def _pick(payload: Mapping[str, Any], keys: Sequence[str]) -> dict[str, Any]:
     return {key: payload.get(key) for key in keys}
 
 
-def trace_view_from(record: RunRecord, events: Sequence[TraceEvent]) -> dict[str, Any]:
-    """The trace view of a run record and its events, in seq order."""
+def trace_view_from(
+    record: RunRecord,
+    events: Sequence[TraceEvent],
+    *,
+    read_artifact: Callable[[str], Any | None] | None = None,
+) -> dict[str, Any]:
+    """The trace view of a run record and its events, in seq order.
+
+    read_artifact reads back a tool result stored by reference (spec 0.30
+    section 9); without it, or once the artifact is gone, the operation
+    shows its event's status and the reference, never invented data.
+    """
     accepted = next((e for e in events if e.event_type is EventType.RUN_ACCEPTED), None)
     accepted_payload = {} if accepted is None else accepted.payload
     terminal = next((e for e in reversed(events) if e.event_type in _TERMINAL_TIMING), None)
     failed = next((e for e in reversed(events) if e.event_type is EventType.RUN_FAILED), None)
     cancelled = next((e for e in reversed(events) if e.event_type is EventType.RUN_CANCELLED), None)
-    operations = _operations(events)
+    operations = _operations(events, read_artifact)
     model_calls = _model_calls(events)
     answer = _final_answer(events)
     return {
@@ -224,8 +235,49 @@ def _proposals(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
     ]
 
 
-def _operations(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
+_RESULT_FIELDS = (
+    "status",
+    "data",
+    "error",
+    "duration_ms",
+    "observed_at",
+    "source_ref",
+    "truncated",
+)
+
+
+def _result_of(
+    payload: Mapping[str, Any], read_artifact: Callable[[str], Any | None] | None
+) -> dict[str, Any]:
+    """The result fields of a tool.finished event, read back when stored by reference."""
+    view = read_tool_result(payload, read_artifact)
+    # Not retained: the event's own status, and nothing invented (RM23).
+    result = view.result if view.retained else {"status": payload.get("status")}
+    return {
+        **_pick(result, _RESULT_FIELDS),
+        "result_ref": view.result_ref,
+        "result_retained": view.retained,
+    }
+
+
+def _once(read_artifact: Callable[[str], Any | None]) -> Callable[[str], Any | None]:
+    """read_artifact that reads each distinct artifact once."""
+    seen: dict[str, Any | None] = {}
+
+    def read(artifact_id: str) -> Any | None:
+        if artifact_id not in seen:
+            seen[artifact_id] = read_artifact(artifact_id)
+        return seen[artifact_id]
+
+    return read
+
+
+def _operations(
+    events: Sequence[TraceEvent], read_artifact: Callable[[str], Any | None] | None
+) -> list[dict[str, Any]]:
     """Each finished tool operation, in order, with the model that proposed it."""
+    if read_artifact is not None:
+        read_artifact = _once(read_artifact)
     return [
         {
             **_pick(
@@ -241,18 +293,7 @@ def _operations(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
                 ),
             ),
             "replayed": bool(e.payload.get("replayed")),
-            **_pick(
-                e.payload["result"],
-                (
-                    "status",
-                    "data",
-                    "error",
-                    "duration_ms",
-                    "observed_at",
-                    "source_ref",
-                    "truncated",
-                ),
-            ),
+            **_result_of(e.payload, read_artifact),
         }
         for e in _of(events, EventType.TOOL_FINISHED)
     ]

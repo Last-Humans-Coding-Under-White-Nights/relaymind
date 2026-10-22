@@ -285,11 +285,13 @@ Carried forward, not done in M3:
   external answer missed the skill's section labels), and no live
   approve that deletes is recorded for AC05.
 - AC08: the second local artifact and the live local swap are done in
-  M6 (#90). A live external swap ran (#88): two models of one provider,
-  `glm-4.6` and `glm-4.5-air`, by a one-line configuration change. Two
-  models behind one endpoint are not the "second compatible external
-  endpoint" of section 13, so AC08 stays open until a swap to a second
-  provider runs live ([#109](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/109)).
+  M6 (#90). A live external swap ran (#88) between two models of one
+  endpoint, which spec 0.29 does not count as a second endpoint. The
+  swap to a second compatible endpoint, Z.ai to bigmodel.cn with only
+  the `[external_model]` table changed, ran live in M6 and closes AC08
+  ([#109](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/109)).
+  Caveat: both endpoints are Zhipu's (international and mainland
+  China platforms), so a second vendor's API is not covered.
 - Restart recovery exists as `LocalOrchestrator.recover_after_restart`,
   but nothing called it at startup, because there was no launcher. The
   operator launcher (#87, see M5) now calls it once before serving.
@@ -443,7 +445,8 @@ Carried forward, not done in M4:
 - Closes: AC13, AC14.
 
 Status (2026-10-22): **M5 closed** (PRs #97, #95, #96, #99, #100, #101,
-and #102, spec 0.21 to 0.27). The operator launcher (#87), the recorded
+and #102, spec 0.21 to 0.27). The GitHub milestone is closed
+(2026-10-23), with all 16 of its issues closed. The operator launcher (#87), the recorded
 answer options (#91), the approval resume race (#93), the chat
 disconnect cancel (#92), the parallel workflow (#30), the caching policy
 (#31), and the browser test of the page script (#89) are merged. AC13
@@ -505,13 +508,19 @@ Carried forward, not done in M5:
   suite and the English live skill-and-tool runs, and the live suite ran
   from Q8_0 to Q4_K_M with only `RELAYMIND_LIVE_MANIFEST` changed
   ([`EVIDENCE.md`](EVIDENCE.md)). Q4_0 was tried and is not qualified.
-  The external half of AC08 is covered with scripted endpoints (#49),
-  and a live swap ran between two models of one provider, `glm-4.6` and
-  `glm-4.5-air` on Z.ai (#88). A second model on the same endpoint is
-  not the "second compatible external endpoint" of section 13, so AC08
-  stays open until a second provider is run (#109).
+  The external half of AC08 is covered with scripted endpoints (#49).
+- AC08 external swap to a second endpoint (#109; RM18, spec 0.29): the
+  live acceptance harness switched from Z.ai international
+  (`https://api.z.ai/api/paas/v4`) to Zhipu bigmodel.cn
+  (`https://open.bigmodel.cn/api/paas/v4`), both `glm-4.6`, with only the
+  `[external_model]` table changed; both traces show the same skill
+  packages and budgets, and every gateway check held
+  ([`EVIDENCE.md`](EVIDENCE.md)). Caveat: both endpoints are Zhipu's
+  (international and mainland China platforms), so a second vendor's
+  API is not covered.
 - Release record (section 14): [`RELEASE.md`](RELEASE.md).
-- Closes: AC15 (open until the Windows run) and the release record.
+- Closes: AC08 (#90, #109), AC15 (open until the Windows run), and the
+  release record.
 
 ## Out of scope for the prototype
 
@@ -585,3 +594,9 @@ listed here so the current order can be traced to its reason.
   findings are recorded, not counted as passes. #104 is closed by this
   work; its Windows launcher start moves to #110, next to the Windows run
   of the latency experiment (#33).
+- 2026-10-22, #109: spec 0.29 defines a second compatible external
+  endpoint as one with its own base URL and its own credential variable,
+  so the #88 swap between two models of one endpoint does not count.
+  The live swap from Z.ai international to Zhipu bigmodel.cn closes
+  AC08. Both endpoints belong to one vendor, so a second vendor's API is
+  not covered.

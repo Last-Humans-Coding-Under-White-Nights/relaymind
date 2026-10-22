@@ -35,7 +35,9 @@ def test_gateway_checks_hold_on_the_live_model(tmp_path):
         external_base_url=None,
         external_model=None,
         external_context_limit=None,
+        second_external_base_url=None,
         second_external_model=None,
+        second_external_context_limit=None,
     )
     document = harness.run_live(args)
     statuses = {s["status"] for s in document["scenarios"]}

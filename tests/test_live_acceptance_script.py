@@ -20,9 +20,11 @@ import pytest
 
 from gateway_helpers import (
     STAGING_OK,
+    build_gateway,
     clarify_turn,
     health_tail,
     route_turn,
+    run,
     text_turn,
     tool_turn,
 )
@@ -40,14 +42,14 @@ def harness():
     return load_script_module("live_acceptance")
 
 
-def config_text(harness, tmp_path, **options):
+def config_text(harness, tmp_path, *, work="work", port=8099, **options):
     manifest, artifact = make_artifact(tmp_path)
     return harness.gateway_config(
-        work=tmp_path / "work",
+        work=tmp_path / work,
         manifest=manifest,
         artifact=artifact,
         local_url="http://127.0.0.1:8033",
-        port=8099,
+        port=port,
         **options,
     )
 
@@ -365,7 +367,33 @@ def test_external_scenarios_need_the_credential_too(harness):
     endpoint = harness.ExternalEndpoint("https://api.example.invalid/v1", "model-x", 32768)
     results = harness.not_run_external(endpoint, environ={})
     assert all(r.status == "not_run" for r in results)
-    assert harness.not_run_external(endpoint, environ={harness.EXTERNAL_KEY_ENV: "k"}) == []
+    (swap,) = harness.not_run_external(endpoint, environ={harness.EXTERNAL_KEY_ENV: "k"})
+    assert swap.name == "ac08_external_swap"
+    assert swap.reason == "no --second-external-model was given"
+
+
+def test_a_tool_result_stored_by_reference_is_read_without_a_crash(harness, tmp_path):
+    """RM22, spec 0.30 section 8: an exported trace holds result_ref, not the result.
+
+    The native event stream has no artifact reader, so the offloaded result
+    is not retained there: it is left out, never a KeyError.
+    """
+    gateway = build_gateway(tmp_path, [route_turn("check-service-health"), *health_tail()])
+    gateway.store.max_inline_result_bytes = 1
+    _, events = run(gateway)
+    exported = [e.to_json_object() for e in events]
+    (finished,) = [e for e in exported if e["event_type"] == "tool.finished"]
+    assert "result_ref" in finished["payload"]
+    assert harness.tool_results(exported) == []
+    assert harness.health_answer_ok(exported) is False
+
+
+def test_an_inline_tool_result_is_read_from_its_event(harness, tmp_path):
+    """RM22: a result kept in its event is read as before."""
+    gateway = build_gateway(tmp_path, [route_turn("check-service-health"), *health_tail()])
+    _, events = run(gateway)
+    (result,) = harness.tool_results([e.to_json_object() for e in events])
+    assert result.data["status"] == "healthy"
 
 
 def test_stats_records_come_from_the_trace(harness):
@@ -647,19 +675,25 @@ def test_ac09_and_ac10_run_with_the_external_only_header(harness, tmp_path):
     assert result.status == "passed", result.to_json_object()
 
 
-def _swap_trace(model):
-    skills = [{"name": "s", "version": "1", "content_hash": "sha256:a"}]
+def _swap_trace(model, content_hash="sha256:a", budgets=8):
+    skills = [{"name": "s", "version": "1", "content_hash": content_hash}]
+    budgets = {"run_generations": budgets}
     return [
-        {"event_type": "run.accepted", "payload": {"skills_offered": skills}},
+        {"event_type": "run.accepted", "payload": {"skills_offered": skills, "budgets": budgets}},
         {"event_type": "model.started", "payload": {"model": model}},
     ]
 
 
-def _swap_config(model, port):
-    return (
-        f'port = {port}\npath = "/w/{model}"\n[external_model]\nmodel = "{model}"\n'
-        'api_key_env = "RELAYMIND_EXTERNAL_API_KEY"\n'
+def _swap_config(harness, tmp_path, work, endpoint, **options):
+    """The harness's own launch file over one shared model artifact, as run_live writes it."""
+    return config_text(
+        harness, tmp_path, work=work, port=8000 + len(work), external=endpoint, **options
     )
+
+
+def _swap_configs(harness, tmp_path, endpoints):
+    """One file per launch; only the per-launch paths, port, and external table differ."""
+    return {name: _swap_config(harness, tmp_path, name, e) for name, e in endpoints.items()}
 
 
 def _swap_result(harness, launch, run_id):
@@ -668,34 +702,272 @@ def _swap_result(harness, launch, run_id):
     return result
 
 
-def test_ac08_external_swap_needs_only_the_model_line_changed(harness):
-    """AC08, RM18: same skills, each run names its own model, only the model line differs."""
+def _swap(harness, tmp_path, endpoints, *, traces=None, configs=None):
     first = _swap_result(harness, "external", "r1")
     second = _swap_result(harness, "external-second", "r2")
-    traces = {"r1": _swap_trace("model-a"), "r2": _swap_trace("model-b")}
-    configs = {
-        "external": _swap_config("model-a", 1),
-        "external-second": _swap_config("model-b", 2),
+    traces = traces or {
+        "r1": _swap_trace(endpoints["external"].model),
+        "r2": _swap_trace(endpoints["external-second"].model),
     }
-    models = {"external": "model-a", "external-second": "model-b"}
-    result = harness.ac08_external_swap(
-        first, second, traces=traces, configs=configs, models=models
+    configs = configs or _swap_configs(harness, tmp_path, endpoints)
+    return harness.ac08_external_swap(
+        first, second, traces=traces, configs=configs, endpoints=endpoints
     )
+
+
+def _second_provider(harness):
+    return {
+        "external": harness.ExternalEndpoint("https://api.one.invalid/v1", "model-a", 32768),
+        "external-second": harness.ExternalEndpoint(
+            "https://api.two.invalid/v1", "model-b", 65536, harness.SECOND_EXTERNAL_KEY_ENV
+        ),
+    }
+
+
+def test_ac08_external_swap_to_a_second_endpoint(harness, tmp_path):
+    """AC08, RM18: a second base URL and credential, only the [external_model] table changed."""
+    result = _swap(harness, tmp_path, _second_provider(harness))
     assert result.status == "passed", result.to_json_object()
-    configs["external-second"] += "context_limit = 8\n"
-    result = harness.ac08_external_swap(
-        first, second, traces=traces, configs=configs, models=models
+    assert result.name == "ac08_external_swap" and result.acceptance == ("AC08", "RM18")
+    assert result.observations["different_base_urls"] is True
+    assert [e["base_url"] for e in result.observations["endpoints"]] == [
+        "https://api.one.invalid/v1",
+        "https://api.two.invalid/v1",
+    ]
+    assert result.observations["config_difference"] == {
+        "api_key_env": [harness.EXTERNAL_KEY_ENV, harness.SECOND_EXTERNAL_KEY_ENV],
+        "base_url": ["https://api.one.invalid/v1", "https://api.two.invalid/v1"],
+        "context_limit": [32768, 65536],
+        "model": ["model-a", "model-b"],
+    }
+
+
+def test_ac08_external_swap_fails_when_a_table_outside_external_model_changes(harness, tmp_path):
+    """AC08, RM18: configuration changes only, and only in the external_model table."""
+    endpoints = _second_provider(harness)
+    configs = _swap_configs(harness, tmp_path, endpoints)
+    configs["external-second"] = _swap_config(
+        harness, tmp_path, "other", endpoints["external-second"], routing_cache=True
     )
+    result = _swap(harness, tmp_path, endpoints, configs=configs)
     assert result.status == "failed"
+    failed = [c for c in result.checks if not c.ok]
+    assert [c.name for c in failed] == ["the two files differ only in the [external_model] table"]
+    assert failed[0].detail == "['cache', 'external_model']"
+    difference = result.observations["config_difference"]
+    assert difference["cache.routing"] == [False, True]
+    assert difference["model"] == ["model-a", "model-b"]
 
 
-def test_a_second_external_model_adds_the_swap_plan(harness):
+def test_ac08_external_swap_records_a_difference_outside_external_model(harness, tmp_path):
+    """AC08: the failure names the other table's change, not an empty difference."""
+    endpoints = _second_provider(harness)
+    configs = _swap_configs(harness, tmp_path, endpoints)
+    configs["external-second"] = configs["external"] + '\n[extra]\nnote = "x"\n'
+    result = _swap(harness, tmp_path, endpoints, configs=configs)
+    assert [c.name for c in result.checks if not c.ok] == [
+        "the two files differ only in the [external_model] table"
+    ]
+    assert result.observations["config_difference"] == {"extra": [None, {"note": "x"}]}
+
+
+def test_ac08_external_swap_survives_a_scalar_external_model(harness, tmp_path):
+    """AC08: a malformed [external_model] (not a table) fails the check, it does not crash."""
+    endpoints = _second_provider(harness)
+    configs = _swap_configs(harness, tmp_path, endpoints)
+    configs["external-second"] = 'external_model = "plain"\n'
+    result = _swap(harness, tmp_path, endpoints, configs=configs)
+    assert "the two files differ only in the [external_model] table" in [
+        c.name for c in result.checks if not c.ok
+    ]
+    assert result.observations["config_difference"]["external_model"][1] == "plain"
+
+
+def test_launch_tables_skips_a_per_launch_key_that_is_not_a_table(harness):
+    """AC08: a scalar where a per-launch table is expected is compared, not a crash."""
+    assert harness._launch_tables('server = "x"\nsandbox = 123\n') == {
+        "server": "x",
+        "sandbox": 123,
+    }
+
+
+def test_ac08_external_swap_fails_on_other_skill_packages_or_models(harness, tmp_path):
+    """Same skill content hashes; each trace names its own configured model.
+
+    A skill package failure shows both offered sets.
+    """
+    endpoints = _second_provider(harness)
+    traces = {"r1": _swap_trace("model-a"), "r2": _swap_trace("model-b", "sha256:b")}
+    result = _swap(harness, tmp_path, endpoints, traces=traces)
+    (failed,) = [c for c in result.checks if not c.ok]
+    assert failed.name == "both runs offered the same skill packages"
+    assert "sha256:a" in failed.detail and "sha256:b" in failed.detail
+    traces = {"r1": _swap_trace("model-a"), "r2": _swap_trace("model-a")}
+    result = _swap(harness, tmp_path, endpoints, traces=traces)
+    assert [c.name for c in result.checks if not c.ok] == [
+        "each run's model calls name its own configured external model"
+    ]
+
+
+def test_ac08_external_swap_fails_on_other_budgets(harness, tmp_path):
+    """AC08: both runs keep the same budgets; a failure shows both sets."""
+    endpoints = _second_provider(harness)
+    traces = {"r1": _swap_trace("model-a"), "r2": _swap_trace("model-b", budgets=10)}
+    result = _swap(harness, tmp_path, endpoints, traces=traces)
+    failed = [c for c in result.checks if not c.ok]
+    assert [c.name for c in failed] == ["both runs had the same budgets"]
+    assert failed[0].detail == "[{'run_generations': 8}, {'run_generations': 10}]"
+
+
+def test_a_swap_at_the_same_base_url_is_not_counted_for_ac08(harness, tmp_path):
+    """AC08 (spec 0.29): another model behind the same base URL is not a second endpoint."""
+    endpoints = {
+        "external": harness.ExternalEndpoint("https://api.one.invalid/v1", "model-a", 32768),
+        "external-second": harness.ExternalEndpoint("https://api.one.invalid/v1", "model-b", 32768),
+    }
+    result = _swap(harness, tmp_path, endpoints)
+    assert result.status == "passed", result.to_json_object()
+    assert result.name == "external_model_swap" and result.acceptance == ("RM18",)
+    assert result.observations["different_base_urls"] is False
+
+
+def test_a_second_external_model_adds_a_swap_plan_at_the_same_endpoint(harness):
+    """RM18: a second model at the same base URL still runs, with the first credential."""
     endpoint = harness.ExternalEndpoint(*ENDPOINT_FIELDS)
-    plans = harness.launch_plans(endpoint, {harness.EXTERNAL_KEY_ENV: "k"}, "model-y")
+    second = harness.ExternalEndpoint(endpoint.base_url, "model-y", endpoint.context_limit)
+    plans = harness.launch_plans(endpoint, {harness.EXTERNAL_KEY_ENV: "k"}, second)
     by_name = {plan.name: plan for plan in plans}
-    assert by_name["external-second"].external.model == "model-y"
-    assert by_name["external-second"].external.base_url == endpoint.base_url
+    assert by_name["external-second"].external == second
     assert by_name["external-poisoned"].poisoned and not by_name["external"].poisoned
+
+
+def test_a_second_endpoint_uses_its_own_credential_variable(harness, tmp_path):
+    """AC08: the second provider's key is read from its own variable, never written down."""
+    endpoint = harness.ExternalEndpoint(*ENDPOINT_FIELDS)
+    second = harness.ExternalEndpoint(
+        "https://api.two.invalid/v1", "model-z", 65536, harness.SECOND_EXTERNAL_KEY_ENV
+    )
+    environ = {harness.EXTERNAL_KEY_ENV: "k"}
+    assert "external-second" not in [
+        p.name for p in harness.launch_plans(endpoint, environ, second)
+    ]
+    assert harness.swap_skip_reason(endpoint, second, environ) == (
+        f"{harness.SECOND_EXTERNAL_KEY_ENV} is not set, so the second endpoint cannot be called"
+    )
+    assert harness.swap_skip_reason(endpoint, None, environ) == (
+        "no --second-external-model was given"
+    )
+    (swap,) = harness.not_run_external(endpoint, second, environ=environ)
+    assert swap.reason == harness.swap_skip_reason(endpoint, second, environ)
+    environ[harness.SECOND_EXTERNAL_KEY_ENV] = "second-secret-value"
+    plans = {p.name: p for p in harness.launch_plans(endpoint, environ, second)}
+    plan = plans["external-second"]
+    assert plan.external == second and plan.scenarios == ("external_only",)
+    text = config_text(harness, tmp_path, external=plan.external)
+    assert 'api_key_env = "RELAYMIND_SECOND_EXTERNAL_API_KEY"' in text
+    assert 'base_url = "https://api.two.invalid/v1"' in text
+    assert "second-secret-value" not in text
+    assert "second-secret-value" not in plan.description
+
+
+FIRST_ENDPOINT_ARGS = (
+    "--external-base-url",
+    "https://api.one.invalid/v1",
+    "--external-model",
+    "model-a",
+    "--external-context-limit",
+    "32768",
+)
+SECOND_URL_ARGS = ("--second-external-base-url", "https://api.two.invalid/v1")
+
+
+@pytest.mark.parametrize(
+    "argv,error",
+    [
+        # AC08: a second base URL needs its model and its own context limit.
+        (
+            [*FIRST_ENDPOINT_ARGS, *SECOND_URL_ARGS],
+            "the --second-external options need --second-external-model",
+        ),
+        (
+            ["--second-external-model", "model-b"],
+            "--second-external-model needs the external endpoint options",
+        ),
+        (
+            [*FIRST_ENDPOINT_ARGS, *SECOND_URL_ARGS, "--second-external-model", "model-b"],
+            "--second-external-base-url needs --second-external-context-limit",
+        ),
+        # A missing --external-context-limit gets the go-together error first.
+        (
+            [*FIRST_ENDPOINT_ARGS[:4], "--second-external-model", "model-b"],
+            "go together",
+        ),
+    ],
+)
+def test_the_second_endpoint_options_need_a_model_and_the_first_endpoint(
+    harness, capsys, argv, error
+):
+    """AC08: incomplete endpoint options stop the run with a usage error that names them."""
+    with pytest.raises(SystemExit, match="^2$"):
+        harness.main(["--out", "x.json", *argv])
+    assert error in capsys.readouterr().err
+
+
+def test_one_endpoint_written_two_ways_is_not_a_second_endpoint(harness):
+    """AC08 (spec 0.29): case, a default port, or a trailing slash do not make a second URL."""
+    first = harness.ExternalEndpoint("https://api.one.invalid/v1", "model-a", 32768)
+    for url in ("https://API.one.invalid/v1/", "https://api.one.invalid:443/v1"):
+        second = harness.ExternalEndpoint(url, "model-b", 32768, harness.SECOND_EXTERNAL_KEY_ENV)
+        assert harness.swap_identity(first, second) == ("external_model_swap", ("RM18",))
+        args = harness.argparse.Namespace(
+            second_external_base_url=url,
+            second_external_model="model-b",
+            second_external_context_limit=32768,
+        )
+        assert harness.second_endpoint(args, first).key_env == harness.EXTERNAL_KEY_ENV
+
+
+def test_a_second_base_url_without_its_own_credential_variable_is_not_ac08(harness):
+    """AC08 (spec 0.29): a second endpoint has its own base URL and its own variable."""
+    first = harness.ExternalEndpoint("https://api.one.invalid/v1", "model-a", 32768)
+    shared = harness.ExternalEndpoint("https://api.two.invalid/v1", "model-b", 32768)
+    assert harness.swap_identity(first, shared) == ("external_model_swap", ("RM18",))
+    own = harness.ExternalEndpoint(
+        "https://api.two.invalid/v1", "model-b", 32768, harness.SECOND_EXTERNAL_KEY_ENV
+    )
+    assert harness.swap_identity(first, own) == ("ac08_external_swap", ("AC08", "RM18"))
+
+
+def test_a_swap_that_did_not_run_keeps_the_name_of_its_configuration(harness):
+    """AC08: a same-URL swap not run is external_model_swap, never an AC08 attempt."""
+    endpoint = harness.ExternalEndpoint(*ENDPOINT_FIELDS)
+    same = harness.ExternalEndpoint(endpoint.base_url, "model-y", endpoint.context_limit)
+    names = {r.name for r in harness.not_run_external(endpoint, same, environ={})}
+    assert "external_model_swap" in names and "ac08_external_swap" not in names
+    names = {r.name for r in harness.not_run_external(endpoint, None, environ={})}
+    assert "ac08_external_swap" in names
+
+
+def test_the_second_endpoint_defaults_to_the_first_base_url_limit_and_key(harness):
+    """A second base URL reads its key from its own variable; the same URL keeps the first."""
+    endpoint = harness.ExternalEndpoint(*ENDPOINT_FIELDS)
+    args = harness.argparse.Namespace(
+        second_external_base_url=None,
+        second_external_model="model-b",
+        second_external_context_limit=None,
+    )
+    assert harness.second_endpoint(args, endpoint) == harness.ExternalEndpoint(
+        endpoint.base_url, "model-b", endpoint.context_limit, harness.EXTERNAL_KEY_ENV
+    )
+    args.second_external_base_url = endpoint.base_url
+    assert harness.second_endpoint(args, endpoint).key_env == harness.EXTERNAL_KEY_ENV
+    args.second_external_base_url = "https://api.two.invalid/v1"
+    args.second_external_context_limit = 65536
+    assert harness.second_endpoint(args, endpoint) == harness.ExternalEndpoint(
+        "https://api.two.invalid/v1", "model-b", 65536, harness.SECOND_EXTERNAL_KEY_ENV
+    )
+    args.second_external_model = None
+    assert harness.second_endpoint(args, endpoint) is None
 
 
 def test_only_cut_off_generations_count_as_in_flight(harness):

@@ -38,7 +38,7 @@ import sqlite3
 import threading
 import time
 import uuid
-from collections.abc import Collection, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -252,6 +252,35 @@ class RunRecord:
 
 
 EventDraft = tuple[EventType, str, Mapping[str, Any]]
+
+
+@dataclass(frozen=True)
+class ToolResultView:
+    """The result of a tool.finished event, inline or read back by reference.
+
+    result is None when an offloaded result is not retained (spec 0.30
+    sections 8 and 9); result_ref is None for an inline result.
+    """
+
+    result: Mapping[str, Any] | None
+    result_ref: Mapping[str, Any] | None
+    retained: bool
+
+
+def read_tool_result(
+    payload: Mapping[str, Any], read_artifact: Callable[[str], Any | None] | None = None
+) -> ToolResultView:
+    """The result of a tool.finished payload, stored or exported (RM22).
+
+    read_artifact reads a result stored by reference. Without it (an
+    exported trace has no store), or once the artifact is gone, the
+    result is not retained and only its reference is known.
+    """
+    ref = payload.get("result_ref")
+    result = payload.get("result")
+    if result is None and ref is not None and read_artifact is not None:
+        result = read_artifact(ref["artifact_id"])
+    return ToolResultView(result, ref, result is not None)
 
 
 def utc_iso(moment: datetime) -> str:
@@ -1030,6 +1059,10 @@ class RunStore:
                 "SELECT content FROM artifact_contents WHERE artifact_id = ?", (artifact_id,)
             ).fetchone()
         return None if row is None else json.loads(row["content"])
+
+    def tool_result(self, payload: Mapping[str, Any]) -> ToolResultView:
+        """The result of a tool.finished payload, read back when stored by reference."""
+        return read_tool_result(payload, self.read_artifact)
 
     def add_artifact_ref(
         self,

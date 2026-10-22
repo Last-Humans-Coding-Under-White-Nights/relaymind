@@ -202,6 +202,10 @@ starts its own llama-server.
   external half ran live once through the harness below
   (`--second-external-model`): the same file with only
   `[external_model] model` changed, between two models of one provider.
+  Under spec 0.29 that is not a second compatible endpoint. The AC08
+  external swap ran live with `--second-external-base-url` (#109), from
+  Z.ai international to Zhipu bigmodel.cn, both `glm-4.6`; `EVIDENCE.md`
+  records it.
 
 - AC09 and the request part of AC16, deterministic (issue #22, spec 0.14
   section 7.1): `pytest tests/test_chat_request.py` checks the parameter
@@ -304,7 +308,12 @@ export per setting. With `--external-base-url`, `--external-model`,
 `--external-context-limit`, and `RELAYMIND_EXTERNAL_API_KEY`, three more
 launches run AC02, `parallel_demo`, `external_only`, AC09 and AC10 with
 the `external_only` header, and AC06 through the external model; with
-`--second-external-model` one more launch runs the AC08 external swap.
+`--second-external-model` one more launch runs the external swap. Only a
+second base URL counts for AC08 (spec 0.29): `--second-external-base-url`
+with `--second-external-context-limit`, and the second
+credential in `RELAYMIND_SECOND_EXTERNAL_API_KEY`; the launch file names
+only the variable. A swap at the same base URL is recorded as
+`external_model_swap` (RM18), not as AC08.
 Without them those scenarios are recorded as not run. Every check has an owner: a gateway check is an invariant the code
 keeps whatever the model does, and a model check is a capability. A
 failed model check is a finding, never a pass.
@@ -379,9 +388,10 @@ their results are in [`EVIDENCE.md`](EVIDENCE.md).
 
 - The M3 to M5 scenarios ran live once, on Apple Silicon macOS only,
   with one external provider ([`EVIDENCE.md`](EVIDENCE.md)).
-- AC08 is not closed. The local swap runs live (#90), and the external
-  swap ran live between two models of one provider (#88); a second
-  provider has not been run (#109).
+- AC08 is closed by the live local swap (#90) and the live external
+  swap from Z.ai to bigmodel.cn (#109), but both endpoints are
+  Zhipu's (international and mainland China platforms), so a second
+  vendor's API is not covered.
 - The browser test of the page script (#89) uses model doubles and a
   disposable sandbox. The one live UI session is a run of the harness,
   not a test of the page against live output.

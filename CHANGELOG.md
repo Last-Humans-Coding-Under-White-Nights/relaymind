@@ -58,6 +58,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   machine was available. AC08 stays open: its external swap ran between
   two models of one provider.
 
+- Live AC08 external swap to a second endpoint (#109; RM18, AC08, spec
+  0.29): the live acceptance harness ran with Z.ai international
+  (`https://api.z.ai/api/paas/v4`) and then Zhipu bigmodel.cn
+  (`https://open.bigmodel.cn/api/paas/v4`), both `glm-4.6`, with only the
+  `[external_model]` table changed. The swap passed and every gateway
+  check of the run held; the run is in `docs/EVIDENCE.md`. AC08 is
+  closed. Both endpoints are Zhipu's (international and mainland China
+  platforms), so a second vendor's API is not covered.
 - Second local model artifact and the live AC08 local swap (#90; RM18, AC08,
   spec sections 6 and 12.3): `models/qwen3-0.6b-q4_k_m.manifest.json`
   (Qwen3-0.6B Q4_K_M), generated from the artifact, passed the live
@@ -886,6 +894,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a cold request apart, and the runtime's prefix cache and sampling
   settings recorded. `docs/RELEASE.md` is the release record of
   section 14.
+- Specification 0.29 -> 0.30: the demo UI trace view (section 9;
+  RM22, RM23) reads a tool result stored by reference back from its
+  artifact and marks it as stored by reference, with its size. When
+  the artifact is no longer retained, the operation shows the status
+  of its tool.finished event, the reference, and that the result is
+  not retained, with no result data. Before this, a run whose tool
+  result was over the inline limit could not be shown (KeyError).
+- Specification 0.28 -> 0.29: AC08 defines a second compatible external
+  endpoint (#109; RM18, section 12.3): it has its own base URL, and the
+  launch file names its own credential variable (it may hold the same
+  key when one vendor serves both base URLs); another model behind the
+  same base URL is not one.
+  For the external switch only the external_model table of the launch
+  file changes. The live acceptance harness takes
+  `--second-external-base-url`, `--second-external-model`, and
+  `--second-external-context-limit`, reads the second credential from
+  `RELAYMIND_SECOND_EXTERNAL_API_KEY` (the launch file names only the
+  variable; a second base URL needs its own context limit), and records
+  the swap as `ac08_external_swap` only when the two base URLs differ
+  (ignoring case, a default port, and a final slash) and the second
+  names its own credential variable; any other swap is recorded as
+  `external_model_swap` (RM18) and does not count for AC08. The #88
+  same-URL swap in `docs/EVIDENCE.md` is marked as not AC08.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried

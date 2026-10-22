@@ -21,10 +21,12 @@ from gateway_helpers import (
     text_turn,
     tool_turn,
 )
-from helpers import ACCEPTED_PAYLOAD
+from helpers import ACCEPTED_PAYLOAD, of_type
 from relaymind.adapters import GenerationOptions
 from relaymind.store import RunRecord, RunStore, TraceEvent
 from relaymind.store.trace_event import EventType, validate_trace_event
+from relaymind.ui.render import render_trace
+from relaymind.ui.settings import DataMode, UiSettings
 from relaymind.ui.trace_view import build_trace_view, trace_view_from
 from ui_helpers import (
     DELETE_ANSWER,
@@ -492,3 +494,72 @@ def test_absent_evidence_is_none_never_invented(tmp_path, missing):
         kept[0] = without_original_messages(kept[0])
     view = trace_view_from(record, kept)
     assert view[missing] is None
+
+
+# -- a tool result stored by reference (spec 0.30 sections 8 and 9) -------------------
+
+
+def _offloaded_run(tmp_path):
+    """A local health run whose tool result the store keeps as an artifact (RM22)."""
+    gateway = health_gateway(tmp_path)
+    gateway.store.max_inline_result_bytes = 1
+    outcome = run_to_rest(gateway, execution_mode="local_only")
+    events = gateway.store.events(outcome.run_id)
+    (finished,) = of_type(events, "tool.finished")
+    assert "result" not in finished.payload
+    return gateway, outcome, events, finished.payload["result_ref"]
+
+
+def test_an_offloaded_tool_result_is_read_back_from_its_artifact(tmp_path):
+    """RM22, RM23: the view shows the stored result and that it was stored by reference."""
+    gateway, outcome, _, ref = _offloaded_run(tmp_path)
+    view = view_of(gateway, outcome)
+    (operation,) = view["operations"]
+    assert operation["status"] == "succeeded"
+    assert operation["data"]["status"] == "healthy"
+    assert operation["result_ref"] == ref
+    assert operation["result_retained"] is True
+    html = render_trace(view, UiSettings(mode=DataMode.DOUBLE))
+    assert "stored by reference" in html
+    assert f"{ref['size_bytes']} bytes" in html
+
+
+def test_an_offloaded_result_that_is_not_retained_shows_its_status_and_reference(tmp_path):
+    """RM23: no invented result; the event's status and the reference are shown."""
+    gateway, outcome, events, ref = _offloaded_run(tmp_path)
+    record = gateway.store.get_run(outcome.run_id)
+    for view in (
+        trace_view_from(record, events),
+        trace_view_from(record, events, read_artifact=lambda artifact_id: None),
+    ):
+        (operation,) = view["operations"]
+        assert operation["status"] == "succeeded"
+        assert operation["data"] is None and operation["error"] is None
+        assert operation["result_ref"] == ref
+        assert operation["result_retained"] is False
+        html = render_trace(view, UiSettings(mode=DataMode.DOUBLE))
+        assert "stored by reference" in html and "not retained" in html
+
+
+def test_a_stored_result_is_read_once_per_view(tmp_path):
+    """Spec 0.30 section 9: each distinct artifact is read back once for one view."""
+    gateway, outcome, events, ref = _offloaded_run(tmp_path)
+    reads = []
+
+    def read(artifact_id):
+        reads.append(artifact_id)
+        return gateway.store.read_artifact(artifact_id)
+
+    (finished,) = of_type(events, "tool.finished")
+    record = gateway.store.get_run(outcome.run_id)
+    view = trace_view_from(record, [*events, finished], read_artifact=read)
+    assert [op["result_retained"] for op in view["operations"]] == [True, True]
+    assert reads == [ref["artifact_id"]]
+
+
+def test_an_inline_tool_result_has_no_reference(tmp_path):
+    """RM23: a result kept in its event names no artifact."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway, execution_mode="local_only")
+    (operation,) = view_of(gateway, outcome)["operations"]
+    assert operation["result_ref"] is None and operation["result_retained"] is True
