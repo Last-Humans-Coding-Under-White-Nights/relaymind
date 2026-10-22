@@ -850,6 +850,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   controls are rendered disabled and the page enables them only once it
   holds the approval token, so an early click cannot send a resume without
   it. A replay-mode view is also run in the browser.
+- Specification 0.27 -> 0.28: section 12.2 defines the evaluation
+  (#32, #33; RM25, sections 12.1 to 12.3 and 14). The correctness corpus
+  is `evaluation/corpus.v1.json` with its sandbox seeds, frozen by a
+  SHA-256 digest in `evaluation/corpus.v1.lock.json`; each case names
+  its class, language, fixture seed, permissions, expected route,
+  acceptable tool calls, clarification answer, confirmation decision,
+  expected outcomes, required and forbidden evidence, expected sandbox
+  state, and rubric, and no case repeats a development example. The
+  corpus runner starts a new gateway for every case and mode, so the
+  three modes start from the same fixture snapshot, and the section
+  defines task success, local completion, tool correctness, schema
+  validity, escalation, missed mandatory confirmation, and provider
+  calls over the trace. The latency runner measures the local path over
+  the compatible stream: first transport event and first answer token
+  on the client's clock, first model action and first useful content
+  from the trace, nearest-rank p50 and p95, timeouts and errors kept,
+  a cold request apart, and the runtime's prefix cache and sampling
+  settings recorded. `docs/RELEASE.md` is the release record of
+  section 14.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried
