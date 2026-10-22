@@ -22,8 +22,9 @@ from gateway_helpers import (
     tool_turn,
 )
 from helpers import ACCEPTED_PAYLOAD
-from relaymind.store import RunRecord, TraceEvent
-from relaymind.store.trace_event import validate_trace_event
+from relaymind.adapters import GenerationOptions
+from relaymind.store import RunRecord, RunStore, TraceEvent
+from relaymind.store.trace_event import EventType, validate_trace_event
 from relaymind.ui.trace_view import build_trace_view, trace_view_from
 from ui_helpers import (
     DELETE_ANSWER,
@@ -225,6 +226,44 @@ def test_a_run_stored_before_the_prompt_was_recorded_says_so():
     view = trace_view_from(FRESH_RECORD, [accepted])
 
     assert view["prompt"] is None
+
+
+def test_the_view_carries_the_recorded_answer_options(tmp_path):
+    """RM19, RM23, RM25, spec 0.22 sections 8 and 9: the options shown are the stored ones."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(
+        gateway,
+        final_options=GenerationOptions(max_output_tokens=60, temperature=0.4, top_p=0.9),
+    )
+    view = view_of(gateway, outcome)
+
+    assert view["answer_options"] == {
+        "max_completion_tokens": 60,
+        "temperature": 0.4,
+        "top_p": 0.9,
+    }
+
+
+def test_a_run_without_options_shows_none_not_unrecorded(tmp_path):
+    """Spec 0.22 section 9: an empty record is a run without options."""
+    gateway = health_gateway(tmp_path)
+    view = view_of(gateway, run_to_rest(gateway))
+
+    assert view["answer_options"] == {}
+
+
+def test_a_run_stored_before_the_options_were_recorded_stays_readable(tmp_path):
+    """RM22, spec 0.22 section 8: no answer_options means not recorded, not none."""
+    with RunStore(tmp_path / "runs.sqlite") as store:
+        run_id = store.create_run(
+            "accepted", accepted=(EventType.RUN_ACCEPTED, "gateway", ACCEPTED_PAYLOAD)
+        ).run_id
+        assert "answer_options" not in store.events(run_id)[0].payload
+
+        view = build_trace_view(store, run_id)
+
+    assert view["answer_options"] is None
+    assert view["prompt"] == ACCEPTED_PAYLOAD["original_messages"]
 
 
 # -- escalation and the active model ---------------------------------------------------

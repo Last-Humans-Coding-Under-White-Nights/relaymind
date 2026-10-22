@@ -121,6 +121,30 @@ def _mode(view: Mapping[str, Any]) -> str:
     return f"<p>Requested: {_t(requested)}. Effective: {_t(mode['effective'])}.</p>"
 
 
+_OPTION_LABELS = (
+    ("max_completion_tokens", "Token budget"),
+    ("temperature", "Temperature"),
+    ("top_p", "Top p"),
+)
+
+
+def _answer_options(view: Mapping[str, Any]) -> str:
+    options = view["answer_options"]
+    if options is None:
+        return _NONE.format(
+            "Not recorded: this run was stored before answer options were recorded."
+        )
+    if not options:
+        return _NONE.format("No answer options were requested.")
+    return (
+        "<p>"
+        + " ".join(
+            f"{label}: {_t(options[name])}." for name, label in _OPTION_LABELS if name in options
+        )
+        + "</p>"
+    )
+
+
 def _models(view: Mapping[str, Any]) -> str:
     active = view["active_model"]
     head = f"<p>Active model: <strong>{_t(active) if active else 'none yet'}</strong></p>"
@@ -317,6 +341,7 @@ def render_trace(view: Mapping[str, Any], settings: UiSettings) -> str:
     sections: Sequence[str] = (
         _section("Original prompt", _prompt(view), "prompt"),
         _section("Execution mode", _mode(view), "mode"),
+        _section("Answer options", _answer_options(view), "options"),
         _section("Models", _models(view), "models"),
         _section("Skill and route", _skill_and_route(view), "skill"),
         _section("Tool proposals", _proposals(view), "proposals"),
