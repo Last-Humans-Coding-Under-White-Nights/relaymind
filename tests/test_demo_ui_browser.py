@@ -1,0 +1,291 @@
+"""The demo UI page script, run in a real browser (RM23, RM11, RM21, RM12, RM25, #89).
+
+Spec 0.27 section 9 (Page script test). The page (``app.js``) runs
+against the real gateway app over model doubles and a disposable
+sandbox; no live model output is used (section 13). Each test checks
+what the page sent to the native endpoints, what it showed, and that
+the data mode label is visible on every view.
+"""
+
+from datetime import UTC, datetime
+
+import pytest
+
+pytest.importorskip("playwright")
+from playwright.sync_api import expect  # noqa: E402
+
+from browser_helpers import browser_page, chat_run_id, open_ui, served  # noqa: E402
+from gateway_helpers import (  # noqa: E402
+    STAGING_OK,
+    build_gateway,
+    clarify_turn,
+    health_tail,
+    route_turn,
+    text_turn,
+    tool_turn,
+)
+from helpers import FakeClock  # noqa: E402
+from relaymind.orchestrator.routing_cache import RoutingCache  # noqa: E402
+from ui_helpers import (  # noqa: E402
+    DELETE_ANSWER,
+    DELETE_PROMPT,
+    HEALTH_PROMPT,
+    database_ids,
+    delete_gateway,
+    external_health_turns,
+    health_gateway,
+    timed_gateway,
+)
+
+WORKFLOW = "health-and-diagnostic-checklist"
+
+
+def start_from_page(page, prompt, mode="auto"):
+    page.fill("#prompt", prompt)
+    page.select_option("#mode", mode)
+    page.click("#run-form button[type=submit]")
+
+
+def trace(page, state=None):
+    selector = ".trace" + (f'[data-state="{state}"]' if state else "")
+    return page.locator("#traces " + selector).first
+
+
+def assert_mode_label_on_every_view(page, mode="DOUBLE"):
+    """RM23: the shell label and the label of each trace in view are visible."""
+    labels = page.locator(".mode-label")
+    assert labels.count() == 1 + page.locator(".trace").count()
+    for index in range(labels.count()):
+        expect(labels.nth(index)).to_be_visible()
+        expect(labels.nth(index)).to_contain_text(mode)
+
+
+def waiting_input_gateway(tmp_path):
+    return timed_gateway(
+        tmp_path,
+        [clarify_turn(), route_turn("check-service-health"), *health_tail()],
+        external_turns=[],
+    )
+
+
+def test_open_a_run_by_id_shows_the_label_and_escapes_once(tmp_path):
+    """RM23, RM12: the opened trace has the mode label and each value is escaped once."""
+    gateway = health_gateway(tmp_path)
+    hostile = 'Is staging-api up? Fish & <b>chips</b> "ok" <img src=x onerror=alert(1)>'
+    with served(gateway) as (base, token), browser_page() as (page, calls):
+        run_id = chat_run_id(base, token, hostile)
+        open_ui(page, base, token)
+        assert_mode_label_on_every_view(page)
+        page.fill("#open-id", run_id)
+        page.click("#open-form button[type=submit]")
+        expect(trace(page, "completed")).to_be_visible()
+        assert_mode_label_on_every_view(page)
+        shown = page.locator(".trace .prompt q").inner_text()
+        assert shown == hostile  # not &amp;amp; or &lt; (nothing escaped twice)
+        assert page.locator(".trace b, .trace img").count() == 0
+        assert STAGING_OK in page.locator(".trace .answer").inner_text()
+    assert calls == []  # opening a run only reads
+
+
+def test_the_recorded_answer_options_are_shown(tmp_path):
+    """RM23, RM25, spec 0.22: the page shows the stored answer options of a run."""
+    gateway = health_gateway(tmp_path)
+    with served(gateway) as (base, token), browser_page() as (page, _):
+        run_id = chat_run_id(base, token, HEALTH_PROMPT, max_completion_tokens=60)
+        open_ui(page, base, token)
+        page.fill("#open-id", run_id)
+        page.click("#open-form button[type=submit]")
+        expect(page.locator(".trace .options")).to_contain_text("Token budget: 60.")
+        assert_mode_label_on_every_view(page)
+
+
+def test_a_clarification_is_answered_through_the_native_resume_endpoint(tmp_path):
+    """RM05, RM21, AC03: the answer goes to resume with the version the trace carried."""
+    gateway = waiting_input_gateway(tmp_path)
+    before = datetime.now(UTC)
+    with served(gateway) as (base, token), browser_page() as (page, calls):
+        open_ui(page, base, token)
+        start_from_page(page, "Is the service healthy?")
+        waiting = trace(page, "waiting_input")
+        expect(waiting).to_be_visible()
+        assert_mode_label_on_every_view(page)
+        # RM25: the browser time of the submission is shown as the browser's clock.
+        note = waiting.locator('[data-slot="submitted"]')
+        expect(note).to_contain_text("You submitted the request (browser clock): ")
+        stamp = note.inner_text().rsplit(": ", 1)[1]
+        submitted = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        assert before <= submitted <= datetime.now(UTC)
+        version = int(waiting.get_attribute("data-state-version"))
+        run_id = waiting.get_attribute("data-run-id")
+
+        waiting.locator('[data-action="answer"] input').fill("staging-api")
+        waiting.locator('[data-action="answer"] button').click()
+        expect(trace(page, "completed")).to_be_visible()
+        assert_mode_label_on_every_view(page)
+        expect(page.locator(".trace .answer")).to_contain_text(STAGING_OK)
+        expect(page.locator(".trace .clarification")).to_contain_text("staging-api")
+    resume = [c for c in calls if c["path"].endswith("/resume")]
+    assert resume == [
+        {
+            "path": f"/relay/v1/runs/{run_id}/resume",
+            "body": {"expected_version": version, "input": "staging-api"},
+        }
+    ]
+
+
+def test_approve_goes_to_the_native_endpoint_and_runs_the_mutation_once(tmp_path):
+    """RM11, RM21, AC05: approve carries the approval ID, the token, and the version."""
+    gateway = delete_gateway(tmp_path, text_turn(DELETE_ANSWER), text_turn(DELETE_ANSWER))
+    with served(gateway) as (base, token), browser_page() as (page, calls):
+        open_ui(page, base, token)
+        start_from_page(page, DELETE_PROMPT)
+        waiting = trace(page, "waiting_confirmation")
+        expect(waiting).to_be_visible()
+        approve = waiting.locator('[data-action="approve"]')
+        expect(approve).to_be_enabled()  # the page read the token once
+        assert_mode_label_on_every_view(page)
+        ids = (
+            approve.get_attribute("data-run-id"),
+            approve.get_attribute("data-approval-id"),
+            int(approve.get_attribute("data-expected-version")),
+        )
+        approve.click()
+        expect(trace(page, "completed")).to_be_visible()
+        assert_mode_label_on_every_view(page)
+        expect(page.locator(".trace .confirmation")).to_contain_text("approved")
+    (resume,) = [c for c in calls if c["path"].endswith("/resume")]
+    run_id, approval_id, version = ids
+    assert resume["path"] == f"/relay/v1/runs/{run_id}/resume"
+    body = resume["body"]
+    assert body.pop("token")  # a non-empty token; its value is single use
+    assert body == {"expected_version": version, "approval_id": approval_id, "approve": True}
+    assert "demo-orders-db" not in database_ids(gateway)
+
+
+def test_deny_goes_to_the_native_endpoint_and_mutates_nothing(tmp_path):
+    """RM11, RM21, AC05: deny resumes with approve false; the database stays."""
+    gateway = delete_gateway(tmp_path)
+    with served(gateway) as (base, token), browser_page() as (page, calls):
+        open_ui(page, base, token)
+        start_from_page(page, DELETE_PROMPT)
+        waiting = trace(page, "waiting_confirmation")
+        deny = waiting.locator('[data-action="deny"]')
+        expect(deny).to_be_enabled()
+        deny.click()
+        expect(trace(page, "cancelled")).to_be_visible()
+        assert_mode_label_on_every_view(page)
+        expect(page.locator(".trace .confirmation")).to_contain_text("denied")
+    (resume,) = [c for c in calls if c["path"].endswith("/resume")]
+    assert resume["body"]["approve"] is False and resume["body"]["token"]
+    assert "demo-orders-db" in database_ids(gateway)
+
+
+def test_a_waiting_run_is_cancelled_through_the_native_cancel_endpoint(tmp_path):
+    """RM14, RM17, AC12: cancel carries the version the trace was rendered for."""
+    gateway = waiting_input_gateway(tmp_path)
+    with served(gateway) as (base, token), browser_page() as (page, calls):
+        open_ui(page, base, token)
+        start_from_page(page, "Is the service healthy?")
+        waiting = trace(page, "waiting_input")
+        expect(waiting).to_be_visible()
+        run_id = waiting.get_attribute("data-run-id")
+        version = int(waiting.get_attribute("data-state-version"))
+        waiting.locator('[data-action="cancel"]').click()
+        expect(trace(page, "cancelled")).to_be_visible()
+        assert_mode_label_on_every_view(page)
+        assert page.locator("[data-action]").count() == 0  # no controls on a finished run
+    assert [c for c in calls if c["path"].endswith("/cancel")] == [
+        {"path": f"/relay/v1/runs/{run_id}/cancel", "body": {"expected_version": version}}
+    ]
+
+
+def test_the_comparison_runs_both_modes_and_shows_the_label_in_each_arm(tmp_path):
+    """RM23, RM25: the page posts the messages only and shows both arms and their timestamps."""
+    gateway = timed_gateway(
+        tmp_path,
+        [route_turn("check-service-health"), *health_tail()],
+        external_turns=external_health_turns(),
+    )
+    with (
+        served(gateway, fixtures=gateway.sandbox) as (base, token),
+        browser_page() as (page, calls),
+    ):
+        open_ui(page, base, token)
+        page.fill("#prompt", HEALTH_PROMPT)
+        page.click("#compare")
+        arms = page.locator("#comparison .arm")
+        expect(arms).to_have_count(2)
+        expect(arms.nth(0).locator(":scope > h2")).to_have_text("auto: completed")
+        expect(arms.nth(1).locator(":scope > h2")).to_have_text("external_only: completed")
+        expect(page.locator("#comparison .trace")).to_have_count(2)
+        assert_mode_label_on_every_view(page)
+        for index in range(2):
+            expect(arms.nth(index).locator('[data-slot="submitted"]')).to_contain_text(
+                "browser clock"
+            )
+    assert calls == [
+        {
+            "path": "/ui/comparisons",
+            "body": {"messages": [{"role": "user", "content": HEALTH_PROMPT}]},
+        }
+    ]
+
+
+def test_the_parallel_workflow_shows_branch_and_synthesis_actors(tmp_path):
+    """RM15, RM23, AC14: the page lists each stage as its own actor."""
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn(WORKFLOW), tool_turn("get_service_health", service="staging-api")],
+        external_turns=[
+            text_turn("1. Check the upstream dependencies."),
+            text_turn(
+                "Observation: staging-api is healthy (checked at 2026-10-20T02:58:00Z).\n\n"
+                "Diagnostic checklist (draft, not log-backed):\n- Check the upstream dependencies."
+            ),
+        ],
+        enabled_workflows={WORKFLOW},
+    )
+    with served(gateway) as (base, token), browser_page() as (page, _):
+        open_ui(page, base, token)
+        start_from_page(page, "Run the health checklist for staging-api.", "parallel_demo")
+        expect(trace(page, "completed")).to_be_visible()
+        rows = page.locator(".trace .workflow tr[data-branch]")
+        expect(rows).to_have_count(3)
+        text = page.locator(".trace .workflow").inner_text()
+        for branch in ("local_health", "external_checklist", "synthesis"):
+            assert branch in text
+        assert_mode_label_on_every_view(page)
+
+
+def test_a_cached_route_is_shown_as_the_routing_cache_mechanism(tmp_path):
+    """RM24, RM23: the second run's route comes from the cache and the page says so."""
+    cache = RoutingCache(clock=FakeClock().monotonic)
+    gateway = timed_gateway(
+        tmp_path,
+        [route_turn("check-service-health"), *health_tail(), *health_tail()],
+        external_turns=[],
+        routing_cache=cache,
+    )
+    with served(gateway) as (base, token), browser_page() as (page, _):
+        open_ui(page, base, token)
+        start_from_page(page, HEALTH_PROMPT)
+        expect(page.locator(".trace[data-state=completed]")).to_have_count(1)
+        assert "mechanism routing_cache" not in page.locator(".trace .skill").inner_text()
+        start_from_page(page, HEALTH_PROMPT)
+        expect(page.locator(".trace[data-state=completed]")).to_have_count(2)
+        newest = page.locator("#traces .trace").first  # the newest run is prepended
+        expect(newest.locator(".skill")).to_contain_text("mechanism routing_cache")
+        assert_mode_label_on_every_view(page)
+    assert cache.counters()["hits"] == 1
+
+
+def test_the_label_follows_the_declared_mode(tmp_path):
+    """RM23: a live-declared UI shows LIVE in the shell and in the trace."""
+    gateway = health_gateway(tmp_path)
+    with served(gateway, mode="live") as (base, token), browser_page() as (page, _):
+        run_id = chat_run_id(base, token, HEALTH_PROMPT)
+        open_ui(page, base, token)
+        page.fill("#open-id", run_id)
+        page.click("#open-form button[type=submit]")
+        expect(trace(page, "completed")).to_be_visible()
+        assert_mode_label_on_every_view(page, "LIVE")

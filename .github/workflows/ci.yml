@@ -25,6 +25,10 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]"
 
+      # The browser test of the demo UI page script (#89) needs Chromium.
+      - name: Install browser
+        run: playwright install --with-deps chromium
+
       - name: Lint
         run: ruff check .
 

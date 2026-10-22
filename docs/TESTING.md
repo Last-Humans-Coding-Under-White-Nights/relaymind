@@ -142,8 +142,17 @@ itself, with the manifest's SHA-256; any other file fails the run.
   no controls and no model call, and the comparison: fixtures reset
   before each run (a spy and a real sandbox), runs one after the other,
   waiting runs cancelled with nothing mutated, and the refusals. The page
-  script (`app.js`) is not run by an automated browser test; no live run
-  is recorded for the UI.
+  script (`app.js`) is run in a real browser by
+  `pytest tests/test_demo_ui_browser.py` (#89, spec 0.27): Playwright
+  Chromium drives the page against the real app on a loopback socket over
+  model doubles. It opens a run by ID, answers a clarification, approves,
+  denies, cancels a waiting run, and runs the comparison; it asserts the
+  native calls and their values, the data mode label in the shell and in
+  every trace, single escaping, the shown browser timestamp, the answer
+  options, the parallel workflow actors, and a routing cache route. Install
+  the browser once with `playwright install chromium`; a machine without
+  it fails the test. CI installs it on ubuntu, macOS, and Windows. No live
+  run is recorded for the UI.
 
 - AC08, deterministic: `pytest tests/test_ac08_model_substitution.py`
   runs one managed scenario (a local skill and two local tools, a local
@@ -244,9 +253,8 @@ itself, with the manifest's SHA-256; any other file fails the run.
   does not satisfy a live-demo requirement (spec section 13).
 - AC08 is not closed: only one local artifact is qualified, so the swap
   to a second qualified local model cannot run.
-- The demo UI page script (`src/relaymind/ui/static/app.js`) is not run
-  by an automated browser test; the tests cover the server contract it
-  relies on.
+- The browser test of the page script (#89) uses model doubles and a
+  disposable sandbox; it is not a live UI session (#88).
 - The parallel workflow (#30, AC14) is tested with model doubles only
   (`tests/test_parallel_workflow.py`): both branches and the synthesis,
   branch attribution in the trace and the UI, provenance of an
