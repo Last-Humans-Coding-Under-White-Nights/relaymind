@@ -17,7 +17,10 @@ the missing input it answers, and the non-negative integer waited_ms
 from the monotonic clock (spec 0.6 section 8; RM12, RM25), run.completed
 and run.failed give model_calls as an array of identified calls and
 external_calls, active_ms, and waiting_ms as non-negative
-integers (section 8, 12.1), cache.hit names the originating version,
+integers (section 8, 12.1), handoff.started names the reason code, the
+external model, the selected skill (or null), the completed operation
+IDs, the allowed tools, and the measured external request (RM13),
+cache.hit names the originating version,
 and skill.loaded names the skill, its version, and its content hash
 (RM06). Timestamps are UTC; elapsed_ms
 comes from a monotonic clock (RM25).
@@ -264,13 +267,47 @@ def _check_answered_payload(payload: Mapping[str, Any]) -> None:
         raise TraceEventError("'waited_ms' must be a non-negative integer")
 
 
+# Spec section 8: how the external request was measured (RM13).
+_REQUEST_METHODS = ("tokenizer", "utf8_bytes")
+_REQUEST_FIELDS = ("size", "limit", "method")
+
+
 def _check_handoff_payload(payload: Mapping[str, Any]) -> None:
-    """The completed operations a handoff carries (spec 0.9 section 8; RM13, RM14)."""
-    if "operation_ids" not in payload:
-        raise TraceEventError("handoff.started payload needs 'operation_ids'")
-    ids = payload["operation_ids"]
-    if not _is_array(ids) or not all(_is_text(operation_id) for operation_id in ids):
-        raise TraceEventError("'operation_ids' must be an array of non-blank strings")
+    """The section 8 handoff.started fields that are not plain text (RM13, RM14).
+
+    The selected skill (name, version, content_hash) or null, the
+    completed operations the envelope carries, the allowed tools, and
+    the measured external request.
+    """
+    for key in ("skill", "operation_ids", "allowed_tools", "request"):
+        if key not in payload:
+            raise TraceEventError(f"handoff.started payload needs '{key}'")
+    skill = payload["skill"]
+    if skill is not None and not (
+        isinstance(skill, Mapping)
+        and set(skill) == set(_SKILL_OFFERED_FIELDS)
+        and all(_is_text(skill[key]) for key in _SKILL_OFFERED_FIELDS)
+    ):
+        raise TraceEventError(
+            f"'skill' must be null or an object with exactly a non-blank"
+            f" {', '.join(_SKILL_OFFERED_FIELDS)}"
+        )
+    for key in ("operation_ids", "allowed_tools"):
+        values = payload[key]
+        if not _is_array(values) or not all(_is_text(value) for value in values):
+            raise TraceEventError(f"'{key}' must be an array of non-blank strings")
+    request = payload["request"]
+    if not (
+        isinstance(request, Mapping)
+        and set(request) == set(_REQUEST_FIELDS)
+        and _is_count(request["size"], 0)
+        and _is_count(request["limit"], 1)
+        and request["method"] in _REQUEST_METHODS
+    ):
+        raise TraceEventError(
+            "'request' must be an object with exactly a non-negative integer size,"
+            f" a positive integer limit, and a method of {' or '.join(_REQUEST_METHODS)}"
+        )
 
 
 def _check_result_reference(payload: Mapping[str, Any]) -> None:

@@ -94,14 +94,25 @@ REQUIRED_PAYLOAD = {
     # Spec 0.6 section 8: the redacted resume input, the input it
     # answers, and the monotonic waiting time (RM25).
     "clarification.answered": {"input": "staging-api", "missing": "service", "waited_ms": 1200},
-    # Spec 0.9 section 8 (RM13): the RM04 reason, the external model, and
-    # the completed operations the handoff envelope carries.
+    # Spec 0.9 section 8 (RM13): the RM04 reason, the external model, the
+    # selected skill (or null), the completed operations the handoff
+    # envelope carries, the allowed tools, and the measured request.
     "handoff.started": {
         "reason_code": "complex_skill",
         "model": "external-model",
+        "skill": {
+            "name": "investigate-performance",
+            "version": "0.1.1",
+            "content_hash": "sha256:ab12",
+        },
         "operation_ids": ["op_1"],
+        "allowed_tools": ["get_metrics", "get_recent_logs"],
+        "request": {"size": 1200, "limit": 32768, "method": "utf8_bytes"},
     },
 }
+
+# A non-blank string in the published schema: at least one non-space character.
+TEXT = {"type": "string", "pattern": "\\S"}
 
 # Payload keys whose published schema is not plain non-blank text.
 # Spec 0.6 section 8: clarification.required carries the clarify
@@ -123,13 +134,26 @@ NON_TEXT_PAYLOAD = {
     },
     "clarification.answered": {"waited_ms": {"type": "integer", "minimum": 0}},
     "handoff.started": {
-        "operation_ids": {"type": "array", "items": {"type": "string", "pattern": "\\S"}}
+        "skill": {
+            "type": ["object", "null"],
+            "properties": {key: TEXT for key in ("name", "version", "content_hash")},
+            "required": ["name", "version", "content_hash"],
+            "additionalProperties": False,
+        },
+        "operation_ids": {"type": "array", "items": TEXT},
+        "allowed_tools": {"type": "array", "items": TEXT},
+        "request": {
+            "type": "object",
+            "properties": {
+                "size": {"type": "integer", "minimum": 0},
+                "limit": {"type": "integer", "minimum": 1},
+                "method": {"enum": ["tokenizer", "utf8_bytes"]},
+            },
+            "required": ["size", "limit", "method"],
+            "additionalProperties": False,
+        },
     },
 }
-
-
-# A non-blank string in the published schema: at least one non-space character.
-TEXT = {"type": "string", "pattern": "\\S"}
 
 
 def with_changes(**changes):
@@ -598,8 +622,79 @@ SAMPLE_EVENTS.update(
         "handoff-integer-operation": terminal_with("handoff.started", operation_ids=[5]),
         "handoff-blank-reason": terminal_with("handoff.started", reason_code=" "),
         "handoff-blank-model": terminal_with("handoff.started", model=" "),
+        "handoff-no-skill": terminal_with("handoff.started", skill=None),
+        "handoff-skill-text": terminal_with("handoff.started", skill="investigate-performance"),
+        "handoff-skill-without-hash": terminal_with(
+            "handoff.started", skill={"name": "a", "version": "1"}
+        ),
+        "handoff-skill-blank-version": terminal_with(
+            "handoff.started", skill={"name": "a", "version": " ", "content_hash": "sha256:a"}
+        ),
+        "handoff-skill-extra-field": terminal_with(
+            "handoff.started",
+            skill={"name": "a", "version": "1", "content_hash": "sha256:a", "body": "x"},
+        ),
+        "handoff-no-tools": terminal_with("handoff.started", allowed_tools=[]),
+        "handoff-text-tools": terminal_with("handoff.started", allowed_tools="get_metrics"),
+        "handoff-blank-tool": terminal_with("handoff.started", allowed_tools=[" "]),
+        "handoff-tokenizer-request": terminal_with(
+            "handoff.started", request={"size": 0, "limit": 1, "method": "tokenizer"}
+        ),
+        "handoff-request-unknown-method": terminal_with(
+            "handoff.started", request={"size": 1, "limit": 2, "method": "guess"}
+        ),
+        "handoff-request-negative-size": terminal_with(
+            "handoff.started", request={"size": -1, "limit": 2, "method": "utf8_bytes"}
+        ),
+        "handoff-request-zero-limit": terminal_with(
+            "handoff.started", request={"size": 0, "limit": 0, "method": "utf8_bytes"}
+        ),
+        "handoff-request-float-size": terminal_with(
+            "handoff.started", request={"size": 1.5, "limit": 2, "method": "utf8_bytes"}
+        ),
+        "handoff-request-boolean-limit": terminal_with(
+            "handoff.started", request={"size": 1, "limit": True, "method": "utf8_bytes"}
+        ),
+        "handoff-request-without-method": terminal_with(
+            "handoff.started", request={"size": 1, "limit": 2}
+        ),
+        "handoff-request-extra-field": terminal_with(
+            "handoff.started",
+            request={"size": 1, "limit": 2, "method": "utf8_bytes", "tokens": 1},
+        ),
+        "handoff-request-text": terminal_with("handoff.started", request="1200"),
     }
 )
+
+
+HANDOFF_ACCEPTED = ("handoff-no-skill", "handoff-no-tools", "handoff-tokenizer-request")
+
+
+def test_the_handoff_started_payload_names_skill_tools_and_request():
+    """RM13, RM14, RM22, AC02, section 8: handoff.started records the skill
+    (name, version, content_hash) or null, the allowed tools, and the
+    measured external request (size, limit, method). A payload of another
+    shape is rejected at write time, by the key it breaks."""
+    for name in HANDOFF_ACCEPTED:
+        validate_trace_event(SAMPLE_EVENTS[name])
+    for name, key in (
+        ("handoff-skill-text", "skill"),
+        ("handoff-skill-without-hash", "skill"),
+        ("handoff-skill-blank-version", "skill"),
+        ("handoff-skill-extra-field", "skill"),
+        ("handoff-text-tools", "allowed_tools"),
+        ("handoff-blank-tool", "allowed_tools"),
+        ("handoff-request-unknown-method", "request"),
+        ("handoff-request-negative-size", "request"),
+        ("handoff-request-zero-limit", "request"),
+        ("handoff-request-float-size", "request"),
+        ("handoff-request-boolean-limit", "request"),
+        ("handoff-request-without-method", "request"),
+        ("handoff-request-extra-field", "request"),
+        ("handoff-request-text", "request"),
+    ):
+        with pytest.raises(TraceEventError, match=key):
+            validate_trace_event(SAMPLE_EVENTS[name])
 
 
 def validator_accepts(data):
