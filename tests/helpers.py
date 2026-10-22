@@ -333,3 +333,11 @@ def run_script(name: str, *args) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
     )
+
+
+class StuckAdapter(ScriptedAdapter):
+    """Model double whose generations never end (for timeouts)."""
+
+    async def generate(self, request):
+        await asyncio.sleep(3600)
+        yield  # pragma: no cover

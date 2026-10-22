@@ -50,7 +50,7 @@ def parse_runtime_log(text: str) -> dict[str, Any]:
     loading = None
     for line in text.splitlines():
         kept = False
-        if (match := _THREADS.search(line)) and facts["n_threads"] is None:
+        if facts["n_threads"] is None and (match := _THREADS.search(line)):
             facts["n_threads"] = int(match.group(1))
             kept = True
         if match := _SLOTS.search(line):

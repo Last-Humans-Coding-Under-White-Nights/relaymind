@@ -163,6 +163,14 @@ _TOOLS: dict[str, tuple[SideEffect, Callable[["SandboxDataService", dict[str, An
 }
 
 DEMO_TOOL_NAMES: frozenset[str] = frozenset(_TOOLS)
+MUTATING_DEMO_TOOLS: frozenset[str] = frozenset(
+    name for name, (side_effect, _) in _TOOLS.items() if side_effect is SideEffect.MUTATING
+)
+# The caller permission each demo tool needs (RM08).
+DEMO_TOOL_PERMISSIONS: dict[str, str] = {
+    name: MUTATE_PERMISSION if name in MUTATING_DEMO_TOOLS else READ_PERMISSION
+    for name in sorted(_TOOLS)
+}
 
 # The argument that names what a mutating tool changes (RM11, section 9).
 _CONFIRMATION_TARGETS: dict[str, str] = {"delete_demo_database": "database_id"}
@@ -463,9 +471,7 @@ def register_demo_tools(registry: ToolRegistry, service: SandboxDataService) -> 
                 timeout_seconds=MAX_TOOL_TIMEOUT_SECONDS,
                 side_effect=side_effect,
                 handler=lambda args, call=call: call(service, args),
-                required_permission=(
-                    MUTATE_PERMISSION if side_effect is SideEffect.MUTATING else READ_PERMISSION
-                ),
+                required_permission=DEMO_TOOL_PERMISSIONS[name],
                 # RM11, section 9: a confirmation binds the database ID.
                 confirmation_target=_CONFIRMATION_TARGETS.get(name),
             )

@@ -24,6 +24,7 @@ from relaymind.evaluation.corpus import (
     corpus_digest,
     development_prompts,
     load_corpus,
+    lock_document,
     parse_corpus,
 )
 from relaymind.tools.sandbox import SandboxDataService
@@ -214,3 +215,8 @@ def test_a_chinese_case_must_name_an_english_case():
     zh["english_case"] = "missing-01"
     with pytest.raises(CorpusError, match="english_case"):
         parse_corpus(doc, seed_dir=SEEDS)
+
+
+def test_the_lock_file_is_the_lock_document_of_the_corpus(corpus):
+    """The lock names the corpus, its version, the digest, and each seed's digest."""
+    assert json.loads(LOCK.read_text("utf-8")) == lock_document(corpus, "corpus.v1.json")

@@ -33,6 +33,7 @@ import asyncio
 import json
 import os
 import random
+import shutil
 import sys
 import tempfile
 import time
@@ -152,13 +153,14 @@ async def _stream(api: harness.Api, prompt: str, sample: dict[str, Any]) -> None
         sample["http_status"] = response.status_code
         sample["run_id"] = response.headers.get(RUN_ID_HEADER)
         async for line in response.aiter_lines():
+            # Once the first token is seen, the rest is only drained (no parsing in the timing).
+            if sample["first_answer_token_ms"] is not None:
+                continue
             if not line.startswith("data: ") or line == "data: [DONE]":
                 continue
             chunk = json.loads(line[len("data: ") :])
-            for choice in chunk.get("choices", []):
-                content = (choice.get("delta") or {}).get("content")
-                if content and sample["first_answer_token_ms"] is None:
-                    sample["first_answer_token_ms"] = _elapsed_ms(started)
+            if any((c.get("delta") or {}).get("content") for c in chunk.get("choices", [])):
+                sample["first_answer_token_ms"] = _elapsed_ms(started)
     sample["completion_ms"] = _elapsed_ms(started)
 
 
@@ -321,7 +323,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         "finished_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "prompts": {
             "file": "evaluation/latency_prompts.v1.json",
-            "sha256": canonical_digest(json.loads(PROMPTS.read_text("utf-8"))),
+            "sha256": canonical_digest(prompts),
             "language": "en",
         },
         "design": {
@@ -362,7 +364,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     harness.write_json(out, document, work=work)
     report = render_latency_markdown(summary, title=f"Latency benchmark: {out.stem}")
     out.with_suffix(".md").write_text(report, encoding="utf-8")
-    harness.shutil.rmtree(work, ignore_errors=True)
+    shutil.rmtree(work, ignore_errors=True)
     return document
 
 

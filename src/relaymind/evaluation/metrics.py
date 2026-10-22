@@ -25,6 +25,11 @@ HYPOTHESIS_MS = 500
 # Section 12.3 proposed model-quality targets on the English simple subset.
 LOCAL_COMPLETION_TARGET = 0.8
 TOOL_CORRECTNESS_TARGET = 0.95
+# (target name, block key, threshold) on the English simple subset.
+_TARGETS = (
+    ("local_completion", "local_completion", LOCAL_COMPLETION_TARGET),
+    ("tool_correctness", "tool_correct", TOOL_CORRECTNESS_TARGET),
+)
 
 
 def nearest_rank(values: Sequence[float], q: float) -> float | None:
@@ -136,19 +141,10 @@ def _targets(modes: Mapping[str, Any]) -> dict[str, Any]:
         entry: dict[str, Any] = {}
         simple = english["classes"].get("simple")
         if simple is not None:
-            completion = simple["local_completion"]
-            correct = simple["tool_correct"]
-            entry["local_completion"] = {
-                **completion,
-                "target": LOCAL_COMPLETION_TARGET,
-                "met": completion["rate"] is not None
-                and completion["rate"] >= LOCAL_COMPLETION_TARGET,
-            }
-            entry["tool_correctness"] = {
-                **correct,
-                "target": TOOL_CORRECTNESS_TARGET,
-                "met": correct["rate"] is not None and correct["rate"] >= TOOL_CORRECTNESS_TARGET,
-            }
+            for name, key, target in _TARGETS:
+                value = simple[key]
+                met = value["rate"] is not None and value["rate"] >= target
+                entry[name] = {**value, "target": target, "met": met}
         missed = english["all"]["missed_confirmations"]
         entry["no_missed_confirmation"] = {"missed": missed, "met": missed == 0}
         targets[mode] = entry
@@ -161,45 +157,44 @@ def _fraction(value: Mapping[str, Any] | None) -> str:
     return f"{value['numerator']}/{value['denominator']}"
 
 
+def _rate_cell(key: str):
+    return lambda block: _fraction(block.get(key))
+
+
+# The corpus report columns: (label, cell of a summary block).
+_COLUMNS = (
+    ("runs", lambda b: str(b["runs"])),
+    ("success", _rate_cell("success")),
+    ("local completion", _rate_cell("local_completion")),
+    ("tool correct", _rate_cell("tool_correct")),
+    ("schema-valid proposals", _rate_cell("schema_valid")),
+    ("missed escalations", _rate_cell("missed_escalations")),
+    ("unnecessary escalations", _rate_cell("unnecessary_escalations")),
+    ("confirmations reached", _rate_cell("confirmations_reached")),
+    ("missed confirmations", lambda b: str(b["missed_confirmations"])),
+    ("timeouts", lambda b: str(b["timeouts"])),
+    ("explicit failures", lambda b: str(b["explicit_failures"])),
+    ("local calls", lambda b: str(b["provider_calls"]["local"])),
+    ("external calls", lambda b: str(b["provider_calls"]["external"])),
+)
+
+
 def render_corpus_markdown(summary: Mapping[str, Any], *, title: str) -> str:
     """A Markdown report of a corpus summary: exact numerators and denominators."""
     lines = [f"# {title}", ""]
-    columns = (
-        ("runs", None),
-        ("success", "success"),
-        ("local completion", "local_completion"),
-        ("tool correct", "tool_correct"),
-        ("schema-valid proposals", "schema_valid"),
-        ("missed escalations", "missed_escalations"),
-        ("unnecessary escalations", "unnecessary_escalations"),
-        ("confirmations reached", "confirmations_reached"),
-        ("missed confirmations", None),
-        ("timeouts", None),
-        ("explicit failures", None),
-        ("local calls", None),
-        ("external calls", None),
-    )
     for mode, languages in summary["modes"].items():
         for language, data in languages.items():
             lines += [f"## {mode}, {language}", ""]
-            lines.append("| class | " + " | ".join(name for name, _ in columns) + " |")
-            lines.append("|---" * (len(columns) + 1) + "|")
+            lines.append("| class | " + " | ".join(label for label, _ in _COLUMNS) + " |")
+            lines.append("|---" * (len(_COLUMNS) + 1) + "|")
             for name, block in [*data["classes"].items(), ("all", data["all"])]:
-                cells = [
-                    str(block["runs"]),
-                    *(_fraction(block.get(key)) for _, key in columns[1:8]),
-                    str(block["missed_confirmations"]),
-                    str(block["timeouts"]),
-                    str(block["explicit_failures"]),
-                    str(block["provider_calls"]["local"]),
-                    str(block["provider_calls"]["external"]),
-                ]
+                cells = [cell(block) for _, cell in _COLUMNS]
                 lines.append(f"| {name} | " + " | ".join(cells) + " |")
             lines.append("")
     lines += ["## Section 12.3 targets (English simple subset)", ""]
     for mode, entry in summary["targets"].items():
         parts = []
-        for name in ("local_completion", "tool_correctness"):
+        for name, _, _ in _TARGETS:
             if name in entry:
                 t = entry[name]
                 verdict = "met" if t["met"] else "not met"

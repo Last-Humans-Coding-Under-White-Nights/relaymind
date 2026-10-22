@@ -11,12 +11,14 @@ corpus cases.
 
 import json
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from relaymind.canonical import canonical_digest
+from relaymind.schema_util import check_closed_fields, check_schema_version
+from relaymind.tools.sandbox import DEMO_TOOL_NAMES, MUTATE_PERMISSION, READ_PERMISSION
 
 CLASSES = ("simple", "complex", "ambiguous", "mutation", "adversarial")
 ENGLISH_CLASS_SIZES = {"simple": 12, "complex": 10, "ambiguous": 6, "mutation": 6, "adversarial": 6}
@@ -24,47 +26,42 @@ MODES = ("auto", "external_only", "local_only")
 LANGUAGES = ("en", "zh")
 ROUTES = ("local", "external", "clarify")
 OUTCOMES = ("completed", "failed", "cancelled")
-PERMISSIONS = ("demo.read", "demo.mutate")
+PERMISSIONS = (READ_PERMISSION, MUTATE_PERMISSION)
 DECISIONS = ("approve", "deny")
-DEMO_TOOLS = frozenset(
-    {
-        "get_service_health",
-        "get_latest_deployment",
-        "get_incident_counts",
-        "get_metrics",
-        "get_recent_logs",
-        "list_demo_databases",
-        "delete_demo_database",
-    }
-)
 # An argument pattern value that accepts any value.
 ANY_VALUE = "*"
 
-_DOCUMENT_FIELDS = frozenset(
-    {"schema_version", "corpus", "version", "frozen_on", "note", "chinese_review", "cases"}
+_DOCUMENT_FIELDS = (
+    "schema_version",
+    "corpus",
+    "version",
+    "frozen_on",
+    "note",
+    "chinese_review",
+    "cases",
 )
-# The JSON field name of each Case attribute.
-_CASE_FIELDS = {
-    "id": "case_id",
-    "class": "case_class",
-    "language": "language",
-    "best_effort": "best_effort",
-    "english_case": "english_case",
-    "prompt": "prompt",
-    "fixture": "fixture",
-    "permissions": "permissions",
-    "expected_route": "expected_route",
-    "required_calls": "required_calls",
-    "allowed_calls": "allowed_calls",
-    "clarification_answer": "clarification_answer",
-    "confirmation": "confirmation",
-    "expected_outcomes": "expected_outcomes",
-    "required_evidence": "required_evidence",
-    "forbidden_evidence": "forbidden_evidence",
-    "expected_databases": "expected_databases",
-    "expect_clarification": "expect_clarification",
-    "rubric": "rubric",
-}
+# The JSON fields of a case.
+_CASE_FIELDS = (
+    "id",
+    "class",
+    "language",
+    "best_effort",
+    "english_case",
+    "prompt",
+    "fixture",
+    "permissions",
+    "expected_route",
+    "required_calls",
+    "allowed_calls",
+    "clarification_answer",
+    "confirmation",
+    "expected_outcomes",
+    "required_evidence",
+    "forbidden_evidence",
+    "expected_databases",
+    "expect_clarification",
+    "rubric",
+)
 
 
 class CorpusError(ValueError):
@@ -95,6 +92,11 @@ class Case:
     expect_clarification: bool
     rubric: str
 
+    @property
+    def acceptable_calls(self) -> list[dict[str, Any]]:
+        """Every call the case accepts: the required groups' calls and the allowed ones."""
+        return [p for group in self.required_calls for p in group] + list(self.allowed_calls)
+
 
 @dataclass(frozen=True)
 class Corpus:
@@ -118,9 +120,8 @@ def load_corpus(path: Path, *, seed_dir: Path) -> Corpus:
 
 def parse_corpus(document: Mapping[str, Any], *, seed_dir: Path) -> Corpus:
     """Check the corpus against the section 12.2 contract and read its seeds."""
-    _check_fields("corpus", document, _DOCUMENT_FIELDS, required=_DOCUMENT_FIELDS)
-    if document["schema_version"] != 1:
-        raise CorpusError("corpus schema_version must be 1")
+    _check_fields("corpus", document, _DOCUMENT_FIELDS)
+    check_schema_version(document["schema_version"], 1, CorpusError)
     seeds: dict[str, dict[str, Any]] = {}
     cases = []
     for raw in document["cases"]:
@@ -174,13 +175,11 @@ def development_prompts(skills_root: Path, *, extra: Iterable[str] = ()) -> set[
 # -- checks -----------------------------------------------------------------------------
 
 
-def _check_fields(where: str, data: object, allowed, *, required) -> None:
-    if not isinstance(data, Mapping):
-        raise CorpusError(f"{where} must be an object")
-    if unknown := sorted(set(data) - set(allowed)):
-        raise CorpusError(f"{where} has unknown field(s): {', '.join(unknown)}")
-    if missing := sorted(set(required) - set(data)):
-        raise CorpusError(f"{where} has missing field(s): {', '.join(missing)}")
+def _check_fields(where: str, data: object, fields: Sequence[str]) -> Mapping[str, Any]:
+    try:
+        return check_closed_fields(data, fields, CorpusError, kind=where)
+    except CorpusError as exc:
+        raise CorpusError(f"{where}: {exc}") from None
 
 
 def _strings(where: str, value: object, choices=None) -> tuple[str, ...]:
@@ -202,8 +201,8 @@ def _pattern(where: str, value: object) -> str:
 
 
 def _call(where: str, value: object) -> dict[str, Any]:
-    _check_fields(where, value, {"tool", "arguments"}, required={"tool", "arguments"})
-    if value["tool"] not in DEMO_TOOLS:
+    _check_fields(where, value, ("tool", "arguments"))
+    if value["tool"] not in DEMO_TOOL_NAMES:
         raise CorpusError(f"{where}: unknown tool {value['tool']!r}")
     if not isinstance(value["arguments"], Mapping):
         raise CorpusError(f"{where}: arguments must be an object")
@@ -211,7 +210,7 @@ def _call(where: str, value: object) -> dict[str, Any]:
 
 
 def _parse_case(raw: object, seeds: Mapping[str, Any]) -> Case:
-    _check_fields("case", raw, _CASE_FIELDS, required=_CASE_FIELDS)
+    _check_fields("case", raw, _CASE_FIELDS)
     where = f"case {raw['id']}"
     if raw["class"] not in CLASSES:
         raise CorpusError(f"{where}: class must be one of {', '.join(CLASSES)}")

@@ -19,7 +19,7 @@ import httpx
 import pytest
 
 from gateway_helpers import clarify_turn, health_tail, route_turn
-from helpers import ScriptedAdapter, load_script_module
+from helpers import ScriptedAdapter, StuckAdapter, load_script_module
 from launcher_helpers import make_artifact
 from relaymind.launcher import build_app, load_config
 
@@ -181,12 +181,7 @@ def test_an_unexpected_outcome_is_recorded_as_an_error(bench, tmp_path):
 
 
 def test_a_request_without_a_response_in_time_is_a_timeout(bench, tmp_path):
-    class Stuck(ScriptedAdapter):
-        async def generate(self, request):
-            await asyncio.sleep(3600)
-            yield  # pragma: no cover
-
-    api, _ = serve(bench, tmp_path, Stuck())
+    api, _ = serve(bench, tmp_path, StuckAdapter())
     sample = measure(bench, api, "Is staging-api healthy?", timeout=0.5)
     assert sample["timed_out"] is True and sample["error"] == "timeout"
     assert sample["first_answer_token_ms"] is None

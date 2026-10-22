@@ -23,7 +23,7 @@ from gateway_helpers import (
     text_turn,
     tool_turn,
 )
-from helpers import ScriptedAdapter, load_script_module
+from helpers import ScriptedAdapter, StuckAdapter, load_script_module
 from launcher_helpers import make_artifact
 from relaymind.launcher import build_app, load_config
 
@@ -41,8 +41,11 @@ def corpus(runner):
     return runner.load_frozen_corpus()
 
 
-def serve(runner, tmp_path, case, local_turns, *, external_turns=None):
-    """The launcher's app from the runner's config for a case; returns an Api."""
+def serve(runner, tmp_path, case, local, *, external_turns=None):
+    """The launcher's app from the runner's config for a case; returns an Api.
+
+    local is the local model double, or its scripted turns.
+    """
     manifest, artifact = make_artifact(tmp_path)
     endpoint = runner.harness.ExternalEndpoint("https://api.example.invalid/v1", "model-x", 32768)
     path = tmp_path / "relaymind.toml"
@@ -63,7 +66,9 @@ def serve(runner, tmp_path, case, local_turns, *, external_turns=None):
     if external_turns is not None:
         external = ScriptedAdapter(turns=external_turns, locality="external")
     launched = build_app(
-        config, local_adapter=ScriptedAdapter(turns=local_turns), external_adapter=external
+        config,
+        local_adapter=local if isinstance(local, ScriptedAdapter) else ScriptedAdapter(turns=local),
+        external_adapter=external,
     )
     return runner.harness.Api(
         "http://127.0.0.1",
@@ -201,33 +206,7 @@ def test_a_complex_case_in_local_only_fails_explicitly(runner, corpus, tmp_path)
 
 def test_a_run_that_does_not_rest_is_a_timeout(runner, corpus, tmp_path):
     case = corpus.case("simple-01")
-
-    class Stuck(ScriptedAdapter):
-        async def generate(self, request):
-            await asyncio.sleep(3600)
-            yield  # pragma: no cover
-
-    manifest, artifact = make_artifact(tmp_path)
-    path = tmp_path / "relaymind.toml"
-    path.write_text(
-        runner.case_config(
-            case,
-            work=tmp_path / "work",
-            manifest=manifest,
-            artifact=artifact,
-            local_url="http://127.0.0.1:8033",
-            port=8099,
-        ),
-        "utf-8",
-    )
-    config = load_config(path)
-    launched = build_app(config, local_adapter=Stuck())
-    api = runner.harness.Api(
-        "http://127.0.0.1",
-        launched.app.state.application_token,
-        sandbox_dir=config.sandbox_dir,
-        transport=httpx.ASGITransport(app=launched.app),
-    )
+    api, _ = serve(runner, tmp_path, case, StuckAdapter())
 
     async def go():
         try:

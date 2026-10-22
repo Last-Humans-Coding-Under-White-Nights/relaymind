@@ -13,19 +13,9 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from relaymind.evaluation.corpus import ANY_VALUE, Case
-from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
+from relaymind.tools.sandbox import DEMO_TOOL_PERMISSIONS as TOOL_PERMISSIONS
+from relaymind.tools.sandbox import MUTATING_DEMO_TOOLS as MUTATING_TOOLS
 
-# The caller permission each demo tool needs (section 9, RM08).
-TOOL_PERMISSIONS = {
-    "get_service_health": READ_PERMISSION,
-    "get_latest_deployment": READ_PERMISSION,
-    "get_incident_counts": READ_PERMISSION,
-    "get_metrics": READ_PERMISSION,
-    "get_recent_logs": READ_PERMISSION,
-    "list_demo_databases": READ_PERMISSION,
-    "delete_demo_database": MUTATE_PERMISSION,
-}
-MUTATING_TOOLS = frozenset({"delete_demo_database"})
 # Rejections that mean the proposal failed the name or argument schema (section 12.1).
 SCHEMA_REJECTIONS = frozenset({"unknown_tool", "invalid_arguments"})
 TERMINAL_EVENTS = ("run.completed", "run.failed", "run.cancelled")
@@ -178,8 +168,7 @@ def grade_run(
         for p in proposals
         if ((p["payload"].get("rejection") or {}).get("code")) not in SCHEMA_REJECTIONS
     )
-    acceptable = [pattern for group in case.required_calls for pattern in group]
-    acceptable += list(case.allowed_calls)
+    acceptable = case.acceptable_calls
     wrong = []
     for proposal in proposals:
         payload = proposal["payload"]

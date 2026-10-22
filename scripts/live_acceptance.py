@@ -77,6 +77,8 @@ from relaymind.adapters.manifest import (  # noqa: E402
     load_manifest,
     verify_artifact,
 )
+from relaymind.evaluation.grading import answer_text as answer_of  # noqa: E402
+from relaymind.evaluation.grading import of_type, terminal_event  # noqa: E402
 from relaymind.skills.predicates import health_status_preserved  # noqa: E402
 from relaymind.stats import AdapterIdentity, GenerationStats, export_stats  # noqa: E402
 from relaymind.store import RunStore  # noqa: E402
@@ -401,10 +403,6 @@ class Api:
 # -- reading a trace --------------------------------------------------------------------
 
 
-def of_type(events: Iterable[Mapping[str, Any]], event_type: str) -> list[Mapping[str, Any]]:
-    return [e for e in events if e["event_type"] == event_type]
-
-
 def started_tools(
     events: Iterable[Mapping[str, Any]], tool_name: str | None = None
 ) -> list[Mapping[str, Any]]:
@@ -413,10 +411,6 @@ def started_tools(
         for e in of_type(events, "tool.started")
         if tool_name is None or e["payload"]["tool_name"] == tool_name
     ]
-
-
-def answer_of(events: Iterable[Mapping[str, Any]]) -> str:
-    return "".join(e["payload"]["text"] for e in of_type(events, "answer.delta"))
 
 
 def route_of(events: Iterable[Mapping[str, Any]]) -> dict[str, Any] | None:
@@ -466,13 +460,6 @@ def in_flight_calls(events: Sequence[Mapping[str, Any]]) -> list[str]:
         if call_id not in finished or (error or {}).get("code") in CUT_OFF_CODES:
             calls.append(call_id)
     return calls
-
-
-def terminal_event(events: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
-    for event in reversed(events):
-        if event["event_type"] in ("run.completed", "run.failed", "run.cancelled"):
-            return event
-    return None
 
 
 def generation_records(
@@ -2117,8 +2104,6 @@ def application_revision() -> dict[str, Any]:
 
 def run_live(args: argparse.Namespace) -> dict[str, Any]:
     runtime = check_runtime(Path(args.manifest))
-    manifest_path, manifest, artifact = runtime.manifest_path, runtime.manifest, runtime.artifact
-    banner = runtime.banner
     application = application_revision()
     external = None
     if args.external_base_url:
@@ -2156,8 +2141,8 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
             config.write_text(
                 gateway_config(
                     work=plan_dir,
-                    manifest=manifest_path.resolve(),
-                    artifact=artifact,
+                    manifest=runtime.manifest_path.resolve(),
+                    artifact=runtime.artifact,
                     local_url=local_url,
                     port=_free_port(),
                     routing_cache=plan.routing_cache,
@@ -2200,7 +2185,9 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
             traces.update(_traces(plan_dir / "runs.sqlite3", run_ids))
             for result in plan_results:
                 if result.name == "routing_cache":
-                    stats_files[plan.name] = _cache_stats(plan, result, traces, manifest, stem)
+                    stats_files[plan.name] = _cache_stats(
+                        plan, result, traces, runtime.manifest, stem
+                    )
         results += not_run_external(external, environ=os.environ)
         launched = {plan.name for plan in plans}
         if "external" in launched and "external-second" not in launched:
@@ -2241,7 +2228,7 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
                 "python": platform.python_version(),
             },
             "application": application,
-            "runtime_banner": banner,
+            "runtime_banner": runtime.banner,
             "llama_server": {
                 "argv": runtime.server_argv,
                 "cold_start_seconds": round(cold_start, 3),

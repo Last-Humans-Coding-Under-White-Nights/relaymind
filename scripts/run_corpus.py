@@ -29,6 +29,7 @@ Usage:
 import argparse
 import asyncio
 import os
+import shutil
 import sys
 import tempfile
 import time
@@ -108,8 +109,9 @@ def case_config(case: Case, *, external: harness.ExternalEndpoint | None = None,
 
 
 def _acceptable(case: Case, pending: Mapping[str, Any]) -> bool:
-    patterns = [p for group in case.required_calls for p in group] + list(case.allowed_calls)
-    return any(call_matches(p, pending["tool_name"], pending["arguments"]) for p in patterns)
+    return any(
+        call_matches(p, pending["tool_name"], pending["arguments"]) for p in case.acceptable_calls
+    )
 
 
 async def run_case(api: harness.Api, case: Case, mode: str, *, timeout: float) -> dict[str, Any]:
@@ -120,6 +122,7 @@ async def run_case(api: harness.Api, case: Case, mode: str, *, timeout: float) -
     record: dict[str, Any] = {"run_id": run_id, "timed_out": False, "actions": []}
     deadline = time.monotonic() + timeout
     clarifications = 0
+    view = None
     try:
         while True:
             view = await api.settle(run_id, timeout=max(deadline - time.monotonic(), 0.01))
@@ -161,8 +164,8 @@ async def run_case(api: harness.Api, case: Case, mode: str, *, timeout: float) -
             break
     except TimeoutError:
         record["timed_out"] = True
+        view = await api.view(run_id)
     # A run left waiting (or still running after a timeout) is cancelled, so it rests.
-    view = await api.view(run_id)
     if view["state"] not in harness.TERMINAL:
         await api.cancel(run_id, view["state_version"])
         try:
@@ -311,7 +314,7 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
     harness.write_json(out, document, work=work)
     report = render_corpus_markdown(summary, title=f"Correctness corpus: {out.stem}")
     out.with_suffix(".md").write_text(report, encoding="utf-8")
-    harness.shutil.rmtree(work, ignore_errors=True)
+    shutil.rmtree(work, ignore_errors=True)
     return document
 
 
