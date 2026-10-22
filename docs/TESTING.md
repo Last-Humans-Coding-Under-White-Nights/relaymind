@@ -304,7 +304,12 @@ export per setting. With `--external-base-url`, `--external-model`,
 `--external-context-limit`, and `RELAYMIND_EXTERNAL_API_KEY`, three more
 launches run AC02, `parallel_demo`, `external_only`, AC09 and AC10 with
 the `external_only` header, and AC06 through the external model; with
-`--second-external-model` one more launch runs the AC08 external swap.
+`--second-external-model` one more launch runs the external swap. Only a
+second base URL counts for AC08 (spec 0.29): `--second-external-base-url`
+(with `--second-external-context-limit` if it differs) and the second
+credential in `RELAYMIND_SECOND_EXTERNAL_API_KEY`; the launch file names
+only the variable. A swap at the same base URL is recorded as
+`external_model_swap` (RM18), not as AC08.
 Without them those scenarios are recorded as not run. Every check has an owner: a gateway check is an invariant the code
 keeps whatever the model does, and a model check is a capability. A
 failed model check is a finding, never a pass.
