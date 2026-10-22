@@ -30,7 +30,7 @@ from helpers import (
     make_demo_skills,
     of_type,
 )
-from relaymind.adapters import Completed, TextDelta, ToolCall, Usage
+from relaymind.adapters import Completed, ModelAdapter, TextDelta, ToolCall, Usage
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
 from relaymind.orchestrator.run_state import RunState
@@ -57,9 +57,12 @@ PAYMENTS_ZH = "payments-api 的状态是 unavailable（不可用），检查时�
 
 @dataclass
 class Gateway:
+    """adapter and external are ScriptedAdapter doubles unless the test
+    passed configured models over real adapters (see build_gateway)."""
+
     orchestrator: LocalOrchestrator
-    adapter: ScriptedAdapter
-    external: ScriptedAdapter
+    adapter: ModelAdapter
+    external: ModelAdapter
     store: RunStore
     sandbox: SandboxDataService
     tools: ToolRegistry
@@ -73,7 +76,7 @@ def build_gateway(
     *,
     budgets: LocalBudgets | None = None,
     capabilities=None,
-    input_tokens: int = 800,
+    input_tokens: int | None = None,
     on_generate=None,
     clock: FakeClock | None = None,
     sandbox_clock=None,
@@ -82,13 +85,33 @@ def build_gateway(
     external_turns=None,
     external_capabilities=None,
     skill_roots=None,
+    local_model: ConfiguredModel | None = None,
+    external_model: ConfiguredModel | None = None,
     **options,
 ) -> Gateway:
     """A gateway over a fresh sandbox; options go to LocalOrchestrator.
 
     external_turns scripts the external model (RM13); without it none
     is configured. skill_roots replaces the checked-in demo skills.
+    local_model and external_model replace the model doubles with
+    configured models over real adapters (AC08); gateway.adapter and
+    gateway.external are then those adapters. Scripting a double that a
+    configured model replaces is an error, never silently ignored.
     """
+    if local_model is not None:
+        _reject_double_options(
+            "local_model",
+            turns=turns,
+            capabilities=capabilities,
+            input_tokens=input_tokens,
+            on_generate=on_generate,
+        )
+    if external_model is not None:
+        _reject_double_options(
+            "external_model",
+            external_turns=external_turns,
+            external_capabilities=external_capabilities,
+        )
     clock = clock or FakeClock()
     tools = ToolRegistry(clock=clock)
     sandbox = SandboxDataService(
@@ -104,29 +127,46 @@ def build_gateway(
             predicates=COMPLETION_PREDICATES.keys(),
             workflows=PARALLEL_WORKFLOWS,
         )
-    adapter = ScriptedAdapter(
-        turns=turns, capabilities=capabilities, input_tokens=input_tokens, on_generate=on_generate
-    )
-    external = ScriptedAdapter(
-        turns=external_turns or [], capabilities=external_capabilities, locality="external"
-    )
     store = RunStore(tmp_path / "runs.sqlite3", clock=clock)
+    local = local_model or ConfiguredModel(
+        adapter=ScriptedAdapter(
+            turns=turns,
+            capabilities=capabilities,
+            input_tokens=800 if input_tokens is None else input_tokens,
+            on_generate=on_generate,
+        ),
+        model_id=LOCAL_MODEL_ID,
+    )
+    if external_model is not None:
+        remote, external = external_model, external_model.adapter
+    else:
+        external = ScriptedAdapter(
+            turns=external_turns or [], capabilities=external_capabilities, locality="external"
+        )
+        remote = (
+            None
+            if external_turns is None
+            else ConfiguredModel(adapter=external, model_id=EXTERNAL_MODEL_ID)
+        )
     orchestrator = LocalOrchestrator(
-        ConfiguredModel(adapter=adapter, model_id=LOCAL_MODEL_ID),
+        local,
         skills=skills,
         tools=tools,
         store=store,
         policy=OperatorPolicy(enabled_tools=DEMO_TOOL_NAMES),
         caller=caller or CallerContext(permissions=frozenset({READ_PERMISSION})),
         budgets=budgets or LocalBudgets(),
-        external=(
-            None
-            if external_turns is None
-            else ConfiguredModel(adapter=external, model_id=EXTERNAL_MODEL_ID)
-        ),
+        external=remote,
         **options,
     )
-    return Gateway(orchestrator, adapter, external, store, sandbox, tools, skills, clock)
+    return Gateway(orchestrator, local.adapter, external, store, sandbox, tools, skills, clock)
+
+
+def _reject_double_options(model: str, **options) -> None:
+    """Raise when a test scripts a double that the configured model replaces."""
+    given = sorted(name for name, value in options.items() if value is not None)
+    if given:
+        raise ValueError(f"{model} replaces the model double; drop {', '.join(given)}")
 
 
 def run(gateway: Gateway, prompt: str = "Is staging-api healthy right now?", **options):
@@ -137,6 +177,10 @@ def run(gateway: Gateway, prompt: str = "Is staging-api healthy right now?", **o
 
 def assert_needs_external(gateway: Gateway, outcome, events, reason_code: str) -> None:
     """RM04: the run failed as needs_external with this reason, nothing published."""
+    assert isinstance(gateway.external, ScriptedAdapter), (
+        "assert_needs_external measures external calls on the double; "
+        "this gateway has a configured external adapter"
+    )
     assert outcome.state is RunState.FAILED
     assert outcome.error_code == "needs_external"
     assert outcome.reason_code == reason_code

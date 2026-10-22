@@ -24,6 +24,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- AC08 model substitution test for the orchestrator and skill packages
+  (#49; RM18, AC08, spec section 12.3): one managed scenario (local
+  skill and tools, local budget stop, handoff) runs through the real
+  orchestrator and adapters under two configurations, a second local
+  endpoint and model and a second external endpoint and model, with one
+  skill root and no code change. The traces name their own models and
+  are equal in routing, tool proposals, results, and handoff content.
+  `build_gateway` in the test helpers accepts configured models over
+  real adapters. No live variant: only one local artifact has a
+  manifest, which `docs/TESTING.md` records, so AC08 stays open until a
+  second local artifact is qualified.
 - Failure behavior and error codes (#21; RM04, AC07, AC16 error part; spec
   0.13 section 11): `relaymind.api.errors` holds the error contract, an
   `ApiError` with a stable code, message, and run reference, one status
