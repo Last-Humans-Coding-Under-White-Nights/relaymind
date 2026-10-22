@@ -174,6 +174,15 @@ def test_targets_are_checked_on_the_english_simple_subset():
     assert targets["no_missed_confirmation"] == {"missed": 0, "met": True}
 
 
+def test_refused_proposals_are_counted_by_code():
+    grades = [
+        grade("simple-01", "auto", rejections={"multiple_tool_calls": 2}),
+        grade("simple-02", "auto", rejections={"multiple_tool_calls": 1, "unknown_tool": 1}),
+    ]
+    block = summarize_corpus(grades)["modes"]["auto"]["en"]["all"]
+    assert block["rejections"] == {"multiple_tool_calls": 3, "unknown_tool": 1}
+
+
 def test_a_timeout_counts_in_the_denominator():
     grades = [grade("simple-01", "auto", timed_out=True, success=False, local_completion=False)]
     simple = summarize_corpus(grades)["modes"]["auto"]["en"]["classes"]["simple"]

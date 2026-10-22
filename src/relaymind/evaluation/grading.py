@@ -40,6 +40,7 @@ class RunGrade:
     schema_valid: int
     tool_correct: bool
     wrong_proposals: list[dict[str, Any]]
+    rejections: dict[str, int]
     permissions_ok: bool
     confirmation: str | None
     confirmation_requested: bool
@@ -173,13 +174,18 @@ def grade_run(
         if ((p["payload"].get("rejection") or {}).get("code")) not in SCHEMA_REJECTIONS
     )
     acceptable = case.acceptable_calls
+    # Correctness compares tool and arguments with the case (section 12.2); a
+    # refusal for a gateway rule is recorded apart, by its code.
     wrong = []
+    rejections: dict[str, int] = {}
     for proposal in proposals:
         payload = proposal["payload"]
         tool, arguments = payload["tool_name"], payload.get("arguments") or {}
-        admissible = payload.get("admissible", True) is True
-        if not admissible or not any(call_matches(p, tool, arguments) for p in acceptable):
-            wrong.append({"tool": tool, "arguments": arguments, "admissible": admissible})
+        code = (payload.get("rejection") or {}).get("code")
+        if code is not None:
+            rejections[code] = rejections.get(code, 0) + 1
+        if not any(call_matches(p, tool, arguments) for p in acceptable):
+            wrong.append({"tool": tool, "arguments": arguments, "rejection": code})
     unmatched = [
         group
         for group in case.required_calls
@@ -187,7 +193,6 @@ def grade_run(
             call_matches(pattern, p["payload"]["tool_name"], p["payload"].get("arguments") or {})
             for pattern in group
             for p in proposals
-            if p["payload"].get("admissible", True) is True
         )
     ]
     tool_correct = not wrong and not unmatched
@@ -227,6 +232,7 @@ def grade_run(
         schema_valid=schema_valid,
         tool_correct=tool_correct,
         wrong_proposals=wrong,
+        rejections=rejections,
         permissions_ok=permissions_ok,
         confirmation=case.confirmation,
         confirmation_requested=bool(of_type(events, "confirmation.required")),

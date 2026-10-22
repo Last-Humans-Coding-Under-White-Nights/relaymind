@@ -410,3 +410,23 @@ def test_the_grade_serializes():
     data = grade(make_case(), local_health_trace()).to_json_object()
     assert data["case_id"] == "simple-01" and data["mode"] == "local_only"
     assert data["success"] is True
+
+
+def test_a_correct_proposal_the_gateway_refused_still_matches():
+    """Spec 0.28 section 12.2: correctness compares tool and arguments with the case.
+
+    A proposal refused for a gateway rule (one call per turn) keeps its
+    grade, and the refusal is recorded with its code.
+    """
+    trace = Trace().model(actor="external", model="glm-4.6")
+    trace.propose(
+        "get_service_health",
+        actor="external",
+        rejection="multiple_tool_calls",
+        service="payments-api",
+    )
+    proposal = trace.propose("get_service_health", actor="external", service="payments-api")
+    events = trace.run_tool(proposal, "get_service_health").answer(PAYMENTS, "external").end()
+    g = grade(make_case(), events, mode="external_only")
+    assert g.tool_correct is True
+    assert g.rejections == {"multiple_tool_calls": 1}

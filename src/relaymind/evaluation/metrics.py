@@ -66,6 +66,10 @@ def _block(grades: Sequence[Mapping[str, Any]], routes: Mapping[str, str]) -> di
             entry = tokens.setdefault(model, {"calls": 0, "input_tokens": 0, "output_tokens": 0})
             for key in entry:
                 entry[key] += used[key]
+    rejections: dict[str, int] = {}
+    for g in grades:
+        for code, count in g.get("rejections", {}).items():
+            rejections[code] = rejections.get(code, 0) + count
     block = {
         "runs": len(grades),
         "success": rate(sum(g["success"] for g in grades), len(grades)),
@@ -81,6 +85,7 @@ def _block(grades: Sequence[Mapping[str, Any]], routes: Mapping[str, str]) -> di
             "external": sum(g["external_calls"] for g in grades),
         },
         "tokens": dict(sorted(tokens.items())),
+        "rejections": dict(sorted(rejections.items())),
     }
     if simple:
         block["local_completion"] = rate(
