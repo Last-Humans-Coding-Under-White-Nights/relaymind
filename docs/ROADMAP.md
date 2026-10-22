@@ -216,7 +216,8 @@ Carried forward, not M2 scope:
   `POST /relay/v1/runs/{id}/resume` (section 7.4) is part of the native
   run API in M4 (#25, #26).
 - Waiting runs are kept in process memory. After a restart, they are
-  failed as `interrupted` by restart recovery (#8, M3).
+  failed as `interrupted` by restart recovery (#8, M3), which the
+  service must call once at startup.
 
 Informational, not blocking (spec 0.7: Chinese support is best-effort):
 
@@ -240,6 +241,9 @@ Informational, not blocking (spec 0.7: Chinese support is best-effort):
 - Restart recovery: interrupted runs and unknown outcomes (#8; RM10,
   RM17, section 5), moved here from M2 because it only matters once
   mutations exist. Part of AC12, which closes in M4 together with #29.
+  Implemented with a new gateway over the same store file
+  (`tests/test_restart_recovery.py`, spec 0.11); the startup call that
+  runs it belongs to the API work (#25).
 - Prompt-injection test for tool output and secret redaction (#20;
   RM12).
 - Failure behavior and error codes (#21; RM04, section 11).

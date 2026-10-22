@@ -33,7 +33,7 @@ import sqlite3
 import threading
 import time
 import uuid
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -587,6 +587,21 @@ class RunStore:
             raise RunNotFoundError(f"no run {run_id}")
         return _run_record(row)
 
+    def unfinished_runs(self, terminal_states: Collection[str]) -> list[RunRecord]:
+        """Runs whose state is not terminal, oldest first (section 5 restart recovery).
+
+        The state machine owns which states are terminal, so the caller
+        names them.
+        """
+        marks = ", ".join("?" for _ in terminal_states)
+        with self._lock:
+            self._check_open()
+            rows = self._conn.execute(
+                f"SELECT * FROM runs WHERE state NOT IN ({marks}) ORDER BY created_at, rowid",
+                tuple(terminal_states),
+            ).fetchall()
+        return [_run_record(row) for row in rows]
+
     def active_run_id(self) -> str | None:
         """The run that holds the one active execution slot, if any (section 11)."""
         with self._lock:
@@ -766,14 +781,22 @@ class RunStore:
         )
         return events
 
-    def events(self, run_id: str, *, after_seq: int = 0) -> list[TraceEvent]:
-        """Retained events for a run in seq order, after after_seq."""
+    def events(
+        self, run_id: str, *, after_seq: int = 0, event_type: EventType | None = None
+    ) -> list[TraceEvent]:
+        """Retained events for a run in seq order, after after_seq.
+
+        event_type, when given, keeps only events of that type; the filter
+        runs in SQL, so other payloads are not decoded.
+        """
+        query = "SELECT * FROM events WHERE run_id = ? AND seq > ?"
+        params: tuple[Any, ...] = (run_id, after_seq)
+        if event_type is not None:
+            query += " AND event_type = ?"
+            params += (event_type.value,)
         with self._lock:
             self._check_open()
-            rows = self._conn.execute(
-                "SELECT * FROM events WHERE run_id = ? AND seq > ? ORDER BY seq",
-                (run_id, after_seq),
-            ).fetchall()
+            rows = self._conn.execute(query + " ORDER BY seq", params).fetchall()
         # Rows were validated when they were written.
         return [
             TraceEvent(
@@ -859,18 +882,23 @@ class RunStore:
             ).fetchone()
         return None if row is None else _tool_operation_record(row)
 
-    def tool_operations(self, run_id: str) -> list[dict[str, Any]]:
+    def tool_operations(self, run_id: str, *, status: str | None = None) -> list[dict[str, Any]]:
         """A run's tool operations in record order, decoded as by get_tool_operation.
 
         Section 8 HandoffEnvelope, RM13: a handoff carries the run's
-        completed operations and their structured results. No operations,
-        or no such run, gives an empty list.
+        completed operations and their structured results. status, when
+        given, keeps only operations with that status (restart recovery
+        reads the pending ones). No operations, or no such run, gives an
+        empty list.
         """
+        query = "SELECT * FROM tool_operations WHERE run_id = ?"
+        params: tuple[Any, ...] = (run_id,)
+        if status is not None:
+            query += " AND status = ?"
+            params += (status,)
         with self._lock:
             self._check_open()
-            rows = self._conn.execute(
-                "SELECT * FROM tool_operations WHERE run_id = ? ORDER BY rowid", (run_id,)
-            ).fetchall()
+            rows = self._conn.execute(query + " ORDER BY rowid", params).fetchall()
         return [_tool_operation_record(row) for row in rows]
 
     def _reference_large_result(self, event: TraceEvent) -> TraceEvent:
@@ -1028,6 +1056,26 @@ class RunStore:
         record["created_at"] = _parse(row["created_at"])
         record["expires_at"] = _parse(row["expires_at"])
         return record
+
+    def expire_approvals(self, run_id: str) -> int:
+        """End the run's pending approvals now; return how many were still live (RM11).
+
+        Restart recovery uses it: an approval that is unused and not yet
+        past its expiry gets that expiry moved to the current time, so no
+        token can be consumed, and the record shows when it ended. A used
+        or already expired approval is left as it is, and so is a void one
+        whose run moved past its state version (get_pending_approval).
+        """
+        now = _iso(self.clock.utc_now())
+        with self._write():
+            cursor = self._conn.execute(
+                "UPDATE approvals SET expires_at = ?"
+                " WHERE run_id = ? AND consumed_at IS NULL AND expires_at > ?"
+                " AND EXISTS (SELECT 1 FROM runs WHERE runs.run_id = approvals.run_id"
+                " AND runs.version = approvals.state_version)",
+                (now, run_id, now),
+            )
+        return cursor.rowcount
 
     def consume_approval(
         self,

@@ -43,6 +43,10 @@ def accepted(store):
 def test_terminal_evidence_is_required_at_write_time(kind, missing):
     """RM16/RM22/RM25: dropping required terminal evidence must reject the write."""
     payload = {**TERMINAL, "final_answer_model": "local-model", "error_code": "interrupted"}
+    if kind == "run.failed":
+        # Spec sections 5 and 8: an interrupted run.failed also names the
+        # interrupted state and the settled operations (RM10, RM17).
+        payload |= {"interrupted_state": "local_running", "settled_operations": []}
     del payload[missing]
     with RunStore() as store:
         run_id = accepted(store)

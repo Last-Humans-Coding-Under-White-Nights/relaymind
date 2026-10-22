@@ -60,6 +60,15 @@
       },
       "required": ["call_id", "model", "actor", "purpose"]
     },
+    "settled_operation": {
+      "type": "object",
+      "properties": {
+        "operation_id": {"type": "string", "pattern": "\\S"},
+        "status": {"enum": ["unknown_outcome", "failed"]}
+      },
+      "required": ["operation_id", "status"],
+      "additionalProperties": false
+    },
     "artifact_ref": {
       "type": "object",
       "properties": {
@@ -166,6 +175,18 @@
       }
     },
     {
+      "if": {"properties": {"event_type": {"enum": ["tool.finished"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {"recovered": {"type": "boolean"}},
+            "if": {"properties": {"recovered": {"const": true}}, "required": ["recovered"]},
+            "then": {"properties": {"replayed": {"const": false}}, "required": ["replayed"]}
+          }
+        }
+      }
+    },
+    {
       "if": {"properties": {"event_type": {"enum": ["model.started", "model.finished"]}}, "required": ["event_type"]},
       "then": {
         "properties": {
@@ -206,9 +227,27 @@
               "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}},
               "external_calls": {"type": "integer", "minimum": 0},
               "active_ms": {"type": "integer", "minimum": 0},
-              "waiting_ms": {"type": "integer", "minimum": 0}
+              "waiting_ms": {"type": "integer", "minimum": 0},
+              "interrupted_state": {
+                "enum": [
+                  "accepted",
+                  "routing",
+                  "local_running",
+                  "external_running",
+                  "parallel_running",
+                  "waiting_input",
+                  "waiting_confirmation"
+                ]
+              },
+              "settled_operations": {"type": "array", "items": {"$ref": "#/$defs/settled_operation"}}
             },
-            "required": ["error_code", "model_calls", "external_calls", "active_ms", "waiting_ms"]
+            "required": ["error_code", "model_calls", "external_calls", "active_ms", "waiting_ms"],
+            "if": {"properties": {"error_code": {"const": "interrupted"}}, "required": ["error_code"]},
+            "then": {"required": ["interrupted_state", "settled_operations"]},
+            "dependentSchemas": {
+              "interrupted_state": {"properties": {"error_code": {"const": "interrupted"}}},
+              "settled_operations": {"properties": {"error_code": {"const": "interrupted"}}}
+            }
           }
         }
       }
