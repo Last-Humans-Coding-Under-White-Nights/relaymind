@@ -4,7 +4,7 @@
 tasks with skills and tools. Complex work is transferred to an external model.
 Every routing decision, tool call, and model call is visible in a trace.
 
-Status: **M1 to M4 are closed.** M1 (adapter and protocol
+Status: **M1 to M5 are closed.** M1 (adapter and protocol
 qualification) and M2 (local skill-and-tool loop) have live runs
 recorded in [`docs/EVIDENCE.md`](docs/EVIDENCE.md) for Apple Silicon
 macOS and native x86-64 Windows. M3 (handoff and confirmation) and M4
@@ -15,8 +15,9 @@ local model artifact is qualified. The operator starts the gateway with
 one command, `relaymind serve --config <file>` (see
 [Start the gateway](#start-the-gateway)). Chinese support is best-effort
 (spec 0.7): Chinese live results are recorded but are not a gate. M5
-(parallel workflow and caching) is implemented with model doubles; M6
-(evaluation) is next. See
+(parallel workflow and caching) is closed on deterministic coverage with
+model doubles; its live evidence is #104 in M6 (evaluation), which is
+next. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan and the
 open items, and [`CHANGELOG.md`](CHANGELOG.md) for what has landed so
 far.

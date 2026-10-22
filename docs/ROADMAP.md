@@ -421,6 +421,40 @@ Carried forward, not done in M4:
   the demo UI. Implemented with model doubles; no live run.
 - Closes: AC13, AC14.
 
+Status (2026-10-22): **M5 closed** (PRs #97, #95, #96, #99, #100, #101,
+and #102, spec 0.21 to 0.27). The operator launcher (#87), the recorded
+answer options (#91), the approval resume race (#93), the chat
+disconnect cancel (#92), the parallel workflow (#30), the caching policy
+(#31), and the browser test of the page script (#89) are merged. AC13
+and AC14 pass with model doubles (`tests/test_routing_cache*.py`,
+`tests/test_skill_parse_cache.py`, `tests/test_parallel_workflow.py`);
+[`TESTING.md`](TESTING.md) lists the tests. As in M3 and M4, the
+milestone was closed on deterministic coverage only: no live run of an
+M5 scenario is recorded in [`EVIDENCE.md`](EVIDENCE.md), which is less
+than the rule at the top of this page asks. The live evidence is #104
+in M6.
+
+Carried forward, not done in M5:
+
+- Live runs: the parallel workflow against live models, a cache-on
+  measurement next to the cache-off baseline, and a launcher start with
+  the pinned model on both platforms (#104). No latency figure for the
+  synthesis call and no cache speedup is claimed.
+- The launcher reads the external credential from the environment
+  variable the config file names; it does not read an OS credential
+  store directly (#87).
+- Runs stored before spec 0.22 have no `answer_options`; the store was
+  not migrated, and the reader treats the field as optional (#91).
+- The approval resume race is closed by the single store transaction;
+  no lock refuses a second gateway on the same store file (#93).
+- A chat disconnect during an in-flight write is covered by the native
+  cancel tests only; there is no chat-level test for it and no dedicated
+  disconnect test for the `relaymind-client-tools` alias (#92).
+- The skill parse cache is process-local and used on registry load and
+  `SkillRegistry.reloaded()` only; a running gateway does not watch
+  skill files (#31).
+- The browser test drives Chromium only (#89).
+
 ## M6 — Evaluation
 
 - Correctness corpus: 40 English scenarios, with best-effort Chinese
@@ -481,3 +515,9 @@ listed here so the current order can be traced to its reason.
   the rule at the top of this page asks for. Their live runs, the
   launcher those runs need, and AC08 are carried forward (see the M3
   and M4 status paragraphs); M5 and M6 start from that state.
+- 2026-10-22, M5 closed: the M4 carry-forward items (the launcher #87,
+  the browser test #89, the recorded answer options #91, the chat
+  disconnect cancel #92) and the approval resume race (#93) were done in
+  M5 next to #30 and #31. M5 was closed on deterministic coverage with
+  model doubles, like M3 and M4; its live evidence (#104) joins the M6
+  latency experiment (#33).

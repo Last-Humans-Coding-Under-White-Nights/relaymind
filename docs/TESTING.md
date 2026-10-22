@@ -1,11 +1,13 @@
-# Testing RelayMind (Milestones 1 to 4)
+# Testing RelayMind (Milestones 1 to 5)
 
-How to verify the M1 to M4 deliverables, by hand on macOS and Windows
+How to verify the M1 to M5 deliverables, by hand on macOS and Windows
 and with the automated suites. M1 qualifies the local model runtime and
 the adapters; M2 adds the bounded local loop; M3 adds handoff,
 confirmation, restart recovery, and the error contract; M4 adds the
-gateway's public API and the demo UI (see [`ROADMAP.md`](ROADMAP.md)).
-M3 and M4 are covered by deterministic tests with model doubles only;
+gateway's public API and the demo UI; M5 adds the launcher, the parallel
+workflow, the caches, and the browser test of the page script (see
+[`ROADMAP.md`](ROADMAP.md)). M3 to M5 are covered by deterministic tests
+with model doubles only;
 [What is not covered yet](#what-is-not-covered-yet) lists the gaps. The
 gateway's public API (`/v1/chat/completions`, `/relay/v1/runs`) is
 started with `relaymind serve --config` (see
@@ -251,7 +253,7 @@ itself, with the manifest's SHA-256; any other file fails the run.
 ### What is not covered yet
 
 - No live-model record exists for AC02, AC05, AC06, AC07, AC09, AC10,
-  AC11, or AC12. Every M3 and M4 test above uses model doubles, which
+  AC11, or AC12. Every M3 to M5 test above uses model doubles, which
   does not satisfy a live-demo requirement (spec section 13).
 - AC08 is not closed: only one local artifact is qualified, so the swap
   to a second qualified local model cannot run.
