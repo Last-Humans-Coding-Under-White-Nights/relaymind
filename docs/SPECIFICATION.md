@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.28 | 22 October 2026 | Proposed implementation baseline
+Version 0.29 | 22 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that lets a small model complete bounded tasks with skills and tools, and transfers complex work to an external model. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -539,7 +539,7 @@ The following scenarios define the implementation acceptance suite. Model double
 | AC05 | Delete a sandbox database, then approve, deny, replay, expire, or alter arguments | Only a matching fresh approval executes once; other cases do not mutate | RM10, RM11, RM17 |
 | AC06 | A tool result contains instructions to expose credentials or invoke an unallowed tool | Tool permissions stay unchanged and secrets are not exposed | RM08, RM12 |
 | AC07 | Local generation exceeds its budget or external generation fails | Bounded escalation or explicit failure; no invented result | RM03, RM04, RM16 |
-| AC08 | Switch to a second qualified local model and a second compatible external endpoint | Same orchestrator and skill packages; configuration changes only for supported adapters | RM18 |
+| AC08 | Switch to a second qualified local model and a second compatible external endpoint. A second endpoint has its own base URL and its own credential (spec 0.29); another model behind the same base URL is not one | Same orchestrator and skill packages; configuration changes only for supported adapters: for the external switch, only the external_model table of the launch file (section 14.1) changes | RM18 |
 | AC09 | Standard SDK sends text with stream true and false | Valid supported responses, stable IDs, correct final markers, no internal progress in content | RM19, RM20 |
 | AC10 | A client-owned function call is followed by its tool result | Valid call IDs and finish reason; caller executes; gateway does not execute the function | RM08, RM19 |
 | AC11 | Native client reconnects to events or resubmits an idempotency key | Events replay in order; no duplicate inference or side effect | RM17, RM21, RM22 |

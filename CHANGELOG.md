@@ -886,6 +886,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a cold request apart, and the runtime's prefix cache and sampling
   settings recorded. `docs/RELEASE.md` is the release record of
   section 14.
+- Specification 0.28 -> 0.29: AC08 defines a second compatible external
+  endpoint (#109; RM18, section 12.3): it has its own base URL and its
+  own credential, and another model behind the same base URL is not one.
+  For the external switch only the external_model table of the launch
+  file changes. The live acceptance harness takes
+  `--second-external-base-url`, `--second-external-model`, and
+  `--second-external-context-limit`, reads the second credential from
+  `RELAYMIND_SECOND_EXTERNAL_API_KEY` (the launch file names only the
+  variable), and records the swap as `ac08_external_swap` only when the
+  two base URLs differ; a swap at one base URL is recorded as
+  `external_model_swap` (RM18) and does not count for AC08.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried
