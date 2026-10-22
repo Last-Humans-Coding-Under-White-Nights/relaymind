@@ -1291,21 +1291,21 @@ def same_base_url(a: str, b: str) -> bool:
     return key(a) == key(b)
 
 
+def is_second_endpoint(first: "ExternalEndpoint", second: "ExternalEndpoint") -> bool:
+    """A second compatible endpoint (spec 0.29): its own base URL and credential variable."""
+    return not same_base_url(first.base_url, second.base_url) and first.key_env != second.key_env
+
+
 def swap_identity(
     first: "ExternalEndpoint | None", second: "ExternalEndpoint | None"
 ) -> tuple[str, tuple[str, ...]]:
     """The result name and IDs of the external swap.
 
-    Only a second compatible endpoint counts for AC08 (spec 0.29): its
-    own base URL and its own credential variable. Any other swap is
-    external_model_swap (RM18). Without both endpoints it is the AC08 swap
-    that was not run.
+    Only a second compatible endpoint counts for AC08 (is_second_endpoint).
+    Any other swap is external_model_swap (RM18). Without both endpoints
+    it is the AC08 swap that was not run.
     """
-    if (
-        first is None
-        or second is None
-        or (not same_base_url(first.base_url, second.base_url) and first.key_env != second.key_env)
-    ):
+    if first is None or second is None or is_second_endpoint(first, second):
         return "ac08_external_swap", ("AC08", "RM18")
     return "external_model_swap", ("RM18",)
 
@@ -1385,15 +1385,6 @@ def ac08_external_swap(
         [first.status, second.status],
     )
     return result
-
-
-# The keys gateway_config fills per launch (paths and port), left out of the comparison.
-PER_LAUNCH_KEYS = {
-    "server": ("port",),
-    "store": ("path",),
-    "skills": ("roots",),
-    "sandbox": ("seed", "work_dir"),
-}
 
 
 def _launch_tables(text: str) -> dict[str, Any]:
@@ -1752,6 +1743,21 @@ def _toml(value: object) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+# The keys gateway_config fills per launch (paths and port), left out of the AC08
+# comparison (_launch_tables).
+PER_LAUNCH_KEYS = {
+    "server": ("port",),
+    "store": ("path",),
+    "skills": ("roots",),
+    "sandbox": ("seed", "work_dir"),
+}
+
+
+def _per_launch(table: str, *values: str) -> list[str]:
+    """The lines of one table's per-launch keys, from TOML values in PER_LAUNCH_KEYS order."""
+    return [f"{key} = {value}" for key, value in zip(PER_LAUNCH_KEYS[table], values, strict=True)]
+
+
 def gateway_config(
     *,
     work: Path,
@@ -1776,14 +1782,13 @@ def gateway_config(
     lines = [
         "[server]",
         'host = "127.0.0.1"',
-        f"port = {port}",
+        *_per_launch("server", str(port)),
         "[store]",
-        f"path = {_toml(work / 'runs.sqlite3')}",
+        *_per_launch("store", _toml(work / "runs.sqlite3")),
         "[skills]",
-        f"roots = [{_toml(skill_root)}]",
+        *_per_launch("skills", f"[{_toml(skill_root)}]"),
         "[sandbox]",
-        f"seed = {_toml(seed)}",
-        f"work_dir = {_toml(work / 'sandbox')}",
+        *_per_launch("sandbox", _toml(seed), _toml(work / "sandbox")),
         "[local_model]",
         f"manifest = {_toml(manifest)}",
         f"artifact = {_toml(artifact)}",
@@ -2013,7 +2018,7 @@ def launch_plans(
             routing_cache=True,
         ),
     ]
-    if external is None or not environ.get(EXTERNAL_KEY_ENV):
+    if external_skip_reason(external, environ) is not None:
         return plans
     external_plan = LaunchPlan(
         "external",
@@ -2035,7 +2040,7 @@ def launch_plans(
             poisoned=True,
         )
     )
-    if second is not None and environ.get(second.key_env):
+    if swap_skip_reason(external, second, environ) is None:
         plans.append(
             replace(
                 external_plan,
@@ -2050,11 +2055,31 @@ def launch_plans(
     return plans
 
 
-def swap_not_run_reason(second: ExternalEndpoint | None) -> str:
-    """Why the swap launch did not run beside the external launch."""
+def external_skip_reason(
+    external: ExternalEndpoint | None, environ: Mapping[str, str]
+) -> str | None:
+    """Why the external launches do not run, or None when they run."""
+    if external is None:
+        return "no external endpoint was configured (--external-base-url and friends)"
+    if not environ.get(EXTERNAL_KEY_ENV):
+        return f"{EXTERNAL_KEY_ENV} is not set, so the external endpoint cannot be called"
+    return None
+
+
+def swap_skip_reason(
+    external: ExternalEndpoint | None,
+    second: ExternalEndpoint | None,
+    environ: Mapping[str, str],
+) -> str | None:
+    """Why the external-second launch does not run, or None when it runs."""
+    reason = external_skip_reason(external, environ)
+    if reason is not None:
+        return reason
     if second is None:
         return "no --second-external-model was given"
-    return f"{second.key_env} is not set, so the second endpoint cannot be called"
+    if not environ.get(second.key_env):
+        return f"{second.key_env} is not set, so the second endpoint cannot be called"
+    return None
 
 
 def second_endpoint(
@@ -2062,19 +2087,22 @@ def second_endpoint(
 ) -> ExternalEndpoint | None:
     """The second external endpoint of the options.
 
-    Base URL and context limit default to the first endpoint's. A second
-    base URL reads its credential from its own variable (spec 0.29).
+    Base URL and context limit default to the first endpoint's. Its
+    credential is in its own variable only when it is a second endpoint
+    (is_second_endpoint, spec 0.29); otherwise it keeps the first one's.
     """
     if external is None or not args.second_external_model:
         return None
-    base_url = args.second_external_base_url or external.base_url
     limit = args.second_external_context_limit
-    return ExternalEndpoint(
-        base_url,
+    second = ExternalEndpoint(
+        args.second_external_base_url or external.base_url,
         args.second_external_model,
         external.context_limit if limit is None else limit,
-        external.key_env if same_base_url(base_url, external.base_url) else SECOND_EXTERNAL_KEY_ENV,
+        SECOND_EXTERNAL_KEY_ENV,
     )
+    if is_second_endpoint(external, second):
+        return second
+    return replace(second, key_env=external.key_env)
 
 
 def not_run_external(
@@ -2083,20 +2111,27 @@ def not_run_external(
     *,
     environ: Mapping[str, str],
 ) -> list[Result]:
-    """The scenarios that need a real external endpoint, recorded as not run when there is none."""
-    if external is None:
-        reason = "no external endpoint was configured (--external-base-url and friends)"
-    elif not environ.get(EXTERNAL_KEY_ENV):
-        reason = f"{EXTERNAL_KEY_ENV} is not set, so the external endpoint cannot be called"
-    else:
-        return []
-    return [
-        Result(name, SCENARIOS[name].acceptance, reason=reason, launch=launch)
-        for launch, name in (
-            *(("external", name) for name in EXTERNAL_SCENARIOS),
-            ("external-poisoned", "ac06_managed_logs"),
-        )
-    ] + [Result(*swap_identity(external, second), reason=reason)]
+    """The scenarios that need a real external endpoint, recorded as not run when there is none.
+
+    The external swap is recorded as not run with the reason that kept its
+    launch out of launch_plans (swap_skip_reason).
+    """
+    reason = external_skip_reason(external, environ)
+    skipped = (
+        []
+        if reason is None
+        else [
+            Result(name, SCENARIOS[name].acceptance, reason=reason, launch=launch)
+            for launch, name in (
+                *(("external", name) for name in EXTERNAL_SCENARIOS),
+                ("external-poisoned", "ac06_managed_logs"),
+            )
+        ]
+    )
+    swap_reason = swap_skip_reason(external, second, environ)
+    if swap_reason is not None:
+        skipped.append(Result(*swap_identity(external, second), reason=swap_reason))
+    return skipped
 
 
 def local_prep_skills(work: Path) -> Path:
@@ -2310,9 +2345,6 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
                     )
         results += not_run_external(external, second, environ=os.environ)
         launched = {plan.name for plan in plans}
-        if "external" in launched and "external-second" not in launched:
-            reason = swap_not_run_reason(second)
-            results.append(Result(*swap_identity(external, second), reason=reason))
         swap = {r.launch: r for r in results if r.name == "external_only"}
         if {"external", "external-second"} <= launched:
             # Keep the planned comparison visible even if a prerequisite

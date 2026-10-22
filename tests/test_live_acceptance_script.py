@@ -367,7 +367,9 @@ def test_external_scenarios_need_the_credential_too(harness):
     endpoint = harness.ExternalEndpoint("https://api.example.invalid/v1", "model-x", 32768)
     results = harness.not_run_external(endpoint, environ={})
     assert all(r.status == "not_run" for r in results)
-    assert harness.not_run_external(endpoint, environ={harness.EXTERNAL_KEY_ENV: "k"}) == []
+    (swap,) = harness.not_run_external(endpoint, environ={harness.EXTERNAL_KEY_ENV: "k"})
+    assert swap.name == "ac08_external_swap"
+    assert swap.reason == "no --second-external-model was given"
 
 
 def test_a_tool_result_stored_by_reference_is_read_without_a_crash(harness, tmp_path):
@@ -862,10 +864,14 @@ def test_a_second_endpoint_uses_its_own_credential_variable(harness, tmp_path):
     assert "external-second" not in [
         p.name for p in harness.launch_plans(endpoint, environ, second)
     ]
-    assert harness.swap_not_run_reason(second) == (
+    assert harness.swap_skip_reason(endpoint, second, environ) == (
         f"{harness.SECOND_EXTERNAL_KEY_ENV} is not set, so the second endpoint cannot be called"
     )
-    assert harness.swap_not_run_reason(None) == "no --second-external-model was given"
+    assert harness.swap_skip_reason(endpoint, None, environ) == (
+        "no --second-external-model was given"
+    )
+    (swap,) = harness.not_run_external(endpoint, second, environ=environ)
+    assert swap.reason == harness.swap_skip_reason(endpoint, second, environ)
     environ[harness.SECOND_EXTERNAL_KEY_ENV] = "second-secret-value"
     plans = {p.name: p for p in harness.launch_plans(endpoint, environ, second)}
     plan = plans["external-second"]
