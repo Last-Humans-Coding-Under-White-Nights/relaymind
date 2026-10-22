@@ -758,13 +758,13 @@ def test_confirmation_required_expires_at_is_the_stored_expiry(tmp_path):
 # --- two orchestrators over one store file (#93) --------------------------------------
 
 
-def test_a_second_orchestrator_taking_the_slot_mid_approval_does_not_lose_it(tmp_path):
+def test_a_second_orchestrator_taking_the_slot_mid_approval_does_not_lose_it(tmp_path, monkeypatch):
     """RM10, RM11, RM17, section 5: the slot check and the approval are one store transaction.
 
     Two processes share one store file; the second has its own store
     connection and state machine. It takes the execution slot after the
-    first one's slot check and before its transaction. The approval must survive the 429 and work
-    once the slot is free again.
+    first one's slot check and before its transaction. The approval must
+    survive the 429 and work once the slot is free again.
     """
     first, waiting, _ = waiting_gateway(tmp_path, *APPROVED_TAIL)
     second = RunStateMachine(RunStore(tmp_path / "runs.sqlite3", clock=first.clock))
@@ -779,10 +779,10 @@ def test_a_second_orchestrator_taking_the_slot_mid_approval_does_not_lose_it(tmp
         other["run_id"] = run.run_id
         return answer
 
-    machine.active_run_id = check_then_lose_the_slot
+    monkeypatch.setattr(machine, "active_run_id", check_then_lose_the_slot)
     with pytest.raises(SlotUnavailableError):
         decide(first, waiting)
-    machine.active_run_id = real_active
+    monkeypatch.setattr(machine, "active_run_id", real_active)
 
     assert first.store.get_run(waiting.run_id).state == "waiting_confirmation"
     assert first.store.get_pending_approval(waiting.run_id) is not None
