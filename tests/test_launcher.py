@@ -10,7 +10,7 @@ import pytest
 
 from api_helpers import call
 from gateway_helpers import build_gateway
-from helpers import ACCEPTED_PAYLOAD, REPO_ROOT, ScriptedAdapter
+from helpers import ACCEPTED_PAYLOAD, BASELINE, REPO_ROOT, ScriptedAdapter
 from launcher_helpers import toml_path, write_config
 from relaymind.adapters.chat_completions import ChatCompletionsAdapter
 from relaymind.adapters.llamacpp import LlamaCppAdapter
@@ -139,6 +139,101 @@ def test_unreadable_or_invalid_toml_is_a_launch_error(tmp_path):
     bad.write_text("[server\n")
     with pytest.raises(LaunchError):
         load_config(bad)
+
+
+def test_non_utf8_config_is_a_launch_error(tmp_path):
+    """Section 14.1: an unreadable file is one explicit message, never a traceback."""
+    bad = tmp_path / "bad.toml"
+    bad.write_bytes("[server]\nhost = '127.0.0.1'\n".encode("utf-16"))
+    with pytest.raises(LaunchError, match="cannot read"):
+        load_config(bad)
+
+
+@pytest.mark.parametrize(
+    "extra, word",
+    [
+        ("\n[server]\nport = 70000\n", "port"),
+        ("\n[server]\nport = 0\n", "port"),
+        ("\n[native]\npoll_seconds = 0\n", "poll_seconds"),
+        ("\n[native]\nheartbeat_seconds = -1\n", "heartbeat_seconds"),
+        ("\n[chat]\nmax_completion_tokens = 0\n", "max_completion_tokens"),
+        (EXTERNAL.replace("16000", "-5"), "context_limit"),
+        ("\n[policy]\npermissions = ['demo.read', 'demo.mutatee']\n", "demo.mutatee"),
+    ],
+)
+def test_out_of_range_or_unknown_values_are_refused(tmp_path, extra, word):
+    """Section 14.1, RM03, RM08: a value that cannot work is a startup error, not a run-time one."""
+    with pytest.raises(LaunchError, match=word):
+        load_config(write_config(tmp_path, extra))
+
+
+@pytest.mark.parametrize(
+    "url", ["https://inference.example.com", "http://192.168.1.5:8033", "not a url"]
+)
+def test_local_model_must_be_a_loopback_server(tmp_path, url):
+    """RM01, section 14.1: a remote 'local' model would make the local-first evidence false."""
+    path = write_config(tmp_path)
+    path.write_text(path.read_text() + f"base_url = {url!r}\n")
+    with pytest.raises(LaunchError, match="base_url"):
+        load_config(path)
+
+
+def test_malformed_sandbox_seed_stops_startup(tmp_path):
+    """Section 9, 14.1: a seed that is not JSON is a startup error before the store opens."""
+    seed = tmp_path / "seed.json"
+    seed.write_text("{not json")
+    path = write_config(tmp_path)
+    path.write_text(path.read_text().replace(toml_path(BASELINE), toml_path(seed)))
+    with pytest.raises(LaunchError, match="sandbox"):
+        build_app(load_config(path), **doubles())
+    assert not (tmp_path / "runs.sqlite3").exists()
+
+
+@pytest.mark.parametrize("kind", ["not_a_database", "directory"])
+def test_unusable_run_store_stops_startup(tmp_path, kind):
+    """Section 5, 14.1: a store that cannot open is one explicit message."""
+    store = tmp_path / "runs.sqlite3"
+    if kind == "directory":
+        store.mkdir()
+    else:
+        store.write_bytes(b"this is not a sqlite database" * 100)
+    with pytest.raises(LaunchError, match="run store"):
+        build_app(load_config(write_config(tmp_path)), **doubles())
+
+
+def test_store_is_closed_when_a_later_startup_step_fails(tmp_path, monkeypatch):
+    """Section 14.1: a refused start leaves no open store connection behind."""
+    closed = []
+    original = RunStore.close
+
+    def spy(self):
+        closed.append(1)
+        original(self)
+
+    def boom(self):
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(RunStore, "close", spy)
+    monkeypatch.setattr(LocalOrchestrator, "recover_after_restart", boom)
+    with pytest.raises(RuntimeError):
+        build_app(load_config(write_config(tmp_path)), **doubles())
+    assert closed
+
+
+def test_ipv6_loopback_address_is_printed_as_a_valid_url(tmp_path):
+    """Section 14.1: the printed bind address is a URL a client can use."""
+    path = write_config(tmp_path)
+    path.write_text("[server]\nhost = '::1'\n" + path.read_text())
+    stdout, served = [], []
+    code = main(
+        ["serve", "--config", str(path)],
+        serve_fn=lambda app, *, host, port: served.append(host),
+        stdout=stdout.append,
+        stderr=stdout.append,
+        **doubles(),
+    )
+    assert code == 0
+    assert "Serving on http://[::1]:8080" in stdout
 
 
 def test_app_serves_the_token_protected_endpoints_over_the_wired_gateway(tmp_path):
@@ -273,12 +368,16 @@ def test_startup_error_exits_2_with_one_message_and_no_server(tmp_path):
     assert "Traceback" not in message
 
 
-def test_credentials_are_never_a_command_line_option(tmp_path, capsys):
-    """RM12: the command accepts only --config."""
+@pytest.mark.parametrize("extra", [["--api-key", "sk-x"], ["--api-key=sk-x"], ["sk-x"]])
+def test_credentials_are_never_a_command_line_option(tmp_path, capsys, extra):
+    """RM12, section 14.1: the command accepts only --config and never echoes a refused value."""
     with pytest.raises(SystemExit) as raised:
-        main(["serve", "--config", str(write_config(tmp_path)), "--api-key", "sk-x"])
+        main(["serve", "--config", str(write_config(tmp_path)), *extra])
     assert raised.value.code == 2
-    assert "sk-x" not in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert "sk-x" not in captured.out
+    assert "sk-x" not in captured.err
+    assert "--config" in captured.err
 
 
 def test_missing_external_credential_does_not_stop_startup_or_leak(tmp_path, monkeypatch):
