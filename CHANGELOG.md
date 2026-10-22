@@ -813,6 +813,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   are removed as expired before each lookup and store; an unusable hit is
   counted as a miss; and every route.selected of a cache-enabled run,
   gateway-made ones included, carries the hit or miss label.
+- Specification 0.26 -> 0.27: section 9 requires an automated browser test of
+  the demo UI page script (#89; RM11, RM12, RM21, RM23, RM25, AC03, AC05,
+  AC12). The test runs the page against the app over model doubles and
+  checks the native endpoint calls, the data mode label on every view, single
+  escaping, and the shown browser timestamp. The browser is a development
+  dependency installed in CI on all three platforms.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried
