@@ -119,7 +119,9 @@ def lifecycle(harness, monkeypatch, tmp_path):
         manifest=str(harness.DEFAULT_MANIFEST),
         out=str(tmp_path / "evidence.json"),
         external_base_url=None,
+        second_external_base_url=None,
         second_external_model=None,
+        second_external_context_limit=None,
     )
     return state
 
@@ -210,14 +212,20 @@ def test_planned_swap_is_reported_when_a_prerequisite_scenario_fails(
     lifecycle.args.external_base_url = endpoint.base_url
     lifecycle.args.external_model = endpoint.model
     lifecycle.args.external_context_limit = endpoint.context_limit
-    lifecycle.args.second_external_model = "model-b"
+    second = harness.ExternalEndpoint(
+        "https://second.invalid/v1", "model-b", 8192, harness.SECOND_EXTERNAL_KEY_ENV
+    )
+    lifecycle.args.second_external_base_url = second.base_url
+    lifecycle.args.second_external_model = second.model
+    lifecycle.args.second_external_context_limit = second.context_limit
     monkeypatch.setenv(harness.EXTERNAL_KEY_ENV, "fixture-key")
+    monkeypatch.setenv(harness.SECOND_EXTERNAL_KEY_ENV, "fixture-key")
     monkeypatch.setattr(
         harness,
         "launch_plans",
         lambda *args, **kwargs: [
             harness.LaunchPlan("external", ("external_only",), "First", external=endpoint),
-            harness.LaunchPlan("external-second", ("external_only",), "Second", external=endpoint),
+            harness.LaunchPlan("external-second", ("external_only",), "Second", external=second),
         ],
     )
 

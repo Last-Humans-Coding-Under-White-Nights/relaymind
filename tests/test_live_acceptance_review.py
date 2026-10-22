@@ -9,7 +9,6 @@ import pytest
 
 from helpers import load_script_module
 from test_live_acceptance_script import (
-    _swap_config,
     _swap_result,
     _swap_trace,
 )
@@ -166,8 +165,14 @@ def test_swap_records_missing_admission_evidence(harness, missing):
         _swap_result(harness, "external", "r1"),
         _swap_result(harness, "external-second", "r2"),
         traces=traces,
-        configs={"external": _swap_config("a", 1), "external-second": _swap_config("b", 2)},
-        models={"external": "a", "external-second": "b"},
+        # The admission check ends the comparison before the files are read.
+        configs={"external": "", "external-second": ""},
+        endpoints={
+            "external": harness.ExternalEndpoint("https://one.invalid/v1", "a", 8192),
+            "external-second": harness.ExternalEndpoint(
+                "https://two.invalid/v1", "b", 8192, harness.SECOND_EXTERNAL_KEY_ENV
+            ),
+        },
     )
     assert gateway_failures(result)
 
