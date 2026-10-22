@@ -271,3 +271,113 @@ def test_the_trace_view_shows_a_cached_route_as_gateway_made(tmp_path):
     assert view["route"]["mechanism"] == "routing_cache"
     proposal = of_type(events, "tool.proposed")[0]
     assert view["timing"]["first_model_action_ms"] == proposal.elapsed_ms
+
+
+# -- review findings for #31 ------------------------------------------------------
+
+
+def labeled_route(events):
+    (selected,) = of_type(events, "route.selected")
+    return selected.payload
+
+
+def test_a_bypass_route_of_a_cache_run_is_labeled_a_miss(tmp_path):
+    """RM22, spec 0.26 Labels: every route.selected of a cache run carries hit or miss."""
+    gateway, _, _ = cached_gateway(tmp_path, [], input_tokens=2049)
+    _, events = run(gateway)
+    payload = labeled_route(events)
+    assert payload["mechanism"] == "bypass"
+    assert payload["routing_cache"] == "miss"
+
+
+def test_an_execution_mode_route_of_a_cache_run_is_labeled_a_miss(tmp_path):
+    """RM22, spec 0.26 Labels: the external_only decision is labeled too."""
+    gateway, _, _ = cached_gateway(tmp_path, [])
+    _, events = run(gateway, execution_mode="external_only")
+    payload = labeled_route(events)
+    assert payload["mechanism"] == "execution_mode"
+    assert payload["routing_cache"] == "miss"
+
+
+def test_a_degraded_route_of_a_cache_run_is_labeled_a_miss(tmp_path):
+    """RM22, spec 0.26 Labels: the degraded_mode decision is labeled too."""
+    from gateway_helpers import text_turn
+    from relaymind.adapters import GenerationFailed
+
+    gateway, _, _ = cached_gateway(
+        tmp_path,
+        [[GenerationFailed(code="unreachable", message="no route to host")]],
+        external_turns=[text_turn(STAGING_OK)],
+        degraded_mode=True,
+    )
+    _, events = run(gateway)
+    payload = labeled_route(events)
+    assert payload["mechanism"] == "degraded_mode"
+    assert payload["routing_cache"] == "miss"
+
+
+def test_a_clarification_resume_route_of_a_cache_run_is_labeled_a_miss(tmp_path):
+    """RM22, spec 0.26 Labels: the resumed decision is labeled too."""
+    import asyncio
+
+    gateway, _, _ = cached_gateway(tmp_path, [route_turn(HEALTH), *health_tail()])
+    waiting, _ = run(gateway, "Is the service healthy?")
+    assert waiting.state is RunState.WAITING_INPUT
+    record = gateway.store.get_run(waiting.run_id)
+    asyncio.run(gateway.orchestrator.resume(waiting.run_id, record.version, "staging-api"))
+    selected = of_type(gateway.store.events(waiting.run_id), "route.selected")
+    assert [e.payload["mechanism"] for e in selected] == [
+        "native_function_calling",
+        "clarification_resume",
+    ]
+    assert [e.payload["routing_cache"] for e in selected] == ["miss", "miss"]
+
+
+def test_a_client_owned_route_of_a_cache_run_is_labeled_a_miss(tmp_path):
+    """RM22, spec 0.26 Labels: the client alias decision is labeled too."""
+    from api_helpers import RUN_ID_HEADER, chat, make_app
+    from relaymind.api.chat import ClientToolsChat
+    from relaymind.api.chat_request import CLIENT_TOOLS
+
+    weather = {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "parameters": {
+                "type": "object",
+                "properties": {"city": {"type": "string"}},
+                "required": ["city"],
+                "additionalProperties": False,
+            },
+        },
+    }
+    gateway, _, _ = cached_gateway(
+        tmp_path, [tool_turn("get_weather", call_id="call_w1", city="Oslo")], external_turns=[]
+    )
+    app = make_app(gateway, client_tools=ClientToolsChat(gateway.orchestrator))
+    response = chat(app, prompt="What is the weather in Oslo?", model=CLIENT_TOOLS, tools=[weather])
+    events = gateway.store.events(response.headers[RUN_ID_HEADER])
+    assert events[0].payload["routing_cache"] is True
+    payload = labeled_route(events)
+    assert payload["mechanism"] == "client_owned"
+    assert payload["routing_cache"] == "miss"
+
+
+def test_a_hit_the_gateway_cannot_use_counts_as_a_miss(tmp_path, monkeypatch):
+    """RM24, spec 0.26 Hit: a cached choice that is not a local route is a miss, in the counters."""
+    from relaymind.orchestrator.route_decision import RouteDecisionError
+
+    gateway, cache, _ = cached_gateway(
+        tmp_path, [route_turn(HEALTH), *health_tail(), route_turn(HEALTH), *health_tail()]
+    )
+    run(gateway)
+
+    def refuse(*args, **kwargs):
+        raise RouteDecisionError("the cached skill no longer fits")
+
+    monkeypatch.setattr(gateway.orchestrator.router, "resume_decision", refuse)
+    _, events = run(gateway)
+    assert not of_type(events, "cache.hit")
+    assert labeled_route(events)["routing_cache"] == "miss"
+    counters = cache.counters()
+    assert (counters["hits"], counters["misses"]) == (0, 2)

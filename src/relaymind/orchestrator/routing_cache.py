@@ -7,10 +7,11 @@ never a decision, an answer, or a tool result. The orchestrator checks
 authorization and runs every tool fresh on a hit.
 
 Entries depend on the skills offered and the caller's permissions and
-enabled tools. A lookup under a context that differs from an entry's
-removes that entry at once (invalidation), so a changed skill or
-permission does not wait for the TTL. The key also holds those parts, so
-an entry of another context could never be a hit in any case.
+enabled tools. All entries share one context: a lookup or store under a
+different context removes every entry at once (invalidation), so a
+changed skill or permission does not wait for the TTL. The key also
+holds those parts, so an entry of another context could never be a hit
+in any case.
 """
 
 import time
@@ -20,7 +21,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from relaymind.adapters import Message
+from relaymind.adapters.base import ToolSchema
 from relaymind.canonical import canonical_digest
+from relaymind.orchestrator.router import SYSTEM_PROMPT
 from relaymind.skills import Skill
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry
 from relaymind.tools.registry import SideEffect
@@ -29,8 +32,6 @@ from relaymind.tools.registry import SideEffect
 TTL_SECONDS = 300
 MAX_ENTRIES = 256
 
-# Bumped whenever the routing prompt (router.SYSTEM_PROMPT) changes.
-ROUTING_PROMPT_VERSION = "1"
 # Bumped whenever spec section 10 changes what the key holds or what is eligible.
 POLICY_VERSION = "1"
 
@@ -63,19 +64,51 @@ class CacheHit:
 @dataclass(frozen=True)
 class _Entry:
     route: CachedRoute
-    context: CacheContext
     stored_at: float
 
 
-def routing_cache_key(parts: Mapping[str, Any]) -> str:
-    """The SHA-256 digest of the canonical form of the key parts and the two versions."""
+def _plain(value: Any) -> Any:
+    """A JSON value with read-only mappings and tuples made plain, for canonical_digest."""
+    if isinstance(value, Mapping):
+        return {key: _plain(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_plain(item) for item in value]
+    return value
+
+
+def routing_prompt_version(
+    functions: Sequence[ToolSchema], *, system_prompt: str = SYSTEM_PROMPT
+) -> str:
+    """The digest of the routing prompt and functions: it changes whenever they change.
+
+    Spec 0.26 section 10 asks for a routing prompt version that changes
+    with the prompt or the functions; deriving it makes that hold without
+    a manual bump.
+    """
     return canonical_digest(
         {
-            **parts,
-            "routing_prompt_version": ROUTING_PROMPT_VERSION,
-            "policy_version": POLICY_VERSION,
+            "system_prompt": system_prompt,
+            "functions": [
+                [schema.name, schema.description, _plain(schema.input_schema)]
+                for schema in functions
+            ],
         }
     )
+
+
+def _message_part(message: Message) -> list[Any]:
+    """Role, text, and tool-call references of one message, as the router receives it."""
+    return [
+        message.role.value,
+        message.content,
+        message.tool_call_id,
+        [[call.call_id, call.tool_name, _plain(call.arguments)] for call in message.tool_calls],
+    ]
+
+
+def routing_cache_key(parts: Mapping[str, Any]) -> str:
+    """The SHA-256 digest of the canonical form of the key parts and the policy version."""
+    return canonical_digest({**parts, "policy_version": POLICY_VERSION})
 
 
 def is_eligible(skill: Skill, tools: ToolRegistry) -> bool:
@@ -96,6 +129,7 @@ def key_and_context(
     caller: CallerContext,
     model_id: str,
     enabled_workflows: Iterable[str],
+    routing_prompt_version: str,
 ) -> tuple[str, CacheContext]:
     """The key digest and the dependency context of one routing request (spec 0.26)."""
     skills = sorted(offered, key=lambda skill: skill.name)
@@ -107,7 +141,7 @@ def key_and_context(
     )
     key = routing_cache_key(
         {
-            "messages": [[m.role.value, m.content, m.tool_call_id] for m in messages],
+            "messages": [_message_part(message) for message in messages],
             "language": language,
             "mode": mode,
             "permissions": sorted(context.permissions),
@@ -116,17 +150,24 @@ def key_and_context(
             "tools": {name: tools.get(name).schema_hash for name in allowed},
             "model": model_id,
             "enabled_workflows": sorted(enabled_workflows),
+            "routing_prompt_version": routing_prompt_version,
         }
     )
     return key, context
 
 
 class RoutingCache:
-    """A bounded, expiring map of key digest to skill choice."""
+    """A bounded, expiring map of key digest to skill choice.
+
+    Entries are kept in store order. The clock is monotonic, so the
+    oldest entries are first, and expired entries are removed from the
+    front before every lookup and store.
+    """
 
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
         self._entries: OrderedDict[str, _Entry] = OrderedDict()
+        self._context: CacheContext | None = None
         self.hits = 0
         self.misses = 0
         self.stores = 0
@@ -152,11 +193,8 @@ class RoutingCache:
         """The unexpired entry under key, after dropping entries stale for context."""
         self._invalidate(context)
         now = self._clock()
+        self._expire(now)
         entry = self._entries.get(key)
-        if entry is not None and now - entry.stored_at >= TTL_SECONDS:
-            del self._entries[key]
-            self.expired += 1
-            entry = None
         if entry is None:
             self.misses += 1
             return None
@@ -164,19 +202,33 @@ class RoutingCache:
         return CacheHit(entry.route, int((now - entry.stored_at) * 1000))
 
     def store(self, key: str, context: CacheContext, route: CachedRoute) -> None:
+        self._invalidate(context)
+        now = self._clock()
+        self._expire(now)
         self._entries.pop(key, None)
-        self._entries[key] = _Entry(route, context, self._clock())
+        self._entries[key] = _Entry(route, now)
         self.stores += 1
         while len(self._entries) > MAX_ENTRIES:
             self._entries.popitem(last=False)
             self.evicted += 1
 
     def drop(self, key: str) -> None:
-        """Remove one entry, for a hit the gateway could not use."""
-        self._entries.pop(key, None)
+        """Remove the entry of a hit the gateway could not use; that lookup is a miss."""
+        if self._entries.pop(key, None) is not None:
+            self.hits -= 1
+            self.misses += 1
+
+    def _expire(self, now: float) -> None:
+        while self._entries:
+            oldest = next(iter(self._entries.values()))
+            if now - oldest.stored_at < TTL_SECONDS:
+                return
+            self._entries.popitem(last=False)
+            self.expired += 1
 
     def _invalidate(self, context: CacheContext) -> None:
-        stale = [key for key, entry in self._entries.items() if entry.context != context]
-        for key in stale:
-            del self._entries[key]
-        self.invalidated += len(stale)
+        if context == self._context:
+            return
+        self.invalidated += len(self._entries)
+        self._entries.clear()
+        self._context = context

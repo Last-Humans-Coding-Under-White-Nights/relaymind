@@ -205,7 +205,11 @@ class _ClientRun(_Run):
         self.emit(
             EventType.ROUTE_SELECTED,
             GATEWAY_ACTOR,
-            {"decision": decision.to_json_object(), "mechanism": mechanism},
+            {
+                "decision": decision.to_json_object(),
+                "mechanism": mechanism,
+                **self._cache_label("miss"),
+            },
         )
 
     # -- the local stage -------------------------------------------------------------

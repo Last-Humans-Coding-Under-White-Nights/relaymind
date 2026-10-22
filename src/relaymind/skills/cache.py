@@ -30,13 +30,24 @@ class ContentCache:
     def __len__(self) -> int:
         return len(self._entries)
 
-    def get_or_parse[T](self, kind: str, data: bytes, parse: Callable[[bytes], T]) -> T:
+    def get_or_parse[T](
+        self,
+        kind: str,
+        data: bytes,
+        parse: Callable[[bytes], T],
+        *,
+        digest: bytes | None = None,
+    ) -> T:
         """The parse of these bytes: stored when seen before, else computed and stored.
 
         kind separates parses that read the same bytes differently (for
-        example a SKILL.md and the directory name it must match).
+        example a SKILL.md and the directory name it must match). digest
+        is the SHA-256 digest of data when the caller already has it, so
+        the bytes are hashed once.
         """
-        key = (kind, hashlib.sha256(data).hexdigest())
+        if digest is None:
+            digest = hashlib.sha256(data).digest()
+        key = (kind, digest.hex())
         if key in self._entries:
             self._entries.move_to_end(key)
             self.hits += 1

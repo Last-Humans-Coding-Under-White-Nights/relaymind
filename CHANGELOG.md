@@ -808,6 +808,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   cache.hit payload (originating_version and originating_run_id), the
   routing_cache label of run.accepted, and the routing_cache route
   mechanism; statistics exports name the cache setting (section 12.1).
+  The key holds the tool calls of assistant turns and a routing prompt
+  version derived from the routing prompt and functions; expired entries
+  are removed as expired before each lookup and store; an unusable hit is
+  counted as a miss; and every route.selected of a cache-enabled run,
+  gateway-made ones included, carries the hit or miss label.
 - Documentation brought up to date after M3 and M4: the README status,
   features, layout, and a verified script that starts the gateway by
   hand (there is no launcher yet); the M3 and M4 status and carried

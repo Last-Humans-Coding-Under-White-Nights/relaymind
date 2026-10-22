@@ -23,7 +23,6 @@ changes the hash (RM07). Later edits on disk do not change a loaded
 registry. Skills never run code: the registry only reads text.
 """
 
-import copy
 import hashlib
 import json
 import re
@@ -209,10 +208,11 @@ def _resource_path(package: Path, relpath: str) -> Path:
 
 
 def _content_hash(files: Sequence[tuple[str, bytes]], tool_hashes: Sequence[str]) -> str:
+    """files are (relative path, SHA-256 digest of the file's bytes) pairs."""
     digest = hashlib.sha256()
-    for relpath, data in sorted(files):
+    for relpath, file_digest in sorted(files):
         digest.update(relpath.encode("utf-8") + b"\0")
-        digest.update(hashlib.sha256(data).digest())
+        digest.update(file_digest)
     for tool_hash in tool_hashes:
         digest.update(b"tool\0" + tool_hash.encode("utf-8"))
     return f"sha256:{digest.hexdigest()}"
@@ -234,21 +234,26 @@ def _load_package(
         _inside(package, path, path.name)
     skill_bytes = skill_path.read_bytes()
     manifest_bytes = manifest_path.read_bytes()
-    try:
-        skill_text = skill_bytes.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise _fail(package, "SKILL.md is not UTF-8 text") from exc
+    skill_digest = hashlib.sha256(skill_bytes).digest()
+    manifest_digest = hashlib.sha256(manifest_bytes).digest()
     # Spec 0.26 section 10: parses are cached by content hash. The package
     # name is part of the SKILL.md key because the frontmatter must match it.
-    name, description, body = cache.get_or_parse(
-        f"skill:{package.name}", skill_bytes, lambda _: _parse_skill_md(package, skill_text)
-    )
-    manifest = copy.deepcopy(
-        cache.get_or_parse(
-            f"manifest:{package.name}",
-            manifest_bytes,
-            lambda raw: _parse_manifest(package, raw),
+    # One digest per file serves the cache key and the content hash.
+    try:
+        name, description, body = cache.get_or_parse(
+            f"skill:{package.name}",
+            skill_bytes,
+            lambda raw: _parse_skill_md(package, raw.decode("utf-8")),
+            digest=skill_digest,
         )
+    except UnicodeDecodeError as exc:
+        raise _fail(package, "SKILL.md is not UTF-8 text") from exc
+    # The cached manifest is only read below, never changed, so it is not copied.
+    manifest = cache.get_or_parse(
+        f"manifest:{package.name}",
+        manifest_bytes,
+        lambda raw: _parse_manifest(package, raw),
+        digest=manifest_digest,
     )
 
     unknown_tools = [tool for tool in manifest["allowed_tools"] if tool not in tools.names()]
@@ -262,7 +267,7 @@ def _load_package(
         raise _fail(package, f"parallel_workflow {workflow!r} is not a registered workflow")
 
     texts: dict[str, str] = {}
-    files = [(SKILL_FILENAME, skill_bytes), (MANIFEST_FILENAME, manifest_bytes)]
+    files = [(SKILL_FILENAME, skill_digest), (MANIFEST_FILENAME, manifest_digest)]
     seen = {skill_path.resolve(), manifest_path.resolve()}
     for relpath in manifest["resources"]:
         try:
@@ -275,11 +280,14 @@ def _load_package(
             raise _fail(package, f"resource {relpath!r} names a package file more than once")
         seen.add(path)
         data = path.read_bytes()
+        data_digest = hashlib.sha256(data).digest()
         try:
-            texts[relpath] = cache.get_or_parse("resource", data, lambda raw: raw.decode("utf-8"))
+            texts[relpath] = cache.get_or_parse(
+                "resource", data, lambda raw: raw.decode("utf-8"), digest=data_digest
+            )
         except UnicodeDecodeError as exc:
             raise _fail(package, f"resource {relpath!r} is not UTF-8 text") from exc
-        files.append((relpath, data))
+        files.append((relpath, data_digest))
 
     tool_hashes = [tools.get(tool).schema_hash for tool in manifest["allowed_tools"]]
     return Skill(
@@ -386,8 +394,11 @@ class SkillRegistry:
             skills,
             configured_roots=tuple(str(root) for root in roots),
             parse_cache=cache,
+            # The resolved directories, so a reload reads the same ones even
+            # after the working directory changed (configured_roots keep
+            # the operator's strings).
             reload_with={
-                "roots": roots,
+                "roots": checked,
                 "tools": tools,
                 "predicates": tuple(predicates),
                 "workflows": tuple(workflows),
@@ -403,7 +414,9 @@ class SkillRegistry:
         """
         if self._reload_with is None:
             raise SkillConfigError("this registry was not loaded from skill roots")
-        return SkillRegistry.load(**self._reload_with, parse_cache=self.parse_cache)
+        fresh = type(self).load(**self._reload_with, parse_cache=self.parse_cache)
+        fresh.configured_roots = self.configured_roots
+        return fresh
 
     def names(self) -> tuple[str, ...]:
         """Skill names in load order."""

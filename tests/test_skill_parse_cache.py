@@ -137,3 +137,34 @@ def test_a_tool_schema_check_runs_on_every_load(root, tools):
             workflows=PARALLEL_WORKFLOWS,
             parse_cache=first.parse_cache,
         )
+
+
+def test_reload_reads_the_directories_first_scanned(root, tools, tmp_path, monkeypatch):
+    """RM07, spec 0.26 section 10: reloaded() re-reads the same roots, not a new cwd's."""
+    monkeypatch.chdir(root.parent)
+    first = SkillRegistry.load(
+        ["skills"],
+        tools=tools,
+        predicates=COMPLETION_PREDICATES.keys(),
+        workflows=PARALLEL_WORKFLOWS,
+    )
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    second = first.reloaded()
+    assert second.names() == first.names()
+    assert second.roots == first.roots
+    # run.accepted records the operator's strings, unchanged by a reload (section 8).
+    assert second.configured_roots == first.configured_roots == ("skills",)
+
+
+def test_reload_keeps_the_registry_class(root, tools):
+    """Spec 0.26 section 10: a reload gives a registry of the same kind."""
+
+    class Custom(SkillRegistry):
+        pass
+
+    first = Custom.load(
+        [root], tools=tools, predicates=COMPLETION_PREDICATES.keys(), workflows=PARALLEL_WORKFLOWS
+    )
+    assert type(first.reloaded()) is Custom

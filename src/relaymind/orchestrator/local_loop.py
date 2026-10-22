@@ -196,6 +196,7 @@ from relaymind.orchestrator.routing_cache import (
     RoutingCache,
     is_eligible,
     key_and_context,
+    routing_prompt_version,
 )
 from relaymind.orchestrator.run_state import (
     CANCEL_REQUESTED,
@@ -1473,7 +1474,11 @@ class _Run:
         self.emit(
             EventType.ROUTE_SELECTED,
             GATEWAY_ACTOR,
-            {"decision": routing.decision.to_json_object(), "mechanism": RESUME_MECHANISM},
+            {
+                "decision": routing.decision.to_json_object(),
+                "mechanism": RESUME_MECHANISM,
+                **self._cache_label("miss"),
+            },
         )
         return routing
 
@@ -1773,7 +1778,11 @@ class _Run:
         self.emit(
             EventType.ROUTE_SELECTED,
             GATEWAY_ACTOR,
-            {"decision": decision.to_json_object(), "mechanism": "degraded_mode"},
+            {
+                "decision": decision.to_json_object(),
+                "mechanism": "degraded_mode",
+                **self._cache_label("miss"),
+            },
         )
 
     async def _run_external(
@@ -2143,7 +2152,11 @@ class _Run:
             self.emit(
                 EventType.ROUTE_SELECTED,
                 GATEWAY_ACTOR,
-                {"decision": decision.to_json_object(), "mechanism": "execution_mode"},
+                {
+                    "decision": decision.to_json_object(),
+                    "mechanism": "execution_mode",
+                    **self._cache_label("miss"),
+                },
             )
             return Routing(decision)
 
@@ -2177,6 +2190,7 @@ class _Run:
                     "mechanism": "bypass",
                     "input_tokens": input_tokens,
                     "input_cap": self.o.budgets.routing_input_tokens,
+                    **self._cache_label("miss"),
                 },
             )
             return Routing(decision)
@@ -2209,6 +2223,7 @@ class _Run:
     # -- routing cache (spec 0.26 section 10) -------------------------------------
 
     def _cache_label(self, outcome: str) -> dict[str, str]:
+        """Spec 0.26 Labels: every route.selected of a cache run says hit or miss."""
         return {} if self.o.routing_cache is None else {"routing_cache": outcome}
 
     def _cache_key(self) -> tuple[str, CacheContext]:
@@ -2223,6 +2238,7 @@ class _Run:
             caller=o.caller,
             model_id=o.model.model_id,
             enabled_workflows=o.enabled_workflows,
+            routing_prompt_version=routing_prompt_version(o.router.functions()),
         )
 
     def _routing_language(self) -> Language:

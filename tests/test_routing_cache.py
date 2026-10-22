@@ -3,12 +3,10 @@
 import pytest
 
 from helpers import FakeClock
-from relaymind.canonical import canonical_digest
 from relaymind.orchestrator.router import SYSTEM_PROMPT
 from relaymind.orchestrator.routing_cache import (
     MAX_ENTRIES,
     POLICY_VERSION,
-    ROUTING_PROMPT_VERSION,
     TTL_SECONDS,
     CacheContext,
     CachedRoute,
@@ -43,6 +41,7 @@ def parts(**changes):
         "tools": {"get_service_health": "sha256:t1"},
         "model": "local-1",
         "enabled_workflows": [],
+        "routing_prompt_version": "v1",
     }
     base.update(changes)
     return base
@@ -54,16 +53,12 @@ def test_the_limits_are_the_policy_values():
     assert MAX_ENTRIES == 256
 
 
-def test_the_prompt_version_is_bumped_with_the_routing_prompt():
-    """RM24: the key holds a routing prompt version; changing the prompt must change it.
+def test_the_policy_version_is_pinned():
+    """RM24: the policy version is a constant bumped with spec section 10.
 
-    If this fails after an edit of the routing prompt, bump
-    ROUTING_PROMPT_VERSION and update the digest here.
+    The routing prompt version is derived from the prompt and the
+    functions (see test_the_routing_prompt_version_follows_the_prompt_and_the_functions).
     """
-    assert canonical_digest(SYSTEM_PROMPT) == (
-        "d28e0009db29519eb31791be5e1dd8942a486401527333de2906bcb8bdb7c54f"
-    )
-    assert ROUTING_PROMPT_VERSION == "1"
     assert POLICY_VERSION == "1"
 
 
@@ -83,19 +78,17 @@ def test_key_is_exact_over_every_part():
         {"tools": {"get_service_health": "sha256:t2"}},
         {"model": "local-2"},
         {"enabled_workflows": ["health-and-diagnostic-checklist"]},
+        {"routing_prompt_version": "v2"},
     ]
     keys = {routing_cache_key(parts(**change)) for change in changes}
     assert base not in keys and len(keys) == len(changes)
 
 
-def test_key_holds_the_prompt_and_policy_versions(monkeypatch):
-    """RM24: a new routing prompt version or policy version is a different key."""
+def test_key_holds_the_policy_version(monkeypatch):
+    """RM24: a new policy version is a different key."""
     from relaymind.orchestrator import routing_cache
 
     base = routing_cache_key(parts())
-    monkeypatch.setattr(routing_cache, "ROUTING_PROMPT_VERSION", "2")
-    assert routing_cache_key(parts()) != base
-    monkeypatch.undo()
     monkeypatch.setattr(routing_cache, "POLICY_VERSION", "2")
     assert routing_cache_key(parts()) != base
 
@@ -154,3 +147,112 @@ def test_drop_removes_one_entry():
     cache.store("k1", CONTEXT, route())
     cache.drop("k1")
     assert cache.lookup("k1", CONTEXT) is None
+
+
+# -- review findings for #31 ------------------------------------------------------
+
+
+def test_drop_of_an_unusable_hit_counts_it_as_a_miss():
+    """RM24, spec 0.26 Hit: a hit the gateway could not use is a miss in the counters."""
+    cache = RoutingCache(clock=FakeClock().monotonic)
+    cache.store("k1", CONTEXT, route())
+    assert cache.lookup("k1", CONTEXT) is not None
+    cache.drop("k1")
+    assert (cache.hits, cache.misses) == (0, 1)
+    assert len(cache) == 0
+
+
+def test_expired_entries_under_other_keys_are_removed_as_expired():
+    """RM24: the TTL ends every entry, not only the one looked up; eviction is not expiry."""
+    clock = FakeClock()
+    cache = RoutingCache(clock=clock.monotonic)
+    for number in range(MAX_ENTRIES):
+        cache.store(f"old_{number}", CONTEXT, route())
+    clock.advance(TTL_SECONDS)
+    cache.store("new", CONTEXT, route())
+    assert (cache.expired, cache.evicted, len(cache)) == (MAX_ENTRIES, 0, 1)
+    clock.advance(1)
+    cache.store("newer", CONTEXT, route())
+    assert cache.lookup("unknown", CONTEXT) is None
+    assert cache.expired == MAX_ENTRIES and len(cache) == 2
+
+
+def test_a_store_under_a_new_context_drops_the_entries_of_the_old_one():
+    """AC13, RM07: entries of another skill set or permission set never outlive the change."""
+    changed = CacheContext(CONTEXT.skill_hashes, frozenset(), CONTEXT.enabled_tools)
+    cache = RoutingCache(clock=FakeClock().monotonic)
+    cache.store("k1", CONTEXT, route())
+    cache.store("k2", changed, route())
+    assert len(cache) == 1 and cache.invalidated == 1
+    assert cache.lookup("k2", changed) is not None
+    assert cache.lookup("k2", CONTEXT) is None
+    assert len(cache) == 0 and cache.invalidated == 2
+
+
+def key_of(messages, **changes):
+    from relaymind.orchestrator.routing_cache import key_and_context
+
+    class _Policy:
+        enabled_tools = frozenset({"get_service_health"})
+
+    class _Caller:
+        permissions = frozenset({"demo.read"})
+
+    options = {
+        "messages": messages,
+        "language": "en",
+        "mode": "auto",
+        "offered": [],
+        "tools": None,
+        "policy": _Policy(),
+        "caller": _Caller(),
+        "model_id": "local-1",
+        "enabled_workflows": [],
+        "routing_prompt_version": "v1",
+    }
+    options.update(changes)
+    return key_and_context(**options)[0]
+
+
+def assistant_call(**arguments):
+    from relaymind.adapters import Message, Role, ToolCall
+
+    return Message(
+        role=Role.ASSISTANT,
+        tool_calls=(ToolCall("call_1", "get_service_health", arguments),),
+    )
+
+
+def test_the_key_holds_the_tool_calls_of_assistant_turns():
+    """RM24, spec 0.26 Key: the exact messages the router receives, tool calls included."""
+    from relaymind.adapters import Message, Role
+
+    user = Message(role=Role.USER, content="check it")
+    answer = Message(role=Role.TOOL, content='{"ok": true}', tool_call_id="call_1")
+    staging = key_of([user, assistant_call(service="staging-api"), answer])
+    payments = key_of([user, assistant_call(service="payments-api"), answer])
+    assert staging != payments
+    assert staging == key_of([user, assistant_call(service="staging-api"), answer])
+
+
+def test_the_key_holds_the_routing_prompt_version():
+    """RM24: a different routing prompt version is a different key."""
+    from relaymind.adapters import Message, Role
+
+    messages = [Message(role=Role.USER, content="check it")]
+    assert key_of(messages) != key_of(messages, routing_prompt_version="v2")
+
+
+def test_the_routing_prompt_version_follows_the_prompt_and_the_functions():
+    """RM24, spec 0.26 Key: derived from the routing prompt and functions, so no manual bump."""
+    from relaymind.adapters.base import ToolSchema
+    from relaymind.orchestrator.routing_cache import routing_prompt_version
+
+    schema = {"type": "object", "properties": {}, "additionalProperties": False}
+    functions = (ToolSchema("check-service-health", "Check a service", schema),)
+    base = routing_prompt_version(functions)
+    assert base == routing_prompt_version(functions)
+    assert routing_prompt_version(functions, system_prompt=SYSTEM_PROMPT + " ") != base
+    other = (ToolSchema("check-service-health", "Check one service", schema),)
+    assert routing_prompt_version(other) != base
+    assert routing_prompt_version(functions, system_prompt=SYSTEM_PROMPT) == base
