@@ -45,7 +45,7 @@ version, and content_hash, and the original messages as role and text
 
 import math
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -193,6 +193,13 @@ def _is_array(value: object) -> bool:
     return isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray)
 
 
+_ANSWER_OPTION_RANGES: dict[str, Callable[[float], bool]] = {
+    "max_completion_tokens": lambda v: v > 0,
+    "temperature": lambda v: 0 <= v <= 2,
+    "top_p": lambda v: 0 < v <= 1,
+}
+
+
 def _check_accepted_payload(payload: Mapping[str, Any]) -> None:
     """The section 8 run.accepted payload."""
     for key in (
@@ -230,6 +237,22 @@ def _check_accepted_payload(payload: Mapping[str, Any]) -> None:
             f" {', '.join(_SKILL_OFFERED_FIELDS)}"
         )
     _check_original_messages(payload["original_messages"])
+    # Spec 0.22: optional, because a run stored before it has no field.
+    if "answer_options" in payload:
+        _check_answer_options(payload["answer_options"])
+
+
+def _check_answer_options(options: object) -> None:
+    """The answer options a run applied, only the keys that apply (spec 0.22 section 8)."""
+    if not isinstance(options, Mapping) or not set(options) <= set(_ANSWER_OPTION_RANGES):
+        raise TraceEventError(
+            f"'answer_options' must be an object with only {', '.join(_ANSWER_OPTION_RANGES)}"
+        )
+    for name, value in options.items():
+        is_int = name == "max_completion_tokens"
+        valid_type = type(value) is int if is_int else type(value) in (int, float)
+        if not valid_type or not math.isfinite(value) or not _ANSWER_OPTION_RANGES[name](value):
+            raise TraceEventError(f"'answer_options' has an invalid '{name}'")
 
 
 def _check_original_messages(messages: object) -> None:
