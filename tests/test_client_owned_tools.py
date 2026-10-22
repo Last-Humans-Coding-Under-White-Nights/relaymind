@@ -470,6 +470,18 @@ def test_the_token_budget_bounds_every_generation_because_each_may_be_the_respon
     assert gateway.adapter.requests[1].options.max_output_tokens == 50
 
 
+def test_the_client_owned_run_records_its_answer_options(tmp_path):
+    """RM19, RM22, spec 0.22 section 8: the alias records the options like the managed one."""
+    gateway, app = client_app(tmp_path, [weather_call(), text_turn(ANSWER)])
+    first = request(app, max_tokens=50, top_p=0.5)
+    second = request(app)
+    options = [
+        of_type(events_of(gateway, response), "run.accepted")[0].payload["answer_options"]
+        for response in (first, second)
+    ]
+    assert options == [{"max_completion_tokens": 50, "top_p": 0.5}, {}]
+
+
 def test_the_token_budget_bounds_the_external_generations_too(tmp_path):
     """Spec 7.1, 7.2, RM04: the external fallback answers the same response."""
     gateway, app = client_app(tmp_path, [], external_turns=[text_turn(ANSWER)])

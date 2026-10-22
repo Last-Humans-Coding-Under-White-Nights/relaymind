@@ -650,6 +650,7 @@ def test_run_accepted_carries_the_section_8_payload(tmp_path):
         "skill_roots": snapshot["skill_roots"],
         "skills_offered": snapshot["skills_offered"],
         "original_messages": [{"role": "user", "content": "Is staging-api healthy right now?"}],
+        "answer_options": {},
     }
     assert outcome.state is RunState.COMPLETED
 

@@ -93,6 +93,8 @@ def test_a_native_run_records_no_model_alias_and_its_modes(tmp_path):
     view = asyncio.run(go())
     accepted = of_type(gateway.store.events(view["run_id"]), "run.accepted")[0].payload
     assert accepted["model_alias"] is None
+    # Spec 0.22 section 8: the native API accepts no answer options.
+    assert accepted["answer_options"] == {}
     assert (accepted["requested_execution_mode"], accepted["effective_execution_mode"]) == (
         "local_only",
         "local_only",

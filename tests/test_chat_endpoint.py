@@ -39,6 +39,7 @@ from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import RunOutcome
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
+from relaymind.store.trace_event import validate_trace_event
 from relaymind.tools import CallerContext
 from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
 
@@ -185,6 +186,50 @@ def test_the_token_budget_applies_to_the_final_generation(tmp_path):
     final = gateway.adapter.requests[-1]
     assert final.options.max_output_tokens == 77
     assert final.options.temperature == 0.3
+
+
+def accepted_options(gateway, response):
+    events = gateway.store.events(response.headers[RUN_ID_HEADER])
+    (accepted,) = of_type(events, "run.accepted")
+    validate_trace_event(accepted.to_json_object())
+    return accepted.payload["answer_options"]
+
+
+def test_run_accepted_records_the_requested_answer_options(tmp_path):
+    """RM19, RM22, RM25, spec 0.22 section 8: the options that shaped the answer."""
+    gateway = healthy_gateway(tmp_path)
+    response = chat(make_app(gateway), max_completion_tokens=77, temperature=0.3, top_p=0.8)
+    assert response.status_code == 200
+    assert accepted_options(gateway, response) == {
+        "max_completion_tokens": 77,
+        "temperature": 0.3,
+        "top_p": 0.8,
+    }
+
+
+def test_the_legacy_max_tokens_is_recorded_as_the_token_budget(tmp_path):
+    """RM19, spec 0.22 section 8: max_tokens is the legacy alias of the budget."""
+    gateway = healthy_gateway(tmp_path)
+    response = chat(make_app(gateway), max_tokens=40)
+    assert accepted_options(gateway, response) == {"max_completion_tokens": 40}
+
+
+def test_a_chat_run_without_options_records_none(tmp_path):
+    """RM22, spec 0.22 section 8: no option is invented, and a default value is not recorded."""
+    gateway = healthy_gateway(tmp_path)
+    response = chat(make_app(gateway))
+    assert accepted_options(gateway, response) == {}
+
+
+def test_an_unaccepted_default_option_is_not_recorded(tmp_path):
+    """RM19, spec 0.22 section 8: temperature 1 is accepted but not applied, so not recorded."""
+    gateway = healthy_gateway(tmp_path)
+    app = make_app(
+        gateway, settings=ChatSettings(supported_options=frozenset({"max_output_tokens"}))
+    )
+    response = chat(app, temperature=1, max_completion_tokens=9)
+    assert response.status_code == 200
+    assert accepted_options(gateway, response) == {"max_completion_tokens": 9}
 
 
 # -- streaming ------------------------------------------------------------------------
