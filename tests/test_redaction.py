@@ -51,3 +51,50 @@ def test_a_short_secret_is_not_scrubbed_from_inside_other_words():
     assert redact_text("10 retries, 1 failed", {"1"}) == f"10 retries, {REDACTED} failed"
     assert redact_text("untrue, but true", {"true"}) == f"untrue, but {REDACTED}"
     assert redact_text("Bearer sk-abc.", {"sk-abc"}) == f"Bearer {REDACTED}."
+
+
+def test_a_secret_repeated_in_free_text_of_the_same_value_is_scrubbed():
+    """RM12, section 8 (spec 0.12): the value is replaced where it is repeated, not only by key."""
+    redactor = Redactor(secret_fields={"source"})
+    value = {
+        "entries": [
+            {"message": "use svc-key-7 to log in", "source": "svc-key-7"},
+            {"message": "svc-key-70 is another word", "source": "svc-key-7"},
+        ],
+        "count": 2,
+    }
+    assert redactor.redact_with_repeats(value) == {
+        "entries": [
+            {"message": f"use {REDACTED} to log in", "source": REDACTED},
+            {"message": "svc-key-70 is another word", "source": REDACTED},
+        ],
+        "count": 2,
+    }
+    assert value["entries"][0]["source"] == "svc-key-7", "must return a copy"
+
+
+def test_a_numeric_secret_repeated_in_free_text_is_scrubbed():
+    """RM12, section 8 (spec 0.12): a number under a secret field is a secret value too."""
+    redactor = Redactor(secret_fields={"pin"})
+    value = {"pin": 7731, "message": "login with pin 7731", "count": 77310}
+    assert redactor.secret_values(value) == frozenset({"7731"})
+    assert redactor.redact_with_repeats(value) == {
+        "pin": REDACTED,
+        "message": f"login with pin {REDACTED}",
+        "count": 77310,
+    }
+
+
+def test_known_secrets_of_the_run_are_scrubbed_from_a_value_without_the_field():
+    """RM12, section 8 (spec 0.12): a secret seen earlier in the run is scrubbed later too."""
+    redactor = Redactor(secret_fields={"source"})
+    value = {"service": "svc-key-7", "limit": 1}
+    assert redactor.redact_with_repeats(value, {"svc-key-7"}) == {
+        "service": REDACTED,
+        "limit": 1,
+    }
+
+
+def test_the_redaction_marker_is_never_scrubbed_again():
+    """RM12: a secret that is a word of the marker leaves earlier replacements whole."""
+    assert redact_text("use longer-secret", {"longer-secret", "redacted"}) == f"use {REDACTED}"

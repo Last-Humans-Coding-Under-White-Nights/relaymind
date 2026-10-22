@@ -101,7 +101,8 @@ run.failed report active_ms and waiting_ms separately (RM22, section
 12.1); waiting_ms is the sum of the recorded waits.
 
 Tool arguments, tool results, and model text are redacted of configured
-secret fields before they are persisted (RM12, section 8).
+secret fields, and of the secret values the run has seen, before they
+are persisted (RM12, section 8).
 """
 
 import asyncio
@@ -383,6 +384,9 @@ class _Confirmation:
     proposal_id: str
     approval_id: str
     target: str
+    # The redacted arguments the approval was issued with; consuming it
+    # presents the same ones, whatever secrets the run learns later.
+    recorded_arguments: dict[str, Any]
     state_version: int
     expires_at: datetime
     stop: Escalation | None
@@ -714,6 +718,15 @@ class _Run:
     def scrub(self, text: str) -> str:
         return redact_text(text, self.secrets)
 
+    def redact_arguments(self, arguments: Mapping[str, Any]) -> dict[str, Any]:
+        """Model-proposed arguments, redacted by key and of the run's secret values.
+
+        Arguments are model text: a model that copies a secret it was
+        shown into a tool call never writes it into the trace (RM12,
+        spec 0.12 section 8).
+        """
+        return self.o.redactor.redact_with_repeats(dict(arguments), self.secrets)
+
     def _summary(self) -> dict[str, Any]:
         """The run.completed / run.failed evidence (RM16, RM22, section 12.1)."""
         usage = self.meter.usage()
@@ -926,12 +939,15 @@ class _Run:
         async def route() -> Routing:
             pending = self.pending
             assert pending is not None
+            # RM12, section 8: scrubbed once, for the trace and the conversation,
+            # so a later handoff never carries the raw secret (RM13).
+            answer = self.scrub(text)
             waited_ms = self._waited_ms()
             self.waiting_ms += waited_ms
             self.emit(
                 EventType.CLARIFICATION_ANSWERED,
                 GATEWAY_ACTOR,
-                {"input": self.scrub(text), "missing": pending.missing, "waited_ms": waited_ms},
+                {"input": answer, "missing": pending.missing, "waited_ms": waited_ms},
             )
             self.pending = None
             self.waiting_since = None
@@ -940,7 +956,7 @@ class _Run:
             self.messages = (
                 *self.messages,
                 Message(role=Role.ASSISTANT, content=pending.question),
-                Message(role=Role.USER, content=text),
+                Message(role=Role.USER, content=answer),
             )
             if pending.skill_id is None:
                 # No skill was chosen: route again with a routing generation.
@@ -1411,7 +1427,6 @@ class _Run:
             )
             raise
         finally:
-            redactor = self.o.redactor
             self.emit(
                 EventType.MODEL_FINISHED,
                 actor,
@@ -1423,7 +1438,7 @@ class _Run:
                     "finish_reason": finish,
                     "tool_calls": len(generation.calls),
                     "proposed_calls": [
-                        {"tool_name": c.tool_name, "arguments": redactor.redact(dict(c.arguments))}
+                        {"tool_name": c.tool_name, "arguments": self.redact_arguments(c.arguments)}
                         for c in generation.calls
                     ],
                     "text": self.scrub(generation.text) or None,
@@ -1578,7 +1593,7 @@ class _Run:
         admitted = needed.admitted
         target_argument = admitted.tool.confirmation_target
         assert target_argument is not None  # _admit rejects a tool without one
-        arguments = self.o.redactor.redact(dict(admitted.arguments))
+        arguments = self.redact_arguments(admitted.arguments)
         # Read from the redacted arguments, so a secret target is never
         # written in plaintext (RM12); the digest still binds its value.
         target = str(arguments[target_argument])
@@ -1618,6 +1633,7 @@ class _Run:
             proposal_id=needed.proposal_id,
             approval_id=approval_id,
             target=target,
+            recorded_arguments=arguments,
             state_version=version,
             expires_at=expires_at,
             stop=stop,
@@ -1671,7 +1687,7 @@ class _Run:
                 self.run_id,
                 token=token,
                 tool_name=pending.admitted.tool_name,
-                arguments=self.o.redactor.redact(dict(pending.admitted.arguments)),
+                arguments=pending.recorded_arguments,
                 target=pending.target,
                 state_version=pending.state_version,
             )
@@ -1799,7 +1815,7 @@ class _Run:
         self, call: ToolCall, skill: Skill | None, rejection: dict[str, str] | None
     ) -> str:
         proposal_id = f"proposal_{uuid.uuid4().hex[:16]}"
-        arguments = self.o.redactor.redact(dict(call.arguments))
+        arguments = self.redact_arguments(call.arguments)
         self.emit(
             EventType.TOOL_PROPOSED,
             self.actor,
@@ -1884,6 +1900,7 @@ class _Run:
                 before_run=before_run,
                 time_limit=self.meter.remaining_seconds,
                 on_finished=on_finished,
+                secrets=frozenset(self.secrets),
             )
         except OperationInFlightError as exc:
             # RM14: an operation in flight blocks continuation that could repeat it.

@@ -22,7 +22,6 @@ the demo skills with that one manifest flag changed, in tmp_path.
 
 import asyncio
 import json
-import shutil
 
 import pytest
 
@@ -31,14 +30,16 @@ from gateway_helpers import (
     LOCAL_MODEL_ID,
     assert_needs_external,
     build_gateway,
+    clarify_turn,
     executed_tools,
+    local_eligible_skills,
     replace_handler,
     route_turn,
     run,
     text_turn,
     tool_turn,
 )
-from helpers import DEMO_SKILLS_ROOT, ScriptedAdapter, make_capabilities, of_type
+from helpers import ScriptedAdapter, make_capabilities, of_type
 from relaymind.adapters import GenerationFailed, Role, TextDelta
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel
@@ -63,13 +64,7 @@ NO_TOKENIZER = make_capabilities(tokenizer_available=False)
 @pytest.fixture
 def local_prep_skills(tmp_path):
     """The demo skills, with investigate-performance allowed to run locally first."""
-    root = tmp_path / "skills"
-    shutil.copytree(DEMO_SKILLS_ROOT, root)
-    manifest = root / "investigate-performance" / "skill.manifest.json"
-    data = json.loads(manifest.read_text("utf-8"))
-    data["local_eligible"] = True
-    manifest.write_text(json.dumps(data), "utf-8")
-    return [root]
+    return local_eligible_skills(tmp_path)
 
 
 def local_collection():
@@ -346,6 +341,41 @@ def test_secret_fields_never_reach_the_external_request(tmp_path, local_prep_ski
     for request in gateway.external.requests:
         assert all("dep-staging-0142" not in text for text in texts(request))
     assert any("[redacted]" in text for text in texts(gateway.external.requests[0]))
+
+
+def test_a_secret_in_the_resume_input_never_reaches_the_handoff(tmp_path, local_prep_skills):
+    """RM12, RM13, AC06, spec section 8: the resume input is scrubbed of the
+    run's secret values once, for the trace and for the conversation, so a
+    later escalation carries only the redacted form in original_messages
+    and the external request."""
+    gateway = build_gateway(
+        tmp_path,
+        [clarify_turn(), *local_collection()],
+        skill_roots=local_prep_skills,
+        external_turns=logs_then_answer(),
+        external_capabilities=NO_TOKENIZER,
+    )
+    waiting, _ = run(gateway, "Why is it slow right now?")
+    assert waiting.state is RunState.WAITING_INPUT
+    gateway.orchestrator._waiting[waiting.run_id].secrets.add("hunter2")
+    record = gateway.store.get_run(waiting.run_id)
+    outcome = asyncio.run(
+        gateway.orchestrator.resume(waiting.run_id, record.version, "staging-api, password hunter2")
+    )
+
+    assert outcome.state is RunState.COMPLETED
+    first = gateway.external.requests[0]
+    # external_messages carries the envelope's original_messages as turns.
+    assert [m.content for m in first.messages if m.role is Role.USER] == [
+        "Why is it slow right now?",
+        "staging-api, password [redacted]",
+    ]
+    for request in gateway.external.requests:
+        assert all("hunter2" not in text for text in texts(request))
+    for request in gateway.adapter.requests:
+        assert all("hunter2" not in text for text in texts(request))
+    events = gateway.store.events(waiting.run_id)
+    assert all("hunter2" not in json.dumps(e.payload) for e in events)
 
 
 # --- when the handoff cannot happen -------------------------------------------------

@@ -18,10 +18,18 @@ nothing scripted, so any call to it fails the test.
 import asyncio
 import dataclasses
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from helpers import BASELINE, FakeClock, ScriptedAdapter, make_demo_skills, of_type
+from helpers import (
+    BASELINE,
+    DEMO_SKILLS_ROOT,
+    FakeClock,
+    ScriptedAdapter,
+    make_demo_skills,
+    of_type,
+)
 from relaymind.adapters import Completed, TextDelta, ToolCall, Usage
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
@@ -168,6 +176,17 @@ def replace_handler(
         changes["timeout_seconds"] = timeout_seconds
     declaration = dataclasses.replace(tool.declaration, **changes)
     gateway.tools._tools[name] = dataclasses.replace(tool, declaration=declaration)
+
+
+def local_eligible_skills(tmp_path: Path) -> list[Path]:
+    """Skill roots: a copy of the demo skills with investigate-performance allowed locally."""
+    root = tmp_path / "skills"
+    shutil.copytree(DEMO_SKILLS_ROOT, root)
+    manifest = root / "investigate-performance" / "skill.manifest.json"
+    data = json.loads(manifest.read_text("utf-8"))
+    data["local_eligible"] = True
+    manifest.write_text(json.dumps(data), "utf-8")
+    return [root]
 
 
 def seed_with(tmp_path: Path, **changes) -> Path:

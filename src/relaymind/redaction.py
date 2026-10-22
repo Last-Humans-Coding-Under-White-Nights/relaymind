@@ -9,12 +9,15 @@ key is replaced with ``[redacted]`` wherever it appears, at any depth.
 Free text, such as model output, has no keys. The values that were
 found under secret keys during a run can be scrubbed from it with
 ``redact_text``, so a model that repeats a secret it was shown does not
-write it into the trace either. It replaces whole tokens only, so a
-short secret value never corrupts unrelated words or numbers.
+write it into the trace either; ``scrub`` does the same for every string
+of a JSON value. It replaces whole tokens only, in one pass, so a short
+secret value never corrupts unrelated words or numbers, and a
+replacement is never scrubbed again.
 
 This module imports nothing from the rest of RelayMind.
 """
 
+import json
 import re
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -56,17 +59,37 @@ class Redactor:
 
     def redact(self, value: Any) -> Any:
         """A copy of a JSON value with every secret field's value replaced."""
+        return self._redact(value, None)
+
+    def redact_with_repeats(self, value: Any, known: Iterable[str] = ()) -> Any:
+        """redact(), and the secret values replaced in every other string.
+
+        A secret that sits in a field may also be repeated in free text
+        next to it, such as a log message. The values found under secret
+        fields of this same value, and the known values a run has
+        already seen, are scrubbed (spec 0.12, section 8), as whole
+        tokens (see redact_text).
+        """
+        return self._redact(value, _pattern(self.secret_values(value) | set(known)))
+
+    def _redact(self, value: Any, pattern: re.Pattern[str] | None) -> Any:
         if isinstance(value, Mapping):
             return {
-                key: REDACTED if self.is_secret(key) else self.redact(item)
+                key: REDACTED if self.is_secret(key) else self._redact(item, pattern)
                 for key, item in value.items()
             }
         if isinstance(value, list | tuple):
-            return [self.redact(item) for item in value]
+            return [self._redact(item, pattern) for item in value]
+        if pattern is not None and isinstance(value, str):
+            return pattern.sub(REDACTED, value)
         return value
 
     def secret_values(self, value: Any) -> frozenset[str]:
-        """The non-blank strings found under secret fields, at any depth."""
+        """The non-blank strings and numbers found under secret fields, at any depth.
+
+        A number is kept as its JSON text, so a numeric PIN repeated in a
+        log message is scrubbed too. A boolean is not a secret value.
+        """
         found: set[str] = set()
         self._collect(value, inside_secret=False, found=found)
         return frozenset(found)
@@ -78,8 +101,32 @@ class Redactor:
         elif isinstance(value, list | tuple):
             for item in value:
                 self._collect(item, inside_secret=inside_secret, found=found)
-        elif inside_secret and isinstance(value, str) and value.strip() and value != REDACTED:
+        elif not inside_secret or isinstance(value, bool):
+            return
+        elif isinstance(value, str) and value.strip() and value != REDACTED:
             found.add(value)
+        elif isinstance(value, int | float):
+            found.add(json.dumps(value))
+
+
+def scrub(value: Any, secrets: Iterable[str]) -> Any:
+    """A copy of a JSON value with the secret values replaced in every string.
+
+    Keys are left alone; this is for free text whose secret fields were
+    already redacted, such as the data of a tool result.
+    """
+    pattern = _pattern(secrets)
+    return value if pattern is None else _scrub(value, pattern)
+
+
+def _scrub(value: Any, pattern: re.Pattern[str]) -> Any:
+    if isinstance(value, Mapping):
+        return {key: _scrub(item, pattern) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_scrub(item, pattern) for item in value]
+    if isinstance(value, str):
+        return pattern.sub(REDACTED, value)
+    return value
 
 
 def redact_text(text: str, secrets: Iterable[str]) -> str:
@@ -87,9 +134,17 @@ def redact_text(text: str, secrets: Iterable[str]) -> str:
 
     A value is replaced as a whole token: it must not continue a longer
     run of letters or digits, so a short value such as "1" or "true"
-    leaves 10 and untrue alone.
+    leaves 10 and untrue alone. All values are replaced in one pass, so
+    a replacement is never scrubbed again.
     """
-    for secret in sorted(set(secrets), key=len, reverse=True):
-        pattern = rf"(?<![A-Za-z0-9]){re.escape(secret)}(?![A-Za-z0-9])"
-        text = re.sub(pattern, lambda _: REDACTED, text)
-    return text
+    pattern = _pattern(secrets)
+    return text if pattern is None else pattern.sub(REDACTED, text)
+
+
+def _pattern(secrets: Iterable[str]) -> re.Pattern[str] | None:
+    """One whole-token pattern for all values, longest first; None when there are none."""
+    values = sorted({s for s in secrets if s}, key=len, reverse=True)
+    if not values:
+        return None
+    alternatives = "|".join(re.escape(value) for value in values)
+    return re.compile(rf"(?<![A-Za-z0-9])(?:{alternatives})(?![A-Za-z0-9])")

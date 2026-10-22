@@ -531,6 +531,61 @@ def test_secret_fields_are_redacted_before_persistence(store, run_id):
     assert "s3cr3t" not in str(record) and "hunter2" not in str(record)
 
 
+def test_a_repeated_secret_is_scrubbed_from_data_but_not_from_the_envelope(store, run_id):
+    """RM12, section 8 (spec 0.12): only the result's data is free text.
+
+    A secret value that is also a word of the tool name, status, or
+    source reference must not break the recorded ToolResult envelope.
+    """
+
+    def leaky(args):
+        return {"service": "read token in use", "calls": 1, "token": "read"}
+
+    executor = make_executor(store, declaration("read_service", leaky))
+    executor.redactor = Redactor(secret_fields={"token"})
+    execution = call(executor, run_id)
+    result = execution.result
+    assert result.status is ToolStatus.SUCCEEDED
+    assert result.tool_name == "read_service"
+    assert result.source_ref.startswith("tool:read_service/")
+    assert result.data == {"service": "[redacted] token in use", "calls": 1, "token": "[redacted]"}
+    record = store.get_tool_operation(result.operation_id)
+    assert record["result"] == result.to_json_object()
+
+
+def test_secrets_the_run_already_knows_are_scrubbed_from_a_later_result(store, run_id):
+    """RM12, section 8 (spec 0.12): a known secret repeated without its field is redacted."""
+
+    def leaky(args):
+        return {"service": "s3cr3t-token in use", "calls": 1}
+
+    executor = make_executor(store, declaration("read_service", leaky))
+    executor.redactor = Redactor(secret_fields={"token"})
+    execution = call(executor, run_id, secrets=frozenset({"s3cr3t-token"}))
+    assert execution.result.data["service"] == "[redacted] in use"
+    record = store.get_tool_operation(execution.result.operation_id)
+    assert "s3cr3t" not in str(record)
+
+
+def test_a_redaction_error_after_the_handler_ran_still_finishes_the_record(store, run_id):
+    """RM10, RM14: a failure while recording a finished handler never leaves it pending."""
+
+    class BrokenRedactor(Redactor):
+        def secret_values(self, value):
+            if isinstance(value, dict) and "calls" in value:  # the handler's data only
+                raise ValueError("redaction failed")
+            return super().secret_values(value)
+
+    handler = CountingHandler()
+    executor = make_executor(store, declaration("read_service", handler))
+    executor.redactor = BrokenRedactor(secret_fields={"token"})
+    with pytest.raises(ValueError, match="redaction failed"):
+        call(executor, run_id)
+    assert handler.calls == 1
+    recorded = store.get_tool_operation(operation_id(executor, run_id))
+    assert recorded is not None and recorded["status"] == "failed"
+
+
 def test_a_time_limit_error_after_the_pending_record_still_finishes_it(store, run_id):
     """RM10, RM14: once the operation is recorded pending, any exception
     finishes it, so a later call is never stuck as in flight."""
