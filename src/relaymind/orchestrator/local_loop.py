@@ -939,12 +939,15 @@ class _Run:
         async def route() -> Routing:
             pending = self.pending
             assert pending is not None
+            # RM12, section 8: scrubbed once, for the trace and the conversation,
+            # so a later handoff never carries the raw secret (RM13).
+            answer = self.scrub(text)
             waited_ms = self._waited_ms()
             self.waiting_ms += waited_ms
             self.emit(
                 EventType.CLARIFICATION_ANSWERED,
                 GATEWAY_ACTOR,
-                {"input": self.scrub(text), "missing": pending.missing, "waited_ms": waited_ms},
+                {"input": answer, "missing": pending.missing, "waited_ms": waited_ms},
             )
             self.pending = None
             self.waiting_since = None
@@ -953,7 +956,7 @@ class _Run:
             self.messages = (
                 *self.messages,
                 Message(role=Role.ASSISTANT, content=pending.question),
-                Message(role=Role.USER, content=text),
+                Message(role=Role.USER, content=answer),
             )
             if pending.skill_id is None:
                 # No skill was chosen: route again with a routing generation.
