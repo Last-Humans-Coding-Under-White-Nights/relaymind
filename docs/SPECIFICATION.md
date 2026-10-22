@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.20 | 22 October 2026 | Proposed implementation baseline
+Version 0.21 | 22 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that lets a small model complete bounded tasks with skills and tools, and transfers complex work to an external model. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -504,6 +504,31 @@ An implementation plan should proceed through adapter and protocol qualification
 Every implementation task and acceptance test MUST reference requirement IDs from this document. Changes to tool ownership, approval rules, API behavior, supported platforms, or evaluation definitions require a specification revision before implementation changes. Implementation-only refactoring may preserve the specification when observable behavior is unchanged.
 
 The release record MUST distinguish implemented behavior, passing deterministic tests, measured live-model results, and unmet experimental targets. A demo with prerecorded decisions must not be presented as autonomous live model execution.
+
+### 14.1 Operator launcher
+
+The operator starts the gateway with one command on macOS and Windows: `relaymind serve --config PATH`. The command is the `relaymind` console script of the package; it needs no WSL or Docker (section 3). PATH names a TOML file, the only way to configure a start. The command line carries no setting other than the file, and in particular no credential.
+
+The file has these tables. A key outside this list, in any table, is a startup error; so is a value of the wrong type, a port outside 1 to 65535, a duration, token limit, or context limit that is not positive, and a permission other than demo.read and demo.mutate. Relative paths resolve against the working directory, like skill roots (section 4.2).
+
+| Table | Keys | Meaning |
+| --- | --- | --- |
+| server | host (default 127.0.0.1), port (default 8080) | The bind address. Only localhost or a loopback literal is accepted (section 7.1). |
+| store | path (default relaymind.sqlite3) | The SQLite run store (section 5). |
+| skills | roots (default ["skills"]) | The skill roots (section 4.2). |
+| sandbox | seed (default tests/fixtures/sandbox/baseline.json), work_dir (default .relaymind/sandbox) | The sandbox demo data service and its working copy (section 9). The demo tools are the only registered tools. |
+| local_model | manifest and artifact (both required), base_url (default http://127.0.0.1:8033) | The pinned local artifact (section 6) and its loopback llama-server. A base_url whose host is not localhost or a loopback literal is a startup error, because a remote server would make the local-first evidence false (RM01). |
+| external_model | base_url, model, context_limit (all required), api_key_env, supported_options | The external Chat Completions endpoint (section 6). The table is optional; without it no external model is configured and every escalation ends as needs_external (RM04). |
+| policy | degraded_mode (default false), enabled_workflows (default empty), allowed_modes (default all four), permissions (default demo.read and demo.mutate) | The degraded-mode policy (section 11), the enabled workflow IDs (section 4.4), the execution modes the API permits (section 7.1), and the permissions of the caller (RM08). Every mutation still needs a confirmation (RM11). |
+| chat | max_completion_tokens, supported_options | ChatSettings (section 7.1). |
+| native | poll_seconds, heartbeat_seconds, sweep_seconds, cancel_wait_seconds | NativeSettings (section 7.4). |
+| ui | mode (required), arm_wait_seconds, poll_seconds | Enables the demo UI with the declared data mode (section 9). Without the table the app serves no UI route. A table without a mode is a startup error. |
+
+The credential of the external model is never in the file or on the command line. The file names the environment variable that holds it (api_key_env, default RELAYMIND_EXTERNAL_API_KEY), and the adapter reads it from the environment when it calls the provider; an operator who keeps it in an OS credential store exports it into the environment of the launching shell. A key named api_key, or any key that is not listed above, is refused. A missing credential is not a startup error, because the adapter reports it as unavailable at call time and readiness shows it (RM16); the launcher does not read or print its value.
+
+Startup is all-or-nothing and runs in this order: read the file, which checks every key, type, and the data mode; check the bind address; check the workflow IDs; verify the local artifact against its manifest (the file hash, and for a GGUF file the tokenizer and chat-template hashes, section 6); open the sandbox and register the demo tools; load and validate every skill package against them; open the run store; build the orchestrator. It then runs restart recovery (section 5) exactly once, before the server socket exists, so no run is accepted first. Any failure before that point, including a public bind address, a manifest hash mismatch, an invalid skill package, an unknown workflow ID, an undeclared or unknown data mode, an unreadable file, an unknown key, a sandbox seed that cannot be read, and a run store that cannot be opened, stops the command with exit status 2 and one explicit message on standard error that names the cause, and no socket is opened. The message never contains a credential or a token, and a refused command-line argument is not echoed, because it may be one.
+
+After recovery the launcher creates the application token (section 7.1) by building the app, prints it once to standard output as one line, `Application token: <token>`, together with the bind address as a URL (an IPv6 literal in brackets), and then serves until stopped. It writes the token nowhere else: not to a log, a file, or standard error. When recovery ended unfinished runs, the launcher also prints how many, so the operator can see them in the store.
 
 ## 15 Sources
 

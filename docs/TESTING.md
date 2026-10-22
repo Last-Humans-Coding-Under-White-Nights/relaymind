@@ -7,10 +7,12 @@ confirmation, restart recovery, and the error contract; M4 adds the
 gateway's public API and the demo UI (see [`ROADMAP.md`](ROADMAP.md)).
 M3 and M4 are covered by deterministic tests with model doubles only;
 [What is not covered yet](#what-is-not-covered-yet) lists the gaps. The
-manual JSON steps below target the llama-server endpoint that the
-`LlamaCppAdapter` talks to. The gateway has no launcher yet; the
-[README](../README.md#send-a-message) shows a script that starts it and
-the requests to send it.
+gateway's public API (`/v1/chat/completions`, `/relay/v1/runs`) is
+started with `relaymind serve --config` (see
+[Starting the gateway](#starting-the-gateway)); the
+[README](../README.md#start-the-gateway) shows the requests to send it.
+The manual JSON steps below target the llama-server endpoint that the
+`LlamaCppAdapter` talks to.
 
 ## Automated suites
 
@@ -228,8 +230,9 @@ itself, with the manifest's SHA-256; any other file fails the run.
   parallel workflow (#30) lands, so `/readyz` never reports it ready.
 - No production backend forwards a live provider stream yet, so the
   mid-stream failure path is tested with a backend double.
-- There is no launcher, so no test starts the gateway the way an
-  operator would.
+- The launcher (`relaymind serve --config`) is tested with model doubles
+  only (`tests/test_launcher.py`); no test starts a real server and model
+  the way an operator would.
 
 ### Required trace events (RM16, RM22, RM25)
 
@@ -335,6 +338,26 @@ discovery and transport doubles, without a real proxy or model. The #56
 Windows run predates this fix. The #58 hosted native Windows run now
 passes without those overrides (see the new evidence entry); it does not
 reproduce the earlier contributor's corporate proxy environment.
+
+## Starting the gateway
+
+The same command starts the gateway on macOS (Terminal) and Windows
+(PowerShell 5.1+). Copy `relaymind.example.toml` to `relaymind.toml`,
+start the pinned runtime as in step 1 below, then run:
+
+```bash
+relaymind serve --config relaymind.toml
+```
+
+It prints the application token once as `Application token: <token>`;
+use it as the bearer token. A public bind address, a model file that does
+not match its manifest, an invalid skill package, or a `[ui]` table with no
+data mode stops it with a message on standard error and exit status 2.
+`pytest tests/test_launcher.py` checks these paths and the single restart
+recovery call with model doubles (spec 0.21 section 14.1); it does not
+start a real server or model. On Windows, set the external credential with
+`$env:RELAYMIND_EXTERNAL_API_KEY = "..."` in the same shell; never pass it
+on the command line.
 
 ## Manual JSON testing from a terminal
 

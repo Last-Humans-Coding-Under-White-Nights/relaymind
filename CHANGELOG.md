@@ -24,6 +24,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Operator launcher (#87; RM12, RM17, RM18, RM19, RM21, RM23; spec 0.21
+  section 14.1): `relaymind serve --config relaymind.toml` starts the
+  gateway on macOS and Windows. The TOML file wires the local and
+  external models, skill roots, sandbox, run store, chat and native
+  settings, the degraded-mode policy, enabled workflows, and the UI data
+  mode. Startup refuses a public bind address, a manifest hash mismatch,
+  an invalid skill package, an undeclared data mode, an unknown key, a
+  credential in the file, a non-loopback local model URL, an out-of-range
+  port, a non-positive duration or limit, an unknown permission, an
+  unreadable sandbox seed, and an unusable run store, with one message and
+  exit status 2. A refused command-line argument is never echoed. Restart
+  recovery runs once before the server accepts a run, and the token is
+  printed once to standard output only. `relaymind.example.toml` is the
+  template; the README, `docs/TESTING.md`, and `docs/ROADMAP.md` use the
+  command. Tests use model doubles (`tests/test_launcher.py`); no live run
+  is recorded.
+- Specification 0.20 → 0.21: section 14.1 defines the operator launcher
+  (#87; RM12, RM17, RM18, RM19, RM21, RM23): the `relaymind serve --config`
+  command, the TOML tables, credentials from the environment only, the
+  all-or-nothing startup order, restart recovery once before serving, and
+  the explicit startup errors, including the value-range, permission, and
+  loopback local model checks.
 - Demo trace UI (#28; RM23, RM25, RM11, RM21; spec 0.20 sections 8 and 9):
   the gateway serves a static page at `GET /ui` (no token, no run data,
   a content security policy) that shows a run's original prompt, mode,
