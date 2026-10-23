@@ -49,7 +49,7 @@ from relaymind.adapters import (
     ToolCall,
 )
 from relaymind.orchestrator.budgets import LocalBudgets
-from relaymind.orchestrator.local_loop import ConfiguredModel
+from relaymind.orchestrator.local_loop import ConfiguredModel, skill_stage_messages
 from relaymind.orchestrator.run_state import RunState, SlotUnavailableError
 from relaymind.redaction import Redactor
 from relaymind.skills import SkillVersionMissingError
@@ -498,6 +498,36 @@ def test_the_skill_generation_sees_the_skill_and_its_permitted_tools(tmp_path):
     after_tool = gateway.adapter.requests[2]
     tool_messages = [m for m in after_tool.messages if m.role is Role.TOOL]
     assert len(tool_messages) == 1 and "2026-10-20T02:58:00Z" in tool_messages[0].content
+
+
+def test_the_skill_stage_conversation_is_one_pure_function(tmp_path):
+    """RM06, RM08: the helper builds the conversation the skill stage sends.
+
+    The prefix-cache probe (#114) and the warm-up (#124) send what the gateway sends by
+    calling the same function, so the test pins the helper to a real run's request.
+    """
+    gateway = build_gateway(
+        tmp_path,
+        [
+            route_turn("check-service-health"),
+            tool_turn("get_service_health", service="staging-api"),
+            text_turn(STAGING_OK),
+            text_turn(STAGING_OK),
+        ],
+    )
+    run(gateway)
+    skill = gateway.skills.get("check-service-health")
+    user = Message(role=Role.USER, content="Is staging-api healthy right now?")
+    built = skill_stage_messages(skill, [user], ["get_service_health"])
+    assert list(gateway.adapter.requests[1].messages) == built
+    first, middle, body = built
+    assert first.role is Role.SYSTEM and middle is user and body.role is Role.SYSTEM
+    assert first.content.startswith(skill.description)
+    assert body.content == f"Skill instructions:\n{skill.body}"
+    # Two offered tools are named with "or", in the order given.
+    two = skill_stage_messages(skill, [user], ["get_metrics", "get_recent_logs"])
+    assert "get_metrics or get_recent_logs" in two[0].content
+    assert skill_stage_messages(skill, (user,), ["get_service_health"]) == built
 
 
 def test_run_accepts_a_message_list(tmp_path):
