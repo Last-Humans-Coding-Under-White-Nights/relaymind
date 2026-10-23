@@ -109,6 +109,19 @@ enabled_workflows = []
 # prefetch = false
 # early_headers = false
 
+# The startup warm-up of the local model (spec 0.31 sections 6 and 14.1). Both keys
+# are optional and the values below are the defaults. After restart recovery and
+# before the address and the token are printed, the gateway sends one
+# routing-shaped and one skill-shaped generation to the local model, so the first
+# request does not pay for loading it. They are not runs. warmup_seconds bounds
+# both together; a runtime that does not answer in time prints one line on
+# standard error and the gateway still starts. Set warmup = false to send
+# nothing. The placement policy keys (policy, margin, probe_after_seconds,
+# detect) are not implemented yet and stop startup as unknown keys.
+# [placement]
+# warmup = true
+# warmup_seconds = 30
+
 # The routing-result cache (spec 0.26 section 10). Off by default and in the
 # benchmark configuration: leave it false for any measurement you report as the
 # baseline. When true, a repeated local read-only request skips only the routing

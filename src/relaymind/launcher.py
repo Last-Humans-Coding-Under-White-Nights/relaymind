@@ -5,7 +5,10 @@ settings, policy, and UI into the gateway. Startup is all-or-nothing:
 every check that can fail runs before the server socket exists, and a
 failure is one explicit ``LaunchError`` message, never a traceback.
 Restart recovery (section 5) runs exactly once, after the orchestrator
-is built and before the server accepts a run.
+is built and before the server accepts a run. The warm-up of the local
+model (``placement.warmup``, section 6) is a separate step, ``warm_up_gateway``,
+that ``main`` runs after recovery and before the address and the token are
+printed; building the app never sends a generation.
 
 The only command line setting is the file. A credential is never in the
 file or on the command line: the file names the environment variable
@@ -15,6 +18,8 @@ written nowhere else.
 """
 
 import argparse
+import asyncio
+import math
 import sqlite3
 import sys
 import tomllib
@@ -46,6 +51,7 @@ from relaymind.orchestrator.prefetch import PrefetchBudgetError, check_prefetch_
 from relaymind.orchestrator.recovery import RecoveryError
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.routing_cache import RoutingCache
+from relaymind.orchestrator.warmup import WarmupResult, warm_up
 from relaymind.orchestrator.workflows import PARALLEL_WORKFLOWS
 from relaymind.skills import SkillConfigError, SkillRegistry, default_skill_roots
 from relaymind.skills.predicates import COMPLETION_PREDICATES
@@ -69,6 +75,7 @@ DEFAULT_STORE_PATH = "relaymind.sqlite3"
 DEFAULT_LOCAL_URL = "http://127.0.0.1:8033"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8080
+DEFAULT_WARMUP_SECONDS = 30.0
 DEFAULT_PERMISSIONS = (READ_PERMISSION, MUTATE_PERMISSION)
 KNOWN_PERMISSIONS = frozenset(DEFAULT_PERMISSIONS)
 
@@ -100,6 +107,9 @@ _TABLES: dict[str, frozenset[str]] = {
     "budgets": frozenset(f.name for f in fields(LocalBudgets)),
     # Spec 0.32 section 14.1: the keys are the PerformanceSettings fields (RM31, RM32).
     "performance": frozenset(f.name for f in fields(PerformanceSettings)),
+    # Spec 0.31 section 14.1: only the warm-up keys exist so far. The placement policy, its
+    # margin, the idle probe, and the local model check stay unknown keys until they are built.
+    "placement": frozenset({"warmup", "warmup_seconds"}),
 }
 
 
@@ -133,15 +143,26 @@ class LauncherConfig:
     budgets: LocalBudgets = field(default_factory=LocalBudgets)
     # Spec 0.32 section 14.1: the performance options; every default is the baseline.
     performance: PerformanceSettings = field(default_factory=PerformanceSettings)
+    # Spec 0.31 section 14.1: the startup warm-up of the local model (section 6).
+    warmup: bool = True
+    warmup_seconds: float = DEFAULT_WARMUP_SECONDS
 
 
 @dataclass(frozen=True)
 class Launched:
-    """A gateway ready to serve: recovery has already run."""
+    """A gateway ready to serve: recovery has already run.
+
+    new_local_adapter makes a fresh adapter for the local runtime, or is None
+    when the caller passed a model double. The warm-up uses it so that no
+    httpx client serves two event loops. warmup holds the timings once
+    ``warm_up_gateway`` has run, and is None before that and with warmup false.
+    """
 
     app: FastAPI
     orchestrator: LocalOrchestrator
     recovered: int
+    new_local_adapter: Callable[[], ModelAdapter] | None = None
+    warmup: WarmupResult | None = None
 
 
 # -- reading the file ---------------------------------------------------------------
@@ -250,6 +271,13 @@ def load_config(path: Path | str) -> LauncherConfig:
 
     budgets = _settings("budgets", lambda: LocalBudgets(**tables["budgets"]))
     performance = _settings("performance", lambda: PerformanceSettings(**tables["performance"]))
+    placement = tables["placement"]
+    warmup = _value(placement, "placement", "warmup", bool, True)
+    warmup_seconds = _value(placement, "placement", "warmup_seconds", (int, float), None)
+    if warmup_seconds is None:
+        warmup_seconds = DEFAULT_WARMUP_SECONDS
+    elif not math.isfinite(warmup_seconds) or not warmup_seconds > 0:
+        raise LaunchError("[placement] warmup_seconds must be a positive number")
 
     return LauncherConfig(
         manifest=Path(_required(local, "local_model", "manifest", str)),
@@ -275,6 +303,8 @@ def load_config(path: Path | str) -> LauncherConfig:
         ui=ui,
         budgets=budgets,
         performance=performance,
+        warmup=warmup,
+        warmup_seconds=float(warmup_seconds),
     )
 
 
@@ -312,25 +342,32 @@ def _external(table: Mapping[str, Any]) -> ChatCompletionsConfig:
 # -- building the gateway -----------------------------------------------------------
 
 
-def _local_model(config: LauncherConfig, adapter: ModelAdapter | None) -> ConfiguredModel:
+def _local_model(
+    config: LauncherConfig, adapter: ModelAdapter | None
+) -> tuple[ConfiguredModel, Callable[[], ModelAdapter] | None]:
+    """The local model, and a maker of fresh adapters for it (None for an injected double)."""
     try:
         manifest = load_manifest(config.manifest)
         verify_artifact(manifest, config.artifact)
         context, kwargs = launch_adapter_settings(manifest.launch_settings)
     except ManifestError as exc:
         raise LaunchError(f"local model: {exc}") from exc
+    maker: Callable[[], ModelAdapter] | None = None
     if adapter is None:
-        adapter = LlamaCppAdapter(
-            LlamaCppConfig(
-                base_url=config.local_url,
-                context_limit=context,
-                chat_template_kwargs=kwargs,
-                # llama-server sends nothing until prefill ends, so a raised
-                # active_seconds needs a read timeout at least as long (RM03).
-                request_timeout_seconds=max(REQUEST_TIMEOUT_SECONDS, config.budgets.active_seconds),
-            )
+        adapter_config = LlamaCppConfig(
+            base_url=config.local_url,
+            context_limit=context,
+            chat_template_kwargs=kwargs,
+            # llama-server sends nothing until prefill ends, so a raised
+            # active_seconds needs a read timeout at least as long (RM03).
+            request_timeout_seconds=max(REQUEST_TIMEOUT_SECONDS, config.budgets.active_seconds),
         )
-    return ConfiguredModel(adapter=adapter, model_id=manifest.model_id)
+
+        def maker() -> ModelAdapter:
+            return LlamaCppAdapter(adapter_config)
+
+        adapter = maker()
+    return ConfiguredModel(adapter=adapter, model_id=manifest.model_id), maker
 
 
 def build_app(
@@ -353,7 +390,7 @@ def build_app(
         raise LaunchError(
             f"[policy] enabled_workflows names unknown workflow: {', '.join(unknown)}"
         )
-    local = _local_model(config, local_adapter)
+    local, new_local_adapter = _local_model(config, local_adapter)
     external = None
     if config.external is not None:
         external = ConfiguredModel(
@@ -422,13 +459,53 @@ def build_app(
             native=config.native,
             ui=ui,
         )
-        return Launched(app=app, orchestrator=orchestrator, recovered=len(report.runs))
+        return Launched(
+            app=app,
+            orchestrator=orchestrator,
+            recovered=len(report.runs),
+            new_local_adapter=new_local_adapter,
+        )
     except RecoveryError as exc:
         store.close()
         raise LaunchError(f"restart recovery failed: {exc}") from exc
     except BaseException:
         store.close()
         raise
+
+
+# -- the warm-up --------------------------------------------------------------------
+
+
+def warm_up_gateway(
+    config: LauncherConfig, launched: Launched, *, local_adapter: ModelAdapter | None = None
+) -> Launched:
+    """Warm the local model up, once, and keep the timings in ``Launched.warmup`` (section 6).
+
+    Called by ``main`` after restart recovery and before the address and the
+    token are printed. It creates no run. With a model double the double
+    is used; otherwise a short-lived adapter of its own does the work in
+    its own event loop and is closed there, so the client that serves the
+    app's loop is never used from two loops. A runtime that does not answer is
+    a result with ready False, never an exception. With warmup false
+    nothing is sent and the result is None.
+    """
+    if not config.warmup:
+        return launched
+    if local_adapter is not None:
+        adapter, owned = local_adapter, False
+    elif launched.new_local_adapter is not None:
+        adapter, owned = launched.new_local_adapter(), True
+    else:
+        adapter, owned = launched.orchestrator.model.adapter, False
+
+    async def work() -> WarmupResult:
+        try:
+            return await warm_up(launched.orchestrator, adapter, seconds=config.warmup_seconds)
+        finally:
+            if owned:
+                await adapter.aclose()
+
+    return replace(launched, warmup=asyncio.run(work()))
 
 
 # -- the command --------------------------------------------------------------------
@@ -494,6 +571,14 @@ def main(
         stdout(
             f"Ended {launched.recovered} unfinished run(s) from an earlier process as interrupted."
         )
+    # Section 14.1: after recovery, before the socket. A runtime that is not ready in time
+    # is one printed line, not a startup error (section 6).
+    launched = warm_up_gateway(config, launched, local_adapter=local_adapter)
+    if launched.warmup is not None:
+        if launched.warmup.ready:
+            stdout(launched.warmup.summary())
+        else:
+            stderr(f"relaymind: local warm-up did not finish: {launched.warmup.detail}")
     host = validate_bind_host(config.host)
     url_host = f"[{host}]" if ":" in host else host
     stdout(f"Serving on http://{url_host}:{config.port}")
