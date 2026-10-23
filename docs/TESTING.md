@@ -586,7 +586,14 @@ feature has a test of the default as well. Later pull requests append here.
   (#140; RM25, RM32): the benchmark config turns on only `early_headers`
   when asked, keep-alive comments are not an answer token, and the first
   transport event is labeled the header time, and not first useful content,
-  when the option is on.
+  when the option is on. Over a real socket a `routing` prompt under early
+  headers ends with the `needs_external` error event and a deliberate close;
+  the sample records `stream_error_code`, keeps its completion time, and is
+  not a transport error, while a close without that event still is.
+  The live check is `scripts/latency_benchmark.py --early-headers` with the
+  pinned runtime first on the path (see
+  [`scripts/README.md`](../scripts/README.md)); no live run with the option
+  is recorded yet.
 
 ### What is not covered yet
 

@@ -29,8 +29,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   when it has one) with no finish chunk and no `[DONE]`. A disconnect still
   cancels the run. Both aliases use it; a request without `stream` and an
   idempotent replay are unchanged. `scripts/latency_benchmark.py
-  --early-headers` runs the gateway with the option and labels the first
-  transport event as the header time.
+  --early-headers` runs the gateway with the option, labels the first
+  transport event as the header time, and reads the mid-stream error event
+  (and the deliberate close after it) as the end of a `routing` sample:
+  the sample keeps its completion time and records the event code in
+  `stream_error_code`; a close without that event is still a transport
+  error (RM25, section 12.2).
 - The `[performance]` launch table (`answer_pass`, `answer_stream`,
   `calls_per_generation`, `prefetch`, `early_headers`) and
   `PerformanceSettings`; every default is the earlier behavior. A wrong value
@@ -48,7 +52,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `scripts/run_corpus.py` takes the draft guards (run language, tool-call
   JSON) from `relaymind.orchestrator.performance`, so the offline regrade
   and the gateway apply one rule (#115, #121).
-
 - `Usage.cached_tokens` is `None` when the source returned no count, not
   0 (#120; RM16, spec 0.31 section 6, finding F9), and the same holds for
   `reasoning_tokens`. The recorded `usage` of an event, the timing
