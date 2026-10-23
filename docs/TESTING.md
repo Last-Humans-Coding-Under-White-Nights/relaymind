@@ -412,9 +412,48 @@ Deterministic tests over model doubles:
   to the export. Results are reported per language, and the matcher's output is
   the same under six values of `PYTHONHASHSEED`.
 
+- `pytest tests/test_local_loop.py` also pins `skill_stage_messages`
+  (#114): the pure function that builds the skill-stage conversation is
+  the conversation of a real run's skill-stage request, so the probes and
+  the later warm-up send what the gateway sends.
+- `pytest tests/test_runtime_extra_args.py` (#117; RM18, spec 0.31
+  section 12.2): the default adds no launch argument, given extra
+  arguments are launched after the manifest's settings and recorded as
+  `extra_args` in the export, the option text is split like a shell would,
+  a short flag, a pinned setting, the model, and the bind address are
+  refused, a negative number is a value, and the corpus runner, the
+  latency runner, and the live harness take the option.
+- `pytest tests/test_probe_prefix_cache.py` (#114): the body the probe
+  sends equals `build_chat_request` for the same messages plus
+  `cache_prompt` (written so that it still holds when the adapter itself
+  sends `cache_prompt`), a group has a cold pair, warm-ups, and ten
+  distinct requests per purpose, the whole `timings` and `usage` objects
+  are kept, a count the runtime did not return is null and not 0, the
+  summary gives the reused share per group, a failed request is a row and
+  the pass goes on, and the common token prefix is computed correctly.
+- `pytest tests/test_probe_cancel_prefill.py` (#117): the long prompt is
+  sized to the target and fits the slot context, a repetition sends idle,
+  long, cancel, short in that order, no two long prompts share a prefix,
+  and a definition without a short-prompt pair per repetition is refused.
+- `pytest tests/test_probe_external_latency.py` (#116) over
+  `httpx.MockTransport`, with no provider call: the checked-in definition
+  is four arms of five, the answer arms offer no tool and carry the health
+  exchange, the tool arms offer the tools of `investigate-performance`,
+  the reasoning switch is the only difference between the arms of a shape,
+  timings come from the clock in the order of the stream, a tool-call delta
+  is the first output, usage is kept whole and a missing count is null,
+  the plan is refused over its call cap, a failed call is not retried, the
+  credential is sent and never recorded, and the entry point prints no
+  credential.
+
 The live runs are scripts, not tests: `scripts/run_corpus.py` and
 `scripts/latency_benchmark.py` (see [`scripts/README.md`](../scripts/README.md));
-their results are in [`EVIDENCE.md`](EVIDENCE.md). The three offline
+their results are in [`EVIDENCE.md`](EVIDENCE.md). The three runtime and
+provider timing probes of M7 (#114, #116, #117) are live scripts too
+(`probes/probe_prefix_cache.py`, `probes/probe_cancel_prefill.py`, and
+`probes/probe_external_latency.py`); the first two need the pinned
+runtime and the model, the third calls a provider and needs its key in the
+environment. Their deterministic tests above use doubles. The three offline
 spikes of M7 (#115, #118, #119) are scripts over the stored corpus export
 (`run_corpus.py --regrade-draft-pass`, `probes/count_multi_calls.py`, and
 `probes/probe_example_match.py`; the commands are in
