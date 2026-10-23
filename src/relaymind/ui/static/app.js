@@ -45,6 +45,23 @@
     return slot;
   }
 
+  function showConfigurations() {
+    const banner = byId("run-configurations");
+    banner.replaceChildren();
+    // One label per visible run also keeps comparison arms distinct (RM23).
+    for (const trace of document.querySelectorAll("main .trace")) {
+      const config = trace.querySelector("[data-run-configuration]");
+      if (!config) continue;
+      const item = document.createElement("details");
+      const title = document.createElement("summary");
+      title.textContent = "Run " + trace.dataset.runId + " configuration";
+      item.open = true;
+      item.append(title, config.cloneNode(true));
+      banner.append(item);
+    }
+    if (!banner.children.length) banner.textContent = "No run selected.";
+  }
+
   async function refresh(runId, container) {
     const response = await api("GET", "/ui/runs/" + encodeURIComponent(runId));
     if (!response.ok) {
@@ -65,6 +82,7 @@
       }
     }
     const trace = slot.querySelector(".trace");
+    showConfigurations();
     if (trace && trace.dataset.terminal === "true") open.delete(runId);
     if (trace) await prepareApproval(trace, slot);
   }
@@ -190,6 +208,7 @@
     const result = await response.json();
     const area = byId("comparison");
     area.replaceChildren();
+    showConfigurations();
     const grid = document.createElement("div");
     grid.className = "compare";
     area.append(grid);

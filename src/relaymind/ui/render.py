@@ -87,6 +87,7 @@ def render_shell(settings: UiSettings) -> str:
         "<title>RelayMind demo trace</title>"
         '<link rel="stylesheet" href="/ui/app.css"></head><body>'
         f'<header class="top">{mode_banner(settings)}'
+        '<div id="run-configurations" aria-live="polite">No run selected.</div>'
         "<h1>RelayMind demo trace</h1>"
         f"{sandbox_line(settings)}"
         '<label class="token">Application token<input id="token" type="password" '
@@ -145,6 +146,34 @@ def _answer_options(view: Mapping[str, Any]) -> str:
     )
 
 
+def _configuration(view: Mapping[str, Any]) -> str:
+    """Only this run's recorded settings, including explicit absence (RM23, RM26)."""
+    config = view["configuration"]
+    labels = (
+        ("local_model", "Local model"),
+        ("local_model_status", "Local model status"),
+        ("local_model_reason", "Local model reason"),
+        ("placement_policy", "Placement policy"),
+        ("answer_pass", "Answer pass"),
+        ("answer_stream", "Answer stream"),
+        ("calls_per_generation", "Calls per generation"),
+        ("prefetch", "Prefetch"),
+        ("early_headers", "Early headers"),
+        ("selection", "Selector chain"),
+    )
+    parts = []
+    for key, label in labels:
+        value = config[key]
+        if key == "local_model" and value is None and config["local_model_status"] == "absent":
+            value = "none configured"
+        elif isinstance(value, bool):
+            value = "on" if value else "off"
+        elif isinstance(value, list):
+            value = ", ".join(value)
+        parts.append(f"<p>{label}: {_t(value) if value is not None else 'not recorded'}</p>")
+    return "<div data-run-configuration>" + "".join(parts) + "</div>"
+
+
 def _models(view: Mapping[str, Any]) -> str:
     active = view["active_model"]
     head = f"<p>Active model: <strong>{_t(active) if active else 'none yet'}</strong></p>"
@@ -156,13 +185,16 @@ def _models(view: Mapping[str, Any]) -> str:
         f"<td>{_t(c['purpose'])}</td>"
         + (f"<td>{_t(c['branch'])}</td>" if branched else "")
         + f"<td>{_t(c['actor'])}</td><td>{_t(c['model'])}</td>"
-        f"<td>{_call_status(c)}</td></tr>"
+        f"<td>{_call_status(c)}</td><td>{_ms(c['first_token_ms'], 'not recorded')}</td>"
+        f"<td>Predicted: {_ms(c['predicted_ms'], 'not recorded')}; "
+        f"actual: {_ms(c['duration_ms'], 'not recorded')}</td></tr>"
         for c in view["model_calls"]
     )
     branch_head = "<th>Branch</th>" if branched else ""
     return (
         f"{head}<table><thead><tr><th>Purpose</th>{branch_head}<th>Actor</th><th>Model</th>"
-        f"<th>Result</th></tr></thead><tbody>{rows}</tbody></table>"
+        f"<th>Result</th><th>First token</th><th>Placement timing</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table>"
     )
 
 
@@ -219,10 +251,35 @@ def _skill_and_route(view: Mapping[str, Any]) -> str:
     )
     if route is None:
         return skill_text + _NONE.format("No route decision yet.")
-    return skill_text + (
-        f"<p>Route: <strong>{_t(route['route'])}</strong>, skill {_t(route['skill_id'])}, "
-        f"reason {_t(route['reason_code'])}, mechanism {_t(route['mechanism'])}.</p>"
-    )
+    parts = [skill_text]
+    for route in view["routes"]:
+        parts.append(
+            f"<p>Route: <strong>{_t(route['route'])}</strong>, skill {_t(route['skill_id'])}, "
+            f"reason {_t(route['reason_code'])}, mechanism {_t(route['mechanism'])}.</p>"
+        )
+        selector = route["selector"]
+        if selector is None:
+            parts.append("<p>Selector: not recorded</p>")
+        else:
+            attempts = "; ".join(f"{a['name']}: {a['outcome']}" for a in selector["attempts"])
+            parts.append(
+                f"<p>Selector: {_t(selector['name'] or 'none selected')}; "
+                f"version: {_t(selector['version'])}; mechanism: {_t(selector['mechanism'])}; "
+                f"elapsed: {_ms(selector['elapsed_ms'], 'not recorded')}. "
+                f"Attempts: {_t(attempts) or 'none'}</p>"
+            )
+        placement = route["placement"]
+        parts.append(
+            "<p>Placement: not recorded</p>"
+            if placement is None
+            else f"<p>Placement: <code>{_json(placement)}</code></p>"
+        )
+        prediction = None if placement is None else placement.get("predicted_ms")
+        parts.append(
+            f"<p>Predicted: {_ms(prediction, 'not recorded')}; "
+            f"actual: {_ms(route['duration_ms'], 'not recorded')}</p>"
+        )
+    return "".join(parts)
 
 
 def _branch(item: Mapping[str, Any]) -> str:
@@ -342,7 +399,7 @@ def _answer(view: Mapping[str, Any]) -> str:
 
 
 def _ms(value: int | None, missing: str) -> str:
-    return missing if value is None else f"{value} ms"
+    return _t(missing) if value is None else f"{_t(value)} ms"
 
 
 def _timing(view: Mapping[str, Any]) -> str:
@@ -407,6 +464,7 @@ def render_trace(view: Mapping[str, Any], settings: UiSettings) -> str:
         _section("Original prompt", _prompt(view), "prompt"),
         _section("Execution mode", _mode(view), "mode"),
         _section("Answer options", _answer_options(view), "options"),
+        _section("Run configuration", _configuration(view), "configuration"),
         _section("Models", _models(view), "models"),
         *(
             [_section("Parallel workflow", _workflow(view), "workflow")]
@@ -414,13 +472,19 @@ def render_trace(view: Mapping[str, Any], settings: UiSettings) -> str:
             else []
         ),
         _section("Skill and route", _skill_and_route(view), "skill"),
+        _section("Workflow steps", "<p>Workflow steps: not recorded</p>", "workflow-steps"),
         _section("Tool proposals", _proposals(view), "proposals"),
         _section("Tool operations", _operations(view), "operations"),
         _section("Failed operations", _failed(view), "failed"),
         _section("Escalation", _escalation(view), "escalation"),
         _section("Clarification", _clarifications(view), "clarification"),
         _section("Confirmation", _confirmation(view), "confirmation"),
-        _section("Final answer", _answer(view), "answer"),
+        _section(
+            "Final answer",
+            _answer(view)
+            + f"<p>Answer pass applied: {_t(view['answer_pass_applied'] or 'not recorded')}</p>",
+            "answer",
+        ),
         _section("Timing", _timing(view), "timing"),
     )
     return (

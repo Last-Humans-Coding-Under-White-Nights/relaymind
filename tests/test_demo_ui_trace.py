@@ -23,6 +23,7 @@ from gateway_helpers import (
 )
 from helpers import ACCEPTED_PAYLOAD, of_type
 from relaymind.adapters import GenerationOptions
+from relaymind.orchestrator.performance import PerformanceSettings
 from relaymind.store import RunRecord, RunStore, TraceEvent
 from relaymind.store.trace_event import EventType, validate_trace_event
 from relaymind.ui.render import render_trace
@@ -51,6 +52,163 @@ FRESH_RECORD = RunRecord("run_1", "routing", 1, None, None, None, _NOW, _NOW)
 
 def view_of(gateway, outcome):
     return build_trace_view(gateway.store, outcome.run_id)
+
+
+def test_phase_two_evidence_is_read_from_the_run(tmp_path):
+    """RM23, RM25, RM28, RM31: recorded options, selector and timing, not defaults."""
+    gateway = health_gateway(tmp_path, performance=PerformanceSettings(answer_pass="draft"))
+    outcome = run_to_rest(gateway)
+    events = gateway.store.events(outcome.run_id)
+    view = view_of(gateway, outcome)
+    accepted = events[0].payload
+    assert view["configuration"]["local_model"] == accepted["local_model"]
+    assert view["configuration"]["local_model_status"] == "ready"
+    assert view["configuration"]["answer_pass"] == "draft"
+    assert view["configuration"]["selection"] == accepted["selection"]
+    assert view["configuration"]["placement_policy"] is None
+    assert view["answer_pass_applied"] == events[-1].payload["answer_pass_applied"]
+    route = of_type(events, "route.selected")[0]
+    assert view["route"]["selector"] == route.payload["selector"]
+    assert view["routes"] == [view["route"]]
+    finished = of_type(events, "model.finished")
+    assert [c["first_token_ms"] for c in view["model_calls"]] == [
+        e.payload.get("first_token_ms") for e in finished
+    ]
+    shown = render_trace(view, UiSettings(mode="double"))
+    assert "Answer pass applied: draft" in shown
+    assert "Selector: model_router" in shown
+    assert "First token" in shown
+    assert "Workflow steps: not recorded" in shown
+
+
+def test_historical_phase_two_fields_are_not_inferred(tmp_path):
+    """RM23: missing phase 2 evidence means not recorded, even after a completion."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway)
+    removed = {
+        "local_model",
+        "local_model_status",
+        "local_model_reason",
+        "answer_pass",
+        "answer_stream",
+        "calls_per_generation",
+        "prefetch",
+        "early_headers",
+        "selection",
+        "selector",
+        "answer_pass_applied",
+        "first_token_ms",
+    }
+    events = [
+        replace(e, payload={k: v for k, v in e.payload.items() if k not in removed})
+        for e in gateway.store.events(outcome.run_id)
+    ]
+    view = trace_view_from(gateway.store.get_run(outcome.run_id), events)
+    assert all(value is None for value in view["configuration"].values())
+    assert view["answer_pass_applied"] is None
+    assert view["route"]["selector"] is None
+    assert all(call["first_token_ms"] is None for call in view["model_calls"])
+    shown = render_trace(view, UiSettings(mode="double"))
+    for label in (
+        "Local model",
+        "Local model status",
+        "Placement policy",
+        "Answer pass",
+        "Answer stream",
+        "Selector",
+        "Answer pass applied",
+    ):
+        assert f"{label}: not recorded" in shown
+
+
+def test_predictions_and_route_call_durations_stay_distinct(tmp_path):
+    """RM23, RM27: predicted and measured times are separate, joined only by call ID."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway)
+    events = gateway.store.events(outcome.run_id)
+    enriched = []
+    for event in events:
+        payload = dict(event.payload)
+        if event.event_type is EventType.ROUTE_SELECTED:
+            payload["placement"] = {"role": "local", "predicted_ms": 900, "reason": "sample"}
+        if event.event_type is EventType.MODEL_FINISHED:
+            payload["first_token_ms"] = 0
+            payload["predicted_ms"] = 900
+        enriched.append(replace(event, payload=payload))
+    view = trace_view_from(gateway.store.get_run(outcome.run_id), enriched)
+    assert view["route"]["duration_ms"] == 250
+    assert view["route"]["placement"]["predicted_ms"] == 900
+    shown = render_trace(view, UiSettings(mode="double"))
+    assert "Predicted: 900 ms; actual: 250 ms" in shown
+    assert "0 ms" in shown
+
+
+def test_each_route_keeps_its_own_selector_and_call_timing(tmp_path):
+    """RM23, RM28: a resumed gateway decision never borrows the prior call's timing."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway)
+    events = gateway.store.events(outcome.run_id)
+    first = of_type(events, "route.selected")[0]
+    resumed = replace(
+        first,
+        payload={
+            "decision": first.payload["decision"],
+            "mechanism": "clarification_resume",
+        },
+    )
+    view = trace_view_from(gateway.store.get_run(outcome.run_id), [*events, resumed])
+    assert len(view["routes"]) == 2
+    assert view["routes"][0]["duration_ms"] == 250
+    assert view["route"]["duration_ms"] is None
+    assert view["route"]["selector"] is None
+    shown = render_trace(view, UiSettings(mode="double"))
+    assert "Selector: model_router" in shown
+    assert "Selector: not recorded" in shown
+
+
+def test_phase_two_labels_escape_recorded_strings(tmp_path):
+    """RM12, RM23: stored selector labels and status causes are data, never markup."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway)
+    events = gateway.store.events(outcome.run_id)
+    hostile = '<img src=x onerror="alert(1)">'
+    changed = []
+    for event in events:
+        payload = copy.deepcopy(dict(event.payload))
+        if event.event_type is EventType.RUN_ACCEPTED:
+            payload["local_model_reason"] = hostile
+            payload["selection"] = [hostile]
+        if event.event_type is EventType.ROUTE_SELECTED:
+            payload["selector"]["name"] = hostile
+            payload["selector"]["attempts"][0]["name"] = hostile
+            payload["placement"] = {"predicted_ms": hostile}
+        if event.event_type is EventType.MODEL_FINISHED:
+            payload["predicted_ms"] = hostile
+        changed.append(replace(event, payload=payload))
+        validate_trace_event(changed[-1].to_json_object())
+    view = trace_view_from(gateway.store.get_run(outcome.run_id), changed)
+    shown = render_trace(view, UiSettings(mode="double"))
+    assert hostile not in shown
+    assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in shown
+
+
+@pytest.mark.parametrize("placement", [None, [], "unknown"])
+def test_unsupported_placement_shapes_do_not_break_a_stored_trace(tmp_path, placement):
+    """RM23: optional placement fields not yet constrained by the schema stay readable."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway)
+    events = [
+        replace(e, payload={**e.payload, "placement": placement})
+        if e.event_type in (EventType.MODEL_STARTED, EventType.ROUTE_SELECTED)
+        else e
+        for e in gateway.store.events(outcome.run_id)
+    ]
+    for event in events:
+        validate_trace_event(event.to_json_object())
+    view = trace_view_from(gateway.store.get_run(outcome.run_id), events)
+    assert view["route"]["placement"] is None
+    assert all(c["placement"] is None and c["predicted_ms"] is None for c in view["model_calls"])
+    assert "Placement: not recorded" in render_trace(view, UiSettings(mode="double"))
 
 
 # -- a completed local run: every listed field ----------------------------------------

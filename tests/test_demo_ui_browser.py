@@ -34,6 +34,8 @@ from gateway_helpers import (
     tool_turn,
 )
 from helpers import FakeClock
+from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
+from relaymind.orchestrator.performance import PerformanceSettings
 from relaymind.orchestrator.routing_cache import RoutingCache
 from ui_helpers import (
     DELETE_ANSWER,
@@ -116,6 +118,31 @@ def test_the_recorded_answer_options_are_shown(tmp_path, browser):
         open_run(page, run_id)
         expect(page.locator(".trace .options")).to_contain_text("Token budget: 60.")
         assert_mode_label_on_every_view(page)
+
+
+def test_shell_and_trace_show_the_runs_phase_two_configuration(tmp_path, browser):
+    """RM23, RM25, RM26, AC20: shell labels follow the displayed run's evidence."""
+    gateway = build_gateway(
+        tmp_path,
+        [],
+        local_status=LocalStatus(LocalModelClass.ABSENT, "not configured"),
+        external_turns=external_health_turns(),
+        performance=PerformanceSettings(answer_pass="draft", prefetch=True),
+    )
+    with served(gateway) as (base, token), browser_page(browser) as (page, _):
+        run_id = chat_run_id(base, token, HEALTH_PROMPT)
+        open_ui(page, base, token)
+        expect(page.locator("#run-configurations")).to_contain_text("No run selected")
+        open_run(page, run_id)
+        for selector in ("#run-configurations", ".trace .configuration"):
+            expect(page.locator(selector)).to_contain_text("Local model: none configured")
+            expect(page.locator(selector)).to_contain_text("Local model status: absent")
+            expect(page.locator(selector)).to_contain_text("Answer pass: draft")
+            expect(page.locator(selector)).to_contain_text("Prefetch: on")
+        expect(page.locator("#run-configurations")).to_contain_text(run_id)
+        expect(page.locator(".trace .skill")).to_contain_text("Selector: example_match")
+        expect(page.locator(".trace .proposals")).to_contain_text("gateway (prefetch)")
+        expect(page.locator(".trace .models")).to_contain_text("First token")
 
 
 def test_a_clarification_is_answered_through_the_native_resume_endpoint(tmp_path, browser):

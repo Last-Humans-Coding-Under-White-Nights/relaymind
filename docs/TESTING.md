@@ -156,9 +156,16 @@ starts its own llama-server.
   through the native endpoints from exactly those values, replay mode with
   no controls and no model call, and the comparison: fixtures reset
   before each run (a spy and a real sandbox), runs one after the other,
-  waiting runs cancelled with nothing mutated, and the refusals. The page
-  script (`app.js`) is run in a real browser by
-  `pytest tests/test_demo_ui_browser.py` (#89, spec 0.27): Playwright
+  waiting runs cancelled with nothing mutated, and the refusals.
+  Phase 2 trace tests (#127; RM12, RM23, RM25–RM29, RM31) also check
+  recorded configuration, selector attempts for every route, routing-call
+  timing joined by call ID, first-token timing including zero, applied answer
+  pass, escaped labels and missing historical fields. Placement projections
+  use illustrative optional event fields; they are not measured predictions.
+  Workflow steps remain a labeled placeholder pending #138.
+
+  The page script (`app.js`) runs in a real browser with
+  `pytest tests/test_demo_ui_browser.py` (#89, #127, spec 0.27 and 0.31): Playwright
   Chromium drives the page against the real app on a loopback socket over
   model doubles. It opens a run by ID, answers a clarification, approves,
   denies, cancels a waiting run, and runs the comparison; it asserts the
@@ -166,7 +173,9 @@ starts its own llama-server.
   every trace, single escaping, the shown browser timestamp, the answer
   options, the parallel workflow actors, a routing cache route, that approve
   and deny stay disabled until the page holds the token, and a replay-mode
-  view with no controls. Install
+  view with no controls. The phase 2 test checks the no-local status and
+  recorded options in both the shell and trace, plus gateway prefetch labels.
+  Install
   the browser once with `playwright install chromium`; a machine without
   it fails the test. CI installs it on ubuntu, macOS, and Windows. One
   live UI session is in the live acceptance harness (below).
