@@ -60,7 +60,7 @@ The auto and local_only runs picked different skills for 0 of 52 cases that have
 
 ## Candidate thresholds
 
-Rule: the thresholds with the most right English picks among those whose English wrong picks are at or below the router's (the lower of its two samples). Router English wrong picks: auto 4, local_only 4; limit 4. Thresholds: score at least 2.8164, margin at least 0.1268. Chosen on the cases that score them; not held out.
+Rule: the thresholds with the most right English picks among those whose English wrong picks are at or below the router's (the lowest of its samples). Router English wrong picks: auto 4, local_only 4; limit 4. Thresholds: score at least 2.8164, margin at least 0.1268. Chosen on the cases that score them; not held out.
 
 ### English at the thresholds
 
@@ -94,8 +94,8 @@ Rule: the thresholds with the most right English picks among those whose English
 
 ## Caveats
 
-- Each skill has one or two example pairs (the delete skill has one), so the index is tiny and its word statistics are coarse.
+- Each skill has only a few example pairs (check-service-health 2, delete-demo-database 1, health-and-diagnostic-checklist 1, investigate-performance 2, lookup-latest-deployment 2, summarize-incident-counts 2), so the index is tiny and its word statistics are coarse.
 - The thresholds are chosen on the same 52 cases that score them; the result is optimistic and is not held out.
-- The router figures are the two runs per case in one export (auto and local_only, sampled at temperature 0.8, one machine); they are two samples, not a distribution.
+- The router figures are the two runs per case in one export (auto and local_only, one machine). The gateway ran the router and the local skill, repair, and final calls at temperature 0, so the two runs are repeats of a near-deterministic call, not independent samples; a second run could still differ, because the runtime does not promise identical output across runs. They are not a distribution.
 - Every corpus case expects one skill and a selector picks at most one, so the macro precision, recall, and Jaccard are equal on the corpus; the micro averages differ. The ops corpus cannot tell a good selector from a poor one, which is why section 12.4 adds the selection benchmarks.
 - Chinese cases are best-effort versions of the simple English cases and have not been natively reviewed; they are reported apart.

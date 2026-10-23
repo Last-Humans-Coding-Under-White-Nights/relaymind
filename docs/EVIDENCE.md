@@ -1475,7 +1475,8 @@ Raw exports and reports (each `.json` has a `.md` beside it):
 
 | Field | Value |
 |-------|-------|
-| Analysis code | `a1d6b6e`, clean tree (`dirty: false` in the draft-pass export as `regraded_with`, and in the other two as `analysed_with`). The three exports are identical under another Python hash seed: two seeds were compared for all three, and a test runs the matcher under six |
+| Analysis code | The draft-pass and multiple-calls exports: `a1d6b6e`, clean tree (`dirty: false` in the draft-pass export as `regraded_with`, and in the multiple-calls export as `analysed_with`). The example-matching export was made again at `d178ffe`, clean tree, after review. The three exports are identical under another Python hash seed: two seeds were compared for all three, and a test runs the matcher under six |
+| Changes after `a1d6b6e` | `19bdcee` simplified the three scripts, and `d178ffe` fixed review findings in the example-matching probe (its caveat text, the rule wording, a new `method.example_pairs` field, and the wrong-pick limit when the export lacks one of the router modes) and made the draft-pass regrade record an unknown revision as `None` like the other two scripts. No figure changed: the draft-pass and multiple-calls exports made again at `d178ffe` differ from the recorded ones only in the revision (`head`), and the example-matching export differs from the one made at `a1d6b6e` only in those text and field changes and in `head`. The draft-pass and multiple-calls files are kept as recorded at `a1d6b6e` |
 | Source export | Made at `c3aa77a`, regraded at `68ae4c3` (the corpus entry above); corpus digest `83023ab1…d5d3bd`, unchanged |
 | Skill sidecar | `evaluation/corpus.v1.skills.json`, new in #118; its SHA-256 of the canonical JSON, `0ccc6204…01548e`, is in the `sidecars` key of `evaluation/corpus.v1.lock.json` |
 | Machine | Apple M1, macOS 27.0.1, Python 3.14.7. The analyses are deterministic and read a file, so the machine does not change them; it is the machine of the source export |
@@ -1550,7 +1551,7 @@ for English. Against the default: the 80 % target of section 12.3 is
 still not met (7/12 is below 80 %); the language guard blocks 9 of the 13
 Chinese runs that had a final generation, so those runs keep their final
 pass and their failures;
-the figures come from one sampled run of a 0.6B model, and the drafts
+the figures come from one recorded run of a 0.6B model, and the drafts
 were never the answer in that run; and RM31 itself requires a corpus run
 in the draft configuration (section 12.3) before the spec revises the
 default. That revision belongs to #128.
@@ -1612,10 +1613,11 @@ verifies the sidecar by digest.
 
 The throwaway matcher (`scripts/probes/probe_example_match.py`) is BM25
 (k1 1.5, b 0.75) over one document per skill, made of its description and
-the requests of its `examples.json` in both languages (one or two pairs
-per skill), with `staging-api` and `payments-api` masked as the enum
-values of the allowed tools' schemas, word tokens for Latin text and
-character bigrams for Chinese. The router baseline is the first
+the requests of its `examples.json` in both languages (two pairs for four
+skills; one pair for `delete-demo-database` and
+`health-and-diagnostic-checklist`), with `staging-api` and `payments-api`
+masked as the enum values of the allowed tools' schemas, word tokens for
+Latin text and character bigrams for Chinese. The router baseline is the first
 `route.selected` with mechanism `native_function_calling` in each run;
 the auto and local_only runs of all 52 cases picked the same skill, so
 the two samples are one. For 6 English cases (complex-01, mutation-01,
@@ -1689,11 +1691,18 @@ Findings:
 
 ### Caveats
 
-- One recorded run on one machine (Apple M1): one sampled generation per
-  case and mode from Qwen3-0.6B at the runtime's default temperature 0.8,
-  and one external model. A second run could give other drafts, other
-  router picks, and other external behavior. Nothing here is a p50 or a
-  distribution.
+- One recorded run on one machine (Apple M1): one generation per case
+  and mode from Qwen3-0.6B, and one external model. The gateway ran the
+  router and the local skill, repair, and final calls at temperature 0
+  (`router.options()` and `LOCAL_OPTIONS` at `c3aa77a`, forwarded by the
+  llama.cpp adapter), not at the runtime's default 0.8, so the drafts and
+  the router picks are greedy outputs, not random draws. The two router
+  runs per case are repeats of a near-deterministic call, not independent
+  samples. A second run could still give other drafts, other router
+  picks, and other external behavior: the runtime does not promise
+  identical output across runs, and the final text of ambiguous-06
+  differs between auto and local_only although both are local calls at
+  temperature 0. Nothing here is a p50 or a distribution.
 - The draft-pass figures are a prediction. The draft pass was never run:
   the gateway has no `answer_pass` option yet (#121). The gateway's own
   language and tool-call guards may differ from these (the spike reads
@@ -1703,8 +1712,10 @@ Findings:
   once needs none of the later one-call generations that re-proposed its
   calls; that is a prediction from recorded behavior, not a measurement.
 - The matcher's thresholds are tuned on the 52 cases that score them,
-  with one or two example pairs per skill, and the sidecar is hand-written
-  by the project, not held out. The two router samples are identical, so
+  with one or two example pairs per skill (one for `delete-demo-database`
+  and `health-and-diagnostic-checklist`, the expected skill of
+  complex-07 and complex-08), and the sidecar is hand-written by the
+  project, not held out. The two router samples are identical, so
   they are one sample.
 - The Chinese cases are best-effort versions of the simple English
   cases and have not been natively reviewed. They are reported apart.

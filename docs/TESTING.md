@@ -388,7 +388,7 @@ Deterministic tests over model doubles:
   after an answer option is blocked and keeps its measured grade; a run
   that changed the sandbox after the draft is not regraded; a draft that
   fails where the final pass succeeded shows as lost; the original export
-  is never changed.
+  is never changed; an unknown application revision is recorded as `None`.
 - `pytest tests/test_probe_count_multi_calls.py` and
   `pytest tests/test_probe_example_match.py`: the two spikes over small
   exports and the checked-in corpus, with no model (#119, #118): the
@@ -397,7 +397,9 @@ Deterministic tests over model doubles:
   answer or an earlier result), the saved generations, the cross-check
   against the refusals in the trace, BM25 on a toy index, masking and
   tokens in both languages, precision, recall, and Jaccard, and the
-  threshold search. Results are reported per language.
+  threshold search. The router baseline counts only the modes the export
+  ran, and the caveats state temperature 0 and each skill's example pair
+  count. Results are reported per language.
 
 The live runs are scripts, not tests: `scripts/run_corpus.py` and
 `scripts/latency_benchmark.py` (see [`scripts/README.md`](../scripts/README.md));
