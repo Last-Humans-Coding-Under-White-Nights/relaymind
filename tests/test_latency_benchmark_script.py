@@ -19,6 +19,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from api_helpers import RunningServer
 from gateway_helpers import clarify_turn, health_tail, route_turn
 from helpers import ScriptedAdapter, StuckAdapter, load_script_module
 from launcher_helpers import make_artifact
@@ -147,6 +148,54 @@ def test_a_simple_prompt_gives_every_metric_under_early_headers(bench, tmp_path)
         assert isinstance(sample[metric], float), metric
     # The transport event is the header time; useful content still comes from the trace.
     assert sample["first_useful_content_ms"] >= sample["first_model_action_ms"]
+
+
+def test_a_routing_prompt_under_early_headers_is_not_a_transport_error(bench, tmp_path):
+    """RM32, section 12.2: the mid-stream error event and the close after it are the outcome.
+
+    Over a real socket the gateway sends the 200 status, the needs_external error event, and
+    then closes the connection on purpose. That close is not a transport error: the sample
+    keeps its completion time and is checked against the expected outcome like the baseline.
+    """
+    adapter = ScriptedAdapter(turns=[route_turn("investigate-performance")])
+    _, config = serve(bench, tmp_path, adapter, early_headers=True)
+    launched = build_app(config, local_adapter=adapter)
+    with RunningServer(launched.app) as server:
+        api = bench.harness.Api(
+            server.origin,
+            launched.app.state.application_token,
+            sandbox_dir=config.sandbox_dir,
+        )
+        sample = measure(bench, api, "Why is payments-api failing?", label="routing")
+    assert sample["http_status"] == 200
+    assert sample["error"] is None
+    assert sample["stream_error_code"] == "needs_external"
+    assert (sample["state"], sample["error_code"]) == ("failed", "needs_external")
+    assert isinstance(sample["completion_ms"], float)
+    assert sample["first_answer_token_ms"] is None
+
+
+def test_a_connection_close_without_an_error_event_is_still_a_transport_error(bench):
+    """Section 12.2: only a close that follows the gateway's own error event is expected."""
+
+    class Cut(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b": keep-alive\n\n"
+            raise httpx.RemoteProtocolError("peer closed connection")
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            stream=Cut(),
+        )
+
+    api = bench.harness.Api(
+        "http://127.0.0.1", "token", sandbox_dir=Path("."), transport=httpx.MockTransport(handler)
+    )
+    sample = measure(bench, api, "Is staging-api healthy?")
+    assert sample["error"].startswith("transport: RemoteProtocolError")
+    assert sample["stream_error_code"] is None
 
 
 def test_the_first_transport_event_is_labeled_by_the_option(bench):

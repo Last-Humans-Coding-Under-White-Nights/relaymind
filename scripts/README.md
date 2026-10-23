@@ -135,7 +135,10 @@
   records `design.early_headers` and `design.first_transport_event`, and
   the report labels the metric "header time". It is never first useful
   content. Without the flag the launch file has no `[performance]` table,
-  which is the baseline.
+  which is the baseline. Under early headers a `routing` sample ends with
+  the gateway's mid-stream error event and a deliberate connection close;
+  the sample records the event code in `stream_error_code` and is checked
+  against the expected outcome, not counted as a transport error.
 
   Both runners reuse the live acceptance harness for the runtime check,
   the launch plan, and the trace read-back.

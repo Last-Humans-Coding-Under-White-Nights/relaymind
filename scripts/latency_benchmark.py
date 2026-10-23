@@ -170,6 +170,18 @@ def _elapsed_ms(started: float) -> float:
     return round((time.monotonic() - started) * 1000, 3)
 
 
+ERROR_EVENT_PREFIX = 'data: {"error"'
+
+
+def _error_event_code(line: str) -> str:
+    """The code of a mid-stream error event line; 'unknown' when it has none."""
+    try:
+        code = json.loads(line[len("data: ") :])["error"].get("code")
+    except (json.JSONDecodeError, AttributeError):
+        return "unknown"
+    return code if isinstance(code, str) and code else "unknown"
+
+
 async def _stream(api: harness.Api, prompt: str, sample: dict[str, Any]) -> None:
     """Send one chat request with stream true and time it on the client's monotonic clock."""
     body = {"model": CHAT_MODEL, "messages": [{"role": "user", "content": prompt}], "stream": True}
@@ -178,15 +190,25 @@ async def _stream(api: harness.Api, prompt: str, sample: dict[str, Any]) -> None
         sample["first_transport_ms"] = _elapsed_ms(started)
         sample["http_status"] = response.status_code
         sample["run_id"] = response.headers.get(RUN_ID_HEADER)
-        async for line in response.aiter_lines():
-            # Once the first token is seen, the rest is only drained (no parsing in the timing).
-            if sample["first_answer_token_ms"] is not None:
-                continue
-            if not line.startswith("data: ") or line == "data: [DONE]":
-                continue
-            chunk = json.loads(line[len("data: ") :])
-            if any((c.get("delta") or {}).get("content") for c in chunk.get("choices", [])):
-                sample["first_answer_token_ms"] = _elapsed_ms(started)
+        try:
+            async for line in response.aiter_lines():
+                if line.startswith(ERROR_EVENT_PREFIX):
+                    # The gateway's own mid-stream error event (spec 0.32 section 7.3): the
+                    # end of the response. It closes the connection on purpose after it.
+                    sample["stream_error_code"] = _error_event_code(line)
+                    continue
+                # Once the first token is seen, the rest is only drained (no parsing).
+                if sample["first_answer_token_ms"] is not None:
+                    continue
+                if not line.startswith("data: ") or line == "data: [DONE]":
+                    continue
+                chunk = json.loads(line[len("data: ") :])
+                if any((c.get("delta") or {}).get("content") for c in chunk.get("choices", [])):
+                    sample["first_answer_token_ms"] = _elapsed_ms(started)
+        except httpx.RemoteProtocolError:
+            # Expected only after the error event; any other cut is a transport error.
+            if sample["stream_error_code"] is None:
+                raise
     sample["completion_ms"] = _elapsed_ms(started)
 
 
@@ -202,6 +224,7 @@ async def measure(api: harness.Api, prompt: Mapping[str, str], *, timeout: float
         "error_code": None,
         "timed_out": False,
         "error": None,
+        "stream_error_code": None,
         "cancelled_after": False,
         "model_calls": [],
         **{metric: None for metric in LATENCY_METRICS},
