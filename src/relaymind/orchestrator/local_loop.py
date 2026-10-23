@@ -245,6 +245,8 @@ APPROVAL_INVALID = "approval_invalid"
 USER_DENIED = "user_denied"
 WORKFLOW_UNAVAILABLE = "workflow_unavailable"
 PARALLEL_WORKFLOW = "parallel_workflow"
+# The tool result of a call in a rejected set (section 4.3).
+NOT_EXECUTED = "not_executed"
 # The branches of the parallel workflow, as traced (spec 0.25, RM15).
 LOCAL_HEALTH, EXTERNAL_CHECKLIST, SYNTHESIS = WORKFLOW_BRANCHES
 ROUTING_MECHANISM = "native_function_calling"
@@ -639,6 +641,38 @@ class _Generation:
     @property
     def text(self) -> str:
         return "".join(self.pieces)
+
+
+@dataclass(frozen=True)
+class _Turn:
+    """What the gateway decided about the tool calls of one generation (RM05, RM09, RM11).
+
+    admitted holds the validated calls in proposal order, one for each
+    entry of proposal_ids, and is empty when the turn was rejected as a
+    whole. answer_all says that the generation was judged as a set
+    (calls_per_generation many), so a rejection answers every call.
+    """
+
+    calls: tuple[ToolCall, ...]
+    admitted: tuple[ValidatedCall, ...]
+    rejection: dict[str, str] | None
+    proposal_ids: tuple[str, ...]
+    answer_all: bool = False
+
+    def rejection_exchange(self) -> list[Message]:
+        """The proposed calls and the rejection, as data for the repair (RM12).
+
+        A chat provider rejects a request in which an assistant tool call
+        has no tool message, so a set answers every call: the first with
+        the rejection, the others as not executed.
+        """
+        assert self.rejection is not None
+        if not self.answer_all:
+            return _tool_exchange(self.calls[0], {"error": self.rejection})
+        skipped = {"error": {"code": NOT_EXECUTED, "message": "not executed: the set was rejected"}}
+        return _tool_exchange_set(
+            self.calls, [{"error": self.rejection}, *[skipped] * (len(self.calls) - 1)]
+        )
 
 
 class LocalOrchestrator:
@@ -1997,14 +2031,11 @@ class _Run:
                 branch=loop.branch,
             )
             if generation.calls:
-                call, admitted, rejection, proposal_id = self._tool_turn(
-                    generation, loop.available, loop.skill
-                )
-                if rejection is not None:
-                    loop.conversation += _tool_exchange(call, {"error": rejection})
+                turn = self._tool_turn(generation, loop.available, loop.skill)
+                if turn.rejection is not None:
+                    loop.conversation += turn.rejection_exchange()
                 else:
-                    assert admitted is not None
-                    await self._tool_step(loop, call, admitted, proposal_id)
+                    await self._tool_step(loop, turn)
             elif generation.text.strip() and (
                 loop.predicate is None or loop.predicate(generation.text, self.results)
             ):
@@ -2162,15 +2193,15 @@ class _Run:
             )
             loop.purpose = "skill"
             if generation.calls:
-                call, admitted, rejection, proposal_id = self._tool_turn(
-                    generation, loop.available, skill
-                )
-                if rejection is not None:
-                    loop.purpose = self._repair_or_stop(rejection)
-                    loop.conversation += _tool_exchange(call, {"error": rejection})
+                # The fixed workflow's branch makes one call, whatever the option says (RM15).
+                turn = self._tool_turn(generation, loop.available, skill, many=False)
+                if turn.rejection is not None:
+                    loop.purpose = self._repair_or_stop(turn.rejection)
+                    loop.conversation += turn.rejection_exchange()
                     continue
-                assert admitted is not None
-                await self._execute_step(loop, call, admitted, proposal_id)
+                await self._execute_step(
+                    loop, turn.calls[0], turn.admitted[0], turn.proposal_ids[0]
+                )
                 return self.results[-1]
             self._keep_draft(generation.text)
             problem = {
@@ -2689,15 +2720,12 @@ class _Run:
             loop.purpose = "skill"
 
             if generation.calls:
-                call, admitted, rejection, proposal_id = self._tool_turn(
-                    generation, loop.available, skill
-                )
-                if rejection is not None:
-                    loop.purpose = self._repair_or_stop(rejection)
-                    loop.conversation += _tool_exchange(call, {"error": rejection})
+                turn = self._tool_turn(generation, loop.available, skill)
+                if turn.rejection is not None:
+                    loop.purpose = self._repair_or_stop(turn.rejection)
+                    loop.conversation += turn.rejection_exchange()
                     continue
-                assert admitted is not None
-                await self._tool_step(loop, call, admitted, proposal_id)
+                await self._tool_step(loop, turn)
                 continue
 
             # A text answer is a finalize proposal (section 7.3).
@@ -2717,10 +2745,13 @@ class _Run:
             loop.purpose = self._repair_or_stop(problem)
             loop.conversation += _correction_exchange(generation.text)
 
-    async def _tool_step(
-        self, loop: _Loop, call: ToolCall, admitted: ValidatedCall, proposal_id: str
-    ) -> None:
-        """Run an admitted call, or hold it for a confirmation if it mutates (RM11)."""
+    async def _tool_step(self, loop: _Loop, turn: _Turn) -> None:
+        """Run an admitted turn, or hold its call for a confirmation if it mutates (RM11)."""
+        if len(turn.admitted) > 1:
+            # Only read-only calls are admitted as a set (section 4.3).
+            await self._execute_set(loop, turn)
+            return
+        call, admitted, proposal_id = turn.calls[0], turn.admitted[0], turn.proposal_ids[0]
         if admitted.tool.side_effect is SideEffect.MUTATING and not self.o.executor.has_operation(
             admitted
         ):
@@ -2733,6 +2764,13 @@ class _Run:
         self, loop: _Loop, call: ToolCall, admitted: ValidatedCall, proposal_id: str
     ) -> None:
         """Dispatch an admitted call as the loop's actor (RM14) and give its outcome on."""
+        result = await self._dispatch_step(loop, admitted, proposal_id)
+        loop.conversation += _tool_exchange(call, result.to_json_object())
+
+    async def _dispatch_step(
+        self, loop: _Loop, admitted: ValidatedCall, proposal_id: str
+    ) -> ToolResult:
+        """Dispatch one admitted call as the loop's actor (RM14); a local failure escalates."""
         actor = loop.actor
         result = await self._run_admitted(admitted, proposal_id, actor)
         if actor == LOCAL_ACTOR and result.status is not ToolStatus.SUCCEEDED:
@@ -2742,7 +2780,22 @@ class _Run:
                 operation_id=result.operation_id,
                 tool_status=result.status.value,
             )
-        loop.conversation += _tool_exchange(call, result.to_json_object())
+        return result
+
+    async def _execute_set(self, loop: _Loop, turn: _Turn) -> None:
+        """Run an admitted set in proposal order, one executor call each (section 4.3).
+
+        The set fits the remaining tool budget (_admit_set), so no limit
+        stops it in the middle. A failed call of the local actor still
+        escalates at once, as it does for a single call (section 11),
+        and so does an exhausted time budget. The conversation then holds
+        one assistant message with every call and one tool message for each.
+        """
+        contents = []
+        for admitted, proposal_id in zip(turn.admitted, turn.proposal_ids, strict=True):
+            result = await self._dispatch_step(loop, admitted, proposal_id)
+            contents.append(result.to_json_object())
+        loop.conversation += _tool_exchange_set(turn.calls, contents)
 
     # -- confirmation (RM11; spec 0.10 sections 4.3, 5) --------------------------------
 
@@ -2942,21 +2995,36 @@ class _Run:
         raise Escalation("invalid_output", f"unrepaired output: {problem['code']}")
 
     def _tool_turn(
-        self, generation: _Generation, available: frozenset[str], skill: Skill | None
-    ) -> tuple[ToolCall, ValidatedCall | None, dict[str, str] | None, str]:
+        self,
+        generation: _Generation,
+        available: frozenset[str],
+        skill: Skill | None,
+        *,
+        many: bool | None = None,
+    ) -> _Turn:
         """Admit a tool turn and record every proposed call (RM05, RM09, RM11, RM16).
 
         The same checks hold for the local and the external actor. Every
         proposed call is recorded, so a turn with several calls keeps all
-        of them in the trace (RM16, RM23). Returns the first call, the
-        admitted call or the rejection, and the first call's proposal ID.
+        of them in the trace (RM16, RM23). many says whether the
+        generation is judged as a set (section 4.3); None takes the
+        performance option.
         """
-        call = generation.calls[0]
-        admitted, rejection = self._admit(generation.calls, available, self.results)
-        proposal_id = self._propose(call, skill, rejection)
-        for extra in generation.calls[1:]:
-            self._propose(extra, skill, rejection)
-        return call, admitted, rejection, proposal_id
+        calls = tuple(generation.calls)
+        as_set = (self.o.performance.calls_per_generation == "many") if many is None else many
+        if as_set and len(calls) > 1:
+            admitted, rejection = self._admit_set(calls, available, self.results)
+        else:
+            one, rejection = self._admit(calls, available, self.results)
+            admitted = [] if one is None else [one]
+        proposal_ids = tuple(self._propose(call, skill, rejection) for call in calls)
+        return _Turn(
+            calls,
+            tuple(admitted),
+            rejection,
+            proposal_ids,
+            answer_all=as_set and len(calls) > 1,
+        )
 
     async def _run_admitted(self, call: ValidatedCall, proposal_id: str, actor: str) -> ToolResult:
         """Dispatch an admitted call and keep its result as run evidence."""
@@ -2976,7 +3044,68 @@ class _Run:
                 "code": "multiple_tool_calls",
                 "message": "propose one tool call at a time",
             }
-        call = calls[0]
+        return self._admit_one(calls[0], available, results)
+
+    def _admit_set(
+        self,
+        calls: Sequence[ToolCall],
+        available: frozenset[str],
+        results: Sequence[ToolResult],
+    ) -> tuple[list[ValidatedCall], dict[str, str] | None]:
+        """The validated calls of a set, or one rejection of the whole generation (section 4.3).
+
+        More calls than the limit, or a mutating call among several, is
+        multiple_tool_calls. Then each call is validated on its own, and
+        the first rejection in proposal order is the one reported, so a
+        partly valid set never runs in part. Last, the calls that need a
+        new execution must fit what the tool budget has left (section 11).
+        """
+        limit = self.meter.admitted_calls_limit()
+        if len(calls) > limit:
+            return [], {
+                "code": "multiple_tool_calls",
+                "message": f"propose at most {limit} tool calls at a time",
+            }
+        if any(self._mutates(call.tool_name) for call in calls):
+            return [], {
+                "code": "multiple_tool_calls",
+                "message": "a mutating tool call must be the only call of its generation",
+            }
+        admitted = []
+        for call in calls:
+            one, rejection = self._admit_one(call, available, results)
+            if rejection is not None:
+                return [], rejection
+            assert one is not None
+            admitted.append(one)
+        # A repeated call is a replay and needs no execution (RM10).
+        new = {
+            ToolExecutor.operation_id(self.run_id, call.tool_name, call.arguments)
+            for call in admitted
+            if not self.o.executor.has_operation(call)
+        }
+        room = self.meter.tool_room()
+        if len(new) > room:
+            return [], {
+                "code": "multiple_tool_calls",
+                "message": f"only {room} more tool executions are allowed in this run",
+            }
+        return admitted, None
+
+    def _mutates(self, tool_name: str) -> bool:
+        """Whether the name is a registered tool with side effects."""
+        try:
+            return self.o.tools.get(tool_name).side_effect is SideEffect.MUTATING
+        except KeyError:
+            return False
+
+    def _admit_one(
+        self,
+        call: ToolCall,
+        available: frozenset[str],
+        results: Sequence[ToolResult],
+    ) -> tuple[ValidatedCall | None, dict[str, str] | None]:
+        """One call's own checks: RM09 validation, RM05 provenance, a confirmable target."""
         try:
             admitted = self.o.executor.validate(
                 self.run_id, call.tool_name, call.arguments, available=available
@@ -3231,6 +3360,27 @@ def _digest(text: str) -> str:
 def _arguments_digest(call: ValidatedCall) -> str:
     """The digest of a call's unredacted canonical arguments (RM11)."""
     return _digest(canonical_json(dict(call.arguments)))
+
+
+def _tool_exchange_set(
+    calls: Sequence[ToolCall], contents: Sequence[Mapping[str, Any]]
+) -> list[Message]:
+    """Every call of a set in one assistant message, then one tool message for each (RM12).
+
+    A chat provider requires each assistant tool call to have a tool
+    message, in the order of the calls.
+    """
+    return [
+        Message(role=Role.ASSISTANT, tool_calls=tuple(calls)),
+        *[
+            Message(
+                role=Role.TOOL,
+                tool_call_id=call.call_id,
+                content=json.dumps(dict(content), ensure_ascii=False),
+            )
+            for call, content in zip(calls, contents, strict=True)
+        ],
+    ]
 
 
 def _tool_exchange(call: ToolCall, content: Mapping[str, Any]) -> list[Message]:

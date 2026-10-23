@@ -326,6 +326,29 @@ class BudgetMeter:
         """One executed tool call; replays are not executions (RM03)."""
         self._charge(("tool_calls",), "tool_calls")
 
+    def tool_room(self) -> int:
+        """How many more tool executions the run may start now (RM03, section 11).
+
+        In a local stage the tighter of the per-stage and the entire-run
+        limit; in the external stage the entire-run limit only. The
+        orchestrator compares a set of calls with it before the first
+        call runs, so a set never runs in part because a limit ran out
+        in the middle (section 4.3).
+        """
+        run_left = self.budgets.run_tool_executions - self._run["tool_calls"]
+        if self._external:
+            return max(run_left, 0)
+        return max(min(self.budgets.tool_calls - self._stage["tool_calls"], run_left), 0)
+
+    def admitted_calls_limit(self) -> int:
+        """The most calls one generation may propose under many (section 4.3).
+
+        The per-stage tool limit in a local stage, and the remaining
+        entire-run tool limit in the external stage, where the
+        per-stage limits do not apply.
+        """
+        return self.tool_room() if self._external else self.budgets.tool_calls
+
     def may_repair(self) -> bool:
         """Whether a format-repair generation is still within this stage's limits.
 
