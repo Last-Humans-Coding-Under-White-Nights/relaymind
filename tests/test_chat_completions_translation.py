@@ -126,3 +126,22 @@ def test_config_freezes_its_request_options():
         ).request_options
         == {}
     )
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"": 1},
+        {"   ": 1},
+        {"outer": {"": 1}},
+        {"outer": {"   ": 1}},
+        {"outer": {"inner": {"\t": 1}}},
+        {"outer": [{"": 1}]},
+    ],
+)
+def test_an_empty_or_blank_key_is_refused_at_any_depth(options):
+    """Spec 0.31 section 14.1: a nested key is checked like a top-level key."""
+    with pytest.raises(ValueError, match="request_options .*key that is not text"):
+        ChatCompletionsConfig(
+            base_url="https://x.example/v1", model="m", context_limit=1024, request_options=options
+        )

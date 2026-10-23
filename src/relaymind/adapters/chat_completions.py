@@ -89,7 +89,7 @@ def _plain_json(value: object, path: str) -> object:
     if isinstance(value, Mapping):
         checked: dict[str, object] = {}
         for key, item in value.items():
-            if not isinstance(key, str):
+            if not isinstance(key, str) or not key.strip():
                 raise ValueError(f"request_options {path} has a key that is not text")
             _refuse_credential(key, f"{path}.{key}")
             checked[key] = _plain_json(item, f"{path}.{key}")
