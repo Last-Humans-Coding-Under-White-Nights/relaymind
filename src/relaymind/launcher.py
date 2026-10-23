@@ -273,10 +273,10 @@ def load_config(path: Path | str) -> LauncherConfig:
     performance = _settings("performance", lambda: PerformanceSettings(**tables["performance"]))
     placement = tables["placement"]
     warmup = _value(placement, "placement", "warmup", bool, True)
-    warmup_seconds = _value(placement, "placement", "warmup_seconds", (int, float), None)
-    if warmup_seconds is None:
-        warmup_seconds = DEFAULT_WARMUP_SECONDS
-    elif not math.isfinite(warmup_seconds) or not warmup_seconds > 0:
+    warmup_seconds = _value(
+        placement, "placement", "warmup_seconds", (int, float), DEFAULT_WARMUP_SECONDS
+    )
+    if not math.isfinite(warmup_seconds) or not warmup_seconds > 0:
         raise LaunchError("[placement] warmup_seconds must be a positive number")
 
     return LauncherConfig(
@@ -476,24 +476,21 @@ def build_app(
 # -- the warm-up --------------------------------------------------------------------
 
 
-def warm_up_gateway(
-    config: LauncherConfig, launched: Launched, *, local_adapter: ModelAdapter | None = None
-) -> Launched:
+def warm_up_gateway(config: LauncherConfig, launched: Launched) -> Launched:
     """Warm the local model up, once, and keep the timings in ``Launched.warmup`` (section 6).
 
     Called by ``main`` after restart recovery and before the address and the
     token are printed. It creates no run. With a model double the double
-    is used; otherwise a short-lived adapter of its own does the work in
-    its own event loop and is closed there, so the client that serves the
-    app's loop is never used from two loops. A runtime that does not answer is
-    a result with ready False, never an exception. With warmup false
-    nothing is sent and the result is None.
+    (the orchestrator's own adapter) is used; otherwise a short-lived
+    adapter of its own does the work in its own event loop and is closed
+    there, so the client that serves the app's loop is never used from two
+    loops. A runtime that does not answer is a result with ready False,
+    never an exception. With warmup false nothing is sent and the result
+    is None.
     """
     if not config.warmup:
         return launched
-    if local_adapter is not None:
-        adapter, owned = local_adapter, False
-    elif launched.new_local_adapter is not None:
+    if launched.new_local_adapter is not None:
         adapter, owned = launched.new_local_adapter(), True
     else:
         adapter, owned = launched.orchestrator.model.adapter, False
@@ -573,7 +570,7 @@ def main(
         )
     # Section 14.1: after recovery, before the socket. A runtime that is not ready in time
     # is one printed line, not a startup error (section 6).
-    launched = warm_up_gateway(config, launched, local_adapter=local_adapter)
+    launched = warm_up_gateway(config, launched)
     if launched.warmup is not None:
         if launched.warmup.ready:
             stdout(launched.warmup.summary())

@@ -1832,16 +1832,9 @@ def gateway_config(
         ]
     if ui:
         lines += ["[ui]", 'mode = "live"']
-    if performance:
-        lines += [
-            "[performance]",
-            *(f"{key} = {_toml(value)}" for key, value in performance.items()),
-        ]
-    if placement:
-        lines += [
-            "[placement]",
-            *(f"{key} = {_toml(value)}" for key, value in placement.items()),
-        ]
+    for name, table in (("performance", performance), ("placement", placement)):
+        if table:
+            lines += [f"[{name}]", *(f"{key} = {_toml(value)}" for key, value in table.items())]
     return "\n".join(lines) + "\n"
 
 

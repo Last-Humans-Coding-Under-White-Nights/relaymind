@@ -367,7 +367,7 @@ def test_the_launcher_keeps_the_timings_in_launched_warmup(tmp_path):
     adapter = scripted(answer(cached=0), answer(cached=7))
     config, built = launch(tmp_path, adapter=adapter)
     try:
-        warmed = launcher.warm_up_gateway(config, built, local_adapter=adapter)
+        warmed = launcher.warm_up_gateway(config, built)
         assert isinstance(warmed.warmup, WarmupResult) and warmed.warmup.ready
         assert [s.cached_tokens for s in warmed.warmup.samples] == [0, 7]
         assert warmed.app is built.app and warmed.orchestrator is built.orchestrator

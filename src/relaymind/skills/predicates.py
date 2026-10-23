@@ -536,15 +536,19 @@ def _plain(value: object, shape: re.Pattern[str]) -> str | None:
     return value if isinstance(value, str) and shape.fullmatch(value) else None
 
 
+def _service_lines(data: Mapping[str, Any]) -> list[str]:
+    """The service line, when the service is a plain service ID."""
+    service = _plain(data.get("service"), _SERVICE_ID)
+    return [] if service is None else [f"Service: {service}"]
+
+
 def _count(value: object) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
 
 def _health_lines(data: Mapping[str, Any], language: str) -> tuple[str, ...]:
     keep = _ZH_KEEP if language == "zh" else ""
-    lines = []
-    if (service := _plain(data.get("service"), _SERVICE_ID)) is not None:
-        lines.append(f"Service: {service}")
+    lines = _service_lines(data)
     if data.get("status") in _STATUSES:
         lines.append(f'Status: write exactly "{data["status"]}".{keep}')
     if (checked_at := _plain(data.get("checked_at"), _TIMESTAMP)) is not None:
@@ -565,9 +569,7 @@ def deployment_reported_criteria(results: Sequence[ToolResult], language: str) -
     data = _latest(results, "get_latest_deployment")
     if data is None:
         return ()
-    lines = []
-    if (service := _plain(data.get("service"), _SERVICE_ID)) is not None:
-        lines.append(f"Service: {service}")
+    lines = _service_lines(data)
     if data.get("deployment_id") is None:
         lines.append(
             "No deployment is recorded for this service: say so, and write no deployment ID."
@@ -590,9 +592,7 @@ def incident_counts_reported_criteria(
     if data is None:
         return ()
     words = _COUNT_WORDS.get(language, _COUNT_WORDS["en"])
-    lines = []
-    if (service := _plain(data.get("service"), _SERVICE_ID)) is not None:
-        lines.append(f"Service: {service}")
+    lines = _service_lines(data)
     for key, name in (
         ("window_minutes", "Window"),
         ("total", "Total"),
@@ -633,13 +633,6 @@ def deletion_outcome_reported_criteria(
     if database is None:
         return ()
     return (f"Database: {database} (write it exactly, and say it was deleted).",)
-
-
-def health_checklist_separated_criteria(
-    results: Sequence[ToolResult], language: str
-) -> tuple[str, ...]:
-    """The health observation the answer must keep, apart from the checklist (RM16)."""
-    return health_status_preserved_criteria(results, language)
 
 
 @dataclass(frozen=True)
@@ -717,7 +710,8 @@ COMPLETION_CRITERIA: Mapping[str, CompletionCriteria] = {
             "log-backed)' (Chinese: '诊断检查清单（草稿，未基于日志）'); the checklist is a "
             "draft, not a diagnosis.",
         ),
-        values=health_checklist_separated_criteria,
+        # The health observation keeps the same values, apart from the checklist (RM16).
+        values=health_status_preserved_criteria,
         failed_checks=health_checklist_separated_failed_checks,
     ),
 }

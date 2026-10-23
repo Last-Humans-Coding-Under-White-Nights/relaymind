@@ -19,7 +19,7 @@ the pinned launch settings of the runtime (RM18).
 
 import asyncio
 import contextlib
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 from relaymind.adapters import (
@@ -54,14 +54,7 @@ class WarmupSample:
     cached_tokens: int | None
 
     def to_json_object(self) -> dict[str, Any]:
-        return {
-            "purpose": self.purpose,
-            "duration_ms": self.duration_ms,
-            "first_token_ms": self.first_token_ms,
-            "input_tokens": self.input_tokens,
-            "output_tokens": self.output_tokens,
-            "cached_tokens": self.cached_tokens,
-        }
+        return asdict(self)
 
 
 @dataclass(frozen=True)
