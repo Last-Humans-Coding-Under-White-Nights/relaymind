@@ -345,7 +345,9 @@ def test_an_interrupted_run_removes_its_work_dir(runner, tmp_path, monkeypatch):
     def interrupt(*args, **kwargs):
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(runner.harness, "check_runtime", lambda manifest: FakeRuntime())
+    monkeypatch.setattr(
+        runner.harness, "check_runtime", lambda manifest, extra_args=(): FakeRuntime()
+    )
     monkeypatch.setattr(runner.harness, "application_revision", lambda: {})
     monkeypatch.setattr(runner.harness, "_stop", stopped.append)
     monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: str(work))
@@ -356,6 +358,7 @@ def test_an_interrupted_run_removes_its_work_dir(runner, tmp_path, monkeypatch):
         modes=["local_only"],
         external_base_url=None,
         manifest="m.json",
+        runtime_extra_args=(),
         out=str(tmp_path / "x.json"),
     )
     with pytest.raises(KeyboardInterrupt):

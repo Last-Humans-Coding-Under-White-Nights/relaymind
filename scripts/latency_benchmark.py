@@ -284,7 +284,7 @@ def _props(local_url: str) -> dict[str, Any] | None:
 
 def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     prompts = load_prompts()
-    runtime = harness.check_runtime(Path(args.manifest))
+    runtime = harness.check_runtime(Path(args.manifest), extra_args=args.runtime_extra_args)
     application = harness.application_revision()
     seed = args.seed if args.seed is not None else random.SystemRandom().randrange(2**31)
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
@@ -362,6 +362,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                 "runtime_devices": runtime_devices(),
                 "runtime_log": runtime_log,
                 "llama_server_argv": runtime.server_argv,
+                "llama_server_extra_args": list(runtime.extra_args),
                 "llama_server_props": props,
                 **runtime.model_record(),
                 "context": {"ctx_size": runtime.manifest.launch_settings.get("ctx_size")},
@@ -392,6 +393,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--manifest", default=os.fspath(harness.DEFAULT_MANIFEST.relative_to(REPO_ROOT))
     )
+    harness.add_runtime_extra_args(parser)
     parser.add_argument("--seed", type=int, help="the order seed (random when not given)")
     parser.add_argument("--runs", type=int, default=RUNS_PER_PROMPT)
     parser.add_argument("--timeout", type=float, default=REQUEST_TIMEOUT_SECONDS)

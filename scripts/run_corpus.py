@@ -281,7 +281,7 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
     if not_run:
         # Without a usable endpoint the gateways are started without one.
         external = None
-    runtime = harness.check_runtime(Path(args.manifest))
+    runtime = harness.check_runtime(Path(args.manifest), extra_args=args.runtime_extra_args)
     application = harness.application_revision()
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
     work = Path(tempfile.mkdtemp(prefix="relaymind-corpus-"))
@@ -346,10 +346,7 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
             "application": application,
             "runtime_banner": runtime.banner,
             "runtime_devices": runtime_devices(),
-            "llama_server": {
-                "argv": runtime.server_argv,
-                "cold_start_seconds": round(cold_start, 3),
-            },
+            "llama_server": runtime.server_record(cold_start),
             **runtime.model_record(),
             "external_endpoint": None
             if external is None
@@ -823,6 +820,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--manifest", default=os.fspath(harness.DEFAULT_MANIFEST.relative_to(REPO_ROOT))
     )
+    harness.add_runtime_extra_args(parser)
     parser.add_argument("--modes", nargs="+", choices=MODES, default=list(MODES))
     parser.add_argument("--cases", nargs="+", help="run only these case IDs (a subset)")
     parser.add_argument("--languages", nargs="+", choices=("en", "zh"))

@@ -33,12 +33,13 @@ import argparse
 import asyncio
 import json
 import platform
+import shlex
 import shutil
 import socket
 import subprocess
 import sys
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +57,7 @@ from relaymind.adapters.base import (
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 from relaymind.adapters.local_http import health_client
 from relaymind.adapters.manifest import (
+    _RESERVED_LAUNCH_FLAGS,
     ArtifactManifest,
     ManifestError,
     launch_adapter_settings,
@@ -67,6 +69,65 @@ from relaymind.stats import AdapterIdentity, GenerationStats, TimingCollector, e
 
 STARTUP_TIMEOUT_SECONDS = 120
 HEALTH_POLL_SECONDS = 0.05
+
+
+def parse_runtime_extra_args(text: str) -> tuple[str, ...]:
+    """Split the text of --runtime-extra-args into llama-server arguments (#117).
+
+    The text is split like a shell would split it. It is the argparse
+    type of the option, so a malformed text is a usage error. The default
+    of the option is no argument.
+    """
+    try:
+        return tuple(shlex.split(text))
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"cannot split the arguments ({exc}); check the quotes"
+        ) from exc
+
+
+def _is_number(token: str) -> bool:
+    try:
+        float(token)
+    except ValueError:
+        return False
+    return True
+
+
+def _flag_name(token: str) -> str:
+    """The setting a long flag names: no dashes, no value, no --no- prefix."""
+    name = token.removeprefix("--").split("=", 1)[0]
+    return name.removeprefix("no-")
+
+
+def check_runtime_extra_args(
+    extra_args: Sequence[str], pinned_argv: Sequence[str]
+) -> tuple[str, ...]:
+    """Extra llama-server arguments, refused when they would change the pinned setup (RM18).
+
+    The manifest pins the model, the chat template, and the launch
+    settings (spec section 6), and the harness sets the bind address.
+    Extra arguments only add settings next to them, such as a CPU-only
+    runtime with fewer threads (spec 0.31 section 12.2). Only long flags
+    are accepted, so a short alias cannot reach a pinned flag; a number
+    after a flag is its value. Raises ValueError with the reason.
+    """
+    pinned = {_flag_name(token) for token in pinned_argv if token.startswith("--")}
+    for index, token in enumerate(extra_args):
+        if not token.startswith("-") or _is_number(token):
+            if index == 0:
+                raise ValueError(f"extra arguments must start with a flag, not {token!r}")
+            continue
+        if not token.startswith("--"):
+            raise ValueError(f"extra argument {token!r} is not a long flag (--name)")
+        name = _flag_name(token)
+        if name in _RESERVED_LAUNCH_FLAGS:
+            raise ValueError(f"extra argument {token!r} is set by the harness or selects a model")
+        if name in pinned:
+            raise ValueError(
+                f"extra argument {token!r} would change a pinned setting of the manifest"
+            )
+    return tuple(extra_args)
 
 
 @dataclass(frozen=True)
