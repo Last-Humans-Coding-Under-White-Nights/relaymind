@@ -27,6 +27,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   narrowed tool proposals without executing any tool. Tool candidates are
   shuffled reproducibly so their presentation does not reveal positives.
   Parquet derivation uses the optional `bench` dependency extra.
+  Recorded Apple M1 runs cover 87 skill cases, 500 local tool cases in both
+  arms, and 100 external tool cases in both arms. The evidence keeps errors
+  and timeouts, distinguishes abstention from narrowing, and changes no defaults.
 - Operation without a usable local model (#126; AC20, RM01, RM05, RM11,
   RM21, RM26, RM28, RM29, spec 0.37 sections 7.4, 8, 11, and 14.1). The
   `[local_model]` table is optional: without it `allowed_modes` defaults to
