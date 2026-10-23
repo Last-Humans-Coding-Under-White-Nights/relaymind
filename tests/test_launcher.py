@@ -30,6 +30,7 @@ from relaymind.adapters.llamacpp import REQUEST_TIMEOUT_SECONDS, LlamaCppAdapter
 from relaymind.launcher import LaunchError, build_app, load_config, main
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import LocalOrchestrator
+from relaymind.orchestrator.performance import PerformanceSettings
 from relaymind.orchestrator.run_state import RunState
 from relaymind.store import RunStore, RunStoreError
 from relaymind.store.trace_event import EventType
@@ -799,3 +800,109 @@ def test_example_config_documents_request_options(tmp_path):
     config = load_config(write_config(tmp_path, "\n" + "\n".join(block) + "\n"))
     assert config.external.model == "your-model-id"
     assert dict(config.external.request_options) == {"thinking": {"type": "disabled"}}
+
+
+# -- the [performance] table (#121, #140; RM31, RM32, spec 0.32 section 14.1) -----------------
+
+PERFORMANCE_KEYS = {
+    "answer_pass",
+    "answer_stream",
+    "calls_per_generation",
+    "prefetch",
+    "early_headers",
+}
+
+
+def test_performance_keys_are_the_settings_fields():
+    """Section 14.1: the table's keys are the PerformanceSettings fields, from one list."""
+    fields = {f.name for f in dataclasses.fields(PerformanceSettings)}
+    assert set(launcher._TABLES["performance"]) == fields == PERFORMANCE_KEYS
+
+
+def test_without_the_table_the_performance_defaults_apply(tmp_path):
+    """RM31, RM32, section 14.1: a file without [performance] runs the baseline."""
+    config = load_config(write_config(tmp_path))
+    assert config.performance == PerformanceSettings()
+    built = build_app(config, **doubles())
+    assert built.orchestrator.performance == PerformanceSettings()
+
+
+def test_every_performance_key_reaches_the_settings(tmp_path):
+    """Section 14.1: each key sets its option; the others keep the default."""
+    extra = (
+        "\n[performance]\nanswer_pass = 'draft'\nanswer_stream = 'buffered'\n"
+        "calls_per_generation = 'many'\nprefetch = true\nearly_headers = true\n"
+    )
+    config = load_config(write_config(tmp_path, extra))
+    chosen = PerformanceSettings(
+        answer_pass="draft", calls_per_generation="many", prefetch=True, early_headers=True
+    )
+    assert config.performance == chosen
+    built = build_app(config, **doubles())
+    assert built.orchestrator.performance == chosen
+    one = tmp_path / "one"
+    one.mkdir()
+    single = load_config(write_config(one, "\n[performance]\nearly_headers = true\n"))
+    assert single.performance == PerformanceSettings(early_headers=True)
+
+
+@pytest.mark.parametrize(
+    "line, word",
+    [
+        ("answer_pass = 'later'", "answer_pass"),
+        ("answer_pass = true", "answer_pass"),
+        ("answer_pass = 1", "answer_pass"),
+        ("calls_per_generation = 'two'", "calls_per_generation"),
+        ("calls_per_generation = 2", "calls_per_generation"),
+        ("prefetch = 'yes'", "prefetch"),
+        ("prefetch = 1", "prefetch"),
+        ("early_headers = 'true'", "early_headers"),
+        ("early_headers = 0", "early_headers"),
+        ("answer_stream = 'chunked'", "answer_stream"),
+        ("answer_stream = 'live'", "answer_stream.*not implemented"),
+        ("surprise = 1", "surprise"),
+    ],
+)
+def test_a_bad_performance_value_is_one_startup_message(tmp_path, line, word):
+    """RM32, section 14.1: a wrong value, or live streaming before it exists, exits with status 2."""
+    config = write_config(tmp_path, f"\n[performance]\n{line}\n")
+    with pytest.raises(LaunchError, match=r"\[performance\].*" + word) as raised:
+        load_config(config)
+    assert "\n" not in str(raised.value)
+    out, err = [], []
+    assert main(["serve", "--config", str(config)], stdout=out.append, stderr=err.append) == 2
+    assert out == [] and len(err) == 1 and "[performance]" in err[0]
+
+
+def test_performance_table_must_be_a_table(tmp_path):
+    path = write_config(tmp_path, base=None)
+    path.write_text("performance = 5\n" + path.read_text())
+    with pytest.raises(LaunchError, match="performance must be a table"):
+        load_config(path)
+
+
+def test_the_configured_performance_options_are_recorded_in_run_accepted(tmp_path):
+    """RM22, spec 0.32 section 8: run.accepted names the options in force."""
+    extra = "\n[performance]\nanswer_pass = 'draft'\nearly_headers = true\n"
+    built = build_app(
+        load_config(write_config(tmp_path, extra)),
+        local_adapter=ScriptedAdapter(turns=[clarify_turn()]),
+    )
+    outcome = asyncio.run(built.orchestrator.run_text("Which service is it?"))
+    accepted = built.orchestrator.store.events(outcome.run_id)[0]
+    recorded = {key: accepted.payload[key] for key in PERFORMANCE_KEYS}
+    assert recorded == PerformanceSettings(answer_pass="draft", early_headers=True).to_json_object()
+
+
+def test_example_config_documents_the_performance_table(tmp_path):
+    """Section 14.1: the commented [performance] block loads when uncommented, with the defaults."""
+    lines = (REPO_ROOT / "relaymind.example.toml").read_text(encoding="utf-8").splitlines()
+    start = lines.index("# [performance]")
+    block = []
+    for line in lines[start:]:
+        if not line.startswith("# "):
+            break
+        block.append(line[2:])
+    assert len(block) == 1 + len(PERFORMANCE_KEYS)
+    config = load_config(write_config(tmp_path, "\n" + "\n".join(block) + "\n"))
+    assert config.performance == PerformanceSettings()
