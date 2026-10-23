@@ -12,10 +12,17 @@ skill instructions require in English or Chinese. A label counts only
 where it starts its own line as a section heading. A label check cannot
 judge whether a hypothesis is sound; that stays with evaluation
 (section 12).
+
+Beside each predicate sit its failed checks and its criteria (spec 0.31
+section 4.4): the predicate is true when no check fails, so the text the
+external model reads and the check the gateway runs cannot drift apart.
+The criteria values come only from schema-typed result fields, never from
+free text (RM12).
 """
 
 import re
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from relaymind.tools.registry import ToolResult, ToolStatus
@@ -272,6 +279,31 @@ def _stated_statuses(answer: str, service: str) -> list[str]:
     return stated
 
 
+def _no_result(tool_name: str) -> str:
+    return f"the gateway has no successful {tool_name} result to check the answer against"
+
+
+def health_status_preserved_failed_checks(
+    answer: str, results: Sequence[ToolResult]
+) -> tuple[str, ...]:
+    """The checks of health_status_preserved that the answer fails (RM16, section 9)."""
+    data = _latest(results, "get_service_health")
+    if data is None:
+        return (_no_result("get_service_health"),)
+    failed = []
+    stated = _stated_statuses(answer, data["service"])
+    if not stated:
+        failed.append("name the service and state its status in the same statement")
+    elif any(status != data["status"] for status in stated):
+        failed.append(
+            "state exactly the status the health tool returned for the service, "
+            "and no other status for it"
+        )
+    if data["checked_at"] not in answer:
+        failed.append("repeat the checked_at time exactly as returned")
+    return tuple(failed)
+
+
 def health_status_preserved(answer: str, results: Sequence[ToolResult]) -> bool:
     """The answer names the returned service, states exactly the returned
     status for it, and repeats the check time (RM16, section 9).
@@ -279,13 +311,42 @@ def health_status_preserved(answer: str, results: Sequence[ToolResult]) -> bool:
     Status words about other resources, such as a dependency to check,
     do not count against the answer.
     """
-    data = _latest(results, "get_service_health")
+    return not health_status_preserved_failed_checks(answer, results)
+
+
+def deployment_reported_failed_checks(
+    answer: str, results: Sequence[ToolResult]
+) -> tuple[str, ...]:
+    """The checks of deployment_reported that the answer fails (RM05, section 9)."""
+    data = _latest(results, "get_latest_deployment")
     if data is None:
-        return False
-    stated = _stated_statuses(answer, data["service"])
-    if not stated or any(status != data["status"] for status in stated):
-        return False
-    return data["checked_at"] in answer
+        return (_no_result("get_latest_deployment"),)
+    failed = []
+    if _id_mention(data["service"]).search(answer) is None:
+        failed.append("name the service")
+    if data["deployment_id"] is None:
+        if not (
+            _DEPLOYMENT_LIKE_ID.search(answer) is None
+            and _ZH_DEPLOYMENT_NUMBER.search(answer) is None
+            and all(
+                found.group() == data.get("revision") for found in _REVISION_LIKE.finditer(answer)
+            )
+        ):
+            failed.append(
+                "say that no deployment is recorded, and write no deployment ID or revision"
+            )
+        return tuple(failed)
+    # The deployment ID has no case rule in the output schema, so it must
+    # be quoted exactly, and no other deployment-like ID may appear (RM05).
+    if any(
+        found.group() != data["deployment_id"] for found in _DEPLOYMENT_LIKE_ID.finditer(answer)
+    ):
+        failed.append("write no deployment ID other than the returned one")
+    if data["deployment_id"] not in answer:
+        failed.append("write the returned deployment_id exactly")
+    if data["deployed_at"] not in answer:
+        failed.append("write the returned deployed_at time exactly")
+    return tuple(failed)
 
 
 def deployment_reported(answer: str, results: Sequence[ToolResult]) -> bool:
@@ -296,26 +357,34 @@ def deployment_reported(answer: str, results: Sequence[ToolResult]) -> bool:
     no recorded deployment, any deployment-like ID in the answer is
     invented (RM05), whatever its case or separator.
     """
-    data = _latest(results, "get_latest_deployment")
+    return not deployment_reported_failed_checks(answer, results)
+
+
+_COUNT_CHECKS = {
+    "window_minutes": "write the window in minutes exactly as returned, next to its own label",
+    "total": "write the total count exactly as returned, next to its own label",
+    "critical": "write the critical count exactly as returned, next to its own label",
+    "warning": "write the warning count exactly as returned, next to its own label",
+    "info": "write the info count exactly as returned, next to its own label",
+}
+
+
+def incident_counts_reported_failed_checks(
+    answer: str, results: Sequence[ToolResult]
+) -> tuple[str, ...]:
+    """The checks of incident_counts_reported that the answer fails (section 9)."""
+    data = _latest(results, "get_incident_counts")
     if data is None:
-        return False
+        return (_no_result("get_incident_counts"),)
+    failed = []
     if _id_mention(data["service"]).search(answer) is None:
-        return False
-    if data["deployment_id"] is None:
-        return (
-            _DEPLOYMENT_LIKE_ID.search(answer) is None
-            and _ZH_DEPLOYMENT_NUMBER.search(answer) is None
-            and all(
-                found.group() == data.get("revision") for found in _REVISION_LIKE.finditer(answer)
-            )
-        )
-    # The deployment ID has no case rule in the output schema, so it must
-    # be quoted exactly, and no other deployment-like ID may appear (RM05).
-    if any(
-        found.group() != data["deployment_id"] for found in _DEPLOYMENT_LIKE_ID.finditer(answer)
-    ):
-        return False
-    return data["deployment_id"] in answer and data["deployed_at"] in answer
+        failed.append("name the service")
+    if _CAUSE_WORDS.search(answer):
+        failed.append("report counts only, with no cause (no because, due to, or root cause)")
+    for key, numbers in _labeled_numbers(answer).items():
+        if not numbers or set(numbers) != {data[key]}:
+            failed.append(_COUNT_CHECKS[key])
+    return tuple(failed)
 
 
 def incident_counts_reported(answer: str, results: Sequence[ToolResult]) -> bool:
@@ -325,13 +394,28 @@ def incident_counts_reported(answer: str, results: Sequence[ToolResult]) -> bool
     No other number may sit next to a count label, so a corrected or
     swapped count fails, and the answer states no inferred cause.
     """
-    data = _latest(results, "get_incident_counts")
-    if data is None:
-        return False
-    if _id_mention(data["service"]).search(answer) is None or _CAUSE_WORDS.search(answer):
-        return False
-    found = _labeled_numbers(answer)
-    return all(numbers and set(numbers) == {data[key]} for key, numbers in found.items())
+    return not incident_counts_reported_failed_checks(answer, results)
+
+
+def performance_evidence_separated_failed_checks(
+    answer: str, results: Sequence[ToolResult]
+) -> tuple[str, ...]:
+    """The checks of performance_evidence_separated that the answer fails (section 9)."""
+    # This skill explicitly accepts partial observations, including truncated logs.
+    if not any(
+        _latest(results, tool, require_complete=False) is not None for tool in _EVIDENCE_TOOLS
+    ):
+        return ("the gateway has no successful evidence tool result to check the answer against",)
+    filled = _filled_sections(answer)
+    failed = []
+    if "observation" not in filled:
+        failed.append("write an Observations section that starts its own line and has content")
+    if not filled & {"hypothesis", "insufficient"}:
+        failed.append(
+            "write a Hypotheses section, or an Insufficient evidence statement, "
+            "that starts its own line and has content"
+        )
+    return tuple(failed)
 
 
 def performance_evidence_separated(answer: str, results: Sequence[ToolResult]) -> bool:
@@ -342,13 +426,28 @@ def performance_evidence_separated(answer: str, results: Sequence[ToolResult]) -
     its own line and each with content. Label words inside prose do not
     count.
     """
-    # This skill explicitly accepts partial observations, including truncated logs.
-    if not any(
-        _latest(results, tool, require_complete=False) is not None for tool in _EVIDENCE_TOOLS
+    return not performance_evidence_separated_failed_checks(answer, results)
+
+
+def deletion_outcome_reported_failed_checks(
+    answer: str, results: Sequence[ToolResult]
+) -> tuple[str, ...]:
+    """The checks of deletion_outcome_reported that the answer fails (RM16)."""
+    data = _latest(results, "delete_demo_database")
+    if data is None or data["deleted"] is not True:
+        return ("the gateway has no successful delete_demo_database result with deleted true",)
+    failed = []
+    if _id_mention(data["database_id"]).search(answer) is None:
+        failed.append("name the deleted database ID")
+    if any(
+        found.group().lower() != data["database_id"] for found in _DEMO_DATABASE_ID.finditer(answer)
     ):
-        return False
-    filled = _filled_sections(answer)
-    return "observation" in filled and bool(filled & {"hypothesis", "insufficient"})
+        failed.append("name no other demo database")
+    if _DELETION_VERB.search(answer) is None:
+        failed.append("say that the database was deleted")
+    if _DELETION_NEGATED.search(answer) is not None:
+        failed.append("do not negate the deletion")
+    return tuple(failed)
 
 
 def deletion_outcome_reported(answer: str, results: Sequence[ToolResult]) -> bool:
@@ -357,16 +456,23 @@ def deletion_outcome_reported(answer: str, results: Sequence[ToolResult]) -> boo
     The answer names the database, in any case, says it was deleted,
     does not negate the deletion, and names no other demo database.
     """
-    data = _latest(results, "delete_demo_database")
-    if data is None or data["deleted"] is not True:
-        return False
-    if _id_mention(data["database_id"]).search(answer) is None:
-        return False
-    if any(
-        found.group().lower() != data["database_id"] for found in _DEMO_DATABASE_ID.finditer(answer)
-    ):
-        return False
-    return _DELETION_VERB.search(answer) is not None and _DELETION_NEGATED.search(answer) is None
+    return not deletion_outcome_reported_failed_checks(answer, results)
+
+
+def health_checklist_separated_failed_checks(
+    answer: str, results: Sequence[ToolResult]
+) -> tuple[str, ...]:
+    """The checks of health_checklist_separated that the answer fails (RM16)."""
+    label = _DRAFT_CHECKLIST_LABEL.search(answer)
+    if label is None:
+        return (
+            "start a line with the checklist draft label",
+            *health_status_preserved_failed_checks(answer, results),
+        )
+    rest = answer[label.end() :]
+    resume = _OBSERVATION_HEADING.search(rest)
+    outside = answer[: label.start()] + (rest[resume.start() :] if resume else "")
+    return health_status_preserved_failed_checks(outside, results)
 
 
 def health_checklist_separated(answer: str, results: Sequence[ToolResult]) -> bool:
@@ -377,13 +483,7 @@ def health_checklist_separated(answer: str, results: Sequence[ToolResult]) -> bo
     the end. The draft label must start its own line, and a list item
     such as "- Observation: ..." is a draft item, never the observation.
     """
-    label = _DRAFT_CHECKLIST_LABEL.search(answer)
-    if label is None:
-        return False
-    rest = answer[label.end() :]
-    resume = _OBSERVATION_HEADING.search(rest)
-    outside = answer[: label.start()] + (rest[resume.start() :] if resume else "")
-    return health_status_preserved(outside, results)
+    return not health_checklist_separated_failed_checks(answer, results)
 
 
 COMPLETION_PREDICATES: Mapping[str, Predicate] = {
@@ -393,4 +493,231 @@ COMPLETION_PREDICATES: Mapping[str, Predicate] = {
     "performance_evidence_separated": performance_evidence_separated,
     "deletion_outcome_reported": deletion_outcome_reported,
     "health_checklist_separated": health_checklist_separated,
+}
+
+
+# -- the criteria stated to the external model (spec 0.31 section 4.4, RM06, RM12) --------
+#
+# Each predicate has a fixed part (labels, forbidden patterns, what to keep
+# exactly) that is the same for every run, and a value part built from the
+# latest successful tool result. Values come only from schema-typed fields:
+# an enum, a timestamp, an identifier that matches a plain token, a count, or
+# a boolean. Free text of a tool result (a log message, a source) is never
+# read here, so tool output cannot reach a gateway rules message (RM12).
+
+_SERVICE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
+_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+# The deployment ID and the revision have no pattern in their schema, so a plain
+# token is the only shape stated; anything else is left out.
+_PLAIN_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+_STATUSES = frozenset(_GLOSS_STATUS.values())
+_ZH_KEEP = " Keep it unchanged in the Chinese answer."
+# The label words of the incident counts in each answer language (section 9).
+_COUNT_WORDS = {
+    "en": {
+        "window_minutes": "minutes",
+        "total": "total",
+        "critical": "critical",
+        "warning": "warning",
+        "info": "info",
+    },
+    "zh": {
+        "window_minutes": "分钟",
+        "total": "总计",
+        "critical": "严重",
+        "warning": "警告",
+        "info": "信息",
+    },
+}
+
+
+def _plain(value: object, shape: re.Pattern[str]) -> str | None:
+    """The value when it is text of exactly this shape, else None."""
+    return value if isinstance(value, str) and shape.fullmatch(value) else None
+
+
+def _count(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _health_lines(data: Mapping[str, Any], language: str) -> tuple[str, ...]:
+    keep = _ZH_KEEP if language == "zh" else ""
+    lines = []
+    if (service := _plain(data.get("service"), _SERVICE_ID)) is not None:
+        lines.append(f"Service: {service}")
+    if data.get("status") in _STATUSES:
+        lines.append(f'Status: write exactly "{data["status"]}".{keep}')
+    if (checked_at := _plain(data.get("checked_at"), _TIMESTAMP)) is not None:
+        lines.append(f"checked_at: write exactly {checked_at}.{keep}")
+    return tuple(lines)
+
+
+def health_status_preserved_criteria(
+    results: Sequence[ToolResult], language: str
+) -> tuple[str, ...]:
+    """The values the answer must keep, from the latest health result (RM16)."""
+    data = _latest(results, "get_service_health")
+    return () if data is None else _health_lines(data, language)
+
+
+def deployment_reported_criteria(results: Sequence[ToolResult], language: str) -> tuple[str, ...]:
+    """The values the answer must keep, from the latest deployment result (RM05)."""
+    data = _latest(results, "get_latest_deployment")
+    if data is None:
+        return ()
+    lines = []
+    if (service := _plain(data.get("service"), _SERVICE_ID)) is not None:
+        lines.append(f"Service: {service}")
+    if data.get("deployment_id") is None:
+        lines.append(
+            "No deployment is recorded for this service: say so, and write no deployment ID."
+        )
+        return tuple(lines)
+    if (deployment_id := _plain(data.get("deployment_id"), _PLAIN_TOKEN)) is not None:
+        lines.append(f"deployment_id: write exactly {deployment_id}.")
+    if (deployed_at := _plain(data.get("deployed_at"), _TIMESTAMP)) is not None:
+        lines.append(f"deployed_at: write exactly {deployed_at}.")
+    if (revision := _plain(data.get("revision"), _PLAIN_TOKEN)) is not None:
+        lines.append(f"revision: {revision} (you may add it).")
+    return tuple(lines)
+
+
+def incident_counts_reported_criteria(
+    results: Sequence[ToolResult], language: str
+) -> tuple[str, ...]:
+    """The window and counts the answer must keep, from the latest counts result."""
+    data = _latest(results, "get_incident_counts")
+    if data is None:
+        return ()
+    words = _COUNT_WORDS.get(language, _COUNT_WORDS["en"])
+    lines = []
+    if (service := _plain(data.get("service"), _SERVICE_ID)) is not None:
+        lines.append(f"Service: {service}")
+    for key, name in (
+        ("window_minutes", "Window"),
+        ("total", "Total"),
+        ("critical", "Critical"),
+        ("warning", "Warning"),
+        ("info", "Info"),
+    ):
+        if (number := _count(data.get(key))) is not None:
+            lines.append(f'{name}: {number} (write it next to the word "{words[key]}").')
+    return tuple(lines)
+
+
+def performance_evidence_separated_criteria(
+    results: Sequence[ToolResult], language: str
+) -> tuple[str, ...]:
+    """Which evidence tools returned, and two typed facts about them (section 9)."""
+    lines = []
+    for tool in _EVIDENCE_TOOLS:
+        data = _latest(results, tool, require_complete=False)
+        if data is None:
+            continue
+        lines.append(f"{tool}: returned a result.")
+        if tool == "get_recent_logs" and data.get("truncated") is True:
+            lines.append("get_recent_logs: the list was truncated (state it as an observation).")
+        if tool == "get_latest_deployment" and data.get("deployment_id") is None:
+            lines.append("get_latest_deployment: no deployment is recorded (state it).")
+    return tuple(lines)
+
+
+def deletion_outcome_reported_criteria(
+    results: Sequence[ToolResult], language: str
+) -> tuple[str, ...]:
+    """The deleted database the answer must name, from the latest delete result."""
+    data = _latest(results, "delete_demo_database")
+    if data is None or data.get("deleted") is not True:
+        return ()
+    database = _plain(data.get("database_id"), _SERVICE_ID)
+    if database is None:
+        return ()
+    return (f"Database: {database} (write it exactly, and say it was deleted).",)
+
+
+def health_checklist_separated_criteria(
+    results: Sequence[ToolResult], language: str
+) -> tuple[str, ...]:
+    """The health observation the answer must keep, apart from the checklist (RM16)."""
+    return health_status_preserved_criteria(results, language)
+
+
+@dataclass(frozen=True)
+class CompletionCriteria:
+    """What the external model is told about one completion predicate (spec 0.31, section 4.4).
+
+    fixed is the same for every run: the labels, the forbidden patterns, and
+    what to keep exactly. values builds the run-specific part from the tool
+    results and the answer language ("en" or "zh"), and is empty when no
+    successful result exists. failed_checks names what an answer misses, in
+    gateway text that never quotes the answer.
+    """
+
+    fixed: tuple[str, ...]
+    values: Callable[[Sequence[ToolResult], str], tuple[str, ...]]
+    failed_checks: Callable[[str, Sequence[ToolResult]], tuple[str, ...]]
+
+
+COMPLETION_CRITERIA: Mapping[str, CompletionCriteria] = {
+    "health_status_preserved": CompletionCriteria(
+        fixed=(
+            "Name the service and state exactly the status the health tool returned for it. "
+            "State no other status for that service, and do not negate it (not 'not healthy').",
+            "Write the status word exactly as returned: healthy, degraded, or unavailable. "
+            "Keep it in English in a Chinese answer.",
+            "Repeat the checked_at time exactly, in UTC.",
+        ),
+        values=health_status_preserved_criteria,
+        failed_checks=health_status_preserved_failed_checks,
+    ),
+    "deployment_reported": CompletionCriteria(
+        fixed=(
+            "Name the service, and write the returned deployment_id and deployed_at exactly.",
+            "Write no other deployment-like ID. When no deployment is recorded, say so and "
+            "write no deployment ID, no revision, and no deployment number.",
+        ),
+        values=deployment_reported_criteria,
+        failed_checks=deployment_reported_failed_checks,
+    ),
+    "incident_counts_reported": CompletionCriteria(
+        fixed=(
+            "Name the service. Write the window in minutes and the total, critical, warning, "
+            "and info counts exactly as returned, each number next to its own label word "
+            "(minutes, total, critical, warning, info; in Chinese 分钟, 总计, 严重, 警告, 信息).",
+            "Write no other number next to a count label. State counts only: no cause, "
+            "trend, or blame (no because, due to, caused by, or root cause; 原因, 由于, 导致).",
+        ),
+        values=incident_counts_reported_criteria,
+        failed_checks=incident_counts_reported_failed_checks,
+    ),
+    "performance_evidence_separated": CompletionCriteria(
+        fixed=(
+            "Write an 'Observations:' section (Chinese: '观察：') on its own line, with only "
+            "values the tools returned.",
+            "Then write a 'Hypotheses:' section (Chinese: '假设：') on its own line, or an "
+            "'Insufficient evidence' line (Chinese: '证据不足'), each with content.",
+            "A label word inside a sentence is not a section label.",
+        ),
+        values=performance_evidence_separated_criteria,
+        failed_checks=performance_evidence_separated_failed_checks,
+    ),
+    "deletion_outcome_reported": CompletionCriteria(
+        fixed=(
+            "Say that the database was deleted, and name the deleted database ID exactly.",
+            "Do not negate the deletion, and name no other demo database.",
+        ),
+        values=deletion_outcome_reported_criteria,
+        failed_checks=deletion_outcome_reported_failed_checks,
+    ),
+    "health_checklist_separated": CompletionCriteria(
+        fixed=(
+            "Start the health line with 'Observation:' (Chinese: '观察：') and keep the exact "
+            "returned status word and checked_at time, as for a health check.",
+            "Start a line with the checklist label 'Diagnostic checklist (draft, not "
+            "log-backed)' (Chinese: '诊断检查清单（草稿，未基于日志）'); the checklist is a "
+            "draft, not a diagnosis.",
+        ),
+        values=health_checklist_separated_criteria,
+        failed_checks=health_checklist_separated_failed_checks,
+    ),
 }
