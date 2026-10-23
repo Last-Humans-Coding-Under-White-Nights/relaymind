@@ -32,6 +32,10 @@ trusted only for the skill choice:
   without a routing generation: the chosen skill's route, or the same
   clarify again.
 
+- Without a usable local model (RM26), a skill a selector chose routes
+  external with reason no_local_model, after the same RM05 check, so the
+  gateway still asks for a missing identifier itself.
+
 Anything else is invalid routing output and raises RouteDecisionError:
 no call, more than one call, an unknown function, undeclared or invalid
 arguments. Invalid output never reaches tool execution (RM02).
@@ -74,6 +78,9 @@ CLARIFY_FUNCTION = "request_clarification"
 # Section 8 clarification.required: what a model-issued clarification
 # waits for, since no skill was chosen.
 SKILL_SELECTION = "skill_selection"
+
+# RM26: the reason code of a route without a usable local model (section 8).
+NO_LOCAL_MODEL = "no_local_model"
 
 # Section 4.2: at most eight short skill descriptions per router prompt.
 MAX_ADVERTISED_SKILLS = 8
@@ -298,19 +305,23 @@ class Router:
             reason_code="execution_mode",
         )
 
-    def client_decision(self, messages: Sequence[Message], mode: ExecutionMode) -> RouteDecision:
+    def client_decision(
+        self, messages: Sequence[Message], mode: ExecutionMode, *, no_local: bool = False
+    ) -> RouteDecision:
         """The client-owned alias: the gateway's own decision, no routing generation (7.2).
 
         Route local with reason simple_skill, or route external with
-        reason execution_mode in external_only; skill_id is null.
+        reason execution_mode in external_only, or with reason
+        no_local_model without a usable local model (RM26, section 7.4);
+        skill_id is null.
         """
-        if mode is ExecutionMode.EXTERNAL_ONLY:
+        if mode is ExecutionMode.EXTERNAL_ONLY or no_local:
             return self._validated(
                 mode,
                 managed=False,
                 route=Route.EXTERNAL.value,
                 language=request_language(messages).value,
-                reason_code="execution_mode",
+                reason_code=NO_LOCAL_MODEL if no_local else "execution_mode",
             )
         return self._validated(
             mode,
@@ -400,16 +411,18 @@ class Router:
         *,
         mode: ExecutionMode,
         language: Language,
+        no_local: bool = False,
     ) -> Routing:
         """The decision for a resume after a clarify that named skill_id (section 5).
 
         No routing generation: the gateway checks the conversation, now
         with the resume input, for the identifier the skill still needs.
+        no_local is a run without a usable local model (RM26).
         """
         skill = self._skills.get(skill_id)
         if skill is None:
             raise RouteDecisionError(f"skill {skill_id!r} is not in the advertised catalog")
-        return self._skill_routing(skill, messages, mode, language)
+        return self._skill_routing(skill, messages, mode, language, no_local=no_local)
 
     def skill_routing(
         self,
@@ -418,21 +431,34 @@ class Router:
         *,
         mode: ExecutionMode,
         language: Language,
+        no_local: bool = False,
     ) -> Routing:
         """The decision for a skill a selector chose (RM28), as for the router's own choice.
 
         Catalog membership, then the route from the registry entry and the
         mode, and the RM05 identifier check with the gateway's clarification.
+        no_local is a run without a usable local model (RM26).
         """
         skill = self._skills.get(skill_id)
         if skill is None:
             raise RouteDecisionError(f"skill {skill_id!r} is not in the advertised catalog")
-        return self._skill_routing(skill, messages, mode, language)
+        return self._skill_routing(skill, messages, mode, language, no_local=no_local)
 
     def _skill_routing(
-        self, skill: Skill, messages: Sequence[Message], mode: ExecutionMode, language: Language
+        self,
+        skill: Skill,
+        messages: Sequence[Message],
+        mode: ExecutionMode,
+        language: Language,
+        *,
+        no_local: bool = False,
     ) -> Routing:
-        """The chosen skill's route, or clarify for a missing identifier (RM05)."""
+        """The chosen skill's route, or clarify for a missing identifier (RM05).
+
+        Without a usable local model (RM26) every skill that needs no
+        clarification routes external with reason no_local_model, whatever
+        its registry entry says, because no local stage can run.
+        """
         missing = self._missing_identifier(skill, messages, language)
         if missing is not None:
             name, label, values = missing
@@ -445,7 +471,9 @@ class Router:
                 clarification=_clarification(language, label, values),
             )
             return Routing(decision, missing=name)
-        route, reason = self._route_for(skill, mode)
+        route, reason = (
+            (Route.EXTERNAL, NO_LOCAL_MODEL) if no_local else self._route_for(skill, mode)
+        )
         decision = self._validated(
             mode,
             route=route.value,

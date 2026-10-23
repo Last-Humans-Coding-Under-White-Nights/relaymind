@@ -53,8 +53,8 @@ from relaymind.orchestrator.local_loop import ConfiguredModel, RunOutcome
 from relaymind.orchestrator.run_state import RunState
 
 PROPOSAL_ID = re.compile(r"proposal_[0-9a-f]{16}")
-# The trace fields that hold a model identifier.
-MODEL_FIELDS = ("model", "final_answer_model")
+# The trace fields that hold a model identifier; run.accepted names the local one (RM26).
+MODEL_FIELDS = ("model", "final_answer_model", "local_model")
 PROMPT = "Why is staging-api slow right now?"
 ANSWER = (
     "Observations:\n"
@@ -239,7 +239,7 @@ def run_scenario(tmp_path, skill_roots, config: Configuration, local_turns=LOCAL
 
 
 def model_names(value) -> set[str]:
-    """Every string found under a "model" or "final_answer_model" key, at any depth."""
+    """Every string found under a model field (MODEL_FIELDS), at any depth."""
     found: set[str] = set()
     if isinstance(value, dict):
         for key, item in value.items():

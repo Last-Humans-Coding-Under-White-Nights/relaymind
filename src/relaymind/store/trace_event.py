@@ -778,12 +778,39 @@ _SELECTION_ACCEPTED_FIELDS: dict[str, Callable[[Any], None]] = {
     "example_match_margin": _unit_number("example_match_margin"),
 }
 
+# RM26: the classes of the local model (section 8, local_model_status). route.selected
+# records the cause of a managed external route, so only a class that is not ready.
+LOCAL_MODEL_CLASSES = ("ready", "unavailable", "unsuitable", "absent")
+NO_LOCAL_CLASSES = LOCAL_MODEL_CLASSES[1:]
+
+
+def _optional_text(name: str) -> Callable[[Any], None]:
+    def check(value: Any) -> None:
+        if value is not None and not _is_text(value):
+            raise TraceEventError(f"'{name}' must be non-blank text or null")
+
+    return check
+
+
+# The configured local model, its class, and the measured cause (RM26).
+_LOCAL_MODEL_ACCEPTED_FIELDS: dict[str, Callable[[Any], None]] = {
+    "local_model": _optional_text("local_model"),
+    "local_model_status": _one_of("local_model_status", LOCAL_MODEL_CLASSES),
+    "local_model_reason": _optional_text("local_model_reason"),
+}
+
 _OPTIONAL_FIELDS: dict[EventType, dict[str, Callable[[Any], None]]] = {
-    EventType.RUN_ACCEPTED: {**_PERFORMANCE_ACCEPTED_FIELDS, **_SELECTION_ACCEPTED_FIELDS},
+    EventType.RUN_ACCEPTED: {
+        **_PERFORMANCE_ACCEPTED_FIELDS,
+        **_SELECTION_ACCEPTED_FIELDS,
+        **_LOCAL_MODEL_ACCEPTED_FIELDS,
+    },
     # RM28: who chose, how, and every selector tried; the narrowing that was admitted.
+    # RM26: the class that made the route managed external execution.
     EventType.ROUTE_SELECTED: {
         "selector": _check_selector,
         "tools_narrowed": _check_tools_narrowed,
+        "local_model_status": _one_of("local_model_status", NO_LOCAL_CLASSES),
     },
     EventType.MODEL_STARTED: {"request_options": _check_request_options},
     EventType.MODEL_FINISHED: {

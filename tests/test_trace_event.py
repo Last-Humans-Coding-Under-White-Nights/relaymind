@@ -1585,3 +1585,48 @@ def test_selection_fields_are_validated_and_published():
         with pytest.raises(TraceEventError, match=key):
             validate_trace_event(data)
         assert not SCHEMA_VALIDATOR.is_valid(data), name
+
+
+# -- The class of the local model (spec 0.31 section 8; RM22, RM26, #126) ----------------------
+
+LOCAL_MODEL_ACCEPTED = {
+    "accepted-ready": accepted_with(
+        local_model="qwen3-0.6b", local_model_status="ready", local_model_reason=None
+    ),
+    "accepted-absent": accepted_with(
+        local_model=None,
+        local_model_status="absent",
+        local_model_reason="no local model is configured",
+    ),
+    "accepted-unsuitable": accepted_with(
+        local_model="qwen3-0.6b",
+        local_model_status="unsuitable",
+        local_model_reason="the routing warm-up took 5200 ms",
+    ),
+    "route-no-local": route_event(local_model_status="unavailable"),
+    "accepted-before-0.31": accepted_with(),
+}
+LOCAL_MODEL_REJECTED = {
+    "model-blank": (accepted_with(local_model=" "), "local_model"),
+    "model-number": (accepted_with(local_model=7), "local_model"),
+    "status-unknown": (accepted_with(local_model_status="slow"), "local_model_status"),
+    "reason-blank": (accepted_with(local_model_reason=""), "local_model_reason"),
+    "reason-number": (accepted_with(local_model_reason=1), "local_model_reason"),
+    # A route is managed external execution only for a class that is not ready.
+    "route-ready": (route_event(local_model_status="ready"), "local_model_status"),
+    "route-unknown": (route_event(local_model_status="gone"), "local_model_status"),
+}
+
+
+def test_local_model_fields_are_validated_and_published():
+    """RM22, RM26, spec 0.31 section 8: the validator and the schema agree on each shape.
+
+    The fields are optional, because a run stored before spec 0.31 has none.
+    """
+    for name, data in LOCAL_MODEL_ACCEPTED.items():
+        validate_trace_event(data)
+        assert SCHEMA_VALIDATOR.is_valid(data), name
+    for name, (data, key) in LOCAL_MODEL_REJECTED.items():
+        with pytest.raises(TraceEventError, match=key):
+            validate_trace_event(data)
+        assert not SCHEMA_VALIDATOR.is_valid(data), name

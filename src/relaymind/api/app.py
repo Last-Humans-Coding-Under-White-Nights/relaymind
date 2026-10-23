@@ -177,7 +177,7 @@ def create_app(
         )
         key = idempotency_key(request.headers)
         mode_header = request.headers.get(MODE_HEADER)
-        mode = _execution_mode(mode_header, MODE_HEADER, chat.alias, settings)
+        mode = _execution_mode(mode_header, MODE_HEADER, chat.alias, settings, orchestrator)
         claim = claim_for(key, "chat", body, mode_header)
         stored = check_stored_key(orchestrator.store, claim)
         backend = backends[chat.alias]
@@ -235,7 +235,7 @@ def create_app(
         body = _decode(await request.body())
         run = parse_run_request(body)
         key = idempotency_key(request.headers)
-        mode = _execution_mode(run.execution_mode, "execution_mode", None, settings)
+        mode = _execution_mode(run.execution_mode, "execution_mode", None, settings, orchestrator)
         claim = claim_for(key, "native", body)
         stored = check_stored_key(orchestrator.store, claim)
         if stored is None:
@@ -337,7 +337,9 @@ def create_app(
             native=native,
             guard=_guarded,
             decode=_decode,
-            require_mode=lambda mode: _execution_mode(mode.value, "execution_mode", None, settings),
+            require_mode=lambda mode: _execution_mode(
+                mode.value, "execution_mode", None, settings, orchestrator
+            ),
         )
     return app
 
@@ -558,11 +560,17 @@ def _decode(raw: bytes) -> object:
 
 
 def _execution_mode(
-    value: object, source: str, alias: str | None, settings: ChatSettings
+    value: object,
+    source: str,
+    alias: str | None,
+    settings: ChatSettings,
+    orchestrator: LocalOrchestrator,
 ) -> ExecutionMode:
     """The effective mode from a header or a native field: absent is auto, never downgraded.
 
     One enumeration and one operator policy serve both surfaces (section 7.4).
+    The class of the local model can forbid a permitted mode while it lasts
+    (RM26): local_only and parallel_demo without a usable local model.
     """
     if value is None:
         mode = ExecutionMode.AUTO
@@ -583,6 +591,9 @@ def _execution_mode(
         raise ApiError(
             "execution_mode_forbidden", f"the execution mode {mode.value} is not permitted"
         )
+    refusal = orchestrator.mode_refusal(mode)
+    if refusal is not None:
+        raise ApiError("execution_mode_forbidden", refusal)
     return mode
 
 

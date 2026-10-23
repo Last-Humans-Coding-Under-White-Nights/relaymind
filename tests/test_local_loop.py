@@ -690,6 +690,10 @@ def test_run_accepted_carries_the_section_8_payload(tmp_path):
         "prefetch_declarations": gateway.skills.prefetch_declarations(gateway.skills.names()),
         # RM28: the selector chain in force and the example_match thresholds, the baseline.
         **SelectionSettings().to_json_object(),
+        # RM26: the configured local model and its class, here ready with no cause.
+        "local_model": LOCAL_MODEL_ID,
+        "local_model_status": "ready",
+        "local_model_reason": None,
     }
     assert outcome.state is RunState.COMPLETED
 

@@ -193,6 +193,9 @@
               },
               "example_match_score": {"type": "number", "minimum": 0, "maximum": 1},
               "example_match_margin": {"type": "number", "minimum": 0, "maximum": 1},
+              "local_model": {"type": ["string", "null"], "pattern": "\\S"},
+              "local_model_status": {"enum": ["ready", "unavailable", "unsuitable", "absent"]},
+              "local_model_reason": {"type": ["string", "null"], "pattern": "\\S"},
               "answer_options": {
                 "type": "object",
                 "properties": {
@@ -217,7 +220,7 @@
       }
     },
     {
-      "description": "Spec 0.31 section 8 (RM28): the selector that chose, or nulls when the chain chose nothing, every selector tried, and the admitted narrowing.",
+      "description": "Spec 0.31 section 8 (RM28): the selector that chose, or nulls when the chain chose nothing, every selector tried, and the admitted narrowing; RM26: the class of the local model that made the route managed external execution.",
       "if": {"properties": {"event_type": {"const": "route.selected"}}, "required": ["event_type"]},
       "then": {
         "properties": {
@@ -248,7 +251,8 @@
                 "required": ["name", "version", "mechanism", "elapsed_ms", "attempts"],
                 "additionalProperties": false
               },
-              "tools_narrowed": {"type": "array", "items": {"type": "string", "pattern": "\\S"}}
+              "tools_narrowed": {"type": "array", "items": {"type": "string", "pattern": "\\S"}},
+              "local_model_status": {"enum": ["unavailable", "unsuitable", "absent"]}
             }
           }
         }
