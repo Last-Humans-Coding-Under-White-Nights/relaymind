@@ -379,7 +379,7 @@ def test_a_model_based_selector_is_bounded_by_its_generation_not_the_time_limit(
 
     selector = ModelBased("model")
     outcome = chain_run([selector], sleep=sleep, context=SelectionContext(generate=generate))
-    assert outcome.attempts[0].outcome is Outcome.SELECTED
+    assert outcome.attempts[0].outcome == Outcome.SELECTED
     assert slept == []
     assert selector.requests[0].deadline_ms is None
 
@@ -565,7 +565,7 @@ def test_an_unknown_skill_is_inadmissible_and_the_next_selector_is_tried(tmp_pat
     assert accepted.payload["selection"] == ["first", "second"]
 
 
-def test_the_selection_request_carries_the_redacted_conversation_and_the_catalog(tmp_path):
+def test_the_selection_request_carries_the_conversation_and_the_catalog(tmp_path):
     """RM28: the request names the run, conversation, language, mode, catalog, permissions."""
     selector = pick("only")
     gateway = build_gateway(tmp_path, health_tail(), external_turns=[], selectors=[selector])
@@ -669,19 +669,23 @@ def test_the_gateway_runs_the_identifier_check_on_a_selected_skill(tmp_path):
 
 
 def test_none_an_error_and_a_timeout_fall_through(tmp_path):
-    """Section 11: the time limit bounds a selector that never answers; the run continues."""
+    """Section 11: the time limit bounds a selector that never answers; the run continues.
+
+    The limit is reached through an injected sleep that ends at once, so the
+    test never waits on the wall clock.
+    """
     hung = Scripted("hung", result("hung"), hang=True)
     gateway = build_gateway(
         tmp_path,
         health_tail(),
         external_turns=[],
-        selectors=[
-            none_of("nothing"),
-            Scripted("broken", raises=ValueError("x")),
-            hung,
-            pick("ok"),
-        ],
-        selection=SelectionSettings(timeout_seconds=0.001),
+        selection=SelectionSettings(timeout_seconds=0.25),
+    )
+    gateway.orchestrator.selection_chain = SelectorChain(
+        [none_of("nothing"), Scripted("broken", raises=ValueError("x")), hung, pick("ok")],
+        timeout_seconds=0.25,
+        clock=gateway.clock.monotonic,
+        sleep=instant,
     )
     outcome, events = run(gateway, PROMPT)
     assert outcome.state is RunState.COMPLETED
@@ -693,7 +697,7 @@ def test_none_an_error_and_a_timeout_fall_through(tmp_path):
     ]
     assert hung.cancelled is True
     (accepted,) = of_type(events, "run.accepted")
-    assert accepted.payload["budgets"]["selection.timeout_seconds"] == 0.001
+    assert accepted.payload["budgets"]["selection.timeout_seconds"] == 0.25
 
 
 def test_an_exhausted_chain_hands_off_with_the_catalog(tmp_path):
@@ -851,7 +855,7 @@ def test_the_selection_settings_are_checked():
     }
 
 
-def test_a_route_external_selection_is_not_parallel_in_local_only(tmp_path):
+def test_a_parallel_skill_routes_external_when_the_mode_does_not_admit_it(tmp_path):
     """RM02: admission checks the mode; the parallel skill routes external outside its mode."""
     selector = pick("p", skill_id="health-and-diagnostic-checklist")
     gateway = build_gateway(tmp_path, [], selectors=[selector])

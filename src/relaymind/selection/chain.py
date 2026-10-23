@@ -207,7 +207,7 @@ class SelectorChain:
                     detail,
                 )
             )
-            if outcome is Outcome.SELECTED:
+            if outcome == Outcome.SELECTED:
                 return ChainResult(
                     tuple(attempts), self._elapsed_ms(started), selector, parsed, admitted
                 )
