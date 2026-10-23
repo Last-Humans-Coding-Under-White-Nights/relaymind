@@ -2899,10 +2899,11 @@ class _Run:
         The set fits the remaining tool budget when one execution is counted
         for each call (_admit_set); a retry of a transient failure is charged
         too, so the budget can still run out in the middle, and the run then
-        ends on budget as it would for a single call. A failed call of the local actor still
-        escalates at once, as it does for a single call (section 11),
-        and so does an exhausted time budget. The conversation then holds
-        one assistant message with every call and one tool message for each.
+        ends on budget as it would for a single call. A failed call of the
+        local actor escalates at once, as it does for a single call (section
+        11), and the calls after it do not run. When every call ran, the
+        conversation gets one assistant message with every call and one
+        tool message for each.
         """
         contents = []
         for admitted, proposal_id in zip(turn.admitted, turn.proposal_ids, strict=True):

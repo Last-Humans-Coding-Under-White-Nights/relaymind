@@ -24,8 +24,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the others `not_executed`; the trace records them the same way). The room
   counts one execution per call, so the retry of a transient read failure
   can still use the last of it in the middle of a set; the run then ends on
-  budget as it would for a single call. A repeated call in
-  a set is a replay and costs no execution (RM10). The default `one`, the
+  budget as it would for a single call. A repeated call in a set is a
+  replay and costs no execution (RM10). The default `one`, the
   client-owned alias (section 7.2), and the fixed parallel workflow's local
   branch (RM15) keep the one-call rule and their old exchange.
   `BudgetMeter.tool_room()` and `admitted_calls_limit()` give the room.
@@ -37,8 +37,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   tool outside `allowed_tools`, a constant for an identifier, a request
   binding for a non-identifier, an unknown parameter or binding, a required
   argument with no binding, a constant the tool schema refuses, or the same
-  call declared twice is a startup error. Under `performance.prefetch = true` the gateway resolves each
-  call from the user turns by the RM05 rule (exactly one allowed value
+  call declared twice is a startup error. Under `performance.prefetch =
+  true` the gateway resolves each call from the user turns by the RM05 rule (exactly one allowed value
   appears; otherwise that call is skipped, not the skill), runs the
   resolved calls together through the executor with every check of a model
   proposal, records `tool.proposed` with actor `gateway`, mechanism
@@ -49,9 +49,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   generation offers no tools. Dispatch authority does not move (RM14), and a
   later proposal of the same call replays the record (RM10). A prefetch the
   tool budget has no room for (one execution per call) is not started. At
-  construction and in the launcher, a skill whose declared calls exceed `tool_calls` (a skill that
-  can run locally) or `run_tool_executions` stops startup under
-  `prefetch = true` (exit status 2, `[performance] prefetch: ...`). The demo
+  construction and in the launcher, a skill whose declared calls exceed
+  `tool_calls` (a skill that can run locally) or `run_tool_executions` stops
+  startup under `prefetch = true` (exit status 2, `[performance] prefetch: ...`). The demo
   skills `check-service-health`, `lookup-latest-deployment`, and
   `investigate-performance` declare their calls (section 9) and move to
   version 0.2.0 (RM07). `run.accepted` records `prefetch_declarations`, an
@@ -95,7 +95,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `PerformanceSettings`; every default is the earlier behavior. A wrong value
   is exit status 2. `answer_stream = "live"` is refused until gated answer
   streaming exists (RM32). `calls_per_generation` (section 4.3) and
-  `prefetch` (RM29) are recorded and acted on; see the two entries below.
+  `prefetch` (RM29) are recorded and acted on; see the two entries above.
   `run.accepted` records the five options in force; the trace schema stays
   at version 1 with these fields optional.
 - A failed run with error code `predicate_unmet` is run state: a chat

@@ -21,8 +21,8 @@ Each package contains:
   `src/relaymind/skills/schemas/skill_manifest.v1.json`. It holds the
   version, languages, local eligibility, allowed tool IDs, resource
   paths, the completion predicate ID, the optional parallel-workflow ID,
-  and optional `prefetch` declarations (see below). Tool IDs, predicate IDs, and workflow IDs must be registered in the
-  gateway. `local_eligible: false` marks a skill external-required
+  and optional `prefetch` declarations (see below). Tool IDs, predicate
+  IDs, and workflow IDs must be registered in the gateway. `local_eligible: false` marks a skill external-required
   (RM04): its final answer comes from an external model. Declaring a
   parallel-workflow ID only joins the workflow; operator configuration
   must also enable it, and the effective execution mode must admit it
@@ -81,7 +81,8 @@ At load the registry refuses the package (the gateway does not start) if a
 tool is not read-only, is not in `allowed_tools`, or is not registered; if
 a name is not a parameter of the tool; if a required parameter has no
 binding; if a request binding names a parameter that is not an identifier
-with a closed list; if a constant is given for an identifier; if a constant
+with a closed list; if a constant is given for an identifier; if the same
+call is declared twice; if a constant
 does not satisfy the tool schema; or if a binding is neither of the two
 shapes above. With prefetch on, a skill whose declared calls exceed the
 configured `tool_calls` (for a skill that can run locally) or

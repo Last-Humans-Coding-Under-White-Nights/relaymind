@@ -603,9 +603,6 @@ feature has a test of the default as well. Later pull requests append here.
   pinned runtime first on the path (see
   [`scripts/README.md`](../scripts/README.md)); no live run with the option
   is recorded yet.
-
-### What is not covered yet
-
 - `pytest tests/test_admitted_calls.py` and `pytest tests/test_local_budgets.py`
   (#122; RM05, RM08 to RM11, section 4.3, AC18): under `many`, two reads
   run in proposal order with their own proposal, start, and finish events,
@@ -664,6 +661,9 @@ feature has a test of the default as well. Later pull requests append here.
   tool event may have model null only with actor `gateway`, the optional
   `mechanism` and `step`, and the `prefetch_declarations` shape are checked
   by the validator and the published schema alike.
+
+### What is not covered yet
+
 - The correctness corpus ran on Apple Silicon macOS only (#32). The
   latency benchmark ran on macOS (#33) and native x86-64 Windows
   (#110), closing AC15 with separate results and environment manifests.
