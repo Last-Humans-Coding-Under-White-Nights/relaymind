@@ -125,10 +125,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   dates the first generated fragment even when a tool call is only emitted
   after the finish chunk (RM09). `[external_model.request_options]` is a
   table of provider request fields sent verbatim and recorded in
-  `model.started`; a credential, a header, a key that would replace
+  `model.started` (only when at least one is declared, spec 0.33, so a
+  local call and an external call without options record none alike); a
+  credential, a header, a key that would replace
   `model`, `messages`, `tools`, `stream`, or `stream_options`, a sampling
-  key (`max_tokens`, `temperature`, `top_p`), and a value
-  that is not JSON stop startup with a message that names the key and never
+  key (`max_tokens`, `temperature`, `top_p`), an empty or blank key at any
+  depth, and a value that is not JSON stop startup with a message that names the key and never
   the value. The trace schema stays at version 1 with optional fields. The
   pinned runtime (build 11785) reported 558 of 559 prompt tokens as cached
   on a repeated prompt and no reasoning count; the live check is in
