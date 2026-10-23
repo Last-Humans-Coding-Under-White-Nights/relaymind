@@ -399,7 +399,8 @@ Deterministic tests over model doubles:
 - `pytest tests/test_run_corpus_script.py` also covers the offline draft
   pass regrade (#115; RM31): a passing draft is published and graded as
   the local answer; a draft in the wrong language, with tool-call JSON, or
-  after an answer option is blocked and keeps its measured grade; a run
+  after a non-default answer option is blocked and keeps its measured grade
+  (an option at its API default does not block it); a run
   that changed the sandbox after the draft is not regraded; a draft that
   fails where the final pass succeeded shows as lost; the original export
   is never changed and the command line refuses an `--out` equal to it;
@@ -546,15 +547,19 @@ feature has a test of the default as well. Later pull requests append here.
   (#121; RM16, RM19, RM31, AC17): under `answer_pass = draft` a passing
   draft is published with purposes `routing, skill, skill` and no `final`,
   by the local actor, and `run.completed` records `answer_pass_applied:
-  draft`; a caller `temperature`, `top_p`, or `max_completion_tokens` runs
-  the final pass and `answer_options` records it; a Chinese run with an
+  draft`; a caller `temperature` or `top_p` other than 1, or any
+  `max_completion_tokens`, runs the final pass and `answer_options` records
+  it, while `temperature` or `top_p` at its API default of 1 keeps the draft
+  and is still recorded; a Chinese run with an
   English draft, an English run with a Chinese draft, and a draft that holds
   tool-call JSON take the final pass; a draft that misses the completion
   predicate is never published; an external answer, and an `external_only`
   run, record no `answer_pass_applied`. The default runs the final pass and
   records `final` (`tests/test_ac01_local_health.py` is unchanged), and
   `run.accepted` holds the five performance options in force.
-  `PerformanceSettings` refuses a wrong value and `answer_stream = live`.
+  `PerformanceSettings` refuses a wrong value and `answer_stream = live`;
+  the language guard compares by value, so a plain `"zh"` is the Chinese
+  run, and an unknown language is an error.
 - `pytest tests/test_launcher.py -k performance` (#121, #140; section 14.1):
   the `[performance]` keys are the `PerformanceSettings` fields, a file
   without the table keeps the defaults, each key reaches the settings, a
@@ -578,8 +583,12 @@ feature has a test of the default as well. Later pull requests append here.
   setting are unchanged; a `needs_external` run and a failed external stage
   end with the error event (code, `run_id`, `reason_code` when there is one)
   and no `[DONE]`; a clarification streams as content; a disconnect after the
-  headers cancels the run and asks the generation to stop; a task cancelled
-  before it ran still ends the run and frees the slot; the client-owned alias
+  headers cancels the run and asks the generation to stop, and the response
+  waits for the run to stop, so a request right after it gets the slot,
+  but no longer than `cancel_wait_seconds` when the run does not stop; a
+  task cancelled before it ran still ends the run and frees the slot, and a
+  cancel before it ran names the run and ends it with `cancel_requested`;
+  the task-to-run mapping is gone when the task ends; the client-owned alias
   returns its call after the headers. Every SDK test runs with the option
   off and on.
 - `pytest tests/test_latency_benchmark_script.py tests/test_evaluation_metrics.py`

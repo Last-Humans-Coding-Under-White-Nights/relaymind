@@ -171,14 +171,15 @@
   counterfactual (#115; RM31, spec 0.31). It grades the stored traces of
   a corpus export as if the skill-stage draft had been published as the
   answer: for each auto and local_only run with a final generation it
-  takes the draft, applies the RM31 guards (no caller answer option, the
-  run's language, no tool-call JSON; the language and tool-call guards are
-  the functions of `relaymind.orchestrator.performance` that the gateway
-  uses; a run with no draft text, or with no language in its first
-  decision, is blocked too, and the export's `guards` explains every block
-  reason), and grades a trace that ends with the draft as the local answer,
-  whose added events pass `validate_trace_event` (`run.completed` records
-  `answer_pass_applied` `draft`). A blocked run keeps its measured grade,
+  takes the draft, applies the RM31 guards (no non-default caller answer
+  option, the run's language, no tool-call JSON; the option, language, and
+  tool-call guards are the functions of `relaymind.orchestrator.performance`
+  that the gateway uses; a run with no draft text, or with no language in
+  its first decision, is blocked too, and the export's `guards` explains
+  every block reason), and grades a trace that ends with the draft as the
+  local answer, whose added events pass `validate_trace_event`
+  (`run.completed` records `answer_pass_applied` `draft`). A blocked run
+  keeps its measured grade,
   and so does a run that changed the sandbox after the draft (its stored
   sandbox state holds a change that the draft would have prevented; the
   report counts it as not gradable). It calls no model, never changes the

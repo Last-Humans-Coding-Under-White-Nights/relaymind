@@ -13,8 +13,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   completion predicate is published as the answer without the second
   generation, when it is in the run's language (`identifiers.has_cjk`: a
   Chinese run needs Chinese text, an English run none), holds no tool-call
-  JSON or tag, and the chat request set no `max_completion_tokens`,
-  `temperature`, or `top_p`; otherwise the final generation runs as before.
+  JSON or tag, and the chat request set no `max_completion_tokens` and no
+  `temperature` or `top_p` other than its API default of 1 (section 7.1);
+  otherwise the final generation runs as before. `run.accepted` records the
+  answer options as before.
   `run.completed` records `answer_pass_applied` (`draft` or `final`) for a
   local answer and leaves it out for an external answer, a workflow render,
   or a client-owned completion. The default stays `final`.
@@ -27,7 +29,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   response when the run ends. A run that ends without an answer sends the
   mid-stream error event (`code`, fixed `message`, `run_id`, and `reason_code`
   when it has one) with no finish chunk and no `[DONE]`. A disconnect still
-  cancels the run. Both aliases use it; a request without `stream` and an
+  cancels the run, even before the run's task first ran, and the response
+  waits for the run to stop up to `[native] cancel_wait_seconds`, as the
+  buffered disconnect does, so the execution slot is free when the
+  connection closes. Both aliases use it; a request without `stream` and an
   idempotent replay are unchanged. `scripts/latency_benchmark.py
   --early-headers` runs the gateway with the option, labels the first
   transport event as the header time, and reads the mid-stream error event
