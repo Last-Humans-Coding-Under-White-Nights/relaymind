@@ -2,11 +2,11 @@
 
 Under answer_pass draft, the skill-stage draft that meets the completion
 predicate is published without a second generation, when it is in the
-run's language, holds no tool-call JSON, and the caller sent no answer
-option. Otherwise the final generation runs as before and the recorded
-options are what shaped the published answer. Under the default every
-earlier test passes unchanged (tests/test_ac01_local_health.py is the
-gate). Deterministic with model doubles (spec section 13).
+run's language, holds no tool-call JSON, and the caller sent no
+non-default answer option (section 7.1). Otherwise the final generation
+runs as before and the recorded options are what shaped the published
+answer. Under the default every earlier test passes unchanged
+(tests/test_ac01_local_health.py is the gate). Deterministic with model doubles (spec section 13).
 """
 
 import asyncio
@@ -122,6 +122,48 @@ def test_a_caller_answer_option_runs_the_final_pass(tmp_path, options):
     assert recorded == {
         {"max_output_tokens": "max_completion_tokens"}.get(k, k): v for k, v in requested.items()
     }
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        GenerationOptions(temperature=1.0),
+        GenerationOptions(top_p=1),
+        GenerationOptions(temperature=1, top_p=1.0),
+    ],
+)
+def test_an_answer_option_at_its_api_default_keeps_the_draft(tmp_path, options):
+    """AC17, RM31, section 7.1: only a non-default answer option forces the final pass.
+
+    temperature 1 and top_p 1 are the API defaults; run.accepted still
+    records the options the adapters accept (section 8).
+    """
+    gateway = draft_gateway(
+        tmp_path,
+        [
+            route_turn("check-service-health"),
+            tool_turn("get_service_health", service="staging-api"),
+            text_turn(STAGING_OK),
+        ],
+    )
+    outcome = asyncio.run(gateway.orchestrator.run(PROMPT, final_options=options))
+    events = gateway.store.events(outcome.run_id)
+    assert outcome.answer == STAGING_OK
+    assert purposes(events) == ["routing", "skill", "skill"]
+    assert completed(events)["answer_pass_applied"] == "draft"
+    requested = {k: v for k, v in vars(options).items() if v is not None}
+    assert accepted(events)["answer_options"] == requested
+
+
+def test_a_non_default_option_next_to_a_default_one_runs_the_final_pass(tmp_path):
+    """AC17, RM31: one non-default option is enough for the final pass."""
+    gateway = draft_gateway(tmp_path, [route_turn("check-service-health"), *health_tail()])
+    options = GenerationOptions(temperature=1, top_p=0.5)
+    outcome = asyncio.run(gateway.orchestrator.run(PROMPT, final_options=options))
+    events = gateway.store.events(outcome.run_id)
+    assert purposes(events) == ["routing", "skill", "skill", "final"]
+    assert completed(events)["answer_pass_applied"] == "final"
+    assert accepted(events)["answer_options"] == {"temperature": 1, "top_p": 0.5}
 
 
 def test_a_chinese_run_with_an_english_draft_takes_the_final_pass(tmp_path):

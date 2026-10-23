@@ -75,6 +75,7 @@ from relaymind.evaluation.metrics import render_corpus_markdown, summarize_corpu
 from relaymind.orchestrator.performance import (  # noqa: E402
     draft_in_language,
     holds_tool_call_json,
+    non_default_answer_options,
 )
 from relaymind.tools.sandbox import MUTATING_DEMO_TOOLS  # noqa: E402
 
@@ -408,7 +409,7 @@ DRAFT_PURPOSES = ("skill", "repair")
 # Every code draft_block_reason returns, explained in the export (its "guards").
 DRAFT_BLOCK_REASONS = {
     "no_draft": "no skill or repair generation gave text without calls before the final one",
-    "answer_options": "the caller sent an answer option",
+    "answer_options": "the caller sent a non-default answer option (section 7.1)",
     "language_unknown": "the run's first route.selected decision names no language (en or zh)",
     "language": "the draft is not in the run's language (identifiers.has_cjk)",
     "tool_call_json": "the draft holds a tool-call tag or JSON naming a tool and arguments",
@@ -430,15 +431,16 @@ def draft_block_reason(
     """Why the gateway would not publish a draft (RM31), or None when it would.
 
     The final generation then runs as before. The guards are: a caller
-    answer option, the run's language (a Chinese run needs Chinese text,
-    an English run none, as the router reads a message, identifiers.has_cjk),
-    and tool-call JSON in the text. A run with no draft text, or with no
+    answer option that is not its API default (section 7.1), the run's
+    language (a Chinese run needs Chinese text, an English run none, as
+    the router reads a message, identifiers.has_cjk), and tool-call JSON
+    in the text. A run with no draft text, or with no
     language in its first decision, is blocked too (no_draft,
     language_unknown).
     """
     if not text.strip():
         return "no_draft"
-    if answer_options:
+    if non_default_answer_options(answer_options or {}):
         return "answer_options"
     if language not in ("en", "zh"):
         return "language_unknown"

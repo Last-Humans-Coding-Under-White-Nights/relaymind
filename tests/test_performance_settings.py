@@ -13,6 +13,7 @@ from relaymind.orchestrator.performance import (
     PerformanceSettings,
     draft_in_language,
     holds_tool_call_json,
+    non_default_answer_options,
 )
 from relaymind.orchestrator.route_decision import Language
 
@@ -146,3 +147,20 @@ def test_tool_call_json_in_a_draft_is_found(text):
 )
 def test_ordinary_answers_are_not_tool_call_json(text):
     assert not holds_tool_call_json(text)
+
+
+@pytest.mark.parametrize(
+    ("record", "expected"),
+    [
+        ({}, {}),
+        ({"temperature": 1}, {}),
+        ({"temperature": 1.0, "top_p": 1}, {}),
+        ({"temperature": 0.2}, {"temperature": 0.2}),
+        ({"top_p": 0.9, "temperature": 1}, {"top_p": 0.9}),
+        # max_completion_tokens has no API default: any value sent is non-default.
+        ({"max_completion_tokens": 32768}, {"max_completion_tokens": 32768}),
+    ],
+)
+def test_only_non_default_answer_options_count(record, expected):
+    """RM31, section 7.1: temperature 1 and top_p 1 are the API defaults."""
+    assert non_default_answer_options(record) == expected

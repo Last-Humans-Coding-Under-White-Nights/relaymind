@@ -185,6 +185,7 @@ from relaymind.orchestrator.performance import (
     PerformanceSettings,
     draft_in_language,
     holds_tool_call_json,
+    non_default_answer_options,
 )
 from relaymind.orchestrator.recovery import (
     RecoveryReport,
@@ -3152,15 +3153,16 @@ class _Run:
         """Whether a draft that met the predicate may be the answer (RM31, AC17).
 
         Only under answer_pass draft. The caller must have sent no
-        answer option, because the options shape the final generation
-        and the recorded answer_options must be what shaped the answer
-        (a native run never sets any). The draft must be in the run's
-        language and hold no tool-call JSON. Otherwise the final
-        generation runs as before.
+        non-default answer option (section 7.1), because such an option
+        shapes the final generation and the recorded answer_options must
+        be what shaped the answer (a native run never sets any); an
+        option at its API default does not block the draft. The draft
+        must be in the run's language and hold no tool-call JSON.
+        Otherwise the final generation runs as before.
         """
         if self.o.performance.answer_pass != "draft":
             return False
-        if self._answer_option_record():
+        if non_default_answer_options(self._answer_option_record()):
             return False
         assert self.language is not None
         return draft_in_language(draft, self.language) and not holds_tool_call_json(draft)

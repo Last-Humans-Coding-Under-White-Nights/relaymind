@@ -729,6 +729,29 @@ def test_a_caller_answer_option_blocks_the_draft(runner, corpus):
     assert (entry["outcome"], entry["reason"]) == ("blocked", "answer_options")
 
 
+def test_an_answer_option_at_its_api_default_does_not_block_the_draft(runner, corpus):
+    """RM31, section 7.1: the regrade reads the gateway's guard; temperature 1 is the default."""
+    document = export_of(
+        runner,
+        corpus,
+        [
+            (
+                "simple-02",
+                "local_only",
+                build_trace(
+                    "run_default",
+                    draft=STAGING_REPLY,
+                    final="x",
+                    answer_options={"temperature": 1, "top_p": 1.0},
+                ),
+                "failed",
+            )
+        ],
+    )
+    entry = runner.regrade_draft_pass(document, corpus)["runs"][0]
+    assert (entry["outcome"], entry["reason"]) == ("published", None)
+
+
 def test_a_run_that_changed_the_sandbox_after_the_draft_is_not_regraded(runner, corpus):
     """The stored sandbox state is the measured run's; a later delete makes it unusable."""
     document = export_of(

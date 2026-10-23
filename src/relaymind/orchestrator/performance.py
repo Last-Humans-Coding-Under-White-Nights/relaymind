@@ -19,18 +19,22 @@ as the answer without a second generation (RM31).
 """
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from relaymind.orchestrator.identifiers import has_cjk
 from relaymind.orchestrator.route_decision import Language
 
 __all__ = [
+    "ANSWER_OPTION_DEFAULTS",
     "ANSWER_PASSES",
     "ANSWER_STREAMS",
     "CALLS_PER_GENERATION",
     "PerformanceSettings",
     "draft_in_language",
     "holds_tool_call_json",
+    "non_default_answer_options",
 ]
 
 ANSWER_PASSES = ("final", "draft")
@@ -99,6 +103,25 @@ class PerformanceSettings:
 _TOOL_CALL_TAG = re.compile(r"</?tool_call>", re.IGNORECASE)
 _TOOL_NAME_KEY = re.compile(r'"(?:tool_name|name|function)"\s*:')
 _TOOL_ARGUMENTS_KEY = re.compile(r'"(?:arguments|parameters)"\s*:')
+
+
+# The API default of each answer option that has one (section 7.1). The token
+# budget has none, so any max_completion_tokens the caller sent is non-default.
+ANSWER_OPTION_DEFAULTS: Mapping[str, float] = {"temperature": 1, "top_p": 1}
+
+
+def non_default_answer_options(options: Mapping[str, Any]) -> dict[str, Any]:
+    """The answer options that differ from their API default (RM31 guard, section 7.1).
+
+    options is the answer_options record of run.accepted (section 8). A
+    non-default option shapes the final generation, so the draft is not
+    published; an option at its API default does not block the draft.
+    """
+    return {
+        name: value
+        for name, value in options.items()
+        if name not in ANSWER_OPTION_DEFAULTS or value != ANSWER_OPTION_DEFAULTS[name]
+    }
 
 
 def holds_tool_call_json(text: str) -> bool:

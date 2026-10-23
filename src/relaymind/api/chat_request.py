@@ -25,6 +25,7 @@ from jsonschema.exceptions import SchemaError
 
 from relaymind.adapters import GenerationOptions, Message, Role, ToolCall
 from relaymind.api.errors import ApiError
+from relaymind.orchestrator.performance import ANSWER_OPTION_DEFAULTS
 from relaymind.store import IdempotencyClaim
 from relaymind.tools.registry import check_parameters_schema
 
@@ -73,9 +74,19 @@ _DEFAULTS: dict[str, object] = {
     "store": False,
 }
 # The sampling options: their API default, their range check, and its message.
-_SAMPLING: tuple[tuple[str, int, Callable[[float], bool], str], ...] = (
-    ("temperature", 1, lambda v: 0 <= v <= 2, "temperature must be a number from 0 to 2"),
-    ("top_p", 1, lambda v: 0 < v <= 1, "top_p must be a number above 0 and at most 1"),
+_SAMPLING: tuple[tuple[str, float, Callable[[float], bool], str], ...] = (
+    (
+        "temperature",
+        ANSWER_OPTION_DEFAULTS["temperature"],
+        lambda v: 0 <= v <= 2,
+        "temperature must be a number from 0 to 2",
+    ),
+    (
+        "top_p",
+        ANSWER_OPTION_DEFAULTS["top_p"],
+        lambda v: 0 < v <= 1,
+        "top_p must be a number above 0 and at most 1",
+    ),
 )
 _INSTRUCTION_ROLES = (Role.SYSTEM, Role.DEVELOPER)
 _TOOL_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}")
