@@ -129,8 +129,12 @@
   a corpus export as if the skill-stage draft had been published as the
   answer: for each auto and local_only run with a final generation it
   takes the draft, applies the RM31 guards (no caller answer option, the
-  run's language, no tool-call JSON), and grades a trace that ends with
-  the draft as the local answer. A blocked run keeps its measured grade,
+  run's language, no tool-call JSON; a run with no draft text, or with no
+  language in its first decision, is blocked too, and the export's
+  `guards` explains every block reason), and grades a trace that ends
+  with the draft as the local answer, whose added events pass
+  `validate_trace_event` (`run.completed` records `answer_pass_applied`
+  `draft`). A blocked run keeps its measured grade,
   and so does a run that changed the sandbox after the draft (its stored
   sandbox state holds a change that the draft would have prevented; the
   report counts it as not gradable). It calls no model, never changes the
@@ -148,7 +152,8 @@
   RM11, spec 0.31 section 4.3). Over a corpus export it classifies every
   generation that proposed two or more calls (read-only or mutating,
   valid or not), applies the rule for several read-only calls per
-  generation, and counts the later one-call generations that re-proposed
+  generation (locally, at most the room left in the stage's tool limit
+  and in the run's), and counts the later one-call generations that re-proposed
   a refused call. It cross-checks its totals against the
   `multiple_tool_calls` refusals in the trace. `--export` defaults to
   the 2026-10-22 corpus export. Offline, no model.
@@ -167,8 +172,12 @@
   `evaluation/corpus.v1.skills.json` (precision, recall, and Jaccard per
   language and class, the score and margin of right and wrong picks), and
   with `--export` (optional) compares them with the local router's picks
-  in a corpus export and proposes thresholds. The scoring functions are
-  pure so that the production selector can port them. Offline, no model.
+  in a corpus export and proposes thresholds. Only a unique best skill
+  is a pick: a tie for the top score is none (spec 0.32 section 14.1).
+  The scores are raw BM25 values, not the [0, 1] scale of section 14.1,
+  so the proposed thresholds are not configuration values. The scoring
+  functions are pure so that the production selector can port them.
+  Offline, no model.
 
   ```bash
   python scripts/probes/probe_example_match.py \
@@ -179,8 +188,7 @@
   All three label their output as offline and not a measured run, and
   record the checkout's HEAD and whether its tree has changes
   (`regraded_with` in the draft-pass export, `analysed_with` in the
-  other two). The regrade and the multiple-calls probe refuse an `--out`
-  that is the export they read. A file that an earlier command wrote
+  other two). Each refuses an `--out` that is the export it reads. A file that an earlier command wrote
   into the checkout makes the tree count as changed, so write each
   output outside the checkout and copy it into `docs/evidence/` when the
   record needs a clean tree. Their results are in `docs/EVIDENCE.md`.

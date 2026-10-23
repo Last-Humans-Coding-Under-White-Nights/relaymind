@@ -382,8 +382,9 @@ Deterministic tests over model doubles:
   the lock holds its digest under `sidecars`, a changed or missing
   sidecar is refused, the same sidecar in another JSON layout is
   accepted (the digest is of the canonical JSON), a lock without
-  `sidecars` still checks the corpus, and the corpus digest is still the
-  one that froze version 1.
+  `sidecars` still checks the corpus, a `sidecars` value that is not an
+  object is refused, and the corpus digest is still the one that froze
+  version 1.
 - `pytest tests/test_run_corpus_script.py` also covers the offline draft
   pass regrade (#115; RM31): a passing draft is published and graded as
   the local answer; a draft in the wrong language, with tool-call JSON, or
@@ -391,18 +392,24 @@ Deterministic tests over model doubles:
   that changed the sandbox after the draft is not regraded; a draft that
   fails where the final pass succeeded shows as lost; the original export
   is never changed and the command line refuses an `--out` equal to it;
-  an unknown application revision is recorded as `None`.
+  an unknown application revision is recorded as `None`; every event the
+  regrade adds passes `validate_trace_event`, with `active_ms` less the
+  waits before the draft and `answer_pass_applied` `draft`; and every
+  block reason the guards can return is documented in the export.
 - `pytest tests/test_probe_count_multi_calls.py` and
   `pytest tests/test_probe_example_match.py`: the two spikes over small
   exports and the checked-in corpus, with no model (#119, #118): the
-  section 4.3 rule (read-only, the per-stage and remaining run limits,
-  a call that fails its own validation, provenance from a clarification
-  answer or an earlier result), the saved generations, the cross-check
-  against the refusals in the trace, BM25 on a toy index, masking and
-  tokens in both languages, precision, recall, and Jaccard, and the
-  threshold search. The router baseline counts only the modes the export
-  ran, and the caveats state temperature 0 and each skill's example pair
-  count. Results are reported per language, and the matcher's output is
+  section 4.3 rule (read-only, the room left in the per-stage limit of a
+  local stage and in the run limit, a call that fails its own
+  validation, null arguments read as `{}`, provenance from a
+  clarification answer or an earlier result), the saved generations, the
+  cross-check against the refusals in the trace, BM25 on a toy index,
+  masking and tokens in both languages, precision, recall, and Jaccard,
+  a tie that is never a pick, and the threshold search. The router
+  baseline counts only the modes the export ran, and the report compares
+  the two modes only when both ran; the caveats state temperature 0 and
+  each skill's example pair count; both probes refuse an `--out` equal
+  to the export. Results are reported per language, and the matcher's output is
   the same under six values of `PYTHONHASHSEED`.
 
 The live runs are scripts, not tests: `scripts/run_corpus.py` and
