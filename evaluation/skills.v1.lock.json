@@ -1,0 +1,359 @@
+{
+  "schema_version": 1,
+  "file": "skills.v1.json",
+  "sha256": "1e89686583aa2334c266bd0b6c26d22129d43a218885b7617e65f2b0bc8670c8",
+  "source_commit": "f860ecf02ef53412a030f8661c83d644b739ff01",
+  "task_commit": "b63b7b2850226b6aa4fb5929a8c1ac7bc4d9a6af",
+  "registry_archive_sha256": "2f3fe7af47494180ec819a7960f9e7e9ffa50ff6daae03edcedc424c1c84fe19",
+  "task_archive_sha256": "c6fb599663b0dec6e19f5ac4b6a75f4820f93ccfd77500c3b7abe9553850fe9c",
+  "cases": [
+    {
+      "id": "3d-scan-calc",
+      "sha256": "4120eb5d74bfb1f8c25edc605e4e178ef2baf16115b35c0a0abb9131fb1305fc"
+    },
+    {
+      "id": "ada-bathroom-plan-repair",
+      "sha256": "191f7550532adee19536da4a34817c91577940096bbbf4aee6d9eb8d6349c8cf"
+    },
+    {
+      "id": "adaptive-cruise-control",
+      "sha256": "053a6987c3ce4b7ab967fe800343077c0200b5db6b20bba57483516af20c1bdc"
+    },
+    {
+      "id": "azure-bgp-oscillation-route-leak",
+      "sha256": "a32393f2fa88dff23d410e099d870a94a67a2e325198cd4637e931b3af2a3f4a"
+    },
+    {
+      "id": "bike-rebalance",
+      "sha256": "e04e79c649f493c822833f270510f34476b4564c3c69401cfe89654d4ca7d209"
+    },
+    {
+      "id": "citation-check",
+      "sha256": "2e954787d48e461b8bd952c6a9e83e80ef68fca2a4a6ee5b8adda9a8d02d3fa2"
+    },
+    {
+      "id": "civ6-adjacency-optimizer",
+      "sha256": "d8e17e87a271b6c6fd46ef63757a0f1f3b4d9a7f78b6181d42461d75de4eb475"
+    },
+    {
+      "id": "court-form-filling",
+      "sha256": "ee652a67210861d114c25b26701a6ed526bc1c556a55d9e7581f0b513a87dc24"
+    },
+    {
+      "id": "crystallographic-wyckoff-position-analysis",
+      "sha256": "3757c25c62f779cf330ba0a54b6a8572da7d2b51f7ea0c9bc5b10b8a7ffb1010"
+    },
+    {
+      "id": "dapt-intrusion-detection",
+      "sha256": "29404d93d8b44a8f87fb2e400965b7d715c9351097d3f03c0619b1850288af54"
+    },
+    {
+      "id": "data-to-d3",
+      "sha256": "bd2256af172bac5d65c76a3797257f9d2b2a243997b2c7baac36b65c149e13a3"
+    },
+    {
+      "id": "debug-trl-grpo",
+      "sha256": "33c53989614163c5d55126fa4b89ccf00f5b610f391cbcc32ee1b4f051b43910"
+    },
+    {
+      "id": "dialogue-parser",
+      "sha256": "14967525b43cb94893ce7bb36d332fed31039a23c9015e428ebfcb6652dc5791"
+    },
+    {
+      "id": "drone-planning-control",
+      "sha256": "122e36fe75cce875e60c82a6f1b0763e9a2367554bdeb47decd067a281d2c4b1"
+    },
+    {
+      "id": "dynamic-object-aware-egomotion",
+      "sha256": "59f77154778b1a25b6bf5fc531d25956d95feb29f26cc2736a6082ba23ce81c2"
+    },
+    {
+      "id": "earthquake-phase-association",
+      "sha256": "468c8391820b596a10afe4322db47e3f5fbe1e235bc511f687f6867d7e7fb434"
+    },
+    {
+      "id": "earthquake-plate-calculation",
+      "sha256": "78846a2a9d5775c4a7cca40255c2dc7e8682cc831c8831674e4043788bdd7ed6"
+    },
+    {
+      "id": "econ-detrending-correlation",
+      "sha256": "0df6f22db161097ec1943ed05c51be7dc90fbbdb8c93a535966fa729dad33e3b"
+    },
+    {
+      "id": "edit-pdf",
+      "sha256": "06661a1f0633811bf43668a440eceb11e9e30f149ca82a565803d3dfd7cf7dc2"
+    },
+    {
+      "id": "energy-ac-optimal-power-flow",
+      "sha256": "278674b13712efc64132acc354552424faf30c69d76c63948b4d68a05f96be0e"
+    },
+    {
+      "id": "energy-market-pricing",
+      "sha256": "6d8e79fd8f9121eb84e9473188462f7e6e08c0d2569de8c18c6634f28f7d5a24"
+    },
+    {
+      "id": "energy-unit-commitment",
+      "sha256": "6588369c463be70058a945be0e12aa0cf0738fa0e4478f3f99be27ab2afbb3a6"
+    },
+    {
+      "id": "enterprise-information-search",
+      "sha256": "82d98aeb8262dc6471dd12ad4a4733fdd0a5808f6b7c8d2a1c39be66e3b9bda3"
+    },
+    {
+      "id": "exam-block-sequencing",
+      "sha256": "528734a0a08e296e7c6ae8d801032fc36d9cf75eaa82e7111bd646ba3a207a96"
+    },
+    {
+      "id": "exceltable-in-ppt",
+      "sha256": "67212de57e6497c47b9131f97937668624e40fa5704ca8f5b0730377a45aa467"
+    },
+    {
+      "id": "exoplanet-detection-period",
+      "sha256": "d5bea3ba2d44e342078b8c299cda05b88e74939b58cc52d4a27919a4ad85abf1"
+    },
+    {
+      "id": "financial-modeling-qa",
+      "sha256": "e4300df5c3638f5ae63822936f8d54c606d0b95d1ed591b0741b5f0baa9e121f"
+    },
+    {
+      "id": "fix-build-agentops",
+      "sha256": "2deb5fa13f7628d88e4c4764ea95ded1bb62a463135633df021b46df6d404387"
+    },
+    {
+      "id": "fix-build-google-auto",
+      "sha256": "5c7dc97479333742fbd3df6bc9129ea282d813c3a55044db9d481a9dbf7f8d1d"
+    },
+    {
+      "id": "fix-druid-loophole-cve",
+      "sha256": "2110a17a4435c8b2d23cf311c8ea2deb2bd22e601750cd56388bb4bc4eb39ff7"
+    },
+    {
+      "id": "fix-erlang-ssh-cve",
+      "sha256": "73d0d86601b08c0a07fe00d4ced8fbc5a675c11d5c6d4fb6d6f9820ee5c6b8c1"
+    },
+    {
+      "id": "fix-visual-stability",
+      "sha256": "1d6a2aff65be7cf5eb08320cd0c4b55f800483634d90cb6a04abc8e538408683"
+    },
+    {
+      "id": "flink-query",
+      "sha256": "cf1789fdad78bf022962dd74511be4f91f5fd09c8cd1dc59a24bf89d3654f707"
+    },
+    {
+      "id": "flood-risk-analysis",
+      "sha256": "4ed227a70e52ad97044a75748c751a46e66251614396e3e772c87b2a11062070"
+    },
+    {
+      "id": "glm-lake-mendota",
+      "sha256": "cab7cc779fad95f72b1a346a36247eeab6ed9364f39acee9b6a1de2f189f33ad"
+    },
+    {
+      "id": "gravitational-wave-detection",
+      "sha256": "b626aa6345feca91978e482abfc6e11be76296d665aeeea2f6e8c954a7f35241"
+    },
+    {
+      "id": "grid-dispatch-operator",
+      "sha256": "50bc9bbd192f58105e7c8a015fa27b1c23967e34af0607a34cdd0c8e22c9d842"
+    },
+    {
+      "id": "hvac-control",
+      "sha256": "3f913b7a73844a32b9860334203c84726de256e74680c104a7435a950b92426b"
+    },
+    {
+      "id": "invoice-fraud-detection",
+      "sha256": "09ed108a191db3d9065ac492cb3f649b6029696e9f4199492ba776d1b7d6ba8e"
+    },
+    {
+      "id": "jax-computing-basics",
+      "sha256": "6303e2a1f0bfe256e83af965fa81deef92b3af78410f7ce7287cda38c17c5fb8"
+    },
+    {
+      "id": "jpg-ocr-stat",
+      "sha256": "9732fe25e75f93a6b0d72fc0295239d8d6f8bdadfd1d020374743a7c1c09d940"
+    },
+    {
+      "id": "lab-unit-harmonization",
+      "sha256": "6664b9691042fae8e307f0969a40a59f7db0f240c8311637dba90f7fee099278"
+    },
+    {
+      "id": "lake-warming-attribution",
+      "sha256": "30c868d2adc234b86fca6d2a89f447ff113ccaeb2d43ab89c6280beb8ad17a25"
+    },
+    {
+      "id": "latex-formula-extraction",
+      "sha256": "c181f1a3a34c8e1ea551d2014aa23ae82d7a6fd571269adc24ec16f01742eaa3"
+    },
+    {
+      "id": "lean4-proof",
+      "sha256": "c9eed2e4b852f92ad8e98572aec50e6a3af0f64d32dd7afe9eeff30c67cd87aa"
+    },
+    {
+      "id": "llm-prefix-cache-replay",
+      "sha256": "36eb6be8e0af927066ea03ee66d1e39e7d9f3e4b039a0bac7bfe2704e34a87ef"
+    },
+    {
+      "id": "manufacturing-codebook-normalization",
+      "sha256": "500de6f62707342d986fcad0c86b39b98b6206fb22212651917e055f18722981"
+    },
+    {
+      "id": "manufacturing-equipment-maintenance",
+      "sha256": "7c10a9d1ac5c5b44cf4c56822b58e2c3dab0f43f808c0d44bb776ea700a00443"
+    },
+    {
+      "id": "manufacturing-fjsp-optimization",
+      "sha256": "b731e7a3405654930bb641e9a6734b2540e86f517a87ba55a24efb82f2f818a1"
+    },
+    {
+      "id": "mario-coin-counting",
+      "sha256": "adac793f4c54f893378a8e9adbed45e334fd52c71fdb92dbac3e4bba3a748c90"
+    },
+    {
+      "id": "mars-clouds-clustering",
+      "sha256": "8e23608ed30a81ff8433f366d22327afd1b518cf1f2ad1e11248bde22ee614d7"
+    },
+    {
+      "id": "multilingual-video-dubbing",
+      "sha256": "8bd4647937102798512f1ea829e19096af69b53cb1becc83cd2cc6b2d88276d9"
+    },
+    {
+      "id": "offer-letter-generator",
+      "sha256": "5918d7903ca2748d588f9a41742f57ad2b4a2f9e691be14d1efbd4b3a6dd2593"
+    },
+    {
+      "id": "organize-messy-files",
+      "sha256": "8bc5d67dd988c6b89635e49498b5d6a893f6dd69ac8038e9ba904f058931fe16"
+    },
+    {
+      "id": "paper-anonymizer",
+      "sha256": "ae7cfeec6422e5dde660b350acf37b597d6e45b3b69e99456eade4c408530ff0"
+    },
+    {
+      "id": "parallel-tfidf-search",
+      "sha256": "38c8cf935a0b3b173263319df8b5f3ce4916c24723c80459e186b5c56194798e"
+    },
+    {
+      "id": "paratransit-routing",
+      "sha256": "7fb6f398a093bf83a4fc7764ce82dbbf9d58d17ac57766ea089cc7c7a176b6f3"
+    },
+    {
+      "id": "pddl-airport-planning",
+      "sha256": "e42c5768e555316147834254a43b5268beab49f2bfdb4e0b5fe594ac5951e1ef"
+    },
+    {
+      "id": "pddl-tpp-planning",
+      "sha256": "688c1dd2d3f088a97048525a96b1112c8d0ae95db97e5a4551c73c8f67232e98"
+    },
+    {
+      "id": "pdf-excel-diff",
+      "sha256": "d518797eee82f6efcaeb6a932da4910fd0e73be3e2b0ae23ab5f1c2fb1bd5d1f"
+    },
+    {
+      "id": "powerlifting-coef-calc",
+      "sha256": "05596451d6a2d09efb2b60fa8516aa5d73439ee3b2884ca70f519a8b297d49eb"
+    },
+    {
+      "id": "pptx-reference-formatting",
+      "sha256": "3eca3267313fdaf1ad29dfab634ed3d7bef105aceaca4335fb05289dc9091ec0"
+    },
+    {
+      "id": "protein-expression-analysis",
+      "sha256": "4c3c3254a796340565b1de27dd486137274babf0f32cc05a979faafdf2866c2d"
+    },
+    {
+      "id": "python-scala-translation",
+      "sha256": "4834de539f6433afd143ca6fad317105ca0c47e473ba35134557f6fce733bf78"
+    },
+    {
+      "id": "quantum-numerical-simulation",
+      "sha256": "fba411e9215d2854de6a08a7839e1c7c6c3193568c4ac5f62a75c9105bb9c86a"
+    },
+    {
+      "id": "r2r-mpc-control",
+      "sha256": "cd0f7ba619b0e27d0b56596aa2d729f02c63e50e6d749586f033eeebf4353798"
+    },
+    {
+      "id": "radar-vital-signs",
+      "sha256": "560abf0d4687ca30240c6b2ee327f1038bae9598eb20821181c89f5022c0fe9b"
+    },
+    {
+      "id": "react-performance-debugging",
+      "sha256": "bd8d562fe698146f0d22b8140dc97fbc260a92d9080790415c96ef7870f14741"
+    },
+    {
+      "id": "reserves-at-risk-calc",
+      "sha256": "06042efe3da6009b821ec31472f01977086caa5cd6f62a0fbb8014c4089456ce"
+    },
+    {
+      "id": "sales-pivot-analysis",
+      "sha256": "4b49c0ac1134083b378c1d31fe71354da9ef68c0af9cda899995960e77f13d2a"
+    },
+    {
+      "id": "sec-financial-report",
+      "sha256": "0bffa71cda9ecce7e56eab09fb37c71a894de77696b37c453bf2d5431d64db13"
+    },
+    {
+      "id": "seismic-phase-picking",
+      "sha256": "5a2df97272d864ba69b8b1433d1b9240ce7147c33e19c0a3bf7e7df1e63c154e"
+    },
+    {
+      "id": "setup-fuzzing-py",
+      "sha256": "5e563cb67d4f20b1f21ba51611ad99c184a50a821645e3baba1f88938b049ed3"
+    },
+    {
+      "id": "shock-analysis-demand",
+      "sha256": "931f5093920c5fe83c53a930f20272a0173510c5d9321a84e22096939f62dc00"
+    },
+    {
+      "id": "shock-analysis-supply",
+      "sha256": "5721dad97f177b4abfe41120ab9261985c6c835a66b4b1cd8d82d509f4c39d2a"
+    },
+    {
+      "id": "simpo-code-reproduction",
+      "sha256": "6ec43e1b4d857acff4765ca29aeeb161dd5f7f06a45904d489afb65aea47b12d"
+    },
+    {
+      "id": "software-dependency-audit",
+      "sha256": "742c1d555e85614249fcd6af1edc3894b9dd24ddc67cc37d0938cc4e950f236d"
+    },
+    {
+      "id": "spring-boot-jakarta-migration",
+      "sha256": "6e582f243be1837e9a0b4098e37708403779a7abfc5aac81c1936c0acdf0e2e5"
+    },
+    {
+      "id": "suricata-custom-exfil",
+      "sha256": "7cb3529dc487fb498cefb30ea57038d04781b9b48f5e1519b00a12a2802a080c"
+    },
+    {
+      "id": "syzkaller-ppdev-syzlang",
+      "sha256": "13d663c64a07bf900c987b170a43a97f7b85466d7117a23e1c0d931f316e4937"
+    },
+    {
+      "id": "threejs-structure-parser",
+      "sha256": "77a8426e5338088b7e028ab170da2d4d088130a498cf4617e9b7a1e2206231f9"
+    },
+    {
+      "id": "threejs-to-obj",
+      "sha256": "ae18c534890528ef22059c5e4ed2f05566d743bd248aa2ae78cc45cde703835d"
+    },
+    {
+      "id": "tictoc-unnecessary-abort-detection",
+      "sha256": "d0085a91f0dccfdc9eda2cda13ca2e414f7691c3f83e3ad871170573ad8a9df3"
+    },
+    {
+      "id": "travel-planning",
+      "sha256": "7d46a9563699352dadfc05100185fad7f9d343246642f2e02588f831e9b8a98f"
+    },
+    {
+      "id": "video-silence-remover",
+      "sha256": "3dd67e3a69ad7f10a2dd3f01332ff2b345a476523c800781cc6a61e4e591d1de"
+    },
+    {
+      "id": "weighted-gdp-calc",
+      "sha256": "ce4cc41246c6a709291bb32531054c17b354740ae4eab823cec067552eddb22e"
+    },
+    {
+      "id": "xlsx-recover-data",
+      "sha256": "6ed8588995c83c2396222e88eb690ecf8ab17d239f7cf830914aef05a93e1404"
+    }
+  ]
+}
