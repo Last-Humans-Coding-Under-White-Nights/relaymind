@@ -230,21 +230,24 @@ async def wait_until_available(
     injectable, so a test never waits on the wall clock.
     """
     deadline = clock() + seconds
+    cause: str | None = None
     while True:
         remaining = deadline - clock()
         health = await _health(adapter, max(remaining, 0.001))
         if isinstance(health, AdapterHealth) and health.available and health.warm:
             return None
-        if isinstance(health, str):
-            cause = health
-        else:
+        if isinstance(health, AdapterHealth):
             cause = (health.detail or "").strip() or (
                 "the model is loading" if health.available else "not available"
             )
+        elif cause is None or health != "no answer":
+            # A last check cut off by the deadline keeps the cause an earlier one gave.
+            cause = health
         remaining = deadline - clock()
         if remaining <= 0:
             return (
-                f"the runtime did not answer with the model loaded within {seconds:g} s ({cause})"
+                f"the runtime did not answer with the model loaded within {seconds:g} s;"
+                f" last check: {cause}"
             )
         await sleep(min(poll_seconds, remaining))
 

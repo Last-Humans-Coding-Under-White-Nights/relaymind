@@ -523,7 +523,9 @@ def test_a_runtime_that_does_not_answer_is_unavailable_after_warmup_seconds(tmp_
     status, result, sleep = detect_with(tmp_path, adapter, seconds=3)
 
     assert status.status == LocalModelClass.UNAVAILABLE
-    assert status.reason == "the runtime did not answer with the model loaded within 3 s (probe)"
+    assert status.reason == (
+        "the runtime did not answer with the model loaded within 3 s; last check: probe"
+    )
     assert result is None and adapter.requests == []
     assert sum(sleep.calls) == pytest.approx(3)
 
