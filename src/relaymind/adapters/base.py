@@ -300,7 +300,8 @@ class ModelAdapter(ABC):
     locality: str | None = None
     # The provider request options the operator declared, sent with every
     # request and recorded in model.started (spec 0.31 section 6). None
-    # for an adapter that has none to declare (a local runtime).
+    # for an adapter that has none to declare (a local runtime); None and
+    # an empty mapping both leave the field out of model.started.
     request_options: Mapping[str, object] | None = None
 
     @abstractmethod

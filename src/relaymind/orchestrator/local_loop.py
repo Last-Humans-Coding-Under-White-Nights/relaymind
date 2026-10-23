@@ -2389,10 +2389,11 @@ class _Run:
         actor = model.actor
         call = {"call_id": call_id, "model": model_id, "actor": actor, "purpose": purpose}
         self.model_calls.append(call)
-        # Spec 0.31 section 8: the provider options an adapter sends are on the record.
-        # A local runtime declares none, and records none.
+        # Spec 0.33 section 8: the provider options an adapter sends are on the record,
+        # only when at least one is declared. A local runtime, a double, and an
+        # external adapter without declared options record none alike.
         declared = getattr(model.adapter, "request_options", None)
-        sent = {} if declared is None else {"request_options": dict(declared)}
+        sent = {"request_options": dict(declared)} if declared else {}
         self.emit(
             EventType.MODEL_STARTED,
             actor,
@@ -2477,7 +2478,7 @@ class _Run:
                     else {
                         "input_tokens": usage.input_tokens,
                         "output_tokens": usage.output_tokens,
-                        # None when the source reported none: absent, never 0 (RM16).
+                        # None when the source reported none: null, never 0 (RM16).
                         "cached_tokens": usage.cached_tokens,
                         "reasoning_tokens": usage.reasoning_tokens,
                     },

@@ -1,11 +1,15 @@
 """First-token time, cached and reasoning tokens, and request options in the trace.
 
-Covers #120: RM16 (an unreported count is absent, never 0), RM18, RM22
+Covers #120: RM16 (an unreported count is null, never 0), RM18, RM22
 (model.started and model.finished payloads), RM25 (the monotonic clock),
 and RM27 (the figures the placement policy will read). Spec 0.31
 sections 6 and 8. Deterministic: model doubles and a fake clock.
 """
 
+import asyncio
+import json
+
+import httpx
 import jsonschema
 
 from gateway_helpers import (
@@ -18,8 +22,16 @@ from gateway_helpers import (
     run,
     text_turn,
 )
-from helpers import FakeClock, ScriptedAdapter, of_type
+from helpers import (
+    FakeClock,
+    ScriptedAdapter,
+    delta_chunk,
+    make_llamacpp_adapter,
+    of_type,
+    sse_response,
+)
 from relaymind.adapters import Completed, FirstToken, TextDelta, ToolCall, Usage
+from relaymind.adapters.chat_completions import ChatCompletionsAdapter, ChatCompletionsConfig
 from relaymind.orchestrator.local_loop import ConfiguredModel
 from relaymind.store.trace_event import TRACE_EVENT_SCHEMA
 
@@ -69,8 +81,8 @@ def test_model_finished_records_first_token_from_the_marker_not_the_tool_call(tm
     assert finished.payload["duration_ms"] == 1250
 
 
-def test_a_double_without_the_marker_falls_back_to_the_first_text_delta(tmp_path):
-    """Spec 0.31 section 6: an adapter that sends no marker is stamped at its first text."""
+def test_a_double_without_the_marker_falls_back_to_the_first_tool_call(tmp_path):
+    """Spec 0.31 section 6: an adapter that sends no marker is stamped at its first tool call."""
     clock = FakeClock()
     turns = [
         [
@@ -164,12 +176,14 @@ def test_model_started_records_the_declared_request_options_of_an_external_call(
     validate(events)
 
 
-def test_an_external_call_with_no_declared_options_records_an_empty_object(tmp_path):
+def test_an_external_call_with_no_declared_options_records_no_field(tmp_path):
+    """Spec 0.33 section 8: request_options is recorded only when options were declared."""
     adapter = ScriptedAdapter(turns=[text_turn(STAGING_OK)], locality="external")
     adapter.request_options = {}
     _, events = external_run(tmp_path, adapter)
     (started,) = of_type(events, "model.started")
-    assert started.payload["request_options"] == {}
+    assert "request_options" not in started.payload
+    validate(events)
 
 
 def test_an_adapter_that_declares_no_options_records_none(tmp_path):
@@ -184,3 +198,86 @@ def test_an_adapter_that_declares_no_options_records_none(tmp_path):
     )
     _, events = run(gateway)
     assert all("request_options" not in e.payload for e in of_type(events, "model.started"))
+
+
+def test_real_adapters_without_declared_options_record_no_field(tmp_path, monkeypatch):
+    """Spec 0.33 sections 6 and 8: real adapters record request_options like the doubles.
+
+    The external ChatCompletionsAdapter without declared options and the
+    local LlamaCppAdapter both leave the field out of model.started.
+    """
+    monkeypatch.setenv("TEST_EXTERNAL_KEY", "sk-test-123")
+    external = ChatCompletionsAdapter(
+        ChatCompletionsConfig(
+            base_url="https://x.example/v1",
+            model=EXTERNAL_MODEL_ID,
+            context_limit=8192,
+            api_key_env="TEST_EXTERNAL_KEY",
+        ),
+        transport=httpx.MockTransport(
+            lambda request: sse_response(
+                [delta_chunk({"content": STAGING_OK}), delta_chunk({}, finish_reason="stop")]
+            )
+        ),
+    )
+    route = {
+        "tool_calls": [
+            {
+                "index": 0,
+                "id": "call_route",
+                "type": "function",
+                "function": {
+                    "name": "request_clarification",
+                    "arguments": json.dumps(
+                        {"language": "en", "question": "Which service do you mean?"}
+                    ),
+                },
+            }
+        ]
+    }
+
+    def llama_server(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/apply-template":
+            return httpx.Response(200, json={"prompt": "templated"})
+        if request.url.path == "/tokenize":
+            return httpx.Response(200, json={"tokens": list(range(100))})
+        return sse_response([delta_chunk(route), delta_chunk({}, "tool_calls")])
+
+    local = make_llamacpp_adapter(llama_server)
+    (tmp_path / "external").mkdir()
+    (tmp_path / "local").mkdir()
+    gateways = [
+        (
+            build_gateway(
+                tmp_path / "external",
+                [],
+                external_model=ConfiguredModel(adapter=external, model_id=EXTERNAL_MODEL_ID),
+            ),
+            "Is staging-api healthy right now?",
+            "external_only",
+        ),
+        (
+            build_gateway(
+                tmp_path / "local",
+                None,
+                local_model=ConfiguredModel(adapter=local, model_id=LOCAL_MODEL_ID),
+            ),
+            "Which service is it?",
+            "local_only",
+        ),
+    ]
+
+    async def go():
+        async with external, local:
+            return [
+                await gateway.orchestrator.run_text(prompt, execution_mode=mode)
+                for gateway, prompt, mode in gateways
+            ]
+
+    outcomes = asyncio.run(go())
+    for (gateway, _, _), outcome in zip(gateways, outcomes, strict=True):
+        events = gateway.store.events(outcome.run_id)
+        started = of_type(events, "model.started")
+        assert started
+        assert all("request_options" not in e.payload for e in started)
+        validate(events)
