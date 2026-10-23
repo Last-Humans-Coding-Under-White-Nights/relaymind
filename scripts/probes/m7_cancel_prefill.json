@@ -21,8 +21,6 @@
     "staging-api 现在健康吗？",
     "payments-api 最近一次部署是什么？",
     "staging-api 在过去 60 分钟内有多少个事故？",
-    "这个服务健康吗？",
-    "Is payments-api up?",
-    "Check the health of staging-api."
+    "这个服务健康吗？"
   ]
 }

@@ -147,10 +147,11 @@ def load_probe_config(path: Path) -> CancelConfig:
     ):
         raise ValueError("'short_prompts' must be a list of different non-blank strings")
     repetitions = count("repetitions", minimum=1)
-    if len(shorts) < 2 * repetitions:
+    if len(shorts) != 2 * repetitions:
+        # Exactly, so the definition an export records lists only the prompts that were sent.
         raise ValueError(
-            f"'short_prompts' needs {2 * repetitions} texts: one idle and one after-cancel "
-            f"request for each of the {repetitions} repetitions"
+            f"'short_prompts' needs exactly {2 * repetitions} texts, one idle and one "
+            f"after-cancel request for each of the {repetitions} repetitions; it has {len(shorts)}"
         )
     timeout = raw.get("request_timeout_seconds")
     if not isinstance(timeout, (int, float)) or isinstance(timeout, bool) or timeout <= 0:

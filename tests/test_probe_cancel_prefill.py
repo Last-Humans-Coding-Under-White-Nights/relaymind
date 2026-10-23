@@ -244,14 +244,27 @@ def test_no_two_long_prompts_share_a_prefix(probe, config):
     assert first.options.max_output_tokens == config.long_output_tokens
 
 
-def test_the_definition_needs_a_short_prompt_pair_for_every_repetition(probe, tmp_path):
+def _definition_with(tmp_path, **changes):
     raw = json.loads(CHECKED_IN.read_text("utf-8"))
-    raw["repetitions"] = 8
     for key in ("manifest", "skills_root", "sandbox_seed"):
         raw[key] = str((CHECKED_IN.parent / raw[key]).resolve())
-    bad = tmp_path / "bad.json"
-    bad.write_text(json.dumps(raw), "utf-8")
-    with pytest.raises(ValueError, match="short_prompts"):
+    raw.update(changes)
+    path = tmp_path / "definition.json"
+    path.write_text(json.dumps(raw), "utf-8")
+    return path
+
+
+def test_the_checked_in_definition_has_one_short_prompt_pair_per_repetition(config):
+    assert len(config.short_prompts) == 2 * config.repetitions
+
+
+@pytest.mark.parametrize("repetitions", [8, 4, 1])
+def test_the_definition_needs_exactly_one_short_prompt_pair_per_repetition(
+    probe, tmp_path, repetitions
+):
+    """RM16: a definition lists only prompts the probe sends, so its record is what was sent."""
+    bad = _definition_with(tmp_path, repetitions=repetitions)
+    with pytest.raises(ValueError, match=f"exactly {2 * repetitions} texts"):
         probe.load_probe_config(bad)
 
 
