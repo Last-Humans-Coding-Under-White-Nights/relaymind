@@ -6,13 +6,23 @@ synthetic GGUF file, and nothing here starts a real model server.
 
 import asyncio
 import dataclasses
+import json
+import re
 import tomllib
 
+import httpx
 import pytest
 
 from api_helpers import call
-from gateway_helpers import build_gateway, clarify_turn
-from helpers import ACCEPTED_PAYLOAD, BASELINE, REPO_ROOT, ScriptedAdapter
+from gateway_helpers import STAGING_OK, build_gateway, clarify_turn
+from helpers import (
+    ACCEPTED_PAYLOAD,
+    BASELINE,
+    REPO_ROOT,
+    ScriptedAdapter,
+    delta_chunk,
+    sse_response,
+)
 from launcher_helpers import toml_path, write_config
 from relaymind import launcher
 from relaymind.adapters.chat_completions import ChatCompletionsAdapter
@@ -605,3 +615,132 @@ def test_example_config_documents_the_budgets_table(tmp_path):
     assert len(block) == 1 + len(BUDGET_FIELDS)
     config = load_config(write_config(tmp_path, "\n" + "\n".join(block) + "\n"))
     assert config.budgets == LocalBudgets()
+
+
+# -- [external_model] request_options (#120; RM12, spec 0.31 sections 6 and 14.1) -----------------
+
+
+def options_config(options_toml: str) -> str:
+    return EXTERNAL + f"\n[external_model.request_options]\n{options_toml}\n"
+
+
+def test_request_options_reach_the_adapter_config_verbatim(tmp_path):
+    """Spec 0.31 section 14.1: a table of provider request fields, kept as written."""
+    extra = options_config("seed = 7\nthinking = { type = 'disabled' }\nlogprobs = false")
+    config = load_config(write_config(tmp_path, extra))
+    assert dict(config.external.request_options) == {
+        "seed": 7,
+        "thinking": {"type": "disabled"},
+        "logprobs": False,
+    }
+    built = build_app(config)
+    assert built.orchestrator.external.adapter.request_options == {
+        "seed": 7,
+        "thinking": {"type": "disabled"},
+        "logprobs": False,
+    }
+
+
+def test_without_request_options_the_config_holds_none(tmp_path):
+    config = load_config(write_config(tmp_path, EXTERNAL))
+    assert dict(config.external.request_options) == {}
+
+
+def test_request_options_are_sent_to_the_provider_and_recorded(tmp_path, monkeypatch):
+    """Spec 0.31 sections 6 and 8: the body carries them and model.started records them."""
+    monkeypatch.setenv("TEST_EXTERNAL_KEY", "sk-test-123")
+    bodies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return sse_response(
+            [delta_chunk({"content": STAGING_OK}), delta_chunk({}, finish_reason="stop")]
+        )
+
+    extra = options_config("thinking = { type = 'disabled' }")
+    config = load_config(write_config(tmp_path, extra))
+    adapter = ChatCompletionsAdapter(config.external, transport=httpx.MockTransport(handler))
+    built = build_app(config, local_adapter=ScriptedAdapter(turns=[]), external_adapter=adapter)
+    outcome = asyncio.run(
+        built.orchestrator.run_text(
+            "Is staging-api healthy right now?", execution_mode="external_only"
+        )
+    )
+    assert bodies and all(b["thinking"] == {"type": "disabled"} for b in bodies)
+    events = built.orchestrator.store.events(outcome.run_id)
+    started = [e for e in events if e.event_type is EventType.MODEL_STARTED]
+    assert started and all(
+        e.payload["request_options"] == {"thinking": {"type": "disabled"}} for e in started
+    )
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "api_key",
+        "API_KEY",
+        "Authorization",
+        "authorization",
+        "headers",
+        "extra_headers",
+        "Extra-Headers",
+        "model",
+        "messages",
+        "tools",
+        "stream",
+        "stream_options",
+    ],
+)
+def test_a_credential_header_or_override_key_stops_startup_without_its_value(tmp_path, key):
+    """RM12, spec 0.31 section 14.1: the message names the key, never the value."""
+    extra = options_config(f"{key} = 'sk-secret-value-123'")
+    with pytest.raises(LaunchError, match="request_options") as raised:
+        load_config(write_config(tmp_path, extra))
+    assert key in str(raised.value)
+    assert "sk-secret-value-123" not in str(raised.value)
+    out, err = [], []
+    assert (
+        main(
+            ["serve", "--config", str(tmp_path / "relaymind.toml")],
+            stdout=out.append,
+            stderr=err.append,
+        )
+        == 2
+    )
+    assert out == [] and len(err) == 1 and "sk-secret-value-123" not in err[0]
+
+
+def test_a_nested_credential_key_is_refused_too(tmp_path):
+    """A header or credential key one level down is still a credential (RM12)."""
+    extra = options_config("extra_body = { headers = { Authorization = 'Bearer sk-secret-9' } }")
+    with pytest.raises(LaunchError, match="request_options") as raised:
+        load_config(write_config(tmp_path, extra))
+    assert "sk-secret-9" not in str(raised.value)
+
+
+def test_a_value_that_is_not_json_is_refused(tmp_path):
+    """Spec 0.31 section 14.1: a TOML date cannot be sent as a provider field."""
+    extra = options_config("since = 2026-10-23")
+    with pytest.raises(LaunchError, match="since") as raised:
+        load_config(write_config(tmp_path, extra))
+    assert "2026" not in str(raised.value)
+
+
+def test_request_options_must_be_a_table(tmp_path):
+    extra = EXTERNAL.replace("api_key_env", "request_options = 'off'\napi_key_env")
+    with pytest.raises(LaunchError, match="request_options"):
+        load_config(write_config(tmp_path, extra))
+
+
+def test_example_config_documents_request_options(tmp_path):
+    """Spec 0.31 section 14.1: the commented external_model block loads when uncommented."""
+    lines = (REPO_ROOT / "relaymind.example.toml").read_text(encoding="utf-8").splitlines()
+    block = []
+    for line in lines[lines.index("# [external_model]") :]:
+        if not line.startswith("#"):
+            break
+        if re.fullmatch(r"# (\[[a-z_.]+\]|[a-z_]+ = .*)", line):
+            block.append(line[2:])
+    config = load_config(write_config(tmp_path, "\n" + "\n".join(block) + "\n"))
+    assert config.external.model == "your-model-id"
+    assert dict(config.external.request_options) == {"thinking": {"type": "disabled"}}

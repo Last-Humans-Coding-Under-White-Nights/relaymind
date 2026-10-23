@@ -1229,3 +1229,74 @@ def test_workflow_fields_are_validated_and_published():
         with pytest.raises(TraceEventError, match=key):
             validate_trace_event(data)
         assert not SCHEMA_VALIDATOR.is_valid(data), name
+
+
+# -- Model call fields (spec 0.31 section 8; RM16, RM22, RM25, RM27, #120) -------------------
+
+FULL_USAGE = {"input_tokens": 100, "output_tokens": 8, "cached_tokens": 64, "reasoning_tokens": 0}
+
+MODEL_FIELDS_ACCEPTED = {
+    "started-request-options": branch_event(
+        "model.started", request_options={"thinking": {"type": "disabled"}}
+    ),
+    "started-empty-request-options": branch_event("model.started", request_options={}),
+    "finished-first-token": branch_event("model.finished", first_token_ms=420),
+    "finished-first-token-zero": branch_event("model.finished", first_token_ms=0),
+    "finished-first-token-null": branch_event("model.finished", first_token_ms=None),
+    "finished-usage-null": branch_event("model.finished", usage=None),
+    "finished-usage-full": branch_event("model.finished", usage=FULL_USAGE),
+    "finished-usage-null-counts": branch_event(
+        "model.finished",
+        usage={**FULL_USAGE, "cached_tokens": None, "reasoning_tokens": None},
+    ),
+    "finished-usage-pre-0.31": branch_event(
+        "model.finished",
+        usage={"input_tokens": 1, "output_tokens": 1, "cached_tokens": 0},
+    ),
+    "finished-usage-bare": branch_event(
+        "model.finished", usage={"input_tokens": 1, "output_tokens": 1}
+    ),
+}
+MODEL_FIELDS_REJECTED = {
+    "request-options-text": (
+        branch_event("model.started", request_options="off"),
+        "request_options",
+    ),
+    "request-options-null": (
+        branch_event("model.started", request_options=None),
+        "request_options",
+    ),
+    "request-options-list": (branch_event("model.started", request_options=[1]), "request_options"),
+    "first-token-negative": (branch_event("model.finished", first_token_ms=-1), "first_token_ms"),
+    "first-token-float": (branch_event("model.finished", first_token_ms=1.5), "first_token_ms"),
+    "first-token-text": (branch_event("model.finished", first_token_ms="3"), "first_token_ms"),
+    "first-token-bool": (branch_event("model.finished", first_token_ms=True), "first_token_ms"),
+    "usage-text": (branch_event("model.finished", usage="many"), "usage"),
+    "usage-missing-input": (
+        branch_event("model.finished", usage={"output_tokens": 1}),
+        "input_tokens",
+    ),
+    "usage-negative-cached": (
+        branch_event("model.finished", usage={**FULL_USAGE, "cached_tokens": -1}),
+        "cached_tokens",
+    ),
+    "usage-float-reasoning": (
+        branch_event("model.finished", usage={**FULL_USAGE, "reasoning_tokens": 0.5}),
+        "reasoning_tokens",
+    ),
+    "usage-extra-field": (
+        branch_event("model.finished", usage={**FULL_USAGE, "guess": 1}),
+        "guess",
+    ),
+}
+
+
+def test_model_call_fields_are_validated_and_published():
+    """RM16, RM22, RM27, spec 0.31 section 8: the validator and the schema agree on each shape."""
+    for name, data in MODEL_FIELDS_ACCEPTED.items():
+        validate_trace_event(data)
+        assert SCHEMA_VALIDATOR.is_valid(data), name
+    for name, (data, key) in MODEL_FIELDS_REJECTED.items():
+        with pytest.raises(TraceEventError, match=key):
+            validate_trace_event(data)
+        assert not SCHEMA_VALIDATOR.is_valid(data), name

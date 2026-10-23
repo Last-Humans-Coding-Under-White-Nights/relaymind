@@ -129,6 +129,11 @@ def test_a_simple_prompt_gives_every_metric(bench, tmp_path):
     # The answer comes after the tool result, so useful content is not before the action.
     assert sample["first_useful_content_ms"] >= sample["first_model_action_ms"]
     assert sample["model_calls"] and all("cached_tokens" in c for c in sample["model_calls"])
+    # Spec 0.31 sections 6 and 8: the counts and the first token are read from the trace;
+    # a double that reports none leaves them None, never 0.
+    for call in sample["model_calls"]:
+        assert {"reasoning_tokens", "first_token_ms"} <= set(call)
+        assert call["cached_tokens"] is None and call["reasoning_tokens"] is None
 
 
 def test_a_clarification_is_the_useful_content_and_the_run_is_cancelled(bench, tmp_path):
@@ -297,9 +302,26 @@ def test_the_run_keeps_cold_warmup_and_measured_samples_apart(bench):
 
 
 def test_the_prefix_cache_setting_is_read_from_the_adapter(bench):
-    record = bench.prefix_cache_record([{"cached_tokens": 0}, {"cached_tokens": 512}])
-    assert record["adapter_sets_cache_prompt"] is False
-    assert record["calls"] == 2 and record["calls_with_cached_tokens"] == 1
+    """RM25, spec 0.31 sections 6 and 12.2: cache_prompt is sent; None is not measured."""
+    record = bench.prefix_cache_record(
+        [{"cached_tokens": 0}, {"cached_tokens": 512}, {"cached_tokens": None}, {}]
+    )
+    assert record["adapter_sets_cache_prompt"] is True
+    assert "sends cache_prompt" in record["note"]
+    assert "not measured" in record["note"]
+    assert record["calls"] == 4
+    assert record["calls_with_reported_count"] == 2
+    assert record["calls_not_measured"] == 2
+    assert record["calls_with_cached_tokens"] == 1
+    assert record["cached_tokens_total"] == 512
+
+
+def test_a_run_without_any_reported_count_has_no_cached_total(bench):
+    """A total over nothing measured is null, not 0."""
+    record = bench.prefix_cache_record([{"cached_tokens": None}, {"cached_tokens": None}])
+    assert record["calls_with_reported_count"] == 0
+    assert record["cached_tokens_total"] is None
+    assert record["calls_with_cached_tokens"] is None
 
 
 def test_an_error_status_without_a_run_is_an_error(bench):

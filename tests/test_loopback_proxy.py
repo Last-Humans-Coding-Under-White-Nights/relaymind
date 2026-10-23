@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from helpers import delta_chunk, load_script_module, make_request, sse_response
-from relaymind.adapters import Completed, TextDelta
+from relaymind.adapters import Completed, FirstToken, TextDelta
 from relaymind.adapters.chat_completions import ChatCompletionsAdapter, ChatCompletionsConfig
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 
@@ -71,6 +71,7 @@ def test_llamacpp_routes_health_and_completions(host, loopback, scheme, proxy_ro
         ) as adapter:
             assert (await adapter.health()).warm
             assert [event async for event in adapter.generate(make_request())] == [
+                FirstToken(),
                 TextDelta(text="pong"),
                 Completed(finish_reason="stop"),
             ]

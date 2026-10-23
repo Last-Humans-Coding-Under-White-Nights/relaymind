@@ -12,7 +12,7 @@ import json
 import httpx
 
 from helpers import collect_events, delta_chunk, make_request, run_closing, sse_response
-from relaymind.adapters import Completed, GenerationFailed, TextDelta, ToolCall, Usage
+from relaymind.adapters import Completed, FirstToken, GenerationFailed, TextDelta, ToolCall, Usage
 from relaymind.adapters.chat_completions import (
     ChatCompletionsAdapter,
     ChatCompletionsConfig,
@@ -68,7 +68,7 @@ def test_generate_authenticates_from_environment(monkeypatch):
     assert seen["path"] == "/v1/chat/completions"
     assert seen["authorization"] == "Bearer sk-test-123"
     assert seen["body"]["model"] == "provider-large-1"
-    assert events == [TextDelta(text="hello"), Completed(finish_reason="stop")]
+    assert events == [FirstToken(), TextDelta(text="hello"), Completed(finish_reason="stop")]
 
 
 def test_provider_error_detail_never_contains_the_credential(monkeypatch):
@@ -137,6 +137,7 @@ def test_usage_events_stream_over_http(monkeypatch):
 
     events = collect_events(make_adapter(handler), make_request())
     assert events == [
+        FirstToken(),
         TextDelta(text="hi"),
         Usage(input_tokens=21, output_tokens=4),
         Completed(finish_reason="stop"),
@@ -218,6 +219,7 @@ def test_generate_streams_tool_call_over_http(monkeypatch):
 
     events = collect_events(make_adapter(handler), make_request())
     assert events == [
+        FirstToken(),
         ToolCall(call_id="call_1", tool_name="get_service_health", arguments={"service": "s"}),
         Completed(finish_reason="tool_calls"),
     ]
@@ -283,3 +285,60 @@ def test_health_maps_ready_auth_rejected_and_missing_credentials(monkeypatch):
     health = run_closing(no_key, lambda a: a.health())
     assert health.available is False
     assert KEY_ENV in health.detail
+
+
+# -- request options, counts, and the first-token marker (#120; RM12, RM16, RM18) ------------
+
+
+def test_request_options_reach_the_provider_body_verbatim(monkeypatch):
+    """Spec 0.31 section 6: operator-declared options are sent as given."""
+    monkeypatch.setenv(KEY_ENV, "sk-test-123")
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return sse_response([delta_chunk({}, finish_reason="stop")])
+
+    config = ChatCompletionsConfig(
+        base_url=CONFIG.base_url,
+        model=CONFIG.model,
+        context_limit=CONFIG.context_limit,
+        api_key_env=KEY_ENV,
+        request_options={"thinking": {"type": "disabled"}, "seed": 7},
+    )
+    adapter = ChatCompletionsAdapter(config, transport=httpx.MockTransport(handler))
+    assert adapter.request_options == {"thinking": {"type": "disabled"}, "seed": 7}
+    collect_events(adapter, make_request())
+    assert seen["body"]["thinking"] == {"type": "disabled"}
+    assert seen["body"]["seed"] == 7
+    assert seen["body"]["model"] == "provider-large-1"
+
+
+def test_an_adapter_without_options_declares_an_empty_mapping():
+    assert make_adapter(lambda r: httpx.Response(200)).request_options == {}
+
+
+def test_usage_details_and_the_marker_stream_over_http(monkeypatch):
+    """Spec 0.31 section 6: a provider's cached and reasoning counts are read from usage."""
+    monkeypatch.setenv(KEY_ENV, "sk-test-123")
+    chunks = [
+        delta_chunk({"reasoning_content": "hmm"}),
+        delta_chunk({"content": "hi"}),
+        delta_chunk({}, finish_reason="stop"),
+        {
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 30,
+                "prompt_tokens_details": {"cached_tokens": 64},
+                "completion_tokens_details": {"reasoning_tokens": 25},
+            },
+        },
+    ]
+    events = collect_events(make_adapter(lambda r: sse_response(chunks)), make_request())
+    assert events == [
+        FirstToken(),
+        TextDelta(text="hi"),
+        Usage(input_tokens=100, output_tokens=30, cached_tokens=64, reasoning_tokens=25),
+        Completed(finish_reason="stop"),
+    ]

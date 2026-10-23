@@ -130,17 +130,41 @@ class ToolCall:
 
 @dataclass(frozen=True)
 class Usage:
-    """Token usage for one model call."""
+    """Token usage for one model call.
+
+    cached_tokens and reasoning_tokens are what the runtime or provider
+    reported for this call (spec 0.31 section 6). None means the source
+    returned no count: it is absent, never 0, because a default of 0 is
+    not a measurement (RM16, finding F9). A reported 0 stays 0.
+    """
 
     input_tokens: int
     output_tokens: int
-    # Provider-reported cache counts, retained per call in the trace
-    # (spec section 7.3); zero when the provider reports none.
-    cached_tokens: int = 0
+    cached_tokens: int | None = None
+    reasoning_tokens: int | None = None
 
     def __post_init__(self) -> None:
-        if self.input_tokens < 0 or self.output_tokens < 0 or self.cached_tokens < 0:
+        if self.input_tokens < 0 or self.output_tokens < 0:
             raise ValueError("token counts must be nonnegative")
+        for name in ("cached_tokens", "reasoning_tokens"):
+            value = getattr(self, name)
+            if value is not None and value < 0:
+                raise ValueError("token counts must be nonnegative")
+
+
+@dataclass(frozen=True)
+class FirstToken:
+    """The first generated fragment arrived (spec 0.31 section 6, RM25).
+
+    An internal marker, not a model output: it carries no time, because
+    the consumer stamps it with its own monotonic clock the moment it
+    reads it. A fragment is any non-empty answer text, reasoning text,
+    or tool-call piece. A tool call is emitted whole only after the
+    finish chunk (RM09), so without this marker the first token of a
+    tool-call generation could only be dated at the end of the stream.
+    The orchestrator consumes it and never forwards it; an adapter that
+    does not send it is dated at its first TextDelta or ToolCall.
+    """
 
 
 @dataclass(frozen=True)
@@ -165,7 +189,7 @@ class GenerationFailed:
     received: bool = False
 
 
-AdapterEvent = TextDelta | ToolCall | Usage | Completed | GenerationFailed
+AdapterEvent = TextDelta | ToolCall | Usage | FirstToken | Completed | GenerationFailed
 
 
 class Role(StrEnum):
@@ -274,6 +298,10 @@ class ModelAdapter(ABC):
     """
 
     locality: str | None = None
+    # The provider request options the operator declared, sent with every
+    # request and recorded in model.started (spec 0.31 section 6). None
+    # for an adapter that has none to declare (a local runtime).
+    request_options: Mapping[str, object] | None = None
 
     @abstractmethod
     async def capabilities(self) -> AdapterCapabilities:

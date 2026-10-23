@@ -41,6 +41,7 @@ from helpers import (
 )
 from relaymind.adapters import (
     Completed,
+    FirstToken,
     GenerationOptions,
     Message,
     Role,
@@ -333,3 +334,34 @@ def test_token_count_matches_the_runtime_prompt_count(make_adapter, request, pro
     usage = [event for event in events if isinstance(event, Usage)]
     assert usage, f"runtime reported no usage; events: {events}"
     assert counted == usage[-1].input_tokens
+
+
+def test_a_repeated_prompt_reports_cached_tokens_and_the_first_token(make_adapter):
+    """RM25, RM27, spec 0.31 section 6 (#120): the pinned runtime's counts reach Usage.
+
+    The same long prompt is sent twice. The adapter sends cache_prompt, so the second
+    request reuses the prefix and the runtime reports it. The usage events are printed so
+    the figure the pinned runtime reports can be recorded; nothing here is a benchmark.
+    """
+    padding = " ".join(f"service-{index} reports a stable status." for index in range(60))
+    messages = (
+        Message(role=Role.SYSTEM, content=f"You check service health. {padding}"),
+        Message(role=Role.USER, content="Reply with exactly one word: pong"),
+    )
+    usages = []
+    for attempt in ("first", "second"):
+        events = collect_events(
+            make_adapter(False),
+            make_request(
+                generation_id=f"smoke_cache_{attempt}",
+                messages=messages,
+                options=GenerationOptions(max_output_tokens=8, temperature=0),
+            ),
+        )
+        # The marker comes before any answer text, and it is sent once.
+        assert isinstance(events[0], FirstToken), events
+        assert sum(isinstance(event, FirstToken) for event in events) == 1
+        usages.append(next(event for event in events if isinstance(event, Usage)))
+    print(f"first usage={usages[0]}; second usage={usages[1]}")
+    assert usages[1].cached_tokens is not None, "the runtime reported no cached count"
+    assert usages[1].cached_tokens > 0, "the repeated prompt reused none of its prefix"

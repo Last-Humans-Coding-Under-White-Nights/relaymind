@@ -559,8 +559,68 @@ def _check_workflow_fields(event_type: EventType, payload: Mapping[str, Any]) ->
             )
 
 
+# Spec 0.31 section 8 (RM16, RM22, RM27): the optional fields of a model call. Each
+# is checked only when present, so events stored before 0.31 stay valid. A later
+# field (the placement fields of M8) is one more row here and in the schema.
+_USAGE_COUNTS = ("input_tokens", "output_tokens")
+_USAGE_OPTIONAL_COUNTS = ("cached_tokens", "reasoning_tokens")
+
+
+def _check_count_or_null(name: str) -> Callable[[Any], None]:
+    def check(value: Any) -> None:
+        if value is not None and not _is_count(value, 0):
+            raise TraceEventError(f"'{name}' must be a non-negative integer or null")
+
+    return check
+
+
+def _check_request_options(value: Any) -> None:
+    if not isinstance(value, Mapping):
+        raise TraceEventError("'request_options' must be a JSON object")
+
+
+def _check_usage(value: Any) -> None:
+    """The usage of a finished call: null, or the token counts the source reported.
+
+    cached_tokens and reasoning_tokens are a count or null (absent: the
+    source reported none, never a defaulted 0) and may be left out of an
+    event stored before 0.31.
+    """
+    if value is None:
+        return
+    if not isinstance(value, Mapping):
+        raise TraceEventError("'usage' must be null or a JSON object")
+    unknown = sorted(str(key) for key in value if key not in _USAGE_COUNTS + _USAGE_OPTIONAL_COUNTS)
+    if unknown:
+        raise TraceEventError(f"usage has unknown fields: {', '.join(unknown)}")
+    for name in _USAGE_COUNTS:
+        if name not in value:
+            raise TraceEventError(f"usage needs '{name}'")
+        if not _is_count(value[name], 0):
+            raise TraceEventError(f"usage '{name}' must be a non-negative integer")
+    for name in _USAGE_OPTIONAL_COUNTS:
+        if name in value and value[name] is not None and not _is_count(value[name], 0):
+            raise TraceEventError(f"usage '{name}' must be a non-negative integer or null")
+
+
+_OPTIONAL_MODEL_FIELDS: dict[EventType, dict[str, Callable[[Any], None]]] = {
+    EventType.MODEL_STARTED: {"request_options": _check_request_options},
+    EventType.MODEL_FINISHED: {
+        "first_token_ms": _check_count_or_null("first_token_ms"),
+        "usage": _check_usage,
+    },
+}
+
+
+def _check_model_fields(event_type: EventType, payload: Mapping[str, Any]) -> None:
+    for name, check in _OPTIONAL_MODEL_FIELDS.get(event_type, {}).items():
+        if name in payload:
+            check(payload[name])
+
+
 def _check_payload(event_type: EventType, payload: Mapping[str, Any]) -> None:
     _check_workflow_fields(event_type, payload)
+    _check_model_fields(event_type, payload)
     if event_type is EventType.RUN_ACCEPTED:
         _check_accepted_payload(payload)
     if event_type is EventType.CACHE_HIT:

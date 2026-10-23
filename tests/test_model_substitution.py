@@ -35,6 +35,7 @@ from relaymind.adapters import (
     AdapterEvent,
     AdapterHealth,
     Completed,
+    FirstToken,
     Message,
     ModelAdapter,
     Role,
@@ -56,6 +57,7 @@ SCENARIO_REQUEST = make_request(
 )
 
 EXPECTED_EVENTS = [
+    FirstToken(),
     ToolCall(
         call_id="call_1",
         tool_name="get_service_health",
@@ -86,7 +88,8 @@ SCENARIO_CHUNKS = [
 # in a generation body is the scenario and must be identical across a
 # swap.
 MODEL_KEYS = ("model",)
-LOCAL_ONLY_KEYS = ("chat_template_kwargs", "reasoning_format")
+# cache_prompt is a llama-server field (spec 0.31 section 6); the provider adapter sends none.
+LOCAL_ONLY_KEYS = ("chat_template_kwargs", "reasoning_format", "cache_prompt")
 
 # The configurations under test. Each pair differs in configuration
 # values only.

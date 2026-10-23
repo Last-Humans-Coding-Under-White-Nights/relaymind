@@ -438,6 +438,32 @@ def test_stats_records_come_from_the_trace(harness):
     assert records[1].completion_seconds == 0.65
     assert records[1].started_at_utc == "2026-10-22T10:00:01Z"
     assert all(r.first_model_action_seconds is None for r in records)
+    # Spec 0.31 section 6: counts the trace does not hold are None, not 0.
+    assert records[0].cached_tokens is None and records[0].reasoning_tokens is None
+    assert records[1].cached_tokens is None and records[1].reasoning_tokens is None
+
+
+def test_generation_records_keep_the_reported_counts(harness):
+    events = [
+        {
+            "event_type": "model.finished",
+            "payload": {
+                "call_id": "c1",
+                "model": "m",
+                "duration_ms": 300,
+                "finish_reason": "stop",
+                "error": None,
+                "usage": {
+                    "input_tokens": 900,
+                    "output_tokens": 20,
+                    "cached_tokens": 0,
+                    "reasoning_tokens": 7,
+                },
+            },
+        }
+    ]
+    (record,) = harness.generation_records(events, prompt="p")
+    assert (record.cached_tokens, record.reasoning_tokens) == (0, 7)
 
 
 def test_first_model_action_skips_gateway_routes(harness):

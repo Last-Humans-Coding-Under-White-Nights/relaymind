@@ -144,6 +144,7 @@ from typing import Any
 from relaymind.adapters import (
     AdapterCapabilities,
     Completed,
+    FirstToken,
     GenerationFailed,
     GenerationOptions,
     GenerationRequest,
@@ -2388,12 +2389,18 @@ class _Run:
         actor = model.actor
         call = {"call_id": call_id, "model": model_id, "actor": actor, "purpose": purpose}
         self.model_calls.append(call)
+        # Spec 0.31 section 8: the provider options an adapter sends are on the record.
+        # A local runtime declares none, and records none.
+        declared = getattr(model.adapter, "request_options", None)
+        sent = {} if declared is None else {"request_options": dict(declared)}
         self.emit(
             EventType.MODEL_STARTED,
             actor,
-            {**call, "tools_offered": [t.name for t in request.tool_schemas], **label},
+            {**call, "tools_offered": [t.name for t in request.tool_schemas], **sent, **label},
         )
         started = self.o.clock.monotonic()
+        # The monotonic time of the first generated fragment (spec 0.31 section 6).
+        first_token: float | None = None
         generation = _Generation()
         usage: Usage | None = None
         finish: str | None = None
@@ -2404,6 +2411,13 @@ class _Run:
         try:
             async with asyncio.timeout(max(self.meter.remaining_seconds(on_external), 0.001)):
                 async for event in adapter.generate(request):
+                    # The marker is consumed here and never forwarded. An adapter
+                    # that sends none is dated at its first text or tool call.
+                    if first_token is None and (
+                        isinstance(event, FirstToken | ToolCall)
+                        or (isinstance(event, TextDelta) and event.text)
+                    ):
+                        first_token = self.o.clock.monotonic()
                     if isinstance(event, ToolCall):
                         generation.calls.append(event)
                     elif isinstance(event, TextDelta):
@@ -2447,6 +2461,10 @@ class _Run:
                     "purpose": purpose,
                     **label,
                     "duration_ms": duration_ms,
+                    # Integer ms from the request start; null when no token arrived.
+                    "first_token_ms": None
+                    if first_token is None
+                    else round((first_token - started) * 1000),
                     "finish_reason": finish,
                     "tool_calls": len(generation.calls),
                     "proposed_calls": [
@@ -2459,7 +2477,9 @@ class _Run:
                     else {
                         "input_tokens": usage.input_tokens,
                         "output_tokens": usage.output_tokens,
+                        # None when the source reported none: absent, never 0 (RM16).
                         "cached_tokens": usage.cached_tokens,
+                        "reasoning_tokens": usage.reasoning_tokens,
                     },
                     "error": None
                     if failure is None

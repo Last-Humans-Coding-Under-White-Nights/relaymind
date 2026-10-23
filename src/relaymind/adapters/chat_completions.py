@@ -7,10 +7,13 @@ and never appear in traces or error messages.
 """
 
 import asyncio
+import copy
 import dataclasses
+import math
 import os
-from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass
+from collections.abc import AsyncIterator, Mapping, Sequence
+from dataclasses import dataclass, field
+from types import MappingProxyType
 
 import httpx
 
@@ -33,6 +36,90 @@ _OPTION_BODY_KEYS = {
 }
 
 
+# Body fields the gateway sets itself (spec 0.31 section 6). A request option
+# never replaces them: build_chat_request sets them after merging the options.
+RESERVED_BODY_FIELDS = frozenset({"model", "messages", "tools", "stream", "stream_options"})
+
+# Option names that would carry a credential or header, compared lowercased with
+# "-" read as "_". The credential comes from api_key_env at call time (RM12), and
+# the adapter owns the request headers.
+CREDENTIAL_OPTION_NAMES = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "x_api_key",
+        "authorization",
+        "proxy_authorization",
+        "headers",
+        "extra_headers",
+        "default_headers",
+    }
+)
+
+
+def _option_name(key: str) -> str:
+    return key.strip().lower().replace("-", "_")
+
+
+def _plain_json(value: object, path: str) -> object:
+    """A plain, mutable JSON copy of an option value, or a ValueError naming the path.
+
+    The message names the key path and never the value (RM12): a value
+    that is refused may be a secret placed under the wrong key.
+    """
+    if value is None or isinstance(value, bool | str):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"request_options {path} must be a finite number")
+        return value
+    if isinstance(value, Mapping):
+        checked: dict[str, object] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError(f"request_options {path} has a key that is not text")
+            if _option_name(key) in CREDENTIAL_OPTION_NAMES:
+                raise ValueError(
+                    f"request_options key {path}.{key} is not allowed: the credential comes "
+                    "from api_key_env and the adapter sets the headers"
+                )
+            checked[key] = _plain_json(item, f"{path}.{key}")
+        return checked
+    if isinstance(value, list | tuple):
+        return [_plain_json(item, f"{path}[{index}]") for index, item in enumerate(value)]
+    raise ValueError(f"request_options {path} is not a JSON value")
+
+
+def check_request_options(options: Mapping[str, object]) -> dict[str, object]:
+    """Validate operator-declared request options; return a plain copy (spec 0.31 section 6).
+
+    Refused, by key name and never with a value: a credential or header
+    key (api_key, authorization, headers, at any depth), a top-level
+    key the gateway sets itself (model, messages, tools, stream,
+    stream_options), and a value that is not JSON (a TOML date).
+    """
+    if not isinstance(options, Mapping):
+        raise ValueError("request_options must be a table")
+    checked: dict[str, object] = {}
+    for key, value in options.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("request_options has a key that is not text")
+        if _option_name(key) in CREDENTIAL_OPTION_NAMES:
+            raise ValueError(
+                f"request_options key {key} is not allowed: the credential comes "
+                "from api_key_env and the adapter sets the headers"
+            )
+        if _option_name(key) in RESERVED_BODY_FIELDS:
+            raise ValueError(
+                f"request_options key {key} is not allowed: the gateway sets "
+                f"{', '.join(sorted(RESERVED_BODY_FIELDS))}"
+            )
+        checked[key] = _plain_json(value, key)
+    return checked
+
+
 def _require_supported(option_name: str, supported_options: Sequence[str]) -> None:
     if option_name not in supported_options:
         raise UnsupportedCapabilityError(
@@ -45,14 +132,24 @@ def build_chat_request(
     *,
     model: str,
     supported_options: Sequence[str],
+    request_options: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Map a normalized request onto an external chat completion body.
 
     Only operator-declared supported parameters are forwarded; a set
     option the provider does not support is an error, never a silent
     drop (the trace must reflect what the provider actually ran).
+
+    request_options (spec 0.31 section 6) are merged first, so the
+    fields the gateway sets afterward win: model, messages, tools,
+    stream, and stream_options can never be overridden, and an option
+    the request sets itself (a sampling option) replaces the declared one.
     """
-    body = base_chat_body(request)
+    body: dict[str, object] = {}
+    for key, value in (request_options or {}).items():
+        if _option_name(key) not in RESERVED_BODY_FIELDS:
+            body[key] = copy.deepcopy(value)
+    body.update(base_chat_body(request))
     body["model"] = model
     for option in dataclasses.fields(request.options):
         value = getattr(request.options, option.name)
@@ -84,6 +181,14 @@ class ChatCompletionsConfig:
     supported_options: tuple[str, ...] = ("max_output_tokens", "temperature", "top_p")
     # Spec section 11.2: external generation is at most 30 seconds.
     request_timeout_seconds: float = 30.0
+    # Spec 0.31 section 6: provider request fields the operator declares, sent
+    # verbatim with every request and recorded in model.started. Checked and
+    # frozen at construction: no credential, no header, no gateway-owned field.
+    request_options: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        checked = check_request_options(self.request_options)
+        object.__setattr__(self, "request_options", MappingProxyType(checked))
 
 
 class ChatCompletionsAdapter(ModelAdapter):
@@ -106,6 +211,11 @@ class ChatCompletionsAdapter(ModelAdapter):
         # One awaited event per running generation; cancel() sets it to
         # interrupt the stream even while it is idle between chunks.
         self._cancel_events: dict[str, asyncio.Event] = {}
+
+    @property
+    def request_options(self) -> Mapping[str, object]:
+        """The declared options as a plain copy; model.started records them."""
+        return check_request_options(self._config.request_options)
 
     def _api_key(self) -> str | None:
         """The credential, read fresh from the environment per call.
@@ -157,6 +267,7 @@ class ChatCompletionsAdapter(ModelAdapter):
             request,
             model=self._config.model,
             supported_options=self._config.supported_options,
+            request_options=self._config.request_options,
         )
         cancel_event = self._cancel_events.setdefault(request.generation_id, asyncio.Event())
         try:

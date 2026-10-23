@@ -509,7 +509,9 @@ def generation_records(
                 failure_code=None if error is None else str(error.get("code", error)),
                 input_tokens=usage.get("input_tokens"),
                 output_tokens=usage.get("output_tokens"),
+                # None when the runtime reported no count: not measured (spec 0.31 section 6).
                 cached_tokens=usage.get("cached_tokens"),
+                reasoning_tokens=usage.get("reasoning_tokens"),
             )
         )
     return records

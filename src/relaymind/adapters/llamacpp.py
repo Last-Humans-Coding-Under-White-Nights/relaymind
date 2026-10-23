@@ -65,6 +65,9 @@ def chat_body(fields: Mapping[str, object], options: GenerationOptions) -> dict[
     # b11785 still supports the HTTP template boolean for both modes;
     # reasoning_effort alone cannot enable thinking after --reasoning off.
     body["reasoning_format"] = "deepseek"
+    # Spec 0.31 section 6: ask for prompt caching explicitly, so the trace
+    # records a request the gateway made and not a server default.
+    body["cache_prompt"] = True
     if options.max_output_tokens is not None:
         body["max_tokens"] = options.max_output_tokens
     if options.temperature is not None:

@@ -77,7 +77,14 @@ _TABLES: dict[str, frozenset[str]] = {
     "sandbox": frozenset({"seed", "work_dir"}),
     "local_model": frozenset({"manifest", "artifact", "base_url"}),
     "external_model": frozenset(
-        {"base_url", "model", "context_limit", "api_key_env", "supported_options"}
+        {
+            "base_url",
+            "model",
+            "context_limit",
+            "api_key_env",
+            "supported_options",
+            "request_options",
+        }
     ),
     "policy": frozenset({"degraded_mode", "enabled_workflows", "allowed_modes", "permissions"}),
     "cache": frozenset({"routing"}),
@@ -288,6 +295,9 @@ def _external(table: Mapping[str, Any]) -> ChatCompletionsConfig:
         args["supported_options"] = tuple(
             _strings(table, "external_model", "supported_options", [])
         )
+    if (options := _value(table, "external_model", "request_options", dict)) is not None:
+        # Checked by the config: no credential, header, or gateway-owned field, and JSON only.
+        args["request_options"] = options
     return _settings("external_model", lambda: ChatCompletionsConfig(**args))
 
 

@@ -8,6 +8,8 @@ Deterministic, no server. Issue #3.
 
 import json
 
+import pytest
+
 from helpers import HEALTH_TOOL, delta_chunk
 from helpers import make_request as make_plain_request
 from relaymind.adapters import (
@@ -449,3 +451,101 @@ def test_streamed_chat_body_always_streams_with_usage():
     assert body["stream"] is True
     assert body["stream_options"] == {"include_usage": True}
     assert body["model"] == "m"
+
+
+# -- cached and reasoning tokens, and the first-token marker (#120; RM16, RM18, RM27) ----------
+
+
+def usage_chunk(**extra):
+    return {"choices": [], "usage": {"prompt_tokens": 100, "completion_tokens": 8}, **extra}
+
+
+def test_usage_details_fill_cached_and_reasoning_tokens():
+    """Spec 0.31 section 6: the usage details are read, not defaulted."""
+    chunk = usage_chunk()
+    chunk["usage"] |= {
+        "prompt_tokens_details": {"cached_tokens": 90},
+        "completion_tokens_details": {"reasoning_tokens": 5},
+    }
+    assert StreamAccumulator().feed(chunk) == [
+        Usage(input_tokens=100, output_tokens=8, cached_tokens=90, reasoning_tokens=5)
+    ]
+
+
+def test_llama_server_timings_cache_n_fills_cached_tokens():
+    """Spec 0.31 section 6: llama-server reports the reused prompt tokens as timings.cache_n."""
+    assert StreamAccumulator().feed(usage_chunk(timings={"cache_n": 77, "prompt_n": 23})) == [
+        Usage(input_tokens=100, output_tokens=8, cached_tokens=77)
+    ]
+
+
+def test_timings_sent_on_an_earlier_chunk_still_fill_the_later_usage():
+    """The final content chunk may carry timings and the usage chunk trails it."""
+    acc = StreamAccumulator()
+    events = acc.feed(delta_chunk({"content": "hi"}))
+    finish = delta_chunk({}, finish_reason="stop")
+    finish["timings"] = {"cache_n": 12}
+    events += acc.feed(finish)
+    events += acc.feed(usage_chunk())
+    assert events[-1] == Usage(input_tokens=100, output_tokens=8, cached_tokens=12)
+
+
+def test_usage_details_win_over_timings_when_both_are_sent():
+    """Spec 0.31 section 6: the usage is the provider's own accounting; timings is the fallback."""
+    chunk = usage_chunk(timings={"cache_n": 5})
+    chunk["usage"]["prompt_tokens_details"] = {"cached_tokens": 64}
+    (usage,) = StreamAccumulator().feed(chunk)
+    assert usage.cached_tokens == 64
+
+
+def test_a_stream_without_the_counts_leaves_them_none_never_zero():
+    """RM16, finding F9: no count reported means absent."""
+    (usage,) = StreamAccumulator().feed(usage_chunk())
+    assert (usage.cached_tokens, usage.reasoning_tokens) == (None, None)
+
+
+def test_a_reported_zero_is_a_measurement():
+    chunk = usage_chunk(timings={"cache_n": 0})
+    chunk["usage"]["completion_tokens_details"] = {"reasoning_tokens": 0}
+    (usage,) = StreamAccumulator().feed(chunk)
+    assert (usage.cached_tokens, usage.reasoning_tokens) == (0, 0)
+
+
+@pytest.mark.parametrize("bad", [None, -3, True, "12", 1.5, [1]])
+def test_a_count_that_is_not_a_non_negative_integer_is_not_measured(bad):
+    chunk = usage_chunk(timings={"cache_n": bad})
+    chunk["usage"]["prompt_tokens_details"] = {"cached_tokens": bad}
+    chunk["usage"]["completion_tokens_details"] = {"reasoning_tokens": bad}
+    (usage,) = StreamAccumulator().feed(chunk)
+    assert (usage.cached_tokens, usage.reasoning_tokens) == (None, None)
+
+
+def test_malformed_detail_objects_are_ignored():
+    chunk = usage_chunk(timings="soon")
+    chunk["usage"]["prompt_tokens_details"] = "many"
+    chunk["usage"]["completion_tokens_details"] = None
+    (usage,) = StreamAccumulator().feed(chunk)
+    assert (usage.cached_tokens, usage.reasoning_tokens) == (None, None)
+
+
+def test_first_token_is_signalled_once_for_content_reasoning_or_a_tool_fragment():
+    """Spec 0.31 section 6: any generated fragment counts; an empty delta does not."""
+    for delta in (
+        {"content": "x"},
+        {"reasoning_content": "think"},
+        {"tool_calls": [{"index": 0, "id": "c", "function": {"name": "t", "arguments": ""}}]},
+    ):
+        acc = StreamAccumulator()
+        assert acc.take_first_token() is False
+        acc.feed(delta_chunk({"role": "assistant", "content": ""}))
+        assert acc.take_first_token() is False
+        acc.feed(delta_chunk(delta))
+        assert acc.take_first_token() is True
+        acc.feed(delta_chunk({"content": "more"}))
+        assert acc.take_first_token() is False
+
+
+def test_build_chat_request_asks_for_prompt_caching():
+    """Spec 0.31 section 6: the adapter requests cache_prompt explicitly."""
+    body = build_chat_request(make_request(), chat_template_kwargs=None)
+    assert body["cache_prompt"] is True

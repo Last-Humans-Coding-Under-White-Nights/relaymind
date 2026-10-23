@@ -22,6 +22,7 @@ from relaymind.adapters.base import (
     AdapterEvent,
     AdapterHealth,
     Completed,
+    FirstToken,
     GenerationFailed,
     GenerationRequest,
     Message,
@@ -73,7 +74,10 @@ class GenerationStats:
     failure_code: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    # Counts the source reported; None when it reported none (RM16, spec 0.31
+    # section 6): an unreported count is not measured, never 0.
     cached_tokens: int | None = None
+    reasoning_tokens: int | None = None
 
 
 # The only finish that is a successful final answer (spec 12.1).
@@ -162,6 +166,11 @@ class TimingCollector(ModelAdapter):
 
     @staticmethod
     def _observe(record: GenerationStats, event: AdapterEvent, elapsed: float) -> None:
+        # FirstToken is the orchestrator's marker (spec 0.31 section 6), not an
+        # event the provider sent. It does not move the section 12.1 metrics, so
+        # exports stay comparable with those made before it existed.
+        if isinstance(event, FirstToken):
+            return
         if record.first_transport_event_seconds is None and (
             not isinstance(event, GenerationFailed) or event.received
         ):
@@ -177,6 +186,7 @@ class TimingCollector(ModelAdapter):
             record.input_tokens = event.input_tokens
             record.output_tokens = event.output_tokens
             record.cached_tokens = event.cached_tokens
+            record.reasoning_tokens = event.reasoning_tokens
         elif isinstance(event, Completed):
             record.finish_reason = event.finish_reason
             if event.finish_reason == _ANSWER_FINISH_REASON:
