@@ -677,3 +677,58 @@ def test_checked_in_tool_lock_contains_only_frozen_source_identities():
     assert len({case["row_index"] for case in lock["cases"]}) == 500
     assert all(set(case) == {"id", "row_index", "sha256"} for case in lock["cases"])
     assert all(len(case["sha256"]) == 64 for case in lock["cases"])
+
+
+def test_parameter_named_properties_is_not_misread_as_schema_container():
+    """RM09: a source argument named properties stays an argument."""
+    case = bench.normalize_toolret(
+        {
+            "id": "properties-arg",
+            "query": "lookup",
+            "negative": [],
+            "positive": [
+                {
+                    "name": "lookup",
+                    "parameters": {
+                        "ids": {"type": "string", "description": "ids"},
+                        "properties": {
+                            "description": "Comma-separated property names",
+                            "type": "str",
+                            "default": "",
+                        },
+                    },
+                }
+            ],
+        },
+        0,
+    )
+    schema = case["tools"][0]["input_schema"]
+    assert set(schema["properties"]) == {"ids", "properties"}
+    assert schema["properties"]["properties"]["type"] == "string"
+    bench.benchmark_registry(case["tools"])
+
+
+def test_cli_captures_application_identity_before_running_cases(tmp_path, monkeypatch):
+    """RM25: commits made during a run cannot relabel the code that started it."""
+    from helpers import load_script_module
+
+    script = load_script_module("selection_benchmark")
+    started = False
+
+    def revision(root):
+        return {"head": "after" if started else "before", "dirty": True}
+
+    async def fake_run(*args, **kwargs):
+        nonlocal started
+        started = True
+        return {"cases": [], "summary": {}}
+
+    monkeypatch.setattr(script, "application_revision", revision)
+    monkeypatch.setattr(script, "run_skills", fake_run)
+    args = script.parser().parse_args(
+        ["--track", "skills", "--selector", "example_match", "--output", str(tmp_path / "run.json")]
+    )
+    report = asyncio.run(script.run(args))
+    assert report["application"]["head"] == "before"
+    assert report["implementation_files"]["scripts/selection_benchmark.py"]
+    assert report["implementation_files"]["src/relaymind/evaluation/selection_benchmark.py"]

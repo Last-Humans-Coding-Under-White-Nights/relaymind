@@ -346,9 +346,13 @@ def _parameters(raw: Mapping[str, Any]) -> dict[str, Any]:
     parameters = raw.get("parameters")
     if isinstance(parameters, str):
         parameters = json.loads(parameters)
-    if isinstance(parameters, dict) and (
-        "properties" in parameters or parameters.get("type") == "object"
-    ):
+    properties = parameters.get("properties") if isinstance(parameters, dict) else None
+    object_schema = isinstance(parameters, dict) and (
+        parameters.get("type") in ("object", "dict")
+        or isinstance(properties, dict)
+        and not any(isinstance(properties.get(key), str) for key in ("type", "description"))
+    )
+    if object_schema:
         schema = _normalize_schema(parameters)
         schema.update(type="object", additionalProperties=False)
         if "required" not in schema and isinstance(raw.get("required"), list):
