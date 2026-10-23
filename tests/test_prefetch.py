@@ -536,6 +536,27 @@ def test_the_resolution_follows_the_declaration_and_the_rm05_rule():
     }
 
 
+@pytest.mark.parametrize(
+    "schema",
+    [
+        pytest.param({}, id="no-properties"),
+        pytest.param({"properties": {}}, id="parameter-missing"),
+        pytest.param({"properties": {"service": {"type": "string"}}}, id="no-enum"),
+        pytest.param({"properties": {"service": {"enum": []}}}, id="empty-enum"),
+        pytest.param({"properties": {"service": "staging-api"}}, id="not-a-schema"),
+    ],
+)
+def test_an_identifier_without_allowed_values_skips_the_call(schema):
+    """RM05, RM29: with no closed list to find in the request, the call is skipped, never guessed.
+
+    The registry refuses such a declaration at load, so this is a schema
+    the resolution was not built for; it is treated as a missing
+    identifier: that call is not prefetched, and the model proposes it.
+    """
+    declared = PrefetchCall("get_service_health", (PrefetchBinding("service", REQUEST),))
+    assert resolve_arguments(declared, schema, "Is staging-api healthy?") is None
+
+
 def test_the_rendered_trace_says_the_gateway_made_a_prefetch_call(tmp_path):
     """RM23: the page names who made the call and invents no model for it."""
     gateway = prefetch_gateway(tmp_path, health_turns(text_turn(STAGING_OK), text_turn(STAGING_OK)))

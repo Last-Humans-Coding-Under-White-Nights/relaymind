@@ -1,4 +1,4 @@
-"""Prefetch: resolving a skill's declared calls from the request (RM29, spec 0.32).
+"""Prefetch: resolving a skill's declared calls from the request (RM29, spec 0.34).
 
 A skill manifest declares read-only calls (``skills/schemas/skill_manifest.v1.json``);
 the registry checks them at load, without a request. This module holds
@@ -13,7 +13,9 @@ the two checks that need more than the manifest:
   allowed values appears in the user turns, otherwise the call is not
   prefetched and the model proposes it as before. A constant is the
   value the manifest documents. A missing or ambiguous identifier skips
-  a call, never the skill, and is not an error.
+  a call, never the skill, and is not an error; so does an identifier
+  whose schema lists no allowed values, which the registry refuses at
+  load and the resolution never guesses around.
 
 Running the calls belongs to the orchestrator (``local_loop``): they go
 through the executor with every check of a model proposal.
@@ -65,16 +67,28 @@ def resolve_arguments(
     user_text is the text of the user turns (identifiers.provenance_text
     without tool results): the gateway's own questions and the model's
     turns are never provenance. The result follows the order of the
-    declaration.
+    declaration. A request-bound parameter that input_schema gives no
+    list of allowed values settles nothing, so the call is skipped, as
+    for a missing identifier (RM05).
     """
-    properties = input_schema.get("properties", {})
+    properties = input_schema.get("properties")
     arguments: dict[str, Any] = {}
     for binding in call.bindings:
         if binding.source != REQUEST:
             arguments[binding.name] = binding.value
             continue
-        found = [v for v in properties[binding.name]["enum"] if identifiers.mentions(user_text, v)]
+        allowed = _allowed_values(properties, binding.name)
+        found = [v for v in allowed if identifiers.mentions(user_text, v)]
         if len(found) != 1:
             return None
         arguments[binding.name] = found[0]
     return arguments
+
+
+def _allowed_values(properties: object, name: str) -> list[str]:
+    """The string values the schema of parameter name allows, or [] when it lists none."""
+    spec = properties.get(name) if isinstance(properties, Mapping) else None
+    values = spec.get("enum") if isinstance(spec, Mapping) else None
+    if not isinstance(values, list | tuple):
+        return []
+    return [value for value in values if isinstance(value, str)]
