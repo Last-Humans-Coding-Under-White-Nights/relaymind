@@ -590,8 +590,13 @@ def _draft_entry(
     if outcome != "published":
         entry["counterfactual"] = entry["measured"]
         return entry, dict(old)
-    counterfactual = {**record, "state": "completed", "error_code": None, "reason_code": None}
-    counterfactual["timed_out"] = False
+    counterfactual = {
+        **record,
+        "state": "completed",
+        "error_code": None,
+        "reason_code": None,
+        "timed_out": False,
+    }
     grade = grade_record(
         case, old["mode"], counterfactual, draft_trace(events, draft), old["databases"]
     ).to_json_object()
@@ -690,25 +695,26 @@ def draft_pass_table(runs: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
                 "measured_pass": 0,
             },
         )
+        measured, counterfactual = (
+            bool(run["measured"]["success"]),
+            bool(run["counterfactual"]["success"]),
+        )
         row["runs"] += 1
-        row["measured_pass"] += bool(run["measured"]["success"])
+        row["measured_pass"] += measured
         if run["outcome"] == "published":
             row["published"] += 1
-            row["published_pass"] += bool(run["counterfactual"]["success"])
+            row["published_pass"] += counterfactual
             # A run that fails measured and passes with the draft, and the reverse.
-            row["gained"] += bool(run["counterfactual"]["success"]) > bool(
-                run["measured"]["success"]
-            )
-            row["lost"] += bool(run["measured"]["success"]) > bool(run["counterfactual"]["success"])
+            row["gained"] += counterfactual > measured
+            row["lost"] += measured > counterfactual
         elif run["outcome"] == "blocked":
             row["blocked"][run["reason"]] = row["blocked"].get(run["reason"], 0) + 1
         else:
             row["not_gradable"] += 1
-    order = {name: i for i, name in enumerate(MODES)}
     return sorted(
         rows.values(),
         key=lambda r: (
-            order[r["mode"]],
+            MODES.index(r["mode"]),
             r["language"],
             CLASSES.index(r["case_class"]),
             r["measured_completed_locally"],
@@ -765,13 +771,9 @@ def render_draft_pass_markdown(result: Mapping[str, Any]) -> str:
         if mode not in DRAFT_PASS_MODES:
             continue
         for language, data in languages.items():
-            blocks = [*data["classes"].items(), ("all", data["all"])]
-            for name, block in blocks:
-                other = (
-                    after[mode][language]["all"]
-                    if name == "all"
-                    else after[mode][language]["classes"][name]
-                )
+            others = {**after[mode][language]["classes"], "all": after[mode][language]["all"]}
+            for name, block in [*data["classes"].items(), ("all", data["all"])]:
+                other = others[name]
                 calls = block["provider_calls"], other["provider_calls"]
                 lines.append(
                     f"| {mode} | {language} | {name} "

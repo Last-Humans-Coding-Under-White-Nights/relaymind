@@ -46,6 +46,7 @@ from typing import Any, NamedTuple
 
 from relaymind.evaluation.corpus import (
     CLASSES,
+    LANGUAGES,
     Corpus,
     check_lock,
     demo_skill_names,
@@ -331,7 +332,7 @@ def load_catalog(skills_root: Path = SKILLS_ROOT) -> list[SkillDoc]:
         requests = tuple(
             pair[language]["request"]
             for pair in examples["pairs"]
-            for language in ("en", "zh")
+            for language in LANGUAGES
             if pair.get(language, {}).get("request")
         )
         catalog.append(
@@ -400,7 +401,7 @@ def _by_language_and_class(
     rows: Sequence[Mapping[str, Any]], key: str = "predicted"
 ) -> list[dict[str, Any]]:
     table = []
-    for language in ("en", "zh"):
+    for language in LANGUAGES:
         for case_class in CLASSES:
             subset = [
                 r for r in rows if r["language"] == language and r["case_class"] == case_class
@@ -419,7 +420,7 @@ def _by_language(rows: Sequence[Mapping[str, Any]], key: str = "predicted") -> d
         language: summarize_sets(
             [(r[key], r["expected_set"]) for r in rows if r["language"] == language]
         )
-        for language in ("en", "zh")
+        for language in LANGUAGES
         if any(r["language"] == language for r in rows)
     }
 
@@ -497,7 +498,7 @@ def analyse(
         "is a measured run of the selector in the gateway.",
         "method": {
             "documents": {s.name: len(tokenize(s.text)) for s in catalog},
-            "masked_identifiers": sorted(catalog_identifiers(catalog)),
+            "masked_identifiers": sorted(index.identifiers),
             "placeholder": PLACEHOLDER,
             "bm25": {"k1": K1, "b": B},
             "tokens": "word tokens for Latin text, character bigrams for Chinese text",
@@ -526,7 +527,7 @@ def analyse(
                     [c for c in picks if c["language"] == language and not c["right"]]
                 ),
             }
-            for language in ("en", "zh")
+            for language in LANGUAGES
         },
         "router": None,
         "candidate": None,
@@ -660,7 +661,7 @@ def render_markdown(analysis: Mapping[str, Any]) -> str:
             f"The auto and local_only runs picked different skills for {router['samples_differ']} "
             f"of {router['cases_in_both']} cases that have both.",
         ]
-        for mode, sample in analysis["router"]["samples"].items():
+        for mode, sample in router["samples"].items():
             lines += _table(
                 f"Router, {mode}", sample["by_language_and_class"], sample["by_language"]
             )

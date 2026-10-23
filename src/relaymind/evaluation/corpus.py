@@ -161,7 +161,7 @@ def check_lock(corpus: Corpus, lock_path: Path) -> None:
         path = lock_path.parent / name
         if not path.is_file():
             raise CorpusError(f"sidecar {name} named in {lock_path.name} is missing")
-        digest = canonical_digest(_read_json(path))
+        digest = canonical_digest(json.loads(path.read_text("utf-8")))
         if digest != frozen:
             raise CorpusError(
                 f"sidecar {name} digest {digest} differs from the frozen digest {frozen} "
@@ -201,11 +201,11 @@ def load_skills_sidecar(
     path: Path, corpus: Corpus, *, skill_names: Collection[str]
 ) -> dict[str, str | None]:
     """The expected skill of every case, read from the sidecar file and checked (RM28)."""
-    text = Path(path).read_text("utf-8")
+    path = Path(path)
     try:
-        document = json.loads(text, object_pairs_hook=_once)
+        document = json.loads(path.read_text("utf-8"), object_pairs_hook=_once)
     except ValueError as exc:
-        raise CorpusError(f"{Path(path).name}: {exc}") from None
+        raise CorpusError(f"{path.name}: {exc}") from None
     return parse_skills_sidecar(document, corpus, skill_names=skill_names)
 
 
@@ -264,10 +264,6 @@ def development_prompts(skills_root: Path, *, extra: Iterable[str] = ()) -> set[
 
 
 # -- checks -----------------------------------------------------------------------------
-
-
-def _read_json(path: Path) -> Any:
-    return json.loads(Path(path).read_text("utf-8"))
 
 
 def _once(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
