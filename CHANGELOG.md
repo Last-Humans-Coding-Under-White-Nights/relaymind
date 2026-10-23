@@ -146,6 +146,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   timing statistics ignore it, so their definitions are unchanged; a
   consumer that lists every event of a stream sees one more (#120).
 
+- Specification 0.34 → 0.35 (#141, #124; RM06, RM12, RM13, RM16, RM24,
+  RM25; AC14): section 4.4 gives the order of the parts of the external
+  system message (the rules, the skill instructions, the fixed completion
+  criteria, the catalog, the answer instruction, then the handoff JSON),
+  splits the completion criteria into a fixed part and a value part that
+  is refreshed before each external generation and measured with the
+  request, says that an external correction names the failed checks, and
+  leaves the synthesis request of the parallel workflow unchanged.
+
 - Specification 0.33 → 0.34 (PR #153 review; RM05, RM09, RM10, RM15,
   RM16, RM22, RM29; sections 4.3, 4.4, 8, 11, and 12.2; AC18): it states
   what #122 and #123 implement. Section 4.3: under
