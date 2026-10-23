@@ -573,6 +573,23 @@ def test_a_failed_routing_warm_up_is_unavailable(tmp_path):
     assert result is not None and not result.ready
 
 
+def test_a_failed_skill_warm_up_after_a_fitting_routing_one_is_ready(tmp_path):
+    """RM26: the class is measured on the routing-shaped warm-up only.
+
+    The skill-shaped warm-up of section 6 is a timing sample; its failure is
+    the printed warm-up line, not a class.
+    """
+    clock = FakeClock()
+    adapter = ScriptedAdapter(
+        turns=[answer(), GenerationFailed(code="unreachable", message="refused")],
+        on_generate=slow(clock, 1.0),
+    )
+    status, result, _ = detect_with(tmp_path, adapter, clock=clock)
+
+    assert status == LocalStatus.ready()
+    assert not result.ready and [s.purpose for s in result.samples] == ["routing"]
+
+
 def silent_adapter():
     class Silent(ScriptedAdapter):
         async def generate(self, request):

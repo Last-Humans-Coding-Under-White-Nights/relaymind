@@ -257,7 +257,10 @@ def classify_warmup(result: WarmupResult, *, seconds: float, active_seconds: flo
 
     Over the per-stage active budget is unsuitable. A warm-up cut off by
     warmup_seconds at or after that budget did not fit it either; one cut
-    off sooner, or one that failed, is unavailable.
+    off sooner, or one that failed, is unavailable. Only the routing sample
+    decides the class: a skill-shaped warm-up that fails or is cut off after
+    a routing one that fits leaves the model ready (the launcher still
+    prints the warm-up line that says it did not finish).
     """
     limit = f"the local stage limit (active_seconds) is {active_seconds:g} s"
     routing = next((s for s in result.samples if s.purpose == "routing"), None)
