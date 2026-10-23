@@ -101,6 +101,14 @@ class Routing:
     missing: str | None = None
 
 
+@dataclass(frozen=True)
+class RoutingChoice:
+    """What one valid routing call chose: a skill, or a clarification question."""
+
+    skill_id: str | None
+    question: str | None = None
+
+
 def request_language(messages: Sequence[Message]) -> Language:
     """The conversation language: zh when the latest user turn with words is Chinese.
 
@@ -325,11 +333,24 @@ class Router:
         language is the run's language once it has one (section 5); the
         first decision takes it from the conversation.
         """
+        choice = self.read_call(calls)
+        run_language = language or request_language(messages)
+        if choice.skill_id is None:
+            assert choice.question is not None
+            return self.clarify_routing(choice.question, mode=mode, language=run_language)
+        return self._skill_routing(self._skills[choice.skill_id], messages, mode, run_language)
+
+    def read_call(self, calls: Sequence[ToolCall]) -> RoutingChoice:
+        """The choice of the routing generation's one function call (RM02).
+
+        Anything but exactly one call to an offered skill function or to
+        request_clarification, with exactly its declared arguments, is
+        invalid routing output and raises RouteDecisionError.
+        """
         if len(calls) != 1:
             raise RouteDecisionError(f"expected one routing function call, got {len(calls)}")
         call = calls[0]
         arguments = dict(call.arguments)
-        run_language = language or request_language(messages)
         if arguments.get("language") not in ("en", "zh"):
             raise RouteDecisionError("routing call 'language' must be en or zh")
 
@@ -339,21 +360,38 @@ class Router:
             question = arguments["question"]
             if not isinstance(question, str):
                 raise RouteDecisionError("'question' must be a string")
-            decision = self._validated(
-                mode,
-                route=Route.CLARIFY.value,
-                language=run_language.value,
-                reason_code="missing_input",
-                clarification=question,
-            )
-            return Routing(decision, missing=SKILL_SELECTION)
+            return RoutingChoice(skill_id=None, question=question)
 
         skill = self._skills.get(call.tool_name)
         if skill is None:
             raise RouteDecisionError(f"unknown routing function: {call.tool_name!r}")
         if set(arguments) != {"language"}:
             raise RouteDecisionError(f"skill function {skill.name!r} takes only language")
-        return self._skill_routing(skill, messages, mode, run_language)
+        return RoutingChoice(skill_id=skill.name)
+
+    def clarify_routing(self, question: str, *, mode: ExecutionMode, language: Language) -> Routing:
+        """A clarification the selector asks for before any skill is chosen (section 5).
+
+        The decision carries no skill, and the run waits for skill_selection.
+        """
+        decision = self._validated(
+            mode,
+            route=Route.CLARIFY.value,
+            language=language.value,
+            reason_code="missing_input",
+            clarification=question,
+        )
+        return Routing(decision, missing=SKILL_SELECTION)
+
+    def selection_failed_decision(
+        self,
+        messages: Sequence[Message],
+        mode: ExecutionMode,
+        *,
+        language: Language | None = None,
+    ) -> RouteDecision:
+        """The selector chain chose nothing (RM28): route external with no skill."""
+        return self._external_decision(messages, mode, language, "selection_failed")
 
     def resume_decision(
         self,
@@ -367,6 +405,24 @@ class Router:
 
         No routing generation: the gateway checks the conversation, now
         with the resume input, for the identifier the skill still needs.
+        """
+        skill = self._skills.get(skill_id)
+        if skill is None:
+            raise RouteDecisionError(f"skill {skill_id!r} is not in the advertised catalog")
+        return self._skill_routing(skill, messages, mode, language)
+
+    def skill_routing(
+        self,
+        skill_id: str,
+        messages: Sequence[Message],
+        *,
+        mode: ExecutionMode,
+        language: Language,
+    ) -> Routing:
+        """The decision for a skill a selector chose (RM28), as for the router's own choice.
+
+        Catalog membership, then the route from the registry entry and the
+        mode, and the RM05 identifier check with the gateway's clarification.
         """
         skill = self._skills.get(skill_id)
         if skill is None:

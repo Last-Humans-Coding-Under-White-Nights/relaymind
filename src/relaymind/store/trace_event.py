@@ -721,8 +721,70 @@ _PERFORMANCE_ACCEPTED_FIELDS: dict[str, Callable[[Any], None]] = {
     "early_headers": _boolean("early_headers"),
 }
 
+# RM28: the outcome of one selector tried (section 8, route.selected attempts).
+SELECTOR_OUTCOMES = ("selected", "none", "timeout", "error", "inadmissible", "not_placed")
+_SELECTOR_FIELDS = ("name", "version", "mechanism", "elapsed_ms", "attempts")
+
+
+def _is_text_array(value: object) -> bool:
+    return _is_array(value) and all(_is_text(item) for item in value)
+
+
+def _check_selector(value: Any) -> None:
+    """The selector of route.selected (RM28): the admitted selector, or nulls, and the attempts."""
+    message = (
+        "'selector' must be an object with only a name, version, and mechanism (text, or"
+        " null when the chain chose nothing), a non-negative integer elapsed_ms, and attempts"
+        f" of a name and an outcome ({', '.join(SELECTOR_OUTCOMES)})"
+    )
+    if not isinstance(value, Mapping) or set(value) != set(_SELECTOR_FIELDS):
+        raise TraceEventError(message)
+    if not all(value[key] is None or _is_text(value[key]) for key in _SELECTOR_FIELDS[:3]):
+        raise TraceEventError(message)
+    if not _is_count(value["elapsed_ms"], 0) or not _is_array(value["attempts"]):
+        raise TraceEventError(message)
+    for attempt in value["attempts"]:
+        if (
+            not isinstance(attempt, Mapping)
+            or set(attempt) != {"name", "outcome"}
+            or not _is_text(attempt["name"])
+            or attempt["outcome"] not in SELECTOR_OUTCOMES
+        ):
+            raise TraceEventError(message)
+
+
+def _check_tools_narrowed(value: Any) -> None:
+    if not _is_text_array(value):
+        raise TraceEventError("'tools_narrowed' must be an array of non-blank tool names")
+
+
+def _check_selection(value: Any) -> None:
+    if not _is_text_array(value) or not value:
+        raise TraceEventError("'selection' must be a non-empty array of non-blank selector names")
+
+
+def _unit_number(name: str) -> Callable[[Any], None]:
+    def check(value: Any) -> None:
+        if not _is_finite_number(value) or not 0 <= value <= 1:
+            raise TraceEventError(f"'{name}' must be a number between 0 and 1")
+
+    return check
+
+
+# The selector chain and the example_match thresholds in force (RM28, section 14.1).
+_SELECTION_ACCEPTED_FIELDS: dict[str, Callable[[Any], None]] = {
+    "selection": _check_selection,
+    "example_match_score": _unit_number("example_match_score"),
+    "example_match_margin": _unit_number("example_match_margin"),
+}
+
 _OPTIONAL_FIELDS: dict[EventType, dict[str, Callable[[Any], None]]] = {
-    EventType.RUN_ACCEPTED: _PERFORMANCE_ACCEPTED_FIELDS,
+    EventType.RUN_ACCEPTED: {**_PERFORMANCE_ACCEPTED_FIELDS, **_SELECTION_ACCEPTED_FIELDS},
+    # RM28: who chose, how, and every selector tried; the narrowing that was admitted.
+    EventType.ROUTE_SELECTED: {
+        "selector": _check_selector,
+        "tools_narrowed": _check_tools_narrowed,
+    },
     EventType.MODEL_STARTED: {"request_options": _check_request_options},
     EventType.MODEL_FINISHED: {
         "first_token_ms": _check_first_token_ms,

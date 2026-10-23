@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaymind.local/schemas/selection_request.v1.json",
+  "title": "SelectionRequest",
+  "description": "What the gateway sends a skill selector (spec 0.31 RM28, section 8). conversation is the run's text conversation, redacted per RM12; catalog is every skill offered to the run; deadline_ms is the time the selector has (selection.timeout_seconds, section 11), or null for a model-based selector, which is bounded by its generation's limits. Unknown fields are rejected.",
+  "type": "object",
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string", "pattern": "\\S"},
+    "conversation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {"enum": ["system", "developer", "user", "assistant"]},
+          "content": {"type": "string"}
+        },
+        "required": ["role", "content"],
+        "additionalProperties": false
+      }
+    },
+    "language": {"enum": ["en", "zh"]},
+    "execution_mode": {"enum": ["auto", "local_only", "external_only", "parallel_demo"]},
+    "catalog": {"type": "array", "items": {"$ref": "#/$defs/skill"}},
+    "permissions": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "\\S"},
+      "uniqueItems": true
+    },
+    "deadline_ms": {"type": ["integer", "null"], "minimum": 1}
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "conversation",
+    "language",
+    "execution_mode",
+    "catalog",
+    "permissions",
+    "deadline_ms"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "skill": {
+      "description": "One offered skill: its registry identity (RM07), description, languages, local eligibility, allowed tools, and the example requests of its examples.json in both languages.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "pattern": "\\S"},
+        "version": {"type": "string", "pattern": "\\S"},
+        "content_hash": {"type": "string", "pattern": "\\S"},
+        "description": {"type": "string"},
+        "languages": {"type": "array", "items": {"enum": ["en", "zh"]}, "uniqueItems": true},
+        "local_eligible": {"type": "boolean"},
+        "allowed_tools": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "\\S"},
+          "uniqueItems": true
+        },
+        "examples": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": [
+        "id",
+        "version",
+        "content_hash",
+        "description",
+        "languages",
+        "local_eligible",
+        "allowed_tools",
+        "examples"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

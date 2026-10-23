@@ -13,6 +13,12 @@ One run, start to end, with the local model only:
    router input with the local tokenizer, and either take the bypass
    decision for an oversized input (section 4.1) or run the single
    routing generation (RM02, ``relaymind.orchestrator.router``).
+   From spec 0.31 the choice goes through the selector chain (RM28,
+   ``relaymind.selection``): the routing generation is the model_router
+   selector, the default chain, and the gateway admits what a selector
+   proposes. A chain that chooses nothing routes external with reason
+   selection_failed; a rejected routing output still escalates with
+   invalid_output when no other selector chose.
    A non-local route is an escalation (step 5). The run keeps the language
    of this first RouteDecision across every resume (section 5).
 2a. Clarify suspends the run in waiting_input with clarification.required
@@ -240,6 +246,23 @@ from relaymind.orchestrator.run_state import (
     TerminalStateError,
 )
 from relaymind.redaction import Redactor, redact_text
+from relaymind.selection import (
+    EXAMPLE_MATCH,
+    EXHAUSTED_MECHANISM,
+    MODEL_ROUTER,
+    Admission,
+    ExampleMatchSelector,
+    ModelRouterSelector,
+    RoutingGeneration,
+    SelectionContext,
+    SelectionResult,
+    SelectionSettings,
+    Selector,
+    SelectorChain,
+    admit,
+    catalog_entries,
+    parse_selection_request,
+)
 from relaymind.skills import Skill, SkillRegistry
 from relaymind.skills.predicates import (
     COMPLETION_CRITERIA,
@@ -284,6 +307,8 @@ PREFETCH = "prefetch"
 # The branches of the parallel workflow, as traced (spec 0.25, RM15).
 LOCAL_HEALTH, EXTERNAL_CHECKLIST, SYNTHESIS = WORKFLOW_BRANCHES
 ROUTING_MECHANISM = "native_function_calling"
+# Spec 0.31 section 8: the selection time limit, recorded inside budgets (RM03, RM28).
+SELECTION_TIMEOUT_BUDGET = "selection.timeout_seconds"
 RESUME_MECHANISM = "clarification_resume"
 # Section 5: each waiting state resumes with its own body shape.
 _RESUME_MISMATCH = {
@@ -775,7 +800,13 @@ class LocalOrchestrator:
         degraded_mode: bool = False,
         routing_cache: RoutingCache | None = None,
         performance: PerformanceSettings | None = None,
+        selection: SelectionSettings | None = None,
+        selectors: Sequence[Selector] | None = None,
     ) -> None:
+        """selection is the [selection] table (spec 0.31 section 14.1); its default is the
+        baseline chain, model_router alone. selectors replaces the configured chain with
+        selector objects, for tests; the launcher never passes it.
+        """
         self.model = model
         # Spec 0.32 section 14.1: every default is the baseline behavior.
         self.performance = performance or PerformanceSettings()
@@ -804,6 +835,21 @@ class LocalOrchestrator:
             budgets=self.budgets,
             enabled_workflows=enabled_workflows,
             parallel_in_auto=parallel_in_auto,
+        )
+        # RM28: the selector chain, in configured order.
+        self.selection = selection or SelectionSettings()
+        built_in: dict[str, Callable[[], Selector]] = {
+            MODEL_ROUTER: lambda: ModelRouterSelector(self.router),
+            EXAMPLE_MATCH: lambda: ExampleMatchSelector(
+                tools,
+                score=self.selection.example_match_score,
+                margin=self.selection.example_match_margin,
+            ),
+        }
+        self.selection_chain = SelectorChain(
+            selectors if selectors is not None else [built_in[n]() for n in self.selection.chain],
+            timeout_seconds=self.selection.timeout_seconds,
+            clock=self.clock.monotonic,
         )
         self.executor = ToolExecutor(tools, store, clock=self.clock, redactor=self.redactor)
         self.machine = RunStateMachine(store)
@@ -1324,6 +1370,9 @@ class _Run:
         self.tool_branch: str | None = None
         self.record: RunRecord
         self.decision: RouteDecision | None = None
+        # The selector's narrowing of the selected skill's tools, intersected with its
+        # allowlist; None when no selector narrowed (RM08, RM28).
+        self.narrowed: tuple[str, ...] | None = None
         # Fixed by the first RouteDecision and kept across resumes (section 5).
         self.language: Language | None = None
         # The clarification being waited on, its start, and the waits so far.
@@ -1444,7 +1493,7 @@ class _Run:
                     "requested_execution_mode": self.requested_mode,
                     "effective_execution_mode": self.mode.value,
                     "model_alias": self.model_alias,
-                    "budgets": self.o.budgets.to_json_object(),
+                    "budgets": self._budget_record(),
                     **self.offered,
                     **({"routing_cache": True} if self.o.routing_cache is not None else {}),
                     **self._phase2_accepted(),
@@ -1465,16 +1514,27 @@ class _Run:
             self._abort(exc)
             raise
 
+    def _budget_record(self) -> dict[str, Any]:
+        """The limits in force for run.accepted: section 11, and the selection limit (RM03)."""
+        return {
+            **self.o.budgets.to_json_object(),
+            SELECTION_TIMEOUT_BUDGET: self.o.selection.timeout_seconds,
+        }
+
     def _phase2_accepted(self) -> dict[str, Any]:
         """The phase 2 fields of run.accepted (spec 0.32 section 8), in one place.
 
-        The performance options in force, and the prefetch declarations of
-        the offered skills (RM29); the placement, selection, and workflow
-        fields of later changes are added here.
+        The performance options in force, the prefetch declarations of the
+        offered skills (RM29), and the selector chain with the example_match
+        thresholds (RM28); the placement and workflow fields of later
+        changes are added here.
         """
         return {
             **self.o.performance.to_json_object(),
             "prefetch_declarations": self.o.skills.prefetch_declarations(self.o.router.offered),
+            # RM28: the selector chain in force, and the matcher thresholds (section 14.1).
+            **self.o.selection.to_json_object(),
+            "selection": list(self.o.selection_chain.names),
         }
 
     def _answer_option_record(self) -> dict[str, Any]:
@@ -1879,7 +1939,7 @@ class _Run:
         if skill is None and self.decision is not None and self.decision.skill_id is not None:
             skill = self._load_skill(self.decision.skill_id)
         if skill is not None:
-            allowlist: tuple[str, ...] = skill.allowed_tools
+            allowlist: tuple[str, ...] = self._skill_allowlist(skill)
             catalog: tuple[tuple[str, str], ...] = ()
         else:
             offered = [self.o.skills.get(name) for name in self.o.router.offered]
@@ -2481,30 +2541,126 @@ class _Run:
             )
             return Routing(decision)
 
-        call_id, generation = await self._generate(
-            "routing", routing_messages, functions, router.options()
-        )
-        try:
-            routing = router.decide(
-                generation.calls, self.messages, mode=self.mode, language=self.language
+        return await self._select(input_tokens, cache_key)
+
+    # -- selection (RM28) ------------------------------------------------------------
+
+    async def _select(
+        self, input_tokens: int, cache_key: tuple[str, CacheContext] | None
+    ) -> Routing:
+        """Run the selector chain and record the admitted choice, or the chain's failure.
+
+        The routing generation of model_router runs through ``_generate``,
+        so it is charged, traced, and cancellable as before; its
+        route.selected keeps the model's actor and fields. A choice of any
+        other selector is the gateway's (actor gateway, the selector's
+        mechanism). Only a routing generation's choice is stored in the
+        routing cache (section 10).
+        """
+        generations: list[tuple[str, _Generation]] = []
+
+        async def generate(
+            messages: Sequence[Message], functions: Sequence[ToolSchema], options: GenerationOptions
+        ) -> RoutingGeneration:
+            call_id, generation = await self._generate("routing", messages, functions, options)
+            generations.append((call_id, generation))
+            return RoutingGeneration(
+                calls=tuple(generation.calls), model=self.o.model.model_id, call_id=call_id
             )
-        except RouteDecisionError as exc:
-            raise Escalation("invalid_output", f"routing output rejected: {exc}") from exc
+
+        def admit_result(result: SelectionResult) -> Admission:
+            return admit(
+                result,
+                router=self.o.router,
+                messages=self.messages,
+                mode=self.mode,
+                language=self.language,
+            )
+
+        chain = await self.o.selection_chain.run(
+            self._selection_request(), SelectionContext(self.messages, generate), admit_result
+        )
+        if chain.admitted is None or chain.selector is None:
+            rejected = chain.rejected_model_output()
+            if rejected is not None:
+                # RM04: the model router's output was rejected and nothing else chose.
+                raise Escalation("invalid_output", f"routing output rejected: {rejected.detail}")
+            decision = self.o.router.selection_failed_decision(
+                self.messages, self.mode, language=self.language
+            )
+            self.emit(
+                EventType.ROUTE_SELECTED,
+                GATEWAY_ACTOR,
+                {
+                    "decision": decision.to_json_object(),
+                    "mechanism": EXHAUSTED_MECHANISM,
+                    **self._cache_label("miss"),
+                    "selector": chain.selector_record(),
+                },
+            )
+            self.narrowed = None
+            return Routing(decision)
+        admission = chain.admitted
+        routing = admission.routing
+        self.narrowed = admission.tools
+        narrowed = {} if admission.tools is None else {"tools_narrowed": list(admission.tools)}
+        if chain.selector.name == MODEL_ROUTER and generations:
+            call_id, generation = generations[-1]
+            self.emit(
+                EventType.ROUTE_SELECTED,
+                self.actor,
+                {
+                    "decision": routing.decision.to_json_object(),
+                    "mechanism": ROUTING_MECHANISM,
+                    "model": self.o.model.model_id,
+                    "call_id": call_id,
+                    "input_tokens": input_tokens,
+                    "model_language": generation.calls[0].arguments.get("language"),
+                    **self._cache_label("miss"),
+                    "selector": chain.selector_record(),
+                    **narrowed,
+                },
+            )
+            self._store_route(routing, cache_key)
+            return routing
+        assert chain.result is not None
         self.emit(
             EventType.ROUTE_SELECTED,
-            self.actor,
+            GATEWAY_ACTOR,
             {
                 "decision": routing.decision.to_json_object(),
-                "mechanism": ROUTING_MECHANISM,
-                "model": self.o.model.model_id,
-                "call_id": call_id,
-                "input_tokens": input_tokens,
-                "model_language": generation.calls[0].arguments.get("language"),
+                "mechanism": chain.result.mechanism,
                 **self._cache_label("miss"),
+                "selector": chain.selector_record(),
+                **narrowed,
             },
         )
-        self._store_route(routing, cache_key)
         return routing
+
+    def _selection_request(self) -> Any:
+        """The SelectionRequest of this routing, without a deadline (RM28, section 8).
+
+        The conversation is the run's text messages, redacted (RM12); the
+        catalog is every offered skill at its run.accepted snapshot (RM07).
+        """
+        roles = (Role.SYSTEM, Role.DEVELOPER, Role.USER, Role.ASSISTANT)
+        conversation = [
+            {"role": m.role.value, "content": m.content}
+            for m in self.messages
+            if m.role in roles and m.content is not None
+        ]
+        return parse_selection_request(
+            {
+                "schema_version": 1,
+                "run_id": self.run_id,
+                "conversation": self.o.redactor.redact_with_repeats(conversation, self.secrets),
+                "language": self._routing_language().value,
+                "execution_mode": self.mode.value,
+                "catalog": catalog_entries(self.o.skills, self.o.router.offered),
+                "permissions": sorted(self.o.caller.permissions),
+                "deadline_ms": None,
+            }
+        )
 
     # -- routing cache (spec 0.26 section 10) -------------------------------------
 
@@ -2525,6 +2681,7 @@ class _Run:
             model_id=o.model.model_id,
             enabled_workflows=o.enabled_workflows,
             routing_prompt_version=routing_prompt_version(o.router.functions()),
+            selector_chain=o.selection_chain.identity,
         )
 
     def _routing_language(self) -> Language:
@@ -2792,6 +2949,12 @@ class _Run:
         )
         return available, self.o.tools.tool_schemas(n for n in allowlist if n in available)
 
+    def _skill_allowlist(self, skill: Skill) -> tuple[str, ...]:
+        """The skill's allowed tools, less those a selector's narrowing removed (RM08, RM28)."""
+        if self.narrowed is None:
+            return skill.allowed_tools
+        return tuple(tool for tool in skill.allowed_tools if tool in self.narrowed)
+
     def _load_skill(self, name: str) -> Skill:
         """Load the skill at the version run.accepted recorded (RM06, RM07)."""
         pinned = next(s for s in self.offered["skills_offered"] if s["name"] == name)
@@ -2811,7 +2974,7 @@ class _Run:
         """
         assert decision.skill_id is not None
         skill = self.skill = self._load_skill(decision.skill_id)
-        available, schemas = self._permitted_tools(skill.allowed_tools)
+        available, schemas = self._permitted_tools(self._skill_allowlist(skill))
         if read_only:
             available = frozenset(
                 name

@@ -589,10 +589,11 @@ def test_the_configured_budgets_are_recorded_in_run_accepted(tmp_path):
     assert recorded["active_seconds"] == 20.0
     assert recorded["local_generations"] == 4
     assert recorded["run_generations"] == 9
-    assert (
-        recorded
-        == LocalBudgets(active_seconds=20, local_generations=4, run_generations=9).to_json_object()
-    )
+    assert recorded == {
+        **LocalBudgets(active_seconds=20, local_generations=4, run_generations=9).to_json_object(),
+        # Spec 0.31 section 8: the selection time limit is recorded with the limits (RM28).
+        "selection.timeout_seconds": 2.0,
+    }
     # The default file records the section 11 defaults.
     plain = tmp_path / "plain"
     plain.mkdir()
@@ -601,7 +602,10 @@ def test_the_configured_budgets_are_recorded_in_run_accepted(tmp_path):
     )
     outcome = asyncio.run(built.orchestrator.run_text("Which service is it?"))
     accepted = built.orchestrator.store.events(outcome.run_id)[0]
-    assert accepted.payload["budgets"] == LocalBudgets().to_json_object()
+    assert accepted.payload["budgets"] == {
+        **LocalBudgets().to_json_object(),
+        "selection.timeout_seconds": 2.0,
+    }
 
 
 def _read_timeouts(built):

@@ -1490,3 +1490,98 @@ def test_gateway_tool_events_and_prefetch_declarations_are_validated_and_publish
         with pytest.raises(TraceEventError, match=key):
             validate_trace_event(data)
         assert not SCHEMA_VALIDATOR.is_valid(data), name
+
+
+# -- Selection fields (spec 0.31 section 8; RM22, RM28, #131) ----------------------------------
+
+SELECTOR_RECORD = {
+    "name": "model_router",
+    "version": "1",
+    "mechanism": "native_function_calling",
+    "elapsed_ms": 12,
+    "attempts": [
+        {"name": "example_match", "outcome": "none"},
+        {"name": "model_router", "outcome": "selected"},
+    ],
+}
+
+
+def route_event(**extra):
+    return branch_event("route.selected", decision={"route": "local"}, **extra)
+
+
+SELECTION_ACCEPTED = {
+    "route-selector": route_event(selector=SELECTOR_RECORD),
+    "route-exhausted-chain": route_event(
+        selector={
+            "name": None,
+            "version": None,
+            "mechanism": None,
+            "elapsed_ms": 0,
+            "attempts": [
+                {"name": "a", "outcome": "timeout"},
+                {"name": "b", "outcome": "error"},
+                {"name": "c", "outcome": "inadmissible"},
+                {"name": "d", "outcome": "not_placed"},
+            ],
+        }
+    ),
+    "route-narrowed": route_event(tools_narrowed=["get_metrics"]),
+    "route-narrowed-to-nothing": route_event(tools_narrowed=[]),
+    "route-before-0.31": route_event(),
+    "accepted-selection": accepted_with(
+        selection=["example_match", "model_router"],
+        example_match_score=0.5,
+        example_match_margin=0,
+    ),
+    "accepted-thresholds-at-one": accepted_with(example_match_score=1, example_match_margin=1.0),
+}
+SELECTION_REJECTED = {
+    "selector-not-object": (route_event(selector="model_router"), "selector"),
+    "selector-missing-attempts": (
+        route_event(selector={k: v for k, v in SELECTOR_RECORD.items() if k != "attempts"}),
+        "selector",
+    ),
+    "selector-extra-field": (route_event(selector={**SELECTOR_RECORD, "score": 1}), "selector"),
+    "selector-negative-elapsed": (
+        route_event(selector={**SELECTOR_RECORD, "elapsed_ms": -1}),
+        "selector",
+    ),
+    "selector-blank-name": (route_event(selector={**SELECTOR_RECORD, "name": " "}), "selector"),
+    "attempt-unknown-outcome": (
+        route_event(selector={**SELECTOR_RECORD, "attempts": [{"name": "a", "outcome": "maybe"}]}),
+        "selector",
+    ),
+    "attempt-extra-field": (
+        route_event(
+            selector={
+                **SELECTOR_RECORD,
+                "attempts": [{"name": "a", "outcome": "none", "detail": "x"}],
+            }
+        ),
+        "selector",
+    ),
+    "narrowed-not-array": (route_event(tools_narrowed="get_metrics"), "tools_narrowed"),
+    "narrowed-blank-tool": (route_event(tools_narrowed=[" "]), "tools_narrowed"),
+    "selection-empty": (accepted_with(selection=[]), "selection"),
+    "selection-blank": (accepted_with(selection=[""]), "selection"),
+    "selection-text": (accepted_with(selection="model_router"), "selection"),
+    "score-above-one": (accepted_with(example_match_score=1.5), "example_match_score"),
+    "score-bool": (accepted_with(example_match_score=True), "example_match_score"),
+    "margin-negative": (accepted_with(example_match_margin=-0.1), "example_match_margin"),
+    "margin-text": (accepted_with(example_match_margin="0.1"), "example_match_margin"),
+}
+
+
+def test_selection_fields_are_validated_and_published():
+    """RM22, RM28, spec 0.31 section 8: the validator and the schema agree on each shape.
+
+    The fields are optional, because a run stored before spec 0.31 has none.
+    """
+    for name, data in SELECTION_ACCEPTED.items():
+        validate_trace_event(data)
+        assert SCHEMA_VALIDATOR.is_valid(data), name
+    for name, (data, key) in SELECTION_REJECTED.items():
+        with pytest.raises(TraceEventError, match=key):
+            validate_trace_event(data)
+        assert not SCHEMA_VALIDATOR.is_valid(data), name

@@ -25,6 +25,7 @@ from relaymind.adapters import Message
 from relaymind.adapters.base import ToolSchema
 from relaymind.canonical import canonical_digest
 from relaymind.orchestrator.router import SYSTEM_PROMPT
+from relaymind.selection.model_router import MODEL_ROUTER, MODEL_ROUTER_VERSION
 from relaymind.skills import Skill
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry
 from relaymind.tools.registry import SideEffect
@@ -34,7 +35,11 @@ TTL_SECONDS = 300
 MAX_ENTRIES = 256
 
 # Bumped whenever spec section 10 changes what the key holds or what is eligible.
-POLICY_VERSION = "1"
+# "2": spec 0.31 adds the selector chain to the key (RM28).
+POLICY_VERSION = "2"
+
+# The baseline selector chain, model_router alone, as each selector's name and version.
+BASELINE_SELECTOR_CHAIN: tuple[tuple[str, str], ...] = ((MODEL_ROUTER, MODEL_ROUTER_VERSION),)
 
 
 @dataclass(frozen=True)
@@ -139,8 +144,13 @@ def key_and_context(
     model_id: str,
     enabled_workflows: Iterable[str],
     routing_prompt_version: str,
+    selector_chain: Sequence[tuple[str, str]] = BASELINE_SELECTOR_CHAIN,
 ) -> tuple[str, CacheContext]:
-    """The key digest and the dependency context of one routing request (spec 0.26)."""
+    """The key digest and the dependency context of one routing request (spec 0.26).
+
+    selector_chain is each configured selector's name and version, in order
+    (spec 0.31, RM28); its default is the baseline chain.
+    """
     skills = sorted(offered, key=lambda skill: skill.name)
     allowed = sorted({name for skill in skills for name in skill.allowed_tools})
     context = CacheContext(
@@ -160,6 +170,7 @@ def key_and_context(
             "model": model_id,
             "enabled_workflows": sorted(enabled_workflows),
             "routing_prompt_version": routing_prompt_version,
+            "selector_chain": [[name, version] for name, version in selector_chain],
         }
     )
     return key, context
