@@ -92,6 +92,11 @@ def test_the_option_text_is_split_like_a_shell_would(probe_timing):
         (("--port", "9"), "harness"),
         (("--model", "other.gguf"), "harness"),
         (("--hf-repo", "x/y"), "harness"),
+        (("--chat-template-kwargs", '{"enable_thinking":true}'), "runtime-only"),
+        (("--reasoning-budget", "-1"), "runtime-only"),
+        (("--override-kv", "tokenizer.ggml.add_bos_token=bool:false"), "runtime-only"),
+        (("--parallel", "1"), "runtime-only"),
+        (("--n-gpu-layers", "0", "--rope-scale", "2"), "runtime-only"),
         (("-t", "2"), "long flag"),
         (("-ngl", "0"), "long flag"),
         (("0",), "start with a flag"),
@@ -107,6 +112,22 @@ def test_an_argument_that_would_change_the_pinned_settings_is_refused(probe_timi
 def test_a_negative_value_is_a_value_and_not_a_flag(probe_timing):
     pinned = launch_settings_argv(load_manifest(PINNED_MANIFEST_PATH).launch_settings)
     given = ("--n-gpu-layers", "-1", "--threads", "2")
+    assert probe_timing.check_runtime_extra_args(given, pinned) == given
+
+
+def test_every_runtime_only_setting_is_accepted_with_its_no_form(probe_timing):
+    pinned = launch_settings_argv(load_manifest(PINNED_MANIFEST_PATH).launch_settings)
+    given = (
+        "--gpu-layers=0",
+        "--threads-batch",
+        "2",
+        "--batch-size",
+        "256",
+        "--ubatch-size",
+        "128",
+        "--mlock",
+        "--no-mmap",
+    )
     assert probe_timing.check_runtime_extra_args(given, pinned) == given
 
 

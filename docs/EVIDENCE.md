@@ -1942,13 +1942,13 @@ Raw exports:
 
 | Field | Value |
 |-------|-------|
-| Measured code | `b96c339` (branch `m7/timing-probes`), for all five runs. The commits after it on the branch only add documentation and these exports, so no code under measurement changed |
+| Measured code | `b96c339` (branch `m7/timing-probes`), for all five runs. Later commits on the branch changed code after the runs. `b1c3f3a` moves shared helpers between the two local probes (reading the definition, resolving paths, reading `/props`) and does not change the requests they send. The review-fix commit after it changes the cancel-prefill probe (the two corrections in the cancel section below: the measured call time and the reference prompt label) and tightens the check of `--runtime-extra-args` to an allowlist of runtime-only settings; the arguments of the constrained runs (`--n-gpu-layers 0 --threads 2`) pass that check. The exports were not rerun, so the two cancel-prefill exports were produced by the code of `b96c339` with those two defects. The other exports record requests the later changes do not touch |
 | `dirty` in the exports | The first export (prefix cache, normal) records `dirty: false`. The other four record `dirty: true`, and the only change in the tree at those runs was the untracked export files of the runs before them (`git status` listed nothing else). The PR1 entry above avoided this by writing to a scratch directory; these runs did not |
 | Runtime | llama.cpp build 11785, commit `8baabd53b`; launch settings from the manifest `models/qwen3-0.6b-q8_0.manifest.json` (`--ctx-size 8192 --jinja --reasoning off --reasoning-format deepseek`); `/props` reports 4 slots of 8192 tokens |
 | Normal configuration | The manifest's settings only: Metal, the default threads (4 on this machine, from the runtime log). `llama_server.extra_args` is `[]` in its exports |
 | Constrained configuration | The manifest's settings followed by `--n-gpu-layers 0 --threads 2` (recorded as `llama_server.extra_args`, and in `llama_server.argv`; the runtime log records `n_threads` 2). A CPU-only runtime with two threads on this M1. The model, the runtime, and the requests are the same. It is a configuration of this machine and is not another machine. The export's `runtime_devices` lists the devices the runtime can see (`--list-devices`), which still shows the Metal device, because it records what is available and not what the model used; the timings below are the evidence that this configuration ran on the CPU |
 | Machine load | Nothing else heavy ran, and no pytest ran during a measurement. The machine was not otherwise idle: the load average read 2.5 just before the first run, with a terminal session, a network proxy, and Finder running. The numbers carry that noise |
-| External run | Z.ai, base URL `https://api.z.ai/api/paas/v4`, model `glm-4.6`, region not known (the endpoint does not say; `region_known: false`), 2026-10-23 14:03:47 to 14:06:14 China Standard Time (06:03 to 06:06 UTC), from this machine over its normal network path. 20 provider calls were made, the cap for this work was 25, and none was retried. Whether the network proxy running on the machine carried the traffic was not checked The API key was read from the environment, sent only in the Authorization header, and is in no export (checked: the key text does not occur in the export file) |
+| External run | Z.ai, base URL `https://api.z.ai/api/paas/v4`, model `glm-4.6`, region not known (the endpoint does not say; `region_known: false`), 2026-10-23 14:03:47 to 14:06:14 China Standard Time (06:03 to 06:06 UTC), from this machine over its normal network path. 20 provider calls were made, the cap for this work was 25, and none was retried. Whether the network proxy running on the machine carried the traffic was not checked. The API key was read from the environment, sent only in the Authorization header, and is in no export (checked: the key text does not occur in the export file) |
 
 ### Prefix reuse (#114)
 
@@ -2077,6 +2077,26 @@ repetition's prompt counted 6,205 (the repetition numbers at the start of
 its lines tokenise longer than the sizing label; the difference is 3.7 %).
 One uncancelled run of the sizing prompt gives the full prefill time. All
 ten long generations ended as cancelled, within 2 ms of the cancel call, and `/slots` showed no slot processing at the end.
+
+Two corrections found in review, after the runs (the measured numbers
+are unchanged; the exports were not rerun):
+
+- `cancel.called_after_ms` in the exports (200.00000001164153 in all
+  ten repetitions) is the requested delay and not a measurement. The code
+  of `b96c339` computed the start time of the long generation by
+  subtracting the delay from the time of the cancel call, so the field
+  could not differ from `requested_after_ms`. The time from the start of the
+  generation to the cancel call was not measured in these runs. The probe
+  now takes the start time before the generation task is created.
+- The sizing prompt and the uncancelled reference run used the labels
+  `size` and `ref`, and the repetitions use two-digit labels (`00` to `04`),
+  which tokenise longer. So the reference (5,984 tokens) and the
+  within-1% sizing describe a shorter prompt than the 6,205 tokens every
+  cancelled repetition sent (3.7% more). The percentages in "What it shows"
+  below compare a wait after a cancel of the 6,205-token prompt with a full
+  prefill of the 5,984-token prompt; read them as "about a fifth", not as
+  exact. The probe now writes the sizing and reference prompts with a
+  two-digit label no repetition uses.
 
 | Configuration | Uncancelled long prefill (5,984 tokens) | Short request on an idle runtime: first token (ms), five repetitions | Short request right after the cancel: first token (ms), five repetitions | Extra wait after a cancel (ms), five repetitions |
 |---|---|---|---|---|

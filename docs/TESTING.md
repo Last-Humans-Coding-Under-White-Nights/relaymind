@@ -420,8 +420,9 @@ Deterministic tests over model doubles:
   section 12.2): the default adds no launch argument, given extra
   arguments are launched after the manifest's settings and recorded as
   `extra_args` in the export, the option text is split like a shell would,
-  a short flag, a pinned setting, the model, and the bind address are
-  refused, a negative number is a value, and the corpus runner, the
+  a short flag, a pinned setting, the model, the bind address, and any
+  setting that is not runtime-only (the template arguments, the reasoning
+  budget, a metadata override, the slot count) are refused, a negative number is a value, and the corpus runner, the
   latency runner, and the live harness take the option.
 - `pytest tests/test_probe_prefix_cache.py` (#114): the body the probe
   sends equals `build_chat_request` for the same messages plus
@@ -433,7 +434,9 @@ Deterministic tests over model doubles:
   the pass goes on, and the common token prefix is computed correctly.
 - `pytest tests/test_probe_cancel_prefill.py` (#117): the long prompt is
   sized to the target and fits the slot context, a repetition sends idle,
-  long, cancel, short in that order, no two long prompts share a prefix,
+  long, cancel, short in that order, the recorded call time is measured
+  and not the requested delay, the sizing and reference prompts tokenise
+  like the repetition prompts, no two long prompts share a prefix,
   and a definition without a short-prompt pair per repetition is refused.
 - `pytest tests/test_probe_external_latency.py` (#116) over
   `httpx.MockTransport`, with no provider call: the checked-in definition

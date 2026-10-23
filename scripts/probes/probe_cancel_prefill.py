@@ -182,8 +182,18 @@ def fit_target(target: int, *, n_ctx: int | None, output_tokens: int) -> int:
     return min(target, n_ctx - output_tokens - CONTEXT_MARGIN)
 
 
+def reference_label(config: CancelConfig) -> int:
+    """The number the sizing prompt and the uncancelled reference prompt use.
+
+    It is the first number no repetition uses, and it is written like a
+    repetition number (two digits), so these prompts tokenise like the
+    ones the repetitions send and share no prefix with any of them.
+    """
+    return config.repetitions
+
+
 def long_request(
-    config: CancelConfig, *, repetition: int | str, lines: int, generation_id: str
+    config: CancelConfig, *, repetition: int, lines: int, generation_id: str
 ) -> GenerationRequest:
     """A long prompt of its own: log lines whose numbers differ from every other repetition's.
 
@@ -191,7 +201,7 @@ def long_request(
     template head and the first word of the header; the runtime has no
     prefix to reuse.
     """
-    label = f"{repetition:02d}" if isinstance(repetition, int) else repetition
+    label = f"{repetition:02d}"
     body = "\n".join(
         f"{label}-{index:04d} staging-api status ok, latency {(index * 37 + 11) % 900 + 100} ms, "
         f"queue {(index * 13 + 7) % 50}, worker {(index * 5) % 16}"
@@ -214,12 +224,16 @@ async def size_long_prompt(
 
     The count is the runtime's own (``/apply-template`` and ``/tokenize``),
     never an estimate, and the lines are adjusted until it is within 1 % of
-    the target (at most five rounds).
+    the target (at most five rounds). The prompt is written with the
+    reference label, which tokenises like a repetition's label, so the
+    count holds for the prompts that are measured.
     """
     lines = max(1, target // TOKENS_PER_LINE)
     tokens = 0
     for _ in range(5):
-        request = long_request(config, repetition="size", lines=lines, generation_id="size")
+        request = long_request(
+            config, repetition=reference_label(config), lines=lines, generation_id="size"
+        )
         tokens = await adapter.count_tokens(request.messages, ())
         if abs(tokens - target) <= target * 0.01:
             break
@@ -250,7 +264,9 @@ async def run_reference(
     adapter: LlamaCppAdapter, config: CancelConfig, *, lines: int
 ) -> dict[str, Any]:
     """One long prompt, not cancelled: how long its prefill takes in full."""
-    request = long_request(config, repetition="ref", lines=lines, generation_id="long_reference")
+    request = long_request(
+        config, repetition=reference_label(config), lines=lines, generation_id="long_reference"
+    )
     seen: list = []
     ended: list = []
     started = time.monotonic()
@@ -292,10 +308,10 @@ async def run_repetition(
 
     seen: list = []
     ended: list = []
+    started = time.monotonic()
     task = asyncio.create_task(_drain(adapter, request, seen, ended))
     await asyncio.sleep(config.cancel_after_ms / 1000)
     cancel_called = time.monotonic()
-    started = cancel_called - config.cancel_after_ms / 1000
     events_before_cancel = len(seen)
     await adapter.cancel(request.generation_id)
     sent_at = time.monotonic()

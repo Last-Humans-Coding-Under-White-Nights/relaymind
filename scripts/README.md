@@ -131,10 +131,14 @@
   `--runtime-extra-args='--n-gpu-layers 0 --threads 2'` for a CPU-only
   runtime with two threads. The default adds nothing. The arguments are
   recorded in every export next to the server argv
-  (`llama_server.extra_args`). Only long flags are accepted, and one that
-  would change a pinned setting of the manifest, select a model, or move
-  the bind address is refused, so the manifest stays the one source of the
-  qualified launch settings. A constrained configuration is reported as
+  (`llama_server.extra_args`). Only long flags are accepted, and only
+  runtime-only settings (`--n-gpu-layers`, `--gpu-layers`, `--threads`,
+  `--threads-batch`, `--batch-size`, `--ubatch-size`, `--mlock`, `--mmap`
+  and their `--no-` forms). Any other flag is refused: a pinned setting of
+  the manifest, a model, the bind address, and also a spelling that could
+  change what the model computes (the template arguments, the reasoning
+  budget, metadata overrides, the slot count). So the manifest stays the
+  one source of the qualified launch settings. A constrained configuration is reported as
   that configuration of that machine, never as another machine.
 
 - `run_corpus.py --regrade-draft-pass` — the offline draft-pass

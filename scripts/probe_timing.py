@@ -86,6 +86,24 @@ def parse_runtime_extra_args(text: str) -> tuple[str, ...]:
         ) from exc
 
 
+# The settings an extra argument may name: how the pinned model runs on this machine, and nothing
+# that changes what it computes (the template, the reasoning mode, the tokenizer, metadata
+# overrides, the context size, or the slot count that divides it). Spellings follow llama-server
+# 0.7.0 --help; the --no- form of a switch is the same setting.
+_RUNTIME_ONLY_FLAGS = frozenset(
+    {
+        "n-gpu-layers",
+        "gpu-layers",
+        "threads",
+        "threads-batch",
+        "batch-size",
+        "ubatch-size",
+        "mlock",
+        "mmap",
+    }
+)
+
+
 def _is_number(token: str) -> bool:
     try:
         float(token)
@@ -109,8 +127,12 @@ def check_runtime_extra_args(
     settings (spec section 6), and the harness sets the bind address.
     Extra arguments only add settings next to them, such as a CPU-only
     runtime with fewer threads (spec 0.31 section 12.2). Only long flags
-    are accepted, so a short alias cannot reach a pinned flag; a number
-    after a flag is its value. Raises ValueError with the reason.
+    are accepted, so a short alias cannot reach a pinned flag, and only the
+    runtime-only settings in ``_RUNTIME_ONLY_FLAGS`` are allowed, so a
+    spelling the manifest does not use (``--chat-template-kwargs``,
+    ``--reasoning-budget``, ``--override-kv``) cannot change what the
+    model computes. A number after a flag is its value. Raises ValueError
+    with the reason.
     """
     pinned = {_flag_name(token) for token in pinned_argv if token.startswith("--")}
     for index, token in enumerate(extra_args):
@@ -126,6 +148,11 @@ def check_runtime_extra_args(
         if name in pinned:
             raise ValueError(
                 f"extra argument {token!r} would change a pinned setting of the manifest"
+            )
+        if name not in _RUNTIME_ONLY_FLAGS:
+            raise ValueError(
+                f"extra argument {token!r} is not a runtime-only setting; allowed: "
+                + ", ".join(f"--{allowed}" for allowed in sorted(_RUNTIME_ONLY_FLAGS))
             )
     return tuple(extra_args)
 

@@ -167,6 +167,64 @@ def test_a_repetition_sends_idle_then_long_then_short_and_cancels_the_long_one(
     assert row["long_generation"]["ended_by"] in ("completed", "cancelled", "failed")
 
 
+def test_called_after_ms_is_measured_and_not_the_requested_delay(
+    probe, config, surfaces, monkeypatch
+):
+    """RM16: a late cancel call is recorded as late (the field is a measurement)."""
+    config = small(config, probe, cancel_after_ms=20)
+    server = FakeLlamaServer()
+    real_sleep = asyncio.sleep
+
+    async def oversleep(delay, *args, **kwargs):
+        # The probe asks for 20 ms; the loop is late and gives it back after 90 ms.
+        return await real_sleep(0.09 if delay == 0.02 else delay, *args, **kwargs)
+
+    monkeypatch.setattr(probe.asyncio, "sleep", oversleep)
+
+    async def go():
+        async with server.adapter() as adapter:
+            with server.client() as client:
+                return await probe.run_repetition(
+                    adapter, client, surfaces, config, KWARGS, repetition=0, lines=20
+                )
+
+    row = asyncio.run(go())
+    assert row["cancel"]["requested_after_ms"] == 20
+    assert row["cancel"]["called_after_ms"] >= 85
+
+
+def test_the_sizing_and_reference_prompts_tokenise_like_the_repetition_prompts(probe, config):
+    """RM16: the within-1% sizing and the reference prefill describe the measured prompt size."""
+    server = FakeLlamaServer()
+
+    async def go():
+        async with server.adapter() as adapter:
+            lines, _ = await probe.size_long_prompt(adapter, config, target=400)
+            sized = probe.long_request(
+                config, repetition=probe.reference_label(config), lines=lines, generation_id="s"
+            )
+            measured = probe.long_request(config, repetition=0, lines=lines, generation_id="m")
+            return (
+                await adapter.count_tokens(sized.messages, ()),
+                await adapter.count_tokens(measured.messages, ()),
+            )
+
+    sized_tokens, measured_tokens = asyncio.run(go())
+    assert sized_tokens == measured_tokens
+
+
+def test_the_reference_prompt_shares_no_prefix_with_a_repetition(probe, config):
+    label = probe.reference_label(config)
+    assert label >= config.repetitions
+    reference = probe.long_request(config, repetition=label, lines=10, generation_id="r")
+    first = probe.long_request(config, repetition=0, lines=10, generation_id="a")
+    one, two = reference.messages[0].content, first.messages[0].content
+    common = 0
+    while common < min(len(one), len(two)) and one[common] == two[common]:
+        common += 1
+    assert common <= len("Capture 0")
+
+
 def test_no_two_long_prompts_share_a_prefix(probe, config):
     first = probe.long_request(config, repetition=0, lines=10, generation_id="a")
     second = probe.long_request(config, repetition=1, lines=10, generation_id="b")

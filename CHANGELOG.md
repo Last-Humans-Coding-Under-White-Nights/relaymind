@@ -84,8 +84,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   adds llama-server arguments after the manifest's launch settings (for a
   CPU-only runtime with two threads) in the live harness, the corpus
   runner, the latency benchmark, and the probes; the default adds none,
-  the arguments are recorded in every export, and one that would change a
-  pinned setting is refused. `skill_stage_messages` in
+  the arguments are recorded in every export, and only runtime-only
+  settings (GPU layers, threads, batch sizes, memory locking) are accepted;
+  any other flag is refused. `skill_stage_messages` in
   `orchestrator/local_loop.py` is the skill-stage conversation as a pure
   function, with no change in behavior. The results are in the 2026-10-23
   runtime and provider timing entry of `docs/EVIDENCE.md`. No gateway
