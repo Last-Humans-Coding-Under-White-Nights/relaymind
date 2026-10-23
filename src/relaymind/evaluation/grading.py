@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from relaymind.evaluation.corpus import ANY_VALUE, Case
+from relaymind.store.trace_event import is_model_proposal
 from relaymind.tools.sandbox import DEMO_TOOL_PERMISSIONS as TOOL_PERMISSIONS
 from relaymind.tools.sandbox import MUTATING_DEMO_TOOLS as MUTATING_TOOLS
 
@@ -57,6 +58,8 @@ class RunGrade:
     success: bool = False
     local_completion: bool | None = None
     failures: list[str] = field(default_factory=list)
+    # Gateway-made proposals (prefetch, workflow steps), counted apart from the model's.
+    gateway_proposals: int = 0
 
     def to_json_object(self) -> dict[str, Any]:
         return asdict(self)
@@ -167,7 +170,11 @@ def grade_run(
 ) -> RunGrade:
     """Grade one run of a case in one mode (spec 0.28 section 12.2)."""
     answer = answer_text(events)
-    proposals = of_type(events, "tool.proposed")
+    # Section 12.1: tool correctness grades model-made proposals only (n may be 0 when
+    # prefetch ran); a gateway-made proposal is counted apart (RM29).
+    all_proposals = of_type(events, "tool.proposed")
+    proposals = [p for p in all_proposals if is_model_proposal(p["payload"])]
+    gateway_proposals = [p for p in all_proposals if not is_model_proposal(p["payload"])]
     schema_valid = sum(
         1
         for p in proposals
@@ -186,13 +193,16 @@ def grade_run(
             rejections[code] = rejections.get(code, 0) + 1
         if not any(call_matches(p, tool, arguments) for p in acceptable):
             wrong.append({"tool": tool, "arguments": arguments, "rejection": code})
+    # A required call is met by a model proposal, or by a gateway call that was admitted:
+    # the evidence the case needs was gathered either way.
+    satisfying = proposals + [p for p in gateway_proposals if p["payload"].get("admissible")]
     unmatched = [
         group
         for group in case.required_calls
         if not any(
             call_matches(pattern, p["payload"]["tool_name"], p["payload"].get("arguments") or {})
             for pattern in group
-            for p in proposals
+            for p in satisfying
         )
     ]
     tool_correct = not wrong and not unmatched
@@ -246,6 +256,7 @@ def grade_run(
         local_calls=local_calls,
         external_calls=external_calls,
         tokens=tokens,
+        gateway_proposals=len(gateway_proposals),
     )
     checks = [
         (

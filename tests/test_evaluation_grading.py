@@ -88,20 +88,20 @@ class Trace:
         decision = {"route": route, "skill_id": skill, "reason_code": "simple_skill"}
         return self.add("route.selected", actor, {"decision": decision})
 
-    def propose(self, tool, actor="local", rejection=None, **arguments):
+    def propose(self, tool, actor="local", rejection=None, mechanism=None, **arguments):
         self.proposals += 1
         proposal_id = f"proposal_{self.proposals}"
-        self.add(
-            "tool.proposed",
-            actor,
-            {
-                "tool_name": tool,
-                "arguments": arguments,
-                "admissible": rejection is None,
-                "rejection": None if rejection is None else {"code": rejection, "message": ""},
-                "proposal_id": proposal_id,
-            },
-        )
+        payload = {
+            "tool_name": tool,
+            "arguments": arguments,
+            "admissible": rejection is None,
+            "rejection": None if rejection is None else {"code": rejection, "message": ""},
+            "proposal_id": proposal_id,
+        }
+        if mechanism is not None:
+            # Spec 0.31: a prefetch or workflow call has actor gateway and model null.
+            payload.update(mechanism=mechanism, model=None)
+        self.add("tool.proposed", actor, payload)
         return proposal_id
 
     def confirm(self, proposal_id, tool="delete_demo_database"):
@@ -430,3 +430,78 @@ def test_a_correct_proposal_the_gateway_refused_still_matches():
     g = grade(make_case(), events, mode="external_only")
     assert g.tool_correct is True
     assert g.rejections == {"multiple_tool_calls": 1}
+
+
+# -- several proposals of one generation, and gateway-made calls (RM29, spec 0.32 section 12.1) ---
+
+
+def test_several_proposals_of_one_generation_are_each_counted_and_graded():
+    """AC18, section 4.3: a set of two reads is two proposals, each graded on its own."""
+    case = make_case(
+        allowed_calls=({"tool": "get_service_health", "arguments": {"service": "staging-api"}},)
+    )
+    trace = Trace().model(purpose="routing").route().model()
+    first = trace.propose("get_service_health", service="payments-api")
+    second = trace.propose("get_service_health", service="staging-api")
+    trace.run_tool(first, "get_service_health").run_tool(second, "get_service_health")
+    events = trace.model(purpose="final").answer(PAYMENTS).end()
+    g = grade(case, events)
+    assert (g.proposals, g.schema_valid) == (2, 2)
+    assert g.tool_correct is True and g.wrong_proposals == []
+    assert g.success
+
+
+def test_a_rejected_set_counts_every_call_with_its_rejection():
+    """AC18, section 4.3: the whole generation is rejected, and each call carries the reason."""
+    trace = Trace().model(actor="external", model="glm-4.6")
+    for service in ("payments-api", "staging-api", "payments-api"):
+        trace.propose(
+            "get_service_health", actor="external", rejection="multiple_tool_calls", service=service
+        )
+    g = grade(make_case(), trace.end("run.failed", error_code="external_failed"), state="failed")
+    assert g.proposals == 3
+    assert g.rejections == {"multiple_tool_calls": 3}
+    assert g.schema_valid == 3
+
+
+def test_a_prefetch_call_is_not_a_model_proposal():
+    """RM29, section 12.1: tool correctness grades model-made proposals only, and n may be 0."""
+    trace = Trace().model(purpose="routing").route()
+    proposal = trace.propose(
+        "get_service_health", actor="gateway", mechanism="prefetch", service="payments-api"
+    )
+    trace.run_tool(proposal, "get_service_health").model(purpose="skill")
+    events = trace.answer(PAYMENTS).end()
+    g = grade(make_case(), events)
+    assert g.proposals == 0 and g.schema_valid == 0
+    assert g.gateway_proposals == 1
+    assert g.wrong_proposals == []
+    # The evidence the case requires was gathered, so the run is not graded as missing a call.
+    assert g.tool_correct is True and g.success
+
+
+def test_a_wrong_prefetch_call_is_not_charged_to_the_model():
+    """Prefetch correctness is a separate metric; it never makes tool correctness fail."""
+    trace = Trace().model(purpose="routing").route()
+    wrong = trace.propose(
+        "get_service_health", actor="gateway", mechanism="prefetch", service="staging-api"
+    )
+    trace.run_tool(wrong, "get_service_health").model(purpose="skill")
+    right = trace.propose("get_service_health", service="payments-api")
+    events = trace.run_tool(right, "get_service_health").answer(PAYMENTS).end()
+    g = grade(make_case(), events)
+    assert g.tool_correct is True
+    assert (g.proposals, g.gateway_proposals) == (1, 1)
+
+
+def test_a_rejected_gateway_call_does_not_satisfy_a_required_call():
+    trace = Trace().model(purpose="routing").route()
+    trace.propose(
+        "get_service_health",
+        actor="gateway",
+        mechanism="prefetch",
+        rejection="tool_not_permitted",
+        service="payments-api",
+    )
+    g = grade(make_case(), trace.answer(PAYMENTS).end(), mode="local_only")
+    assert g.tool_correct is False

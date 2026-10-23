@@ -21,7 +21,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from relaymind.store import EventType, RunRecord, RunStore, TraceEvent, read_tool_result
-from relaymind.store.trace_event import WORKFLOW_BRANCHES
+from relaymind.store.trace_event import WORKFLOW_BRANCHES, is_model_proposal
 
 __all__ = ["build_trace_view", "trace_view_from"]
 
@@ -391,5 +391,6 @@ def _is_model_action(event: TraceEvent) -> bool:
     if event.event_type is EventType.ROUTE_SELECTED:
         return event.actor != _GATEWAY_ACTOR
     if event.event_type is EventType.TOOL_PROPOSED:
-        return event.payload.get("admissible", True) is True
+        # A prefetch or workflow call is the gateway's, not a model's (RM29, section 12.1).
+        return event.payload.get("admissible", True) is True and is_model_proposal(event.payload)
     return False

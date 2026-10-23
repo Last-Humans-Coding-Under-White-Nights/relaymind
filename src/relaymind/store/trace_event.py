@@ -567,6 +567,16 @@ GATEWAY_ACTOR = "gateway"
 TOOL_MECHANISMS: tuple[str, ...] = ("model", "prefetch", "workflow")
 
 
+def is_model_proposal(payload: Mapping[str, Any]) -> bool:
+    """Whether a tool.proposed payload is a model's proposal, not a gateway call (RM29).
+
+    The mechanism is absent for a model's proposal, which is the default;
+    a prefetch or workflow call names it and has no model (section 8).
+    A client-owned proposal has no mechanism either.
+    """
+    return payload.get("mechanism", "model") == "model"
+
+
 def _check_tool_model(payload: Mapping[str, Any], actor: str) -> None:
     """Every tool event names its originating model; a gateway call names none (RM22)."""
     model = payload.get("model")

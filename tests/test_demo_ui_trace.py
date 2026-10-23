@@ -185,6 +185,29 @@ def test_any_route_the_gateway_recorded_is_not_a_model_action(tmp_path, mechanis
     assert view["timing"]["first_model_action_ms"] == proposed.elapsed_ms
 
 
+def test_a_prefetch_proposal_is_not_a_model_action(tmp_path):
+    """RM29, section 12.1: the gateway's prefetch proposal comes first but is not the model's."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway)
+    record = gateway.store.get_run(outcome.run_id)
+    events = gateway.store.events(outcome.run_id)
+    proposed = next(e for e in events if e.event_type.value == "tool.proposed")
+    prefetch = replace(
+        proposed,
+        actor="gateway",
+        elapsed_ms=1,
+        payload={**proposed.payload, "mechanism": "prefetch", "model": None},
+    )
+    # A prefetch runs before any model generation, so its proposal comes first in the trace.
+    shown = [events[0], prefetch, *events[1:]]
+
+    view = trace_view_from(record, shown)
+    route = next(e for e in events if e.event_type.value == "route.selected")
+    assert view["timing"]["first_model_action_ms"] == route.elapsed_ms != prefetch.elapsed_ms
+    # The view lists the gateway's proposal like any other, with no model named.
+    assert any(p["actor"] == "gateway" and p["model"] is None for p in view["proposals"])
+
+
 def test_no_model_action_yet_is_reported_as_none_not_zero():
     """Section 9 (spec 0.20): while there is no action, the figure is absent."""
     accepted = validate_trace_event(

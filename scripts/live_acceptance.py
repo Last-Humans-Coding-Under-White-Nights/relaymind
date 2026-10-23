@@ -461,7 +461,12 @@ def first_model_action_ms(events: Iterable[Mapping[str, Any]]) -> int | None:
         if kind == "route.selected" and event["actor"] != "gateway":
             return event["elapsed_ms"]
         # A client-owned proposal has no admissible field (as in relaymind.ui.trace_view).
-        if kind == "tool.proposed" and event["payload"].get("admissible", True) is True:
+        # A prefetch or workflow call is the gateway's, not a model's (RM29, section 12.1).
+        if (
+            kind == "tool.proposed"
+            and event["payload"].get("admissible", True) is True
+            and event["payload"].get("mechanism", "model") == "model"
+        ):
             return event["elapsed_ms"]
     return None
 
