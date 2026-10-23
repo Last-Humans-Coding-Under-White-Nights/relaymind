@@ -203,7 +203,7 @@ def test_stated_numbers_are_found_next_to_chinese_text(text, numbers):
     assert _stated_numbers(text) == {repr(n) for n in numbers}
 
 
-# -- prefetch declarations (RM29, spec 0.32 section 9; #123) -----------------------------------
+# -- prefetch declarations (RM29, spec 0.34 section 9; #123) -----------------------------------
 
 # Section 9: the calls each demo skill declares; the others declare none.
 SECTION_9_PREFETCH = {

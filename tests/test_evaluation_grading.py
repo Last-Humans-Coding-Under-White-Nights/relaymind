@@ -432,7 +432,7 @@ def test_a_correct_proposal_the_gateway_refused_still_matches():
     assert g.rejections == {"multiple_tool_calls": 1}
 
 
-# -- several proposals of one generation, and gateway-made calls (RM29, spec 0.32 section 12.1) ---
+# -- several proposals of one generation, and gateway-made calls (RM29, spec 0.34 section 12.2) ---
 
 
 def test_several_proposals_of_one_generation_are_each_counted_and_graded():

@@ -1,5 +1,5 @@
 """AC18, admitted calls: several read-only calls from one generation (RM05, RM08 to RM11,
-spec 0.32 sections 4.3, 8, 11, 14.1; #122).
+spec 0.34 sections 4.3, 4.4, 8, 11, 14.1; #122).
 
 Under performance.calls_per_generation = many, up to the per-stage tool
 limit of read-only calls are admitted from one generation in a local
@@ -7,9 +7,11 @@ stage, and up to the remaining entire-run tool limit in the external
 stage. Each call is validated on its own, runs in proposal order through
 the executor, and is answered as its own tool message. A mutating call
 is admitted only alone; a generation with more calls than the limit
-allows, or one invalid call, is rejected as a whole without executing
-anything. Under the default, one, every earlier test passes unchanged
-(tests/test_local_loop.py is the gate). Deterministic, with model doubles.
+allows, a set the tool budget has no room for, or one invalid call, is
+rejected as a whole without executing anything, and the rejection
+answers every call with what the trace records for it. Under the
+default, one, every earlier test passes unchanged (tests/test_local_loop.py
+is the gate). Deterministic, with model doubles.
 """
 
 import json

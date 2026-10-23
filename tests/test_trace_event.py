@@ -1361,7 +1361,7 @@ def test_performance_fields_are_validated_and_published():
         assert not SCHEMA_VALIDATOR.is_valid(data), name
 
 
-# -- Gateway tool events and prefetch declarations (spec 0.32 sections 4.2, 8; RM22, RM29) ---
+# -- Gateway tool events and prefetch declarations (spec 0.34 sections 4.2, 8; RM22, RM29) ---
 
 DECLARATIONS = {
     "check-service-health": [
@@ -1477,7 +1477,7 @@ GATEWAY_REJECTED = {
 
 
 def test_gateway_tool_events_and_prefetch_declarations_are_validated_and_published():
-    """RM22, RM29, spec 0.32 section 8: a gateway-made tool event has model null.
+    """RM22, RM29, spec 0.34 section 8: a gateway-made tool event has model null.
 
     The mechanism of a proposal and the run's prefetch declarations are
     optional, so events stored before 0.31 stay valid; the validator and

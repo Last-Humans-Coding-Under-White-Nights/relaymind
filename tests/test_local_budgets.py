@@ -325,7 +325,7 @@ def test_no_repair_is_offered_when_the_entire_run_has_no_generation_left():
     assert meter.may_repair() is False
 
 
-# -- the room for a set of calls (section 4.3, spec 0.32; #122) ---------------------------------
+# -- the room for a set of calls (section 4.3, spec 0.34; #122) ---------------------------------
 
 
 def test_the_tool_room_is_the_tighter_of_the_stage_and_the_run_limit():

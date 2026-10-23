@@ -1,5 +1,5 @@
 """AC18, prefetch: read-only calls a skill declares run before its first generation
-(RM29, RM05, RM08 to RM10, RM12, RM14, RM22, spec 0.32 sections 4.2, 8, 9, 14.1; #123).
+(RM29, RM05, RM08 to RM10, RM12, RM14, RM22, spec 0.34 sections 4.2, 8, 9, 14.1; #123).
 
 Under performance.prefetch = true, the gateway resolves each declared
 call from the request by the RM05 rule, runs the resolved calls

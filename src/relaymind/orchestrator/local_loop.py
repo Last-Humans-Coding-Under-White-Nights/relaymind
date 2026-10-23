@@ -62,18 +62,20 @@ One run, start to end, with the local model only:
    already has a recorded operation asks for nothing (RM10).
 4. An invalid proposal gets at most the configured format-repair
    generations, inside the generation limit (RM03).
-4a. Admitted calls per generation (spec 0.32 section 4.3, AC18). Under
+4a. Admitted calls per generation (spec 0.34 section 4.3, AC18). Under
    calls_per_generation many, a generation's read-only calls are judged
    as a set: more than the limit, a mutating call among several, one
    invalid call, or a set with more new executions than the tool budget has
    room for rejects the whole generation before anything runs, and the
-   rejection answers every call: the failed call with its own rejection,
-   the others as not executed. The room counts one execution per call, so
+   rejection answers every call with what its tool.proposed records: the
+   failed call with its own rejection and the others as not executed, or,
+   for a rejection about the set, every call with it. The room counts one execution per call, so
    a retry of a transient read failure (section 11) can still use the last
    of it in the middle of a set; that ends the run on budget like a single
    call would.
    An admitted set runs in proposal order, each call as its own operation.
-4b. Prefetch (RM29, AC18). Under prefetch true, the calls a skill declares
+   The parallel workflow's local branch keeps the one-call rule (RM15).
+4b. Prefetch (RM29, spec 0.34, AC18). Under prefetch true, the calls a skill declares
    run before its first generation in a local stage: the gateway resolves
    each from the request by the RM05 rule, runs them together through the
    same checks as a proposal (actor gateway, mechanism prefetch, model
