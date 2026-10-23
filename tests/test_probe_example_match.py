@@ -375,6 +375,64 @@ def test_the_router_baseline_and_the_candidate_thresholds_come_from_the_export(p
     assert candidate["chinese"]["cases"] == 12
 
 
+def _local_only_export(*grades):
+    """An export of local_only runs: grades are (case_id, skill or None)."""
+    native = "native_function_calling"
+    document = {"grades": [], "traces": {}}
+    for index, (case_id, skill) in enumerate(grades):
+        run_id = f"r{index}"
+        document["grades"].append({"case_id": case_id, "mode": "local_only", "run_id": run_id})
+        document["traces"][run_id] = (
+            [route_event(native, skill)] if skill else [{"event_type": "run.failed", "payload": {}}]
+        )
+    return document
+
+
+def test_a_mode_missing_from_the_export_does_not_set_the_wrong_pick_limit(probe):
+    """Only the modes the export ran count; a missing mode is not a router with no wrong picks."""
+    document = _local_only_export(
+        ("simple-01", "check-service-health"),
+        ("simple-02", "lookup-latest-deployment"),
+        ("simple-05", None),
+    )
+    result = probe.analyse(
+        probe.load_corpus_and_sidecar(), probe.load_catalog(SKILLS), export=document
+    )
+    assert set(result["router"]["samples"]) == {"local_only"}
+    candidate = result["candidate"]
+    assert candidate["router_wrong_picks"] == {"local_only": 1}
+    assert candidate["max_wrong"] == 1
+
+
+def test_an_export_with_no_auto_or_local_only_run_is_refused(probe):
+    document = {
+        "grades": [{"case_id": "simple-01", "mode": "external_only", "run_id": "r1"}],
+        "traces": {"r1": [route_event("native_function_calling", "check-service-health")]},
+    }
+    with pytest.raises(SystemExit, match="auto or local_only"):
+        probe.analyse(probe.load_corpus_and_sidecar(), probe.load_catalog(SKILLS), export=document)
+
+
+def test_the_caveats_say_the_router_ran_at_temperature_zero(analysis):
+    """The gateway sets temperature 0 for local calls; the record must not say 0.8 (RM25)."""
+    text = " ".join(analysis["caveats"])
+    assert "0.8" not in text
+    assert "temperature 0" in text
+    assert "not independent" in text
+
+
+def test_the_caveats_give_the_example_pair_count_of_every_skill(probe, analysis):
+    """Two skills have one pair, not one (health-and-diagnostic-checklist and the delete skill)."""
+    pairs = {
+        path.parent.name: len(json.loads(path.read_text("utf-8"))["pairs"])
+        for path in SKILLS.glob("*/examples.json")
+    }
+    assert analysis["method"]["example_pairs"] == pairs
+    caveat = analysis["caveats"][0]
+    for name, count in pairs.items():
+        assert f"{name} {count}" in caveat
+
+
 def test_the_cli_writes_the_analysis_and_a_report(probe, tmp_path):
     out = tmp_path / "example-match.json"
     probe.main(["--out", str(out)])

@@ -61,7 +61,11 @@ from relaymind.evaluation.corpus import (  # noqa: E402
     check_lock,
     load_corpus,
 )
-from relaymind.evaluation.environment import machine_manifest, runtime_devices  # noqa: E402
+from relaymind.evaluation.environment import (  # noqa: E402
+    application_revision,
+    machine_manifest,
+    runtime_devices,
+)
 from relaymind.evaluation.grading import (  # noqa: E402
     RunGrade,
     call_matches,
@@ -657,7 +661,7 @@ def regrade_draft_pass(document: dict[str, Any], corpus: Corpus) -> dict[str, An
             )
             if key in document
         },
-        "regraded_with": {"application": harness.application_revision()},
+        "regraded_with": {"application": application_revision(REPO_ROOT)},
         "runs": runs,
         "table": draft_pass_table(runs),
         "measured_summary": _summary(document["grades"], corpus),

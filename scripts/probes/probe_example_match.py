@@ -74,13 +74,14 @@ ROUTER_MODES = ("auto", "local_only")
 ROUTER_MECHANISM = "native_function_calling"
 _CJK = "㐀-䶿一-鿿豈-﫿"
 _TOKEN = re.compile(rf"([{_CJK}]+)|([A-Za-z0-9]+)")
-CAVEATS = (
-    "Each skill has one or two example pairs (the delete skill has one), so the index is tiny "
-    "and its word statistics are coarse.",
+_CAVEATS = (
     "The thresholds are chosen on the same 52 cases that score them; the result is optimistic "
     "and is not held out.",
-    "The router figures are the two runs per case in one export (auto and local_only, sampled "
-    "at temperature 0.8, one machine); they are two samples, not a distribution.",
+    "The router figures are the two runs per case in one export (auto and local_only, one "
+    "machine). The gateway ran the router and the local skill, repair, and final calls at "
+    "temperature 0, so the two runs are repeats of a near-deterministic call, not independent "
+    "samples; a second run could still differ, because the runtime does not promise "
+    "identical output across runs. They are not a distribution.",
     "Every corpus case expects one skill and a selector picks at most one, so the macro "
     "precision, recall, and Jaccard are equal on the corpus; the micro averages differ. The ops "
     "corpus cannot tell a good selector from a poor one, which is why section 12.4 adds the "
@@ -314,6 +315,7 @@ class SkillDoc:
     description: str
     requests: tuple[str, ...]
     allowed_tools: tuple[str, ...]
+    pairs: int
 
     @property
     def text(self) -> str:
@@ -341,6 +343,7 @@ def load_catalog(skills_root: Path = SKILLS_ROOT) -> list[SkillDoc]:
                 match.group(1).strip() if match else "",
                 requests,
                 tuple(manifest["allowed_tools"]),
+                len(examples["pairs"]),
             )
         )
     return catalog
@@ -356,6 +359,16 @@ def catalog_identifiers(catalog: Sequence[SkillDoc]) -> frozenset[str]:
             ).values():
                 found.update(values)
     return frozenset(found)
+
+
+def caveats(catalog: Sequence[SkillDoc]) -> list[str]:
+    """The caveats of the report; the example pair count of each skill is read from the catalog."""
+    pairs = ", ".join(f"{skill.name} {skill.pairs}" for skill in catalog)
+    index = (
+        f"Each skill has only a few example pairs ({pairs}), so the index is tiny and its word "
+        "statistics are coarse."
+    )
+    return [index, *_CAVEATS]
 
 
 class CorpusSkills(NamedTuple):
@@ -498,6 +511,7 @@ def analyse(
         "is a measured run of the selector in the gateway.",
         "method": {
             "documents": {s.name: len(tokenize(s.text)) for s in catalog},
+            "example_pairs": {s.name: s.pairs for s in catalog},
             "masked_identifiers": sorted(index.identifiers),
             "placeholder": PLACEHOLDER,
             "bm25": {"k1": K1, "b": B},
@@ -508,7 +522,7 @@ def analyse(
             "sidecar": SIDECAR.name,
             "router_export": None if export is None else export.get("corpus"),
         },
-        "caveats": list(CAVEATS),
+        "caveats": caveats(catalog),
         "cases": [
             {k: v for k, v in c.items() if k not in ("predicted", "expected_set")} for c in cases
         ],
@@ -543,7 +557,10 @@ def _against_router(
     export: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     picks = router_picks(export)
-    samples = {mode: _router_sample(cases, picks, mode) for mode in ROUTER_MODES}
+    modes = [mode for mode in ROUTER_MODES if any(key[1] == mode for key in picks)]
+    if not modes:
+        raise SystemExit("the export has no auto or local_only run, so it has no router baseline")
+    samples = {mode: _router_sample(cases, picks, mode) for mode in modes}
     english_wrong = {
         mode: sum(
             row["wrong"] for row in sample["by_language_and_class"] if row["language"] == "en"
@@ -567,7 +584,7 @@ def _against_router(
     candidate = {
         "language": "en",
         "rule": "the thresholds with the most right English picks among those whose English "
-        "wrong picks are at or below the router's (the lower of its two samples)",
+        "wrong picks are at or below the router's (the lowest of its samples)",
         "router_wrong_picks": english_wrong,
         "max_wrong": max_wrong,
         "thresholds": thresholds,

@@ -617,6 +617,15 @@ def test_the_result_is_labeled_a_counterfactual_and_the_export_is_untouched(runn
     assert json.dumps(document, sort_keys=True) == snapshot
 
 
+def test_the_draft_pass_records_an_unknown_revision_as_unknown(
+    runner, corpus, monkeypatch, tmp_path
+):
+    """An unknown revision is None, as in the other spikes, never a clean tree (RM25)."""
+    monkeypatch.setattr(runner, "REPO_ROOT", tmp_path)
+    result = runner.regrade_draft_pass(three_local_runs(runner, corpus), corpus)
+    assert result["regraded_with"]["application"] == {"head": None, "dirty": None}
+
+
 def test_an_auto_handoff_after_a_failed_final_is_replaced_by_the_draft(runner, corpus):
     """The external calls that followed the final pass are not made when the draft is published."""
     document = export_of(
