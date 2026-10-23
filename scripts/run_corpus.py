@@ -409,6 +409,14 @@ DRAFT_PURPOSES = ("skill", "repair")
 _TOOL_CALL_TAG = re.compile(r"</?tool_call>", re.IGNORECASE)
 _TOOL_NAME_KEY = re.compile(r'"(?:tool_name|name|function)"\s*:')
 _TOOL_ARGUMENTS_KEY = re.compile(r'"(?:arguments|parameters)"\s*:')
+# Every code draft_block_reason returns, explained in the export (its "guards").
+DRAFT_BLOCK_REASONS = {
+    "no_draft": "no skill or repair generation gave text without calls before the final one",
+    "answer_options": "the caller sent an answer option",
+    "language_unknown": "the run's first route.selected decision names no language (en or zh)",
+    "language": "the draft is not in the run's language (identifiers.has_cjk)",
+    "tool_call_json": "the draft holds a tool-call tag or JSON naming a tool and arguments",
+}
 
 
 def run_language(events: Sequence[Mapping[str, Any]]) -> str | None:
@@ -496,12 +504,27 @@ def _completed_locally(events: Sequence[Mapping[str, Any]]) -> bool:
     )
 
 
+def _waits_before(events: Sequence[Mapping[str, Any]], draft: Mapping[str, Any]) -> int:
+    """The measured waiting_ms less the clarification waits recorded after the draft."""
+    terminal = terminal_event(events)
+    waiting = int(terminal["payload"].get("waiting_ms", 0)) if terminal else 0
+    later = sum(
+        int(e["payload"].get("waited_ms") or 0)
+        for e in events[draft["index"] + 1 :]
+        if e["event_type"] == "clarification.answered"
+    )
+    return max(waiting - later, 0)
+
+
 def draft_trace(events: Sequence[Mapping[str, Any]], draft: Mapping[str, Any]) -> list[dict]:
     """The counterfactual trace: the events up to the draft, then the draft as the local answer.
 
     The run completes with the draft's model as the final answer model and
     no external call; the generations and tool calls after the draft are
-    not part of it.
+    not part of it. run.completed has every field section 8 requires
+    (RM22): the model calls up to the draft, waiting_ms the measured waits
+    before the draft, active_ms the draft's elapsed time less those waits,
+    and answer_pass_applied draft (RM31, spec 0.32).
     """
     kept = [dict(e) for e in events[: draft["index"] + 1]]
     last = kept[-1]
@@ -509,7 +532,7 @@ def draft_trace(events: Sequence[Mapping[str, Any]], draft: Mapping[str, Any]) -
         k: last[k] for k in ("schema_version", "run_id", "timestamp", "elapsed_ms") if k in last
     }
     seq = last.get("seq", len(kept))
-    terminal = terminal_event(events)
+    waiting = _waits_before(events, draft)
     calls = [
         {
             "actor": e["actor"],
@@ -540,7 +563,9 @@ def draft_trace(events: Sequence[Mapping[str, Any]], draft: Mapping[str, Any]) -
                 "final_answer_model": draft["model"],
                 "external_calls": 0,
                 "model_calls": calls,
-                "waiting_ms": (terminal["payload"].get("waiting_ms", 0) if terminal else 0),
+                "active_ms": max(int(draft.get("elapsed_ms") or 0) - waiting, 0),
+                "waiting_ms": waiting,
+                "answer_pass_applied": "draft",
                 "counterfactual": DRAFT_PASS_LABEL,
             },
         }
@@ -646,11 +671,7 @@ def regrade_draft_pass(document: dict[str, Any], corpus: Corpus) -> dict[str, An
         "had been published as the answer (RM31). No model was called and the source export is "
         "not changed. A blocked run keeps its measured grade. This is not a measured run: the "
         "draft pass was never run, so the figures are a prediction of it.",
-        "guards": {
-            "answer_options": "the caller sent an answer option",
-            "language": "the draft is not in the run's language (identifiers.has_cjk)",
-            "tool_call_json": "the draft holds a tool-call tag or JSON naming a tool and arguments",
-        },
+        "guards": dict(DRAFT_BLOCK_REASONS),
         "source": {
             key: document[key]
             for key in (

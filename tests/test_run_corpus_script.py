@@ -9,8 +9,11 @@ with scripted model doubles in place of the models (section 13).
 """
 
 import argparse
+import ast
 import asyncio
+import inspect
 import json
+import textwrap
 from pathlib import Path
 
 import httpx
@@ -27,6 +30,7 @@ from gateway_helpers import (
 from helpers import ScriptedAdapter, StuckAdapter, load_script_module
 from launcher_helpers import make_artifact
 from relaymind.launcher import build_app, load_config
+from relaymind.store.trace_event import validate_trace_event
 
 REPO = Path(__file__).resolve().parent.parent
 DELETED = "Deleted the sandbox database demo-orders-db."
@@ -756,6 +760,76 @@ def test_the_draft_is_the_last_text_without_calls_before_the_final(runner):
     # A text from the final generation, or from before the tool call, is not the draft.
     assert runner.find_draft(events[: draft["index"] - 3]) is None
     assert runner.find_draft([]) is None
+
+
+@pytest.mark.parametrize(
+    ("ending", "final"),
+    [("failed", "payments-api is down."), ("handoff", "x"), ("completed", "It is fine.")],
+)
+def test_every_synthetic_event_of_the_counterfactual_trace_is_a_valid_trace_event(
+    runner, ending, final
+):
+    """RM22, section 8: the events the regrade adds pass validate_trace_event.
+
+    run.completed carries every required terminal field, and records the
+    pass that produced the answer, answer_pass_applied draft (RM31, spec
+    0.32 section 8).
+    """
+    events = build_trace("run_valid", draft=STAGING_REPLY, final=final, ending=ending)
+    draft = runner.find_draft(events)
+    trace = runner.draft_trace(events, draft)
+    added = trace[draft["index"] + 1 :]
+    assert [e["event_type"] for e in added] == ["answer.delta", "run.completed"]
+    for event in added:
+        validate_trace_event(event)
+    payload = added[-1]["payload"]
+    assert payload["answer_pass_applied"] == "draft"
+    assert payload["final_answer_model"] == LOCAL and payload["external_calls"] == 0
+    assert (payload["active_ms"], payload["waiting_ms"]) == (draft["elapsed_ms"], 0)
+    assert [c["purpose"] for c in payload["model_calls"]] == ["routing", "skill", "skill"]
+
+
+def test_the_counterfactual_counts_only_the_waits_before_the_draft(runner):
+    """Section 12.1: active_ms is the draft's elapsed time less the waits that came before it."""
+    events = build_trace("run_waits", draft=STAGING_REPLY, final="x", ending="completed")
+    draft = runner.find_draft(events)
+    before = {**events[2], "event_type": "clarification.answered"}
+    before["payload"] = {"input": "staging-api", "missing": "service", "waited_ms": 300}
+    after = {**before, "payload": {**before["payload"], "waited_ms": 50}}
+    events = [
+        *events[:3],
+        before,
+        *events[3 : draft["index"] + 2],
+        after,
+        *events[draft["index"] + 2 :],
+    ]
+    events[-1]["payload"]["waiting_ms"] = 350
+    draft = runner.find_draft(events)
+    payload = runner.draft_trace(events, draft)[-1]["payload"]
+    assert payload["waiting_ms"] == 300
+    assert payload["active_ms"] == draft["elapsed_ms"] - 300
+
+
+def test_every_block_reason_is_documented_in_the_export(runner, corpus):
+    """Every code draft_block_reason can return is explained in the export's guards."""
+    source = inspect.getsource(runner.draft_block_reason)
+    returned = {
+        node.value.value
+        for node in ast.walk(ast.parse(textwrap.dedent(source)))
+        if isinstance(node, ast.Return)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    }
+    assert returned == {
+        "no_draft",
+        "answer_options",
+        "language_unknown",
+        "language",
+        "tool_call_json",
+    }
+    guards = runner.regrade_draft_pass(three_local_runs(runner, corpus), corpus)["guards"]
+    assert set(guards) == returned
+    assert all(isinstance(text, str) and text.strip() for text in guards.values())
 
 
 @pytest.mark.parametrize(
