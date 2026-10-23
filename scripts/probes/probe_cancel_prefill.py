@@ -53,11 +53,15 @@ sys.path.insert(0, str(PROBES_DIR.parent))
 
 import live_acceptance as harness  # noqa: E402
 from probe_prefix_cache import (  # noqa: E402
+    LABEL,
     REPO_ROOT,
     Surfaces,
     build_surfaces,
     observe,
+    read_definition,
     request_body,
+    resolve_path,
+    server_props,
 )
 
 from relaymind.adapters.base import (  # noqa: E402
@@ -79,10 +83,6 @@ from relaymind.evaluation.environment import (  # noqa: E402
 )
 
 KIND = "relaymind.probe.cancel_prefill"
-LABEL = (
-    "single-pass observations from one run on one machine; not a benchmark result "
-    "(spec 12.3); never p50 or p95"
-)
 # Room kept in a slot's context beside the prompt and the answer.
 CONTEXT_MARGIN = 256
 # A rough size of one log line in tokens, for the first guess of the sizing.
@@ -125,21 +125,7 @@ class CancelConfig:
 
 def load_probe_config(path: Path) -> CancelConfig:
     """Read and validate a probe definition; ValueError names the bad field."""
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise ValueError(f"cannot read the definition: {exc}") from exc
-    if not isinstance(raw, dict):
-        raise ValueError("the definition must be a JSON object")
-
-    def resolved(key: str) -> Path:
-        value = raw.get(key)
-        if not isinstance(value, str) or not value:
-            raise ValueError(f"'{key}' must be a path")
-        target = (path.parent / value).resolve()
-        if not target.exists():
-            raise ValueError(f"'{key}' not found: {value}")
-        return target
+    raw = read_definition(path)
 
     def count(key: str, *, minimum: int) -> int:
         value = raw.get(key)
@@ -170,9 +156,9 @@ def load_probe_config(path: Path) -> CancelConfig:
     if not isinstance(timeout, (int, float)) or isinstance(timeout, bool) or timeout <= 0:
         raise ValueError("'request_timeout_seconds' must be a positive number")
     return CancelConfig(
-        manifest_path=resolved("manifest"),
-        skills_root=resolved("skills_root"),
-        sandbox_seed=resolved("sandbox_seed"),
+        manifest_path=resolve_path(raw, path, "manifest"),
+        skills_root=resolve_path(raw, path, "skills_root"),
+        sandbox_seed=resolve_path(raw, path, "sandbox_seed"),
         skill=text("skill"),
         target_tokens=count("target_tokens", minimum=100),
         cancel_after_ms=count("cancel_after_ms", minimum=1),
@@ -344,19 +330,6 @@ async def run_repetition(
 # -- the run -------------------------------------------------------------------------------------
 
 
-def _server_props(client: httpx.Client) -> dict[str, Any] | None:
-    try:
-        data = client.get("/props").json()
-    except (httpx.HTTPError, ValueError):
-        return None
-    settings = data.get("default_generation_settings") or {}
-    return {
-        "n_ctx": settings.get("n_ctx"),
-        "total_slots": data.get("total_slots"),
-        "build_info": data.get("build_info"),
-    }
-
-
 def _slots_processing(client: httpx.Client) -> int | None:
     """How many slots are still processing a request; None when /slots does not answer."""
     try:
@@ -386,7 +359,7 @@ async def measure(
         with httpx.Client(
             base_url=base_url, timeout=config.request_timeout_seconds, trust_env=False
         ) as client:
-            props = _server_props(client)
+            props = server_props(client)
             target = fit_target(
                 config.target_tokens,
                 n_ctx=props["n_ctx"] if props else None,

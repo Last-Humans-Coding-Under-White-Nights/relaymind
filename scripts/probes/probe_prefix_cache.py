@@ -141,23 +141,31 @@ def _prompt_list(raw: Mapping[str, Any], key: str) -> tuple[str, ...]:
     return tuple(value)
 
 
-def load_probe_config(path: Path) -> ProbeConfig:
-    """Read and validate a probe definition; ValueError names the bad field."""
+def read_definition(path: Path) -> dict[str, Any]:
+    """The JSON object of a probe definition; ValueError when it is not one."""
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise ValueError(f"cannot read the definition: {exc}") from exc
     if not isinstance(raw, dict):
         raise ValueError("the definition must be a JSON object")
+    return raw
 
-    def resolved(key: str) -> Path:
-        value = raw.get(key)
-        if not isinstance(value, str) or not value:
-            raise ValueError(f"'{key}' must be a path")
-        target = (path.parent / value).resolve()
-        if not target.exists():
-            raise ValueError(f"'{key}' not found: {value}")
-        return target
+
+def resolve_path(raw: Mapping[str, Any], path: Path, key: str) -> Path:
+    """An existing path the definition names, relative to the definition file."""
+    value = raw.get(key)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"'{key}' must be a path")
+    target = (path.parent / value).resolve()
+    if not target.exists():
+        raise ValueError(f"'{key}' not found: {value}")
+    return target
+
+
+def load_probe_config(path: Path) -> ProbeConfig:
+    """Read and validate a probe definition; ValueError names the bad field."""
+    raw = read_definition(path)
 
     warmups = raw.get("warmups")
     if type(warmups) is not int or warmups < 0:
@@ -176,9 +184,9 @@ def load_probe_config(path: Path) -> ProbeConfig:
     if not isinstance(warmup_prompts, dict) or set(warmup_prompts) != set(PURPOSES):
         raise ValueError("'warmup_prompts' must name a text for each purpose")
     config = ProbeConfig(
-        manifest_path=resolved("manifest"),
-        skills_root=resolved("skills_root"),
-        sandbox_seed=resolved("sandbox_seed"),
+        manifest_path=resolve_path(raw, path, "manifest"),
+        skills_root=resolve_path(raw, path, "skills_root"),
+        sandbox_seed=resolve_path(raw, path, "sandbox_seed"),
         skill=skill,
         warmups=warmups,
         warmup_prompts=warmup_prompts,
@@ -462,12 +470,13 @@ def constant_prefixes(
             count_prompt_tokens(client, surfaces.request(purpose, text, "count"), template_kwargs)
             for text in config.prompts(purpose)
         ]
-        if any(tokens is None for tokens in lists):
+        counted = [tokens for tokens in lists if tokens is not None]
+        if len(counted) < len(lists):
             found[purpose] = {"constant_prefix_tokens": None, "prompt_tokens": None}
             continue
-        sizes = [len(tokens) for tokens in lists if tokens is not None]
+        sizes = [len(tokens) for tokens in counted]
         found[purpose] = {
-            "constant_prefix_tokens": common_prefix_length([t for t in lists if t is not None]),
+            "constant_prefix_tokens": common_prefix_length(counted),
             "prompt_tokens": {"min": min(sizes), "max": max(sizes)},
         }
     return found
@@ -539,7 +548,8 @@ def cold_requests(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
 # -- the run -------------------------------------------------------------------------------------
 
 
-def _server_props(client: httpx.Client) -> dict[str, Any] | None:
+def server_props(client: httpx.Client) -> dict[str, Any] | None:
+    """The context size, slot count, and build of the runtime (/props); None when it fails."""
     try:
         data = client.get("/props").json()
     except (httpx.HTTPError, ValueError):
@@ -590,7 +600,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                     with httpx.Client(
                         base_url=base_url, timeout=REQUEST_TIMEOUT_SECONDS, trust_env=False
                     ) as client:
-                        props = _server_props(client)
+                        props = server_props(client)
                         if prefixes is None:
                             prefixes = constant_prefixes(client, surfaces, config, template_kwargs)
                         print(f"{layout} cache_prompt={cache_prompt}", flush=True)
