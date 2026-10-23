@@ -289,6 +289,27 @@ CORRECTION = (
 )
 
 
+def skill_stage_messages(
+    skill: Skill, messages: Sequence[Message], tool_names: Sequence[str]
+) -> list[Message]:
+    """The first conversation of the skill stage (RM06, RM08).
+
+    The skill description and the tools to call come first, then the
+    run's messages, then the full skill body as a system message (the
+    layout above). It is a pure function of its arguments, so a probe or
+    a warm-up that sends it sends what the gateway sends.
+    """
+    tools = " or ".join(tool_names)
+    return [
+        Message(
+            role=Role.SYSTEM,
+            content=f"{skill.description}\n{SKILL_INSTRUCTION.format(tools=tools)}",
+        ),
+        *messages,
+        Message(role=Role.SYSTEM, content=f"{BODY_HEADER}\n{skill.body}"),
+    ]
+
+
 @dataclass(frozen=True)
 class ConfiguredModel:
     """A configured model: its adapter and its identity in traces.
@@ -2521,15 +2542,9 @@ class _Run:
                 f"no permitted tools for skill {skill.name!r}",
                 hand_off=False,
             )
-        tool_names = " or ".join(schema.name for schema in schemas)
-        conversation: list[Message] = [
-            Message(
-                role=Role.SYSTEM,
-                content=f"{skill.description}\n{SKILL_INSTRUCTION.format(tools=tool_names)}",
-            ),
-            *self.messages,
-            Message(role=Role.SYSTEM, content=f"{BODY_HEADER}\n{skill.body}"),
-        ]
+        conversation = skill_stage_messages(
+            skill, self.messages, [schema.name for schema in schemas]
+        )
         predicate = COMPLETION_PREDICATES[skill.completion_predicate]
         return _Loop(conversation, schemas, available, skill, predicate)
 
@@ -3089,4 +3104,5 @@ __all__ = [
     "ResumeInputError",
     "RunOutcome",
     "aborted_run_id",
+    "skill_stage_messages",
 ]

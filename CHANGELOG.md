@@ -70,6 +70,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   acceptance failures, missing external scenarios, and the unavailable
   browser driver remain recorded. A hosted-runner workflow is no longer
   needed to obtain the Windows result.
+- Runtime and provider timing probes (#114, #116, #117; RM18, RM25, RM26,
+  RM27, spec 0.32 sections 6, 10, and 12.2):
+  `scripts/probes/probe_prefix_cache.py` sends the gateway's own routing
+  and skill-stage requests to llama-server with `cache_prompt` on and off
+  and reads the whole `timings` and `usage` objects;
+  `scripts/probes/probe_cancel_prefill.py` cancels a prompt of about 6,000
+  tokens during prefill and measures the wait of the next request (its
+  definition lists exactly two short prompts per repetition);
+  `scripts/probes/probe_external_latency.py` records the time to headers,
+  to the first reasoning delta, to the first content or tool-call delta,
+  and to the end of streamed provider calls, with and without tools and
+  with the provider's reasoning default and off. `--runtime-extra-args`
+  adds llama-server arguments after the manifest's launch settings (for a
+  CPU-only runtime with two threads) in the live harness, the corpus
+  runner, the latency benchmark, and the probes; the default adds none,
+  the arguments are recorded in every export, and only runtime-only
+  settings (GPU layers, threads, batch sizes), each with one integer value
+  in its range, are accepted; a positional argument (a model path), a
+  missing or invalid value, a `--no-` form, and any other flag are refused. `skill_stage_messages` in
+  `orchestrator/local_loop.py` is the skill-stage conversation as a pure
+  function, with no change in behavior. The results are in the 2026-10-23
+  runtime and provider timing entry of `docs/EVIDENCE.md`. No gateway
+  default changes.
 - Offline S0 spikes on the 2026-10-22 corpus export (#115, #118, #119;
   RM28, RM31, spec 0.31 sections 4.3, 12.1, 12.2, and 12.4):
   `scripts/run_corpus.py --regrade-draft-pass` grades the stored traces as

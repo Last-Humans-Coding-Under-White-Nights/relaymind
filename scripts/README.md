@@ -124,6 +124,30 @@
   Both runners reuse the live acceptance harness for the runtime check,
   the launch plan, and the trace read-back.
 
+- `--runtime-extra-args` — llama-server arguments added after the
+  manifest's launch settings (#117; RM18, spec 0.31 section 12.2), for
+  `live_acceptance.py`, `run_corpus.py`, `latency_benchmark.py`, and the
+  two timing probes below. One quoted text, for example
+  `--runtime-extra-args='--n-gpu-layers 0 --threads 2'` for a CPU-only
+  runtime with two threads. The default adds nothing. The arguments are
+  recorded in every export next to the server argv
+  (`llama_server.extra_args`; `llama_server_extra_args` in the latency
+  benchmark export). Only the runtime-only settings of llama.cpp b11785
+  are accepted, as long flags, each with one integer value given as
+  `--threads 2` or `--threads=2`: `--n-gpu-layers` and `--gpu-layers`
+  (at least -1, or `auto` or `all`), `--threads`, `--threads-batch`,
+  `--batch-size`, and `--ubatch-size` (each at least 1). Anything else is
+  refused, with the token named: a positional argument (llama-server
+  reads one as the model path), a short flag, a missing, non-integer, or
+  out-of-range value, a `--no-` form, a pinned setting of the manifest, a
+  model, the bind address, and any other flag, including a spelling that
+  could change what the model computes (the template arguments, the
+  reasoning budget, metadata overrides, the slot count). b11785 has no
+  `--mlock` or `--mmap` switch, so neither is accepted. So the manifest
+  stays the one source of the qualified launch settings. A constrained
+  configuration is reported as that configuration of that machine, never
+  as another machine.
+
 - `run_corpus.py --regrade-draft-pass` — the offline draft-pass
   counterfactual (#115; RM31, spec 0.31). It grades the stored traces of
   a corpus export as if the skill-stage draft had been published as the
@@ -192,3 +216,76 @@
   into the checkout makes the tree count as changed, so write each
   output outside the checkout and copy it into `docs/evidence/` when the
   record needs a clean tree. Their results are in `docs/EVIDENCE.md`.
+
+- `probes/probe_prefix_cache.py` — the prefix-cache probe (#114, #117;
+  RM25, RM27, spec 0.31 sections 6 and 10). It launches llama-server from
+  the manifest, builds the routing request with `Router.build_request`
+  over the demo skills and the skill-stage request with
+  `skill_stage_messages` (the function `LocalOrchestrator._local_setup`
+  calls), encodes both with the llama.cpp adapter's `build_chat_request`,
+  and sends them over raw HTTP with `cache_prompt` true and then false, so
+  the whole `timings` and `usage` objects are read (`cache_n`, `prompt_n`,
+  `prompt_ms`, `predicted_n`, `predicted_ms`, and
+  `prompt_tokens_details.cached_tokens`; a count the runtime did not return
+  is null). Each group (blocked and interleaved layout, each with the flag
+  on and off) runs in a launch of its own, with a cold request, warm-ups,
+  and ten different user texts per purpose. The export has the constant
+  prefix of each purpose in tokens. Needs the pinned runtime on `PATH` and
+  the model; the definition is `probes/m7_prefix_cache.json`.
+
+  ```bash
+  python scripts/probes/probe_prefix_cache.py scripts/probes/m7_prefix_cache.json \
+      --out docs/evidence/<date>-prefix-cache-<machine>.json \
+      [--runtime-extra-args='--n-gpu-layers 0 --threads 2']
+  ```
+
+- `probes/probe_cancel_prefill.py` — the cancel-during-prefill probe
+  (#117; RM14, RM26, RM27). A prompt of about 6,000 tokens (sized with the
+  runtime's tokenizer to fit the context of one slot from `/props`) goes
+  through `LlamaCppAdapter`; the probe cancels it after 200 ms and sends a
+  short routing-shaped request at once, then compares that request's wait
+  with the same kind of request on an idle runtime. Five repetitions, each
+  with a long prompt of its own, and one uncancelled run for the full
+  prefill time. Definition: `probes/m7_cancel_prefill.json`; it lists
+  exactly two short prompts per repetition (one idle, one after the
+  cancel), and the probe refuses any other count, so the definition an
+  export records lists only the prompts that were sent.
+
+  ```bash
+  python scripts/probes/probe_cancel_prefill.py scripts/probes/m7_cancel_prefill.json \
+      --out docs/evidence/<date>-cancel-prefill-<machine>.json \
+      [--runtime-extra-args='--n-gpu-layers 0 --threads 2']
+  ```
+
+- `probes/probe_external_latency.py` — the external first-token probe
+  (#116; RM25, spec 0.31 sections 6 and 12.1). Streamed Chat Completions
+  over raw HTTP to the configured endpoint; per request it records the
+  time to the response headers, to the first `reasoning_content` delta,
+  to the first content or tool-call delta, and to the end, with the whole
+  `usage` object (a reasoning-token count the provider did not return is
+  null). Two request shapes built by `external_messages` over a synthetic
+  handoff envelope (an answer generation after a health tool exchange, and
+  a tool-offering generation of `investigate-performance`), times the
+  provider's reasoning default or its documented switch from the
+  definition `probes/m7_external_latency.json` (with the documentation URLs
+  checked on the day): four arms of five requests, interleaved in rounds.
+  The endpoint and the model come from `--base-url` and `--model`
+  (defaults: `RELAYMIND_EXTERNAL_BASE_URL` and `RELAYMIND_EXTERNAL_MODEL`),
+  and `--region` records the region when it is known. The plan is refused
+  when it is over `--max-calls` (default 20), a failed
+  call is never retried, and the key comes from the environment variable
+  named by `--api-key-env` (default `RELAYMIND_EXTERNAL_API_KEY`), goes
+  only in the Authorization header, and is never printed or written. It
+  calls a provider, so run it only when that is authorized.
+
+  ```bash
+  source ~/.config/relaymind/external.env
+  python scripts/probes/probe_external_latency.py scripts/probes/m7_external_latency.json \
+      --out docs/evidence/<date>-external-latency-<provider>.json
+  ```
+
+  The three probes label their output as single-pass observations from
+  one run, never p50 or p95 (spec 12.3), and record the checkout's
+  revision. As with the offline spikes, a file an earlier command wrote
+  into the checkout makes the tree count as changed. Their results are in
+  `docs/EVIDENCE.md`.

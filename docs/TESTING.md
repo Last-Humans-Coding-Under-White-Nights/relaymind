@@ -318,6 +318,17 @@ Without them those scenarios are recorded as not run. Every check has an owner: 
 keeps whatever the model does, and a model check is a capability. A
 failed model check is a finding, never a pass.
 
+`--runtime-extra-args='--n-gpu-layers 0 --threads 2'` adds runtime-only
+llama-server arguments after the manifest's launch settings (#117; RM18,
+spec 0.31 section 12.2), for a constrained run on the same machine. The
+default adds none, and the arguments are recorded in the export as
+`llama_server.extra_args`. Each allowed setting takes one integer value
+(`--threads 2` or `--threads=2`); a positional argument, a missing,
+non-integer, or out-of-range value, a `--no-` form, and any other flag
+are refused (RM18). `scripts/run_corpus.py` and
+`scripts/latency_benchmark.py` take the same option;
+`tests/test_runtime_extra_args.py` covers it with doubles.
+
 `pytest tests/test_live_acceptance_script.py` (default suite) runs every
 scenario against the launcher's app over model doubles.
 `pytest -m live tests/test_live_acceptance.py` runs the harness against
@@ -412,9 +423,60 @@ Deterministic tests over model doubles:
   to the export. Results are reported per language, and the matcher's output is
   the same under six values of `PYTHONHASHSEED`.
 
+- `pytest tests/test_local_loop.py` also pins `skill_stage_messages`
+  (#114): the pure function that builds the skill-stage conversation is
+  the conversation of a real run's skill-stage request, so the probes and
+  the later warm-up send what the gateway sends.
+- `pytest tests/test_runtime_extra_args.py` (#117; RM18, spec 0.31
+  section 12.2): the default adds no launch argument, given extra
+  arguments are launched after the manifest's settings and recorded as
+  `extra_args` in the export, the option text is split like a shell would,
+  a short flag, a pinned setting, the model, the bind address, and any
+  setting that is not runtime-only (the template arguments, the reasoning
+  budget, a metadata override, the slot count) are refused, so are a
+  positional argument (a model path), a missing, non-integer, or
+  out-of-range value, a `--no-` form, and the `--mlock` and `--mmap`
+  switches b11785 does not have, each refusal names the token and never
+  the value of a refused flag, a negative number is a value, every
+  runtime-only setting is accepted with its value as the next token or
+  after `=`, the extra arguments recorded in `docs/evidence/` pass the
+  check, and the corpus runner, the latency runner, and the live harness
+  take the option.
+- `pytest tests/test_probe_prefix_cache.py` (#114): the body the probe
+  sends equals `build_chat_request` for the same messages plus
+  `cache_prompt` (written so that it still holds when the adapter itself
+  sends `cache_prompt`), a group has a cold pair, warm-ups, and ten
+  distinct requests per purpose, the whole `timings` and `usage` objects
+  are kept, a count the runtime did not return is null and not 0, the
+  summary gives the reused share per group, a failed request is a row and
+  the pass goes on, and the common token prefix is computed correctly.
+- `pytest tests/test_probe_cancel_prefill.py` (#117): the long prompt is
+  sized to the target and fits the slot context, a repetition sends idle,
+  long, cancel, short in that order, the recorded call time is measured
+  and not the requested delay, the sizing and reference prompts tokenise
+  like the repetition prompts, no two long prompts share a prefix, a
+  definition without exactly one short-prompt pair per repetition is
+  refused, a token count of zero stops the sizing with a clear error, and
+  a failed short request leaves no long generation running.
+- `pytest tests/test_probe_external_latency.py` (#116) over
+  `httpx.MockTransport`, with no provider call: the checked-in definition
+  is four arms of five, the answer arms offer no tool and carry the health
+  exchange, the tool arms offer the tools of `investigate-performance`,
+  the reasoning switch is the only difference between the arms of a shape,
+  timings come from the clock in the order of the stream, a tool-call delta
+  is the first output, usage is kept whole and a missing count is null,
+  the plan is refused over its call cap, a failed call is not retried, the
+  credential is sent and never recorded, and the entry point prints no
+  credential.
+
 The live runs are scripts, not tests: `scripts/run_corpus.py` and
 `scripts/latency_benchmark.py` (see [`scripts/README.md`](../scripts/README.md));
-their results are in [`EVIDENCE.md`](EVIDENCE.md). The three offline
+their results are in [`EVIDENCE.md`](EVIDENCE.md). The three runtime and
+provider timing probes of M7 (#114, #116, #117) are live scripts too
+(`probes/probe_prefix_cache.py`, `probes/probe_cancel_prefill.py`, and
+`probes/probe_external_latency.py`); the first two need the pinned
+runtime and the model, the third calls a provider and needs its key in the
+environment. Their deterministic tests above use doubles. The three offline
 spikes of M7 (#115, #118, #119) are scripts over the stored corpus export
 (`run_corpus.py --regrade-draft-pass`, `probes/count_multi_calls.py`, and
 `probes/probe_example_match.py`; the commands are in
@@ -461,9 +523,12 @@ their results are in the 2026-10-23 entry of `EVIDENCE.md`.
   calls per generation, prefetch, gated streaming, operation without a
   local model, the placement policy, the selection interface, or
   workflow packages. The cached-token figures in the existing exports
-  are adapter defaults (finding F9 in [`EVIDENCE.md`](EVIDENCE.md)). The M7 to M9
+  are adapter defaults (finding F9 in [`EVIDENCE.md`](EVIDENCE.md)); the
+  prefix-cache probe (#114) read the runtime's own counts once, and the
+  gateway does not record them yet. The M7 to M9
   issues in [`ROADMAP.md`](ROADMAP.md) carry the tests. The offline
-  spikes (#115, #118, #119) test their own scripts, not the gateway.
+  spikes (#115, #118, #119) and the timing probes (#114, #116, #117) test
+  their own scripts, not the gateway.
 - The selection benchmarks of spec section 12.4 (skills from
   SkillsBench, tools from ToolRet-Training-20w, workflow plans) do not
   exist yet (#143 to #145). Until they run, no claim is made about

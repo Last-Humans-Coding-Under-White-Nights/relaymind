@@ -1,0 +1,618 @@
+{
+  "kind": "relaymind.probe.cancel_prefill",
+  "label": "single-pass observations from one run on one machine; not a benchmark result (spec 12.3); never p50 or p95",
+  "command": "python scripts/probes/probe_cancel_prefill.py scripts/probes/m7_cancel_prefill.json --out docs/evidence/2026-10-23-cancel-prefill-constrained-apple-m1.json --runtime-extra-args=--n-gpu-layers 0 --threads 2",
+  "started_at_utc": "2026-10-23T06:00:13+00:00",
+  "finished_at_utc": "2026-10-23T06:02:20+00:00",
+  "machine": {
+    "os": "Darwin",
+    "os_version": "macOS 27.0.1",
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "cpu_count": 8,
+    "ram_bytes": 8589934592,
+    "gpu": [
+      {
+        "model": "Apple M1",
+        "cores": "7"
+      }
+    ],
+    "python": "3.14.7"
+  },
+  "application": {
+    "head": "b96c339ef0741d5497c4878f3a965ac4fdcbae01",
+    "dirty": true
+  },
+  "runtime_banner": "version: 0.7.0-dev (build 11785, commit 8baabd53b)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64",
+  "runtime_devices": "Available devices:\n  MTL0: Apple M1 (5461 MiB, 5460 MiB free)\n  BLAS: Accelerate (0 MiB, 0 MiB free)",
+  "llama_server": {
+    "argv": [
+      "--ctx-size",
+      "8192",
+      "--jinja",
+      "--reasoning",
+      "off",
+      "--reasoning-format",
+      "deepseek",
+      "--n-gpu-layers",
+      "0",
+      "--threads",
+      "2"
+    ],
+    "extra_args": [
+      "--n-gpu-layers",
+      "0",
+      "--threads",
+      "2"
+    ],
+    "cold_start_seconds": 1.294
+  },
+  "manifest": "/Users/dmitrykudryavtsev/Playground/relaymind-m7/models/qwen3-0.6b-q8_0.manifest.json",
+  "model_id": "qwen3-0.6b",
+  "model_file": "Qwen3-0.6B-Q8_0.gguf",
+  "model_sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+  "quantization": "Q8_0",
+  "runtime_log": {
+    "n_threads": 2,
+    "n_slots": 4,
+    "n_ctx_slot": 8192,
+    "model_load_ms": 1187.862,
+    "lines": [
+      "0.00.039.482 I srv    load_model: loading model '/Users/dmitrykudryavtsev/Playground/relaymind-m7/models/Qwen3-0.6B-Q8_0.gguf'",
+      "0.01.124.963 I cmn          init: llama threadpool init, n_threads = 2",
+      "0.01.220.779 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'",
+      "0.01.227.344 I srv  llama_server: model loaded"
+    ]
+  },
+  "definition": {
+    "manifest": "qwen3-0.6b-q8_0.manifest.json",
+    "skill": "check-service-health",
+    "target_tokens": 6000,
+    "cancel_after_ms": 200,
+    "repetitions": 5,
+    "warmups": 2,
+    "warmup_prompt": "Is the payments-api service up at the moment?",
+    "request_timeout_seconds": 300.0,
+    "long_output_tokens": 8,
+    "long_user_prompt": "Summarize the log lines above in one sentence.",
+    "short_prompts": [
+      "Is staging-api healthy right now?",
+      "What was the latest deployment of payments-api?",
+      "How many incidents did staging-api have in the last 60 minutes?",
+      "Is the service healthy?",
+      "payments-api got slow after the last deploy. Find out why.",
+      "Delete the demo database demo-orders.",
+      "staging-api 现在健康吗？",
+      "payments-api 最近一次部署是什么？",
+      "staging-api 在过去 60 分钟内有多少个事故？",
+      "这个服务健康吗？",
+      "Is payments-api up?",
+      "Check the health of staging-api."
+    ]
+  },
+  "props": {
+    "n_ctx": 8192,
+    "total_slots": 4,
+    "build_info": "b11785-8baabd53b"
+  },
+  "sizing": {
+    "target_tokens": 6000,
+    "aimed_tokens": 6000,
+    "lines": 219,
+    "counted_tokens": 5984,
+    "reference_uncancelled": {
+      "wall_ms": 55658.33604201907,
+      "ended_by": "completed",
+      "input_tokens": 5984
+    }
+  },
+  "slots_processing_after": 0,
+  "repetitions": [
+    {
+      "repetition": 0,
+      "long_prompt_tokens": 6205,
+      "idle": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 1052.94716602657,
+        "wall_ms": 1436.3190830335952,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "check-service-health",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 947,
+          "prompt_n": 15,
+          "prompt_ms": 293.567,
+          "prompt_per_token_ms": 19.571133333333332,
+          "prompt_per_second": 51.09566129708039,
+          "predicted_n": 21,
+          "predicted_ms": 730.894,
+          "predicted_per_token_ms": 36.5447,
+          "predicted_per_second": 27.36374905253019
+        },
+        "usage": {
+          "completion_tokens": 21,
+          "prompt_tokens": 962,
+          "total_tokens": 983,
+          "prompt_tokens_details": {
+            "cached_tokens": 947
+          }
+        },
+        "cache_n": 947,
+        "prompt_n": 15,
+        "prompt_ms": 293.567,
+        "predicted_n": 21,
+        "predicted_ms": 730.894,
+        "cached_tokens": 947,
+        "prompt_tokens": 962,
+        "completion_tokens": 21
+      },
+      "cancel": {
+        "requested_after_ms": 200,
+        "called_after_ms": 200.00000001164153,
+        "events_before_cancel": 0
+      },
+      "after_cancel": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 10422.37045802176,
+        "wall_ms": 10811.865249997936,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "lookup-latest-deployment",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 18,
+          "prompt_ms": 208.24,
+          "prompt_per_token_ms": 11.568888888888889,
+          "prompt_per_second": 86.43872454859776,
+          "predicted_n": 23,
+          "predicted_ms": 781.791,
+          "predicted_per_token_ms": 35.53595454545455,
+          "predicted_per_second": 28.140513257379528
+        },
+        "usage": {
+          "completion_tokens": 23,
+          "prompt_tokens": 964,
+          "total_tokens": 987,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 18,
+        "prompt_ms": 208.24,
+        "predicted_n": 23,
+        "predicted_ms": 781.791,
+        "cached_tokens": 946,
+        "prompt_tokens": 964,
+        "completion_tokens": 23,
+        "sent_after_cancel_ms": 0.01808302477002144
+      },
+      "long_generation": {
+        "ended_by": "cancelled",
+        "ended_after_cancel_ms": 1.1656660353764892,
+        "events": []
+      }
+    },
+    {
+      "repetition": 1,
+      "long_prompt_tokens": 6205,
+      "idle": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 933.9478330221027,
+        "wall_ms": 1313.0244169733487,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "summarize-incident-counts",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 24,
+          "prompt_ms": 299.019,
+          "prompt_per_token_ms": 12.459125,
+          "prompt_per_second": 80.2624582384397,
+          "predicted_n": 25,
+          "predicted_ms": 837.316,
+          "predicted_per_token_ms": 34.88816666666667,
+          "predicted_per_second": 28.663013724806405
+        },
+        "usage": {
+          "completion_tokens": 25,
+          "prompt_tokens": 970,
+          "total_tokens": 995,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 24,
+        "prompt_ms": 299.019,
+        "predicted_n": 25,
+        "predicted_ms": 837.316,
+        "cached_tokens": 946,
+        "prompt_tokens": 970,
+        "completion_tokens": 25
+      },
+      "cancel": {
+        "requested_after_ms": 200,
+        "called_after_ms": 200.00000001164153,
+        "events_before_cancel": 0
+      },
+      "after_cancel": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 11145.832667010836,
+        "wall_ms": 11568.77875002101,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "health-and-diagnostic-checklist",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 14,
+          "prompt_ms": 204.05,
+          "prompt_per_token_ms": 14.575000000000001,
+          "prompt_per_second": 68.6106346483705,
+          "predicted_n": 24,
+          "predicted_ms": 851.977,
+          "predicted_per_token_ms": 37.042478260869565,
+          "predicted_per_second": 26.996033930493432
+        },
+        "usage": {
+          "completion_tokens": 24,
+          "prompt_tokens": 960,
+          "total_tokens": 984,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 14,
+        "prompt_ms": 204.05,
+        "predicted_n": 24,
+        "predicted_ms": 851.977,
+        "cached_tokens": 946,
+        "prompt_tokens": 960,
+        "completion_tokens": 24,
+        "sent_after_cancel_ms": 0.021417043171823025
+      },
+      "long_generation": {
+        "ended_by": "cancelled",
+        "ended_after_cancel_ms": 1.8969170050695539,
+        "events": []
+      }
+    },
+    {
+      "repetition": 2,
+      "long_prompt_tokens": 6205,
+      "idle": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 784.200832946226,
+        "wall_ms": 1162.4927079537883,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "investigate-performance",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 22,
+          "prompt_ms": 337.719,
+          "prompt_per_token_ms": 15.350863636363636,
+          "prompt_per_second": 65.14291467166491,
+          "predicted_n": 21,
+          "predicted_ms": 699.727,
+          "predicted_per_token_ms": 34.98635,
+          "predicted_per_second": 28.582575775981205
+        },
+        "usage": {
+          "completion_tokens": 21,
+          "prompt_tokens": 968,
+          "total_tokens": 989,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 22,
+        "prompt_ms": 337.719,
+        "predicted_n": 21,
+        "predicted_ms": 699.727,
+        "cached_tokens": 946,
+        "prompt_tokens": 968,
+        "completion_tokens": 21
+      },
+      "cancel": {
+        "requested_after_ms": 200,
+        "called_after_ms": 200.00000001164153,
+        "events_before_cancel": 0
+      },
+      "after_cancel": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 11390.109708998352,
+        "wall_ms": 11793.659750022925,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "delete-demo-database",
+              "arguments": "{\"language\": \"zh\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 16,
+          "prompt_ms": 279.787,
+          "prompt_per_token_ms": 17.4866875,
+          "prompt_per_second": 57.186359623570794,
+          "predicted_n": 22,
+          "predicted_ms": 797.315,
+          "predicted_per_token_ms": 37.96738095238096,
+          "predicted_per_second": 26.33839824912362
+        },
+        "usage": {
+          "completion_tokens": 22,
+          "prompt_tokens": 962,
+          "total_tokens": 984,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 16,
+        "prompt_ms": 279.787,
+        "predicted_n": 22,
+        "predicted_ms": 797.315,
+        "cached_tokens": 946,
+        "prompt_tokens": 962,
+        "completion_tokens": 22,
+        "sent_after_cancel_ms": 0.029499991796910763
+      },
+      "long_generation": {
+        "ended_by": "cancelled",
+        "ended_after_cancel_ms": 1.3457919703796506,
+        "events": []
+      }
+    },
+    {
+      "repetition": 3,
+      "long_prompt_tokens": 6205,
+      "idle": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 894.0830419887789,
+        "wall_ms": 1299.9701669905335,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "check-service-health",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 19,
+          "prompt_ms": 360.864,
+          "prompt_per_token_ms": 18.992842105263158,
+          "prompt_per_second": 52.65141438325796,
+          "predicted_n": 21,
+          "predicted_ms": 760.395,
+          "predicted_per_token_ms": 38.01975,
+          "predicted_per_second": 26.302119293262052
+        },
+        "usage": {
+          "completion_tokens": 21,
+          "prompt_tokens": 965,
+          "total_tokens": 986,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 19,
+        "prompt_ms": 360.864,
+        "predicted_n": 21,
+        "predicted_ms": 760.395,
+        "cached_tokens": 946,
+        "prompt_tokens": 965,
+        "completion_tokens": 21
+      },
+      "cancel": {
+        "requested_after_ms": 200,
+        "called_after_ms": 200.00000001164153,
+        "events_before_cancel": 0
+      },
+      "after_cancel": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 11023.570374993142,
+        "wall_ms": 11446.183791966178,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "lookup-latest-deployment",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 17,
+          "prompt_ms": 285.124,
+          "prompt_per_token_ms": 16.772000000000002,
+          "prompt_per_second": 59.62318149296446,
+          "predicted_n": 23,
+          "predicted_ms": 855.451,
+          "predicted_per_token_ms": 38.884136363636365,
+          "predicted_per_second": 25.717428584454282
+        },
+        "usage": {
+          "completion_tokens": 23,
+          "prompt_tokens": 963,
+          "total_tokens": 986,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 17,
+        "prompt_ms": 285.124,
+        "predicted_n": 23,
+        "predicted_ms": 855.451,
+        "cached_tokens": 946,
+        "prompt_tokens": 963,
+        "completion_tokens": 23,
+        "sent_after_cancel_ms": 0.017417012713849545
+      },
+      "long_generation": {
+        "ended_by": "cancelled",
+        "ended_after_cancel_ms": 1.727666996885091,
+        "events": []
+      }
+    },
+    {
+      "repetition": 4,
+      "long_prompt_tokens": 6205,
+      "idle": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 1073.9977920311503,
+        "wall_ms": 1490.5070420354605,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "summarize-incident-counts",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 24,
+          "prompt_ms": 362.941,
+          "prompt_per_token_ms": 15.122541666666665,
+          "prompt_per_second": 66.12645030459497,
+          "predicted_n": 25,
+          "predicted_ms": 927.563,
+          "predicted_per_token_ms": 38.64845833333333,
+          "predicted_per_second": 25.874253285221595
+        },
+        "usage": {
+          "completion_tokens": 25,
+          "prompt_tokens": 970,
+          "total_tokens": 995,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 24,
+        "prompt_ms": 362.941,
+        "predicted_n": 25,
+        "predicted_ms": 927.563,
+        "cached_tokens": 946,
+        "prompt_tokens": 970,
+        "completion_tokens": 25
+      },
+      "cancel": {
+        "requested_after_ms": 200,
+        "called_after_ms": 200.00000001164153,
+        "events_before_cancel": 0
+      },
+      "after_cancel": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 11257.595999981277,
+        "wall_ms": 11651.108541002031,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "health-and-diagnostic-checklist",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 14,
+          "prompt_ms": 245.721,
+          "prompt_per_token_ms": 17.5515,
+          "prompt_per_second": 56.97518730592827,
+          "predicted_n": 24,
+          "predicted_ms": 865.239,
+          "predicted_per_token_ms": 37.61908695652174,
+          "predicted_per_second": 26.582250684492955
+        },
+        "usage": {
+          "completion_tokens": 24,
+          "prompt_tokens": 960,
+          "total_tokens": 984,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 14,
+        "prompt_ms": 245.721,
+        "predicted_n": 24,
+        "predicted_ms": 865.239,
+        "cached_tokens": 946,
+        "prompt_tokens": 960,
+        "completion_tokens": 24,
+        "sent_after_cancel_ms": 0.014625024050474167
+      },
+      "long_generation": {
+        "ended_by": "cancelled",
+        "ended_after_cancel_ms": 1.0875000152736902,
+        "events": []
+      }
+    }
+  ]
+}

@@ -555,7 +555,11 @@ a day or less on existing exports or the existing benchmark.
 - S0 spikes, measure before commitment (spec section 12.3):
   - read the runtime's `timings` and cached tokens, then rerun the
     latency benchmark, because every cached-token figure so far is an
-    adapter default (#114);
+    adapter default (#114). The probe is done (2026-10-23,
+    [`EVIDENCE.md`](EVIDENCE.md)): with `cache_prompt` on, the runtime
+    reused 946 or 947 of 960 to 970 routing tokens (98 %) and 257 or 258
+    of 559 to 564 skill-stage tokens (46 %), because the user's text sits
+    before the skill body. The latency benchmark rerun is not done;
   - regrade the corpus export offline with the skill-stage draft as the
     answer, which decides `answer_pass` (#115). Done offline
     (2026-10-23, [`EVIDENCE.md`](EVIDENCE.md)): of the 36 auto and
@@ -567,11 +571,19 @@ a day or less on existing exports or the existing benchmark.
     80 % target. A prediction from one recorded run, not a measurement:
     `final` stays the default until #128;
   - external first-token time with and without tools and with provider
-    reasoning on and off, which decides the external-path lever (#116);
+    reasoning on and off, which decides the external-path lever (#116).
+    Done for one provider (2026-10-23, 20 calls, Z.ai `glm-4.6`): the
+    response headers came with the first token, so there is no earlier
+    sign of life; reasoning off still left 4.7 to 6.7 s on a short
+    answer. A first look, not a benchmark;
   - timings in a constrained configuration of the Apple M1 (a
     CPU-only runtime with fewer threads) next to its normal one, cold
     and warm prefix, cancel during prefill, which sets the deadline
-    margin (#117);
+    margin (#117). Done (2026-10-23): CPU-only with two threads, a
+    cold routing request took 4121 to 4403 ms against 1028 to 1054 ms in
+    the normal configuration, and the next request waited about a fifth of
+    the long prompt's full prefill after a cancel (1.76 to 1.82 s normal,
+    10.4 to 11.4 s constrained). One run on one machine;
   - score an example-matching selector offline on the corpus prompts,
     with the expected-skill sidecar file (#118, P0: it decides whether
     no-local selection works). Done offline (2026-10-23): the sidecar

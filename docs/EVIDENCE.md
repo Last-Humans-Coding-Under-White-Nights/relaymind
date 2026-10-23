@@ -1892,3 +1892,361 @@ correctness corpus (4/12). Windows completed 0/60 simple latency
 requests and 0/8 requests in each cache arm (including Chinese); these
 are different prompt sets, not a Windows correctness-corpus score.
 No Windows correctness corpus ran, and no cache speedup is claimed.
+
+## 2026-10-23 — Runtime and provider timing probes (#114, #116, #117), Apple Silicon macOS
+
+Three probes that read what the pinned runtime and one external provider
+report about time. They give the performance work of spec 0.32 something
+measured to start from: whether llama-server reuses the constant prompt
+prefixes (finding F9, #114), what the fixed cost of an external call is
+made of (finding F3, #116), and how the same requests behave in a
+constrained configuration of this machine (RM26, RM27, #117). No gateway
+behavior or default changed; the only code the probes share with the
+gateway is `skill_stage_messages`, the skill-stage conversation that
+`LocalOrchestrator._local_setup` builds, which was moved into a pure
+function so that the probe sends exactly what the gateway sends. Every
+figure is a single-pass observation from one run on one machine, never a
+p50 or a p95 (spec 12.3), and each export says so in a `label` field.
+
+### Commands
+
+From the repository root, with the pinned runtime first on the path
+(`llama-server --version`: `version: 0.7.0-dev (build 11785, commit
+8baabd53b)`, the runtime the manifest names):
+
+```bash
+export PATH=/Users/dmitrykudryavtsev/llama-b11785-dl/x/llama-b11785:$PATH
+python scripts/probes/probe_prefix_cache.py scripts/probes/m7_prefix_cache.json \
+    --out docs/evidence/2026-10-23-prefix-cache-apple-m1.json
+python scripts/probes/probe_prefix_cache.py scripts/probes/m7_prefix_cache.json \
+    --out docs/evidence/2026-10-23-prefix-cache-constrained-apple-m1.json \
+    --runtime-extra-args='--n-gpu-layers 0 --threads 2'
+python scripts/probes/probe_cancel_prefill.py scripts/probes/m7_cancel_prefill.json \
+    --out docs/evidence/2026-10-23-cancel-prefill-apple-m1.json
+python scripts/probes/probe_cancel_prefill.py scripts/probes/m7_cancel_prefill.json \
+    --out docs/evidence/2026-10-23-cancel-prefill-constrained-apple-m1.json \
+    --runtime-extra-args='--n-gpu-layers 0 --threads 2'
+source ~/.config/relaymind/external.env      # RELAYMIND_EXTERNAL_BASE_URL, _MODEL, _API_KEY
+python scripts/probes/probe_external_latency.py scripts/probes/m7_external_latency.json \
+    --out docs/evidence/2026-10-23-external-latency-zai-glm-4.6.json --max-calls 25
+```
+
+Raw exports:
+[`2026-10-23-prefix-cache-apple-m1.json`](evidence/2026-10-23-prefix-cache-apple-m1.json),
+[`2026-10-23-prefix-cache-constrained-apple-m1.json`](evidence/2026-10-23-prefix-cache-constrained-apple-m1.json),
+[`2026-10-23-cancel-prefill-apple-m1.json`](evidence/2026-10-23-cancel-prefill-apple-m1.json),
+[`2026-10-23-cancel-prefill-constrained-apple-m1.json`](evidence/2026-10-23-cancel-prefill-constrained-apple-m1.json),
+[`2026-10-23-external-latency-zai-glm-4.6.json`](evidence/2026-10-23-external-latency-zai-glm-4.6.json).
+
+### Application revision and conditions
+
+| Field | Value |
+|-------|-------|
+| Measured code | `b96c339` (branch `m7/timing-probes`), for all five runs. Later commits on the branch changed code after the runs. `b1c3f3a` moves shared helpers between the two local probes (reading the definition, resolving paths, reading `/props`) and does not change the requests they send. The review-fix commit after it changes the cancel-prefill probe (the two corrections in the cancel section below: the measured call time and the reference prompt label) and tightens the check of `--runtime-extra-args` to an allowlist of runtime-only settings; the arguments of the constrained runs (`--n-gpu-layers 0 --threads 2`) pass that check. The exports were not rerun, so the two cancel-prefill exports were produced by the code of `b96c339` with those two defects. The other exports record requests the later changes do not touch |
+| Rebase onto master | After the runs, #147 (`a3028c0`) and #110 (`8f2de8e`) merged and the branch was rebased onto master. The commits named above are the pre-rebase revisions, kept as recorded in the exports; their equivalents on this branch are `b96c339` → `19f049b` and `b1c3f3a` → `34c24ee`. Each pair differs in code only by #147's review fixes to the offline spikes (`scripts/run_corpus.py`, `scripts/probes/count_multi_calls.py`, `scripts/probes/probe_example_match.py`, `src/relaymind/evaluation/corpus.py`, and their tests); #110 changed only documentation and evidence files. None of the three timing probes or the live harness imports those modules, so no figure changes |
+| Second review of PR #149 | After the runs and the rebase, `05f903f`, `71b3672`, and `7747e62` fix the findings of the second code-owner review; no export was rerun or edited. `05f903f` replaces the check of `--runtime-extra-args` with an explicit grammar: each runtime-only setting takes one integer value in its range (as the next token or after `=`), and a positional argument (llama-server reads one as the model path), a missing, non-integer, or out-of-range value, a `--no-` form, and the `--mlock` and `--mmap` switches, which b11785 does not have, are refused. The extra arguments recorded by the two constrained runs (`--n-gpu-layers 0 --threads 2`) pass the new check unchanged, so every recorded launch is one the code accepts now (`tests/test_runtime_extra_args.py` checks the extra arguments of every export in `docs/evidence/`); the check only accepts or refuses, and it does not change the arguments it accepts. `71b3672` stops the cancel-prefill sizing with a clear error when the runtime counts no tokens (a zero count would have ended the recorded runs with a division error, and both counted 5,984 tokens), and cancels and awaits the long generation when a later step of a repetition fails; the steps of a repetition, their order, and the points where its times are taken are unchanged, and the one new await comes after the last measurement. `7747e62` removes the last two of the twelve short prompts from `scripts/probes/m7_cancel_prefill.json` (SHA-256 `e2fc040078718ddf906a15349c9b413335707e77f411de8d04f34300689c7240` at the runs, `893438c95f16b0b915c5d1fb16b07f3ddf961a0c55048ebc51db5aed5b8231cb` now) and refuses a definition without exactly two short prompts per repetition. The two cancel-prefill exports record the twelve-prompt definition. The removed prompts, "Is payments-api up?" and "Check the health of staging-api.", were never sent: the code of `b96c339` sends prompts `2r` and `2r + 1` (counted from 0) in repetition `r`, the exports record repetitions 0 to 4, so prompts 0 to 9 were sent, and neither removed text occurs in either export outside its `definition`. The other fields of the definition and its first ten prompts are unchanged. The prefix-cache and external-latency probes did not change. So no figure changes |
+| `dirty` in the exports | The first export (prefix cache, normal) records `dirty: false`. The other four record `dirty: true`, and the only change in the tree at those runs was the untracked export files of the runs before them (`git status` listed nothing else). The PR1 entry above avoided this by writing to a scratch directory; these runs did not |
+| Runtime | llama.cpp build 11785, commit `8baabd53b`; launch settings from the manifest `models/qwen3-0.6b-q8_0.manifest.json` (`--ctx-size 8192 --jinja --reasoning off --reasoning-format deepseek`); `/props` reports 4 slots of 8192 tokens |
+| Normal configuration | The manifest's settings only: Metal, the default threads (4 on this machine, from the runtime log). `llama_server.extra_args` is `[]` in its exports |
+| Constrained configuration | The manifest's settings followed by `--n-gpu-layers 0 --threads 2` (recorded as `llama_server.extra_args`, and in `llama_server.argv`; the runtime log records `n_threads` 2). A CPU-only runtime with two threads on this M1. The model, the runtime, and the requests are the same. It is a configuration of this machine and is not another machine. The export's `runtime_devices` lists the devices the runtime can see (`--list-devices`), which still shows the Metal device, because it records what is available and not what the model used; the timings below are the evidence that this configuration ran on the CPU |
+| Machine load | Nothing else heavy ran, and no pytest ran during a measurement. The machine was not otherwise idle: the load average read 2.5 just before the first run, with a terminal session, a network proxy, and Finder running. The numbers carry that noise |
+| External run | Z.ai, base URL `https://api.z.ai/api/paas/v4`, model `glm-4.6`, region not known (the endpoint does not say; `region_known: false`), 2026-10-23 14:03:47 to 14:06:14 China Standard Time (06:03 to 06:06 UTC), from this machine over its normal network path. 20 provider calls were made, the cap for this work was 25, and none was retried. Whether the network proxy running on the machine carried the traffic was not checked. The API key was read from the environment, sent only in the Authorization header, and is in no export (checked: the key text does not occur in the export file) |
+
+### Prefix reuse (#114)
+
+The probe builds the routing request with `Router.build_request` over the
+demo skills and the skill-stage request with `skill_stage_messages` over
+the offered tool of `check-service-health`, encodes both with the llama.cpp
+adapter's `build_chat_request`, adds only `cache_prompt` (true, then
+false), and sends them over raw HTTP so the whole `timings` and `usage`
+objects are read. Each of four groups (blocked and interleaved layout, each
+with `cache_prompt` true and false) runs in a launch of its own: the first
+request of each purpose after the launch (cold), three warm-up rounds, then
+ten requests per purpose with different user text (five English, five
+Chinese). Each configuration sent 112 requests (8 cold, 24 warm-up, 80
+measured); all returned status 200, and every row returned `timings` and
+`usage.prompt_tokens_details.cached_tokens` (none is null). Ranges below are
+over the measured requests of both layouts; the export has each layout apart
+and they agree.
+
+Normal configuration (milliseconds, the runtime's own `prompt_ms`; wall is
+the client's time to the end of the stream):
+
+| Purpose | `cache_prompt` | Prompt tokens | `cache_n` (reused) | `prompt_n` (computed) | `prompt_ms` | Wall |
+|---|---|---|---|---|---|---|
+| routing | true | 960 to 970 | 946 to 947 | 14 to 24 | 35 to 54 | 351 to 417 |
+| routing | false | 960 to 970 | 0 | 960 to 970 | 655 to 692 | 995 to 1069 |
+| skill stage | true | 559 to 564 | 257 to 258 | 301 to 307 | 217 to 234 | 542 to 570 |
+| skill stage | false | 559 to 564 | 0 | 559 to 564 | 375 to 394 | 698 to 741 |
+
+Constrained configuration (CPU, 2 threads), the same requests:
+
+| Purpose | `cache_prompt` | Prompt tokens | `cache_n` (reused) | `prompt_n` (computed) | `prompt_ms` | Wall |
+|---|---|---|---|---|---|---|
+| routing | true | 960 to 970 | 946 to 947 | 14 to 24 | 149 to 305 | 742 to 1114 |
+| routing | false | 960 to 970 | 0 | 960 to 970 | 3405 to 4330 | 3997 to 5018 |
+| skill stage | true | 559 to 564 | 257 to 258 | 301 to 307 | 1066 to 1346 | 1530 to 2011 |
+| skill stage | false | 559 to 564 | 0 | 559 to 564 | 1903 to 2274 | 2348 to 2827 |
+
+The cold request of each group (the first request of a purpose after the
+launch, so the cache holds nothing for it): `cache_n` 0 in all 16. Wall
+time, normal: routing 1028 to 1054 ms and skill stage 701 to 749 ms;
+constrained: routing 4121 to 4403 ms and skill stage 2325 to 2601 ms (four
+launches each, so four values per cell; they are in `cold_requests`).
+
+What the figures say, per purpose:
+
+- **Routing: the constant prefix is reused.** The 946 leading tokens (the
+  routing prompt and the seven skill functions) are the same in every
+  routing request, and the runtime reused 946 or 947 of 960 to 970 tokens,
+  98 %, in both layouts and both configurations. With `cache_prompt` false
+  it reused none. A warm routing request computes 14 to 24 tokens. Reuse
+  cuts the runtime's prompt time from about 0.66 s to about 0.05 s in the
+  normal configuration, and from 3.4 to 4.3 s to 0.15 to 0.31 s in the
+  constrained one.
+- **Skill stage: only a part of the constant text is reused.** The probe
+  measured a constant prefix of 257 tokens, and the runtime reused 257 or
+  258 of 559 to 564 (46 %). The rest, 301 to 307 tokens, was computed in
+  every request. The cause is the order of the messages
+  `skill_stage_messages` builds: the skill's description, then the user's
+  message, then the message that holds the skill instructions (about 1,200
+  characters, a constant part of the request, as the tool schema and the
+  skill's description are), so the user's
+  text sits before the skill body and ends the shared prefix. This is the
+  layout that spec 0.32 section 10 says to change (the skill body before
+  the conversation). It is a finding about the current layout, not about
+  the runtime.
+- **The runtime reports its reuse.** `timings.cache_n` and
+  `usage.prompt_tokens_details.cached_tokens` agree in every one of the 224
+  rows (112 per configuration), including 0 when `cache_prompt` is false. So the counts the adapter
+  records as 0 today (finding F9) are available to read (#120), and no
+  launch setting has to change for them (RM18).
+
+What this means for #124: the first change is code only. The adapter has to
+send `cache_prompt` explicitly and read `cache_n` and `cached_tokens` (PR3);
+the routing request needs no layout change, because its constant part
+already comes first. The skill stage needs the layout change: with the skill
+body before the user message, the constant prefix would be about 560 tokens
+minus the user text instead of 257. That is a prediction from the token
+counts above, not a measurement; the effect on the skill-stage `prompt_n` is
+to be measured by the rerun in #124 step 5 once PR3 has the adapter read the
+counts (the latency benchmark rerun belongs to PR6). One thing this probe
+did not test: an arm that leaves `cache_prompt` out of the body, so what the
+runtime does by default at this build is not measured here (spec section 6,
+S10, says it caches by default; the explicit true arm is what #124 will
+send).
+
+### Constrained configuration (#117)
+
+Both configurations are recorded with their runtime arguments above. The
+cold and warm figures per purpose are the two tables and the cold-request
+line above. Class, as the gateway would measure it (RM26): the rule is
+that the routing-shaped warm-up generation finishes within the per-stage
+active budget of section 11, which is 4.0 seconds. Applied by hand, because
+detection (#126) is not built, to the wall time of the routing request:
+
+| Configuration | Cold routing request (four launches) | Warm routing request, prefix reused | Routing request without reuse (warm, `cache_prompt` false) | By the RM26 rule |
+|---|---|---|---|---|
+| Normal (Metal, default threads) | 1028 to 1054 ms | 351 to 417 ms | 995 to 1069 ms | Within 4.0 s cold and warm: suitable |
+| Constrained (CPU, 2 threads) | 4121 to 4403 ms (all four over 4.0 s) | 742 to 1114 ms | 3997 to 5018 ms | Over 4.0 s cold: the startup warm-up would classify it unsuitable; the warm request fits |
+
+The constrained configuration therefore shows the case that matters for
+RM26 and RM27: one request that fits warm and does not fit cold. A startup
+warm-up is a cold request, so detection by the rule as written would
+classify this configuration unsuitable even though a routing request with
+the prefix in the cache finishes in about a quarter of the budget. The
+margin on the cold request is small (4121 ms against 4000 ms, 3 % at the
+lowest value), so it is a borderline measurement of one configuration and
+not a general threshold. Whether the rule should use the cold or the warm
+time is a question for #126 and #130; this entry only supplies the numbers.
+The normal configuration is "suitable" by the same rule. No class was
+computed by a gateway, because detection (#126) does not exist yet.
+
+The optional GitHub-hosted runner step of #117 was not run.
+
+### Cancel during prefill (#117)
+
+A prompt of about 6,000 tokens goes through `LlamaCppAdapter.generate`;
+after 200 ms the probe calls `adapter.cancel`, the call the gateway makes
+when a run is cancelled (RM14), and sends a short routing-shaped request at
+once. The same kind of short request is sent to the idle runtime just before
+each repetition. Five repetitions per configuration; each repetition has a
+long prompt of its own (log lines whose numbers differ), so no prefix is
+shared between them. `/props` first: 4 slots of 8192 tokens, so the prompt
+was sized to fit one slot. The sizing prompt counted 5,984 tokens with the
+runtime's own tokenizer (`/apply-template`, `/tokenize`), and each
+repetition's prompt counted 6,205 (the repetition numbers at the start of
+its lines tokenise longer than the sizing label; the difference is 3.7 %).
+One uncancelled run of the sizing prompt gives the full prefill time. All
+ten long generations ended as cancelled, within 2 ms of the cancel call, and `/slots` showed no slot processing at the end.
+
+Two corrections found in review, after the runs (the measured numbers
+are unchanged; the exports were not rerun):
+
+- `cancel.called_after_ms` in the exports (200.00000001164153 in all
+  ten repetitions) is the requested delay and not a measurement. The code
+  of `b96c339` computed the start time of the long generation by
+  subtracting the delay from the time of the cancel call, so the field
+  could not differ from `requested_after_ms`. The time from the start of the
+  generation to the cancel call was not measured in these runs. The probe
+  now takes the start time before the generation task is created.
+- The sizing prompt and the uncancelled reference run used the labels
+  `size` and `ref`, and the repetitions use two-digit labels (`00` to `04`),
+  which tokenise longer. So the reference (5,984 tokens) and the
+  within-1% sizing describe a shorter prompt than the 6,205 tokens every
+  cancelled repetition sent (3.7% more). The percentages in "What it shows"
+  below compare a wait after a cancel of the 6,205-token prompt with a full
+  prefill of the 5,984-token prompt; read them as "about a fifth", not as
+  exact. The probe now writes the sizing and reference prompts with a
+  two-digit label no repetition uses.
+
+| Configuration | Uncancelled long prefill (5,984 tokens) | Short request on an idle runtime: first token (ms), five repetitions | Short request right after the cancel: first token (ms), five repetitions | Extra wait after a cancel (ms), five repetitions |
+|---|---|---|---|---|
+| Normal | 7761 ms | 630, 362, 345, 328, 337 | 1818, 1790, 1763, 1761, 1771 | 1188, 1429, 1419, 1432, 1433 |
+| Constrained | 55658 ms | 1053, 934, 784, 894, 1074 | 10422, 11146, 11390, 11024, 11258 | 9369, 10212, 10606, 10129, 10184 |
+
+Wall time to the end of the short request, after the cancel: normal 1937 to
+1998 ms, constrained 10812 to 11794 ms (idle: 522 to 842 ms and 1162 to
+1491 ms). In every repetition the short request still found its 946-token
+routing prefix in the cache (`cache_n` 946).
+
+What it shows: the client's cancel returns at once and the long generation
+ends, but the runtime does not become free at once. The next request waited
+1.76 to 1.82 s for its first token in the normal configuration and 10.4 to
+11.4 s in the constrained one, against 0.33 to 0.63 s and 0.78 to 1.07 s
+when the runtime was idle. That is not the whole prefill (the wait is 23 %
+of the uncancelled time in the normal configuration and 19 to 21 % in the
+constrained one), so the runtime does stop the prefill early. What it does
+not show is why it stops where it does; this probe did not look at the
+runtime's batch handling. For RM27 the practical reading is that a local
+generation cancelled at a deadline can delay the next local request by
+about a fifth of the prompt's full prefill time on this machine, so the
+deadline margin of #130 has to count that wait on a slow configuration; the
+two waits above are the inputs for it.
+
+### External first-token time (#116)
+
+Streamed Chat Completions over raw HTTP to Z.ai, `glm-4.6`, 20 calls in 5
+rounds of the four arms, the order of the arms rotating each round. Two
+request shapes, both built by `external_messages` over a synthetic handoff
+envelope and encoded by the external adapter's `build_chat_request`: an
+**answer** generation (a `get_service_health` exchange in the conversation,
+no tools offered, about 765 prompt tokens) and a **tools** generation (the
+tools of `investigate-performance` offered, about 1,193 prompt tokens). The
+**default** arms send nothing about reasoning. The **off** arms add the
+field `"thinking": {"type": "disabled"}`. Documentation checked on the day
+(2026-10-23): the Z.ai API reference for chat completion,
+<https://docs.z.ai/api-reference/llm/chat-completion>, lists the request
+field `thinking.type` with the options `enabled` and `disabled` (default
+`enabled`; for GLM-4.6 the model decides whether to think when it is
+enabled), and the thinking guide,
+<https://docs.z.ai/guides/capabilities/thinking-mode>, shows the same field
+and the streamed `reasoning_content` delta. Neither page documents a
+reasoning-token count in `usage`; the provider returned
+`usage.completion_tokens_details.reasoning_tokens` anyway, and the table
+shows it. Times are seconds from the request start; "headers" is the time
+to the response headers.
+
+| Arm | Request (call number) | Prompt tokens | Completion tokens | Reasoning tokens | Headers | First reasoning delta | First content or tool-call delta | End | Tool calls |
+|---|---|---|---|---|---|---|---|---|---|
+| answer, default | #0 (1) | 768 | 81 | 51 | 8.74 | 8.74 | 9.08 | 9.37 | 0 |
+| answer, default | #1 (8) | 767 | 99 | 68 | 7.95 | 7.95 | 8.22 | 8.22 | 0 |
+| answer, default | #2 (11) | 770 | 89 | 59 | 5.05 | 5.05 | 5.54 | 5.54 | 0 |
+| answer, default | #3 (14) | 765 | 32 | 1 | 7.45 | none | 7.45 | 7.45 | 0 |
+| answer, default | #4 (17) | 768 | 94 | 63 | 6.92 | 6.92 | 7.42 | 7.55 | 0 |
+| answer, off | #0 (2) | 767 | 26 | 0 | 4.72 | none | 4.72 | 4.72 | 0 |
+| answer, off | #1 (5) | 766 | 32 | 0 | 5.21 | none | 5.21 | 5.21 | 0 |
+| answer, off | #2 (12) | 769 | 31 | 0 | 5.22 | none | 5.22 | 5.32 | 0 |
+| answer, off | #3 (15) | 764 | 31 | 0 | 6.70 | none | 6.70 | 6.70 | 0 |
+| answer, off | #4 (18) | 767 | 30 | 0 | 5.98 | none | 5.98 | 5.98 | 0 |
+| tools, default | #0 (3) | 1194 | 155 | 89 | 7.61 | 7.61 | 9.61 | 9.63 | 3 |
+| tools, default | #1 (6) | 1191 | 129 | 56 | 7.31 | 7.32 | 7.57 | 8.17 | 3 |
+| tools, default | #2 (9) | 1193 | 120 | 39 | 7.78 | 7.78 | 8.25 | 8.25 | 3 |
+| tools, default | #3 (16) | 1195 | 132 | 51 | 6.10 | 6.10 | 6.34 | 6.98 | 3 |
+| tools, default | #4 (19) | 1197 | 232 | 147 | 7.07 | 7.07 | 10.21 | 12.07 | 4 |
+| tools, off | #0 (4) | 1194 | 69 | 0 | 6.00 | none | 6.00 | 6.02 | 3 |
+| tools, off | #1 (7) | 1191 | 69 | 0 | 5.88 | none | 5.88 | 5.92 | 3 |
+| tools, off | #2 (10) | 1193 | 66 | 0 | 6.84 | none | 6.84 | 6.89 | 3 |
+| tools, off | #3 (13) | 1195 | 79 | 0 | 9.16 | none | 9.16 | 9.44 | 3 |
+| tools, off | #4 (20) | 1197 | 65 | 0 | 7.24 | none | 7.24 | 7.28 | 3 |
+
+All 20 calls returned status 200 and none was retried. The first call
+pays for the connection and says so in its row (`first_call_of_run`).
+`cached_tokens` in `usage` was 0 in all 20, and the provider returned the
+field. The requests of one round are the same five user texts in every arm.
+
+What the observation shows, as far as 20 calls go:
+
+- **The wait is before the first byte.** In all 20 calls the response
+  headers arrived at the same moment as the first reasoning or content
+  delta (within 0.6 ms; the export has the exact values). The provider
+  sent nothing, headers included, until it had its first token. So the
+  time to headers is the time to the first token here, and the response
+  headers are no earlier sign of life than the first delta from this
+  provider.
+- **A fixed cost of about 5 s exists without reasoning and without a long
+  output.** With reasoning off, an answer of 26 to 32 tokens from a prompt
+  of 764 to 769 tokens had its first (and nearly its last) token after 4.72
+  to 6.70 s. Reasoning and output length cannot explain that time, because
+  there was no reasoning and the output was short.
+- **The provider's reasoning default adds time in these 20 calls, but not
+  a constant amount.** Paired by round (same user text, one call of each arm
+  close in time), the default answer arm's first content delta came later
+  than the off arm's in all five rounds, by 0.32 to 4.36 s, and the tools
+  arm's in four of five (the exception: tools off #3, 9.16 s against 6.34 s
+  for default). The default arms spent 1 to 147 reasoning tokens (one answer
+  call spent 1 and sent no reasoning delta), and the longest waits are the
+  calls with the most reasoning tokens. The ranges of the arms overlap (first
+  content delta: answer default 5.54 to 9.08 s, answer off 4.72 to 6.70 s,
+  tools default 6.34 to 10.21 s, tools off 5.88 to 9.16 s).
+- **The tools shape was slower than the answer shape, and 5 calls per arm
+  cannot say why.** With reasoning off the tools shape took 5.88 to 9.16 s
+  to its first delta against 4.72 to 6.70 s for the answer shape (slower in
+  all five pairs, by 0.67 to 2.47 s), with about 430 more prompt tokens and
+  a three-call output instead of a short text. The prompt size, the tool
+  offering, and the output are not separated by this design.
+- **Streaming gave little to forward early in these calls.** The end of
+  the stream followed the first content or tool-call delta by 0 to 0.10 s
+  for the answer off arm, 0.02 to 0.28 s for the tools off arm, and 0 to
+  0.64 s in the default arms, except tools default #4 (1.86 s, 232 tokens).
+  The outputs were short, so this says nothing about long answers.
+
+What it does not show: how the 4.7 to 9 s splits between the network path,
+queueing at the provider, and the provider's prompt processing, because the
+probe sent no request with a tiny prompt and measured no connection-only
+baseline; the region is not known, and one run at one time of day cannot
+say how the time varies over a day. It does not say what a provider other
+than Z.ai does, and it does not say what a different `thinking` setting or
+`reasoning_effort` would do. The default arm is also not "reasoning always
+on": GLM-4.6 decides, and one default answer call used 1 reasoning token.
+
+For the external-path lever (#120, #125): reasoning cost is one part of the
+fixed cost and is controllable with a documented request field
+(`external_model.request_options`, section 6), but turning it off left a
+wait of about 5 s on the shortest requests, so switching reasoning off alone
+did not make an external call fast in these 20 calls. Fewer external
+generations (RM29, RM31) would remove a whole fixed cost per call; this
+observation does not measure that, and it does not rank the levers.
+
+### Caveats
+
+- One run of each probe on one machine and one provider, at one time of day;
+  no p50 or p95, no repeat of a configuration. The five-round external
+  sample and the ten requests per purpose are sizes for a first look, not a
+  benchmark. The runs were not made on an idle machine (load average 2.5
+  before the first run).
+- The constrained configuration is a CPU-only runtime with two threads on
+  this M1. It is not a measurement of any other machine, and the class
+  statement above is the RM26 rule applied by hand to the wall times of
+  this one configuration, not a class computed by a gateway.
+- The prefix-cache requests use one skill (`check-service-health`) and ten
+  user texts per purpose; the skill-stage prefix length of other skills
+  differs with the length of their descriptions and bodies.
+- The `cache_prompt` field was always sent explicitly. The runtime's
+  behavior with the field absent is not measured here.
+- `reused_share` and the constant-prefix token counts come from the
+  runtime's own tokenizer and template (`/apply-template`, `/tokenize`),
+  not from an estimate.
+- The `thinking` field was checked against the provider's documentation
+  pages on the day, but the pages do not document the reasoning-token count
+  that the provider returned.

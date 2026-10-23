@@ -77,7 +77,14 @@ if TYPE_CHECKING:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from probe_timing import _free_port, _launch_server, _runtime_banner, _stop  # noqa: E402
+from probe_timing import (  # noqa: E402
+    _free_port,
+    _launch_server,
+    _runtime_banner,
+    _stop,
+    check_runtime_extra_args,
+    parse_runtime_extra_args,
+)
 
 from relaymind.adapters.manifest import (  # noqa: E402
     launch_settings_argv,
@@ -2220,10 +2227,22 @@ class Runtime:
     manifest: Any
     artifact: Path
     banner: str
+    # Arguments added after the manifest's launch settings, such as a CPU-only
+    # runtime with fewer threads (spec 0.31 section 12.2). None by default.
+    extra_args: tuple[str, ...] = ()
 
     @property
     def server_argv(self) -> list[str]:
-        return launch_settings_argv(self.manifest.launch_settings)
+        """The arguments llama-server is launched with: the manifest's, then the extras."""
+        return [*launch_settings_argv(self.manifest.launch_settings), *self.extra_args]
+
+    def server_record(self, cold_start_seconds: float) -> dict[str, Any]:
+        """The launch as an export records it: argv, the extras in it, and the cold start."""
+        return {
+            "argv": self.server_argv,
+            "extra_args": list(self.extra_args),
+            "cold_start_seconds": round(cold_start_seconds, 3),
+        }
 
     def launch(self, log: Path) -> tuple[subprocess.Popen, str, float]:
         """Start llama-server from the manifest's launch settings (models/README.md)."""
@@ -2239,9 +2258,19 @@ class Runtime:
         }
 
 
-def check_runtime(manifest_path: Path) -> Runtime:
-    """The runtime banner must name the manifest's version, and the artifact its hash."""
+def check_runtime(manifest_path: Path, extra_args: Sequence[str] = ()) -> Runtime:
+    """The runtime banner must name the manifest's version, and the artifact its hash.
+
+    extra_args are launched after the manifest's settings and recorded in every export; one
+    that would change a pinned setting is refused (RM18).
+    """
     manifest = load_manifest(manifest_path)
+    try:
+        extras = check_runtime_extra_args(
+            extra_args, launch_settings_argv(manifest.launch_settings)
+        )
+    except ValueError as exc:
+        raise SystemExit(f"--runtime-extra-args: {exc}") from exc
     artifact = REPO_ROOT / "models" / manifest.file_name
     banner = _runtime_banner()
     if banner is None or f"version: {manifest.runtime_version}" not in [
@@ -2249,7 +2278,20 @@ def check_runtime(manifest_path: Path) -> Runtime:
     ]:
         raise SystemExit(f"llama-server on PATH is not {manifest.runtime_version}: {banner}")
     verify_artifact(manifest, artifact)
-    return Runtime(Path(manifest_path), manifest, artifact, banner)
+    return Runtime(Path(manifest_path), manifest, artifact, banner, extras)
+
+
+def add_runtime_extra_args(parser: argparse.ArgumentParser) -> None:
+    """The --runtime-extra-args option every runner shares (#117); the default adds none."""
+    parser.add_argument(
+        "--runtime-extra-args",
+        type=parse_runtime_extra_args,
+        default=(),
+        metavar="'ARGS'",
+        help="llama-server arguments added after the manifest's launch settings, as one "
+        "quoted text, for example --runtime-extra-args='--n-gpu-layers 0 --threads 2'; "
+        "recorded in the export; an argument that changes a pinned setting is refused",
+    )
 
 
 def application_revision() -> dict[str, Any]:
@@ -2258,7 +2300,7 @@ def application_revision() -> dict[str, Any]:
 
 
 def run_live(args: argparse.Namespace) -> dict[str, Any]:
-    runtime = check_runtime(Path(args.manifest))
+    runtime = check_runtime(Path(args.manifest), extra_args=args.runtime_extra_args)
     application = application_revision()
     external = None
     if args.external_base_url:
@@ -2381,10 +2423,7 @@ def run_live(args: argparse.Namespace) -> dict[str, Any]:
             },
             "application": application,
             "runtime_banner": runtime.banner,
-            "llama_server": {
-                "argv": runtime.server_argv,
-                "cold_start_seconds": round(cold_start, 3),
-            },
+            "llama_server": runtime.server_record(cold_start),
             **runtime.model_record(),
             "external_endpoint": external and _endpoint_record(external),
             "second_external_endpoint": second and _endpoint_record(second),
@@ -2451,6 +2490,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="the export file (JSON)")
     parser.add_argument("--manifest", default=os.fspath(DEFAULT_MANIFEST))
+    add_runtime_extra_args(parser)
     parser.add_argument("--external-base-url")
     parser.add_argument("--external-model")
     parser.add_argument("--external-context-limit", type=int)

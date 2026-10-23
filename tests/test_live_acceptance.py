@@ -32,6 +32,7 @@ def test_gateway_checks_hold_on_the_live_model(tmp_path):
     args = SimpleNamespace(
         out=str(tmp_path / "live.json"),
         manifest=str(live_manifest_path(os.environ)),
+        runtime_extra_args=(),
         external_base_url=None,
         external_model=None,
         external_context_limit=None,

@@ -348,12 +348,16 @@ def test_an_interrupted_benchmark_removes_its_work_dir(bench, tmp_path, monkeypa
     def interrupt(url):
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(bench.harness, "check_runtime", lambda manifest: _FakeRuntime())
+    monkeypatch.setattr(
+        bench.harness, "check_runtime", lambda manifest, extra_args=(): _FakeRuntime()
+    )
     monkeypatch.setattr(bench.harness, "application_revision", lambda: {})
     monkeypatch.setattr(bench.harness, "_stop", stopped.append)
     monkeypatch.setattr(bench.tempfile, "mkdtemp", lambda prefix: str(work))
     monkeypatch.setattr(bench, "_props", interrupt)
-    args = argparse.Namespace(manifest="m.json", seed=1, runs=1, timeout=1.0, out="x.json")
+    args = argparse.Namespace(
+        manifest="m.json", runtime_extra_args=(), seed=1, runs=1, timeout=1.0, out="x.json"
+    )
     with pytest.raises(KeyboardInterrupt):
         bench.run_benchmark(args)
     assert not work.exists()

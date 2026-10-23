@@ -1,0 +1,35 @@
+{
+  "skills_root": "../../skills",
+  "sandbox_seed": "../../tests/fixtures/sandbox/baseline.json",
+  "repetitions": 5,
+  "answer": {
+    "skill": "check-service-health",
+    "requests": [
+      {"service": "staging-api", "text": "Is staging-api healthy right now?"},
+      {"service": "payments-api", "text": "Check the health of payments-api."},
+      {"service": "staging-api", "text": "Please tell me whether staging-api is healthy."},
+      {"service": "payments-api", "text": "Is payments-api up?"},
+      {"service": "staging-api", "text": "How is staging-api doing today?"}
+    ]
+  },
+  "tools": {
+    "skill": "investigate-performance",
+    "requests": [
+      {"text": "payments-api got slow after the last deploy. Find out why."},
+      {"text": "Why is staging-api slower than usual this afternoon?"},
+      {"text": "Investigate the latency of payments-api over the last hour."},
+      {"text": "staging-api response times look worse after the release. What changed?"},
+      {"text": "Look into the slow requests on payments-api and tell me what the evidence shows."}
+    ]
+  },
+  "reasoning_off": {
+    "fields": {"thinking": {"type": "disabled"}},
+    "provider": "Z.ai",
+    "checked_on": "2026-10-23",
+    "documentation": [
+      "https://docs.z.ai/api-reference/llm/chat-completion",
+      "https://docs.z.ai/guides/capabilities/thinking-mode"
+    ],
+    "note": "The API reference lists the thinking request field (type enabled or disabled, supported by the GLM-4.6 series and higher, default enabled). The thinking guide shows thinking.type disabled and the streamed reasoning_content delta, and calls GLM-4.6 hybrid thinking. Neither page documents a reasoning-token count in usage."
+  }
+}
