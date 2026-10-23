@@ -1782,11 +1782,14 @@ def gateway_config(
     seed: Path = BASELINE_SEED,
     skill_root: Path = SKILLS_ROOT,
     permissions: Sequence[str] | None = None,
+    performance: Mapping[str, Any] | None = None,
 ) -> str:
     """The operator's TOML file for one launch (spec section 14.1); it holds no credential.
 
     permissions, when given, are the caller permissions of [policy];
     otherwise the launcher default (demo.read and demo.mutate) applies.
+    performance, when given, is the [performance] table (spec 0.32 section
+    14.1); without it the launch file has none and every default applies.
     """
     lines = [
         "[server]",
@@ -1819,6 +1822,11 @@ def gateway_config(
         ]
     if ui:
         lines += ["[ui]", 'mode = "live"']
+    if performance:
+        lines += [
+            "[performance]",
+            *(f"{key} = {_toml(value)}" for key, value in performance.items()),
+        ]
     return "\n".join(lines) + "\n"
 
 

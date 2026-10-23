@@ -25,7 +25,7 @@ sample, and the summary; a Markdown report is written next to it.
 
 Usage:
     python scripts/latency_benchmark.py --out docs/evidence/<date>-latency-<machine>.json \\
-        [--seed N] [--runs 10]
+        [--seed N] [--runs 10] [--early-headers]
 """
 
 import argparse
@@ -107,9 +107,30 @@ def warmup_prompts(prompts: Sequence[Mapping[str, str]]) -> list[Mapping[str, st
     return [next(p for p in prompts if p["label"] == label) for label in LABELS]
 
 
-def benchmark_config(**options) -> str:
-    """The operator file: checked-in skills, baseline sandbox, no external model, cache off."""
-    return harness.gateway_config(**options, routing_cache=False, external=None)
+def benchmark_config(*, early_headers: bool = False, **options) -> str:
+    """The operator file: checked-in skills, baseline sandbox, no external model, cache off.
+
+    early_headers turns on performance.early_headers (RM32, spec 0.32 section 7.3) and
+    nothing else; without it the file has no [performance] table, which is the baseline.
+    """
+    performance = {"early_headers": True} if early_headers else None
+    return harness.gateway_config(
+        **options, routing_cache=False, external=None, performance=performance
+    )
+
+
+def first_transport_label(early_headers: bool) -> str:
+    """What the first transport event is in this configuration (spec 0.32 sections 7.3, 12.1).
+
+    Under early headers the status line arrives when the run is accepted, so the metric is
+    the header time. It says nothing about when the first useful content arrives.
+    """
+    if early_headers:
+        return (
+            "header time: the status line sent at acceptance (early response headers); "
+            "not first useful content"
+        )
+    return "the response status, sent when the run has finished (the baseline)"
 
 
 def first_useful_content_ms(events: Sequence[Mapping[str, Any]]) -> float | None:
@@ -295,6 +316,7 @@ def _props(local_url: str) -> dict[str, Any] | None:
 
 
 def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
+    early_headers = bool(getattr(args, "early_headers", False))
     prompts = load_prompts()
     runtime = harness.check_runtime(Path(args.manifest), extra_args=args.runtime_extra_args)
     application = harness.application_revision()
@@ -316,6 +338,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                     artifact=runtime.artifact,
                     local_url=local_url,
                     port=harness._free_port(),
+                    early_headers=early_headers,
                 ),
                 encoding="utf-8",
             )
@@ -348,7 +371,12 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
             "note": "Spec 0.28 section 12.2 latency experiment on the local path, concurrency one, "
             "routing cache off. First transport event and first answer token are client times; "
             "first model action and first useful content are trace times (elapsed_ms from "
-            "run.accepted). The two clocks are never subtracted. Errors and timeouts are kept.",
+            "run.accepted). The two clocks are never subtracted. Errors and timeouts are kept."
+            + (
+                " First transport event: " + first_transport_label(True) + "."
+                if early_headers
+                else ""
+            ),
             "command": " ".join(["python", "scripts/latency_benchmark.py", *sys.argv[1:]]),
             "started_at_utc": started_at,
             "finished_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -364,6 +392,8 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                 "request_timeout_seconds": args.timeout,
                 "concurrency": 1,
                 "routing_cache": False,
+                "early_headers": early_headers,
+                "first_transport_event": first_transport_label(early_headers),
                 "external_model": None,
                 "path": "POST /v1/chat/completions, stream true, model relaymind",
             },
@@ -394,7 +424,9 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         }
         out = Path(args.out)
         harness.write_json(out, document, work=work)
-        report = render_latency_markdown(summary, title=f"Latency benchmark: {out.stem}")
+        report = render_latency_markdown(
+            summary, title=f"Latency benchmark: {out.stem}", early_headers=early_headers
+        )
         out.with_suffix(".md").write_text(report, encoding="utf-8")
         return document
 
@@ -407,10 +439,22 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     harness.add_runtime_extra_args(parser)
     parser.add_argument("--seed", type=int, help="the order seed (random when not given)")
+    parser.add_argument(
+        "--early-headers",
+        action="store_true",
+        help="run the gateway with performance.early_headers (RM32); the first transport "
+        "event is then labeled header time",
+    )
     parser.add_argument("--runs", type=int, default=RUNS_PER_PROMPT)
     parser.add_argument("--timeout", type=float, default=REQUEST_TIMEOUT_SECONDS)
     document = run_benchmark(parser.parse_args(argv))
-    print(render_latency_markdown(document["summary"], title="Latency benchmark"))
+    print(
+        render_latency_markdown(
+            document["summary"],
+            title="Latency benchmark",
+            early_headers=document["design"]["early_headers"],
+        )
+    )
 
 
 if __name__ == "__main__":

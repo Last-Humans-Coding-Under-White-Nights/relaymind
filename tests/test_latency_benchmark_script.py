@@ -23,6 +23,7 @@ from gateway_helpers import clarify_turn, health_tail, route_turn
 from helpers import ScriptedAdapter, StuckAdapter, load_script_module
 from launcher_helpers import make_artifact
 from relaymind.launcher import build_app, load_config
+from relaymind.orchestrator.performance import PerformanceSettings
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -32,11 +33,12 @@ def bench():
     return load_script_module("latency_benchmark")
 
 
-def serve(bench, tmp_path, adapter):
+def serve(bench, tmp_path, adapter, **options):
     manifest, artifact = make_artifact(tmp_path)
     path = tmp_path / "relaymind.toml"
     path.write_text(
         bench.benchmark_config(
+            **options,
             work=tmp_path / "work",
             manifest=manifest,
             artifact=artifact,
@@ -116,6 +118,43 @@ def test_the_config_has_the_cache_off_and_no_external_model(bench, tmp_path):
     _, config = serve(bench, tmp_path, ScriptedAdapter(turns=[]))
     assert config.routing_cache is False
     assert config.external is None
+
+
+# -- early response headers (RM32, spec 0.32 sections 7.3 and 12.1; #140) ---------------------
+
+
+def test_the_baseline_config_has_early_headers_off(bench, tmp_path):
+    """Section 12.1: false, the default, is the latency baseline."""
+    _, config = serve(bench, tmp_path, ScriptedAdapter(turns=[]))
+    assert config.performance.early_headers is False
+
+
+def test_the_early_headers_config_turns_only_that_option_on(bench, tmp_path):
+    """RM32: the benchmark names the option in the launch file, as every run records it."""
+    _, config = serve(bench, tmp_path, ScriptedAdapter(turns=[]), early_headers=True)
+    assert config.performance.early_headers is True
+    assert config.performance == PerformanceSettings(early_headers=True)
+    assert config.routing_cache is False and config.external is None
+
+
+def test_a_simple_prompt_gives_every_metric_under_early_headers(bench, tmp_path):
+    """RM20, RM32: the keep-alive comments are not an answer token."""
+    adapter = ScriptedAdapter(turns=[route_turn("check-service-health"), *health_tail()])
+    api, _ = serve(bench, tmp_path, adapter, early_headers=True)
+    sample = measure(bench, api, "Is staging-api healthy?")
+    assert sample["error"] is None and sample["state"] == "completed"
+    for metric in bench.LATENCY_METRICS:
+        assert isinstance(sample[metric], float), metric
+    # The transport event is the header time; useful content still comes from the trace.
+    assert sample["first_useful_content_ms"] >= sample["first_model_action_ms"]
+
+
+def test_the_first_transport_event_is_labeled_by_the_option(bench):
+    """Spec 0.32 section 7.3: with early headers it is the header time, never useful content."""
+    assert "header time" in bench.first_transport_label(True)
+    assert "not first useful content" in bench.first_transport_label(True)
+    assert "header" not in bench.first_transport_label(False)
+    assert bench.first_transport_label(True) != bench.first_transport_label(False)
 
 
 def test_a_simple_prompt_gives_every_metric(bench, tmp_path):

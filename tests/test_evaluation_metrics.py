@@ -294,3 +294,13 @@ def test_the_latency_report_renders_each_metric():
     for metric in LATENCY_METRICS:
         assert metric in text
     assert "500" in text
+
+
+def test_the_report_labels_the_first_transport_event_as_header_time_under_early_headers():
+    """Spec 0.32 section 7.3: the label is in the report and the default report has none."""
+    summary = summarize_latency([sample(first_transport_ms=40.0)])
+    plain = render_latency_markdown(summary, title="Latency")
+    early = render_latency_markdown(summary, title="Latency", early_headers=True)
+    assert "| first_transport_ms |" in plain and "header time" not in plain
+    assert "| first_transport_ms (header time) |" in early
+    assert "not first useful content" in early
