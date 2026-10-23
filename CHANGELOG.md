@@ -253,6 +253,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   timing statistics ignore it, so their definitions are unchanged; a
   consumer that lists every event of a stream sees one more (#120).
 
+- Specification 0.36 → 0.37 (#126; RM22, RM26, RM28, RM29; sections 7.4
+  and 8): it states what a gateway without a usable local model does where
+  0.31 left it open. Startup detection measures the routing-shaped warm-up
+  cold, because it is the first request after the model loaded; a warm-up
+  that fails, or that does not finish within `placement.warmup_seconds`
+  when that is shorter than the stage budget, classifies the model
+  unavailable. Without a usable local model the chain runs without
+  `model_router`, and with `example_match` alone when that leaves no
+  selector. A model last measured unsuitable comes back unsuitable when
+  readiness sees it answer again. Every `route.selected` of an auto run in
+  managed external execution carries `local_model_status`; `/readyz`
+  reports the class in a `local_model` object and reports a mode the class
+  forbids as not ready. A skill that routes external with its skill ID runs
+  its prefetch calls after `handoff.started` and before the first external
+  generation (RM29).
+
 - Specification 0.35 → 0.36 (#131, #132; RM22, RM24, RM28; sections 8 and
   10): it states what the selection interface records. A selector chain that
   chooses nothing makes the gateway record its own decision (route external,
