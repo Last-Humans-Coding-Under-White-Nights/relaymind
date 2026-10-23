@@ -59,6 +59,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Offline S0 spikes on the 2026-10-22 corpus export (#115, #118, #119;
+  RM28, RM31, spec 0.31 sections 4.3, 12.1, 12.2, and 12.4):
+  `scripts/run_corpus.py --regrade-draft-pass` grades the stored traces as
+  if the skill-stage draft had been the answer, after the RM31 guards, and
+  writes a separate export labeled as an offline counterfactual;
+  `scripts/probes/count_multi_calls.py` counts the round trips that several
+  read-only calls per generation would have saved;
+  `scripts/probes/probe_example_match.py` scores a throwaway BM25 matcher
+  on the 52 corpus prompts against the new skill sidecar
+  `evaluation/corpus.v1.skills.json`. The corpus lock freezes the sidecar
+  in a `sidecars` key, `check_lock` verifies the sidecars a lock names, and
+  the corpus digest is unchanged. `relaymind.evaluation.environment` gains
+  `application_revision()`. The results are in the 2026-10-23 entry of
+  `docs/EVIDENCE.md`. No gateway behavior or default changes.
 - Correctness corpus and latency benchmark (#32, #33; RM25, spec 0.28
   sections 12.1 to 12.3 and 14): the frozen corpus
   `evaluation/corpus.v1.json` (40 English cases in the section 12.2

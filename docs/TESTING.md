@@ -373,11 +373,37 @@ Deterministic tests over model doubles:
   the seeded order, the cold and warm-up samples, and the client and
   trace timings.
 - `pytest tests/test_evaluation_environment.py`: the machine manifest and
-  the runtime log facts (threads, slots, model load time).
+  the runtime log facts (threads, slots, model load time), and the
+  checkout revision that an offline analysis records.
+- `pytest tests/test_evaluation_corpus.py` also covers the skill sidecar
+  (#118; RM28, spec 0.31 section 12.2): it names every corpus case once,
+  each value is a demo skill or null, a Chinese case follows its English
+  case, the expected skill allows a tool of every required call group,
+  the lock holds its digest under `sidecars`, a changed or missing
+  sidecar is refused, and the corpus digest is still the one that froze
+  version 1.
+- `pytest tests/test_run_corpus_script.py` also covers the offline draft
+  pass regrade (#115; RM31): a passing draft is published and graded as
+  the local answer; a draft in the wrong language, with tool-call JSON, or
+  after an answer option is blocked and keeps its measured grade; a run
+  that changed the sandbox after the draft is not regraded; a draft that
+  fails where the final pass succeeded shows as lost; the original export
+  is never changed.
+- `pytest tests/test_probe_count_multi_calls.py` and
+  `pytest tests/test_probe_example_match.py`: the two spikes over small
+  exports and the checked-in corpus, with no model (#119, #118): the
+  section 4.3 rule (read-only, the per-stage and remaining run limits,
+  a call that fails its own validation, provenance from a clarification
+  answer or an earlier result), the saved generations, the cross-check
+  against the refusals in the trace, BM25 on a toy index, masking and
+  tokens in both languages, precision, recall, and Jaccard, and the
+  threshold search. Results are reported per language.
 
 The live runs are scripts, not tests: `scripts/run_corpus.py` and
 `scripts/latency_benchmark.py` (see [`scripts/README.md`](../scripts/README.md));
-their results are in [`EVIDENCE.md`](EVIDENCE.md).
+their results are in [`EVIDENCE.md`](EVIDENCE.md). The three offline
+spikes of M7 (#115, #118, #119) are scripts over the stored corpus export
+and call no model; their results are in the 2026-10-23 entry there.
 
 ### What is not covered yet
 
@@ -412,7 +438,8 @@ their results are in [`EVIDENCE.md`](EVIDENCE.md).
   local model, the placement policy, the selection interface, or
   workflow packages. The cached-token figures in the existing exports
   are adapter defaults (finding F9 in [`EVIDENCE.md`](EVIDENCE.md)). The M7 to M9
-  issues in [`ROADMAP.md`](ROADMAP.md) carry the tests.
+  issues in [`ROADMAP.md`](ROADMAP.md) carry the tests. The offline
+  spikes (#115, #118, #119) test their own scripts, not the gateway.
 - The selection benchmarks of spec section 12.4 (skills from
   SkillsBench, tools from ToolRet-Training-20w, workflow plans) do not
   exist yet (#143 to #145). Until they run, no claim is made about

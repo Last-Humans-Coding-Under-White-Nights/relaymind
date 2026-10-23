@@ -123,3 +123,55 @@
 
   Both runners reuse the live acceptance harness for the runtime check,
   the launch plan, and the trace read-back.
+
+- `run_corpus.py --regrade-draft-pass` — the offline draft-pass
+  counterfactual (#115; RM31, spec 0.31). It grades the stored traces of
+  a corpus export as if the skill-stage draft had been published as the
+  answer: for each auto and local_only run with a final generation it
+  takes the draft, applies the RM31 guards (no caller answer option, the
+  run's language, no tool-call JSON), and grades a trace that ends with
+  the draft as the local answer. A blocked run keeps its measured grade.
+  It calls no model, never changes the export it reads, and writes a
+  separate export and Markdown report labeled "offline counterfactual,
+  not a measured run".
+
+  ```bash
+  python scripts/run_corpus.py \
+      --regrade-draft-pass docs/evidence/2026-10-22-corpus-apple-m1.json \
+      --out docs/evidence/<date>-corpus-draft-pass-<machine>.json
+  ```
+
+- `probes/count_multi_calls.py` — the multiple-calls spike (#119; RM09,
+  RM11, spec 0.31 section 4.3). Over a corpus export it classifies every
+  generation that proposed two or more calls (read-only or mutating,
+  valid or not), applies the rule for several read-only calls per
+  generation, and counts the later one-call generations that re-proposed
+  a refused call. It cross-checks its totals against the
+  `multiple_tool_calls` refusals in the trace. Offline, no model.
+
+  ```bash
+  python scripts/probes/count_multi_calls.py \
+      --export docs/evidence/2026-10-22-corpus-apple-m1.json \
+      --out docs/evidence/<date>-multi-calls-<machine>.json
+  ```
+
+- `probes/probe_example_match.py` — the example-matching spike (#118;
+  RM28, spec 0.31 sections 12.1, 12.2, and 12.4). A throwaway BM25
+  matcher over each demo skill's description and example requests, with
+  identifiers masked, word tokens for Latin text, and character bigrams
+  for Chinese. It scores the 52 corpus prompts against the skill sidecar
+  `evaluation/corpus.v1.skills.json` (precision, recall, and Jaccard per
+  language and class, the score and margin of right and wrong picks), and
+  with `--export` compares them with the local router's picks in a corpus
+  export and proposes thresholds. The scoring functions are pure so that
+  the production selector can port them. Offline, no model.
+
+  ```bash
+  python scripts/probes/probe_example_match.py \
+      --export docs/evidence/2026-10-22-corpus-apple-m1.json \
+      --out docs/evidence/<date>-example-match-<machine>.json
+  ```
+
+  All three label their output as an offline analysis and record the
+  application revision they ran at; their results are in
+  `docs/EVIDENCE.md`.

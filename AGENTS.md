@@ -31,12 +31,12 @@ codebase.
 | `src/relaymind/redaction.py` | Configured secret-field redaction before anything is persisted (RM12, section 8) |
 | `src/relaymind/stats.py` | Per-generation timing metrics and JSON export for adapter comparisons, labeled with the routing cache setting (RM25, section 12.1) |
 | `src/relaymind/ui/` | Demo UI: decisions and execution evidence (RM23); the trace view built from stored events (`trace_view.py`), escaped HTML (`render.py`), routes and static page (`routes.py`, `static/`), the comparison on reset fixtures (`comparison.py`), and the declared data mode (`settings.py`) |
-| `src/relaymind/evaluation/` | Evaluation (RM25, spec section 12): the frozen corpus loader and digest check (`corpus.py`), grading one run from its trace (`grading.py`), corpus and latency summaries and reports (`metrics.py`), and the environment manifest (`environment.py`) |
-| `evaluation/` | The frozen correctness corpus (`corpus.v1.json`, its digest in `corpus.v1.lock.json`) and the latency prompts (`latency_prompts.v1.json`); a changed case is a new corpus version (spec section 12.2) |
+| `src/relaymind/evaluation/` | Evaluation (RM25, spec section 12): the frozen corpus loader, digest check, and skill sidecar (`corpus.py`; RM28, spec 0.31), grading one run from its trace (`grading.py`), corpus and latency summaries and reports (`metrics.py`), and the environment manifest and checkout revision (`environment.py`) |
+| `evaluation/` | The frozen correctness corpus (`corpus.v1.json`, its digest in `corpus.v1.lock.json`), the expected skill of every case (`corpus.v1.skills.json`, frozen in the same lock), and the latency prompts (`latency_prompts.v1.json`); a changed case is a new corpus version (spec section 12.2) |
 | `models/` | Pinned model artifact manifests (RM18, spec section 6); GGUF files are downloaded per `models/README.md`, never checked in |
 | `skills/` | Demo skill packages, one directory per skill, SKILL.md plus `skill.manifest.json`; the default skill root (operators may configure others, spec section 4.2) |
 | `tests/` | Test suite; `tests/fixtures/` holds sandbox demo data; `tests/test_demo_ui_browser.py` runs the UI page script in Chromium (Playwright; `playwright install chromium`) |
-| `scripts/` | Developer scripts: model manifest generation (RM18), the live acceptance harness, the corpus runner, and the latency benchmark (RM25); `scripts/README.md` lists what exists |
+| `scripts/` | Developer scripts: model manifest generation (RM18), the live acceptance harness, the corpus runner (with its offline draft-pass regrade), the latency benchmark (RM25), and the spikes in `scripts/probes/` (including the offline ones over the corpus export); `scripts/README.md` lists what exists |
 | `docs/` | Spec, architecture, roadmap, testing guide, live evidence record (`docs/EVIDENCE.md`, raw exports in `docs/evidence/`), and design rationale for spec revisions (`docs/design/`, not normative) |
 
 ## Ownership boundaries (do not blur these)
