@@ -1,0 +1,4676 @@
+{
+  "schema_version": 1,
+  "benchmark": "selection",
+  "track": "skills",
+  "created_at": "2026-10-23T15:15:42.806613+00:00",
+  "selector": {
+    "name": "model_router",
+    "version": "1",
+    "endpoint": null
+  },
+  "source_training": "unknown",
+  "files": {
+    "skills.v1.json": "1e89686583aa2334c266bd0b6c26d22129d43a218885b7617e65f2b0bc8670c8",
+    "skills.v1.lock.json": "93b19cd289525d297a6ec0d6e4b19b2250cb17ce5f407a22526dc1347a7aa5ac"
+  },
+  "source": {
+    "repository": "https://github.com/benchflow-ai/skillsbench",
+    "commit": "f860ecf02ef53412a030f8661c83d644b739ff01",
+    "license": "Apache-2.0",
+    "attribution": "Derived from SkillsBench by the SkillsBench contributors.",
+    "registry_digest_verification": "verified all registry task digests using docs/dataset-versioning.md",
+    "registry_version": "1.1",
+    "task_commit": "b63b7b2850226b6aa4fb5929a8c1ac7bc4d9a6af"
+  },
+  "seed": 42,
+  "sample_ids": [
+    "3d-scan-calc",
+    "ada-bathroom-plan-repair",
+    "adaptive-cruise-control",
+    "azure-bgp-oscillation-route-leak",
+    "bike-rebalance",
+    "citation-check",
+    "civ6-adjacency-optimizer",
+    "court-form-filling",
+    "crystallographic-wyckoff-position-analysis",
+    "dapt-intrusion-detection",
+    "data-to-d3",
+    "debug-trl-grpo",
+    "dialogue-parser",
+    "drone-planning-control",
+    "dynamic-object-aware-egomotion",
+    "earthquake-phase-association",
+    "earthquake-plate-calculation",
+    "econ-detrending-correlation",
+    "edit-pdf",
+    "energy-ac-optimal-power-flow",
+    "energy-market-pricing",
+    "energy-unit-commitment",
+    "enterprise-information-search",
+    "exam-block-sequencing",
+    "exceltable-in-ppt",
+    "exoplanet-detection-period",
+    "financial-modeling-qa",
+    "fix-build-agentops",
+    "fix-build-google-auto",
+    "fix-druid-loophole-cve",
+    "fix-erlang-ssh-cve",
+    "fix-visual-stability",
+    "flink-query",
+    "flood-risk-analysis",
+    "glm-lake-mendota",
+    "gravitational-wave-detection",
+    "grid-dispatch-operator",
+    "hvac-control",
+    "invoice-fraud-detection",
+    "jax-computing-basics",
+    "jpg-ocr-stat",
+    "lab-unit-harmonization",
+    "lake-warming-attribution",
+    "latex-formula-extraction",
+    "lean4-proof",
+    "llm-prefix-cache-replay",
+    "manufacturing-codebook-normalization",
+    "manufacturing-equipment-maintenance",
+    "manufacturing-fjsp-optimization",
+    "mario-coin-counting",
+    "mars-clouds-clustering",
+    "multilingual-video-dubbing",
+    "offer-letter-generator",
+    "organize-messy-files",
+    "paper-anonymizer",
+    "parallel-tfidf-search",
+    "paratransit-routing",
+    "pddl-airport-planning",
+    "pddl-tpp-planning",
+    "pdf-excel-diff",
+    "powerlifting-coef-calc",
+    "pptx-reference-formatting",
+    "protein-expression-analysis",
+    "python-scala-translation",
+    "quantum-numerical-simulation",
+    "r2r-mpc-control",
+    "radar-vital-signs",
+    "react-performance-debugging",
+    "reserves-at-risk-calc",
+    "sales-pivot-analysis",
+    "sec-financial-report",
+    "seismic-phase-picking",
+    "setup-fuzzing-py",
+    "shock-analysis-demand",
+    "shock-analysis-supply",
+    "simpo-code-reproduction",
+    "software-dependency-audit",
+    "spring-boot-jakarta-migration",
+    "suricata-custom-exfil",
+    "syzkaller-ppdev-syzlang",
+    "threejs-structure-parser",
+    "threejs-to-obj",
+    "tictoc-unnecessary-abort-detection",
+    "travel-planning",
+    "video-silence-remover",
+    "weighted-gdp-calc",
+    "xlsx-recover-data"
+  ],
+  "machine": {
+    "os": "Darwin",
+    "os_version": "macOS 27.0.1",
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "cpu_count": 8,
+    "ram_bytes": 8589934592,
+    "gpu": [
+      {
+        "model": "Apple M1",
+        "cores": "7"
+      }
+    ],
+    "python": "3.14.7"
+  },
+  "application": {
+    "head": "749e40f797da047d3180baf587748e9920800d16",
+    "dirty": false
+  },
+  "implementation_files": {
+    "scripts/selection_benchmark.py": "1653ef4cfd72819f2b781c929e3780cd084e109cd92c78377c59edece2683acd",
+    "src/relaymind/evaluation/selection_benchmark.py": "c8fc7b192faafb89daf04a0bbdeaf933be9a11e9ddb0eed639e1ac75d6a433e5"
+  },
+  "configuration": {
+    "timeout_seconds": 4.0,
+    "context_limit": 4096,
+    "routing_input_tokens": 2048,
+    "routing_output_tokens": 128,
+    "calls_per_generation": "many",
+    "example_score": 0.5,
+    "example_margin": 0.1,
+    "proposal": "none"
+  },
+  "model": {
+    "name": "qwen3-0.6b",
+    "endpoint": "http://127.0.0.1:8033",
+    "manifest": {
+      "schema_version": 1,
+      "model_id": "qwen3-0.6b",
+      "source_url": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF",
+      "source_revision": "23749fefcc72300e3a2ad315e1317431b06b590a",
+      "file_name": "Qwen3-0.6B-Q8_0.gguf",
+      "file_sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+      "quantization": "Q8_0",
+      "tokenizer_hash": "27b1fe636a04016514d2aa83b89792da06437beef1fcb9cfda669ddfd94b784d",
+      "chat_template_hash": "57f1fd00f0013a2be96aa79b857391f27e23df5b5f847072b524c897e24d0361",
+      "runtime": "llama.cpp",
+      "runtime_version": "0.7.0-dev (build 11785, commit 8baabd53b)",
+      "launch_settings": {
+        "ctx_size": 8192,
+        "jinja": true,
+        "reasoning": "off",
+        "reasoning_format": "deepseek"
+      },
+      "license": "Apache-2.0"
+    },
+    "request_options": null
+  },
+  "caveats": [
+    "Office/coding tasks and web APIs; not ops corpus evidence.",
+    "Router catalog capped at eight; one router pick bounds multi-skill recall.",
+    "Long prompts that exceed measured input limits are counted as bypasses.",
+    "Tool arguments are schema-checked, not graded for semantic correctness.",
+    "External inputs use the production conservative UTF-8 byte context guard.",
+    "Source training declaration is operator-reported; unknown is not held-out evidence."
+  ],
+  "results": {
+    "cases": [
+      {
+        "id": "3d-scan-calc",
+        "category": "industrial-physical-systems",
+        "difficulty": "hard",
+        "expected": [
+          "mesh-analysis"
+        ],
+        "predicted": [
+          "mesh-analysis"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "seismic-picker-selection",
+          "stepinfo-3d",
+          "marker",
+          "maven-dependency-management",
+          "mesh-analysis",
+          "geospatial-analysis",
+          "report-generator",
+          "architectural-dxf-extraction"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "mesh-analysis"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1349,
+        "usage": {
+          "input_tokens": 1349,
+          "output_tokens": 20
+        },
+        "latency_ms": 2616.2125000264496,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "ada-bathroom-plan-repair",
+        "category": "industrial-physical-systems",
+        "difficulty": "hard",
+        "expected": [
+          "ada-plan-view-accessibility",
+          "architectural-dxf-extraction",
+          "geometric-layout-repair"
+        ],
+        "predicted": [],
+        "status": "bypass",
+        "none": false,
+        "catalog_ids": [
+          "geometric-layout-repair",
+          "senior-java",
+          "search-attractions",
+          "architectural-dxf-extraction",
+          "ada-plan-view-accessibility",
+          "audio-extractor",
+          "exoplanet-workflows",
+          "search-accommodations"
+        ],
+        "error": "routing_input_tokens",
+        "input_tokens": 3094,
+        "latency_ms": 18.19458301179111,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "adaptive-cruise-control",
+        "category": "industrial-physical-systems",
+        "difficulty": "medium",
+        "expected": [
+          "csv-processing",
+          "pid-controller",
+          "simulation-metrics",
+          "vehicle-dynamics",
+          "yaml-config"
+        ],
+        "predicted": [],
+        "status": "timeout",
+        "none": false,
+        "catalog_ids": [
+          "pid-controller",
+          "transit-least-squares",
+          "csv-processing",
+          "seismic-picker-selection",
+          "fjsp-baseline-repair-with-downtime-and-policy",
+          "simulation-metrics",
+          "yaml-config",
+          "vehicle-dynamics"
+        ],
+        "error": "selector timeout",
+        "input_tokens": 1853,
+        "latency_ms": 4002.815500018187,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "azure-bgp-oscillation-route-leak",
+        "category": "software-engineering",
+        "difficulty": "medium",
+        "expected": [
+          "azure-bgp"
+        ],
+        "predicted": [
+          "azure-bgp"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "mpc-horizon-tuning",
+          "azure-bgp",
+          "spring-security-6",
+          "setup-env",
+          "plot-quadrotor",
+          "pid-controller",
+          "image-ocr",
+          "seismic-picker-selection"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "azure-bgp"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1519,
+        "usage": {
+          "input_tokens": 1519,
+          "output_tokens": 21
+        },
+        "latency_ms": 2850.588124943897,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "bike-rebalance",
+        "category": "mathematics-or-formal-reasoning",
+        "difficulty": "medium",
+        "expected": [
+          "geospatial-routing-data",
+          "logistics-rules-to-optimization",
+          "routing-subtour-elimination",
+          "scip-opt"
+        ],
+        "predicted": [],
+        "status": "bypass",
+        "none": false,
+        "catalog_ids": [
+          "geospatial-routing-data",
+          "segment-combiner",
+          "scip-opt",
+          "logistics-rules-to-optimization",
+          "search-attractions",
+          "csv-processing",
+          "routing-subtour-elimination",
+          "audio-extractor"
+        ],
+        "error": "routing_input_tokens",
+        "input_tokens": 2395,
+        "latency_ms": 14.61600000038743,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "citation-check",
+        "category": "office-white-collar",
+        "difficulty": "medium",
+        "expected": [
+          "citation-management"
+        ],
+        "predicted": [
+          "citation-management"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "syz-extract-constants",
+          "lean4-memories",
+          "senior-security",
+          "fjsp-baseline-repair-with-downtime-and-policy",
+          "pdf-editing",
+          "citation-management",
+          "attitude-controller-planner",
+          "csv-processing"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "citation-management"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1321,
+        "usage": {
+          "input_tokens": 1321,
+          "output_tokens": 20
+        },
+        "latency_ms": 2143.694708007388,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "civ6-adjacency-optimizer",
+        "category": "mathematics-or-formal-reasoning",
+        "difficulty": "hard",
+        "expected": [
+          "civ6lib",
+          "hex-grid-spatial",
+          "map-optimization-strategy",
+          "sqlite-map-parser"
+        ],
+        "predicted": [
+          "map-optimization-strategy"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "sqlite-map-parser",
+          "mip-solver-and-solution-audit",
+          "map-optimization-strategy",
+          "civ6lib",
+          "uv-package-manager",
+          "ffmpeg-media-info",
+          "architectural-dxf-extraction",
+          "hex-grid-spatial"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "map-optimization-strategy"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1630,
+        "usage": {
+          "input_tokens": 1630,
+          "output_tokens": 24
+        },
+        "latency_ms": 2423.265166929923,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.25,
+          "jaccard": 0.25
+        }
+      },
+      {
+        "id": "court-form-filling",
+        "category": "office-white-collar",
+        "difficulty": "easy",
+        "expected": [
+          "pdf"
+        ],
+        "predicted": [
+          "pdf"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "fuzzy-match",
+          "glm-output",
+          "search-restaurants",
+          "parallel-processing",
+          "logistics-rules-to-optimization",
+          "text-to-speech",
+          "imc-tuning-rules",
+          "pdf"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "pdf"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1404,
+        "usage": {
+          "input_tokens": 1404,
+          "output_tokens": 19
+        },
+        "latency_ms": 1474.1522079566494,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "crystallographic-wyckoff-position-analysis",
+        "category": "natural-science",
+        "difficulty": "medium",
+        "expected": [
+          "pymatgen",
+          "sympy"
+        ],
+        "predicted": [
+          "pymatgen"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "syzlang-ioctl-basics",
+          "sympy",
+          "mip-solver-and-solution-audit",
+          "architectural-dxf-extraction",
+          "locational-marginal-prices",
+          "pymatgen",
+          "vital-sign-extraction",
+          "ffmpeg-format-conversion"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "pymatgen"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1619,
+        "usage": {
+          "input_tokens": 1619,
+          "output_tokens": 22
+        },
+        "latency_ms": 2469.2807079991326,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "dapt-intrusion-detection",
+        "category": "cybersecurity",
+        "difficulty": "hard",
+        "expected": [
+          "pcap-analysis",
+          "threat-detection"
+        ],
+        "predicted": [
+          "pcap-analysis"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "threat-detection",
+          "timeseries-detrending",
+          "pcap-analysis",
+          "segment-combiner",
+          "search-driving-distance",
+          "data-reconciliation",
+          "jakarta-namespace",
+          "testing-python"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "pcap-analysis"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1784,
+        "usage": {
+          "input_tokens": 1784,
+          "output_tokens": 21
+        },
+        "latency_ms": 3207.1963330963627,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "data-to-d3",
+        "category": "software-engineering",
+        "difficulty": "medium",
+        "expected": [
+          "d3-visualization"
+        ],
+        "predicted": [],
+        "status": "timeout",
+        "none": false,
+        "catalog_ids": [
+          "box-least-squares",
+          "sampling-and-indexing",
+          "map-optimization-strategy",
+          "video-processor",
+          "cvss-score-extraction",
+          "d3-visualization",
+          "conditioning",
+          "mesh-analysis"
+        ],
+        "error": "selector timeout",
+        "input_tokens": 1653,
+        "latency_ms": 4002.978500095196,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "debug-trl-grpo",
+        "category": "software-engineering",
+        "difficulty": "hard",
+        "expected": [
+          "grpo",
+          "rl-post-training",
+          "trl"
+        ],
+        "predicted": [
+          "trl"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "rl-post-training",
+          "grpo",
+          "integral-action-design",
+          "python-scala-syntax-mapping",
+          "trl",
+          "lean4-memories",
+          "architectural-dxf-extraction",
+          "threejs"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "trl"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1373,
+        "usage": {
+          "input_tokens": 1373,
+          "output_tokens": 19
+        },
+        "latency_ms": 1433.3088329294696,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "dialogue-parser",
+        "category": "software-engineering",
+        "difficulty": "easy",
+        "expected": [
+          "dialogue-graph"
+        ],
+        "predicted": [
+          "dialogue-graph"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "dialogue-graph",
+          "matched-filtering",
+          "erlang-concurrency",
+          "dc-power-flow",
+          "senior-security",
+          "ffmpeg-video-editing",
+          "report-generator",
+          "scip-opt"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "dialogue-graph"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1496,
+        "usage": {
+          "input_tokens": 1496,
+          "output_tokens": 21
+        },
+        "latency_ms": 3040.3473749756813,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "drone-planning-control",
+        "category": "industrial-physical-systems",
+        "difficulty": "medium",
+        "expected": [
+          "attitude-controller-planner",
+          "flight-plan-parser",
+          "motor-model-dynamics",
+          "plot-quadrotor",
+          "position-controller-trajectory-planner",
+          "stepinfo-3d"
+        ],
+        "predicted": [],
+        "status": "timeout",
+        "none": false,
+        "catalog_ids": [
+          "plot-quadrotor",
+          "attitude-controller-planner",
+          "position-controller-trajectory-planner",
+          "stepinfo-3d",
+          "report-generator",
+          "flight-plan-parser",
+          "motor-model-dynamics",
+          "senior-java"
+        ],
+        "error": "selector timeout",
+        "input_tokens": 2020,
+        "latency_ms": 4003.028459032066,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "dynamic-object-aware-egomotion",
+        "category": "industrial-physical-systems",
+        "difficulty": "medium",
+        "expected": [
+          "dyn-object-masks",
+          "egomotion-estimation",
+          "output-validation",
+          "sampling-and-indexing"
+        ],
+        "predicted": [],
+        "status": "invalid_output",
+        "none": false,
+        "catalog_ids": [
+          "egomotion-estimation",
+          "manufacturing-failure-reason-codebook-normalization",
+          "analyze-ci",
+          "dyn-object-masks",
+          "glm-basics",
+          "sampling-and-indexing",
+          "threejs",
+          "output-validation"
+        ],
+        "error": "expected one routing function call, got 2",
+        "input_tokens": 1340,
+        "usage": {
+          "input_tokens": 1340,
+          "output_tokens": 46
+        },
+        "latency_ms": 1863.6278749909252,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "earthquake-phase-association",
+        "category": "natural-science",
+        "difficulty": "hard",
+        "expected": [
+          "gamma-phase-associator",
+          "obspy-data-api",
+          "seisbench-model-api",
+          "seismic-picker-selection"
+        ],
+        "predicted": [
+          "obspy-data-api"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "seismic-picker-selection",
+          "parallel-processing",
+          "dyn-object-masks",
+          "gamma-phase-associator",
+          "seisbench-model-api",
+          "obspy-data-api",
+          "transit-least-squares",
+          "syzlang-ioctl-basics"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "obspy-data-api"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1588,
+        "usage": {
+          "input_tokens": 1588,
+          "output_tokens": 22
+        },
+        "latency_ms": 2509.771166020073,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.25,
+          "jaccard": 0.25
+        }
+      },
+      {
+        "id": "earthquake-plate-calculation",
+        "category": "natural-science",
+        "difficulty": "medium",
+        "expected": [
+          "geospatial-analysis"
+        ],
+        "predicted": [
+          "geospatial-analysis"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "senior-java",
+          "ffmpeg-keyframe-extraction",
+          "motor-model-dynamics",
+          "spring-security-6",
+          "geospatial-analysis",
+          "threejs",
+          "image-ocr",
+          "python-scala-syntax-mapping"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "geospatial-analysis"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1400,
+        "usage": {
+          "input_tokens": 1400,
+          "output_tokens": 22
+        },
+        "latency_ms": 2534.4622919801623,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "econ-detrending-correlation",
+        "category": "finance-economics",
+        "difficulty": "medium",
+        "expected": [
+          "timeseries-detrending"
+        ],
+        "predicted": [
+          "timeseries-detrending"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "sympy",
+          "timeseries-detrending",
+          "jackson-security",
+          "openai-vision",
+          "integral-action-design",
+          "restclient-migration",
+          "syzkaller-build-loop",
+          "search-accommodations"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "timeseries-detrending"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1632,
+        "usage": {
+          "input_tokens": 1632,
+          "output_tokens": 22
+        },
+        "latency_ms": 2640.9594169817865,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "edit-pdf",
+        "category": "office-white-collar",
+        "difficulty": "medium",
+        "expected": [
+          "pdf-editing",
+          "text-parser"
+        ],
+        "predicted": [
+          "pdf-editing"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "mip-solver-and-solution-audit",
+          "pymatgen",
+          "browser-testing",
+          "workload-balancing",
+          "transit-least-squares",
+          "ac-branch-pi-model",
+          "pdf-editing",
+          "text-parser"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "pdf-editing"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1413,
+        "usage": {
+          "input_tokens": 1413,
+          "output_tokens": 21
+        },
+        "latency_ms": 2665.5412500258535,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "energy-ac-optimal-power-flow",
+        "category": "industrial-physical-systems",
+        "difficulty": "medium",
+        "expected": [
+          "ac-branch-pi-model",
+          "casadi-ipopt-nlp",
+          "power-flow-data"
+        ],
+        "predicted": [
+          "ac-branch-pi-model"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "sampling-and-indexing",
+          "casadi-ipopt-nlp",
+          "power-flow-data",
+          "ac-branch-pi-model",
+          "ortools-pickup-delivery-routing",
+          "mip-solver-and-solution-audit",
+          "geometric-layout-repair",
+          "light-curve-preprocessing"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "ac-branch-pi-model"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1800,
+        "usage": {
+          "input_tokens": 1800,
+          "output_tokens": 24
+        },
+        "latency_ms": 1924.9177919700742,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "energy-market-pricing",
+        "category": "industrial-physical-systems",
+        "difficulty": "hard",
+        "expected": [
+          "dc-power-flow",
+          "economic-dispatch",
+          "locational-marginal-prices",
+          "power-flow-data"
+        ],
+        "predicted": [],
+        "status": "timeout",
+        "none": false,
+        "catalog_ids": [
+          "dc-power-flow",
+          "timeseries-detrending",
+          "workload-balancing",
+          "power-flow-data",
+          "ordered-window-sequencing-mip",
+          "locational-marginal-prices",
+          "economic-dispatch",
+          "maven-plugin-configuration"
+        ],
+        "error": "selector timeout",
+        "input_tokens": 2011,
+        "latency_ms": 4002.64962494839,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "energy-unit-commitment",
+        "category": "industrial-physical-systems",
+        "difficulty": "hard",
+        "expected": [
+          "milp-solver-workflow",
+          "unit-commitment-data-modeling",
+          "unit-commitment-operating-rules"
+        ],
+        "predicted": [
+          "unit-commitment-operating-rules"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "milp-solver-workflow",
+          "unit-commitment-data-modeling",
+          "pid-controller",
+          "unit-commitment-operating-rules",
+          "vehicle-dynamics",
+          "prefix-cache-replay",
+          "text-to-speech",
+          "openai-vision"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "unit-commitment-operating-rules"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 2005,
+        "usage": {
+          "input_tokens": 2005,
+          "output_tokens": 25
+        },
+        "latency_ms": 2180.708625004627,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "enterprise-information-search",
+        "category": "office-white-collar",
+        "difficulty": "hard",
+        "expected": [
+          "enterprise-artifact-search"
+        ],
+        "predicted": [],
+        "status": "invalid_output",
+        "none": false,
+        "catalog_ids": [
+          "lean4-theorem-proving",
+          "fuzzy-match",
+          "enterprise-artifact-search",
+          "audio-extractor",
+          "architectural-dxf-extraction",
+          "openai-vision",
+          "pause-detector",
+          "image-ocr"
+        ],
+        "error": "tool call MgcxdTJwqZYdq2Eyafz8coVYk9GvtJm6 for request_clarification: Unterminated string starting at: line 1 column 14 (char 13)",
+        "input_tokens": 1318,
+        "latency_ms": 3210.7191670220345,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "exam-block-sequencing",
+        "category": "mathematics-or-formal-reasoning",
+        "difficulty": "hard",
+        "expected": [
+          "mip-solver-and-solution-audit",
+          "ordered-window-sequencing-mip"
+        ],
+        "predicted": [
+          "mip-solver-and-solution-audit"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "openai-vision",
+          "usgs-data-download",
+          "integral-action-design",
+          "ordered-window-sequencing-mip",
+          "setup-env",
+          "ffmpeg-video-filters",
+          "python-scala-functional",
+          "mip-solver-and-solution-audit"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "mip-solver-and-solution-audit"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1695,
+        "usage": {
+          "input_tokens": 1695,
+          "output_tokens": 27
+        },
+        "latency_ms": 2882.113750092685,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "exceltable-in-ppt",
+        "category": "office-white-collar",
+        "difficulty": "medium",
+        "expected": [
+          "pptx",
+          "xlsx"
+        ],
+        "predicted": [
+          "pptx"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "obspy-data-api",
+          "xlsx",
+          "unit-commitment-operating-rules",
+          "segment-combiner",
+          "obj-exporter",
+          "video-processor",
+          "dialogue-graph",
+          "pptx"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "pptx"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1416,
+        "usage": {
+          "input_tokens": 1416,
+          "output_tokens": 20
+        },
+        "latency_ms": 2482.211207970977,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "exoplanet-detection-period",
+        "category": "natural-science",
+        "difficulty": "medium",
+        "expected": [
+          "box-least-squares",
+          "exoplanet-workflows",
+          "light-curve-preprocessing",
+          "lomb-scargle-periodogram",
+          "transit-least-squares"
+        ],
+        "predicted": [
+          "light-curve-preprocessing"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "light-curve-preprocessing",
+          "ffmpeg-keyframe-extraction",
+          "ffmpeg-media-info",
+          "exoplanet-workflows",
+          "lomb-scargle-periodogram",
+          "scipy-curve-fit",
+          "transit-least-squares",
+          "box-least-squares"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "light-curve-preprocessing"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1413,
+        "usage": {
+          "input_tokens": 1413,
+          "output_tokens": 23
+        },
+        "latency_ms": 2564.2202920280397,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.2,
+          "jaccard": 0.2
+        }
+      },
+      {
+        "id": "financial-modeling-qa",
+        "category": "finance-economics",
+        "difficulty": "hard",
+        "expected": [
+          "pdf",
+          "xlsx"
+        ],
+        "predicted": [
+          "xlsx"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "pdf",
+          "search-flights",
+          "hibernate-upgrade",
+          "fuzzy-match",
+          "sqlite-map-parser",
+          "object-counter",
+          "xlsx",
+          "python-scala-functional"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "xlsx"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1341,
+        "usage": {
+          "input_tokens": 1341,
+          "output_tokens": 19
+        },
+        "latency_ms": 2248.3596249949187,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "fix-build-agentops",
+        "category": "software-engineering",
+        "difficulty": "easy",
+        "expected": [
+          "analyze-ci",
+          "temporal-python-testing",
+          "testing-python",
+          "uv-package-manager"
+        ],
+        "predicted": [],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "usgs-data-download",
+          "analyze-ci",
+          "uv-package-manager",
+          "testing-python",
+          "exoplanet-workflows",
+          "temporal-python-testing",
+          "setup-env",
+          "image-editing"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "clarify",
+            "clarification": "Please provide the specific error messages or details from the repository to help identify the issues."
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "clarify": true,
+        "input_tokens": 1290,
+        "usage": {
+          "input_tokens": 1290,
+          "output_tokens": 44
+        },
+        "latency_ms": 2687.481499975547,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "fix-build-google-auto",
+        "category": "software-engineering",
+        "difficulty": "easy",
+        "expected": [
+          "maven-build-lifecycle",
+          "maven-dependency-management",
+          "maven-plugin-configuration"
+        ],
+        "predicted": [],
+        "status": "invalid_output",
+        "none": false,
+        "catalog_ids": [
+          "seismic-picker-selection",
+          "python-scala-oop",
+          "maven-plugin-configuration",
+          "maven-build-lifecycle",
+          "memory-optimization",
+          "maven-dependency-management",
+          "vulnerability-csv-reporting",
+          "fuzzing-python"
+        ],
+        "error": "expected one routing function call, got 0",
+        "input_tokens": 1340,
+        "usage": {
+          "input_tokens": 1340,
+          "output_tokens": 53
+        },
+        "latency_ms": 2816.993165994063,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "fix-druid-loophole-cve",
+        "category": "cybersecurity",
+        "difficulty": "hard",
+        "expected": [
+          "jackson-security",
+          "senior-java"
+        ],
+        "predicted": [],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "glm-calibration",
+          "syz-extract-constants",
+          "python-scala-collections",
+          "senior-java",
+          "jackson-security",
+          "maven-build-lifecycle",
+          "power-flow-data",
+          "pdf"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "clarify",
+            "clarification": "What is the specific patch file format and content required for this vulnerability fix?"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "clarify": true,
+        "input_tokens": 1470,
+        "usage": {
+          "input_tokens": 1470,
+          "output_tokens": 42
+        },
+        "latency_ms": 2857.2462500305846,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "fix-erlang-ssh-cve",
+        "category": "cybersecurity",
+        "difficulty": "hard",
+        "expected": [
+          "erlang-concurrency",
+          "erlang-distribution",
+          "erlang-otp-behaviors",
+          "find-bugs",
+          "senior-security",
+          "ssh-penetration-testing"
+        ],
+        "predicted": [
+          "erlang-concurrency"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "erlang-distribution",
+          "image-ocr",
+          "erlang-concurrency",
+          "ssh-penetration-testing",
+          "find-bugs",
+          "senior-security",
+          "erlang-otp-behaviors",
+          "lab-unit-harmonization"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "erlang-concurrency"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1349,
+        "usage": {
+          "input_tokens": 1349,
+          "output_tokens": 22
+        },
+        "latency_ms": 2511.549749993719,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.16666666666666666,
+          "jaccard": 0.16666666666666666
+        }
+      },
+      {
+        "id": "fix-visual-stability",
+        "category": "software-engineering",
+        "difficulty": "hard",
+        "expected": [
+          "browser-testing",
+          "react-best-practices",
+          "web-interface-guidelines"
+        ],
+        "predicted": [
+          "react-best-practices"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "web-interface-guidelines",
+          "python-scala-idioms",
+          "react-best-practices",
+          "image-ocr",
+          "browser-testing",
+          "search-driving-distance",
+          "ffmpeg-audio-processing",
+          "spring-boot-migration"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "react-best-practices"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1227,
+        "usage": {
+          "input_tokens": 1227,
+          "output_tokens": 22
+        },
+        "latency_ms": 2383.715207921341,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "flink-query",
+        "category": "software-engineering",
+        "difficulty": "hard",
+        "expected": [
+          "pdf",
+          "senior-data-engineer"
+        ],
+        "predicted": [],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "python-scala-libraries",
+          "finite-horizon-lqr",
+          "pdf",
+          "cvss-score-extraction",
+          "csv-processing",
+          "dialogue-graph",
+          "senior-data-engineer",
+          "ssh-penetration-testing"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "clarify",
+            "clarification": "Please provide the task input and job input paths for the Flink job."
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "clarify": true,
+        "input_tokens": 1767,
+        "usage": {
+          "input_tokens": 1767,
+          "output_tokens": 42
+        },
+        "latency_ms": 3242.648374987766,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "flood-risk-analysis",
+        "category": "natural-science",
+        "difficulty": "medium",
+        "expected": [
+          "flood-detection",
+          "nws-flood-thresholds",
+          "usgs-data-download"
+        ],
+        "predicted": [
+          "flood-detection"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "flood-detection",
+          "search-restaurants",
+          "analyze-ci",
+          "manufacturing-failure-reason-codebook-normalization",
+          "trend-analysis",
+          "geospatial-analysis",
+          "nws-flood-thresholds",
+          "usgs-data-download"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "flood-detection"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1238,
+        "usage": {
+          "input_tokens": 1238,
+          "output_tokens": 22
+        },
+        "latency_ms": 2605.313166975975,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "glm-lake-mendota",
+        "category": "natural-science",
+        "difficulty": "hard",
+        "expected": [
+          "glm-basics",
+          "glm-calibration",
+          "glm-output"
+        ],
+        "predicted": [
+          "glm-calibration"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "report-generator",
+          "glm-calibration",
+          "python-scala-oop",
+          "object-counter",
+          "plot-quadrotor",
+          "glm-basics",
+          "maven-plugin-configuration",
+          "glm-output"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "glm-calibration"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1253,
+        "usage": {
+          "input_tokens": 1253,
+          "output_tokens": 21
+        },
+        "latency_ms": 2219.643000047654,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "gravitational-wave-detection",
+        "category": "natural-science",
+        "difficulty": "medium",
+        "expected": [
+          "conditioning",
+          "matched-filtering"
+        ],
+        "predicted": [
+          "matched-filtering"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "conditioning",
+          "suricata-offline-evejson",
+          "matched-filtering",
+          "dyn-object-masks",
+          "pcap-triage-tshark",
+          "scip-opt",
+          "maven-dependency-management",
+          "ortools-pickup-delivery-routing"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "matched-filtering"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1387,
+        "usage": {
+          "input_tokens": 1387,
+          "output_tokens": 21
+        },
+        "latency_ms": 1504.5364999677986,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "grid-dispatch-operator",
+        "category": "industrial-physical-systems",
+        "difficulty": "medium",
+        "expected": [
+          "dc-power-flow",
+          "economic-dispatch",
+          "power-flow-data"
+        ],
+        "predicted": [
+          "economic-dispatch"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "architectural-dxf-extraction",
+          "erlang-concurrency",
+          "plot-quadrotor",
+          "dc-power-flow",
+          "nlp-research-repo-package-installment",
+          "xlsx",
+          "economic-dispatch",
+          "power-flow-data"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "economic-dispatch"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1500,
+        "usage": {
+          "input_tokens": 1500,
+          "output_tokens": 21
+        },
+        "latency_ms": 2690.9515000879765,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "hvac-control",
+        "category": "industrial-physical-systems",
+        "difficulty": "medium",
+        "expected": [
+          "excitation-signal-design",
+          "first-order-model-fitting",
+          "imc-tuning-rules",
+          "safety-interlocks",
+          "scipy-curve-fit"
+        ],
+        "predicted": [],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "architectural-dxf-extraction",
+          "stepinfo-3d",
+          "excitation-signal-design",
+          "first-order-model-fitting",
+          "citation-management",
+          "safety-interlocks",
+          "imc-tuning-rules",
+          "scipy-curve-fit"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "clarify",
+            "clarification": "Are you sure about the requirements for the temperature controller and the simulation environment?"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "clarify": true,
+        "input_tokens": 1645,
+        "usage": {
+          "input_tokens": 1645,
+          "output_tokens": 42
+        },
+        "latency_ms": 3232.400416978635,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "invoice-fraud-detection",
+        "category": "finance-economics",
+        "difficulty": "hard",
+        "expected": [
+          "fuzzy-match",
+          "pdf",
+          "xlsx"
+        ],
+        "predicted": [
+          "fuzzy-match"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "segment-combiner",
+          "xlsx",
+          "image-editing",
+          "glm-basics",
+          "fjsp-baseline-repair-with-downtime-and-policy",
+          "fuzzy-match",
+          "dyn-object-masks",
+          "pdf"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "fuzzy-match"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1610,
+        "usage": {
+          "input_tokens": 1610,
+          "output_tokens": 21
+        },
+        "latency_ms": 2895.7314590224996,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "jax-computing-basics",
+        "category": "software-engineering",
+        "difficulty": "medium",
+        "expected": [
+          "jax-skills"
+        ],
+        "predicted": [
+          "jax-skills"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "senior-data-scientist",
+          "exoplanet-workflows",
+          "locational-marginal-prices",
+          "jax-skills",
+          "dyn-object-masks",
+          "senior-java",
+          "unit-commitment-data-modeling",
+          "qutip"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "jax-skills"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1521,
+        "usage": {
+          "input_tokens": 1521,
+          "output_tokens": 21
+        },
+        "latency_ms": 2746.9310000305995,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "jpg-ocr-stat",
+        "category": "office-white-collar",
+        "difficulty": "hard",
+        "expected": [
+          "image-ocr",
+          "openai-vision",
+          "pdf",
+          "video-frame-extraction",
+          "xlsx"
+        ],
+        "predicted": [
+          "image-ocr"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "video-frame-extraction",
+          "routing-subtour-elimination",
+          "image-ocr",
+          "openai-vision",
+          "pdf",
+          "reflow-profile-compliance-toolkit",
+          "xlsx",
+          "maven-build-lifecycle"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "image-ocr"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1641,
+        "usage": {
+          "input_tokens": 1641,
+          "output_tokens": 21
+        },
+        "latency_ms": 1717.369000078179,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.2,
+          "jaccard": 0.2
+        }
+      },
+      {
+        "id": "lab-unit-harmonization",
+        "category": "natural-science",
+        "difficulty": "medium",
+        "expected": [
+          "lab-unit-harmonization"
+        ],
+        "predicted": [
+          "lab-unit-harmonization"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "pca-decomposition",
+          "position-controller-trajectory-planner",
+          "d3-visualization",
+          "timeseries-detrending",
+          "text-parser",
+          "lab-unit-harmonization",
+          "fuzzy-match",
+          "memory-optimization"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "lab-unit-harmonization"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1694,
+        "usage": {
+          "input_tokens": 1694,
+          "output_tokens": 24
+        },
+        "latency_ms": 2892.1970420051366,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "lake-warming-attribution",
+        "category": "natural-science",
+        "difficulty": "medium",
+        "expected": [
+          "contribution-analysis",
+          "meteorology-driver-classification",
+          "pca-decomposition",
+          "trend-analysis"
+        ],
+        "predicted": [],
+        "status": "invalid_output",
+        "none": false,
+        "catalog_ids": [
+          "trend-analysis",
+          "meteorology-driver-classification",
+          "contribution-analysis",
+          "image-ocr",
+          "pca-decomposition",
+          "video-frame-extraction",
+          "grpo",
+          "parallel-processing"
+        ],
+        "error": "expected one routing function call, got 2",
+        "input_tokens": 1312,
+        "usage": {
+          "input_tokens": 1312,
+          "output_tokens": 42
+        },
+        "latency_ms": 1728.866665973328,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "latex-formula-extraction",
+        "category": "office-white-collar",
+        "difficulty": "medium",
+        "expected": [
+          "marker",
+          "pdf"
+        ],
+        "predicted": [
+          "marker"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "custom-distance-metrics",
+          "report-generator",
+          "pdf",
+          "threat-detection",
+          "csv-processing",
+          "obspy-data-api",
+          "seisbench-model-api",
+          "marker"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "marker"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1561,
+        "usage": {
+          "input_tokens": 1561,
+          "output_tokens": 19
+        },
+        "latency_ms": 2723.057124996558,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "lean4-proof",
+        "category": "mathematics-or-formal-reasoning",
+        "difficulty": "medium",
+        "expected": [
+          "lean4-memories",
+          "lean4-theorem-proving"
+        ],
+        "predicted": [
+          "lean4-theorem-proving"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "lean4-memories",
+          "discover-important-function",
+          "pause-detector",
+          "ffmpeg-format-conversion",
+          "gamma-phase-associator",
+          "python-scala-functional",
+          "lean4-theorem-proving",
+          "xlsx"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "lean4-theorem-proving"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1472,
+        "usage": {
+          "input_tokens": 1472,
+          "output_tokens": 24
+        },
+        "latency_ms": 2502.209209022112,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "llm-prefix-cache-replay",
+        "category": "software-engineering",
+        "difficulty": "medium",
+        "expected": [
+          "cache-policy-comparison",
+          "prefix-cache-replay"
+        ],
+        "predicted": [],
+        "status": "timeout",
+        "none": false,
+        "catalog_ids": [
+          "prefix-cache-replay",
+          "cache-policy-comparison",
+          "finite-horizon-lqr",
+          "erlang-otp-behaviors",
+          "ffmpeg-video-filters",
+          "sqlite-map-parser",
+          "spring-boot-migration",
+          "glm-basics"
+        ],
+        "error": "selector timeout",
+        "input_tokens": 1475,
+        "latency_ms": 4021.433416986838,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "manufacturing-codebook-normalization",
+        "category": "industrial-physical-systems",
+        "difficulty": "medium",
+        "expected": [
+          "manufacturing-failure-reason-codebook-normalization"
+        ],
+        "predicted": [
+          "manufacturing-failure-reason-codebook-normalization"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "manufacturing-failure-reason-codebook-normalization",
+          "image-editing",
+          "pptx",
+          "web-interface-guidelines",
+          "python-scala-idioms",
+          "image-ocr",
+          "audio-extractor",
+          "radar-signal-processing"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "manufacturing-failure-reason-codebook-normalization"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1627,
+        "usage": {
+          "input_tokens": 1627,
+          "output_tokens": 28
+        },
+        "latency_ms": 2465.3882089769468,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "manufacturing-equipment-maintenance",
+        "category": "industrial-physical-systems",
+        "difficulty": "medium",
+        "expected": [
+          "reflow-machine-maintenance-guidance",
+          "reflow-profile-compliance-toolkit"
+        ],
+        "predicted": [],
+        "status": "timeout",
+        "none": false,
+        "catalog_ids": [
+          "architectural-dxf-extraction",
+          "transit-least-squares",
+          "hex-grid-spatial",
+          "reflow-profile-compliance-toolkit",
+          "reflow-machine-maintenance-guidance",
+          "fuzzing-python",
+          "fuzzy-match",
+          "ortools-pickup-delivery-routing"
+        ],
+        "error": "selector timeout",
+        "input_tokens": 2043,
+        "latency_ms": 4005.219916929491,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "manufacturing-fjsp-optimization",
+        "category": "industrial-physical-systems",
+        "difficulty": "medium",
+        "expected": [
+          "fjsp-baseline-repair-with-downtime-and-policy"
+        ],
+        "predicted": [],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "syz-extract-constants",
+          "excitation-signal-design",
+          "ortools-pickup-delivery-routing",
+          "transaction-protocol-reasoning",
+          "report-generator",
+          "enterprise-artifact-search",
+          "fjsp-baseline-repair-with-downtime-and-policy",
+          "ada-plan-view-accessibility"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "clarify",
+            "clarification": "Please provide the specific details of the instance.txt, downtime.csv, policy.json, and current baseline to proceed with the solution."
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "clarify": true,
+        "input_tokens": 1387,
+        "usage": {
+          "input_tokens": 1387,
+          "output_tokens": 52
+        },
+        "latency_ms": 3252.547000069171,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "mario-coin-counting",
+        "category": "media-content-production",
+        "difficulty": "medium",
+        "expected": [
+          "ffmpeg-keyframe-extraction",
+          "image-editing",
+          "object-counter"
+        ],
+        "predicted": [],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "13f-analyzer",
+          "contribution-analysis",
+          "workload-balancing",
+          "object-counter",
+          "ffmpeg-keyframe-extraction",
+          "image-editing",
+          "csv-processing",
+          "plot-quadrotor"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "clarify",
+            "clarification": "Please specify the exact steps to extract key frames and count objects in the video."
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "clarify": true,
+        "input_tokens": 1500,
+        "usage": {
+          "input_tokens": 1500,
+          "output_tokens": 43
+        },
+        "latency_ms": 3048.590625054203,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "mars-clouds-clustering",
+        "category": "natural-science",
+        "difficulty": "hard",
+        "expected": [
+          "custom-distance-metrics",
+          "parallel-processing",
+          "pareto-optimization"
+        ],
+        "predicted": [
+          "pareto-optimization"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "integral-action-design",
+          "audio-extractor",
+          "threejs",
+          "video-frame-extraction",
+          "spring-boot-migration",
+          "pareto-optimization",
+          "custom-distance-metrics",
+          "parallel-processing"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "pareto-optimization"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1787,
+        "usage": {
+          "input_tokens": 1787,
+          "output_tokens": 23
+        },
+        "latency_ms": 2782.315667020157,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "multilingual-video-dubbing",
+        "category": "media-content-production",
+        "difficulty": "medium",
+        "expected": [
+          "ffmpeg-audio-processing",
+          "ffmpeg-format-conversion",
+          "ffmpeg-media-info",
+          "ffmpeg-video-editing",
+          "ffmpeg-video-filters",
+          "text-to-speech"
+        ],
+        "predicted": [],
+        "status": "timeout",
+        "none": false,
+        "catalog_ids": [
+          "ffmpeg-video-editing",
+          "maven-plugin-configuration",
+          "ffmpeg-audio-processing",
+          "ffmpeg-media-info",
+          "geometric-layout-repair",
+          "ffmpeg-format-conversion",
+          "ffmpeg-video-filters",
+          "text-to-speech"
+        ],
+        "error": "selector timeout",
+        "input_tokens": 1455,
+        "latency_ms": 4003.584500052966,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "offer-letter-generator",
+        "category": "office-white-collar",
+        "difficulty": "easy",
+        "expected": [
+          "docx"
+        ],
+        "predicted": [
+          "docx"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "radar-vital-signs",
+          "trl",
+          "object-counter",
+          "cache-policy-comparison",
+          "dyn-object-masks",
+          "docx",
+          "find-bugs",
+          "imc-tuning-rules"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "docx"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1433,
+        "usage": {
+          "input_tokens": 1433,
+          "output_tokens": 20
+        },
+        "latency_ms": 2576.1756249703467,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "organize-messy-files",
+        "category": "office-white-collar",
+        "difficulty": "medium",
+        "expected": [
+          "docx",
+          "file-organizer",
+          "pdf",
+          "planning-with-files",
+          "pptx"
+        ],
+        "predicted": [
+          "file-organizer"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "file-organizer",
+          "pdf",
+          "docx",
+          "transaction-protocol-reasoning",
+          "restclient-migration",
+          "trivy-offline-vulnerability-scanning",
+          "planning-with-files",
+          "pptx"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "file-organizer"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1402,
+        "usage": {
+          "input_tokens": 1402,
+          "output_tokens": 22
+        },
+        "latency_ms": 2402.1084579871967,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.2,
+          "jaccard": 0.2
+        }
+      },
+      {
+        "id": "paper-anonymizer",
+        "category": "office-white-collar",
+        "difficulty": "medium",
+        "expected": [
+          "academic-pdf-redaction",
+          "pdf"
+        ],
+        "predicted": [
+          "academic-pdf-redaction"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "temporal-python-testing",
+          "reflow-profile-compliance-toolkit",
+          "first-order-model-fitting",
+          "fuzzing-python",
+          "pdf",
+          "maven-plugin-configuration",
+          "syz-extract-constants",
+          "academic-pdf-redaction"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "academic-pdf-redaction"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1204,
+        "usage": {
+          "input_tokens": 1204,
+          "output_tokens": 22
+        },
+        "latency_ms": 2336.609916994348,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "parallel-tfidf-search",
+        "category": "software-engineering",
+        "difficulty": "medium",
+        "expected": [
+          "memory-optimization",
+          "python-parallelization",
+          "workload-balancing"
+        ],
+        "predicted": [
+          "python-parallelization"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "memory-optimization",
+          "unit-commitment-operating-rules",
+          "workload-balancing",
+          "stepinfo-3d",
+          "python-parallelization",
+          "search-attractions",
+          "box-least-squares",
+          "civ6lib"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "python-parallelization"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1513,
+        "usage": {
+          "input_tokens": 1513,
+          "output_tokens": 22
+        },
+        "latency_ms": 2502.7394590433687,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "paratransit-routing",
+        "category": "mathematics-or-formal-reasoning",
+        "difficulty": "hard",
+        "expected": [
+          "ortools-pickup-delivery-routing",
+          "ortools-routing-modeling"
+        ],
+        "predicted": [
+          "ortools-pickup-delivery-routing"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "react-best-practices",
+          "planning-with-files",
+          "ortools-routing-modeling",
+          "plot-quadrotor",
+          "python-parallelization",
+          "temporal-python-testing",
+          "ortools-pickup-delivery-routing",
+          "python-scala-syntax-mapping"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "ortools-pickup-delivery-routing"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1305,
+        "usage": {
+          "input_tokens": 1305,
+          "output_tokens": 26
+        },
+        "latency_ms": 2578.375415992923,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "pddl-airport-planning",
+        "category": "mathematics-or-formal-reasoning",
+        "difficulty": "medium",
+        "expected": [
+          "pddl-skills"
+        ],
+        "predicted": [
+          "pddl-skills"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "scipy-curve-fit",
+          "meteorology-driver-classification",
+          "pddl-skills",
+          "vehicle-dynamics",
+          "motor-model-dynamics",
+          "senior-data-engineer",
+          "python-scala-syntax-mapping",
+          "search-flights"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "pddl-skills"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1584,
+        "usage": {
+          "input_tokens": 1584,
+          "output_tokens": 22
+        },
+        "latency_ms": 2941.1977499257773,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "pddl-tpp-planning",
+        "category": "mathematics-or-formal-reasoning",
+        "difficulty": "medium",
+        "expected": [
+          "pddl-skills"
+        ],
+        "predicted": [
+          "pddl-skills"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "hibernate-upgrade",
+          "report-generator",
+          "erlang-concurrency",
+          "suricata-offline-evejson",
+          "python-scala-collections",
+          "vulnerability-csv-reporting",
+          "pddl-skills",
+          "finite-horizon-lqr"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "pddl-skills"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1496,
+        "usage": {
+          "input_tokens": 1496,
+          "output_tokens": 22
+        },
+        "latency_ms": 3105.0901669077575,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "pdf-excel-diff",
+        "category": "office-white-collar",
+        "difficulty": "medium",
+        "expected": [
+          "pdf",
+          "xlsx"
+        ],
+        "predicted": [
+          "xlsx"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "maven-build-lifecycle",
+          "trivy-offline-vulnerability-scanning",
+          "grpo",
+          "openai-vision",
+          "image-ocr",
+          "xlsx",
+          "pdf",
+          "segment-combiner"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "xlsx"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1529,
+        "usage": {
+          "input_tokens": 1529,
+          "output_tokens": 19
+        },
+        "latency_ms": 2655.0517089199275,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "powerlifting-coef-calc",
+        "category": "office-white-collar",
+        "difficulty": "easy",
+        "expected": [
+          "powerlifting",
+          "senior-data-scientist",
+          "xlsx"
+        ],
+        "predicted": [
+          "xlsx"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "erlang-otp-behaviors",
+          "safety-interlocks",
+          "pause-detector",
+          "powerlifting",
+          "senior-data-scientist",
+          "testing-python",
+          "geometric-layout-repair",
+          "xlsx"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "xlsx"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1470,
+        "usage": {
+          "input_tokens": 1470,
+          "output_tokens": 19
+        },
+        "latency_ms": 2640.8570000203326,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "pptx-reference-formatting",
+        "category": "office-white-collar",
+        "difficulty": "medium",
+        "expected": [
+          "pptx"
+        ],
+        "predicted": [
+          "pptx"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "finite-horizon-lqr",
+          "planning-with-files",
+          "testing-python",
+          "suricata-rules-basics",
+          "scip-opt",
+          "azure-bgp",
+          "pptx",
+          "mesh-analysis"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "pptx"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1317,
+        "usage": {
+          "input_tokens": 1317,
+          "output_tokens": 20
+        },
+        "latency_ms": 2445.4452919308096,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "protein-expression-analysis",
+        "category": "natural-science",
+        "difficulty": "medium",
+        "expected": [
+          "xlsx"
+        ],
+        "predicted": [
+          "xlsx"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "state-space-linearization",
+          "python-parallelization",
+          "ortools-routing-modeling",
+          "xlsx",
+          "pca-decomposition",
+          "geospatial-routing-data",
+          "image-ocr",
+          "docx"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "xlsx"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1595,
+        "usage": {
+          "input_tokens": 1595,
+          "output_tokens": 19
+        },
+        "latency_ms": 2906.7049169680104,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "python-scala-translation",
+        "category": "software-engineering",
+        "difficulty": "medium",
+        "expected": [
+          "python-scala-collections",
+          "python-scala-functional",
+          "python-scala-idioms",
+          "python-scala-libraries",
+          "python-scala-oop",
+          "python-scala-syntax-mapping"
+        ],
+        "predicted": [
+          "python-scala-libraries"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "trl",
+          "silence-detector",
+          "python-scala-libraries",
+          "python-scala-oop",
+          "python-scala-collections",
+          "python-scala-functional",
+          "python-scala-syntax-mapping",
+          "python-scala-idioms"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "python-scala-libraries"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1524,
+        "usage": {
+          "input_tokens": 1524,
+          "output_tokens": 23
+        },
+        "latency_ms": 3070.7564579788595,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.16666666666666666,
+          "jaccard": 0.16666666666666666
+        }
+      },
+      {
+        "id": "quantum-numerical-simulation",
+        "category": "natural-science",
+        "difficulty": "medium",
+        "expected": [
+          "qutip"
+        ],
+        "predicted": [
+          "transaction-protocol-reasoning"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "search-flights",
+          "silence-detector",
+          "qutip",
+          "openai-vision",
+          "pptx",
+          "obj-exporter",
+          "erlang-otp-behaviors",
+          "transaction-protocol-reasoning"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "transaction-protocol-reasoning"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1782,
+        "usage": {
+          "input_tokens": 1782,
+          "output_tokens": 24
+        },
+        "latency_ms": 2938.0407499847934,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "r2r-mpc-control",
+        "category": "industrial-physical-systems",
+        "difficulty": "medium",
+        "expected": [
+          "finite-horizon-lqr",
+          "integral-action-design",
+          "mpc-horizon-tuning",
+          "state-space-linearization"
+        ],
+        "predicted": [],
+        "status": "timeout",
+        "none": false,
+        "catalog_ids": [
+          "lomb-scargle-periodogram",
+          "state-space-linearization",
+          "senior-security",
+          "ssh-penetration-testing",
+          "mpc-horizon-tuning",
+          "object-counter",
+          "integral-action-design",
+          "finite-horizon-lqr"
+        ],
+        "error": "selector timeout",
+        "input_tokens": 1799,
+        "latency_ms": 4011.1851249821484,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "radar-vital-signs",
+        "category": "natural-science",
+        "difficulty": "medium",
+        "expected": [
+          "radar-signal-processing",
+          "radar-vital-signs",
+          "vital-sign-extraction"
+        ],
+        "predicted": [
+          "radar-vital-signs"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "first-order-model-fitting",
+          "ffmpeg-video-editing",
+          "radar-signal-processing",
+          "vital-sign-extraction",
+          "milp-solver-workflow",
+          "hibernate-upgrade",
+          "ffmpeg-video-filters",
+          "radar-vital-signs"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "radar-vital-signs"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1702,
+        "usage": {
+          "input_tokens": 1702,
+          "output_tokens": 24
+        },
+        "latency_ms": 1985.5858338996768,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "react-performance-debugging",
+        "category": "software-engineering",
+        "difficulty": "hard",
+        "expected": [
+          "browser-testing",
+          "react-best-practices"
+        ],
+        "predicted": [
+          "react-best-practices"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "fuzzy-name-search",
+          "ffmpeg-format-conversion",
+          "transaction-protocol-reasoning",
+          "browser-testing",
+          "find-bugs",
+          "output-validation",
+          "object-counter",
+          "react-best-practices"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "react-best-practices"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1285,
+        "usage": {
+          "input_tokens": 1285,
+          "output_tokens": 22
+        },
+        "latency_ms": 1464.9314159760252,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "reserves-at-risk-calc",
+        "category": "finance-economics",
+        "difficulty": "medium",
+        "expected": [
+          "xlsx"
+        ],
+        "predicted": [
+          "xlsx"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "ffmpeg-video-filters",
+          "egomotion-estimation",
+          "object-counter",
+          "silence-detector",
+          "xlsx",
+          "yaml-config",
+          "seisbench-model-api",
+          "mip-solver-and-solution-audit"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "xlsx"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1653,
+        "usage": {
+          "input_tokens": 1653,
+          "output_tokens": 19
+        },
+        "latency_ms": 2721.1817499483004,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "sales-pivot-analysis",
+        "category": "office-white-collar",
+        "difficulty": "medium",
+        "expected": [
+          "pdf",
+          "xlsx"
+        ],
+        "predicted": [],
+        "status": "timeout",
+        "none": false,
+        "catalog_ids": [
+          "lean4-theorem-proving",
+          "academic-pdf-redaction",
+          "pdf",
+          "fuzzing-python",
+          "routing-subtour-elimination",
+          "xlsx",
+          "qutip",
+          "motor-model-dynamics"
+        ],
+        "error": "selector timeout",
+        "input_tokens": 1670,
+        "latency_ms": 4005.0987499998882,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "sec-financial-report",
+        "category": "finance-economics",
+        "difficulty": "hard",
+        "expected": [
+          "13f-analyzer",
+          "fuzzy-name-search"
+        ],
+        "predicted": [],
+        "status": "timeout",
+        "none": false,
+        "catalog_ids": [
+          "text-to-speech",
+          "13f-analyzer",
+          "fuzzing-python",
+          "egomotion-estimation",
+          "flood-detection",
+          "transit-least-squares",
+          "fuzzy-name-search",
+          "web-interface-guidelines"
+        ],
+        "error": "selector timeout",
+        "input_tokens": 1540,
+        "latency_ms": 4004.086708999239,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "seismic-phase-picking",
+        "category": "natural-science",
+        "difficulty": "hard",
+        "expected": [
+          "obspy-data-api",
+          "obspy-datacenter-client",
+          "seisbench-model-api",
+          "seismic-picker-selection"
+        ],
+        "predicted": [
+          "obspy-data-api"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "seisbench-model-api",
+          "d3-visualization",
+          "ffmpeg-keyframe-extraction",
+          "locational-marginal-prices",
+          "seismic-picker-selection",
+          "ac-branch-pi-model",
+          "obspy-data-api",
+          "obspy-datacenter-client"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "obspy-data-api"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1736,
+        "usage": {
+          "input_tokens": 1736,
+          "output_tokens": 22
+        },
+        "latency_ms": 1878.6447920138016,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.25,
+          "jaccard": 0.25
+        }
+      },
+      {
+        "id": "setup-fuzzing-py",
+        "category": "cybersecurity",
+        "difficulty": "medium",
+        "expected": [
+          "discover-important-function",
+          "fuzzing-python",
+          "setup-env"
+        ],
+        "predicted": [],
+        "status": "invalid_output",
+        "none": false,
+        "catalog_ids": [
+          "threejs",
+          "fuzzing-python",
+          "uv-package-manager",
+          "setup-env",
+          "conditioning",
+          "search-cities",
+          "radar-signal-processing",
+          "discover-important-function"
+        ],
+        "error": "expected one routing function call, got 2",
+        "input_tokens": 1432,
+        "usage": {
+          "input_tokens": 1432,
+          "output_tokens": 60
+        },
+        "latency_ms": 3642.315624980256,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "shock-analysis-demand",
+        "category": "finance-economics",
+        "difficulty": "medium",
+        "expected": [
+          "xlsx"
+        ],
+        "predicted": [
+          "xlsx"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "ffmpeg-media-info",
+          "image-ocr",
+          "contribution-analysis",
+          "reflow-profile-compliance-toolkit",
+          "civ6lib",
+          "pid-controller",
+          "enterprise-artifact-search",
+          "xlsx"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "xlsx"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1580,
+        "usage": {
+          "input_tokens": 1580,
+          "output_tokens": 19
+        },
+        "latency_ms": 2736.631290987134,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "shock-analysis-supply",
+        "category": "finance-economics",
+        "difficulty": "hard",
+        "expected": [
+          "xlsx"
+        ],
+        "predicted": [
+          "xlsx"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "geospatial-routing-data",
+          "data-reconciliation",
+          "cvss-score-extraction",
+          "vital-sign-extraction",
+          "senior-security",
+          "pcap-triage-tshark",
+          "analyze-ci",
+          "xlsx"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "xlsx"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 2010,
+        "usage": {
+          "input_tokens": 2010,
+          "output_tokens": 19
+        },
+        "latency_ms": 3246.297708945349,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "id": "simpo-code-reproduction",
+        "category": "software-engineering",
+        "difficulty": "hard",
+        "expected": [
+          "nlp-research-repo-package-installment",
+          "pdf"
+        ],
+        "predicted": [
+          "nlp-research-repo-package-installment"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "nlp-research-repo-package-installment",
+          "pdf",
+          "reflow-machine-maintenance-guidance",
+          "sympy",
+          "motor-model-dynamics",
+          "vital-sign-extraction",
+          "fuzzy-name-search",
+          "reflow-profile-compliance-toolkit"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "nlp-research-repo-package-installment"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1555,
+        "usage": {
+          "input_tokens": 1555,
+          "output_tokens": 27
+        },
+        "latency_ms": 1795.9397500380874,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "software-dependency-audit",
+        "category": "cybersecurity",
+        "difficulty": "medium",
+        "expected": [
+          "cvss-score-extraction",
+          "trivy-offline-vulnerability-scanning",
+          "vulnerability-csv-reporting"
+        ],
+        "predicted": [
+          "vulnerability-csv-reporting"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "cvss-score-extraction",
+          "react-best-practices",
+          "trivy-offline-vulnerability-scanning",
+          "architectural-dxf-extraction",
+          "sampling-and-indexing",
+          "position-controller-trajectory-planner",
+          "vulnerability-csv-reporting",
+          "economic-dispatch"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "vulnerability-csv-reporting"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1363,
+        "usage": {
+          "input_tokens": 1363,
+          "output_tokens": 25
+        },
+        "latency_ms": 3601.13254096359,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "spring-boot-jakarta-migration",
+        "category": "software-engineering",
+        "difficulty": "hard",
+        "expected": [
+          "hibernate-upgrade",
+          "jakarta-namespace",
+          "restclient-migration",
+          "spring-boot-migration",
+          "spring-security-6"
+        ],
+        "predicted": [],
+        "status": "timeout",
+        "none": false,
+        "catalog_ids": [
+          "jakarta-namespace",
+          "spring-security-6",
+          "trivy-offline-vulnerability-scanning",
+          "spring-boot-migration",
+          "cvss-score-extraction",
+          "hibernate-upgrade",
+          "restclient-migration",
+          "exoplanet-workflows"
+        ],
+        "error": "selector timeout",
+        "input_tokens": 1486,
+        "latency_ms": 4003.373624989763,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "suricata-custom-exfil",
+        "category": "cybersecurity",
+        "difficulty": "medium",
+        "expected": [
+          "pcap-triage-tshark",
+          "suricata-offline-evejson",
+          "suricata-rules-basics"
+        ],
+        "predicted": [
+          "suricata-rules-basics"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "suricata-offline-evejson",
+          "pcap-triage-tshark",
+          "lomb-scargle-periodogram",
+          "data-reconciliation",
+          "manufacturing-failure-reason-codebook-normalization",
+          "python-scala-collections",
+          "suricata-rules-basics",
+          "file-organizer"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "suricata-rules-basics"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1342,
+        "usage": {
+          "input_tokens": 1342,
+          "output_tokens": 25
+        },
+        "latency_ms": 2916.3453340297565,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "syzkaller-ppdev-syzlang",
+        "category": "cybersecurity",
+        "difficulty": "medium",
+        "expected": [
+          "syz-extract-constants",
+          "syzkaller-build-loop",
+          "syzlang-ioctl-basics"
+        ],
+        "predicted": [
+          "syzkaller-build-loop"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "syzkaller-build-loop",
+          "syzlang-ioctl-basics",
+          "stepinfo-3d",
+          "fuzzy-name-search",
+          "radar-vital-signs",
+          "pdf-editing",
+          "sympy",
+          "syz-extract-constants"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "syzkaller-build-loop"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1508,
+        "usage": {
+          "input_tokens": 1508,
+          "output_tokens": 24
+        },
+        "latency_ms": 2445.0841669458896,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "threejs-structure-parser",
+        "category": "media-content-production",
+        "difficulty": "medium",
+        "expected": [
+          "obj-exporter",
+          "threejs"
+        ],
+        "predicted": [
+          "threejs"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "fuzzy-name-search",
+          "obj-exporter",
+          "browser-testing",
+          "pddl-skills",
+          "energy-calculator",
+          "azure-bgp",
+          "threejs",
+          "erlang-distribution"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "threejs"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1435,
+        "usage": {
+          "input_tokens": 1435,
+          "output_tokens": 20
+        },
+        "latency_ms": 2634.7355840262026,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "threejs-to-obj",
+        "category": "media-content-production",
+        "difficulty": "medium",
+        "expected": [
+          "obj-exporter",
+          "threejs"
+        ],
+        "predicted": [
+          "obj-exporter"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "threejs",
+          "motor-model-dynamics",
+          "flood-detection",
+          "obj-exporter",
+          "restclient-migration",
+          "video-frame-extraction",
+          "yaml-config",
+          "obspy-datacenter-client"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "obj-exporter"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1285,
+        "usage": {
+          "input_tokens": 1285,
+          "output_tokens": 21
+        },
+        "latency_ms": 2382.2402919176966,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      },
+      {
+        "id": "tictoc-unnecessary-abort-detection",
+        "category": "software-engineering",
+        "difficulty": "hard",
+        "expected": [
+          "transaction-concurrency-control-foundations",
+          "transaction-protocol-reasoning",
+          "transaction-trace-analysis"
+        ],
+        "predicted": [
+          "transaction-trace-analysis"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "reflow-profile-compliance-toolkit",
+          "ortools-pickup-delivery-routing",
+          "mip-solver-and-solution-audit",
+          "transaction-concurrency-control-foundations",
+          "search-cities",
+          "transaction-protocol-reasoning",
+          "syzkaller-build-loop",
+          "transaction-trace-analysis"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "transaction-trace-analysis"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1778,
+        "usage": {
+          "input_tokens": 1778,
+          "output_tokens": 22
+        },
+        "latency_ms": 2679.64858293999,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "id": "travel-planning",
+        "category": "mathematics-or-formal-reasoning",
+        "difficulty": "medium",
+        "expected": [
+          "search-accommodations",
+          "search-attractions",
+          "search-cities",
+          "search-driving-distance",
+          "search-flights",
+          "search-restaurants"
+        ],
+        "predicted": [],
+        "status": "invalid_output",
+        "none": false,
+        "catalog_ids": [
+          "search-driving-distance",
+          "search-restaurants",
+          "search-cities",
+          "light-curve-preprocessing",
+          "search-accommodations",
+          "maven-dependency-management",
+          "search-flights",
+          "search-attractions"
+        ],
+        "error": "expected one routing function call, got 5",
+        "input_tokens": 1614,
+        "usage": {
+          "input_tokens": 1614,
+          "output_tokens": 107
+        },
+        "latency_ms": 3293.212875025347,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "video-silence-remover",
+        "category": "media-content-production",
+        "difficulty": "hard",
+        "expected": [
+          "audio-extractor",
+          "energy-calculator",
+          "pause-detector",
+          "report-generator",
+          "segment-combiner",
+          "silence-detector",
+          "video-processor"
+        ],
+        "predicted": [
+          "audio-extractor"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "silence-detector",
+          "pause-detector",
+          "audio-extractor",
+          "energy-calculator",
+          "video-processor",
+          "suricata-offline-evejson",
+          "report-generator",
+          "segment-combiner"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "audio-extractor"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1495,
+        "usage": {
+          "input_tokens": 1495,
+          "output_tokens": 21
+        },
+        "latency_ms": 1600.2785000018775,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.14285714285714285,
+          "jaccard": 0.14285714285714285
+        }
+      },
+      {
+        "id": "weighted-gdp-calc",
+        "category": "finance-economics",
+        "difficulty": "medium",
+        "expected": [
+          "xlsx"
+        ],
+        "predicted": [
+          "imc-tuning-rules"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "maven-plugin-configuration",
+          "imc-tuning-rules",
+          "xlsx",
+          "vital-sign-extraction",
+          "exoplanet-workflows",
+          "map-optimization-strategy",
+          "attitude-controller-planner",
+          "search-restaurants"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "imc-tuning-rules"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1551,
+        "usage": {
+          "input_tokens": 1551,
+          "output_tokens": 24
+        },
+        "latency_ms": 3069.918416906148,
+        "metrics": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "jaccard": 0.0
+        }
+      },
+      {
+        "id": "xlsx-recover-data",
+        "category": "finance-economics",
+        "difficulty": "medium",
+        "expected": [
+          "data-reconciliation",
+          "xlsx"
+        ],
+        "predicted": [
+          "data-reconciliation"
+        ],
+        "status": "ok",
+        "none": false,
+        "catalog_ids": [
+          "glm-output",
+          "sqlite-map-parser",
+          "ffmpeg-video-filters",
+          "13f-analyzer",
+          "xlsx",
+          "data-reconciliation",
+          "docx",
+          "spring-boot-migration"
+        ],
+        "selection": {
+          "schema_version": 1,
+          "candidate": {
+            "kind": "skill",
+            "skill_id": "data-reconciliation"
+          },
+          "mechanism": "native_function_calling",
+          "confidence": null,
+          "selector": {
+            "name": "model_router",
+            "version": "1"
+          },
+          "model_calls": [
+            {
+              "model": "qwen3-0.6b"
+            }
+          ]
+        },
+        "input_tokens": 1203,
+        "usage": {
+          "input_tokens": 1203,
+          "output_tokens": 21
+        },
+        "latency_ms": 2709.227249957621,
+        "metrics": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "jaccard": 0.5
+        }
+      }
+    ],
+    "summary": {
+      "count": 87,
+      "macro": {
+        "precision": 0.6896551724137931,
+        "recall": 0.38689107827038854,
+        "jaccard": 0.38689107827038854
+      },
+      "micro": {
+        "precision": 0.967741935483871,
+        "recall": 0.25862068965517243,
+        "jaccard": 0.2564102564102564
+      },
+      "none_rate": 0.0,
+      "invalid_output_rate": 0.06896551724137931,
+      "bypasses": 2,
+      "bypass_rate": 0.022988505747126436,
+      "schema_validity": 0,
+      "errors": 11,
+      "completeness": 0.20689655172413793
+    },
+    "by_category": {
+      "cybersecurity": {
+        "count": 7,
+        "macro": {
+          "precision": 0.7142857142857143,
+          "recall": 0.23809523809523808,
+          "jaccard": 0.23809523809523808
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 0.22727272727272727,
+          "jaccard": 0.22727272727272727
+        },
+        "none_rate": 0.0,
+        "invalid_output_rate": 0.14285714285714285,
+        "bypasses": 0,
+        "bypass_rate": 0.0,
+        "schema_validity": 0,
+        "errors": 0,
+        "completeness": 0.0
+      },
+      "finance-economics": {
+        "count": 9,
+        "macro": {
+          "precision": 0.7777777777777778,
+          "recall": 0.5925925925925926,
+          "jaccard": 0.5925925925925926
+        },
+        "micro": {
+          "precision": 0.875,
+          "recall": 0.5,
+          "jaccard": 0.4666666666666667
+        },
+        "none_rate": 0.0,
+        "invalid_output_rate": 0.0,
+        "bypasses": 0,
+        "bypass_rate": 0.0,
+        "schema_validity": 0,
+        "errors": 1,
+        "completeness": 0.4444444444444444
+      },
+      "industrial-physical-systems": {
+        "count": 14,
+        "macro": {
+          "precision": 0.35714285714285715,
+          "recall": 0.21428571428571427,
+          "jaccard": 0.21428571428571427
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 0.1111111111111111,
+          "jaccard": 0.1111111111111111
+        },
+        "none_rate": 0.0,
+        "invalid_output_rate": 0.07142857142857142,
+        "bypasses": 1,
+        "bypass_rate": 0.07142857142857142,
+        "schema_validity": 0,
+        "errors": 5,
+        "completeness": 0.14285714285714285
+      },
+      "mathematics-or-formal-reasoning": {
+        "count": 8,
+        "macro": {
+          "precision": 0.75,
+          "recall": 0.46875,
+          "jaccard": 0.46875
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 0.2727272727272727,
+          "jaccard": 0.2727272727272727
+        },
+        "none_rate": 0.0,
+        "invalid_output_rate": 0.125,
+        "bypasses": 1,
+        "bypass_rate": 0.125,
+        "schema_validity": 0,
+        "errors": 0,
+        "completeness": 0.25
+      },
+      "media-content-production": {
+        "count": 5,
+        "macro": {
+          "precision": 0.6,
+          "recall": 0.22857142857142856,
+          "jaccard": 0.22857142857142856
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 0.15,
+          "jaccard": 0.15
+        },
+        "none_rate": 0.0,
+        "invalid_output_rate": 0.0,
+        "bypasses": 0,
+        "bypass_rate": 0.0,
+        "schema_validity": 0,
+        "errors": 1,
+        "completeness": 0.0
+      },
+      "natural-science": {
+        "count": 14,
+        "macro": {
+          "precision": 0.8571428571428571,
+          "recall": 0.4309523809523809,
+          "jaccard": 0.4309523809523809
+        },
+        "micro": {
+          "precision": 0.9230769230769231,
+          "recall": 0.32432432432432434,
+          "jaccard": 0.3157894736842105
+        },
+        "none_rate": 0.0,
+        "invalid_output_rate": 0.07142857142857142,
+        "bypasses": 0,
+        "bypass_rate": 0.0,
+        "schema_validity": 0,
+        "errors": 0,
+        "completeness": 0.21428571428571427
+      },
+      "office-white-collar": {
+        "count": 14,
+        "macro": {
+          "precision": 0.8571428571428571,
+          "recall": 0.5166666666666667,
+          "jaccard": 0.5166666666666667
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 0.4,
+          "jaccard": 0.4
+        },
+        "none_rate": 0.0,
+        "invalid_output_rate": 0.07142857142857142,
+        "bypasses": 0,
+        "bypass_rate": 0.0,
+        "schema_validity": 0,
+        "errors": 1,
+        "completeness": 0.2857142857142857
+      },
+      "software-engineering": {
+        "count": 16,
+        "macro": {
+          "precision": 0.625,
+          "recall": 0.34375,
+          "jaccard": 0.34375
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 0.23809523809523808,
+          "jaccard": 0.23809523809523808
+        },
+        "none_rate": 0.0,
+        "invalid_output_rate": 0.0625,
+        "bypasses": 0,
+        "bypass_rate": 0.0,
+        "schema_validity": 0,
+        "errors": 3,
+        "completeness": 0.1875
+      }
+    },
+    "by_difficulty": {
+      "easy": {
+        "count": 6,
+        "macro": {
+          "precision": 0.6666666666666666,
+          "recall": 0.5555555555555556,
+          "jaccard": 0.5555555555555556
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 0.3076923076923077,
+          "jaccard": 0.3076923076923077
+        },
+        "none_rate": 0.0,
+        "invalid_output_rate": 0.16666666666666666,
+        "bypasses": 0,
+        "bypass_rate": 0.0,
+        "schema_validity": 0,
+        "errors": 0,
+        "completeness": 0.5
+      },
+      "hard": {
+        "count": 28,
+        "macro": {
+          "precision": 0.75,
+          "recall": 0.30688775510204086,
+          "jaccard": 0.30688775510204086
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 0.25,
+          "jaccard": 0.25
+        },
+        "none_rate": 0.0,
+        "invalid_output_rate": 0.03571428571428571,
+        "bypasses": 1,
+        "bypass_rate": 0.03571428571428571,
+        "schema_validity": 0,
+        "errors": 3,
+        "completeness": 0.07142857142857142
+      },
+      "medium": {
+        "count": 53,
+        "macro": {
+          "precision": 0.660377358490566,
+          "recall": 0.41006289308176097,
+          "jaccard": 0.41006289308176097
+        },
+        "micro": {
+          "precision": 0.9459459459459459,
+          "recall": 0.25925925925925924,
+          "jaccard": 0.25547445255474455
+        },
+        "none_rate": 0.0,
+        "invalid_output_rate": 0.07547169811320754,
+        "bypasses": 1,
+        "bypass_rate": 0.018867924528301886,
+        "schema_validity": 0,
+        "errors": 8,
+        "completeness": 0.24528301886792453
+      }
+    }
+  }
+}

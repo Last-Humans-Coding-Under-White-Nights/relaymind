@@ -2444,3 +2444,82 @@ requests, concurrency one, routing cache off, no external model.
   generation (it stayed in place when unchanged), and the latency runner
   gained the field above. No run here exercised the external request, and the
   latency exports were not re-made; their figures are unchanged.
+
+## 2026-10-23 — M7 skill and tool selection benchmarks, Apple M1
+
+Dates and times in this entry are UTC. These are the first recorded section 12.4 comparisons for #143 and #144 (RM02, RM08, RM09, RM25, RM28). They measure skill selection in SkillsBench's office/coding tasks and tool selection/proposals on ToolRet web APIs. The ops correctness corpus and its task-success gates are separate. No gateway default changes follow from this entry.
+
+The [sanitized aggregate](evidence/2026-10-23-selection-benchmarks-apple-m1.json) contains exact scores, numerators, denominators, status counts, recorded usage, source hashes, and implementation hashes. The complete SkillsBench reports are [example_match](evidence/2026-10-23-selection-skills-example-apple-m1.json) and [model_router](evidence/2026-10-23-selection-skills-router-apple-m1.json). ToolRet source rows, instructions, queries, and candidate metadata remain outside the repository; its raw-report SHA-256 values are retained in the aggregate.
+
+### Application, sources, and environment
+
+| Item | Recorded configuration |
+|---|---|
+| Measured application | `749e40f797da047d3180baf587748e9920800d16`, clean tree at the start of every pass; the aggregate records the two benchmark implementation file hashes |
+| Later portability/reporting fixes | `11d265d` adds Windows checkout/UTF-8 portability; the later published head `1cad5d6` also corrects inapplicable generic summary diagnostics. Both were separate from the live checkout at `749e40f`. The aggregate independently derives selector abstentions and omits inapplicable schema validity; predictions and P/R/J are unchanged |
+| Machine | Apple M1, 8 CPU cores, 7-core GPU reported by the machine manifest, 8 GiB RAM; macOS 27.0.1, arm64; Python 3.14.7 |
+| Local runtime | Qualified llama.cpp `0.7.0-dev (build 11785, commit 8baabd53b)`; Qwen3-0.6B Q8_0, artifact SHA-256 `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031`, checked against the pinned manifest |
+| Runtime settings | `--ctx-size 8192 --jinja --reasoning off --reasoning-format deepseek`; runtime log reports four threads, four slots and 8192 tokens per slot. Actual device placement was not separately exported by this runner |
+| Cache and workload | A reused runtime warmed by earlier exploratory activity. Skills passes ran sequentially. Local ToolRet started at 15:16:45 UTC; external ToolRet started at 15:18:22 UTC and overlapped it. A brief local verification suite also ran on the development host. These are workload observations, with no cold-start or isolated-device latency claim |
+| SkillsBench | Registry commit `f860ecf02ef53412a030f8661c83d644b739ff01`, task commit `b63b7b2850226b6aa4fb5929a8c1ac7bc4d9a6af`; all 87 registry task digests verified using the documented method; 195 distinct skill names, 23 differing package copies recorded; Apache-2.0 license/notice retained |
+| Skills file hash | `1e89686583aa2334c266bd0b6c26d22129d43a218885b7617e65f2b0bc8670c8` |
+| ToolRet | `mangopy/ToolRet-Training-20w`, revision `fdf5a317455b1e60785de7ba587496aa6cc878e4`; 500 unique rows sampled from 208826 rows, seed 20261023; strata 1 / 2–3 / 4+ positives have 167 / 167 / 166 cases; all 8753 normalized declarations passed registry validation |
+| ToolRet lock hash | `075b751bdf5dd456127ef02f5f182f1f4e211a286864b0298d69d9a48f312b12` |
+| Benchmark seed and training declaration | Seed 42 for distractors, candidate order, and the external 100-case subset. Source training/tuning status is `unknown`; no held-out claim is made |
+| Skill selector settings | `example_match` score 0.5, margin 0.1, whole 195-skill pool; `model_router` has at most eight expected-preserving skills, routing input cap 2048 tokens and output cap 128 tokens |
+| Proposal settings | First skill-stage generation only, `calls_per_generation=many`; local context limit 4096, temperature 0, default 4-second time bound per blocking model operation; external context limit 128000, provider sampling defaults and default 30-second time bound per blocking operation. No tool handler executes |
+
+External endpoint: `https://api.z.ai/api/paas/v4`, model `glm-4.6`; request options `{}`. Endpoint region and shared provider load were not measured. The credential remained in the operator's environment.
+
+### Skill selection
+
+All 87 cases remain in the macro-score denominator, including timeouts, invalid outputs, and bypasses. Example requests use leave-one-task-out derivation. The router's score applies to its expected-preserving eight-skill catalog; a single router pick also limits recall on tasks requiring several skills.
+
+| Selector | n | Macro P / R / J | Micro P / R / J | Empty predicted sets | Bypass | Timeout | Invalid output |
+|---|---:|---|---|---:|---:|---:|---:|
+| example_match | 87 | 4.60% / 3.64% / 3.64% | 83.33% / 2.16% / 2.15% | 82 | 0 | 0 | 0 |
+| model_router | 87 | 68.97% / 38.69% / 38.69% | 96.77% / 25.86% / 25.64% | 25 | 2 | 11 | 6 |
+
+The example matcher's macro Jaccard was below the capped router's in this run. The full category/difficulty breakdown and selection-latency distributions are in the aggregate. The catalog sizes differ as the protocol specifies; these scores support only the recorded configurations.
+
+### Tool selection and first-generation proposals
+
+The keep-all `model_router` baseline requires no inference for tool selection. The proposal experiments use `example_match` on a synthetic skill containing the candidate tool declarations. A selector abstention sends an empty set to the selector-returned arm. That is counted separately from keeping all tools. Neither built-in selector returns a useful strict nonempty tool subset, so these runs do not establish a narrowing benefit. Each case runs the full arm first and the selector-returned arm second; order and prefix-cache effects are not separated.
+
+| Run / arm | n | Macro P / R / J | Micro P / R / J | Schema-valid proposals | Bypass | Timeout | Other error / invalid output |
+|---|---:|---|---|---|---:|---:|---:|
+| tools-baseline / selection | 500 | 13.75% / 100.00% / 13.75% | 14.32% / 100.00% / 14.32% | not applicable (no proposals) | 0 | 0 | 0 / 0 |
+| tools-local / selection | 500 | 4.28% / 38.60% / 4.28% | 11.58% / 30.25% / 9.14% | not applicable (no proposals) | 0 | 0 | 0 / 0 |
+| tools-local / full set | 500 | 23.75% / 21.80% / 20.53% | 60.94% / 14.45% / 13.22% | 100.00% (320 proposals) | 54 | 233 | 0 / 0 |
+| tools-local / selector-returned set | 500 | 19.05% / 17.88% / 17.06% | 64.52% / 11.17% / 10.53% | 100.00% (248 proposals) | 23 | 35 | 0 / 0 |
+| tools-external / selection | 100 | 3.41% / 31.00% / 3.41% | 11.43% / 22.56% / 8.21% | not applicable (no proposals) | 0 | 0 | 0 / 0 |
+| tools-external / full set | 100 | 67.52% / 65.73% / 59.93% | 67.26% / 57.14% / 44.71% | 99.25% (266 proposals) | 0 | 2 | 0 / 0 |
+| tools-external / selector-returned set | 100 | 23.46% / 25.50% / 22.49% | 69.35% / 16.17% / 15.09% | 100.00% (64 proposals) | 0 | 13 | 0 / 0 |
+
+| Selector-returned sets | All candidates | Empty / abstention | Strict nonempty subset |
+|---|---:|---:|---:|
+| tools-local | 193 | 307 | 0 |
+| tools-external | 31 | 69 | 0 |
+
+| Proposal run / arm | Generation attempts | Calls with reported input / output usage | Reported input / output tokens |
+|---|---:|---|---|
+| tools-local / proposal_full | 446 | 213 / 213 | 468820 / 10069 |
+| tools-local / proposal_narrowed | 477 | 442 / 442 | 418314 / 29798 |
+| tools-external / proposal_full | 100 | 98 / 98 | 248116 / 23907 |
+| tools-external / proposal_narrowed | 100 | 87 / 87 | 88014 / 29632 |
+
+Generation attempts are entries that reached the generation stage, not an independently instrumented provider request count. The external run is bounded by 100 cases × two arms, at most 200 inference calls with no benchmark retries. Token totals contain only returned usage; failures and cancellation can leave usage unreported. Schema-validity denominators count returned complete-generation proposals; timeout and bypass cases have no returned proposal to schema-check. Argument schemas are checked, but ToolRet has no reference argument values, so semantic argument correctness is not graded.
+
+### Reproduction and remaining scope
+
+Check out the measurement revision and use the qualified runtime and pinned artifacts described above. The equivalent direct runner commands below reproduce the effective settings; output paths stay outside the repository. The actual executions used the approved local wrapper around these commands. Credential values are never placed on the command line.
+
+```bash
+python scripts/selection_benchmark.py --track skills --selector example_match --seed 42 --model qwen3-0.6b --model-manifest models/qwen3-0.6b-q8_0.manifest.json --output /tmp/skills-example.json
+python scripts/selection_benchmark.py --track skills --selector model_router --seed 42 --model qwen3-0.6b --local-url http://127.0.0.1:8033 --model-manifest models/qwen3-0.6b-q8_0.manifest.json --output /tmp/skills-router.json
+python scripts/selection_benchmark.py --track tools --selector model_router --seed 42 --toolret-cache /tmp/relaymind-toolret-cache --output /tmp/tools-baseline.json
+python scripts/selection_benchmark.py --track tools --selector example_match --proposal local --seed 42 --model qwen3-0.6b --local-url http://127.0.0.1:8033 --model-manifest models/qwen3-0.6b-q8_0.manifest.json --toolret-cache /tmp/relaymind-toolret-cache --output /tmp/tools-local.json
+python scripts/selection_benchmark.py --track tools --selector example_match --proposal external --limit 100 --context-limit 128000 --seed 42 --external-url "$RELAYMIND_EXTERNAL_BASE_URL" --external-model "$RELAYMIND_EXTERNAL_MODEL" --toolret-cache /tmp/relaymind-toolret-cache --output /tmp/tools-external.json
+```
+
+These are one-pass observations on one shared Apple M1 host. They do not change defaults or replace the phase 2 corpus/latency matrix in #128. A third-party narrowing selector and workflow-plan evaluation (#133, #145) remain separate work. No Windows live selection measurement was made in this entry; Windows CI verifies portability only.
