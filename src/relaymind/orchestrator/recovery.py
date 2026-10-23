@@ -31,7 +31,7 @@ from relaymind.orchestrator.run_state import (
 )
 from relaymind.store import RunStore
 from relaymind.store.trace_event import EventType
-from relaymind.tools.executor import ToolExecutor
+from relaymind.tools.executor import GATEWAY_OPERATION_MODEL, ToolExecutor
 
 INTERRUPTED = "interrupted"
 
@@ -155,7 +155,8 @@ def _settle(
     payload: dict[str, Any] = {
         "operation_id": operation["operation_id"],
         "tool_name": operation["tool_name"],
-        "model": operation["model"],
+        # An operation the gateway made itself (a prefetch) names no model (RM22).
+        "model": None if operation["model"] == GATEWAY_OPERATION_MODEL else operation["model"],
         "status": result.status.value,
         "replayed": False,
         "recovered": True,

@@ -239,7 +239,13 @@ from relaymind.store import IdempotencyClaim, RunRecord, RunStore, StaleVersionE
 from relaymind.store.run_store import EventDraft, utc_iso
 from relaymind.store.trace_event import WORKFLOW_BRANCHES, EventType
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry, ToolRejectedError
-from relaymind.tools.executor import Execution, OperationInFlightError, ToolExecutor, ValidatedCall
+from relaymind.tools.executor import (
+    GATEWAY_OPERATION_MODEL,
+    Execution,
+    OperationInFlightError,
+    ToolExecutor,
+    ValidatedCall,
+)
 from relaymind.tools.registry import SideEffect, ToolResult, ToolStatus
 
 _T = TypeVar("_T")
@@ -3346,7 +3352,7 @@ class _Run:
             execution = await self.o.executor.execute(
                 call,
                 proposal_id=proposal_id,
-                model=GATEWAY_ACTOR if model_id is None else model_id,
+                model=GATEWAY_OPERATION_MODEL if model_id is None else model_id,
                 attempt=attempt,
                 before_run=before_run,
                 time_limit=self.meter.remaining_seconds,
