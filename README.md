@@ -45,7 +45,9 @@ pip install -e .
 
 Then install the local runtime (llama.cpp) and download the model
 (Qwen3-0.6B, about 0.6 GB) as described in
-[`models/README.md`](models/README.md).
+[`models/README.md`](models/README.md). The local model is optional: a
+gateway with only an external model works too (see "Without a local
+model" below).
 
 ## Configure
 
@@ -66,7 +68,19 @@ the `[budgets]` table; the example file shows the keys, and every run
 records the values it used.
 
 Without an external model, a task that needs one ends with a clear
-`needs_external` error. Every setting is described in
+`needs_external` error.
+
+### Without a local model
+
+Leave out the `[local_model]` table and fill in `[external_model]`. The
+gateway then picks the skill without a model call (the `example_match`
+selector), asks for a missing service name itself, waits for your
+approval before a change, and sends every generation to the external
+model. Only `auto` and `external_only` can be used. With a local model,
+the gateway also checks at startup whether it answers and whether it is
+fast enough for the `[budgets]` stage limit; when it is not, one printed
+line says so and `auto` uses the external model the same way. Set
+`detect = false` in a `[placement]` table to skip that check. Every setting is described in
 [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md), section 14.1.
 
 ## Start

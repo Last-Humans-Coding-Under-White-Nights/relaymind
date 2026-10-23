@@ -782,6 +782,52 @@ feature has a test of the default as well. Later pull requests append here.
   and an `http` selector (not available until #133) are exit status 2 with
   one `[selection]` message, `run.accepted` records the values, and the
   commented block of `relaymind.example.toml` loads with the defaults.
+- `pytest tests/test_ac20_no_local.py` (#126; AC20, RM01, RM05, RM11,
+  RM21, RM26, RM28, RM29, sections 7.4, 8, and 11): each scenario runs in
+  the three classes, absent (no local model), unavailable, and unsuitable,
+  with `build_gateway(local_status=...)`. A simple request is selected by
+  `example_match` without a routing generation (`route.selected` with actor
+  `gateway`, reason `no_local_model`, and `local_model_status`) and answered
+  by the external model with the skill body in its system message; the
+  completion predicate corrects a wrong answer; with `prefetch = true` the
+  declared call runs after `handoff.started` and the first external
+  generation is offered no tools; a missing service name gets the gateway's
+  clarification, and the answer resumes into the external stage; a delete
+  waits for confirmation in the external stage; a request no selector
+  places hands off with the catalog (`selection_failed`). `local_only` and
+  `parallel_demo` are 403 `execution_mode_forbidden` over the native and
+  the chat API while the class forbids them, and before a run exists when
+  the orchestrator is called directly; `local_only` still runs locally while
+  the model is unsuitable. `run.accepted` records `local_model` (null only
+  when absent), `local_model_status`, and `local_model_reason`; a ready model
+  records `ready`. `/readyz` reports the class in `local_model`, auto is
+  ready when the external model is, and an unavailable model is never shown
+  available. With detection on, readiness makes a model that answers again
+  ready (or unsuitable again, when it was measured so) and one that stops
+  answering unavailable; with it off the class never changes. `external_only`
+  keeps its own `route.selected`, degraded mode never applies, a gateway
+  without an external model ends as `needs_external`, and the client-owned
+  alias runs on the external model. Every model output is a scripted double;
+  the local double has no turns, so any local call fails the test. The UI
+  clause of AC20 is #127.
+- `pytest tests/test_launcher.py -k local_model` and
+  `pytest tests/test_launcher_warmup.py` (#126; RM26, section 14.1): a file without
+  `[local_model]` starts, with `auto` and `external_only` and the
+  `example_match` chain as defaults, and its documented variant of
+  `relaymind.example.toml` loads; a file with neither model table, local
+  modes, or `model_router` without a local model is exit status 2. Detection
+  runs over doubles with a fake clock and an injected sleep: a runtime that
+  never answers is unavailable after `warmup_seconds`, a model that is
+  still loading is waited for, a routing warm-up over `active_seconds` is
+  unsuitable (at the limit is ready, and a raised limit is the one used), a
+  failed warm-up, or one cut off before the stage budget, is unavailable,
+  and one cut off at the budget is unsuitable; `warmup = false` checks only
+  availability and `detect = false` keeps the earlier warm-up. `main`
+  prints one `Local model:` line with the class and the cause, and none
+  for a ready model. `tests/test_local_status.py` covers the modes each
+  class forbids, and `tests/test_trace_event.py -k local_model_fields`
+  checks the new optional fields in the validator and the published schema
+  alike.
 
 ### What is not covered yet
 

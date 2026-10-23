@@ -8,6 +8,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Operation without a usable local model (#126; AC20, RM01, RM05, RM11,
+  RM21, RM26, RM28, RM29, spec 0.37 sections 7.4, 8, 11, and 14.1). The
+  `[local_model]` table is optional: without it `allowed_modes` defaults to
+  `auto` and `external_only` and the selector chain to `example_match`, and
+  a file with neither model table, or with `local_only`, `parallel_demo`,
+  or `model_router` but no local model, stops startup. `[placement] detect`
+  (default true) classifies a configured local model after recovery:
+  unavailable when the runtime does not answer with the model loaded within
+  `warmup_seconds`, unsuitable when the routing-shaped warm-up takes longer
+  than `active_seconds`; the launcher prints one `Local model:` line with
+  the class and the cause, and readiness repeats the availability check.
+  In auto, a class other than ready is managed external execution: the
+  chain runs without `model_router`, the gateway asks for a missing
+  identifier itself, otherwise the run hands off with the skill loaded
+  (reason `no_local_model`), its prefetch calls first, and a mutation still
+  waits for confirmation; a request no selector places hands off with the
+  catalog, and the client-owned alias runs on the external model.
+  `local_only` and `parallel_demo` are 403 `execution_mode_forbidden` while
+  the class forbids them (`local_only` still runs locally while the model is
+  unsuitable). `run.accepted` records `local_model`, `local_model_status`,
+  and `local_model_reason`, `route.selected` records `local_model_status`,
+  and `/readyz` reports a `local_model` object; auto is then ready when the
+  external model is. None of this is degraded mode, `external_only` is
+  unchanged, and with `detect = false` the class never changes. A skill that
+  routes external with its skill ID now runs its prefetch calls before the
+  first external generation. The UI label is #127.
 - The selection interface (#131; RM02, RM05, RM08, RM22, RM24, RM28, AC22
   in process, spec 0.36 sections 8, 10, 11, and 14.1). The new
   `relaymind.selection` package publishes `selection_request.v1.json` and
