@@ -6,9 +6,12 @@ every check that can fail runs before the server socket exists, and a
 failure is one explicit ``LaunchError`` message, never a traceback.
 Restart recovery (section 5) runs exactly once, after the orchestrator
 is built and before the server accepts a run. The warm-up of the local
-model (``placement.warmup``, section 6) is a separate step, ``warm_up_gateway``,
-that ``main`` runs after recovery and before the address and the token are
-printed; building the app never sends a generation.
+model (``placement.warmup``, section 6) and its detection (``placement.detect``,
+RM26) are a separate step, ``warm_up_gateway``, that ``main`` runs after
+recovery and before the address and the token are printed; building the app
+never sends a generation. The local_model table is optional (RM26): without
+it the gateway runs without a local model, allowed_modes defaults to auto and
+external_only, and the selector chain to example_match.
 
 The only command line setting is the file. A credential is never in the
 file or on the command line: the file names the environment variable
@@ -23,7 +26,7 @@ import math
 import sqlite3
 import sys
 import tomllib
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any, NoReturn
@@ -46,14 +49,15 @@ from relaymind.api.chat_request import SAMPLING_OPTIONS
 from relaymind.api.server import serve, validate_bind_host
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
+from relaymind.orchestrator.local_status import LocalStatus
 from relaymind.orchestrator.performance import PerformanceSettings
 from relaymind.orchestrator.prefetch import PrefetchBudgetError, check_prefetch_budgets
 from relaymind.orchestrator.recovery import RecoveryError
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.routing_cache import RoutingCache
-from relaymind.orchestrator.warmup import WarmupResult, warm_up
+from relaymind.orchestrator.warmup import WarmupResult, detect_local_model, warm_up
 from relaymind.orchestrator.workflows import PARALLEL_WORKFLOWS
-from relaymind.selection import SelectionSettings
+from relaymind.selection import EXAMPLE_MATCH, MODEL_ROUTER, SelectionSettings
 from relaymind.skills import SkillConfigError, SkillRegistry, default_skill_roots
 from relaymind.skills.predicates import COMPLETION_PREDICATES
 from relaymind.store import RunStore
@@ -78,6 +82,8 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8080
 DEFAULT_WARMUP_SECONDS = 30.0
 DEFAULT_PERMISSIONS = (READ_PERMISSION, MUTATE_PERMISSION)
+# Section 14.1: the modes a gateway without a local_model table may permit (RM26).
+NO_LOCAL_MODES = (ExecutionMode.AUTO, ExecutionMode.EXTERNAL_ONLY)
 KNOWN_PERMISSIONS = frozenset(DEFAULT_PERMISSIONS)
 
 _TABLES: dict[str, frozenset[str]] = {
@@ -108,9 +114,9 @@ _TABLES: dict[str, frozenset[str]] = {
     "budgets": frozenset(f.name for f in fields(LocalBudgets)),
     # Spec 0.32 section 14.1: the keys are the PerformanceSettings fields (RM31, RM32).
     "performance": frozenset(f.name for f in fields(PerformanceSettings)),
-    # Spec 0.31 section 14.1: only the warm-up keys exist so far. The placement policy, its
-    # margin, the idle probe, and the local model check stay unknown keys until they are built.
-    "placement": frozenset({"warmup", "warmup_seconds"}),
+    # Spec 0.31 section 14.1: the warm-up keys and the local model check (RM26). The
+    # placement policy, its margin, and the idle probe stay unknown keys until they are built.
+    "placement": frozenset({"warmup", "warmup_seconds", "detect"}),
     # Spec 0.32 section 14.1: the keys are the SelectionSettings fields (RM28).
     "selection": frozenset(f.name for f in fields(SelectionSettings)),
 }
@@ -122,10 +128,13 @@ class LaunchError(Exception):
 
 @dataclass(frozen=True)
 class LauncherConfig:
-    """A validated configuration file. It holds no credential, only a variable name."""
+    """A validated configuration file. It holds no credential, only a variable name.
 
-    manifest: Path
-    artifact: Path
+    manifest and artifact are None when the file has no local_model table (RM26).
+    """
+
+    manifest: Path | None = None
+    artifact: Path | None = None
     host: str = DEFAULT_HOST
     port: int = DEFAULT_PORT
     store_path: Path = Path(DEFAULT_STORE_PATH)
@@ -149,6 +158,8 @@ class LauncherConfig:
     # Spec 0.31 section 14.1: the startup warm-up of the local model (section 6).
     warmup: bool = True
     warmup_seconds: float = DEFAULT_WARMUP_SECONDS
+    # Spec 0.31 section 14.1: classify the local model at startup and in readiness (RM26).
+    detect: bool = True
     # Spec 0.31 section 14.1: the selector chain; the default is model_router alone (RM28).
     selection: SelectionSettings = field(default_factory=SelectionSettings)
 
@@ -248,12 +259,24 @@ def load_config(path: Path | str) -> LauncherConfig:
     tables = {name: _table(raw, name) for name in _TABLES}
     server, local = tables["server"], tables["local_model"]
     policy, chat, native = tables["policy"], tables["chat"], tables["native"]
+    # Section 14.1 (RM26): the local_model table is optional, but one model table is needed.
+    has_local = "local_model" in raw
+    if not has_local and "external_model" not in raw:
+        raise LaunchError(
+            "the file has neither a [local_model] nor an [external_model] table;"
+            " configure at least one model"
+        )
 
-    modes = _strings(policy, "policy", "allowed_modes", [m.value for m in ExecutionMode])
+    default_modes = ExecutionMode if has_local else NO_LOCAL_MODES
+    modes = _strings(policy, "policy", "allowed_modes", [m.value for m in default_modes])
     try:
         allowed = frozenset(ExecutionMode(m) for m in modes)
     except ValueError as exc:
         raise LaunchError(f"[policy] allowed_modes: {exc}") from exc
+    if not has_local and (needing := sorted(m.value for m in allowed - set(NO_LOCAL_MODES))):
+        raise LaunchError(
+            f"[policy] allowed_modes names {', '.join(needing)}, which need a [local_model] table"
+        )
     options = _strings(chat, "chat", "supported_options", sorted(SAMPLING_OPTIONS))
     chat_args: dict[str, Any] = {"allowed_modes": allowed, "supported_options": frozenset(options)}
     if (limit := _positive(chat, "chat", "max_completion_tokens", int)) is not None:
@@ -283,11 +306,12 @@ def load_config(path: Path | str) -> LauncherConfig:
     )
     if not math.isfinite(warmup_seconds) or not warmup_seconds > 0:
         raise LaunchError("[placement] warmup_seconds must be a positive number")
-    selection = _selection(tables["selection"])
+    detect = _value(placement, "placement", "detect", bool, True)
+    selection = _selection(tables["selection"], has_local=has_local)
 
     return LauncherConfig(
-        manifest=Path(_required(local, "local_model", "manifest", str)),
-        artifact=Path(_required(local, "local_model", "artifact", str)),
+        manifest=Path(_required(local, "local_model", "manifest", str)) if has_local else None,
+        artifact=Path(_required(local, "local_model", "artifact", str)) if has_local else None,
         local_url=_local_url(local),
         host=_value(server, "server", "host", str, DEFAULT_HOST),
         port=port,
@@ -311,13 +335,20 @@ def load_config(path: Path | str) -> LauncherConfig:
         performance=performance,
         warmup=warmup,
         warmup_seconds=float(warmup_seconds),
+        detect=detect,
         selection=selection,
     )
 
 
-def _selection(table: Mapping[str, Any]) -> SelectionSettings:
-    """The [selection] table (RM28). An http selector is refused until it exists (#133)."""
+def _selection(table: Mapping[str, Any], *, has_local: bool) -> SelectionSettings:
+    """The [selection] table (RM28). An http selector is refused until it exists (#133).
+
+    Without a local model (RM26) the default chain is example_match, and
+    model_router, which needs the local model, is a startup error.
+    """
     args = dict(table)
+    if not has_local:
+        args.setdefault("chain", [EXAMPLE_MATCH])
     if "chain" in table:
         chain = _value(table, "selection", "chain", list)
         for item in chain:
@@ -328,6 +359,11 @@ def _selection(table: Mapping[str, Any]) -> SelectionSettings:
                         " use model_router or example_match"
                     )
                 raise LaunchError("[selection] chain: an item is a selector name")
+        if not has_local and MODEL_ROUTER in chain:
+            raise LaunchError(
+                "[selection] chain names model_router, which needs a [local_model] table;"
+                " use example_match"
+            )
         args["chain"] = chain
     return _settings("selection", lambda: SelectionSettings(**args))
 
@@ -368,8 +404,13 @@ def _external(table: Mapping[str, Any]) -> ChatCompletionsConfig:
 
 def _local_model(
     config: LauncherConfig, adapter: ModelAdapter | None
-) -> tuple[ConfiguredModel, Callable[[], ModelAdapter] | None]:
-    """The local model, and a maker of fresh adapters for it (None for an injected double)."""
+) -> tuple[ConfiguredModel | None, Callable[[], ModelAdapter] | None]:
+    """The local model, and a maker of fresh adapters for it (None for an injected double).
+
+    Both are None when no local model is configured (RM26).
+    """
+    if config.manifest is None or config.artifact is None:
+        return None, None
     try:
         manifest = load_manifest(config.manifest)
         verify_artifact(manifest, config.artifact)
@@ -474,6 +515,8 @@ def build_app(
             performance=config.performance,
             routing_cache=RoutingCache() if config.routing_cache else None,
             selection=config.selection,
+            # RM26: readiness repeats the availability check when detection is on.
+            detect=config.detect,
         )
         report = orchestrator.recover_after_restart()
         ui = None if config.ui is None else replace(config.ui, fixtures=sandbox)
@@ -501,33 +544,56 @@ def build_app(
 # -- the warm-up --------------------------------------------------------------------
 
 
-def warm_up_gateway(config: LauncherConfig, launched: Launched) -> Launched:
-    """Warm the local model up, once, and keep the timings in ``Launched.warmup`` (section 6).
+def warm_up_gateway(
+    config: LauncherConfig,
+    launched: Launched,
+    *,
+    sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
+) -> Launched:
+    """Classify and warm up the local model, once (RM26, section 6).
 
     Called by ``main`` after restart recovery and before the address and the
-    token are printed. It creates no run. With a model double the double
-    (the orchestrator's own adapter) is used; otherwise a short-lived
-    adapter of its own does the work in its own event loop and is closed
-    there, so the client that serves the app's loop is never used from two
-    loops. A runtime that does not answer is a result with ready False,
-    never an exception. With warmup false nothing is sent and the result
-    is None.
+    token are printed. It creates no run. With placement.detect true the
+    local model is checked first and its class is set on the orchestrator
+    (unavailable or unsuitable when it cannot run or cannot help); with
+    detect false only the warm-up runs, as before spec 0.31. The timings are
+    kept in ``Launched.warmup``. With a model double the double (the
+    orchestrator's own adapter) is used; otherwise a short-lived adapter of
+    its own does the work in its own event loop and is closed there, so the
+    client that serves the app's loop is never used from two loops. A
+    runtime that does not answer is a result, never an exception. Without
+    a local model, or with warmup and detect false, nothing is sent.
+    sleep is the wait between health checks, a test seam.
     """
-    if not config.warmup:
+    model = launched.orchestrator.model
+    if model is None or not (config.warmup or config.detect):
         return launched
     if launched.new_local_adapter is not None:
         adapter, owned = launched.new_local_adapter(), True
     else:
-        adapter, owned = launched.orchestrator.model.adapter, False
+        adapter, owned = model.adapter, False
 
-    async def work() -> WarmupResult:
+    async def work() -> tuple[LocalStatus | None, WarmupResult | None]:
         try:
-            return await warm_up(launched.orchestrator, adapter, seconds=config.warmup_seconds)
+            if config.detect:
+                return await detect_local_model(
+                    launched.orchestrator,
+                    adapter,
+                    warmup=config.warmup,
+                    seconds=config.warmup_seconds,
+                    sleep=sleep,
+                )
+            return None, await warm_up(
+                launched.orchestrator, adapter, seconds=config.warmup_seconds
+            )
         finally:
             if owned:
                 await adapter.aclose()
 
-    return replace(launched, warmup=asyncio.run(work()))
+    status, result = asyncio.run(work())
+    if status is not None:
+        launched.orchestrator.set_local_status(status)
+    return replace(launched, warmup=result)
 
 
 # -- the command --------------------------------------------------------------------
@@ -601,6 +667,10 @@ def main(
             stdout(launched.warmup.summary())
         else:
             stderr(f"relaymind: local warm-up did not finish: {launched.warmup.detail}")
+    # RM26: one line names the class and the cause when the local model cannot run or help.
+    local = launched.orchestrator.local_status
+    if not local.usable:
+        stdout(local.line())
     host = validate_bind_host(config.host)
     url_host = f"[{host}]" if ":" in host else host
     stdout(f"Serving on http://{url_host}:{config.port}")
