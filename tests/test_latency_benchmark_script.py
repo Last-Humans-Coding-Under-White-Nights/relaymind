@@ -417,6 +417,28 @@ def test_the_prefix_cache_setting_is_read_from_the_adapter(bench):
     assert record["cached_tokens_total"] == 512
 
 
+def test_external_cache_tokens_are_not_attributed_to_the_local_runtime(bench):
+    """RM25: mixed configurations retain call ownership and isolate local cache counts."""
+    events = [
+        {
+            "event_type": "model.finished",
+            "actor": actor,
+            "payload": {
+                "call_id": actor,
+                "model": model,
+                "purpose": "skill",
+                "first_token_ms": 10,
+                "usage": {"cached_tokens": cached},
+            },
+        }
+        for actor, model, cached in (("local", "small", 7), ("external", "large", 500))
+    ]
+    calls = bench._model_calls(events)
+    assert [(c["actor"], c["model"]) for c in calls] == [("local", "small"), ("external", "large")]
+    assert bench.prefix_cache_record(calls)["cached_tokens_total"] == 7
+    assert bench.prefix_cache_record(calls)["calls"] == 1
+
+
 def test_a_run_without_any_reported_count_has_no_cached_total(bench):
     """A total over nothing measured is null, not 0."""
     record = bench.prefix_cache_record([{"cached_tokens": None}, {"cached_tokens": None}])

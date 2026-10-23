@@ -8,6 +8,14 @@ candidate presentation, inert handlers, loopback HTTP selectors, proposal
 validation and source derivation. ToolRet fixture rows are synthetic; no
 download or model call is needed in the default test suite. Real benchmark
 commands and the optional `bench` extra are described in `scripts/README.md`.
+Phase 2 runner configurations (#128; RM03, RM25, RM26, RM29, RM31, RM32)
+are covered by `tests/test_runner_configurations.py`, alongside the corpus
+and latency script tests. The tests check launch-file round trips, validation,
+no-local runtime bypass, external prerequisites, export/report labels and
+offline regrading. Grading and metric regressions distinguish gateway-owned
+answers from local-model completion and report no-local completion as not
+applicable. These deterministic checks do not constitute the live evaluation
+matrix or evidence for changing defaults.
 
 How to verify the M1 to M5 deliverables, by hand on macOS and Windows
 and with the automated suites. M1 qualifies the local model runtime and

@@ -178,6 +178,9 @@ def _model_calls(events: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
         usage = event["payload"].get("usage") or {}
         calls.append(
             {
+                "call_id": event["payload"].get("call_id"),
+                "actor": event.get("actor"),
+                "model": event["payload"].get("model"),
                 "purpose": event["payload"].get("purpose"),
                 "duration_ms": event["payload"].get("duration_ms"),
                 "input_tokens": usage.get("input_tokens"),
@@ -339,6 +342,9 @@ def prefix_cache_record(calls: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     A call whose cached count is None was not measured (spec 0.31 section 6): it is
     counted apart, never as 0, and a total over no measured call is null.
     """
+    # Earlier exports had no actor and this runner supported local calls only.
+    # Current mixed configurations must not attribute external cache usage to llama.cpp.
+    calls = [call for call in calls if call.get("actor", "local") == "local"]
     request = GenerationRequest(
         generation_id="probe", messages=(Message(role=Role.USER, content="x"),)
     )
