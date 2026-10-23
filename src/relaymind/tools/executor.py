@@ -69,6 +69,10 @@ from relaymind.tools.registry import (
 
 PENDING = "pending"
 
+# What the store keeps as the model of an operation the gateway made itself, a prefetch
+# (RM29). Its trace events name no model (RM22), but the column is not nullable.
+GATEWAY_OPERATION_MODEL = "gateway"
+
 # Section 11: the failures a read-only call may be retried once after.
 TRANSIENT_ERRORS: frozenset[str] = frozenset({"tool_unavailable", "tool_timeout"})
 MAX_ATTEMPTS = 2

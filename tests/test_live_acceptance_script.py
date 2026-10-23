@@ -486,6 +486,26 @@ def test_first_model_action_skips_gateway_routes(harness):
     assert harness.first_model_action_ms(events) == 700
 
 
+def test_first_model_action_skips_a_prefetch_proposal(harness):
+    """RM29, section 12.1: a gateway-made prefetch proposal is not a model action."""
+    events = [
+        {
+            "event_type": "tool.proposed",
+            "actor": "gateway",
+            "elapsed_ms": 5,
+            "payload": {"admissible": True, "mechanism": "prefetch", "model": None},
+        },
+        {
+            "event_type": "tool.proposed",
+            "actor": "local",
+            "elapsed_ms": 650,
+            "payload": {"admissible": True, "mechanism": "model"},
+        },
+    ]
+    assert harness.first_model_action_ms(events) == 650
+    assert harness.first_model_action_ms(events[:1]) is None
+
+
 def test_the_export_hides_local_paths(harness, tmp_path):
     """Committed evidence names <repo> and <work>, not this machine's directories."""
     path = tmp_path / "out.json"

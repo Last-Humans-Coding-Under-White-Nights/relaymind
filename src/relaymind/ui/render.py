@@ -240,9 +240,15 @@ def _proposals(view: Mapping[str, Any]) -> str:
             if p["admissible"]
             else f"rejected: {_t(p['rejection'] and p['rejection'].get('code'))}"
         )
+        # A call the gateway made itself (prefetch, RM29) names no model: say so.
+        who = (
+            f"proposed by {_t(p['model'])} ({_t(p['actor'])})"
+            if p["model"] is not None
+            else f"made by the {_t(p['actor'])} ({_t(p['mechanism'])})"
+        )
         items.append(
-            f"<li><strong>{_t(p['tool_name'])}</strong> proposed by {_t(p['model'])} "
-            f"({_t(p['actor'])}){_branch(p)}, {verdict}<pre>{_json(p['arguments'])}</pre></li>"
+            f"<li><strong>{_t(p['tool_name'])}</strong> {who}"
+            f"{_branch(p)}, {verdict}<pre>{_json(p['arguments'])}</pre></li>"
         )
     return f"<ul>{''.join(items)}</ul>"
 

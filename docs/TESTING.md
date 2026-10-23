@@ -603,6 +603,71 @@ feature has a test of the default as well. Later pull requests append here.
   pinned runtime first on the path (see
   [`scripts/README.md`](../scripts/README.md)); no live run with the option
   is recorded yet.
+- `pytest tests/test_admitted_calls.py` and `pytest tests/test_local_budgets.py`
+  (#122; RM05, RM08 to RM11, section 4.3, AC18): under `many`, two reads
+  run in proposal order with their own proposal, start, and finish events,
+  each charged, and the next request holds one assistant message with both
+  calls and one tool message for each; three reads over the per-stage limit
+  of 2, a set with more new executions than the remaining stage budget has
+  room for, a mutating call with another, and one invalid call (schema,
+  name, or provenance) are rejected whole with nothing run, the first
+  rejection in proposal order is the one reported and belongs to the call
+  that failed, the repair is used, and the rejection exchange answers every
+  call with the rejection its `tool.proposed` records (`not_executed` for
+  the others of a set with one invalid call; the set's own rejection for
+  every call when the limit, a mutating call, or the room refused it; spec
+  0.34 section 4.3); a repeated call in a set replays and is charged once; in the external stage the limit is the remaining
+  `run_tool_executions` (a set of 3 passes the local limit of 2; a set over
+  what the local stage left is refused). Under `one` the old rejection and its
+  one-call exchange are unchanged (`tests/test_local_loop.py` passes as it
+  was, but for the new `prefetch_declarations` key of `run.accepted`), and
+  the client-owned alias exposes one call under `many`, and so does the
+  parallel workflow's `local_health` branch (spec 0.34 section 4.4). The meter's room is
+  the tighter of the stage and run limits locally, and the run limit in the
+  external stage.
+- `pytest tests/test_evaluation_grading.py tests/test_demo_ui_trace.py
+  tests/test_live_acceptance_script.py` (#122, #123; section 12.1): several
+  proposals of one generation are each counted and graded, a rejected set
+  records the code on every call, a prefetch proposal is neither a model
+  action nor a model proposal (tool correctness reports its n, which may be
+  0), a required call is met by an admitted gateway call and not by a refused
+  one, and the trace view lists the mechanism.
+- `pytest tests/test_skill_registry.py -k prefetch` (#123; RM29, section
+  4.2): a declaration loads and is kept on the skill; the key is optional;
+  a mutating tool, a tool outside the allowlist, a constant for an identifier
+  (required enum or optional pattern), a request binding for a non-identifier
+  or for a pattern without a closed list, an unknown binding source or shape,
+  an unknown parameter, a required argument with no binding, a constant
+  outside the tool schema or of the wrong type, and an unknown field are load
+  errors; constants are checked against the full tool schema with every
+  allowed value of the request binding, so a constant that one value refuses
+  (`if`/`then`) or that needs an unbound property (`dependentRequired`) is
+  a load error, and one that `minProperties` accepts only with the
+  identifier loads (spec 0.34); `prefetch_declarations` is keyed by skill with empty arrays.
+- `pytest tests/test_prefetch.py` (#123; RM05, RM08 to RM10, RM12, RM14,
+  RM29, AC18): with `prefetch = true` and "Is staging-api healthy?",
+  `get_service_health` runs before the first skill generation
+  (`tool.proposed` actor `gateway`, mechanism `prefetch`, model null), the
+  first skill request holds the exchange and offers no tools, the run has
+  one generation fewer, the call is charged, and `run.accepted` records the
+  option and the declarations (an empty array for a skill with none); two
+  services in the request, or none, prefetch nothing (a clarification
+  resumes into a prefetch); two calls run at once (a barrier both handlers
+  must reach) and `get_metrics` stays offered; the local actor keeps dispatch
+  and the answer (RM14); a handoff carries the operations and the external
+  repeat is a replay; a failed prefetch escalates like a failed proposal; a
+  refused call is on the record and not run; a budget with no room starts
+  nothing; limits the declarations cannot fit stop startup (and not while
+  `prefetch` is false); under `false` the declarations stay idle.
+  `tests/test_demo_skills.py -k prefetch` checks the section 9 declarations
+  and that every English and Chinese example request resolves and its
+  response still meets the predicate. `tests/test_launcher.py -k prefetch`
+  checks the exit status 2 message. `tests/test_restart_recovery.py -k
+  prefetch` checks the recovered event has no model.
+- `pytest tests/test_trace_event.py -k gateway` (#123; RM22, section 8): a
+  tool event may have model null only with actor `gateway`, the optional
+  `mechanism` and `step`, and the `prefetch_declarations` shape are checked
+  by the validator and the published schema alike.
 
 ### What is not covered yet
 
@@ -640,11 +705,12 @@ feature has a test of the default as well. Later pull requests append here.
   model on macOS (the harness above) and on x86-64 Windows (#110, five
   starts, `/readyz` 200 on all).
 - Phase 2 (spec 0.31, RM26 to RM32, AC17 to AC23) is mostly specified and
-  not implemented: there is no test for admitted calls per generation,
-  prefetch, gated streaming, operation without a local model, the
-  placement policy, the selection interface, or workflow packages. The
-  budgets table (#142), the call timing and count recording (#120), the draft
-  answer pass (#121, AC17), and early response headers (#140) are implemented; their tests are in
+  not implemented: there is no test for gated streaming, operation without
+  a local model, the placement policy, the selection interface, or workflow
+  packages. The budgets table (#142), the call timing and count recording
+  (#120), the draft answer pass (#121, AC17), early response headers
+  (#140), admitted calls per generation (#122), and prefetch (#123), both
+  AC18, are implemented; their tests are in
   [Phase 2 (spec 0.31)](#phase-2-spec-031). The cached-token figures in the existing exports
   are adapter defaults (finding F9 in [`EVIDENCE.md`](EVIDENCE.md)); the
   prefix-cache probe (#114) read the runtime's own counts once, and the

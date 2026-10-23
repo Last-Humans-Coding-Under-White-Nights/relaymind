@@ -93,9 +93,10 @@ _FIELDS = (
 
 _TOOL_EVENTS = (EventType.TOOL_PROPOSED, EventType.TOOL_STARTED, EventType.TOOL_FINISHED)
 
-# Payload keys that must be non-blank strings, per event type.
+# Payload keys that must be non-blank strings, per event type. A tool event
+# names its originating model too, but a gateway-made call has none, so
+# _check_tool_model checks that key (RM22, spec 0.31).
 _REQUIRED_PAYLOAD: dict[EventType, tuple[str, ...]] = {
-    **{event_type: ("model",) for event_type in _TOOL_EVENTS},
     EventType.MODEL_STARTED: ("call_id", "model"),
     EventType.MODEL_FINISHED: ("call_id", "model"),
     EventType.RUN_COMPLETED: ("final_answer_model",),
@@ -559,6 +560,92 @@ def _check_workflow_fields(event_type: EventType, payload: Mapping[str, Any]) ->
             )
 
 
+# Spec 0.31 section 8 (RM22, RM29, RM30): who proposed a tool call. A model's
+# proposal is the default and is left unmarked; a gateway-made call (a prefetch
+# or a workflow step) has actor gateway and model null.
+GATEWAY_ACTOR = "gateway"
+TOOL_MECHANISMS: tuple[str, ...] = ("model", "prefetch", "workflow")
+
+
+def is_model_proposal(payload: Mapping[str, Any]) -> bool:
+    """Whether a tool.proposed payload is a model's proposal, not a gateway call (RM29).
+
+    The mechanism is absent for a model's proposal, which is the default;
+    a prefetch or workflow call names it and has no model (section 8).
+    A client-owned proposal has no mechanism either.
+    """
+    return payload.get("mechanism", "model") == "model"
+
+
+# The mechanisms of a call the gateway makes itself; only these have no originating model.
+GATEWAY_MECHANISMS: tuple[str, ...] = ("prefetch", "workflow")
+
+
+def _check_tool_model(payload: Mapping[str, Any], actor: str) -> None:
+    """Every tool event names its originating model; a gateway-made call names none (RM22).
+
+    A null model is accepted only for actor gateway with the mechanism marker
+    (prefetch or workflow) on the event, so a model-made call that lost its
+    model is still refused.
+    """
+    model = payload.get("model")
+    if _is_text(model):
+        return
+    if (
+        model is None
+        and "model" in payload
+        and actor == GATEWAY_ACTOR
+        and payload.get("mechanism") in GATEWAY_MECHANISMS
+    ):
+        return
+    raise TraceEventError(
+        "tool event payload needs a non-blank 'model' "
+        "(null only for actor gateway with mechanism prefetch or workflow)"
+    )
+
+
+def _check_tool_mechanism(event_type: EventType, payload: Mapping[str, Any]) -> None:
+    """The optional mechanism of a tool event; a workflow proposal names its step (RM30).
+
+    tool.started and tool.finished carry the mechanism of a gateway-made
+    call too, so the null model of such a call can be told from a lost one.
+    """
+    if "mechanism" in payload:
+        _one_of("mechanism", TOOL_MECHANISMS)(payload["mechanism"])
+    if event_type is not EventType.TOOL_PROPOSED:
+        return
+    workflow = payload.get("mechanism") == "workflow"
+    if workflow and not _is_text(payload.get("step")):
+        raise TraceEventError("a workflow proposal needs a non-blank 'step'")
+    if not workflow and "step" in payload:
+        raise TraceEventError("'step' belongs to a workflow proposal only")
+
+
+def _check_prefetch_declarations(value: Any) -> None:
+    """The declared prefetch calls of the offered skills, by skill ID (RM29, section 8).
+
+    A skill with none has an empty array. Each call names its tool and
+    its argument bindings, as the manifest declares them.
+    """
+    message = (
+        "'prefetch_declarations' must be an object of arrays of calls with a non-blank"
+        " 'tool' and an 'arguments' object"
+    )
+    if not isinstance(value, Mapping):
+        raise TraceEventError(message)
+    for skill, calls in value.items():
+        if not _is_text(skill) or not _is_array(calls):
+            raise TraceEventError(message)
+        for call in calls:
+            if (
+                not isinstance(call, Mapping)
+                or set(call) != {"tool", "arguments"}
+                or not _is_text(call["tool"])
+                or not isinstance(call["arguments"], Mapping)
+            ):
+                raise TraceEventError(message)
+
+
 # Spec 0.31 and 0.32 section 8 (RM16, RM22, RM27, RM31, RM32): the optional fields of
 # phase 2. Each is checked only when present, so events stored before 0.31 stay valid
 # and readers never infer a missing one. A later field (the placement fields of M8,
@@ -625,6 +712,8 @@ def _boolean(name: str) -> Callable[[Any], None]:
 
 # The performance options in force (section 14.1), as run.accepted records them.
 _PERFORMANCE_ACCEPTED_FIELDS: dict[str, Callable[[Any], None]] = {
+    # RM29: the offered skills' prefetch declarations (the option is "prefetch").
+    "prefetch_declarations": _check_prefetch_declarations,
     "answer_pass": _one_of("answer_pass", ("final", "draft")),
     "answer_stream": _one_of("answer_stream", ("buffered", "live")),
     "calls_per_generation": _one_of("calls_per_generation", ("one", "many")),
@@ -652,7 +741,7 @@ def _check_optional_fields(event_type: EventType, payload: Mapping[str, Any]) ->
             check(payload[name])
 
 
-def _check_payload(event_type: EventType, payload: Mapping[str, Any]) -> None:
+def _check_payload(event_type: EventType, payload: Mapping[str, Any], actor: str) -> None:
     _check_workflow_fields(event_type, payload)
     _check_optional_fields(event_type, payload)
     if event_type is EventType.RUN_ACCEPTED:
@@ -671,11 +760,14 @@ def _check_payload(event_type: EventType, payload: Mapping[str, Any]) -> None:
         _check_cancelled_payload(payload)
     if event_type is EventType.RUN_FAILED:
         _check_failed_payload(payload)
+    if event_type in _TOOL_EVENTS:
+        _check_tool_mechanism(event_type, payload)
     if event_type is EventType.TOOL_FINISHED:
         _check_recovered_result(payload)
     if event_type in (EventType.RUN_COMPLETED, EventType.RUN_FAILED, EventType.RUN_CANCELLED):
         _check_terminal_payload(event_type, payload)
     if event_type in _TOOL_EVENTS:
+        _check_tool_model(payload, actor)
         _check_result_reference(payload)
         ids = [key for key in ("operation_id", "proposal_id") if key in payload]
         if not ids:
@@ -713,7 +805,7 @@ def validate_trace_event(data: object) -> TraceEvent:
     payload = data["payload"]
     if not isinstance(payload, Mapping):
         raise TraceEventError("'payload' must be a JSON object")
-    _check_payload(event_type, payload)
+    _check_payload(event_type, payload, data["actor"])
     payload = dict(payload)
     if event_type is EventType.RUN_ACCEPTED:
         # Any sequence is accepted; the event holds JSON-shaped lists.

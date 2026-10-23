@@ -323,3 +323,43 @@ def test_no_repair_is_offered_when_the_entire_run_has_no_generation_left():
     meter.charge_generation("routing")
     meter.charge_generation("skill")
     assert meter.may_repair() is False
+
+
+# -- the room for a set of calls (section 4.3, spec 0.34; #122) ---------------------------------
+
+
+def test_the_tool_room_is_the_tighter_of_the_stage_and_the_run_limit():
+    """Section 4.3, 11: a set is compared with what the meter has left, before it starts."""
+    meter = BudgetMeter(LocalBudgets(tool_calls=2, run_tool_executions=3), clock=FakeClock())
+    assert (meter.tool_room(), meter.admitted_calls_limit()) == (2, 2)
+    meter.charge_tool_call()
+    assert (meter.tool_room(), meter.admitted_calls_limit()) == (1, 2)
+    meter.new_stage()  # the full per-stage limits again, with one run execution used
+    assert meter.tool_room() == 2
+    meter.charge_tool_call()
+    meter.charge_tool_call()
+    assert meter.tool_room() == 0
+
+
+def test_the_external_stage_has_the_remaining_run_limit_only():
+    """Section 4.3: the per-stage limits do not apply once the external stage starts."""
+    meter = BudgetMeter(LocalBudgets(tool_calls=1, run_tool_executions=4), clock=FakeClock())
+    meter.charge_tool_call()
+    assert meter.admitted_calls_limit() == 1
+    meter.start_external()
+    assert meter.tool_room() == meter.admitted_calls_limit() == 3
+    meter.charge_tool_call()
+    assert meter.tool_room() == 2
+
+
+def test_a_room_check_never_charges():
+    """RM03: asking for the room is not an execution."""
+    meter = BudgetMeter(LocalBudgets(), clock=FakeClock())
+    meter.tool_room()
+    meter.admitted_calls_limit()
+    assert meter.usage()["tool_calls"] == 0
+
+
+def test_the_room_is_zero_when_no_tool_calls_are_allowed():
+    meter = BudgetMeter(LocalBudgets(tool_calls=0), clock=FakeClock())
+    assert meter.tool_room() == meter.admitted_calls_limit() == 0

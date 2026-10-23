@@ -62,6 +62,25 @@ One run, start to end, with the local model only:
    already has a recorded operation asks for nothing (RM10).
 4. An invalid proposal gets at most the configured format-repair
    generations, inside the generation limit (RM03).
+4a. Admitted calls per generation (spec 0.34 section 4.3, AC18). Under
+   calls_per_generation many, a generation's read-only calls are judged
+   as a set: more than the limit, a mutating call among several, one
+   invalid call, or a set with more new executions than the tool budget has
+   room for rejects the whole generation before anything runs, and the
+   rejection answers every call with what its tool.proposed records: the
+   failed call with its own rejection and the others as not executed, or,
+   for a rejection about the set, every call with it. The room counts one execution per call, so
+   a retry of a transient read failure (section 11) can still use the last
+   of it in the middle of a set; that ends the run on budget like a single
+   call would.
+   An admitted set runs in proposal order, each call as its own operation.
+   The parallel workflow's local branch keeps the one-call rule (RM15).
+4b. Prefetch (RM29, spec 0.34, AC18). Under prefetch true, the calls a skill declares
+   run before its first generation in a local stage: the gateway resolves
+   each from the request by the RM05 rule, runs them together through the
+   same checks as a proposal (actor gateway, mechanism prefetch, model
+   null), charges them to the budgets, and adds the exchange to the
+   conversation. Dispatch authority does not move (RM14).
 
 Every generation is charged by its purpose in one place, ``_generate``,
 before it runs, and every tool execution is charged when the executor
@@ -140,7 +159,7 @@ import hmac
 import json
 import secrets
 import uuid
-from collections.abc import Awaitable, Callable, Collection, Iterator, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from typing import Any, TypeVar
@@ -187,6 +206,7 @@ from relaymind.orchestrator.performance import (
     holds_tool_call_json,
     non_default_answer_options,
 )
+from relaymind.orchestrator.prefetch import check_prefetch_budgets, resolve_arguments
 from relaymind.orchestrator.recovery import (
     RecoveryReport,
     model_calls,
@@ -226,7 +246,13 @@ from relaymind.store import IdempotencyClaim, RunRecord, RunStore, StaleVersionE
 from relaymind.store.run_store import EventDraft, utc_iso
 from relaymind.store.trace_event import WORKFLOW_BRANCHES, EventType
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry, ToolRejectedError
-from relaymind.tools.executor import Execution, OperationInFlightError, ToolExecutor, ValidatedCall
+from relaymind.tools.executor import (
+    GATEWAY_OPERATION_MODEL,
+    Execution,
+    OperationInFlightError,
+    ToolExecutor,
+    ValidatedCall,
+)
 from relaymind.tools.registry import SideEffect, ToolResult, ToolStatus
 
 _T = TypeVar("_T")
@@ -245,6 +271,11 @@ APPROVAL_INVALID = "approval_invalid"
 USER_DENIED = "user_denied"
 WORKFLOW_UNAVAILABLE = "workflow_unavailable"
 PARALLEL_WORKFLOW = "parallel_workflow"
+# The tool result of a call in a rejected set (section 4.3).
+NOT_EXECUTED = "not_executed"
+# The mechanism of a tool.proposed event for a call the gateway makes before the skill's
+# first generation (RM29, section 8).
+PREFETCH = "prefetch"
 # The branches of the parallel workflow, as traced (spec 0.25, RM15).
 LOCAL_HEALTH, EXTERNAL_CHECKLIST, SYNTHESIS = WORKFLOW_BRANCHES
 ROUTING_MECHANISM = "native_function_calling"
@@ -641,6 +672,64 @@ class _Generation:
         return "".join(self.pieces)
 
 
+@dataclass(frozen=True)
+class _Turn:
+    """What the gateway decided about the tool calls of one generation (RM05, RM09, RM11).
+
+    admitted holds the validated calls in proposal order, one for each
+    entry of proposal_ids, and is empty when the turn was rejected as a
+    whole. answer_all says that the generation was judged as a set
+    (calls_per_generation many), so a rejection answers every call.
+    offending is the position of the call that failed its own checks, which
+    the rejection belongs to; it is None when the rejection is about the set.
+    """
+
+    calls: tuple[ToolCall, ...]
+    admitted: tuple[ValidatedCall, ...]
+    rejection: dict[str, str] | None
+    proposal_ids: tuple[str, ...]
+    answer_all: bool = False
+    offending: int | None = None
+
+    def call_rejections(self) -> list[dict[str, str] | None]:
+        """What each call is told, in proposal order; the trace records the same (section 4.3).
+
+        The call that failed its own checks gets the rejection and the
+        other calls of the set not_executed. A rejection about the set
+        belongs to no single call, so every call gets it (spec 0.34).
+        """
+        return [
+            not_executed_rejection()
+            if self.offending is not None and index != self.offending
+            else self.rejection
+            for index in range(len(self.calls))
+        ]
+
+    def rejection_exchange(self) -> list[Message]:
+        """The proposed calls and the rejection, as data for the repair (RM12).
+
+        A chat provider rejects a request in which an assistant tool call
+        has no tool message, so a set answers every call, each with the
+        rejection its tool.proposed records (spec 0.34 section 4.3).
+        """
+        assert self.rejection is not None
+        if not self.answer_all:
+            return _tool_exchange(self.calls[0], {"error": self.rejection})
+        return _tool_exchange_set(
+            self.calls, [{"error": rejection} for rejection in self.call_rejections()]
+        )
+
+
+def _count(number: int, noun: str) -> str:
+    """The number and the noun, plural unless the number is 1: "1 tool call", "2 tool calls"."""
+    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
+
+
+def not_executed_rejection() -> dict[str, str]:
+    """What a valid call of a rejected set is told: another call failed, so none ran."""
+    return {"code": NOT_EXECUTED, "message": "not executed: another call of the set was rejected"}
+
+
 class LocalOrchestrator:
     """Runs managed requests through the bounded local loop."""
 
@@ -666,6 +755,9 @@ class LocalOrchestrator:
         self.model = model
         # Spec 0.32 section 14.1: every default is the baseline behavior.
         self.performance = performance or PerformanceSettings()
+        if self.performance.prefetch:
+            # RM29: a skill whose prefetch calls alone exceed a limit is a startup error.
+            check_prefetch_budgets(skills, budgets or LocalBudgets())
         # Spec 0.26 section 10: None (the default) runs without a routing cache.
         self.routing_cache = routing_cache
         self.external = external
@@ -1352,10 +1444,14 @@ class _Run:
     def _phase2_accepted(self) -> dict[str, Any]:
         """The phase 2 fields of run.accepted (spec 0.32 section 8), in one place.
 
-        The performance options in force today; the placement, selection,
-        and workflow fields of later changes are added here.
+        The performance options in force, and the prefetch declarations of
+        the offered skills (RM29); the placement, selection, and workflow
+        fields of later changes are added here.
         """
-        return self.o.performance.to_json_object()
+        return {
+            **self.o.performance.to_json_object(),
+            "prefetch_declarations": self.o.skills.prefetch_declarations(self.o.router.offered),
+        }
 
     def _answer_option_record(self) -> dict[str, Any]:
         """The caller's answer options as applied, for run.accepted (spec 0.22 section 8)."""
@@ -1445,6 +1541,9 @@ class _Run:
                 await self._execute_step(
                     loop, confirmed.tool_call, confirmed.admitted, confirmed.proposal_id
                 )
+            else:
+                # A new stage: its declared calls run before its first generation (RM29).
+                await self._prefetch(loop)
             answer, answer_pass = await self._local_loop(loop)
         except _ConfirmationNeeded as needed:
             return self._await_confirmation(needed, None)
@@ -1997,14 +2096,11 @@ class _Run:
                 branch=loop.branch,
             )
             if generation.calls:
-                call, admitted, rejection, proposal_id = self._tool_turn(
-                    generation, loop.available, loop.skill
-                )
-                if rejection is not None:
-                    loop.conversation += _tool_exchange(call, {"error": rejection})
+                turn = self._tool_turn(generation, loop.available, loop.skill)
+                if turn.rejection is not None:
+                    loop.conversation += turn.rejection_exchange()
                 else:
-                    assert admitted is not None
-                    await self._tool_step(loop, call, admitted, proposal_id)
+                    await self._tool_step(loop, turn)
             elif generation.text.strip() and (
                 loop.predicate is None or loop.predicate(generation.text, self.results)
             ):
@@ -2162,15 +2258,15 @@ class _Run:
             )
             loop.purpose = "skill"
             if generation.calls:
-                call, admitted, rejection, proposal_id = self._tool_turn(
-                    generation, loop.available, skill
-                )
-                if rejection is not None:
-                    loop.purpose = self._repair_or_stop(rejection)
-                    loop.conversation += _tool_exchange(call, {"error": rejection})
+                # The fixed workflow's branch makes one call, whatever the option says (RM15).
+                turn = self._tool_turn(generation, loop.available, skill, many=False)
+                if turn.rejection is not None:
+                    loop.purpose = self._repair_or_stop(turn.rejection)
+                    loop.conversation += turn.rejection_exchange()
                     continue
-                assert admitted is not None
-                await self._execute_step(loop, call, admitted, proposal_id)
+                await self._execute_step(
+                    loop, turn.calls[0], turn.admitted[0], turn.proposal_ids[0]
+                )
                 return self.results[-1]
             self._keep_draft(generation.text)
             problem = {
@@ -2689,15 +2785,12 @@ class _Run:
             loop.purpose = "skill"
 
             if generation.calls:
-                call, admitted, rejection, proposal_id = self._tool_turn(
-                    generation, loop.available, skill
-                )
-                if rejection is not None:
-                    loop.purpose = self._repair_or_stop(rejection)
-                    loop.conversation += _tool_exchange(call, {"error": rejection})
+                turn = self._tool_turn(generation, loop.available, skill)
+                if turn.rejection is not None:
+                    loop.purpose = self._repair_or_stop(turn.rejection)
+                    loop.conversation += turn.rejection_exchange()
                     continue
-                assert admitted is not None
-                await self._tool_step(loop, call, admitted, proposal_id)
+                await self._tool_step(loop, turn)
                 continue
 
             # A text answer is a finalize proposal (section 7.3).
@@ -2717,10 +2810,74 @@ class _Run:
             loop.purpose = self._repair_or_stop(problem)
             loop.conversation += _correction_exchange(generation.text)
 
-    async def _tool_step(
-        self, loop: _Loop, call: ToolCall, admitted: ValidatedCall, proposal_id: str
-    ) -> None:
-        """Run an admitted call, or hold it for a confirmation if it mutates (RM11)."""
+    async def _prefetch(self, loop: _Loop) -> None:
+        """Run the skill's declared calls before its first generation (RM29, AC18).
+
+        Only under performance.prefetch. Each declared call is resolved from the
+        user turns by the RM05 rule; one the request does not settle is skipped,
+        and the model proposes it as before. A resolved call passes the checks
+        of a model proposal (RM08, RM09, RM05) and is recorded as a gateway
+        proposal, mechanism prefetch. The admitted calls run together and are
+        charged to the budgets; their exchange joins the conversation in the
+        declared order, so tool output stays data (RM12). Dispatch authority
+        stays with the stage's actor (RM14), and a later proposal of the same
+        call replays the recorded operation (RM10). Prefetch is not started
+        when its new executions exceed the tool budget's room (one per call;
+        a retry can still use more, and then the run ends on budget).
+        """
+        skill = loop.skill
+        if not self.o.performance.prefetch or skill is None or not skill.prefetch:
+            return
+        user_text = identifiers.provenance_text(self.messages)
+        planned: list[tuple[ToolCall, ValidatedCall | None, dict[str, str] | None]] = []
+        for index, declared in enumerate(skill.prefetch):
+            schema = self.o.tools.get(declared.tool).declaration.input_schema
+            arguments = resolve_arguments(declared, schema, user_text)
+            if arguments is None:
+                continue
+            call = ToolCall(
+                call_id=f"prefetch_{index + 1}", tool_name=declared.tool, arguments=arguments
+            )
+            admitted, rejection = self._admit_one(call, loop.available, self.results)
+            planned.append((call, admitted, rejection))
+        runnable = [(call, admitted) for call, admitted, _ in planned if admitted is not None]
+        if self._new_executions(admitted for _, admitted in runnable) > self.meter.tool_room():
+            return
+        proposal_ids = {
+            call.call_id: self._propose(call, skill, rejection, mechanism=PREFETCH)
+            for call, _, rejection in planned
+        }
+        if not runnable:
+            return
+        outcomes = await asyncio.gather(
+            *(
+                self._dispatch_step(loop, admitted, proposal_ids[call.call_id], mechanism=PREFETCH)
+                for call, admitted in runnable
+            ),
+            return_exceptions=True,
+        )
+        failed = next((o for o in outcomes if isinstance(o, BaseException)), None)
+        if failed is not None:
+            raise failed
+        results = [o for o in outcomes if isinstance(o, ToolResult)]
+        loop.conversation += _tool_exchange_set(
+            [call for call, _ in runnable], [r.to_json_object() for r in results]
+        )
+        pending = loop.available - {
+            r.tool_name for r in self.results if r.status is ToolStatus.SUCCEEDED
+        }
+        if not pending:
+            # Every tool the skill needs has a result: an answer generation (section 7.3).
+            loop.schemas = ()
+            loop.available = frozenset()
+
+    async def _tool_step(self, loop: _Loop, turn: _Turn) -> None:
+        """Run an admitted turn, or hold its call for a confirmation if it mutates (RM11)."""
+        if len(turn.admitted) > 1:
+            # Only read-only calls are admitted as a set (section 4.3).
+            await self._execute_set(loop, turn)
+            return
+        call, admitted, proposal_id = turn.calls[0], turn.admitted[0], turn.proposal_ids[0]
         if admitted.tool.side_effect is SideEffect.MUTATING and not self.o.executor.has_operation(
             admitted
         ):
@@ -2733,8 +2890,20 @@ class _Run:
         self, loop: _Loop, call: ToolCall, admitted: ValidatedCall, proposal_id: str
     ) -> None:
         """Dispatch an admitted call as the loop's actor (RM14) and give its outcome on."""
+        result = await self._dispatch_step(loop, admitted, proposal_id)
+        loop.conversation += _tool_exchange(call, result.to_json_object())
+
+    async def _dispatch_step(
+        self,
+        loop: _Loop,
+        admitted: ValidatedCall,
+        proposal_id: str,
+        *,
+        mechanism: str | None = None,
+    ) -> ToolResult:
+        """Dispatch one admitted call as the loop's actor (RM14); a local failure escalates."""
         actor = loop.actor
-        result = await self._run_admitted(admitted, proposal_id, actor)
+        result = await self._run_admitted(admitted, proposal_id, actor, mechanism=mechanism)
         if actor == LOCAL_ACTOR and result.status is not ToolStatus.SUCCEEDED:
             raise Escalation(
                 "tool_failure",
@@ -2742,7 +2911,25 @@ class _Run:
                 operation_id=result.operation_id,
                 tool_status=result.status.value,
             )
-        loop.conversation += _tool_exchange(call, result.to_json_object())
+        return result
+
+    async def _execute_set(self, loop: _Loop, turn: _Turn) -> None:
+        """Run an admitted set in proposal order, one executor call each (section 4.3).
+
+        The set fits the remaining tool budget when one execution is counted
+        for each call (_admit_set); a retry of a transient failure is charged
+        too, so the budget can still run out in the middle, and the run then
+        ends on budget as it would for a single call. A failed call of the
+        local actor escalates at once, as it does for a single call (section
+        11), and the calls after it do not run. When every call ran, the
+        conversation gets one assistant message with every call and one
+        tool message for each.
+        """
+        contents = []
+        for admitted, proposal_id in zip(turn.admitted, turn.proposal_ids, strict=True):
+            result = await self._dispatch_step(loop, admitted, proposal_id)
+            contents.append(result.to_json_object())
+        loop.conversation += _tool_exchange_set(turn.calls, contents)
 
     # -- confirmation (RM11; spec 0.10 sections 4.3, 5) --------------------------------
 
@@ -2942,25 +3129,47 @@ class _Run:
         raise Escalation("invalid_output", f"unrepaired output: {problem['code']}")
 
     def _tool_turn(
-        self, generation: _Generation, available: frozenset[str], skill: Skill | None
-    ) -> tuple[ToolCall, ValidatedCall | None, dict[str, str] | None, str]:
+        self,
+        generation: _Generation,
+        available: frozenset[str],
+        skill: Skill | None,
+        *,
+        many: bool | None = None,
+    ) -> _Turn:
         """Admit a tool turn and record every proposed call (RM05, RM09, RM11, RM16).
 
         The same checks hold for the local and the external actor. Every
         proposed call is recorded, so a turn with several calls keeps all
-        of them in the trace (RM16, RM23). Returns the first call, the
-        admitted call or the rejection, and the first call's proposal ID.
+        of them in the trace (RM16, RM23). many says whether the
+        generation is judged as a set (section 4.3); None takes the
+        performance option.
         """
-        call = generation.calls[0]
-        admitted, rejection = self._admit(generation.calls, available, self.results)
-        proposal_id = self._propose(call, skill, rejection)
-        for extra in generation.calls[1:]:
-            self._propose(extra, skill, rejection)
-        return call, admitted, rejection, proposal_id
+        calls = tuple(generation.calls)
+        if many is None:
+            many = self.o.performance.calls_per_generation == "many"
+        as_set = many and len(calls) > 1
+        offending: int | None = None
+        if as_set:
+            admitted, rejection, offending = self._admit_set(calls, available, self.results)
+        else:
+            one, rejection = self._admit(calls, available, self.results)
+            admitted = [] if one is None else [one]
+        turn = _Turn(calls, tuple(admitted), rejection, (), answer_all=as_set, offending=offending)
+        # A call that failed its own checks carries its rejection; the valid calls of that
+        # set are recorded as not executed, so the trace never calls a valid call malformed
+        # (RM16). A rejection about the set (a limit, a mutation, no room) is every call's.
+        # The repair exchange tells each call the same (spec 0.34 section 4.3).
+        proposal_ids = tuple(
+            self._propose(call, skill, call_rejection)
+            for call, call_rejection in zip(calls, turn.call_rejections(), strict=True)
+        )
+        return replace(turn, proposal_ids=proposal_ids)
 
-    async def _run_admitted(self, call: ValidatedCall, proposal_id: str, actor: str) -> ToolResult:
+    async def _run_admitted(
+        self, call: ValidatedCall, proposal_id: str, actor: str, *, mechanism: str | None = None
+    ) -> ToolResult:
         """Dispatch an admitted call and keep its result as run evidence."""
-        result = await self._dispatch(call, proposal_id, actor)
+        result = await self._dispatch(call, proposal_id, actor, mechanism=mechanism)
         self.results.append(result)
         return result
 
@@ -2976,7 +3185,90 @@ class _Run:
                 "code": "multiple_tool_calls",
                 "message": "propose one tool call at a time",
             }
-        call = calls[0]
+        return self._admit_one(calls[0], available, results)
+
+    def _admit_set(
+        self,
+        calls: Sequence[ToolCall],
+        available: frozenset[str],
+        results: Sequence[ToolResult],
+    ) -> tuple[list[ValidatedCall], dict[str, str] | None, int | None]:
+        """The validated calls of a set, or one rejection of the whole generation (section 4.3).
+
+        More calls than the limit, or a mutating call among several, is
+        multiple_tool_calls. Then each call is validated on its own, and
+        the first rejection in proposal order is the one reported, so a
+        partly valid set never runs in part; the third value is the position
+        of the call it belongs to (None for a rejection about the set).
+        Last, the calls that need a new execution must fit what the tool
+        budget has left (section 11), counting one execution per call; a
+        retry is not reserved for.
+        """
+        limit = self.meter.admitted_calls_limit()
+        if len(calls) > limit:
+            return (
+                [],
+                {
+                    "code": "multiple_tool_calls",
+                    "message": f"propose at most {_count(limit, 'tool call')} at a time",
+                },
+                None,
+            )
+        if any(self._mutates(call.tool_name) for call in calls):
+            return (
+                [],
+                {
+                    "code": "multiple_tool_calls",
+                    "message": "a mutating tool call must be the only call of its generation",
+                },
+                None,
+            )
+        admitted = []
+        for index, call in enumerate(calls):
+            one, rejection = self._admit_one(call, available, results)
+            if rejection is not None:
+                return [], rejection, index
+            assert one is not None
+            admitted.append(one)
+        room = self.meter.tool_room()
+        if self._new_executions(admitted) > room:
+            return (
+                [],
+                {
+                    "code": "multiple_tool_calls",
+                    "message": (
+                        f"only {_count(room, 'more tool execution')}"
+                        f" {'is' if room == 1 else 'are'} allowed in this run"
+                    ),
+                },
+                None,
+            )
+        return admitted, None, None
+
+    def _new_executions(self, calls: Iterable[ValidatedCall]) -> int:
+        """How many distinct operations the calls would execute; a repeat is a replay (RM10)."""
+        return len(
+            {
+                ToolExecutor.operation_id(self.run_id, call.tool_name, call.arguments)
+                for call in calls
+                if not self.o.executor.has_operation(call)
+            }
+        )
+
+    def _mutates(self, tool_name: str) -> bool:
+        """Whether the name is a registered tool with side effects."""
+        try:
+            return self.o.tools.get(tool_name).side_effect is SideEffect.MUTATING
+        except KeyError:
+            return False
+
+    def _admit_one(
+        self,
+        call: ToolCall,
+        available: frozenset[str],
+        results: Sequence[ToolResult],
+    ) -> tuple[ValidatedCall | None, dict[str, str] | None]:
+        """One call's own checks: RM09 validation, RM05 provenance, a confirmable target."""
         try:
             admitted = self.o.executor.validate(
                 self.run_id, call.tool_name, call.arguments, available=available
@@ -3011,13 +3303,21 @@ class _Run:
         return admitted, None
 
     def _propose(
-        self, call: ToolCall, skill: Skill | None, rejection: dict[str, str] | None
+        self,
+        call: ToolCall,
+        skill: Skill | None,
+        rejection: dict[str, str] | None,
+        *,
+        mechanism: str | None = None,
     ) -> str:
+        """Record a proposed call. mechanism names a gateway-made call (prefetch, RM29):
+        actor gateway and model null (RM22); a model's proposal leaves it out."""
         proposal_id = f"proposal_{uuid.uuid4().hex[:16]}"
         arguments = self.redact_arguments(call.arguments)
+        by_gateway = mechanism is not None
         self.emit(
             EventType.TOOL_PROPOSED,
-            self.actor,
+            GATEWAY_ACTOR if by_gateway else self.actor,
             {
                 **self._branch_label(),
                 "proposal_id": proposal_id,
@@ -3027,11 +3327,15 @@ class _Run:
                 "skill_id": None if skill is None else skill.name,
                 "skill_version": None if skill is None else skill.version,
                 "run_state_version": self.record.version,
-                "model": self.active_model.model_id,
+                "model": None if by_gateway else self.active_model.model_id,
+                **({"mechanism": mechanism} if by_gateway else {}),
                 "admissible": rejection is None,
                 "rejection": rejection,
             },
         )
+        if by_gateway:
+            # A gateway call is no proposal of a model: it is an operation or it is refused.
+            return proposal_id
         if self.authority.holder == LOCAL_ACTOR:
             # Until it produces an operation, it is only a proposal (RM13).
             self.local_proposals[proposal_id] = {
@@ -3048,18 +3352,30 @@ class _Run:
         """The workflow branch the tool events of the moment belong to (spec 0.25)."""
         return {} if self.tool_branch is None else {"branch": self.tool_branch}
 
-    async def _dispatch(self, call: ValidatedCall, proposal_id: str, actor: str) -> ToolResult:
+    async def _dispatch(
+        self, call: ValidatedCall, proposal_id: str, actor: str, *, mechanism: str | None = None
+    ) -> ToolResult:
         """Execute (or replay) the call, with the one retry section 11 allows.
 
         Only the actor that holds dispatch authority may dispatch (RM14).
+        mechanism names a call the gateway made itself, a prefetch: it
+        runs for the actor that holds authority, and its events name no
+        model but carry the mechanism.
         """
         self.authority.require(actor)
-        execution = await self._execute(call, proposal_id, attempt=1)
+        execution = await self._execute(call, proposal_id, attempt=1, mechanism=mechanism)
         if self.o.executor.may_retry(call, execution.result, attempt=1):
-            execution = await self._execute(call, proposal_id, attempt=2)
+            execution = await self._execute(call, proposal_id, attempt=2, mechanism=mechanism)
         return execution.result
 
-    async def _execute(self, call: ValidatedCall, proposal_id: str, *, attempt: int) -> Execution:
+    async def _execute(
+        self,
+        call: ValidatedCall,
+        proposal_id: str,
+        *,
+        attempt: int,
+        mechanism: str | None = None,
+    ) -> Execution:
         common = {
             "proposal_id": proposal_id,
             "tool_name": call.tool_name,
@@ -3070,7 +3386,12 @@ class _Run:
         if approval_id is not None:
             # RM11: a confirmed call names the approval that authorized it.
             common["approval_id"] = approval_id
-        model_id = self.active_model.model_id
+        # A gateway-made call has no originating model (RM22, spec 0.31); the store
+        # keeps an internal label, because its column is not nullable.
+        model_id = None if mechanism is not None else self.active_model.model_id
+        if mechanism is not None:
+            # The marker tells a gateway-made call from a model-made one that lost its model.
+            common["mechanism"] = mechanism
 
         def before_run(operation_id: str) -> None:
             # Only a real execution is charged (RM03); a replay never is.
@@ -3104,7 +3425,7 @@ class _Run:
             execution = await self.o.executor.execute(
                 call,
                 proposal_id=proposal_id,
-                model=model_id,
+                model=GATEWAY_OPERATION_MODEL if model_id is None else model_id,
                 attempt=attempt,
                 before_run=before_run,
                 time_limit=self.meter.remaining_seconds,
@@ -3231,6 +3552,27 @@ def _digest(text: str) -> str:
 def _arguments_digest(call: ValidatedCall) -> str:
     """The digest of a call's unredacted canonical arguments (RM11)."""
     return _digest(canonical_json(dict(call.arguments)))
+
+
+def _tool_exchange_set(
+    calls: Sequence[ToolCall], contents: Sequence[Mapping[str, Any]]
+) -> list[Message]:
+    """Every call of a set in one assistant message, then one tool message for each (RM12).
+
+    A chat provider requires each assistant tool call to have a tool
+    message, in the order of the calls.
+    """
+    return [
+        Message(role=Role.ASSISTANT, tool_calls=tuple(calls)),
+        *[
+            Message(
+                role=Role.TOOL,
+                tool_call_id=call.call_id,
+                content=json.dumps(dict(content), ensure_ascii=False),
+            )
+            for call, content in zip(calls, contents, strict=True)
+        ],
+    ]
 
 
 def _tool_exchange(call: ToolCall, content: Mapping[str, Any]) -> list[Message]:

@@ -617,10 +617,18 @@ a day or less on existing exports or the existing benchmark.
   JSON, no caller answer option), and `answer_pass_applied` in
   `run.completed`; no corpus run in this configuration yet (#128).
 - Several read-only tool calls admitted per generation under
-  `calls_per_generation = many` (#122; section 4.3, AC18).
+  `calls_per_generation = many` (#122; section 4.3, AC18). Done
+  (2026-10-23, deterministic tests with model doubles): the limit is the
+  per-stage tool limit locally and the remaining run limit in the external
+  stage, a set is rejected whole, and no corpus or live run in this
+  configuration yet.
 - Prefetch declarations in skill manifests under `prefetch = true`
   (#123; RM29, AC18): the gateway collects request-determined evidence
-  before the first skill generation.
+  before the first skill generation. Done (2026-10-23, deterministic tests
+  with model doubles): the manifest `prefetch` key, the load checks, the
+  run of the resolved calls as gateway proposals, and the three demo
+  skills; the external-stage call is #126, and no corpus or live run with
+  prefetch yet.
 - Local warm-up at startup and the cache-friendly prompt layout (#124;
   sections 6 and 10), after #114.
 - Completion criteria in the external request, and corrections per

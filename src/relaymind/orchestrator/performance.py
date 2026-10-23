@@ -10,9 +10,10 @@ configuration.
 An option that the gateway cannot honor is refused, never accepted and
 ignored. ``answer_stream = "live"`` is a spec value (RM32), but gated
 answer streaming is not implemented yet, so it stops startup. The
-options ``calls_per_generation`` and ``prefetch`` are stored and
-recorded here; the orchestrator acts on them in a later change (RM29,
-section 4.3), and until then they change nothing but the record.
+orchestrator acts on ``calls_per_generation`` (the admitted-calls rule
+of section 4.3) and on ``prefetch`` (RM29, ``orchestrator/prefetch.py``);
+under their defaults, ``one`` and false, a run takes the path it took
+before spec 0.31.
 
 The guards at the end decide whether a validated draft may be published
 as the answer without a second generation (RM31).

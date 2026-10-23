@@ -24,9 +24,9 @@ from helpers import ACCEPTED_PAYLOAD, FakeClock, of_type
 from relaymind.orchestrator.local_loop import LocalOrchestrator
 from relaymind.orchestrator.recovery import RecoveryError, recover_interrupted_runs
 from relaymind.orchestrator.run_state import RunState, SlotUnavailableError, TerminalStateError
-from relaymind.store.trace_event import EventType
+from relaymind.store.trace_event import EventType, validate_trace_event
 from relaymind.tools import CallerContext
-from relaymind.tools.executor import ToolExecutor, utc_timestamp
+from relaymind.tools.executor import GATEWAY_OPERATION_MODEL, ToolExecutor, utc_timestamp
 from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
 
 CALLER = CallerContext(permissions=frozenset({READ_PERMISSION, MUTATE_PERMISSION}))
@@ -74,6 +74,33 @@ def pending_operation(gateway, run_id, tool_name, arguments):
         arguments=arguments,
     )
     return operation_id
+
+
+def test_a_recovered_prefetch_operation_names_no_model(tmp_path):
+    """RM22, RM29: an operation the gateway made itself is recovered with model null.
+
+    The store keeps an internal label for it, because its column is not
+    nullable; the recovered tool.finished is a valid trace event with
+    actor gateway and no model, like the events the call wrote before the crash.
+    """
+    old = build_gateway(tmp_path, [], caller=CALLER, external_turns=[])
+    run = unfinished_run(old)
+    operation_id = ToolExecutor.operation_id(run.run_id, "get_service_health", HEALTH)
+    old.store.record_tool_operation(
+        run.run_id,
+        operation_id=operation_id,
+        proposal_id="prop_prefetch",
+        tool_name="get_service_health",
+        model=GATEWAY_OPERATION_MODEL,
+        arguments=HEALTH,
+    )
+    new = restart(old, tmp_path)
+    new.orchestrator.recover_after_restart()
+    (finished,) = of_type(new.store.events(run.run_id), "tool.finished")
+    assert finished.actor == "gateway" and finished.payload["model"] is None
+    assert finished.payload["recovered"] is True and finished.payload["replayed"] is False
+    # The event is valid as stored: the trace schema allows a null model for a gateway call.
+    validate_trace_event(finished.to_json_object())
 
 
 def test_unfinished_run_fails_as_interrupted_and_releases_the_slot(tmp_path):

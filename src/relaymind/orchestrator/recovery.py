@@ -31,9 +31,11 @@ from relaymind.orchestrator.run_state import (
 )
 from relaymind.store import RunStore
 from relaymind.store.trace_event import EventType
-from relaymind.tools.executor import ToolExecutor
+from relaymind.tools.executor import GATEWAY_OPERATION_MODEL, ToolExecutor
 
 INTERRUPTED = "interrupted"
+# The mechanism of a gateway-made operation whose events do not name one (RM29).
+PREFETCH_MECHANISM = "prefetch"
 
 
 @dataclass(frozen=True)
@@ -155,7 +157,8 @@ def _settle(
     payload: dict[str, Any] = {
         "operation_id": operation["operation_id"],
         "tool_name": operation["tool_name"],
-        "model": operation["model"],
+        # An operation the gateway made itself (a prefetch) names no model (RM22).
+        "model": None if operation["model"] == GATEWAY_OPERATION_MODEL else operation["model"],
         "status": result.status.value,
         "replayed": False,
         "recovered": True,
@@ -166,15 +169,38 @@ def _settle(
     branch = _branch_of(store, operation)
     if branch is not None:
         payload["branch"] = branch
+    if payload["model"] is None:
+        payload["mechanism"] = _gateway_mechanism(store, operation)
     store.append_event(operation["run_id"], EventType.TOOL_FINISHED, GATEWAY_ACTOR, payload)
     return SettledOperation(operation["operation_id"], result.status.value)
 
 
+def _gateway_mechanism(store: RunStore, operation: Mapping[str, Any]) -> str:
+    """The mechanism of an operation the gateway made itself (RM22, RM29).
+
+    The tool.started event names it; if the crash came before that event,
+    the operation's proposal does. A gateway-made operation with neither can
+    only be a prefetch, the one mechanism that runs before any model event.
+    """
+    named = _started_field(store, operation, "mechanism")
+    if named is not None:
+        return named
+    for event in store.events(operation["run_id"], event_type=EventType.TOOL_PROPOSED):
+        if event.payload.get("proposal_id") == operation["proposal_id"]:
+            return event.payload.get("mechanism", PREFETCH_MECHANISM)
+    return PREFETCH_MECHANISM
+
+
 def _branch_of(store: RunStore, operation: Mapping[str, Any]) -> str | None:
     """The workflow branch the operation's tool.started named, if any (spec 0.25 section 8)."""
+    return _started_field(store, operation, "branch")
+
+
+def _started_field(store: RunStore, operation: Mapping[str, Any], key: str) -> str | None:
+    """A field of the operation's tool.started payload, if it names one."""
     for event in store.events(operation["run_id"], event_type=EventType.TOOL_STARTED):
         if event.payload.get("operation_id") == operation["operation_id"]:
-            return event.payload.get("branch")
+            return event.payload.get(key)
     return None
 
 

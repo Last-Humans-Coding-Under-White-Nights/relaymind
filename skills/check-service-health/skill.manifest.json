@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "0.1.1",
+  "version": "0.2.0",
   "languages": [
     "en",
     "zh"
@@ -13,5 +13,15 @@
     "examples.json"
   ],
   "completion_predicate": "health_status_preserved",
-  "parallel_workflow": null
+  "parallel_workflow": null,
+  "prefetch": [
+    {
+      "tool": "get_service_health",
+      "arguments": {
+        "service": {
+          "from": "request"
+        }
+      }
+    }
+  ]
 }
