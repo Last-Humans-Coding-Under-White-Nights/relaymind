@@ -11,12 +11,18 @@ sized to the context, and prompts that never repeat a prefix.
 import asyncio
 import dataclasses
 import json
+import time
 
 import httpx
 import pytest
 
 from helpers import SCRIPTS_DIR, load_script_module, sse_response
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
+
+# The probe measures with time.monotonic, and the event loop schedules its sleeps on the
+# same clock. Where that clock is coarse (about 15.6 ms on Windows), a measured delay can
+# read up to two ticks short of the requested one; elsewhere the slack is negligible.
+CLOCK_SLACK_MS = 2 * time.get_clock_info("monotonic").resolution * 1000
 
 CHECKED_IN = SCRIPTS_DIR / "probes" / "m7_cancel_prefill.json"
 KWARGS = {"enable_thinking": False}
@@ -157,7 +163,7 @@ def test_a_repetition_sends_idle_then_long_then_short_and_cancels_the_long_one(
     assert server.log[0][1] != server.log[2][1]
     assert row["repetition"] == 0 and row["long_prompt_tokens"] > 0
     assert row["cancel"]["requested_after_ms"] == 20
-    assert row["cancel"]["called_after_ms"] >= 20
+    assert row["cancel"]["called_after_ms"] >= 20 - CLOCK_SLACK_MS
     assert row["cancel"]["events_before_cancel"] == 0
     assert row["idle"]["http_status"] == 200 and row["after_cancel"]["http_status"] == 200
     assert row["after_cancel"]["wall_ms"] >= row["after_cancel"]["first_delta_ms"] >= 0
@@ -190,7 +196,8 @@ def test_called_after_ms_is_measured_and_not_the_requested_delay(
 
     row = asyncio.run(go())
     assert row["cancel"]["requested_after_ms"] == 20
-    assert row["cancel"]["called_after_ms"] >= 85
+    # Still well above the requested 20 ms, so the field is the measured delay.
+    assert row["cancel"]["called_after_ms"] >= 85 - CLOCK_SLACK_MS
 
 
 def test_the_sizing_and_reference_prompts_tokenise_like_the_repetition_prompts(probe, config):
