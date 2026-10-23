@@ -383,10 +383,19 @@ class _EarlyStream(_ClosingStream):
     while the run may still work. The run's task is cancelled through the
     orchestrator's request cancel, the path of the buffered disconnect
     (RM14, AC12, section 7.4), so the run ends cancelled and nothing is
-    left running for a client that is gone.
+    left running for a client that is gone. The response waits for the
+    run to stop only as long as for a native cancel, so the execution
+    slot is released before the connection is freed when the run stops
+    in time.
     """
 
-    def __init__(self, lines: AsyncIterator[str], *, cancel: Callable[[], None], **kwargs: Any):
+    def __init__(
+        self,
+        lines: AsyncIterator[str],
+        *,
+        cancel: Callable[[], Awaitable[None]],
+        **kwargs: Any,
+    ):
         super().__init__(lines, **kwargs)
         self._cancel = cancel
 
@@ -394,7 +403,7 @@ class _EarlyStream(_ClosingStream):
         try:
             await super().__call__(scope, receive, send)
         finally:
-            self._cancel()
+            await self._cancel()
 
 
 def _early_response(
@@ -412,9 +421,11 @@ def _early_response(
     """
     task = accepted.start()
 
-    def cancel() -> None:
+    async def cancel() -> None:
+        # The bounded wait of the buffered disconnect and the native cancel (section 7.4).
         if not task.done():
             orchestrator.request_cancel(task)
+            await asyncio.wait({task}, timeout=native.cancel_wait_seconds)
 
     lines = early_stream(
         chat.alias,

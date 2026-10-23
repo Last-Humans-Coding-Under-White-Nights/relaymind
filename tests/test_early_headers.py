@@ -405,6 +405,90 @@ def test_a_disconnect_after_the_headers_cancels_the_run(tmp_path):
     assert data_events(client) == []
 
 
+class _Stubborn(GatedAdapter):
+    """A local model that, once cancelled, stops only when release is set."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.release = asyncio.Event()
+
+    async def generate(self, request):
+        self.started.set()
+        try:
+            await self.gate.wait()
+        except asyncio.CancelledError:
+            await self.release.wait()
+            raise
+        async for event in super().generate(request):
+            yield event
+
+
+def stubborn_early(tmp_path, native):
+    adapter = _Stubborn(turns=HEALTH_TURNS)
+    gateway = build_gateway(
+        tmp_path,
+        None,
+        local_model=ConfiguredModel(adapter=adapter, model_id="stubborn"),
+        external_turns=[],
+        performance=EARLY,
+    )
+    return gateway, adapter, make_app(gateway, native=native)
+
+
+def test_a_disconnect_releases_the_slot_before_the_connection_is_freed(tmp_path):
+    """RM14, RM17, AC12, section 7.4: the early stream waits for the run to stop, as the
+    buffered disconnect does, so the next request gets the single slot, not 429."""
+    gateway, adapter, app = stubborn_early(tmp_path, FAST)
+
+    async def go():
+        first = chat_client(app, stream=True).start()
+        await asyncio.wait_for(adapter.started.wait(), 10)
+        await until(lambda: head(first) is not None)
+        run_id = gateway.store.active_run_id()
+        # The model takes a moment to stop, well inside the cancel wait.
+        asyncio.get_running_loop().call_later(0.05, adapter.release.set)
+        await first.leave()
+        # No yield between the freed connection and these checks.
+        assert gateway.store.get_run(run_id).state == "cancelled"
+        assert gateway.store.active_run_id() is None
+        second = chat_client(app, stream=True).start()
+        await until(lambda: head(second) is not None)
+        status = head(second)[0]
+        adapter.gate.set()
+        await asyncio.wait_for(second.task, 10)
+        return run_id, status
+
+    run_id, status = asyncio.run(go())
+    cancelled_run(gateway, run_id)
+    assert status == 200
+
+
+def test_the_disconnect_wait_is_bounded_by_the_native_cancel_wait(tmp_path):
+    """RM03, RM14, section 7.4: a run that does not stop holds the connection only
+    native.cancel_wait_seconds, as the buffered disconnect and the native cancel do."""
+    native = NativeSettings(heartbeat_seconds=0.01, cancel_wait_seconds=0.2)
+    gateway, adapter, app = stubborn_early(tmp_path, native)
+
+    async def go():
+        loop = asyncio.get_running_loop()
+        client = chat_client(app, stream=True).start()
+        await asyncio.wait_for(adapter.started.wait(), 10)
+        await until(lambda: head(client) is not None)
+        run_id = gateway.store.active_run_id()
+        left = loop.time()
+        await client.leave()
+        held = loop.time() - left
+        still_active = gateway.store.active_run_id() == run_id
+        adapter.release.set()
+        await run_ended(gateway, run_id)
+        return run_id, held, still_active
+
+    run_id, held, still_active = asyncio.run(go())
+    assert still_active, "the run stopped before the wait ran out"
+    assert 0.15 <= held < 5
+    cancelled_run(gateway, run_id)
+
+
 def test_a_task_cancelled_before_it_starts_releases_the_slot(tmp_path):
     """RM17: a run that was accepted and never driven still ends, cancelled."""
     gateway = build_gateway(tmp_path, HEALTH_TURNS, external_turns=[], performance=EARLY)
