@@ -6,8 +6,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Specification 0.31 → 0.32 (PR #146 review; RM05, RM17, RM22,
+  RM26, RM28 to RM32; AC11, AC17 to AC20, AC22, AC23): distinguish
+  an absent local model from an unavailable or unsuitable configured
+  one; separate the prefetch option from its declarations; complete
+  the answer-pass event and terminal-error contracts; define selector
+  threshold keys, ranges, and provisional defaults; separate prefetch
+  binding validation from request-time resolution; and specify workflow
+  package loading before workflow-ID checks. Documentation only;
+  phase 2 remains unimplemented.
+
+- Specification 0.30 → 0.31 (phase 2; RM26 to RM32, AC17 to AC23):
+  operation without a usable local model, with detection; placement
+  from recorded timing samples; one replaceable selection interface;
+  prefetch; workflow packages; the draft answer pass; gated answer
+  streaming and early response headers; several read-only calls per
+  generation; completion criteria in the external request; timing and
+  cached-token recording; a budgets launch table; and the selection
+  benchmarks of section 12.4. Every new option defaults to the earlier
+  behavior. Reasoning: `docs/design/2026-10-23-performance-first-routing.md`;
+  findings: the 2026-10-23 analysis in `docs/EVIDENCE.md`; plan: M7 to
+  M9 in `docs/ROADMAP.md`. Documentation only: no code or observable
+  behavior changes.
+- `README.md` is now a short user guide (what it is, install,
+  configure, start, use); project status lives in `docs/ROADMAP.md`
+  and `docs/RELEASE.md`.
+
 ### Fixed
 
+- Correct the skill guide's workflow-key description, repair the testing
+  guide's README link, and install the client SDK before the Python
+  quickstart example (PR #146 review).
+
+- `docs/EVIDENCE.md`: the 2026-10-22 latency entry reported "0 cached
+  prompt tokens" as a runtime figure; it is the adapter's default
+  (finding F9 of the 2026-10-23 analysis).
 - Demo skill completion predicates reject answers that break spec
   section 9 (#13; RM05, RM16, RM23): negated or mixed health statuses,
   inferred incident causes or a missing service, invented deployment IDs,

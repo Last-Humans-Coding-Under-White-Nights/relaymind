@@ -8,7 +8,7 @@ codebase.
 1. **The spec is the single source of truth.**
    [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md) defines what RelayMind
    does. Every implementation task and every acceptance test must reference
-   requirement IDs from it (RM01–RM25, AC01–AC16). If code and spec disagree,
+   requirement IDs from it (RM01–RM32, AC01–AC23; RM26–RM32 and AC17–AC23 are specified in 0.31 and not implemented yet). If code and spec disagree,
    the spec wins. If the spec is wrong, revise the spec first, then change
    the code.
 2. **Tests come before code.** Write a failing test that captures the
@@ -37,7 +37,7 @@ codebase.
 | `skills/` | Demo skill packages, one directory per skill, SKILL.md plus `skill.manifest.json`; the default skill root (operators may configure others, spec section 4.2) |
 | `tests/` | Test suite; `tests/fixtures/` holds sandbox demo data; `tests/test_demo_ui_browser.py` runs the UI page script in Chromium (Playwright; `playwright install chromium`) |
 | `scripts/` | Developer scripts: model manifest generation (RM18), the live acceptance harness, the corpus runner, and the latency benchmark (RM25); `scripts/README.md` lists what exists |
-| `docs/` | Spec, architecture, roadmap, testing guide, live evidence record (`docs/EVIDENCE.md`, raw exports in `docs/evidence/`) |
+| `docs/` | Spec, architecture, roadmap, testing guide, live evidence record (`docs/EVIDENCE.md`, raw exports in `docs/evidence/`), and design rationale for spec revisions (`docs/design/`, not normative) |
 
 ## Ownership boundaries (do not blur these)
 
@@ -74,6 +74,15 @@ See spec section 3 for the full component contract.
 9. **Honest evidence (RM16, section 12).** Never report an unavailable
    service as healthy, a draft as a log-backed diagnosis, or a schema
    example as a measured result.
+10. **A selector proposes, the gateway admits (RM28).** A selector,
+    a prefetch declaration, or a workflow file never executes anything,
+    grants a permission, or skips a clarification or a confirmation.
+11. **Predictions are labeled (RM27).** A placement prediction is
+    recorded next to the actual duration and never reported as a
+    measurement; the placement policy never changes a budget.
+12. **Nothing unverified reaches a client (RM32).** A streamed
+    statement is forwarded only after the gateway checked it; a late
+    failure ends the stream, never replaces text.
 
 ## Development workflow
 

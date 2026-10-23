@@ -71,3 +71,27 @@ These choices follow the selected build's
 and [request parser](https://github.com/ggml-org/llama.cpp/blob/8baabd53b77d1c48c6ef8d3b620436292f3f6231/tools/server/server-common.cpp).
 See [`docs/EVIDENCE.md`](../docs/EVIDENCE.md) for qualification of this
 runtime. Earlier entries describe their recorded runtime only.
+
+## Start the runtime
+
+With the pinned build first on PATH and the verified artifact in
+`models/`, start llama-server with the manifest's launch settings:
+
+macOS / Linux (Terminal):
+
+```bash
+llama-server -m models/Qwen3-0.6B-Q8_0.gguf \
+  --host 127.0.0.1 --port 8033 --ctx-size 8192 \
+  --jinja --reasoning off --reasoning-format deepseek
+```
+
+Windows (PowerShell 5.1+):
+
+```powershell
+llama-server -m models/Qwen3-0.6B-Q8_0.gguf `
+  --host 127.0.0.1 --port 8033 --ctx-size 8192 `
+  --jinja --reasoning off --reasoning-format deepseek
+```
+
+These launch flags also work in PowerShell 5.1; no JSON command-line
+quoting is needed.

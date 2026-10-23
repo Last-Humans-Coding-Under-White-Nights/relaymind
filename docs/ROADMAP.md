@@ -5,7 +5,12 @@ Implementation order follows the dependency guidance in
 requirements it implements and the acceptance tests that close it. A
 milestone is done when its deterministic tests pass and its live checks are
 recorded in [`EVIDENCE.md`](EVIDENCE.md). Issues on GitHub carry an `M1`
-to `M6` label; the lists below name the issues where the order matters.
+to `M9` label; the lists below name the issues where the order matters.
+M1 to M6 are the prototype; M7 to M9 are phase 2 (spec 0.31), the
+answer to customer feedback, with shorter waiting time as the objective
+(see
+[`design/2026-10-23-performance-first-routing.md`](design/2026-10-23-performance-first-routing.md)
+for the reasoning).
 
 ## M1 — Adapter and protocol qualification
 
@@ -522,6 +527,143 @@ Carried forward, not done in M5:
 - Closes: AC08 (#90, #109), AC15 (open until the Windows run), and the
   release record.
 
+## M7 — Fewer round trips, selection, and no-local operation (spec 0.31)
+
+Order of work in M7, M8, and M9: each issue's "Depends on" line, which
+is the one place a dependency is written down.
+
+Phase 2 starts with the levers the recorded evidence already supports,
+the selection interface the no-local mode needs, and the mode the
+customers without a local model need. Nothing in M7 needs the placement
+policy; everything in M7 records the timing fields that M8 needs. Every
+new option defaults to the behavior before spec 0.31, so the baseline
+stays reproducible by launch keys; the M7 runs decide which defaults
+the next revision changes. The milestone opens with the S0 spikes, each
+a day or less on existing exports or the existing benchmark.
+
+- Specification 0.31 and the documents around it (#113): RM26 to RM32,
+  AC17 to AC23, the changelog, the design rationale, this roadmap.
+- S0 spikes, measure before commitment (spec section 12.3):
+  - read the runtime's `timings` and cached tokens, then rerun the
+    latency benchmark, because every cached-token figure so far is an
+    adapter default (#114);
+  - regrade the corpus export offline with the skill-stage draft as the
+    answer, which decides `answer_pass` (#115);
+  - external first-token time with and without tools and with provider
+    reasoning on and off, which decides the external-path lever (#116);
+  - timings in a constrained configuration of the Apple M1 (a
+    CPU-only runtime with fewer threads) next to its normal one, cold
+    and warm prefix, cancel during prefill, which sets the deadline
+    margin (#117);
+  - score an example-matching selector offline on the corpus prompts,
+    with the expected-skill sidecar file (#118, P0: it decides whether
+    no-local selection works);
+  - count the round trips several read-only calls per generation would
+    have saved (#119).
+- Budgets table in the launch file, recorded in every run (#142; RM03,
+  section 14.1): the one knob a slow-laptop operator needs.
+- First-token, cached, and reasoning tokens per model call, and provider
+  request options (#120; sections 6, 8, 14.1).
+- Draft answer pass (#121; RM31, AC17): `answer_pass = draft` publishes
+  the validated draft; `final` stays the default until #115 and #128
+  report.
+- Several read-only tool calls admitted per generation under
+  `calls_per_generation = many` (#122; section 4.3, AC18).
+- Prefetch declarations in skill manifests under `prefetch = true`
+  (#123; RM29, AC18): the gateway collects request-determined evidence
+  before the first skill generation.
+- Local warm-up at startup and the cache-friendly prompt layout (#124;
+  sections 6 and 10), after #114.
+- Completion criteria in the external request, and corrections per
+  completed run as a metric (#141; section 4.4; finding F6).
+- Early response headers and keep-alives for streamed chat requests
+  (#140; RM32, section 7.3): a chat client gets its run reference and
+  the events URL before the answer.
+- Selection interface: the request and result schemas, the chain, and
+  `model_router` behind it with its decisions unchanged (#131; RM28,
+  AC22).
+- Example-match selector (#132; RM28): no model call; the no-local
+  default chain.
+- Operation without a usable local model (#126; RM26, AC20):
+  `[local_model]` optional; the gateway detects a local model that
+  cannot run or cannot help on this machine; auto is managed external
+  execution through the example matcher; external_only is unchanged.
+- Demo UI labels and progress (#127; section 9).
+- Selection benchmarks (section 12.4), our own, built from the
+  SkillsBench dataset for skills (#143, P0) and the
+  ToolRet-Training-20w dataset for tools (#144, P1): every selector is
+  scored through the RM28 interface on the same frozen files with
+  precision, recall, and Jaccard, so a customer's own selector and the
+  default are compared the same way.
+- M7 evaluation (#128): labeled configurations, the new metrics, the
+  timing-sample file option, the corpus and latency runs that confirm
+  or revise the defaults, the release record.
+- Closes: AC17, AC18, AC20; the in-process part of AC22.
+
+Exit: no-local auto completes the English simple subset with
+clarification and confirmation working through the example matcher;
+corrections per completed run is reported before and after #141; every
+M7 configuration has a recorded run, reported apart from the baseline;
+the next spec revision states which defaults change, with the numbers.
+
+## M8 — Device-aware placement and the selector transport (spec 0.31)
+
+The placement policy needs the timing samples M7 starts recording; the
+HTTP selector transport is what makes requirement 4 (replaceable
+selection) true for a third party.
+
+- Timing samples in the run store (#129; RM27): per-generation,
+  warm-up, and probe samples, throughput estimates, per-skill local
+  outcomes.
+- Placement policy (#130; RM27, AC21): the hard cap, per-generation
+  deadlines, the idle probe, `local_slow`, readiness, and the
+  expected-wait rule as a labeled experiment. `local_first` stays the
+  default and reproduces the pre-0.31 decisions; #134 decides whether
+  `device_aware` becomes the default.
+- Out-of-process selectors over loopback HTTP, P0 (#133; RM28, AC22),
+  with an example selector server.
+- Gated answer streaming, P1 (#125; RM32, AC19): answer generations
+  only, per-statement holdback, `buffered` the default; the gate is
+  task-success parity with buffered and the streamed failures reported;
+  after #141, because every rejected answer under live is a failed run.
+- M8 evaluation (#134): the normal and the constrained configuration
+  of the M1, each reported with its measured class, with the
+  timing-sample file and an external model so the placement rules can
+  fire; prediction error, wasted local time, selection precision,
+  recall, and Jaccard, external calls and tokens per completed task,
+  the release record.
+- Closes: AC19, AC21, AC22.
+
+Exit: the unsuitable-machine hypothesis of section 12.3 is reported as
+met or not met with exact numbers in the constrained configuration; a
+selector swap by configuration, including an HTTP selector, leaves the
+orchestrator and the packages unchanged.
+
+## M9 — Workflows (spec 0.31, P1)
+
+Workflow packages are the execution plans of skills, named by the new
+manifest key `workflow`; selection by intent is skill selection, so the
+catalog, the RouteDecision, and the run states do not change. The fixed
+parallel workflow keeps its code, its `parallel_workflow` key, and
+AC14. Only the `auto` role needs M8's placement; the rest of M9 could
+start alongside M8.
+
+- Workflow schema, strict YAML loader, and registry (#135; RM30).
+- Workflow runner with tool, model, and render steps, one shared stage
+  per plan, and per-step placement (#136; RM30, AC23).
+- Demo workflow packages and the skill manifest `workflow` field (#137;
+  section 9).
+- Workflow events in the trace view and the UI steps view (#138;
+  sections 8 and 9).
+- M9 evaluation (#139): each demo skill with and without its workflow.
+- Workflow plan benchmark (#145; section 12.4): plan precision,
+  recall, and Jaccard on the multi-member cases, plan validity, outcome
+  value; ordering is stated as not measured.
+- Closes: AC23.
+
+Exit: the generations-per-completed-run hypothesis for prefetch and
+workflows is reported with exact numbers; AC14 is unchanged.
+
 ## Out of scope for the prototype
 
 See the priority table in spec section 1. Highlights: token-level
@@ -600,3 +742,10 @@ listed here so the current order can be traced to its reason.
   The live swap from Z.ai international to Zhipu bigmodel.cn closes
   AC08. Both endpoints belong to one vendor, so a second vendor's API is
   not covered.
+- 2026-10-23, spec 0.31 (#113): phase 2 answers customer feedback
+  with milestones M7 to M9. The reasons, the options rejected, and what
+  three reviews and the owner changed are in
+  [`design/2026-10-23-performance-first-routing.md`](design/2026-10-23-performance-first-routing.md);
+  the findings behind them are the 2026-10-23 analysis in
+  [`EVIDENCE.md`](EVIDENCE.md). Each milestone opens with measurement
+  and ends with the runs that decide the next revision's defaults.

@@ -21,6 +21,26 @@ spec is the source of truth; this page only explains where things live.
 | Schema boundary checks | `src/relaymind/schema_util.py` | Shared checks for published, versioned JSON Schemas (closed field sets, exact schema_version, first schema error; spec section 8). |
 | Timing instrumentation | `src/relaymind/stats.py` | Record spec 12.1 metrics per generation around any adapter; export JSON for adapter comparisons (M1 working data, not benchmark evidence). |
 
+## Phase 2 components (spec 0.31, planned)
+
+Specification 0.31 adds components that do not exist in the code yet;
+[`ROADMAP.md`](ROADMAP.md) M7 to M9 build them. Where they will live,
+so that the dependency direction below stays true:
+
+| Spec component | Planned package | Responsibility |
+|----------------|-----------------|----------------|
+| Selector (RM28) | `src/relaymind/selection/` | The SelectionRequest and SelectionResult schemas, the chain, the built-in `model_router` (the routing generation now in `orchestrator/router.py`) and `example_match`, and the loopback HTTP transport. Sits below the orchestrator and above skills; it executes nothing. |
+| Placement policy (RM27) | `src/relaymind/orchestrator/placement.py` | Predicts where a generation runs from the timing samples the store keeps; never changes a budget. |
+| Timing samples (RM27) | `src/relaymind/store/` | A table of per-generation and warm-up samples, read by placement, written by the orchestrator. |
+| Prefetch (RM29) | `src/relaymind/skills/` and `src/relaymind/orchestrator/` | Manifest declarations validated at load; executed by the orchestrator through the executor before the first skill generation. |
+| Workflow registry and runner (RM30) | `src/relaymind/workflows/` | Loads and validates `workflow.yaml` packages from the configured roots; runs tool, model, and render steps. The fixed parallel workflow stays in `orchestrator/local_loop.py` until a runner reproduces it. |
+| Answer pass, gated streaming, early headers (RM31, RM32) | `src/relaymind/orchestrator/local_loop.py`, `src/relaymind/api/chat.py` | The draft pass, the per-statement holdback of the live answer stream, and early response headers for streamed chat requests. |
+| Budgets table (RM03, section 14.1) | `src/relaymind/launcher.py` | The `[budgets]` table mapped onto `LocalBudgets`; every value recorded in run.accepted. |
+
+Demo workflow packages (`workflow.yaml` plus optional `examples.json`)
+will live in `workflows/` at the repository root, the default workflow
+root, with the same root rules as skills.
+
 Demo skill packages (SKILL.md plus `skill.manifest.json`, spec sections
 4.2 and 9) live in `skills/` at the repository root, one directory per
 skill; that directory is the default skill root, and operators can

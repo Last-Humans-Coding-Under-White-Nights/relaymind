@@ -41,9 +41,14 @@ Each package contains:
 | delete-demo-database | list_demo_databases, delete_demo_database | Confirmation required | true | deletion_outcome_reported |
 | health-and-diagnostic-checklist | get_service_health | Parallel demo workflow, external synthesis | false | health_checklist_separated |
 
-The parallel workflow that health-and-diagnostic-checklist joins is not
-implemented yet (#30). Until it is, `parallel_demo` fails with
-`workflow_unavailable`; the other modes follow spec section 4.4.
+The parallel workflow that health-and-diagnostic-checklist joins runs
+in `parallel_demo` (#30, spec section 4.4). The `parallel_workflow`
+key keeps its fixed-workflow meaning (RM15). Phase 2 adds a distinct
+`workflow` key for a workflow package (RM30); a manifest sets at most
+one of these keys, and they are not aliases. It also adds optional
+`prefetch` declarations (RM29) and workflow packages under `workflows/`;
+these additions are not implemented yet, so packages keep the keys the
+current schema accepts (see `docs/ROADMAP.md`, M7 and M9).
 
 Changing a package changes its content hash; bump `version` in
 `skill.manifest.json` as well (RM07).
