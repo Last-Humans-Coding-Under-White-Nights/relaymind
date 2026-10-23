@@ -134,6 +134,12 @@ curl -s http://127.0.0.1:8080/v1/chat/completions \
   with `X-RelayMind-Events-URL` naming the run's event stream (open it with
   the same token to follow the run), then a keep-alive comment while it
   works. No answer text is sent before the answer is ready.
+- **Fewer round trips.** In the same `[performance]` table,
+  `calls_per_generation = "many"` lets the model ask for several read-only
+  tools in one step, and `prefetch = true` runs the read-only calls a skill
+  declares (when your request names the service) before the model starts.
+  Both are off by default; see `relaymind.example.toml` and
+  `skills/README.md`.
 
 ## Coming next
 
