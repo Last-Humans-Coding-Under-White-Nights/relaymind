@@ -638,3 +638,42 @@ def test_documented_skillsbench_registry_digests_are_verified():
     with pytest.raises(ValueError, match="digest"):
         derive.verify_registry(tasks, {"tasks/example": "sha256:" + "b" * 64})
     derive.verify_registry(tasks, {"tasks/example": "sha256:" + "a" * 64})
+
+
+def test_toolret_schema_property_text_shorthand_is_validated():
+    """RM09/RM25: textual type shorthand is normalized, not forwarded as a schema."""
+    case = bench.normalize_toolret(
+        {
+            "id": "text-schema",
+            "query": "lookup",
+            "negative": [],
+            "positive": [
+                {
+                    "name": "lookup",
+                    "description": "lookup",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"query": "str, optional", "count": "int"},
+                    },
+                }
+            ],
+        },
+        0,
+    )
+    schema = case["tools"][0]["input_schema"]
+    assert schema["properties"]["query"] == {"type": "string"}
+    assert schema["properties"]["count"] == {"type": "integer"}
+    bench.benchmark_registry(case["tools"])
+
+
+def test_checked_in_tool_lock_contains_only_frozen_source_identities():
+    """RM25 §12.4: no ToolRet source row is redistributed with the lock."""
+    root = Path(__file__).resolve().parents[1] / "evaluation"
+    lock = json.loads((root / "tools.v1.lock.json").read_text())
+    assert lock["revision"] == bench.TOOLRET_REVISION
+    assert lock["size"] == len(lock["cases"]) == 500
+    assert sum(lock["quotas"]) == 500
+    assert len(lock["shards"]) == 6
+    assert len({case["row_index"] for case in lock["cases"]}) == 500
+    assert all(set(case) == {"id", "row_index", "sha256"} for case in lock["cases"])
+    assert all(len(case["sha256"]) == 64 for case in lock["cases"])

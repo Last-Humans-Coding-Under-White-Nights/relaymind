@@ -316,6 +316,12 @@ _TYPE_ALIASES = {
 
 def _normalize_schema(source: Any) -> Any:
     """Translate dataset type aliases only in schema positions, never const data."""
+    if isinstance(source, str):
+        typ = re.split(r"[,\s]", source.strip().lower(), maxsplit=1)[0]
+        typ = _TYPE_ALIASES.get(typ, typ)
+        if typ not in ("string", "integer", "number", "boolean", "object", "array", "null"):
+            raise ValueError(f"unsupported source schema type: {source!r}")
+        return {"type": typ}
     if not isinstance(source, dict):
         return source
     schema = dict(source)
