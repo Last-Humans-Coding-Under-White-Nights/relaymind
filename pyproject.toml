@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "relaymind"
 version = "0.1.0"
-description = "Local AI gateway: a small local model completes bounded tasks with skills and tools, and transfers complex work to an external model."
+description = "Local AI gateway that makes the best use of external language models from a PC with limited resources: simple bounded tasks on a small local model when the machine can, everything else external with few round trips, completed work preserved, every decision traced."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.12"

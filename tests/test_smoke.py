@@ -1,7 +1,7 @@
 """Scaffold smoke test.
 
 Keeps CI meaningful before the first feature lands. Real tests reference
-requirement IDs from docs/SPECIFICATION.md (RM01-RM25, AC01-AC16).
+requirement IDs from docs/SPECIFICATION.md (RM01-RM32, AC01-AC23).
 """
 
 import relaymind

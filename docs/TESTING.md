@@ -406,6 +406,17 @@ their results are in [`EVIDENCE.md`](EVIDENCE.md).
 - The launcher (`relaymind serve --config`) has started with the pinned
   model on macOS only (the harness above); no Windows start is recorded
   (#110).
+- Phase 2 (spec 0.31, RM26 to RM32, AC17 to AC23) is specified and not
+  implemented: there is no test for the draft answer pass, admitted
+  calls per generation, prefetch, gated streaming, operation without a
+  local model, the placement policy, the selection interface, or
+  workflow packages. The cached-token figures in the existing exports
+  are adapter defaults (finding F9 in [`EVIDENCE.md`](EVIDENCE.md)). The M7 to M9
+  issues in [`ROADMAP.md`](ROADMAP.md) carry the tests.
+- The selection benchmarks of spec section 12.4 (skills from
+  SkillsBench, tools from ToolRet-Training-20w, workflow plans) do not
+  exist yet (#143 to #145). Until they run, no claim is made about
+  which selector is better outside the six-skill ops corpus.
 
 ### Required trace events (RM16, RM22, RM25)
 
@@ -542,24 +553,8 @@ non-thinking uses the runtime's reasoning control, not prompt strings).
 Install the exact build and verify its archive as described in
 [`models/README.md`](../models/README.md#runtime-and-reasoning-controls).
 
-macOS / Linux (Terminal):
-
-```bash
-llama-server -m models/Qwen3-0.6B-Q8_0.gguf \
-  --host 127.0.0.1 --port 8033 --ctx-size 8192 \
-  --jinja --reasoning off --reasoning-format deepseek
-```
-
-Windows (PowerShell 5.1+):
-
-```powershell
-llama-server -m models/Qwen3-0.6B-Q8_0.gguf `
-  --host 127.0.0.1 --port 8033 --ctx-size 8192 `
-  --jinja --reasoning off --reasoning-format deepseek
-```
-
-These launch flags also work in PowerShell 5.1; no JSON command-line
-quoting is needed. For a thinking-mode request, set
+Start it as [`models/README.md`](../models/README.md#start-the-runtime)
+shows. For a thinking-mode request, set
 `chat_template_kwargs` to `{"enable_thinking": true}` and
 `reasoning_format` to `"deepseek"` in the JSON body. Reasoning must appear
 only in `reasoning_content`; `content` is the answer. The live suite checks

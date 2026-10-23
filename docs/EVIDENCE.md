@@ -17,8 +17,8 @@ swap (#90), the first live runs of the M3 to M5 acceptance
 scenarios through `relaymind serve --config` with a live external
 endpoint (#88, #104), and the first correctness corpus and latency
 benchmark runs (#32, #33), and the AC08 external swap to a second
-endpoint (#109), all on Apple Silicon macOS except the M1 Windows
-smoke test. No launcher start on Windows is recorded. See [`ROADMAP.md`](ROADMAP.md)
+endpoint (#109), and the offline analysis behind spec 0.31, all on
+Apple Silicon macOS except the M1 Windows smoke test. No launcher start on Windows is recorded. See [`ROADMAP.md`](ROADMAP.md)
 for what is carried forward.
 
 ## 2026-10-20 — M1 live smoke test, Apple Silicon macOS
@@ -1285,8 +1285,15 @@ either way for them. Per label, p95 first model action was 505 ms
   (a local answer is replayed, section 7.3), so transport latency is not
   early feedback here.
 - Prefix cache: the adapter does not send `cache_prompt`, so
-  llama-server's default applies; the runtime reported 0 cached prompt
-  tokens on all 270 measured model calls.
+  llama-server's default applies. The export shows `cached_tokens` 0 on
+  all 270 measured model calls. Correction (2026-10-23, spec 0.31
+  section 6): that 0 is the adapter's default, not a measurement. The
+  adapter builds its usage from `prompt_tokens` and `completion_tokens`
+  only and reads neither the runtime's `timings` (`cache_n`) nor
+  `prompt_tokens_details.cached_tokens`, as the routing probe entry
+  above already notes for its own export. Whether the runtime reused
+  the routing prefix in this run is unknown; #114 reads the counts and
+  reruns the benchmark.
 - Cold startup: llama-server 0.765 s from launch to the first healthy
   `/health` (model load 660 ms by the runtime's log clock), the gateway
   1.198 s to `/healthz`. The cold request (`lat-01`): first model
@@ -1400,3 +1407,27 @@ run ended `needs_external`). These are single-pass observations.
 AC08 is closed with this run and the #90 local swap, with the caveat
 above: both external endpoints are Zhipu's, so another vendor's API has
 not been run.
+
+## 2026-10-23 — Offline analysis of the 2026-10-22 corpus export (spec 0.31)
+
+The findings that spec 0.31 rests on, taken offline from the stored
+traces of
+[`2026-10-22-corpus-apple-m1.json`](evidence/2026-10-22-corpus-apple-m1.json)
+(156 runs, Apple M1, Qwen3-0.6B Q8_0, external `glm-4.6`; see the
+corpus entry above). No model was called. The counts were taken with
+ad-hoc queries over the trace events, defined per finding below; #115
+and #119 turn the two that decide defaults into checked-in scripts.
+They are findings about this one run on this one machine, not general
+claims. Other documents cite these findings by their number.
+
+| # | Finding | Definition |
+|---|---------|------------|
+| F1 | The final generation broke a draft that had met the completion predicate in 14 local-path runs: 7 English (simple-04 in auto and local_only, simple-10 in local_only, simple-12 in auto and local_only, ambiguous-01 in auto and local_only) and 7 Chinese. 9 of the 14 drafts were in the run's language (the 7 English, and simple-08-zh in both modes); 5 Chinese drafts were in English (simple-01-zh and simple-02-zh in both modes, simple-06-zh in local_only). On the English simple subset in local_only, 3 of the 8 failures are of this kind, so publishing the draft would have given at most 7 of 12 local completions instead of 4 of 12 (an upper bound; #115 is the check). | auto and local_only runs in which a `final` generation ran and the run did not complete locally; the draft is the text of the last `skill` or `repair` generation without proposed calls |
+| F2 | Local time before a handoff in auto: 39 runs, p50 2048 ms, p95 3623 ms, maximum 4002 ms. | `elapsed_ms` of `handoff.started`; nearest-rank percentiles |
+| F3 | External per-call cost: duration ≈ 5361 ms + 28.7 ms per output token over 232 calls; median call 7714 ms. The cause of the fixed part is unknown, because no first-token time is recorded (#116). | external `model.finished` events with a duration and an output token count; ordinary least squares |
+| F4 | 73 proposals were refused with `multiple_tool_calls`, from 21 external generations of 2 to 5 calls each. No local generation proposed more than one call. | `model.finished` with two or more proposed calls; `tool.proposed` refusals by code |
+| F5 | 41 of 125 external tool-call generations also carried text. | external `model.finished` with proposed calls and non-blank text |
+| F6 | 34 of 107 external text answers were rejected by the completion predicate and corrected in a further generation, all of them in auto handoffs that carried a skill (34 of 57 answers there; median duration of a rejected generation 9097 ms). In external_only, which carries no predicate, 0 of 45 were rejected. 12 runs completed after a correction. | external `model.finished` without proposed calls or error; a generation that is not the published answer counts as rejected |
+| F7 | 73 runs were answered by the external model: median answer 112 output tokens, median run active time 16121 ms. | runs whose `answer.delta` actor is external; `active_ms` of the terminal event |
+| F8 | Local outcomes per skill in auto, for runs routed local: check-service-health 4 of 8 completed locally, lookup-latest-deployment 5 of 11, summarize-incident-counts 0 of 8, delete-demo-database 0 of 4. | first `route.selected` with route local; completed with no `handoff.started` |
+| F9 | The export's `cached_tokens` values are the adapter's default 0, not measurements (the correction in the latency entry above). | `relaymind.adapters.openai_compat` reads only `prompt_tokens` and `completion_tokens` |

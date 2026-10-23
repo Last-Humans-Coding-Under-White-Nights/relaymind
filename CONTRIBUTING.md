@@ -36,7 +36,7 @@ This project uses Spec-Driven Development and Test-Driven Development.
 
 - The spec ([`docs/SPECIFICATION.md`](docs/SPECIFICATION.md)) is the single
   source of truth. Every task and test references its requirement IDs
-  (RM01–RM25, AC01–AC16).
+  (RM01–RM32, AC01–AC23).
 - Behavior changes need a spec revision **before** code changes.
   Implementation-only refactoring does not.
 - Write a failing test first, then implement until it passes.
