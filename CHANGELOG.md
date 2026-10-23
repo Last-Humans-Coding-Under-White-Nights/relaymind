@@ -38,8 +38,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the registry checks it at load, without a request: a mutating tool, a
   tool outside `allowed_tools`, a constant for an identifier, a request
   binding for a non-identifier, an unknown parameter or binding, a required
-  argument with no binding, a constant the tool schema refuses, or the same
-  call declared twice is a startup error. Under `performance.prefetch =
+  argument with no binding, constants the full tool schema refuses for any
+  allowed value of a request binding (spec 0.34), or the same call declared
+  twice is a startup error. Under `performance.prefetch =
   true` the gateway resolves each call from the user turns by the RM05 rule (exactly one allowed value
   appears; otherwise that call is skipped, not the skill), runs the
   resolved calls together through the executor with every check of a model

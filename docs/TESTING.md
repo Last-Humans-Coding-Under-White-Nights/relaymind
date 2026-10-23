@@ -639,7 +639,11 @@ feature has a test of the default as well. Later pull requests append here.
   or for a pattern without a closed list, an unknown binding source or shape,
   an unknown parameter, a required argument with no binding, a constant
   outside the tool schema or of the wrong type, and an unknown field are load
-  errors; `prefetch_declarations` is keyed by skill with empty arrays.
+  errors; constants are checked against the full tool schema with every
+  allowed value of the request binding, so a constant that one value refuses
+  (`if`/`then`) or that needs an unbound property (`dependentRequired`) is
+  a load error, and one that `minProperties` accepts only with the
+  identifier loads (spec 0.34); `prefetch_declarations` is keyed by skill with empty arrays.
 - `pytest tests/test_prefetch.py` (#123; RM05, RM08 to RM10, RM12, RM14,
   RM29, AC18): with `prefetch = true` and "Is staging-api healthy?",
   `get_service_health` runs before the first skill generation

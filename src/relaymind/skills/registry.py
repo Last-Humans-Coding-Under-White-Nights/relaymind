@@ -25,6 +25,7 @@ registry. Skills never run code: the registry only reads text.
 
 import copy
 import hashlib
+import itertools
 import json
 import re
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
@@ -316,20 +317,43 @@ def _prefetch_calls(
         missing = [name for name in schema.get("required", ()) if name not in entry["arguments"]]
         if missing:
             raise _fail(package, f"{where}: required parameters without a binding: {missing}")
-        # The tool's own schema judges the constants. The request-bound names are left out
-        # and "required" is lifted, because their values exist only at run time.
-        constants = {b.name: b.value for b in bindings if b.source == CONSTANT}
-        partial = parameters_validator({**schema, "required": []})
-        error = first_schema_error(partial, constants)
-        if error is not None:
-            name = ".".join(str(part) for part in error.path) or "(arguments)"
-            raise _fail(package, f"{where}: constant for {name!r} fails the tool schema")
         call = PrefetchCall(tool_name, tuple(bindings))
+        _check_constants(package, where, call, schema)
         if any(_same_call(call, earlier) for earlier in calls):
             # Two equal calls would race on one operation ID when run together (RM10).
             raise _fail(package, f"{where}: the same call is declared twice")
         calls.append(call)
     return tuple(calls)
+
+
+def _check_constants(package: Path, where: str, call: PrefetchCall, schema: Any) -> None:
+    """Fail unless the tool schema accepts the call for every value the request can give (RM29).
+
+    Spec 0.34: the constants are judged by the tool's full schema, with
+    its required properties and any rule that ties properties together,
+    so they are never judged apart from the identifiers they will be sent
+    with. Each request binding is an identifier with a closed list of
+    values, so the arguments the call can have at run time are known:
+    the constants with each combination of those values. The registry
+    checks every combination with the validator of the run time check
+    (RM09), so that check never refuses a declared call for its constants.
+    """
+    validator = parameters_validator(schema)
+    names = call.from_request
+    choices = [schema["properties"][name]["enum"] for name in names]
+    for values in itertools.product(*choices):
+        given = dict(zip(names, values, strict=True))
+        error = first_schema_error(validator, {**call.constants, **given})
+        if error is None:
+            continue
+        name = ".".join(str(part) for part in error.path) or "(arguments)"
+        when = ", ".join(f"{key}={value!r}" for key, value in given.items())
+        raise _fail(
+            package,
+            f"{where}: the constants fail the tool schema at {name!r}"
+            + (f" when the request gives {when}" if when else "")
+            + f": {error.message}",
+        )
 
 
 def _same_call(a: PrefetchCall, b: PrefetchCall) -> bool:

@@ -82,9 +82,12 @@ tool is not read-only, is not in `allowed_tools`, or is not registered; if
 a name is not a parameter of the tool; if a required parameter has no
 binding; if a request binding names a parameter that is not an identifier
 with a closed list; if a constant is given for an identifier; if the same
-call is declared twice; if a constant
-does not satisfy the tool schema; or if a binding is neither of the two
-shapes above. With prefetch on, a skill whose declared calls exceed the
+call is declared twice; if the constants do not satisfy the tool schema;
+or if a binding is neither of the two shapes above. The constants are
+checked against the whole tool schema (its required properties and any
+rule that ties properties together) together with every allowed value
+of each request binding, so a call the registry loads is never refused
+at run time for its constants (spec 0.34). With prefetch on, a skill whose declared calls exceed the
 configured `tool_calls` (for a skill that can run locally) or
 `run_tool_executions` also stops startup.
 

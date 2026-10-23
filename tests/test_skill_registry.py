@@ -679,7 +679,7 @@ def test_the_default_root_is_recorded_as_configured(tmp_path, monkeypatch):
     assert registry.offered_snapshot([])["skill_roots"] == ["skills/"]
 
 
-# --- RM29: prefetch declarations (spec 0.32 sections 4.2, 8; AC18, #123) -----------
+# --- RM29: prefetch declarations (spec 0.34 sections 4.2, 8; AC18, #123) -----------
 
 LOGS_INPUT_SCHEMA = {
     "type": "object",
@@ -900,6 +900,75 @@ def test_a_bad_prefetch_declaration_is_a_load_error(tmp_path, calls, allowed, me
     with pytest.raises(SkillPackageError, match=message) as raised:
         load([tmp_path], tools=prefetch_tools())
     assert "check-service-health" in str(raised.value)
+
+
+# Spec 0.34 RM29: a tool whose schema ties properties together. For payments-api the
+# window is at most 60 minutes; a note needs a reason; and two properties are always sent.
+TIED_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "service": {"enum": ["staging-api", "payments-api"]},
+        "window_minutes": {"type": "integer", "minimum": 1},
+        "note": {"type": "string"},
+        "reason": {"type": "string"},
+    },
+    "required": ["service", "window_minutes"],
+    "dependentRequired": {"note": ["reason"]},
+    "minProperties": 2,
+    "if": {"properties": {"service": {"const": "payments-api"}}, "required": ["service"]},
+    "then": {"properties": {"window_minutes": {"maximum": 60}}},
+    "additionalProperties": False,
+}
+
+
+def load_tied(tmp_path, arguments):
+    tools = prefetch_tools()
+    tools.register(make_tool_declaration(name="get_window", input_schema=TIED_INPUT_SCHEMA))
+    call = {"tool": "get_window", "arguments": arguments}
+    write_package(tmp_path, manifest_data=prefetch_manifest(call, allowed=("get_window",)))
+    return load([tmp_path], tools=tools)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        pytest.param(
+            {"service": FROM_REQUEST, "window_minutes": {"constant": 1440}},
+            r"window_minutes.*service='payments-api'",
+            id="a-constant-one-allowed-identifier-value-refuses",
+        ),
+        pytest.param(
+            {
+                "service": FROM_REQUEST,
+                "window_minutes": {"constant": 30},
+                "note": {"constant": "nightly"},
+            },
+            "reason",
+            id="a-constant-that-needs-an-unbound-property",
+        ),
+    ],
+)
+def test_constants_are_checked_with_the_full_tool_schema(tmp_path, arguments, message):
+    """RM29, spec 0.34: constants are checked with every allowed value of the request binding.
+
+    Checked alone, without the identifier and without "required", these
+    constants pass, yet at run time the schema check (RM09) would refuse
+    the call for payments-api, or for a note without a reason. So the
+    declaration is a manifest validation error at load.
+    """
+    with pytest.raises(SkillPackageError, match=message):
+        load_tied(tmp_path, arguments)
+
+
+def test_constants_that_fit_every_allowed_identifier_value_load(tmp_path):
+    """RM29, spec 0.34: the full schema accepts the call for every value, so it loads.
+
+    minProperties counts the identifier too, so a check of the constants
+    alone would refuse this declaration.
+    """
+    registry = load_tied(tmp_path, {"service": FROM_REQUEST, "window_minutes": {"constant": 30}})
+    (declared,) = registry.get("check-service-health").prefetch
+    assert dict(declared.constants) == {"window_minutes": 30}
 
 
 def test_the_same_tool_with_different_constants_is_two_calls(tmp_path):
