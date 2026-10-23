@@ -10,10 +10,13 @@ calls and applies the section 4.3 rule for ``calls_per_generation: many``:
 
 - every call is read-only (``DEMO_TOOL_PERMISSIONS``); a mutating call keeps
   the rejection, because a confirmation binds one call (RM11);
-- the set has at most the limit: the per-stage tool limit
-  (``tool_calls`` of ``run.accepted``) in a local stage, the remaining
-  entire-run limit (``run_tool_executions`` less the ``tool.started``
-  events before the generation) in the external stage;
+- the set has at most the limit: in the external stage, the remaining
+  entire-run limit (``run_tool_executions`` of ``run.accepted`` less the
+  ``tool.started`` events before the generation); in a local stage, the
+  same and at most the remaining per-stage tool limit (``tool_calls``
+  less the ``tool.started`` events since the stage began: the run start,
+  a clarification answer, or a confirmation), because the per-stage limit
+  bounds every tool call of the stage (RM03, section 11);
 - every call passes its own validation: a known, offered tool, arguments
   that match the input schema (RM09), and identifiers that come from the
   request, a clarification answer, or an earlier tool result (RM05); one
@@ -87,10 +90,16 @@ def provenance_before(events: Sequence[Mapping[str, Any]], index: int) -> str:
     return "\n".join(parts)
 
 
+def call_arguments(value: Any) -> dict[str, Any]:
+    """The proposed arguments; null or another non-object reads as {}, as the adapter reads it."""
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
 def classify_call(
-    name: str, arguments: Mapping[str, Any], *, offered: Sequence[str], provenance: str
+    name: str, arguments: Any, *, offered: Sequence[str], provenance: str
 ) -> dict[str, Any]:
     """A call's class (read, mutate, or unknown) and its first validation problem, if any."""
+    arguments = call_arguments(arguments)
     permission = DEMO_TOOL_PERMISSIONS.get(name)
     problem = None
     if permission is None:
@@ -103,17 +112,43 @@ def classify_call(
         problem = "unsupported_identifier"
     return {
         "tool": name,
-        "arguments": dict(arguments),
+        "arguments": arguments,
         "class": _CLASSES.get(permission, "unknown"),
         "problem": problem,
     }
 
 
-def generation_limit(actor: str, budgets: Mapping[str, Any], started_before: int) -> int:
-    """Section 4.3: the per-stage tool limit locally, the remaining run limit externally."""
+# Events after which a local stage starts again with the full per-stage limits (section 5):
+# a clarification answer, and the resume of an approved confirmation.
+STAGE_BOUNDARIES = ("clarification.answered", "confirmation.required")
+
+
+def generation_limit(
+    actor: str, budgets: Mapping[str, Any], started_before: int, started_in_stage: int
+) -> int:
+    """Section 4.3: the room left in the limits when the generation proposes its set (RM03).
+
+    Externally, the entire-run tool limit less the tools started before
+    the generation. Locally, the same, and at most the per-stage tool
+    limit less the tools started in the generation's local stage, because
+    that limit bounds every tool call of the stage (section 11).
+    """
+    run_room = max(int(budgets["run_tool_executions"]) - started_before, 0)
     if actor == "local":
-        return int(budgets["tool_calls"])
-    return max(int(budgets["run_tool_executions"]) - started_before, 0)
+        return min(max(int(budgets["tool_calls"]) - started_in_stage, 0), run_room)
+    return run_room
+
+
+def tools_started(events: Sequence[Mapping[str, Any]], index: int) -> tuple[int, int]:
+    """The tool.started events before an event: in the run, and in the current local stage."""
+    run = stage = 0
+    for event in events[:index]:
+        if event["event_type"] in STAGE_BOUNDARIES:
+            stage = 0
+        elif event["event_type"] == "tool.started":
+            run += 1
+            stage += 1
+    return run, stage
 
 
 def decide(calls: Sequence[Mapping[str, Any]], limit: int) -> tuple[bool, str | None]:
@@ -148,7 +183,7 @@ def _saved(
     singles = [(p, _calls_of(e)[0]) for p, e in later if p not in used and len(_calls_of(e)) == 1]
     saved = changed = 0
     for position, proposed in singles:
-        key = call_key(proposed["tool_name"], proposed["arguments"])
+        key = call_key(proposed["tool_name"], call_arguments(proposed.get("arguments")))
         if match := next((r for r in remaining if r[1] == key), None):
             remaining.remove(match)
             used.add(position)
@@ -190,14 +225,13 @@ def analyse_run(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         classified = [
             classify_call(
                 c["tool_name"],
-                c["arguments"],
+                c.get("arguments"),
                 offered=offered.get(event["payload"]["call_id"], []),
                 provenance=provenance,
             )
             for c in calls
         ]
-        started = sum(1 for e in events[:index] if e["event_type"] == "tool.started")
-        limit = generation_limit(actor, budgets, started)
+        limit = generation_limit(actor, budgets, *tools_started(events, index))
         admitted, reason = decide(classified, limit)
         saved = changed = 0
         if admitted:

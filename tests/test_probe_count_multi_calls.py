@@ -163,7 +163,7 @@ def test_more_calls_than_the_remaining_run_limit_keep_the_rejection(probe):
 
 
 def test_a_local_generation_is_limited_by_the_per_stage_tool_limit(probe):
-    """Local: the per-stage limit; the entire-run limit does not apply to it."""
+    """Local: the per-stage limit when no tool has started in the stage (section 4.3)."""
     trace = Trace("run_d", "Why is payments-api slow?", tool_calls=2, run_tool_executions=6)
     trace.generation("local", [HEALTH, LOGS, DEPLOY])
     over, _ = only_generation(probe, export_of((trace, "complex-01", "complex", "en", "auto")))
@@ -173,6 +173,73 @@ def test_a_local_generation_is_limited_by_the_per_stage_tool_limit(probe):
     trace.generation("local", [HEALTH, LOGS])
     fits, _ = only_generation(probe, export_of((trace, "complex-01", "complex", "en", "auto")))
     assert fits["admitted"] is True
+
+
+def test_a_local_generation_is_limited_by_the_room_left_in_its_stage(probe):
+    """RM03, sections 4.3 and 11: the tools already started in the local stage use the limit.
+
+    The per-stage tool limit bounds every tool call of the stage, so a set
+    is admitted only up to what is left of it. A clarification answer
+    opens a new stage with the full limit (section 5).
+    """
+    trace = Trace("run_s", "Why is payments-api slow?", tool_calls=3, run_tool_executions=6)
+    trace.generation("local", [HEALTH])
+    trace.execute("get_service_health")
+    trace.generation("local", [LOGS, DEPLOY])
+    over, _ = only_generation(probe, export_of((trace, "complex-01", "complex", "en", "auto")))
+    assert (over["limit"], over["admitted"], over["reason"]) == (2, True, None)
+
+    trace = Trace("run_s2", "Why is payments-api slow?", tool_calls=2, run_tool_executions=6)
+    trace.generation("local", [HEALTH])
+    trace.execute("get_service_health")
+    trace.generation("local", [LOGS, DEPLOY])
+    over, _ = only_generation(probe, export_of((trace, "complex-01", "complex", "en", "auto")))
+    assert (over["limit"], over["admitted"], over["reason"]) == (1, False, "over_limit")
+
+    resumed = Trace("run_s3", "Why is payments-api slow?", tool_calls=2, run_tool_executions=6)
+    resumed.generation("local", [HEALTH])
+    resumed.execute("get_service_health")
+    resumed.answered("payments-api")
+    resumed.generation("local", [LOGS, DEPLOY])
+    fits, _ = only_generation(probe, export_of((resumed, "complex-01", "complex", "en", "auto")))
+    assert (fits["limit"], fits["admitted"]) == (2, True)
+
+
+def test_a_local_generation_is_also_bounded_by_the_entire_run_tool_limit(probe):
+    """Section 11: the entire-run limit bounds the sum of all stages, local ones too."""
+    trace = Trace("run_t", "Why is payments-api slow?", tool_calls=2, run_tool_executions=3)
+    for _ in range(2):
+        trace.generation("local", [HEALTH])
+        trace.execute("get_service_health")
+    trace.answered("payments-api")
+    trace.generation("local", [LOGS, DEPLOY])
+    over, _ = only_generation(probe, export_of((trace, "complex-01", "complex", "en", "auto")))
+    assert (over["limit"], over["admitted"], over["reason"]) == (1, False, "over_limit")
+
+
+def test_null_arguments_are_read_as_an_empty_object(probe):
+    """RM09: the adapter reads a null arguments field as {} (a tool without parameters).
+
+    The probe does the same instead of failing on the stored trace; a
+    later one-call re-proposal with null arguments matches the same call.
+    """
+    trace = Trace("run_u", "List my databases and check payments-api.")
+    trace.generation("external", [("list_demo_databases", None), HEALTH])
+    trace.generation("external", [("list_demo_databases", None)])
+    trace.execute("list_demo_databases")
+    generation = probe.analyse_export(export_of((trace, "complex-01", "complex", "en", "auto")))[
+        "generations"
+    ][0]
+    first = generation["calls"][0]
+    assert (first["arguments"], first["problem"], first["class"]) == ({}, None, "read")
+    assert (generation["admitted"], generation["saved_generations"]) == (True, 1)
+
+    trace = Trace("run_u2", "Check payments-api.")
+    trace.generation("external", [("get_service_health", None), HEALTH])
+    generation, _ = only_generation(
+        probe, export_of((trace, "complex-01", "complex", "en", "auto"))
+    )
+    assert generation["calls"][0]["problem"] == "invalid_arguments"
 
 
 @pytest.mark.parametrize(
