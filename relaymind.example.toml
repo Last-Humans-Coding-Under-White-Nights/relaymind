@@ -36,7 +36,8 @@ base_url = "http://127.0.0.1:8033"   # the llama-server from models/README.md
 # a provider's reasoning off where its API allows it. The field names are the
 # provider's own; this one is an example. A key named api_key or authorization,
 # a headers key, a key that would replace model, messages, tools, stream, or
-# stream_options, and a value that is not JSON stop startup. The message names
+# stream_options, a sampling key a request sets (max_tokens, temperature,
+# top_p), and a value that is not JSON stop startup. The message names
 # the key and never prints the value.
 # [external_model.request_options]
 # thinking = { type = "disabled" }

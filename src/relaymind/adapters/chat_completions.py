@@ -40,6 +40,11 @@ _OPTION_BODY_KEYS = {
 # never replaces them: build_chat_request sets them after merging the options.
 RESERVED_BODY_FIELDS = frozenset({"model", "messages", "tools", "stream", "stream_options"})
 
+# Body keys a request sets itself from its sampling options. A declared option
+# with one of these names would be replaced and the trace would record a value
+# the provider never received (RM16), so it is refused at configuration time.
+SAMPLING_BODY_KEYS = frozenset(_OPTION_BODY_KEYS.values())
+
 # Option names that would carry a credential or header, compared lowercased with
 # "-" read as "_". The credential comes from api_key_env at call time (RM12), and
 # the adapter owns the request headers.
@@ -100,7 +105,8 @@ def check_request_options(options: Mapping[str, object]) -> dict[str, object]:
     Refused, by key name and never with a value: a credential or header
     key (api_key, authorization, headers, at any depth), a top-level
     key the gateway sets itself (model, messages, tools, stream,
-    stream_options), and a value that is not JSON (a TOML date).
+    stream_options), a sampling key a request sets (max_tokens,
+    temperature, top_p), and a value that is not JSON (a TOML date).
     """
     if not isinstance(options, Mapping):
         raise ValueError("request_options must be a table")
@@ -113,6 +119,12 @@ def check_request_options(options: Mapping[str, object]) -> dict[str, object]:
             raise ValueError(
                 f"request_options key {key} is not allowed: the gateway sets "
                 f"{', '.join(sorted(RESERVED_BODY_FIELDS))}"
+            )
+        if _option_name(key) in SAMPLING_BODY_KEYS:
+            raise ValueError(
+                f"request_options key {key} is not allowed: a request sets "
+                f"{', '.join(sorted(SAMPLING_BODY_KEYS))}, so a declared value "
+                "would not be the one sent"
             )
         checked[key] = _plain_json(value, key)
     return checked
@@ -142,6 +154,8 @@ def build_chat_request(
     fields the gateway sets afterward win: model, messages, tools,
     stream, and stream_options can never be overridden, and an option
     the request sets itself (a sampling option) replaces the declared one.
+    ChatCompletionsConfig refuses a declared option with a sampling key,
+    so for a configured adapter the trace and the body agree.
     """
     body: dict[str, object] = {}
     for key, value in (request_options or {}).items():

@@ -314,7 +314,14 @@ def _local_model(config: LauncherConfig, adapter: ModelAdapter | None) -> Config
     if adapter is None:
         adapter = LlamaCppAdapter(
             LlamaCppConfig(
-                base_url=config.local_url, context_limit=context, chat_template_kwargs=kwargs
+                base_url=config.local_url,
+                context_limit=context,
+                chat_template_kwargs=kwargs,
+                # llama-server sends nothing until prefill ends, so a raised
+                # active_seconds needs a read timeout at least as long (RM03).
+                request_timeout_seconds=max(
+                    LlamaCppConfig.request_timeout_seconds, config.budgets.active_seconds
+                ),
             )
         )
     return ConfiguredModel(adapter=adapter, model_id=manifest.model_id)
@@ -344,7 +351,17 @@ def build_app(
     external = None
     if config.external is not None:
         external = ConfiguredModel(
-            adapter=external_adapter or ChatCompletionsAdapter(config.external),
+            adapter=external_adapter
+            or ChatCompletionsAdapter(
+                # A raised external_seconds needs a read timeout at least as long (RM03).
+                replace(
+                    config.external,
+                    request_timeout_seconds=max(
+                        config.external.request_timeout_seconds,
+                        config.budgets.external_seconds,
+                    ),
+                )
+            ),
             model_id=config.external.model,
         )
     # The skills name tools, so the sandbox and its tools come first.

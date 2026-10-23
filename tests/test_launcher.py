@@ -603,6 +603,34 @@ def test_the_configured_budgets_are_recorded_in_run_accepted(tmp_path):
     assert accepted.payload["budgets"] == LocalBudgets().to_json_object()
 
 
+def _read_timeouts(built):
+    """The read timeouts of the real local and external adapters a built gateway holds."""
+    orchestrator = built.orchestrator
+    return (
+        orchestrator.model.adapter._client.timeout.read,
+        orchestrator.external.adapter._client.timeout.read,
+    )
+
+
+def test_adapter_read_timeouts_follow_the_raised_budgets(tmp_path):
+    """RM03: a raised active_seconds or external_seconds is not cut off by a hidden 30 s limit."""
+    extra = EXTERNAL + "\n[budgets]\nactive_seconds = 90\nexternal_seconds = 120\n"
+    built = build_app(load_config(write_config(tmp_path, extra)))
+    try:
+        assert _read_timeouts(built) == (90.0, 120.0)
+    finally:
+        built.orchestrator.store.close()
+
+
+def test_adapter_read_timeouts_keep_the_30_second_floor(tmp_path):
+    """Section 11.2: budgets at or under 30 s keep the 30 s adapter timeout."""
+    built = build_app(load_config(write_config(tmp_path, EXTERNAL)))
+    try:
+        assert _read_timeouts(built) == (30.0, 30.0)
+    finally:
+        built.orchestrator.store.close()
+
+
 def test_example_config_documents_the_budgets_table(tmp_path):
     """Section 14.1: the commented [budgets] block loads when uncommented and holds the defaults."""
     lines = (REPO_ROOT / "relaymind.example.toml").read_text(encoding="utf-8").splitlines()
@@ -708,6 +736,15 @@ def test_a_credential_header_or_override_key_stops_startup_without_its_value(tmp
         == 2
     )
     assert out == [] and len(err) == 1 and "sk-secret-value-123" not in err[0]
+
+
+@pytest.mark.parametrize("key", ["max_tokens", "temperature", "top_p", "Max-Tokens"])
+def test_a_sampling_option_key_is_refused_so_the_trace_matches_the_body(tmp_path, key):
+    """RM16, spec 0.31 section 8: a request sets these, so a declared one would be replaced."""
+    extra = options_config(f"{key} = 100")
+    with pytest.raises(LaunchError, match="request_options") as raised:
+        load_config(write_config(tmp_path, extra))
+    assert key in str(raised.value)
 
 
 def test_a_nested_credential_key_is_refused_too(tmp_path):

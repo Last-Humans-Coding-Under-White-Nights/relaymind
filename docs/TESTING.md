@@ -498,6 +498,8 @@ feature has a test of the default as well. Later pull requests append here.
   `[budgets]`, `run.accepted` records the values in force, and the commented
   block of `relaymind.example.toml` loads when uncommented and holds the
   defaults.
+  The real adapters get a read timeout of at least `active_seconds` (local)
+  and `external_seconds` (external), never under 30 seconds (`-k read_timeouts`).
 - `pytest tests/test_llamacpp_translation.py tests/test_chat_completions_adapter.py`
   (#120; RM16, RM18, RM27, section 6): the usage details
   (`prompt_tokens_details.cached_tokens`,
@@ -529,7 +531,7 @@ feature has a test of the default as well. Later pull requests append here.
   verbatim and `model.started`, they never replace `model`, `messages`,
   `tools`, `stream`, or `stream_options`, and a key named `api_key` or
   `authorization` (any case), a header key (also nested), a gateway-owned
-  key, or a value that is not JSON (a TOML date) stops startup with a
+  key, a sampling key (`max_tokens`, `temperature`, `top_p`), or a value that is not JSON (a TOML date) stops startup with a
   message that names the key and never the value.
 - `pytest -m live tests/test_llamacpp_live_smoke.py` (#120): with the
   pinned runtime first on the path, a repeated prompt reports a cached
