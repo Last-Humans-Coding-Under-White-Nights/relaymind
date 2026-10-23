@@ -154,7 +154,7 @@ async def run(args: argparse.Namespace) -> dict:
     else:
         lock = args.evaluation_dir / "tools.v1.lock.json"
         cases = _toolret_cases(lock, args.toolret_cache)
-        data = {"source": json.loads(lock.read_text())}
+        data = {"source": json.loads(lock.read_text(encoding="utf-8"))}
         files[lock.name] = file_digest(lock)
     limit = args.limit if args.limit is not None else (100 if args.proposal == "external" else None)
     selected = _subset(cases, limit, args.seed)
@@ -260,7 +260,7 @@ async def run(args: argparse.Namespace) -> dict:
         "model": {
             "name": args.external_model if args.proposal == "external" else args.model,
             "endpoint": args.external_url if args.proposal == "external" else args.local_url,
-            "manifest": json.loads(args.model_manifest.read_text())
+            "manifest": json.loads(args.model_manifest.read_text(encoding="utf-8"))
             if args.model_manifest
             else None,
             "request_options": args.external_request_options

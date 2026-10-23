@@ -1,0 +1,2 @@
+# Frozen evaluation files are hashed as exact bytes on every supported platform.
+/evaluation/*.json text eol=lf

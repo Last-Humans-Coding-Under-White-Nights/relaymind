@@ -64,7 +64,7 @@ def fetch_shards(cache_dir: Path, *, revision: str = TOOLRET_REVISION) -> list[P
 
 def load_cases(lock_path: Path, cache_dir: Path, *, revision: str = TOOLRET_REVISION) -> list[dict]:
     """Read only the frozen sample, refusing changed revisions, shards, rows or normalization."""
-    lock = json.loads(Path(lock_path).read_text())
+    lock = json.loads(Path(lock_path).read_text(encoding="utf-8"))
     if lock["dataset"] != TOOLRET_DATASET or lock["revision"] != revision:
         raise ValueError("ToolRet dataset or revision differs from lock")
     paths = fetch_shards(Path(cache_dir), revision=revision)
@@ -98,7 +98,7 @@ def main() -> None:
     args = parser.parse_args()
     paths = args.parquet or fetch_shards(args.cache_dir)
     if args.verify:
-        lock = json.loads(args.lock.read_text())
+        lock = json.loads(args.lock.read_text(encoding="utf-8"))
         if lock["revision"] != TOOLRET_REVISION or lock["dataset"] != TOOLRET_DATASET:
             raise ValueError("ToolRet dataset or revision differs from lock")
         wanted = {case["row_index"] for case in lock["cases"]}
@@ -113,7 +113,7 @@ def main() -> None:
             for name, path in zip(SHARDS, paths, strict=True)
         ]
         args.lock.parent.mkdir(parents=True, exist_ok=True)
-        args.lock.write_text(json.dumps(lock, indent=2) + "\n")
+        args.lock.write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(f"Verified {len(cases)} ToolRet cases; source rows are not written")
 
 

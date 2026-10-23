@@ -47,10 +47,10 @@ def file_digest(path: Path) -> str:
 
 def load_locked(path: Path, lock_path: Path) -> dict[str, Any]:
     """Refuse a changed benchmark file before a selector sees it."""
-    lock = json.loads(lock_path.read_text())
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
     if file_digest(path) != lock["sha256"]:
         raise ValueError("benchmark file digest differs from lock")
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def set_metrics(predicted: Iterable[str], expected: Iterable[str]) -> dict[str, float]:
