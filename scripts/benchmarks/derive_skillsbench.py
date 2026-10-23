@@ -255,7 +255,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="relaymind-skillsbench-") as temporary:
         root = Path(temporary)
         extract_inputs(registry_archive, root / "registry")
-        registry = json.loads((root / "registry/registry.json").read_text())
+        registry = json.loads((root / "registry/registry.json").read_text(encoding="utf-8"))
         release = next(entry for entry in registry if entry["version"] == REGISTRY_VERSION)
         if {task["git_commit_id"] for task in release["tasks"]} != {TASK_COMMIT}:
             raise ValueError("registry task revision differs from pinned commit")
@@ -273,7 +273,11 @@ def main() -> None:
             ),
         )
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n")
+        args.out.write_text(
+            json.dumps(document, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
         lock = {
             "schema_version": 1,
             "file": args.out.name,
@@ -285,7 +289,7 @@ def main() -> None:
             "cases": [{"id": case["id"], "sha256": case["sha256"]} for case in document["cases"]],
         }
         args.lock.parent.mkdir(parents=True, exist_ok=True)
-        args.lock.write_text(json.dumps(lock, indent=2) + "\n")
+        args.lock.write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8", newline="\n")
         (args.out.parent / "skillsbench.LICENSE").write_bytes((root / "tasks/LICENSE").read_bytes())
         notice = (
             "SkillsBench selection benchmark\nDerived from " + REPOSITORY + "\n"
@@ -296,8 +300,8 @@ def main() -> None:
         )
         upstream_notice = root / "tasks/NOTICE"
         if upstream_notice.exists():
-            notice += "\nUpstream notice:\n" + upstream_notice.read_text()
-        (args.out.parent / "skillsbench.NOTICE").write_text(notice)
+            notice += "\nUpstream notice:\n" + upstream_notice.read_text(encoding="utf-8")
+        (args.out.parent / "skillsbench.NOTICE").write_text(notice, encoding="utf-8", newline="\n")
         print(
             f"Derived {len(document['cases'])} tasks, {len(document['catalog'])} skills, "
             f"{len(document['excluded'])} exclusions"

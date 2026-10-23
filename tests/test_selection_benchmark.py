@@ -732,3 +732,43 @@ def test_cli_captures_application_identity_before_running_cases(tmp_path, monkey
     assert report["application"]["head"] == "before"
     assert report["implementation_files"]["scripts/selection_benchmark.py"]
     assert report["implementation_files"]["src/relaymind/evaluation/selection_benchmark.py"]
+
+
+def test_frozen_skills_survive_windows_autocrlf_checkout(tmp_path):
+    """RM25: Windows checkout must preserve the bytes covered by the published lock."""
+    import shutil
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "core.autocrlf", "true"], check=True)
+    (tmp_path / "evaluation").mkdir()
+    attributes = root / ".gitattributes"
+    if attributes.exists():
+        shutil.copyfile(attributes, tmp_path / ".gitattributes")
+    for name in ("skills.v1.json", "skills.v1.lock.json"):
+        shutil.copyfile(root / "evaluation" / name, tmp_path / "evaluation" / name)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True, capture_output=True)
+    for path in (tmp_path / "evaluation").iterdir():
+        path.unlink()
+    subprocess.run(["git", "-C", str(tmp_path), "checkout-index", "--all"], check=True)
+    data = bench.load_locked(
+        tmp_path / "evaluation/skills.v1.json", tmp_path / "evaluation/skills.v1.lock.json"
+    )
+    assert len(data["cases"]) == 87
+    assert b"\r\n" not in (tmp_path / "evaluation/skills.v1.json").read_bytes()
+
+
+def test_locked_benchmark_uses_utf8_under_a_legacy_windows_locale(tmp_path, monkeypatch):
+    """RM25: source text is UTF-8 regardless of the operator's Windows codepage."""
+    data = tmp_path / "skills.json"
+    lock = tmp_path / "skills.lock.json"
+    data.write_bytes(json.dumps({"request": "检查数据库"}, ensure_ascii=False).encode("utf-8"))
+    lock.write_bytes(json.dumps({"sha256": bench.file_digest(data)}).encode("utf-8"))
+    read_text = Path.read_text
+
+    def legacy_read(path, encoding=None, **kwargs):
+        return read_text(path, encoding=encoding or "cp1252", **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", legacy_read)
+    assert bench.load_locked(data, lock)["request"] == "检查数据库"
