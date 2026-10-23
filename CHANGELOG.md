@@ -16,6 +16,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   no reported count is counted as not measured and a total over no
   measured call is `null`. Exports made before this change still hold the
   adapter's default of 0.
+- The launcher sets the read timeout of each real adapter to at least the
+  budget in force: `active_seconds` for the llama.cpp adapter and
+  `external_seconds` for the external adapter, never under the earlier
+  30 seconds (#142, #120; RM03). Before, a raised limit could be cut off
+  by an unrecorded 30 second read timeout. A file without `[budgets]`
+  behaves as before.
 - Adapter event streams now start a generation with a `FirstToken` marker
   before its first answer text, reasoning text, or tool-call fragment. The
   timing statistics ignore it, so their definitions are unchanged; a

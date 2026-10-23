@@ -499,7 +499,8 @@ feature has a test of the default as well. Later pull requests append here.
   block of `relaymind.example.toml` loads when uncommented and holds the
   defaults.
   The real adapters get a read timeout of at least `active_seconds` (local)
-  and `external_seconds` (external), never under 30 seconds (`-k read_timeouts`).
+  and `external_seconds` (external), never under 30 seconds
+  (`pytest tests/test_launcher.py -k read_timeouts`).
 - `pytest tests/test_llamacpp_translation.py tests/test_chat_completions_adapter.py`
   (#120; RM16, RM18, RM27, section 6): the usage details
   (`prompt_tokens_details.cached_tokens`,
@@ -526,13 +527,14 @@ feature has a test of the default as well. Later pull requests append here.
   the optional `first_token_ms`, `usage`, and `request_options` fields are
   checked by the validator and the published schema alike, from one table of
   optional model-call fields, and `schema_version` stays 1.
-- `pytest tests/test_chat_completions_translation.py tests/test_launcher.py -k request_options`
-  (#120; RM12, section 6 and 14.1): the options reach the provider body
+- `pytest tests/test_chat_completions_translation.py tests/test_launcher.py`
+  (#120; RM12, RM16, section 6 and 14.1): the options reach the provider body
   verbatim and `model.started`, they never replace `model`, `messages`,
   `tools`, `stream`, or `stream_options`, and a key named `api_key` or
   `authorization` (any case), a header key (also nested), a gateway-owned
-  key, a sampling key (`max_tokens`, `temperature`, `top_p`), or a value that is not JSON (a TOML date) stops startup with a
-  message that names the key and never the value.
+  key, a sampling key (`max_tokens`, `temperature`, `top_p`), or a value
+  that is not JSON (a TOML date) stops startup with a message that names
+  the key and never the value.
 - `pytest -m live tests/test_llamacpp_live_smoke.py` (#120): with the
   pinned runtime first on the path, a repeated prompt reports a cached
   count above zero and the marker comes first. The live count is recorded
