@@ -772,3 +772,60 @@ def test_locked_benchmark_uses_utf8_under_a_legacy_windows_locale(tmp_path, monk
 
     monkeypatch.setattr(Path, "read_text", legacy_read)
     assert bench.load_locked(data, lock)["request"] == "检查数据库"
+
+
+def test_tool_narrowing_reports_abstentions_and_unmeasured_schema_validity():
+    """RM25: selector abstention is measured; absent proposal validity is not zero."""
+
+    class AbstainingSelector:
+        name = "abstain"
+
+        async def select(self, request, context):
+            return {
+                "schema_version": 1,
+                "candidate": {"kind": "none"},
+                "mechanism": "test",
+                "confidence": None,
+                "selector": {"name": self.name, "version": "1"},
+                "model_calls": [],
+            }
+
+    case = bench.normalize_toolret(
+        {
+            "id": "diagnostics",
+            "query": "request",
+            "positive": [{"name": "keep", "parameters": {}}],
+            "negative": [],
+        },
+        0,
+    )
+    abstained = asyncio.run(bench.run_tools([case], AbstainingSelector()))
+    assert abstained["narrowing"]["summary"]["none_rate"] == 1
+    assert abstained["narrowing"]["cases"][0]["none"] is True
+    assert abstained["narrowing"]["summary"]["schema_validity"] is None
+    assert abstained["narrowing"]["summary"]["macro"] == {"precision": 0, "recall": 0, "jaccard": 0}
+    baseline = asyncio.run(
+        bench.run_tools([case], type("Baseline", (), {"name": "model_router"})())
+    )
+    assert baseline["narrowing"]["summary"]["none_rate"] == 0
+    assert baseline["narrowing"]["summary"]["schema_validity"] is None
+    assert baseline["narrowing"]["summary"]["macro"] == {"precision": 1, "recall": 1, "jaccard": 1}
+
+
+def test_proposal_diagnostics_do_not_infer_abstention_or_validity_without_calls():
+    """RM25: an error or no proposed calls supplies no schema-validity denominator."""
+    rows = [
+        {
+            "id": "error",
+            "expected": ["keep"],
+            "predicted": [],
+            "status": "error",
+            "proposal_count": 0,
+        }
+    ]
+    summary = bench.summarize(rows)
+    assert summary["none_rate"] is None
+    assert summary["schema_validity"] is None
+    case = {"expected": ["keep"]}
+    score = bench.score_proposals(case, [], bench.benchmark_registry([]), [])
+    assert score["schema_validity"] is None

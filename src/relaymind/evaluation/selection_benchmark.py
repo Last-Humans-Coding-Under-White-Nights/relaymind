@@ -90,13 +90,15 @@ def summarize(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             k: counts["intersection"] / counts[d] if counts[d] else 0
             for k, d in [("precision", "predicted"), ("recall", "expected"), ("jaccard", "union")]
         },
-        "none_rate": sum(r.get("none", False) for r in rows) / n if n else 0,
+        "none_rate": sum(r.get("none", False) for r in rows) / n
+        if n and any("none" in r for r in rows)
+        else None,
         "invalid_output_rate": sum(r.get("status") == "invalid_output" for r in rows) / n
         if n
         else 0,
         "bypasses": bypasses,
         "bypass_rate": bypasses / n if n else 0,
-        "schema_validity": valid_proposals / proposals if proposals else 0,
+        "schema_validity": valid_proposals / proposals if proposals else None,
         "errors": sum(r.get("status") in ("error", "timeout") for r in rows),
         "completeness": sum(set(r["expected"]) <= set(r["predicted"]) for r in rows) / n
         if n
@@ -540,7 +542,7 @@ def score_proposals(
         "expected": list(case["expected"]),
         "metrics": set_metrics(predicted, case["expected"]),
         "rejections": rejections,
-        "schema_validity": (len(calls) - len(rejections)) / len(calls) if calls else 0.0,
+        "schema_validity": (len(calls) - len(rejections)) / len(calls) if calls else None,
         "proposal_count": len(calls),
     }
 
@@ -571,6 +573,7 @@ async def run_tools(
             "expected": case["expected"],
             "predicted": [],
             "status": "ok",
+            "none": False,
             "instruction": case["instruction"],
             "offered": names,
         }
@@ -588,6 +591,7 @@ async def run_tools(
                     )
                 )
                 row["selection"] = result.to_json_object()
+                row["none"] = result.candidate.kind == "none"
                 if result.candidate.kind == "skill":
                     if result.candidate.skill_id != entry["id"]:
                         raise SelectionError("unknown synthetic skill")
@@ -617,7 +621,7 @@ async def run_tools(
                 "predicted": [],
                 "status": "ok",
                 "offered": list(offered),
-                "schema_validity": 0,
+                "schema_validity": None,
                 "proposal_count": 0,
             }
             started = time.monotonic()
