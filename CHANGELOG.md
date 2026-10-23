@@ -8,6 +8,44 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Completion criteria in the external request, and corrections per completed
+  run (#141; RM06, RM12, RM13, RM16, RM25, spec 0.34 section 4.4,
+  finding F6). Beside each completion predicate, `skills/predicates.py` now
+  holds its failed checks and its criteria, in a registry keyed like
+  `COMPLETION_PREDICATES` (`COMPLETION_CRITERIA`); the predicate is true when
+  no check fails. The fixed part of the criteria (labels, forbidden patterns,
+  what to keep exactly) follows the skill instructions in the first system
+  message of the external request. The value part is one gateway rules
+  message placed at the end of the conversation before each external
+  generation once a successful result exists, refreshed instead of piled up
+  and measured with the request (RM13). Its values come only from
+  schema-typed fields of the latest successful result (a service or database
+  ID, the status enum, timestamps, counts, a boolean, and a deployment ID or
+  revision only when it is a plain token), never from free text, so the
+  injected log line of the AC06 fixture never reaches it (RM12). A rejected
+  external answer is corrected with the failed checks, in gateway text that
+  does not quote the answer; the local correction and the parallel synthesis
+  request are unchanged (AC14). `relaymind.evaluation.grading` counts the
+  external answer generations before the published one in a completed run
+  and their summed duration, and `relaymind.evaluation.metrics` reports them
+  per block and in the corpus report; a missing duration leaves the sum
+  unmeasured, and a grade without the figure is not reported as zero.
+- Local warm-up at startup and the external prompt layout (#124; RM18,
+  RM24, RM25, RM27, spec 0.31 sections 6, 10, and 14.1). A `[placement]`
+  table takes `warmup` (default true) and `warmup_seconds` (default 30); the
+  other placement keys stay unknown keys until they exist. After restart
+  recovery and before the address and the token are printed, `main` sends one
+  routing-shaped and one skill-shaped generation to the local model on a
+  short-lived adapter of its own, built by `Router.build_request` and
+  `skill_stage_messages`. They create no run and are bounded by
+  `warmup_seconds`; their timings (duration, first token, cached tokens, with
+  `None` for a count the runtime did not report) are in `Launched.warmup` and
+  one stdout line. A runtime that does not answer in time or fails is one line
+  on standard error, not a startup error. `build_app` sends nothing. In the
+  external request the system message now ends with the handoff JSON (run ID,
+  remaining budgets). The local layout change (the skill body before the
+  conversation) was measured live and not kept (see Changed).
+  `scripts/latency_benchmark.py` gains `--no-startup-warmup`.
 - Admitted calls per generation (#122; RM05, RM08 to RM11, section 4.3,
   AC18): under `performance.calls_per_generation = "many"` a generation may
   propose several read-only calls. In a local stage the limit is the
@@ -107,6 +145,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The skill-stage layout is unchanged (#124, spec 0.34 section 10). Moving
+  the skill body before the conversation in the first system message was
+  measured on 2026-10-23 on the pinned model and lowered the live AC01 pass
+  count and the local_only English simple corpus subset (4/12 local
+  completion and 11/12 tool correctness before, 1/12 and 7/12 after, twice
+  each); `docs/EVIDENCE.md` has the runs.
 - A tool event of a gateway-made call has model null and actor `gateway`
   (RM22, spec 0.32 section 8); `tool.proposed` has an optional `mechanism`
   (`model`, the default, `prefetch`, or `workflow` with its `step`). The
@@ -154,6 +198,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   is refreshed before each external generation and measured with the
   request, says that an external correction names the failed checks, and
   leaves the synthesis request of the parallel workflow unchanged.
+  Section 10 no longer asks for the skill body before the conversation in
+  the skill stage: the live measurement of #124 lowered local completion and
+  tool correctness, so that layout stays as it was.
 
 - Specification 0.33 → 0.34 (PR #153 review; RM05, RM09, RM10, RM15,
   RM16, RM22, RM29; sections 4.3, 4.4, 8, 11, and 12.2; AC18): it states
