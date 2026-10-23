@@ -864,7 +864,7 @@ def test_every_performance_key_reaches_the_settings(tmp_path):
     ],
 )
 def test_a_bad_performance_value_is_one_startup_message(tmp_path, line, word):
-    """RM32, section 14.1: a wrong value, or live streaming before it exists, exits with status 2."""
+    """RM32, section 14.1: a wrong value, or live streaming before it exists, is exit 2."""
     config = write_config(tmp_path, f"\n[performance]\n{line}\n")
     with pytest.raises(LaunchError, match=r"\[performance\].*" + word) as raised:
         load_config(config)

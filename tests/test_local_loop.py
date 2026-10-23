@@ -50,6 +50,7 @@ from relaymind.adapters import (
 )
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel, skill_stage_messages
+from relaymind.orchestrator.performance import PerformanceSettings
 from relaymind.orchestrator.run_state import RunState, SlotUnavailableError
 from relaymind.redaction import Redactor
 from relaymind.skills import SkillVersionMissingError
@@ -681,6 +682,8 @@ def test_run_accepted_carries_the_section_8_payload(tmp_path):
         "skills_offered": snapshot["skills_offered"],
         "original_messages": [{"role": "user", "content": "Is staging-api healthy right now?"}],
         "answer_options": {},
+        # Spec 0.32 section 8: the performance options in force, here the baseline.
+        **PerformanceSettings().to_json_object(),
     }
     assert outcome.state is RunState.COMPLETED
 
