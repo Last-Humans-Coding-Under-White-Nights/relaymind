@@ -96,6 +96,7 @@ from relaymind.evaluation.grading import of_type, terminal_event  # noqa: E402
 from relaymind.skills.predicates import health_status_preserved  # noqa: E402
 from relaymind.stats import AdapterIdentity, GenerationStats, export_stats  # noqa: E402
 from relaymind.store import RunStore, read_tool_result  # noqa: E402
+from relaymind.store.trace_event import is_model_proposal  # noqa: E402
 from relaymind.tools import ToolResult  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -465,7 +466,7 @@ def first_model_action_ms(events: Iterable[Mapping[str, Any]]) -> int | None:
         if (
             kind == "tool.proposed"
             and event["payload"].get("admissible", True) is True
-            and event["payload"].get("mechanism", "model") == "model"
+            and is_model_proposal(event["payload"])
         ):
             return event["elapsed_ms"]
     return None

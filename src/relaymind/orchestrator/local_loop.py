@@ -152,7 +152,7 @@ import hmac
 import json
 import secrets
 import uuid
-from collections.abc import Awaitable, Callable, Collection, Iterator, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from typing import Any, TypeVar
@@ -2807,12 +2807,7 @@ class _Run:
             admitted, rejection = self._admit_one(call, loop.available, self.results)
             planned.append((call, admitted, rejection))
         runnable = [(call, admitted) for call, admitted, _ in planned if admitted is not None]
-        new = {
-            ToolExecutor.operation_id(self.run_id, admitted.tool_name, admitted.arguments)
-            for _, admitted in runnable
-            if not self.o.executor.has_operation(admitted)
-        }
-        if len(new) > self.meter.tool_room():
+        if self._new_executions(admitted for _, admitted in runnable) > self.meter.tool_room():
             return
         proposal_ids = {
             call.call_id: self._propose(call, skill, rejection, mechanism=PREFETCH)
@@ -3108,8 +3103,10 @@ class _Run:
         performance option.
         """
         calls = tuple(generation.calls)
-        as_set = (self.o.performance.calls_per_generation == "many") if many is None else many
-        if as_set and len(calls) > 1:
+        if many is None:
+            many = self.o.performance.calls_per_generation == "many"
+        as_set = many and len(calls) > 1
+        if as_set:
             admitted, rejection = self._admit_set(calls, available, self.results)
         else:
             one, rejection = self._admit(calls, available, self.results)
@@ -3120,7 +3117,7 @@ class _Run:
             tuple(admitted),
             rejection,
             proposal_ids,
-            answer_all=as_set and len(calls) > 1,
+            answer_all=as_set,
         )
 
     async def _run_admitted(
@@ -3177,19 +3174,23 @@ class _Run:
                 return [], rejection
             assert one is not None
             admitted.append(one)
-        # A repeated call is a replay and needs no execution (RM10).
-        new = {
-            ToolExecutor.operation_id(self.run_id, call.tool_name, call.arguments)
-            for call in admitted
-            if not self.o.executor.has_operation(call)
-        }
         room = self.meter.tool_room()
-        if len(new) > room:
+        if self._new_executions(admitted) > room:
             return [], {
                 "code": "multiple_tool_calls",
                 "message": f"only {room} more tool executions are allowed in this run",
             }
         return admitted, None
+
+    def _new_executions(self, calls: Iterable[ValidatedCall]) -> int:
+        """How many distinct operations the calls would execute; a repeat is a replay (RM10)."""
+        return len(
+            {
+                ToolExecutor.operation_id(self.run_id, call.tool_name, call.arguments)
+                for call in calls
+                if not self.o.executor.has_operation(call)
+            }
+        )
 
     def _mutates(self, tool_name: str) -> bool:
         """Whether the name is a registered tool with side effects."""
