@@ -4,18 +4,21 @@ All model output comes from doubles; the local artifact is a tiny
 synthetic GGUF file, and nothing here starts a real model server.
 """
 
+import asyncio
+import dataclasses
 import tomllib
 
 import pytest
 
 from api_helpers import call
-from gateway_helpers import build_gateway
+from gateway_helpers import build_gateway, clarify_turn
 from helpers import ACCEPTED_PAYLOAD, BASELINE, REPO_ROOT, ScriptedAdapter
 from launcher_helpers import toml_path, write_config
 from relaymind import launcher
 from relaymind.adapters.chat_completions import ChatCompletionsAdapter
 from relaymind.adapters.llamacpp import LlamaCppAdapter
 from relaymind.launcher import LaunchError, build_app, load_config, main
+from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import LocalOrchestrator
 from relaymind.orchestrator.run_state import RunState
 from relaymind.store import RunStore, RunStoreError
@@ -472,3 +475,133 @@ def test_example_config_is_valid():
     """The checked-in example loads, so the documented command starts from a sound file."""
     config = load_config(REPO_ROOT / "relaymind.example.toml")
     assert config.host == "127.0.0.1" and config.ui is not None
+
+
+# -- the [budgets] table (#142; RM03, RM17, RM19, sections 11 and 14.1) -----------------
+
+BUDGET_FIELDS = tuple(f.name for f in dataclasses.fields(LocalBudgets))
+
+
+def test_budget_keys_are_the_local_budgets_fields():
+    """Section 14.1: the table's keys are the section 11 limit names, derived from one list."""
+    assert set(launcher._TABLES["budgets"]) == set(BUDGET_FIELDS)
+    assert "active_seconds" in BUDGET_FIELDS and "external_seconds" in BUDGET_FIELDS
+
+
+def test_without_the_table_the_budget_defaults_apply(tmp_path):
+    """RM03, section 14.1: a file without [budgets] keeps the section 11 defaults."""
+    config = load_config(write_config(tmp_path))
+    assert config.budgets == LocalBudgets()
+    built = build_app(config, **doubles())
+    assert built.orchestrator.budgets == LocalBudgets()
+
+
+def test_every_budget_key_reaches_local_budgets(tmp_path):
+    """RM03, section 14.1: each key sets its limit; the others keep the default."""
+    values = {
+        "routing_generations": 2,
+        "local_generations": 5,
+        "tool_calls": 3,
+        "repair_generations": 2,
+        "active_seconds": 12,
+        "routing_input_tokens": 4096,
+        "routing_output_tokens": 256,
+        "run_active_seconds": 90.5,
+        "run_generations": 10,
+        "run_tool_executions": 7,
+        "waiting_seconds": 120,
+        "clarification_rounds": 1,
+        "external_generations": 4,
+        "external_seconds": 45.5,
+    }
+    assert set(values) == set(BUDGET_FIELDS)
+    lines = "".join(f"{key} = {value}\n" for key, value in values.items())
+    config = load_config(write_config(tmp_path, f"\n[budgets]\n{lines}"))
+    assert config.budgets == LocalBudgets(**values)
+    one = tmp_path / "one"
+    one.mkdir()
+    single = load_config(write_config(one, "\n[budgets]\nactive_seconds = 9\n"))
+    assert single.budgets == dataclasses.replace(LocalBudgets(), active_seconds=9)
+
+
+@pytest.mark.parametrize(
+    "line, word",
+    [
+        ("active_seconds = 'fast'", "active_seconds"),
+        ("local_generations = true", "local_generations"),
+        ("active_seconds = false", "active_seconds"),
+        ("local_generations = 2.5", "local_generations"),
+        ("tool_calls = 1.0", "tool_calls"),
+        ("active_seconds = inf", "active_seconds"),
+        ("active_seconds = nan", "active_seconds"),
+        ("external_seconds = -inf", "external_seconds"),
+        ("active_seconds = 0", "active_seconds"),
+        ("active_seconds = -1", "active_seconds"),
+        ("local_generations = 0", "local_generations"),
+        ("run_generations = 0", "run_generations"),
+        ("routing_input_tokens = 0", "routing_input_tokens"),
+        ("tool_calls = -1", "tool_calls"),
+        ("repair_generations = 4", "repair"),
+        ("local_generations = 1\nrepair_generations = 2", "repair"),
+        ("surprise = 1", "surprise"),
+    ],
+)
+def test_a_bad_budget_value_is_one_startup_message(tmp_path, line, word):
+    """RM03, section 14.1: a wrong type or range is exit status 2 with one message."""
+    config = write_config(tmp_path, f"\n[budgets]\n{line}\n")
+    with pytest.raises(LaunchError, match=r"\[budgets\].*" + word) as raised:
+        load_config(config)
+    assert "\n" not in str(raised.value)
+    out, err = [], []
+    assert main(["serve", "--config", str(config)], stdout=out.append, stderr=err.append) == 2
+    assert out == [] and len(err) == 1 and "[budgets]" in err[0]
+
+
+def test_budgets_table_must_be_a_table(tmp_path):
+    path = write_config(tmp_path, base=None)
+    path.write_text("budgets = 5\n" + path.read_text())
+    with pytest.raises(LaunchError, match="budgets must be a table"):
+        load_config(path)
+
+
+def test_the_configured_budgets_are_recorded_in_run_accepted(tmp_path):
+    """RM03, RM17: run.accepted holds the limits in force; a raised limit is on the record."""
+    extra = "\n[budgets]\nactive_seconds = 20\nlocal_generations = 4\nrun_generations = 9\n"
+    built = build_app(
+        load_config(write_config(tmp_path, extra)),
+        local_adapter=ScriptedAdapter(turns=[clarify_turn()]),
+    )
+    outcome = asyncio.run(built.orchestrator.run_text("Which service is it?"))
+    accepted = built.orchestrator.store.events(outcome.run_id)[0]
+    assert accepted.event_type is EventType.RUN_ACCEPTED
+    recorded = accepted.payload["budgets"]
+    assert recorded["active_seconds"] == 20.0
+    assert recorded["local_generations"] == 4
+    assert recorded["run_generations"] == 9
+    assert (
+        recorded
+        == LocalBudgets(active_seconds=20, local_generations=4, run_generations=9).to_json_object()
+    )
+    # The default file records the section 11 defaults.
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    built = build_app(
+        load_config(write_config(plain)), local_adapter=ScriptedAdapter(turns=[clarify_turn()])
+    )
+    outcome = asyncio.run(built.orchestrator.run_text("Which service is it?"))
+    accepted = built.orchestrator.store.events(outcome.run_id)[0]
+    assert accepted.payload["budgets"] == LocalBudgets().to_json_object()
+
+
+def test_example_config_documents_the_budgets_table(tmp_path):
+    """Section 14.1: the commented [budgets] block loads when uncommented and holds the defaults."""
+    lines = (REPO_ROOT / "relaymind.example.toml").read_text(encoding="utf-8").splitlines()
+    start = lines.index("# [budgets]")
+    block = []
+    for line in lines[start:]:
+        if not line.startswith("# "):
+            break
+        block.append(line[2:])
+    assert len(block) == 1 + len(BUDGET_FIELDS)
+    config = load_config(write_config(tmp_path, "\n" + "\n".join(block) + "\n"))
+    assert config.budgets == LocalBudgets()

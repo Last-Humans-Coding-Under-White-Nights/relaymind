@@ -19,7 +19,7 @@ import sqlite3
 import sys
 import tomllib
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -39,6 +39,7 @@ from relaymind.api.app import ChatSettings, NativeSettings, create_app
 from relaymind.api.chat import ClientToolsChat
 from relaymind.api.chat_request import SAMPLING_OPTIONS
 from relaymind.api.server import serve, validate_bind_host
+from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
 from relaymind.orchestrator.recovery import RecoveryError
 from relaymind.orchestrator.route_decision import ExecutionMode
@@ -85,6 +86,9 @@ _TABLES: dict[str, frozenset[str]] = {
         {"poll_seconds", "heartbeat_seconds", "sweep_seconds", "cancel_wait_seconds"}
     ),
     "ui": frozenset({"mode", "arm_wait_seconds", "poll_seconds"}),
+    # Spec 0.31 section 14.1: the keys are the section 11 limit names, so a new limit
+    # added to LocalBudgets is configurable without a second list (RM03).
+    "budgets": frozenset(f.name for f in fields(LocalBudgets)),
 }
 
 
@@ -114,6 +118,8 @@ class LauncherConfig:
     chat: ChatSettings = field(default_factory=ChatSettings)
     native: NativeSettings = field(default_factory=NativeSettings)
     ui: UiSettings | None = None
+    # Spec 0.31 section 14.1: the section 11 limits; an omitted key keeps its default (RM03).
+    budgets: LocalBudgets = field(default_factory=LocalBudgets)
 
 
 @dataclass(frozen=True)
@@ -229,6 +235,8 @@ def load_config(path: Path | str) -> LauncherConfig:
     if unknown_permissions := sorted(permissions - KNOWN_PERMISSIONS):
         raise LaunchError(f"[policy] permissions names unknown: {', '.join(unknown_permissions)}")
 
+    budgets = _settings("budgets", lambda: LocalBudgets(**tables["budgets"]))
+
     return LauncherConfig(
         manifest=Path(_required(local, "local_model", "manifest", str)),
         artifact=Path(_required(local, "local_model", "artifact", str)),
@@ -251,6 +259,7 @@ def load_config(path: Path | str) -> LauncherConfig:
         chat=_settings("chat", lambda: ChatSettings(**chat_args)),
         native=_settings("native", lambda: NativeSettings(**native_args)),
         ui=ui,
+        budgets=budgets,
     )
 
 
@@ -360,6 +369,7 @@ def build_app(
             enabled_workflows=config.enabled_workflows,
             external=external,
             degraded_mode=config.degraded_mode,
+            budgets=config.budgets,
             routing_cache=RoutingCache() if config.routing_cache else None,
         )
         report = orchestrator.recover_after_restart()
