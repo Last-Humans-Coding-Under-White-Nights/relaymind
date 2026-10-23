@@ -18,6 +18,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   routing call). The shell keeps the local model, its status and reason, the
   placement policy, the answer pass, and the answer stream on screen. Workflow
   steps have a labeled placeholder pending #138.
+- Reproducible selection benchmarks (#143, #144; RM02, RM08, RM09, RM25,
+  RM28, section 12.4): pinned SkillsBench derivation and attribution, a
+  digest-locked skill catalog with leave-one-task-out examples, and a pinned
+  ToolRet sample lock with no dataset rows checked in. The runner compares
+  built-in and loopback HTTP selectors, exports per-case diagnostics and
+  macro/micro precision, recall and Jaccard, and evaluates full versus
+  narrowed tool proposals without executing any tool. Tool candidates are
+  shuffled reproducibly so their presentation does not reveal positives.
+  Parquet derivation uses the optional `bench` dependency extra.
 - Operation without a usable local model (#126; AC20, RM01, RM05, RM11,
   RM21, RM26, RM28, RM29, spec 0.37 sections 7.4, 8, 11, and 14.1). The
   `[local_model]` table is optional: without it `allowed_modes` defaults to

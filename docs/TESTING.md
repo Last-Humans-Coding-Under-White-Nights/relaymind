@@ -1,5 +1,14 @@
 # Testing RelayMind (Milestones 1 to 5)
 
+Selection benchmark tests (#143, #144; RM02, RM08, RM09, RM25, RM28) run
+with `pytest tests/test_selection_benchmark.py`. They cover frozen digests,
+set scoring and macro/micro summaries, leave-one-task-out examples, router
+catalog caps and context bypasses, both source tool schema styles, seeded
+candidate presentation, inert handlers, loopback HTTP selectors, proposal
+validation and source derivation. ToolRet fixture rows are synthetic; no
+download or model call is needed in the default test suite. Real benchmark
+commands and the optional `bench` extra are described in `scripts/README.md`.
+
 How to verify the M1 to M5 deliverables, by hand on macOS and Windows
 and with the automated suites. M1 qualifies the local model runtime and
 the adapters; M2 adds the bounded local loop; M3 adds handoff,
