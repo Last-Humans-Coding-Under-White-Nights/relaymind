@@ -409,6 +409,17 @@ def _by_language_and_class(
     return table
 
 
+def _by_language(rows: Sequence[Mapping[str, Any]], key: str = "predicted") -> dict[str, Any]:
+    """One summary per language: Chinese results are never merged into English ones."""
+    return {
+        language: summarize_sets(
+            [(r[key], r["expected_set"]) for r in rows if r["language"] == language]
+        )
+        for language in ("en", "zh")
+        if any(r["language"] == language for r in rows)
+    }
+
+
 def _spread(values: Sequence[float]) -> dict[str, float] | None:
     if not values:
         return None
@@ -438,7 +449,7 @@ def _router_sample(
         if (c["case_id"], mode) in picks
     ]
     return {
-        "all": summarize_sets([(r["predicted"], r["expected_set"]) for r in rows]),
+        "by_language": _by_language(rows),
         "by_language_and_class": _by_language_and_class(rows),
     }
 
@@ -499,12 +510,19 @@ def analyse(
         "argmax": {
             "note": "The best skill of every prompt with no thresholds (every prompt with any "
             "word in common with the index is a pick).",
-            "all": summarize_sets([(c["predicted"], c["expected_set"]) for c in cases]),
+            "by_language": _by_language(cases),
             "by_language_and_class": _by_language_and_class(cases),
         },
         "distributions": {
-            "right": _distribution([c for c in picks if c["right"]]),
-            "wrong": _distribution([c for c in picks if not c["right"]]),
+            language: {
+                "right": _distribution(
+                    [c for c in picks if c["language"] == language and c["right"]]
+                ),
+                "wrong": _distribution(
+                    [c for c in picks if c["language"] == language and not c["right"]]
+                ),
+            }
+            for language in ("en", "zh")
         },
         "router": None,
         "candidate": None,
@@ -585,11 +603,16 @@ _HEAD = (
 )
 
 
-def _table(title: str, rows: Sequence[Mapping[str, Any]], total: Mapping[str, Any] | None = None):
+def _table(
+    title: str,
+    rows: Sequence[Mapping[str, Any]],
+    totals: Mapping[str, Mapping[str, Any]] | None = None,
+) -> list[str]:
+    """Rows per language and class, then one total row per language (never both languages)."""
     lines = ["", f"### {title}", "", *_HEAD]
     lines += [_summary_row(f"{r['language']} {r['case_class']}", r) for r in rows]
-    if total is not None:
-        lines.append(_summary_row("all", total))
+    for language, total in (totals or {}).items():
+        lines.append(_summary_row(f"{language} all", total))
     return lines
 
 
@@ -605,24 +628,25 @@ def render_markdown(analysis: Mapping[str, Any]) -> str:
         *_table(
             "Matcher",
             analysis["argmax"]["by_language_and_class"],
-            analysis["argmax"]["all"],
+            analysis["argmax"]["by_language"],
         ),
         "",
         "### Score and margin of the picks",
         "",
-        "| picks | count | score min | p25 | median | p75 | max | margin min | p25 | median "
-        "| p75 | max |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| language | picks | count | score min | p25 | median | p75 | max | margin min | p25 "
+        "| median | p75 | max |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
-    for kind, part in analysis["distributions"].items():
-        s, m = part["score"] or {}, part["margin"] or {}
-        lines.append(
-            f"| {kind} | {part['count']} | "
-            + " | ".join(_fmt(s.get(k)) for k in ("min", "p25", "median", "p75", "max"))
-            + " | "
-            + " | ".join(_fmt(m.get(k)) for k in ("min", "p25", "median", "p75", "max"))
-            + " |"
-        )
+    for language, picks in analysis["distributions"].items():
+        for kind, part in picks.items():
+            s, m = part["score"] or {}, part["margin"] or {}
+            lines.append(
+                f"| {language} | {kind} | {part['count']} | "
+                + " | ".join(_fmt(s.get(k)) for k in ("min", "p25", "median", "p75", "max"))
+                + " | "
+                + " | ".join(_fmt(m.get(k)) for k in ("min", "p25", "median", "p75", "max"))
+                + " |"
+            )
     if analysis["router"] is not None:
         router = analysis["router"]
         lines += [
@@ -633,7 +657,9 @@ def render_markdown(analysis: Mapping[str, Any]) -> str:
             f"of {router['cases_in_both']} cases that have both.",
         ]
         for mode, sample in analysis["router"]["samples"].items():
-            lines += _table(f"Router, {mode}", sample["by_language_and_class"], sample["all"])
+            lines += _table(
+                f"Router, {mode}", sample["by_language_and_class"], sample["by_language"]
+            )
         candidate = analysis["candidate"]
         t = candidate["thresholds"]
         lines += [
@@ -646,10 +672,14 @@ def render_markdown(analysis: Mapping[str, Any]) -> str:
             f"{t['min_score']:.4f}, margin at least {t['min_margin']:.4f}. Chosen on the cases "
             "that score them; not held out.",
             *_table(
-                "English at the thresholds", candidate["english_by_class"], candidate["english"]
+                "English at the thresholds",
+                candidate["english_by_class"],
+                {"en": candidate["english"]},
             ),
             *_table(
-                "Chinese at the thresholds", candidate["chinese_by_class"], candidate["chinese"]
+                "Chinese at the thresholds",
+                candidate["chinese_by_class"],
+                {"zh": candidate["chinese"]},
             ),
             "",
             "### Right and wrong English picks along the frontier",

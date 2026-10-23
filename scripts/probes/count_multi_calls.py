@@ -218,10 +218,8 @@ def analyse_run(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return {"generations": generations, "refused": refused, "model_calls": len(finished)}
 
 
-def analyse_export(document: Mapping[str, Any]) -> dict[str, Any]:
-    """Classify every multi-call generation of a corpus export and count the saved round trips."""
-    runs, rows = [], {}
-    totals = {
+def _counts() -> dict[str, Any]:
+    return {
         "generations": 0,
         "proposals": 0,
         "admitted": 0,
@@ -229,8 +227,31 @@ def analyse_export(document: Mapping[str, Any]) -> dict[str, Any]:
         "mixed": 0,
         "saved_generations": 0,
         "reproposed_changed": 0,
-        "actors": {},
     }
+
+
+def _tally(target: dict[str, Any], generation: Mapping[str, Any]) -> None:
+    target["generations"] += 1
+    target["proposals"] += len(generation["calls"])
+    target["admitted"] += generation["admitted"]
+    target["mixed"] += generation["mixed"]
+    target["saved_generations"] += generation["saved_generations"]
+    target["reproposed_changed"] += generation["reproposed_changed"]
+    if generation["reason"]:
+        kept = target["kept_rejected"]
+        kept[generation["reason"]] = kept.get(generation["reason"], 0) + 1
+
+
+def analyse_export(document: Mapping[str, Any]) -> dict[str, Any]:
+    """Classify every multi-call generation of a corpus export and count the saved round trips.
+
+    The counts are per mode, language, and class, and per language; the
+    all-language totals serve the cross-check against the trace alone,
+    because Chinese results are never merged into English ones (section 12.2).
+    """
+    runs, rows = [], {}
+    totals = {**_counts(), "actors": {}}
+    by_language: dict[str, dict[str, Any]] = {}
     refused = 0
     for grade in document["grades"]:
         events = document["traces"].get(grade["run_id"], [])
@@ -256,28 +277,14 @@ def analyse_export(document: Mapping[str, Any]) -> dict[str, Any]:
                     "case_class": grade["case_class"],
                     "runs": set(),
                     "model_calls": 0,
-                    "generations": 0,
-                    "proposals": 0,
-                    "admitted": 0,
-                    "kept_rejected": {},
-                    "mixed": 0,
-                    "saved_generations": 0,
-                    "reproposed_changed": 0,
+                    **_counts(),
                 },
             )
             if grade["run_id"] not in row["runs"]:
                 row["runs"].add(grade["run_id"])
                 row["model_calls"] += analysis["model_calls"]
-            for target in (row, totals):
-                target["generations"] += 1
-                target["proposals"] += len(generation["calls"])
-                target["admitted"] += generation["admitted"]
-                target["mixed"] += generation["mixed"]
-                target["saved_generations"] += generation["saved_generations"]
-                target["reproposed_changed"] += generation["reproposed_changed"]
-                if generation["reason"]:
-                    kept = target["kept_rejected"]
-                    kept[generation["reason"]] = kept.get(generation["reason"], 0) + 1
+            for target in (row, totals, by_language.setdefault(grade["language"], _counts())):
+                _tally(target, generation)
             actors = totals["actors"]
             actors[generation["actor"]] = actors.get(generation["actor"], 0) + 1
     table = sorted(
@@ -294,6 +301,7 @@ def analyse_export(document: Mapping[str, Any]) -> dict[str, Any]:
         "source": {"corpus": document.get("corpus"), "application": document.get("application")},
         "generations": runs,
         "totals": totals,
+        "totals_by_language": dict(sorted(by_language.items())),
         "table": table,
         "cross_check": {
             "generations": totals["generations"],
@@ -328,10 +336,13 @@ def render_markdown(result: Mapping[str, Any]) -> str:
             f"| {row['admitted']} | {_kept(row['kept_rejected'])} | {row['mixed']} "
             f"| {row['saved_generations']} | {row['reproposed_changed']} |"
         )
+    for language, counts in result["totals_by_language"].items():
+        lines.append(
+            f"| all {language} | | | | | {counts['generations']} | {counts['proposals']} "
+            f"| {counts['admitted']} | {_kept(counts['kept_rejected'])} | {counts['mixed']} "
+            f"| {counts['saved_generations']} | {counts['reproposed_changed']} |"
+        )
     lines += [
-        f"| all | | | | | {totals['generations']} | {totals['proposals']} "
-        f"| {totals['admitted']} | {_kept(totals['kept_rejected'])} | {totals['mixed']} "
-        f"| {totals['saved_generations']} | {totals['reproposed_changed']} |",
         "",
         f"Generations by actor: {_kept(totals['actors'])}.",
         "",

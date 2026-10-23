@@ -299,10 +299,11 @@ def test_the_analysis_scores_the_fifty_two_corpus_prompts(analysis):
     cases = analysis["cases"]
     assert len(cases) == 52
     assert {c["language"] for c in cases} == {"en", "zh"}
-    argmax = analysis["argmax"]["all"]
-    assert argmax["cases"] == 52
-    assert argmax["right"] + argmax["wrong"] + argmax["none"] == 52
-    assert argmax["picks"] == argmax["right"] + argmax["wrong"]
+    by_language = analysis["argmax"]["by_language"]
+    assert (by_language["en"]["cases"], by_language["zh"]["cases"]) == (40, 12)
+    for part in by_language.values():
+        assert part["right"] + part["wrong"] + part["none"] == part["cases"]
+        assert part["picks"] == part["right"] + part["wrong"]
 
 
 def test_the_analysis_is_reported_per_language_and_class_and_never_merges_chinese(analysis):
@@ -316,10 +317,13 @@ def test_the_analysis_is_reported_per_language_and_class_and_never_merges_chines
 
 def test_the_distributions_separate_right_and_wrong_picks(analysis):
     dist = analysis["distributions"]
-    assert set(dist) == {"right", "wrong"}
-    for part in dist.values():
-        assert set(part) >= {"count", "score", "margin"}
-    assert dist["right"]["count"] + dist["wrong"]["count"] == analysis["argmax"]["all"]["picks"]
+    assert set(dist) == {"en", "zh"}
+    for language, picks in dist.items():
+        assert set(picks) == {"right", "wrong"}
+        for part in picks.values():
+            assert set(part) >= {"count", "score", "margin"}
+        total = picks["right"]["count"] + picks["wrong"]["count"]
+        assert total == analysis["argmax"]["by_language"][language]["picks"]
 
 
 def test_the_analysis_is_deterministic(probe, analysis):
@@ -355,7 +359,8 @@ def test_the_router_baseline_and_the_candidate_thresholds_come_from_the_export(p
     assert (result["router"]["cases_in_both"], result["router"]["samples_differ"]) == (2, 1)
     samples = result["router"]["samples"]
     assert set(samples) == {"auto", "local_only"}
-    auto, local = samples["auto"]["all"], samples["local_only"]["all"]
+    auto = samples["auto"]["by_language"]["en"]
+    local = samples["local_only"]["by_language"]["en"]
     assert (auto["cases"], auto["right"], auto["wrong"], auto["none"]) == (3, 1, 1, 1)
     assert (local["cases"], local["right"], local["wrong"], local["none"]) == (2, 2, 0, 0)
     candidate = result["candidate"]
@@ -376,6 +381,8 @@ def test_the_cli_writes_the_analysis_and_a_report(probe, tmp_path):
     report = out.with_suffix(".md").read_text("utf-8")
     assert LABEL in report.splitlines()[0]
     assert "precision" in report and "Jaccard" in report
+    # Chinese is reported apart: one total row per language, none for both.
+    assert "| en all |" in report and "| zh all |" in report
 
 
 def test_the_probe_does_not_change_the_corpus_or_the_sidecar(probe, tmp_path):

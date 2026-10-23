@@ -305,6 +305,22 @@ def test_the_table_is_per_language_mode_and_class_with_exact_counts(probe):
     assert external["saved_generations"] == 2
 
 
+def test_totals_are_given_per_language_and_chinese_is_not_merged_into_english(probe):
+    """Section 12.2: Chinese results are reported apart."""
+    english = complex_run("run_s", calls=[HEALTH, LOGS], later=[HEALTH, LOGS])
+    chinese = complex_run("run_t", calls=[HEALTH, LOGS, DEPLOY], later=[HEALTH])
+    document = export_of(english, (*chinese[:3], "zh", chinese[4]))
+    result = probe.analyse_export(document)
+    by_language = result["totals_by_language"]
+    assert (by_language["en"]["generations"], by_language["en"]["proposals"]) == (1, 2)
+    assert (by_language["zh"]["generations"], by_language["zh"]["proposals"]) == (1, 3)
+    assert by_language["en"]["saved_generations"] == 2
+    assert by_language["zh"]["saved_generations"] == 1
+    assert result["totals"]["generations"] == 2
+    report = probe.render_markdown(result)
+    assert "| all en |" in report and "| all zh |" in report
+
+
 def test_the_result_is_labeled_and_the_export_is_untouched(probe):
     document = export_of(complex_run("run_q", calls=[HEALTH, LOGS], later=[HEALTH, LOGS]))
     snapshot = json.dumps(document, sort_keys=True)
