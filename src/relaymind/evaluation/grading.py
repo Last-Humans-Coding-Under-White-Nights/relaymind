@@ -315,5 +315,20 @@ def grade_run(
     grade.failures = [reason for ok, reason in checks if not ok]
     grade.success = not grade.failures
     if case.case_class == "simple":
-        grade.local_completion = grade.success and external_calls == 0
+        accepted = next(iter(of_type(events, "run.accepted")), {}).get("payload", {})
+        absent = accepted.get("local_model_status") == "absent" or (
+            "local_model" in accepted and accepted["local_model"] is None
+        )
+        terminal = (terminal_event(events) or {}).get("payload", {})
+        # Legacy traces omitted the owner; preserve their historical grading. New
+        # traces must name a model that actually made a local call, never gateway.
+        local_owner = "final_answer_model" not in terminal or (
+            terminal["final_answer_model"] != "gateway"
+            and any(
+                call.get("actor") == "local" and call.get("model") == terminal["final_answer_model"]
+                for call in terminal.get("model_calls", [])
+            )
+        )
+        if not absent:
+            grade.local_completion = grade.success and external_calls == 0 and local_owner
     return grade
