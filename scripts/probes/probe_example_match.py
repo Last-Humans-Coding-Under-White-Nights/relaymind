@@ -151,8 +151,12 @@ def build_index(
 
 
 def score_query(index: Index, query: str) -> dict[str, float]:
-    """The BM25 score of the query against every skill document; unknown words add nothing."""
-    words = set(tokenize(mask_identifiers(query, index.identifiers)))
+    """The BM25 score of the query against every skill document; unknown words add nothing.
+
+    The sum runs over the sorted distinct words, so the last bits of a score
+    do not depend on the hash seed of the process.
+    """
+    words = sorted(set(tokenize(mask_identifiers(query, index.identifiers))))
     scores = {}
     for name, counter in index.terms.items():
         norm = 1.0

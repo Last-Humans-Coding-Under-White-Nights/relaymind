@@ -11,6 +11,9 @@ called.
 
 import json
 import math
+import os
+import subprocess
+import sys
 
 import pytest
 
@@ -396,3 +399,31 @@ def test_the_probe_does_not_change_the_corpus_or_the_sidecar(probe, tmp_path):
     }
     probe.main(["--out", str(tmp_path / "x.json")])
     assert {path: path.read_bytes() for path in before} == before
+
+
+def test_the_result_does_not_depend_on_the_hash_seed(tmp_path):
+    """BM25 sums over a set of words; the order of the sum must not change the last bits."""
+    export = tmp_path / "export.json"
+    export.write_text(
+        json.dumps(
+            {
+                "grades": [{"case_id": "simple-02", "mode": "auto", "run_id": "r1"}],
+                "traces": {"r1": [route_event("native_function_calling", "check-service-health")]},
+            }
+        ),
+        "utf-8",
+    )
+    outputs = set()
+    for seed in ("1", "2", "3", "4", "5", "6"):
+        out = tmp_path / f"seed-{seed}.json"
+        script = REPO_ROOT / "scripts" / "probes" / "probe_example_match.py"
+        subprocess.run(
+            [sys.executable, str(script), "--export", str(export), "--out", str(out)],
+            check=True,
+            capture_output=True,
+            env={**os.environ, "PYTHONHASHSEED": seed},
+        )
+        document = json.loads(out.read_text("utf-8"))
+        document.pop("analysed_with")
+        outputs.add(json.dumps(document, sort_keys=True))
+    assert len(outputs) == 1
