@@ -43,6 +43,7 @@ from relaymind.orchestrator.local_loop import (
     EXTERNAL_OPTIONS,
     GATEWAY_ACTOR,
     LOCAL_OPTIONS,
+    AcceptedRun,
     ContextLimitExceeded,
     Escalation,
     ExternalFailure,
@@ -59,7 +60,7 @@ from relaymind.store import IdempotencyClaim
 from relaymind.store.trace_event import EventType
 from relaymind.tools.registry import parameters_validator
 
-__all__ = ["ToolOffer", "run_client_request"]
+__all__ = ["ToolOffer", "accept_client_request", "run_client_request"]
 
 CHOICES = ("auto", "none", "required", "function")
 # One repair generation locally (RM03); the external stage gets one retry too.
@@ -153,6 +154,34 @@ async def run_client_request(
     )
     with orchestrator.owning(run):
         return await run.execute_client()
+
+
+def accept_client_request(
+    orchestrator: LocalOrchestrator,
+    messages: Sequence[Message],
+    offer: ToolOffer,
+    *,
+    execution_mode: str | None = None,
+    model_alias: str | None = None,
+    final_options: GenerationOptions | None = None,
+    idempotency: IdempotencyClaim | None = None,
+) -> AcceptedRun:
+    """Accept a client-owned request without driving it (RM32, spec 0.32 section 7.3).
+
+    The synchronous part of run_client_request: the slot (429) and
+    run.accepted. The caller drives the work with AcceptedRun.start.
+    """
+    run = _ClientRun(
+        orchestrator,
+        tuple(messages),
+        offer,
+        execution_mode,
+        model_alias,
+        final_options,
+        idempotency,
+    )
+    run.open()
+    return AcceptedRun(orchestrator, run, lambda: run._protected(run.drive_client))
 
 
 class _ClientRun(_Run):

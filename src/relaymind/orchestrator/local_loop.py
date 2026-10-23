@@ -143,7 +143,7 @@ import uuid
 from collections.abc import Awaitable, Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from relaymind.adapters import (
     AdapterCapabilities,
@@ -228,6 +228,7 @@ from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry, ToolRej
 from relaymind.tools.executor import Execution, OperationInFlightError, ToolExecutor, ValidatedCall
 from relaymind.tools.registry import SideEffect, ToolResult, ToolStatus
 
+_T = TypeVar("_T")
 GATEWAY_ACTOR = "gateway"
 LOCALITIES = (LOCAL_ACTOR, EXTERNAL_ACTOR)
 NEEDS_EXTERNAL = "needs_external"
@@ -398,6 +399,61 @@ class StartedRun:
     state: str
     state_version: int
     task: "asyncio.Task[RunOutcome] | None" = None
+
+
+class AcceptedRun:
+    """A run that holds the execution slot, with run.accepted written, and no work started.
+
+    A streamed chat request under early headers (RM32, spec 0.32 section
+    7.3) needs the run ID before the run finishes, and every check that
+    can refuse the request (including the 429 slot) before a header is
+    sent. ``LocalOrchestrator.accept`` does that synchronous part. The
+    caller then drives the work in a task it owns with ``start``: the
+    task owns the run, so ``request_cancel`` maps a disconnect to it as
+    it does for ``run``. A task cancelled before it first ran ends the
+    run as cancelled and releases the slot.
+    """
+
+    def __init__(
+        self,
+        owner: "LocalOrchestrator",
+        run: "_Run",
+        work: Callable[[], Awaitable[RunOutcome]],
+    ) -> None:
+        self._owner = owner
+        self._run = run
+        self._work = work
+
+    @property
+    def run_id(self) -> str:
+        return self._run.run_id
+
+    async def complete(self) -> RunOutcome:
+        """Drive the run to a terminal or waiting state, owned by the current task."""
+        with self._owner.owning(self._run):
+            return self._owner._keep_if_waiting(self._run, await self._work())
+
+    def start(self, convert: Callable[[RunOutcome], _T]) -> "asyncio.Task[_T]":
+        """Drive the run in a new task whose result is convert(outcome).
+
+        A task cancelled before its first step still ends the run.
+        """
+
+        async def drive() -> _T:
+            return convert(await self.complete())
+
+        task = asyncio.get_running_loop().create_task(drive())
+        task.add_done_callback(self._settle)
+        return task
+
+    def _settle(self, task: "asyncio.Task[Any]") -> None:
+        if task.cancelled():
+            # Cancelled before its first step, the work never reached _protected,
+            # so the run is ended here. A run that already ended is unchanged.
+            self._run._abort(asyncio.CancelledError())
+        else:
+            # The run recorded its own failure (section 5); nobody retrieves it.
+            task.exception()
 
 
 # The attribute that marks an exception raised by a run's own work (section 11).
@@ -868,6 +924,26 @@ class LocalOrchestrator:
         run = _Run(self, tuple(messages), execution_mode, model_alias, final_options, idempotency)
         run.open()
         return self._start(run, run.drive)
+
+    def accept(
+        self,
+        messages: Sequence[Message],
+        *,
+        execution_mode: str | None = None,
+        model_alias: str | None = None,
+        final_options: GenerationOptions | None = None,
+        idempotency: IdempotencyClaim | None = None,
+    ) -> AcceptedRun:
+        """Accept a managed request and return the run before any work starts (RM32).
+
+        The synchronous part of run(): the execution slot is taken or
+        SlotUnavailableError (429) is raised and nothing is created, and
+        run.accepted is written. The caller drives the work with
+        AcceptedRun.start, and its task owns the run (request_cancel).
+        """
+        run = _Run(self, tuple(messages), execution_mode, model_alias, final_options, idempotency)
+        run.open()
+        return AcceptedRun(self, run, run.drive)
 
     async def cancel(
         self, run_id: str, expected_version: int, *, wait_seconds: float = 5.0

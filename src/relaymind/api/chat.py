@@ -23,22 +23,26 @@ no ``[DONE]``. A request without stream collects the whole live
 answer first (spec 0.15 section 7.3).
 """
 
+import asyncio
 import json
 import logging
+import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from relaymind.adapters import ToolCall, ToolSchema
 from relaymind.api.chat_request import CLIENT_TOOLS, MANAGED, ChatRequest
-from relaymind.api.errors import ApiError, error_from_outcome
-from relaymind.orchestrator.client_loop import ToolOffer, run_client_request
-from relaymind.orchestrator.local_loop import LocalOrchestrator, RunOutcome
+from relaymind.api.errors import ApiError, error_from_exception, error_from_outcome
+from relaymind.orchestrator.client_loop import ToolOffer, accept_client_request, run_client_request
+from relaymind.orchestrator.local_loop import AcceptedRun, LocalOrchestrator, RunOutcome
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
 from relaymind.store import EventType, RunStore
 
 __all__ = [
+    "AcceptedChat",
+    "AcceptingBackend",
     "ChatBackend",
     "ChatResult",
     "ClientToolsChat",
@@ -48,6 +52,7 @@ __all__ = [
     "answer_pieces",
     "collect_live",
     "completion_body",
+    "early_stream",
     "open_stream",
     "stream_chunks",
 ]
@@ -118,9 +123,43 @@ class ChatResult:
 
 
 class ChatBackend(Protocol):
-    """Runs a validated request under an effective execution mode."""
+    """Runs a validated request under an effective execution mode.
+
+    A backend that can also accept a run before it works on it has an
+    ``accept`` method returning an ``AcceptedChat`` (early response
+    headers, RM32); a backend without one is always answered when its
+    run has finished.
+    """
 
     async def complete(self, request: ChatRequest, mode: ExecutionMode) -> ChatResult: ...
+
+
+@runtime_checkable
+class AcceptingBackend(Protocol):
+    """A backend that can accept a run before it works on it (RM32)."""
+
+    def accept(self, request: ChatRequest, mode: ExecutionMode) -> "AcceptedChat": ...
+
+
+@dataclass(frozen=True)
+class AcceptedChat:
+    """A chat run that is accepted and not yet driven (RM32, spec 0.32 section 7.3).
+
+    The run holds the execution slot and has its run ID. ``start``
+    drives it in a task the response owns, so a disconnect maps to the
+    run through ``LocalOrchestrator.request_cancel``; the task yields the
+    ChatResult or raises the ApiError the request would have got.
+    """
+
+    run: AcceptedRun
+    to_result: Callable[[RunOutcome], ChatResult]
+
+    @property
+    def run_id(self) -> str:
+        return self.run.run_id
+
+    def start(self) -> "asyncio.Task[ChatResult]":
+        return self.run.start(self.to_result)
 
 
 class _RunChat:
@@ -128,6 +167,9 @@ class _RunChat:
 
     def __init__(self, orchestrator: LocalOrchestrator) -> None:
         self.orchestrator = orchestrator
+
+    def _accepted(self, run: AcceptedRun, request: ChatRequest) -> AcceptedChat:
+        return AcceptedChat(run, lambda outcome: self._result(outcome, stream=request.stream))
 
     def _result(self, outcome: RunOutcome, *, stream: bool) -> ChatResult:
         run_id = outcome.run_id
@@ -183,6 +225,17 @@ class ManagedChat(_RunChat):
         )
         return self._result(outcome, stream=request.stream)
 
+    def accept(self, request: ChatRequest, mode: ExecutionMode) -> AcceptedChat:
+        """Take the slot and write run.accepted; the work starts with ``AcceptedChat.start``."""
+        run = self.orchestrator.accept(
+            request.messages,
+            execution_mode=mode.value,
+            model_alias=MANAGED,
+            final_options=request.final_options,
+            idempotency=request.idempotency,
+        )
+        return self._accepted(run, request)
+
 
 class ClientToolsChat(_RunChat):
     """The ``relaymind-client-tools`` alias: functions the caller executes (RM08, AC10).
@@ -192,13 +245,29 @@ class ClientToolsChat(_RunChat):
     (spec 0.16 section 7.2).
     """
 
-    async def complete(self, request: ChatRequest, mode: ExecutionMode) -> ChatResult:
+    def _offer(self, request: ChatRequest) -> ToolOffer:
         choice = request.tool_choice
-        offer = ToolOffer(
+        return ToolOffer(
             tuple(ToolSchema(t.name, t.description or "", t.parameters) for t in request.tools),
             choice="auto" if choice is None else choice.mode,
             function=None if choice is None else choice.name,
         )
+
+    def accept(self, request: ChatRequest, mode: ExecutionMode) -> AcceptedChat:
+        """Take the slot and write run.accepted; the work starts with ``AcceptedChat.start``."""
+        run = accept_client_request(
+            self.orchestrator,
+            request.messages,
+            self._offer(request),
+            execution_mode=mode.value,
+            model_alias=CLIENT_TOOLS,
+            final_options=request.final_options,
+            idempotency=request.idempotency,
+        )
+        return self._accepted(run, request)
+
+    async def complete(self, request: ChatRequest, mode: ExecutionMode) -> ChatResult:
+        offer = self._offer(request)
         outcome = await run_client_request(
             self.orchestrator,
             request.messages,
@@ -360,6 +429,53 @@ async def stream_chunks(alias: str, result: ChatResult, created: int) -> AsyncGe
             yield chunk({"content": piece})
     yield chunk({}, result.finish_reason)
     yield "data: [DONE]\n\n"
+
+
+KEEP_ALIVE = ": keep-alive\n\n"
+
+
+async def early_stream(
+    alias: str,
+    accepted: AcceptedChat,
+    task: "asyncio.Task[ChatResult]",
+    *,
+    heartbeat_seconds: float,
+    on_internal_error: Callable[[Exception], None],
+) -> AsyncGenerator[str]:
+    """The SSE lines of a streamed request whose headers went out at acceptance (RM32).
+
+    Spec 0.32 section 7.3. It sends an SSE comment at once and then every
+    heartbeat_seconds until the run's task is done: a comment is not a
+    chunk, so no content reaches the client before the answer (RM20). A
+    run that produced a result then sends exactly the chunks of a
+    buffered response. A run that ended without an answer, or whose task
+    failed, sends the one mid-stream error event of section 7.3 (its
+    code, a fixed message, the run ID, and the reason code when it has
+    one) and StreamAborted closes the connection with no finish chunk
+    and no [DONE]; the status line cannot change any more. The caller
+    owns the task and cancels it when the response ends first.
+    """
+    yield KEEP_ALIVE
+    while not task.done():
+        await asyncio.wait({task}, timeout=heartbeat_seconds)
+        if not task.done():
+            yield KEEP_ALIVE
+    try:
+        if task.cancelled():
+            raise ApiError(
+                "run_terminal", f"run {accepted.run_id} was cancelled", run_id=accepted.run_id
+            )
+        result = task.result()
+    except Exception as exc:
+        error = error_from_exception(exc, run_id=accepted.run_id)
+        if error.run_id is None:
+            error.run_id = accepted.run_id
+        if error.code == "internal_error":
+            on_internal_error(exc)
+        yield f"data: {json.dumps(error.body())}\n\n"
+        raise StreamAborted from None
+    async for line in stream_chunks(alias, result, int(time.time())):
+        yield line
 
 
 async def _first_text(pieces: AsyncIterator[str]) -> str | None:
