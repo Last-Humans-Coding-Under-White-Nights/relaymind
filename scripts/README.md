@@ -128,6 +128,15 @@
       --out docs/evidence/<date>-latency-<machine>.json [--seed N]
   ```
 
+  `--early-headers` (#140; RM25, RM32, spec 0.32 sections 7.3 and 12.1)
+  starts the gateway with `performance.early_headers = true` and
+  nothing else changed. The status line then arrives when the run is
+  accepted, so the first transport event is the header time: the export
+  records `design.early_headers` and `design.first_transport_event`, and
+  the report labels the metric "header time". It is never first useful
+  content. Without the flag the launch file has no `[performance]` table,
+  which is the baseline.
+
   Both runners reuse the live acceptance harness for the runtime check,
   the launch plan, and the trace read-back.
 

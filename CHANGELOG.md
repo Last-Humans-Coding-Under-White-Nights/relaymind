@@ -6,7 +6,48 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- The draft answer pass (#121; RM16, RM19, RM31, AC17): under
+  `performance.answer_pass = "draft"` the skill-stage draft that met the
+  completion predicate is published as the answer without the second
+  generation, when it is in the run's language (`identifiers.has_cjk`: a
+  Chinese run needs Chinese text, an English run none), holds no tool-call
+  JSON or tag, and the chat request set no `max_completion_tokens`,
+  `temperature`, or `top_p`; otherwise the final generation runs as before.
+  `run.completed` records `answer_pass_applied` (`draft` or `final`) for a
+  local answer and leaves it out for an external answer, a workflow render,
+  or a client-owned completion. The default stays `final`.
+- Early response headers (#140; RM14, RM19, RM20, RM21, RM32, AC12): under
+  `performance.early_headers = true` a streamed chat request is accepted
+  first (authentication, body, mode, idempotency, and the 429 slot still come
+  before any header), gets `X-RelayMind-Run-ID` and the new
+  `X-RelayMind-Events-URL` at once, then an SSE comment keep-alive every
+  `[native] heartbeat_seconds`, and exactly the chunks of a buffered
+  response when the run ends. A run that ends without an answer sends the
+  mid-stream error event (`code`, fixed `message`, `run_id`, and `reason_code`
+  when it has one) with no finish chunk and no `[DONE]`. A disconnect still
+  cancels the run. Both aliases use it; a request without `stream` and an
+  idempotent replay are unchanged. `scripts/latency_benchmark.py
+  --early-headers` runs the gateway with the option and labels the first
+  transport event as the header time.
+- The `[performance]` launch table (`answer_pass`, `answer_stream`,
+  `calls_per_generation`, `prefetch`, `early_headers`) and
+  `PerformanceSettings`; every default is the earlier behavior. A wrong value
+  is exit status 2. `answer_stream = "live"` is refused until gated answer
+  streaming exists (RM32). `calls_per_generation` and `prefetch` are
+  recorded and take effect in a later change (RM29, section 4.3).
+  `run.accepted` records the five options in force; the trace schema stays
+  at version 1 with these fields optional.
+- A failed run with error code `predicate_unmet` is run state: a chat
+  request names it in a 409 `run_terminal` (section 7.1). No code produces it
+  yet.
+
 ### Changed
+
+- `scripts/run_corpus.py` takes the draft guards (run language, tool-call
+  JSON) from `relaymind.orchestrator.performance`, so the offline regrade
+  and the gateway apply one rule (#115, #121).
 
 - `Usage.cached_tokens` is `None` when the source returned no count, not
   0 (#120; RM16, spec 0.31 section 6, finding F9), and the same holds for

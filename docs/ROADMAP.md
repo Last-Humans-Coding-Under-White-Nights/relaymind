@@ -612,7 +612,10 @@ a day or less on existing exports or the existing benchmark.
   tokens as cached on a repeated prompt and no reasoning count.
 - Draft answer pass (#121; RM31, AC17): `answer_pass = draft` publishes
   the validated draft; `final` stays the default until #115 and #128
-  report.
+  report. Done (2026-10-23, deterministic tests with model doubles):
+  the `[performance]` table, the draft guards (run language, tool-call
+  JSON, no caller answer option), and `answer_pass_applied` in
+  `run.completed`; no corpus run in this configuration yet (#128).
 - Several read-only tool calls admitted per generation under
   `calls_per_generation = many` (#122; section 4.3, AC18).
 - Prefetch declarations in skill manifests under `prefetch = true`
@@ -624,7 +627,10 @@ a day or less on existing exports or the existing benchmark.
   completed run as a metric (#141; section 4.4; finding F6).
 - Early response headers and keep-alives for streamed chat requests
   (#140; RM32, section 7.3): a chat client gets its run reference and
-  the events URL before the answer.
+  the events URL before the answer. Done (2026-10-23, deterministic
+  tests with model doubles and one loopback socket): `early_headers`
+  in `[performance]` for both aliases; no live latency run with the
+  option yet.
 - Selection interface: the request and result schemas, the chain, and
   `model_router` behind it with its decisions unchanged (#131; RM28,
   AC22).
