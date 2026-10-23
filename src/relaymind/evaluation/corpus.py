@@ -148,7 +148,8 @@ def check_lock(corpus: Corpus, lock_path: Path) -> None:
     A sidecar named in the lock is read from the lock file's directory and
     compared by the digest of its canonical JSON, so its layout on disk
     does not matter. A lock without a sidecars key (made before spec 0.31)
-    checks the corpus alone.
+    checks the corpus alone; a sidecars value that is not an object is
+    refused.
     """
     lock_path = Path(lock_path)
     lock = json.loads(lock_path.read_text("utf-8"))
@@ -157,7 +158,10 @@ def check_lock(corpus: Corpus, lock_path: Path) -> None:
             f"corpus digest {corpus.digest} differs from the frozen digest {lock.get('sha256')} "
             f"in {lock_path.name}; a changed corpus is a new version (section 12.2)"
         )
-    for name, frozen in sorted((lock.get("sidecars") or {}).items()):
+    sidecars = lock.get("sidecars", {})
+    if not isinstance(sidecars, Mapping):
+        raise CorpusError(f"{lock_path.name}: 'sidecars' must be an object")
+    for name, frozen in sorted(sidecars.items()):
         path = lock_path.parent / name
         if not path.is_file():
             raise CorpusError(f"sidecar {name} named in {lock_path.name} is missing")

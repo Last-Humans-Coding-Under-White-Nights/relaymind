@@ -402,3 +402,14 @@ def test_a_lock_without_sidecars_still_checks_the_corpus(corpus, tmp_path):
     path.write_text(json.dumps(lock), "utf-8")
     with pytest.raises(CorpusError, match="digest"):
         check_lock(corpus, path)
+
+
+@pytest.mark.parametrize("value", [["corpus.v1.skills.json"], "corpus.v1.skills.json", 3, [], None])
+def test_a_sidecars_value_that_is_not_an_object_is_refused(corpus, tmp_path, value):
+    """Section 12.2: a malformed lock is a CorpusError, never a crash."""
+    lock = json.loads(LOCK.read_text("utf-8"))
+    lock["sidecars"] = value
+    path = tmp_path / LOCK.name
+    path.write_text(json.dumps(lock), "utf-8")
+    with pytest.raises(CorpusError, match=f"{LOCK.name}: 'sidecars' must be an object"):
+        check_lock(corpus, path)
