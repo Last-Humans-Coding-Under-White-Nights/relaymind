@@ -2319,3 +2319,128 @@ pytest -m live tests/test_llamacpp_live_smoke.py        # 8 passed in 6.63 s
   provider's count and the value of `request_options` against a live
   provider were not run: this change was tested with a mock transport only.
   Nothing in this entry is an external measurement.
+
+## 2026-10-23 — Startup warm-up and skill-stage layout (#124), Apple Silicon macOS
+
+Three questions from #124, each answered with a live run on the pinned
+local model: does the startup warm-up change the first request, does the
+skill body before the conversation in the skill stage keep tool correctness
+and local completion, and what do the per-call cached tokens look like
+before and after. The external request layout and the completion criteria
+(#141) are covered by deterministic tests only; no external endpoint was
+used here.
+
+| Field | Value |
+|-------|-------|
+| Machine | Apple M1, 8 GiB RAM, macOS 27.0.1, Metal backend |
+| Runtime | `0.7.0-dev (build 11785, commit 8baabd53b)`, first on PATH; the Homebrew build was not used |
+| Local artifact | `models/qwen3-0.6b-q8_0.manifest.json` (Qwen3-0.6B Q8_0), the pinned launch settings, unchanged |
+| Test time | 2026-10-23, 10:29 to 10:45 UTC |
+| Python | 3.14.7 |
+| Applications | "before": `a4243f9` (the base of this branch, clean, checked out in a scratch worktree). "After": `0caa1cc` (this branch with the warm-up and the criteria; clean). Layout experiments: `4db75b9` (body first, then the description and tool instruction) and `7bfe3fa` (description and tool instruction, then the body), each a one-function change on top of `0caa1cc`, committed in a scratch worktree and not on any branch. The corpus and latency exports record `head` (and `dirty: false` where the exporter records it). The three AC01 exports (`relaymind.live_local_trace`) record no revision: `...-ac01-current-layout-...` is `0caa1cc`, `...-ac01-body-first-instruction-first-...` is `7bfe3fa` (description and tool instruction first, then the body), and `...-ac01-body-first-instruction-last-...` is `4db75b9` (body first, then the description and tool instruction); the mapping follows the order of the runs and the scratch names in the recorded commands. One AC01 export per layout is committed. The base AC01 runs and the repeat AC01 runs were not exported. The `command` field of each new export had its output path rewritten to `<scratch>/...` after the run; nothing else in the exports was edited. |
+| Rebase onto master | After these runs, #149, #150, #152, and #153 (with its review fixes) merged into master, and this branch now sits on master (`0fca2b7`); its commits have new IDs, and the IDs above are the measured revisions, kept as recorded in the exports. "Before" `a4243f9` has the same tree as `a59c7aa`, #153's head before its review fixes. "After" `0caa1cc` is now `8611a28`. In code the pair differs only by #153's review fixes: `orchestrator/prefetch.py` and `skills/registry.py` (prefetch, off in every run here) and `orchestrator/local_loop.py` (the set rejection exchange under `calls_per_generation = many`, off here, and the wording of the `multiple_tool_calls` message). No recorded export holds a `multiple_tool_calls` rejection, so no measured run reached a changed line, and no figure changes. The spec revision of this branch is 0.35, because #153 took 0.34 |
+| Exports | `docs/evidence/2026-10-23-latency-before-apple-m1.json`, `...-latency-after-warmup-apple-m1.json`, `...-latency-after-no-warmup-apple-m1.json` (with `.md`); `...-corpus-local-simple-current-layout-run{1,2}-apple-m1.json` and `...-body-first-run{1,2}-...` (with `.md`); `...-ac01-current-layout-...`, `...-ac01-body-first-instruction-last-...`, `...-ac01-body-first-instruction-first-...` |
+
+### Commands
+
+```bash
+export PATH=<llama-b11785 dir>:$PATH
+# Latency benchmark, seed 20261023, 10 runs per prompt, one run of each:
+python scripts/latency_benchmark.py --out lat-base.json --seed 20261023   # at a4243f9
+python scripts/latency_benchmark.py --out lat-after.json --seed 20261023  # at 0caa1cc
+python scripts/latency_benchmark.py --out lat-after-nowarm.json --seed 20261023 --no-startup-warmup
+# Layout gate, at 0caa1cc and at each experiment commit:
+pytest -m live tests/test_local_loop_live.py
+python scripts/run_corpus.py --out corpus.json --modes local_only --languages en \
+    --cases simple-01 simple-02 ... simple-12
+```
+
+The runtime was started by the scripts and stopped by them; none was left
+running.
+
+### The layout gate (AC01 and the local_only English simple subset)
+
+| Layout | Live AC01 (4 prompts, 2 languages) | Corpus local completion | Corpus tool correctness |
+|--------|------------------------------------|-------------------------|-------------------------|
+| Today's order (`0caa1cc`; same at the base `a4243f9`) | 3 of 4 pass in each of 3 runs (and in 2 runs at the base); `zh-staging` fails | 4/12, twice | 11/12, twice |
+| `4db75b9`: body, then the description and tool instruction, in the first system message | 2 of 4, then 1 of 4 | not run | not run |
+| `7bfe3fa`: description and tool instruction, then the body, in the first system message | 3 of 4 in each of 3 runs (same failure) | 1/12, twice | 7/12, twice |
+
+- The corpus rows are the `local_only` English `simple-01` to `simple-12`
+  cases. The rate is exact (numerator over 12), and the same cases ran in
+  every row. The two runs of each layout gave the same figures.
+- `4db75b9` made the final generation answer with the single word
+  `healthy` in several runs, and the results differed between two runs of
+  the same build, so it was not taken further. `7bfe3fa` kept the AC01 pass
+  count and was a little faster (12.4 to 13.2 s for the four prompts, against
+  15.5 to 16.4 s), but the corpus fell from 4/12 to 1/12 local completion
+  and from 11/12 to 7/12 tool correctness.
+- Decision: the new layout is not kept. Tool correctness and local
+  completion fell, which is the condition #124 sets. Spec section 10 no
+  longer asks for it (spec 0.35). The `zh-staging` failure is the known
+  Chinese final-pass failure of the earlier entries, present at the base.
+
+### The warm-up and the latency benchmark
+
+One run each, same seed, same prompts, 120 measured samples, 3 warm-up
+requests, concurrency one, routing cache off, no external model.
+
+| Metric | Before (`a4243f9`) | After, warm-up on | After, `--no-startup-warmup` |
+|--------|--------------------|-------------------|------------------------------|
+| Cold request: first model action | 1008 ms | 371 ms | 1033 ms |
+| Cold request: completion | 3348 ms | 2544 ms | 3501 ms |
+| Cold request: routing call, duration, cached / input tokens | 995 ms, 0 / 960 | 364 ms, 946 / 960 | 1013 ms, 0 / 960 |
+| Gateway start to healthy | 1.164 s | 2.907 s | 1.410 s |
+| First model action, all samples, p50 / p95 | 423 / 479 ms | 438 / 583 ms | 456 / 558 ms |
+| First answer token, all samples (n = 40), p50 / p95 | 583 / 2244 ms | 622 / 2405 ms | 537 / 2517 ms |
+| Completion, all samples, p50 / p95 | 584 / 2493 ms | 705 / 2619 ms | 568 / 2693 ms |
+| Calls with a reported cached count | 270 of 270 | 270 of 270 | 270 of 270 |
+| Calls with cached tokens above 0 | 267 | 266 | 266 |
+| Cached tokens, sum over the calls | 197133 | 197090 | 196150 |
+
+- The warm-up does what it is for: the first request after start no longer
+  pays for the routing prefix. Its routing call reported 946 of 960 input
+  tokens cached, and its first model action fell from about 1 s to 371 ms.
+  The cost is a longer start: 2.9 s from launch to healthy against 1.2 s,
+  because the two warm-up generations run before the address is printed.
+- After the first request the three builds are the same within the spread
+  of one run each. The differences in p50 and p95 above (for example first
+  model action p95 479, 583, and 558 ms) are not shown to be a change: there
+  was one run per arm, so there is no estimate of the run-to-run spread.
+  Nothing here says the warm-up or the layout of the external request changed
+  steady-state latency. The 500 ms first-model-action hypothesis is not
+  claimed or refuted by this entry.
+- Cached tokens per call are the runtime's own counts for every one of the
+  270 measured calls (none "not measured"). Which calls reported 0 cached
+  (3 or 4 in each export) was not checked.
+- The 50 samples marked as errors in each export (40 `simple`, 10
+  `clarification`) ended `failed` with `needs_external`, where the label
+  expects `completed` or `waiting_input`. They are the same count in all
+  three exports and at the base, so they predate this change; the latency
+  figures include those runs as the earlier benchmark did.
+
+### Caveats
+
+- One machine, one model file, one run of each latency arm, two or three of
+  each layout gate. The latency arms ran back to back in one session; no
+  other work ran during the measurements, and no `pytest` ran during a
+  latency run.
+- The experiment commits are in no branch; the exports hold their head
+  SHAs. The layout gate compares layouts at one revision; the base run
+  compares revisions for the latency.
+- The external side is untested live: the criteria message, the failed
+  checks in the correction, and the handoff-last layout have only
+  deterministic coverage. Their effect on corrections per completed run
+  needs a corpus run with an external endpoint (#128); the metric is now
+  reported by the evaluation code.
+- The warm-up timings are in `Launched.warmup` and one stdout line of the
+  launcher. The three latency exports here were made at `0caa1cc`, before
+  `scripts/latency_benchmark.py` wrote the launcher's warm-up line and its
+  samples (`cold_start.startup_warmup`) into the export, so
+  these exports do not hold the warm-up's own timings. A later export of the
+  runner does.
+- Changed after the measured commit `0caa1cc`: the criteria values message
+  is moved to the end of the external conversation before every external
+  generation (it stayed in place when unchanged), and the latency runner
+  gained the field above. No run here exercised the external request, and the
+  latency exports were not re-made; their figures are unchanged.

@@ -140,6 +140,12 @@ curl -s http://127.0.0.1:8080/v1/chat/completions \
   declares (when your request names the service) before the model starts.
   Both are off by default; see `relaymind.example.toml` and
   `skills/README.md`.
+- **Warm-up at startup.** Before it prints the address, the gateway sends
+  two short requests to the local model so the first real request does not
+  pay for loading it. They are not runs. Set `warmup = false` in a
+  `[placement]` table to turn it off, or `warmup_seconds` to change the
+  30 second limit; a model that does not answer in time is one printed line,
+  not a startup error.
 
 ## Coming next
 

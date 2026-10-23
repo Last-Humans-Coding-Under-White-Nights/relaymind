@@ -1789,6 +1789,7 @@ def gateway_config(
     skill_root: Path = SKILLS_ROOT,
     permissions: Sequence[str] | None = None,
     performance: Mapping[str, Any] | None = None,
+    placement: Mapping[str, Any] | None = None,
 ) -> str:
     """The operator's TOML file for one launch (spec section 14.1); it holds no credential.
 
@@ -1796,6 +1797,9 @@ def gateway_config(
     otherwise the launcher default (demo.read and demo.mutate) applies.
     performance, when given, is the [performance] table (spec 0.32 section
     14.1); without it the launch file has none and every default applies.
+    placement, when given, is the [placement] table (spec 0.31 section 14.1),
+    for example {"warmup": False}; without it the startup warm-up of the
+    local model runs, which is the default.
     """
     lines = [
         "[server]",
@@ -1828,11 +1832,9 @@ def gateway_config(
         ]
     if ui:
         lines += ["[ui]", 'mode = "live"']
-    if performance:
-        lines += [
-            "[performance]",
-            *(f"{key} = {_toml(value)}" for key, value in performance.items()),
-        ]
+    for name, table in (("performance", performance), ("placement", placement)):
+        if table:
+            lines += [f"[{name}]", *(f"{key} = {_toml(value)}" for key, value in table.items())]
     return "\n".join(lines) + "\n"
 
 

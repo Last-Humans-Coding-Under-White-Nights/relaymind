@@ -102,6 +102,17 @@ def test_the_config_is_one_the_launcher_accepts(harness, tmp_path):
     assert {mode.value for mode in config.chat.allowed_modes} == {"auto", "local_only"}
 
 
+def test_the_placement_table_is_written_only_when_named(harness, tmp_path):
+    """Spec 0.31 section 14.1: without it every default applies, the warm-up on among them."""
+    path = tmp_path / "relaymind.toml"
+    path.write_text(config_text(harness, tmp_path), "utf-8")
+    assert "[placement]" not in path.read_text("utf-8")
+    assert load_config(path).warmup is True
+    path.write_text(config_text(harness, tmp_path, placement={"warmup": False}), "utf-8")
+    config = load_config(path)
+    assert config.warmup is False and config.warmup_seconds == 30.0
+
+
 def test_the_cache_and_ui_are_off_unless_named(harness, tmp_path):
     """Section 10: the baseline is cache-off; the demo UI is served only when asked."""
     path = tmp_path / "relaymind.toml"

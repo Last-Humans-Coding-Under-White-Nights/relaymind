@@ -6,6 +6,7 @@ RM13 (what a handoff preserves; local assumptions stay proposals), RM14
 """
 
 import copy
+import json
 
 import jsonschema
 import pytest
@@ -13,6 +14,7 @@ import pytest
 from relaymind.adapters import Message, Role
 from relaymind.orchestrator.handoff import (
     HANDOFF_ENVELOPE_SCHEMA,
+    RULES,
     DispatchAuthority,
     DispatchRevokedError,
     FinalAnswerOwnedError,
@@ -360,6 +362,68 @@ def test_a_catalog_is_described_when_no_skill_was_selected():
         answer_instruction="x",
     )
     assert "check-service-health: Check a service." in messages[0].content
+
+
+def test_the_system_message_puts_the_constant_parts_first_and_the_handoff_json_last():
+    """Spec 0.35 section 4.4: rules, skill, criteria, catalog, answer, then the handoff JSON."""
+    messages = external_messages(
+        build(),
+        skill_body="Steps.",
+        catalog=(("check-service-health", "Check a service."),),
+        answer_instruction="Answer in English.",
+        completion_criteria=("Keep the status word exactly.",),
+    )
+    text = messages[0].content
+    marks = [
+        text.index(RULES[0]),
+        text.index("Skill instructions:"),
+        text.index("Keep the status word exactly."),
+        text.index("Available skills:"),
+        text.index("Answer in English."),
+        text.index("Handoff (JSON):"),
+    ]
+    assert marks == sorted(marks) and len(set(marks)) == len(marks)
+    # The handoff JSON, with the run ID and the remaining budgets, is the last line.
+    handoff = json.loads(text.split("\n")[-1])
+    assert handoff["run_id"] == "run_1" and handoff["remaining_budgets"]["run_generations"] == 7
+
+
+def test_the_part_before_the_handoff_json_does_not_depend_on_the_run():
+    """RM24 (section 10): two runs of one skill share the whole prefix up to the handoff JSON."""
+
+    def prefix(run_id, budgets):
+        envelope = build(run_id=run_id, remaining_budgets=budgets)
+        text = external_messages(
+            envelope,
+            skill_body="Steps.",
+            catalog=(),
+            answer_instruction="Answer in English.",
+            completion_criteria=("Keep the status word exactly.",),
+        )[0].content
+        return text[: text.index("Handoff (JSON):")]
+
+    assert prefix("run_1", {"run_generations": 7}) == prefix("run_2", {"run_generations": 3})
+
+
+def test_the_fixed_criteria_are_labeled_gateway_rules_after_the_skill_body():
+    """RM12, spec 0.35 section 4.4: the fixed part is a gateway rule, listed after the skill."""
+    text = external_messages(
+        build(),
+        skill_body="Steps.",
+        catalog=(),
+        answer_instruction="x",
+        completion_criteria=("First rule.", "Second rule."),
+    )[0].content
+    assert "\n- First rule.\n- Second rule.\n" in text
+    assert text.index("Steps.") < text.index("First rule.")
+
+
+def test_without_criteria_the_message_has_no_criteria_section():
+    """AC14: the synthesis request passes no criteria and keeps its text."""
+    text = external_messages(build(), skill_body="Steps.", catalog=(), answer_instruction="x")[
+        0
+    ].content
+    assert "ompletion criteria" not in text
 
 
 # --- dispatch authority and final-answer ownership --------------------------------

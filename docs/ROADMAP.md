@@ -630,9 +630,21 @@ a day or less on existing exports or the existing benchmark.
   skills; the external-stage call is #126, and no corpus or live run with
   prefetch yet.
 - Local warm-up at startup and the cache-friendly prompt layout (#124;
-  sections 6 and 10), after #114.
+  sections 6 and 10), after #114. Done (2026-10-23): `[placement]`
+  `warmup` and `warmup_seconds`, the warm-up step in `main`, and the
+  external system message with the handoff JSON last. The cold routing
+  call took 995 ms without the warm-up and 364 ms with it, on one run each.
+  The local layout (skill body before the conversation) was measured in two
+  variants and not kept: the body after the instruction kept AC01 at 3 of 4
+  but lowered corpus local completion (4/12 to 1/12) and tool correctness
+  (11/12 to 7/12); the body first lowered AC01 to 2 of 4, then 1 of 4, and was
+  not run on the corpus.
 - Completion criteria in the external request, and corrections per
-  completed run as a metric (#141; section 4.4; finding F6).
+  completed run as a metric (#141; section 4.4; finding F6). Done
+  (2026-10-23, deterministic tests with model doubles): the criteria beside
+  each predicate, the refreshed values message, the named failed checks, and
+  the metric in grading and reports; no live external run, so the effect on
+  corrections is not measured yet (#128).
 - Early response headers and keep-alives for streamed chat requests
   (#140; RM32, section 7.3): a chat client gets its run reference and
   the events URL before the answer. Done (2026-10-23, deterministic

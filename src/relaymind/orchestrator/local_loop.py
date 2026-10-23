@@ -241,7 +241,12 @@ from relaymind.orchestrator.run_state import (
 )
 from relaymind.redaction import Redactor, redact_text
 from relaymind.skills import Skill, SkillRegistry
-from relaymind.skills.predicates import COMPLETION_PREDICATES, Predicate
+from relaymind.skills.predicates import (
+    COMPLETION_CRITERIA,
+    COMPLETION_PREDICATES,
+    CompletionCriteria,
+    Predicate,
+)
 from relaymind.store import IdempotencyClaim, RunRecord, RunStore, StaleVersionError, TraceClock
 from relaymind.store.run_store import EventDraft, utc_iso
 from relaymind.store.trace_event import WORKFLOW_BRANCHES, EventType
@@ -325,11 +330,24 @@ DRAFT_HEADER = (
     "from the request alone, before the health check finished. It is unverified and not "
     "log-backed, and it is not a diagnosis. Label it as a draft in your answer."
 )
+# Spec 0.35 section 4.4: the value part of the completion criteria in an external request.
+CRITERIA_VALUES_HEADER = (
+    "[gateway] Completion criteria values from the latest tool results. "
+    "These are gateway rules, not tool output; keep them exactly:"
+)
 BRANCH_CORRECTION = "[gateway] Call the {tools} tool to get the data now. Do not write an answer."
 CORRECTION = (
     "[gateway] The answer did not meet the skill's completion criteria. "
     "Answer again from the tool results only, following the skill rules."
 )
+# An external correction names the checks the answer failed (spec 0.35 section 4.4).
+EXTERNAL_CORRECTION = (
+    "[gateway] The answer did not meet the skill's completion criteria. Failed checks:\n"
+    "{checks}\n"
+    "Answer again from the tool results only, following the skill rules "
+    "and the completion criteria."
+)
+EMPTY_ANSWER_CHECK = "write an answer: the last answer was empty"
 
 
 def skill_stage_messages(
@@ -620,6 +638,12 @@ class _Loop:
     actor: str = LOCAL_ACTOR
     # The workflow branch its model calls belong to, if any (spec 0.25).
     branch: str | None = None
+    # The completion criteria stated to the external model (spec 0.35 section 4.4); None
+    # for the local stage and the parallel synthesis, which keep their own messages.
+    criteria: CompletionCriteria | None = None
+    language: str = "en"
+    # The one gateway rules message with the criteria values, so a refresh replaces it.
+    criteria_message: Message | None = None
 
 
 @dataclass(frozen=True)
@@ -1890,16 +1914,29 @@ class _Run:
             remaining_budgets=self.meter.remaining_budgets(),
             language=language.value,
         )
+        criteria = None if skill is None else COMPLETION_CRITERIA[skill.completion_predicate]
         conversation = list(
             external_messages(
                 envelope,
                 skill_body=None if skill is None else skill.body,
                 catalog=catalog,
                 answer_instruction=ANSWER_LANGUAGE[language],
+                completion_criteria=() if criteria is None else criteria.fixed,
             )
         )
         predicate = None if skill is None else COMPLETION_PREDICATES[skill.completion_predicate]
-        loop = _Loop(conversation, schemas, available, skill, predicate, actor=EXTERNAL_ACTOR)
+        loop = _Loop(
+            conversation,
+            schemas,
+            available,
+            skill,
+            predicate,
+            actor=EXTERNAL_ACTOR,
+            criteria=criteria,
+            language=language.value,
+        )
+        # The first request is measured with the values message, if results exist (RM13).
+        self._refresh_criteria(loop)
         degraded = (
             {"degraded_mode": True, "local_failure": self.scrub(stop.detail)}
             if stop.degraded
@@ -2106,11 +2143,38 @@ class _Run:
             ):
                 return self._publish(generation, EXTERNAL_ACTOR)
             else:
-                loop.conversation += _correction_exchange(generation.text)
+                loop.conversation += _external_correction(loop, generation.text, self.results)
             await self._check_external_size(loop)
 
+    def _refresh_criteria(self, loop: _Loop) -> None:
+        """Keep one gateway rules message with the criteria values of the latest results.
+
+        The values come from the latest successful tool results only (RM12).
+        The message moves to the end of the conversation before each external
+        generation, behind any tool result, rejected answer, or correction
+        added since, and replaces its earlier copy, so a request never carries
+        two (spec 0.35 section 4.4). There is none when no successful result
+        exists.
+        """
+        if loop.criteria is None:
+            return
+        lines = loop.criteria.values(self.results, loop.language)
+        current = loop.criteria_message
+        if current is not None:
+            loop.conversation[:] = [m for m in loop.conversation if m is not current]
+            loop.criteria_message = None
+        if lines:
+            content = "\n".join([CRITERIA_VALUES_HEADER, *(f"- {line}" for line in lines)])
+            loop.criteria_message = Message(role=Role.SYSTEM, content=content)
+            loop.conversation.append(loop.criteria_message)
+
     async def _check_external_size(self, loop: _Loop) -> None:
-        """Tool results accumulate, so the request is measured again (RM13)."""
+        """Refresh the criteria values, then measure the next request (RM13).
+
+        Tool results accumulate, so the request is measured again before
+        every external generation, with the values message it will carry.
+        """
+        self._refresh_criteria(loop)
         assert loop.capabilities is not None
         try:
             size = await measure_request(
@@ -3542,6 +3606,28 @@ def _correction_exchange(text: str) -> list[Message]:
     return [
         Message(role=Role.ASSISTANT, content=text or "(no answer)"),
         Message(role=Role.USER, content=CORRECTION),
+    ]
+
+
+def _external_correction(loop: _Loop, text: str, results: Sequence[ToolResult]) -> list[Message]:
+    """A rejected external answer and a correction that names the failed checks (spec 0.35).
+
+    The checks are gateway text from the skill's predicate; the rejected
+    answer is not quoted in the correction (RM12). A loop without criteria,
+    the parallel synthesis, gets the generic correction (AC14).
+    """
+    if loop.criteria is None:
+        return _correction_exchange(text)
+    checks = loop.criteria.failed_checks(text, results) if text.strip() else (EMPTY_ANSWER_CHECK,)
+    # A predicate that rejects with no named check still gets a correction.
+    content = (
+        EXTERNAL_CORRECTION.format(checks="\n".join(f"- {check}" for check in checks))
+        if checks
+        else CORRECTION
+    )
+    return [
+        Message(role=Role.ASSISTANT, content=text or "(no answer)"),
+        Message(role=Role.USER, content=content),
     ]
 
 

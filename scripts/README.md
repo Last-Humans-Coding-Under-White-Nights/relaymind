@@ -140,6 +140,15 @@
   the sample records the event code in `stream_error_code` and is checked
   against the expected outcome, not counted as a transport error.
 
+  `--no-startup-warmup` (#124; spec 0.31 section 6) writes
+  `placement.warmup = false`. The default launch warms the local model up
+  before it serves, so the cold request is no longer the first the runtime
+  sees; with the flag it is. The export records `design.startup_warmup`, and
+  the launch file it keeps shows the table. With the warm-up on, the export
+  also holds the launcher's warm-up line and the samples read from it in
+  `cold_start.startup_warmup` (n/a stays `null`; no samples when the
+  launcher printed no such line).
+
   Both runners reuse the live acceptance harness for the runtime check,
   the launch plan, and the trace read-back.
 

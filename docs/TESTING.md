@@ -668,6 +668,61 @@ feature has a test of the default as well. Later pull requests append here.
   tool event may have model null only with actor `gateway`, the optional
   `mechanism` and `step`, and the `prefetch_declarations` shape are checked
   by the validator and the published schema alike.
+- `pytest tests/test_external_criteria.py` (#141; RM06, RM12, RM13, RM16,
+  AC06, AC14, spec 0.35 section 4.4): every registered predicate has
+  criteria, and a passing answer has no failed check while every rejected
+  answer has at least one (the predicate is true when none fails); the
+  fixed part holds no run value; the values come from the latest successful
+  result only, a failed result gives none, an identifier that is not a
+  plain token is left out, and over the injected-logs fixture neither the
+  log line nor its credential reaches them. At the gateway: the fixed part
+  follows the skill body in the first system message, the values are one
+  system message at the end of the request once a result exists, a new
+  result replaces it instead of adding a second, and it stays last, also
+  after a tool step or a correction, and the request is measured
+  with it (a limit that the request fits only without it ends the run as
+  `context_limit_exceeded` before any call), a rejected answer is corrected
+  with the failed checks and without quoting the answer, an empty answer has
+  its own check, `external_only` has no criteria, and the local correction
+  and the parallel synthesis request (no criteria message, the generic
+  correction) are unchanged. `tests/test_handoff_envelope.py` and
+  `tests/test_ac02_handoff.py` check the order of the external system
+  message: rules, skill instructions, criteria, catalog, answer
+  instruction, then the handoff JSON as the last line, and that everything
+  before it is the same for two runs of one skill.
+- `pytest tests/test_evaluation_grading.py tests/test_evaluation_metrics.py`
+  (#141; RM25, section 12.1, finding F6): the external text generations
+  before the published one in a completed run are corrections, with their
+  summed duration; a tool proposal, the parallel draft, an errored call, a
+  failed run, and a local run have none; a missing duration leaves the sum
+  unmeasured; the summary and the report give corrections per completed run
+  per language and leave a grade without the figure out.
+- `pytest tests/test_launcher_warmup.py` (#124; RM18, RM25, RM27, section
+  6 and 14.1): `[placement]` takes `warmup` and `warmup_seconds`, a wrong
+  type or a non-positive or non-finite duration is exit status 2, the
+  other placement keys are unknown keys, and the commented block of
+  `relaymind.example.toml` loads with the defaults. `build_app` sends no
+  generation. `main` sends the routing-shaped and the skill-shaped request
+  (built by the gateway's own builders) after recovery and before the
+  address and the token, creates no run, and sends nothing with `warmup =
+  false`. The timings come from the orchestrator's clock (a fake clock in the
+  test), a count the runtime did not report stays `None` in the result and
+  prints as `n/a`, a failed generation, a double that raises, and a runtime
+  that does not answer within `warmup_seconds` (the generation is closed)
+  are one line on standard error and the gateway still serves, and the
+  short-lived adapter is closed in its own event loop. The warm-up text is
+  not in the corpus or the latency prompts. `tests/test_latency_benchmark_script.py`
+  and `tests/test_live_acceptance_script.py` check `--no-startup-warmup` and
+  the `[placement]` table of the harness config; the latency export holds
+  the warm-up samples read from the launcher line (n/a stays `None`; none
+  when warm-up is off or no line was printed).
+- Live, with the pinned runtime first on the path (#124): `pytest -m live
+  tests/test_local_loop_live.py` and `scripts/run_corpus.py --modes
+  local_only --languages en --cases simple-01 ... simple-12` ran with the
+  skill-stage layout as it is and with the skill body before the
+  conversation in two variants; one lowered the corpus subset and the other
+  lowered AC01, so neither was kept. The runs are in
+  [`EVIDENCE.md`](EVIDENCE.md).
 
 ### What is not covered yet
 
