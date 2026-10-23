@@ -27,6 +27,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   timing statistics ignore it, so their definitions are unchanged; a
   consumer that lists every event of a stream sees one more (#120).
 
+- Specification 0.32 → 0.33 (PR #150 review; RM03, RM12, RM16, RM22;
+  sections 6, 8, and 14.1): `model.finished` holds `cached_tokens` and
+  `reasoning_tokens` inside `usage`, next to the input and output counts,
+  and records a count the source did not report as `null`, never a
+  defaulted 0 (0.31 put them at the top level and said absent);
+  `first_token_ms` is integer milliseconds, `null` when no token arrived;
+  `model.started` records `request_options` only when at least one option
+  is declared, so a local call and an external call without declared
+  options both leave it out. Section 14.1 also states the two rules #150
+  added before this revision: a sampling key (`max_tokens`,
+  `temperature`, `top_p`) in `[external_model.request_options]` is
+  refused, and the launcher sets each real adapter's read timeout to at
+  least the budget in force; a request option key, at any depth, must be
+  non-blank text.
+
 - Specification 0.31 → 0.32 (PR #146 review; RM05, RM17, RM22,
   RM26, RM28 to RM32; AC11, AC17 to AC20, AC22, AC23): distinguish
   an absent local model from an unavailable or unsuitable configured
