@@ -621,7 +621,8 @@ feature has a test of the default as well. Later pull requests append here.
   what the local stage left is refused). Under `one` the old rejection and its
   one-call exchange are unchanged (`tests/test_local_loop.py` passes as it
   was, but for the new `prefetch_declarations` key of `run.accepted`), and
-  the client-owned alias exposes one call under `many`. The meter's room is
+  the client-owned alias exposes one call under `many`, and so does the
+  parallel workflow's `local_health` branch (spec 0.34 section 4.4). The meter's room is
   the tighter of the stage and run limits locally, and the run limit in the
   external stage.
 - `pytest tests/test_evaluation_grading.py tests/test_demo_ui_trace.py

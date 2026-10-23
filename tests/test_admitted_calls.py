@@ -553,6 +553,47 @@ def test_the_client_owned_alias_keeps_its_one_call_rule(tmp_path):
     assert proposed.payload["proposal_id"] == "c1"
 
 
+def test_the_parallel_workflow_local_branch_keeps_its_one_call_rule(tmp_path):
+    """Spec 0.34 sections 4.3, 4.4 (RM15): local_health makes one call under many too.
+
+    Two calls from the branch generation are rejected with
+    multiple_tool_calls, as under one: every call is recorded with the
+    rejection, the exchange holds the first call only, nothing runs, and
+    the repair's single call is the branch's observation.
+    """
+    from test_parallel_workflow import (
+        ANSWER as WORKFLOW_ANSWER,
+    )
+    from test_parallel_workflow import (
+        DRAFT,
+        WORKFLOW,
+        parallel_gateway,
+        run_parallel,
+    )
+
+    health = call("c_health", "get_service_health", service="staging-api")
+    again = call("c_again", "get_service_health", service="staging-api")
+    gateway = parallel_gateway(
+        tmp_path,
+        local=[
+            route_turn(WORKFLOW),
+            calls_turn(health, again),
+            tool_turn("get_service_health", service="staging-api"),
+        ],
+        external=[text_turn(DRAFT), text_turn(WORKFLOW_ANSWER)],
+        performance=MANY,
+    )
+    outcome, events = run_parallel(gateway)
+    assert outcome.state is RunState.COMPLETED
+    refused = [p for p in proposals(events) if p["admissible"] is False]
+    assert [p["call_id"] for p in refused] == ["c_health", "c_again"]
+    assert {p["rejection"]["code"] for p in refused} == {"multiple_tool_calls"}
+    assert executed_tools(events) == ["get_service_health"]
+    repair = gateway.adapter.requests[2]
+    assert [c.call_id for c in last_assistant_calls(repair).tool_calls] == ["c_health"]
+    assert len(tool_messages(repair)) == 1
+
+
 def test_a_single_call_proposal_is_unchanged_in_the_local_loop(tmp_path):
     """Section 14.1: under many a lone call takes the same steps as under one."""
     turns = [
