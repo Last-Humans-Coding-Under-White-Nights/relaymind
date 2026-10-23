@@ -131,15 +131,17 @@
   `--runtime-extra-args='--n-gpu-layers 0 --threads 2'` for a CPU-only
   runtime with two threads. The default adds nothing. The arguments are
   recorded in every export next to the server argv
-  (`llama_server.extra_args`). Only long flags are accepted, and only
+  (`llama_server.extra_args`; `llama_server_extra_args` in the latency
+  benchmark export). Only long flags are accepted, and only
   runtime-only settings (`--n-gpu-layers`, `--gpu-layers`, `--threads`,
   `--threads-batch`, `--batch-size`, `--ubatch-size`, `--mlock`, `--mmap`
   and their `--no-` forms). Any other flag is refused: a pinned setting of
   the manifest, a model, the bind address, and also a spelling that could
   change what the model computes (the template arguments, the reasoning
   budget, metadata overrides, the slot count). So the manifest stays the
-  one source of the qualified launch settings. A constrained configuration is reported as
-  that configuration of that machine, never as another machine.
+  one source of the qualified launch settings. A constrained
+  configuration is reported as that configuration of that machine, never
+  as another machine.
 
 - `run_corpus.py --regrade-draft-pass` — the offline draft-pass
   counterfactual (#115; RM31, spec 0.31). It grades the stored traces of
@@ -259,7 +261,10 @@
   provider's reasoning default or its documented switch from the
   definition `probes/m7_external_latency.json` (with the documentation URLs
   checked on the day): four arms of five requests, interleaved in rounds.
-  The plan is refused when it is over `--max-calls` (default 20), a failed
+  The endpoint and the model come from `--base-url` and `--model`
+  (defaults: `RELAYMIND_EXTERNAL_BASE_URL` and `RELAYMIND_EXTERNAL_MODEL`),
+  and `--region` records the region when it is known. The plan is refused
+  when it is over `--max-calls` (default 20), a failed
   call is never retried, and the key comes from the environment variable
   named by `--api-key-env` (default `RELAYMIND_EXTERNAL_API_KEY`), goes
   only in the Authorization header, and is never printed or written. It

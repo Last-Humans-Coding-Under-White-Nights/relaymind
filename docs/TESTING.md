@@ -318,6 +318,14 @@ Without them those scenarios are recorded as not run. Every check has an owner: 
 keeps whatever the model does, and a model check is a capability. A
 failed model check is a finding, never a pass.
 
+`--runtime-extra-args='--n-gpu-layers 0 --threads 2'` adds runtime-only
+llama-server arguments after the manifest's launch settings (#117; RM18,
+spec 0.31 section 12.2), for a constrained run on the same machine. The
+default adds none, and the arguments are recorded in the export as
+`llama_server.extra_args`. `scripts/run_corpus.py` and
+`scripts/latency_benchmark.py` take the same option;
+`tests/test_runtime_extra_args.py` covers it with doubles.
+
 `pytest tests/test_live_acceptance_script.py` (default suite) runs every
 scenario against the launcher's app over model doubles.
 `pytest -m live tests/test_live_acceptance.py` runs the harness against
@@ -422,8 +430,10 @@ Deterministic tests over model doubles:
   `extra_args` in the export, the option text is split like a shell would,
   a short flag, a pinned setting, the model, the bind address, and any
   setting that is not runtime-only (the template arguments, the reasoning
-  budget, a metadata override, the slot count) are refused, a negative number is a value, and the corpus runner, the
-  latency runner, and the live harness take the option.
+  budget, a metadata override, the slot count) are refused, a negative
+  number is a value, every runtime-only setting is accepted with its
+  `--no-` form, and the corpus runner, the latency runner, and the live
+  harness take the option.
 - `pytest tests/test_probe_prefix_cache.py` (#114): the body the probe
   sends equals `build_chat_request` for the same messages plus
   `cache_prompt` (written so that it still holds when the adapter itself
@@ -503,9 +513,12 @@ their results are in the 2026-10-23 entry of `EVIDENCE.md`.
   calls per generation, prefetch, gated streaming, operation without a
   local model, the placement policy, the selection interface, or
   workflow packages. The cached-token figures in the existing exports
-  are adapter defaults (finding F9 in [`EVIDENCE.md`](EVIDENCE.md)). The M7 to M9
+  are adapter defaults (finding F9 in [`EVIDENCE.md`](EVIDENCE.md)); the
+  prefix-cache probe (#114) read the runtime's own counts once, and the
+  gateway does not record them yet. The M7 to M9
   issues in [`ROADMAP.md`](ROADMAP.md) carry the tests. The offline
-  spikes (#115, #118, #119) test their own scripts, not the gateway.
+  spikes (#115, #118, #119) and the timing probes (#114, #116, #117) test
+  their own scripts, not the gateway.
 - The selection benchmarks of spec section 12.4 (skills from
   SkillsBench, tools from ToolRet-Training-20w, workflow plans) do not
   exist yet (#143 to #145). Until they run, no claim is made about
