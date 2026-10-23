@@ -365,7 +365,7 @@ def test_a_catalog_is_described_when_no_skill_was_selected():
 
 
 def test_the_system_message_puts_the_constant_parts_first_and_the_handoff_json_last():
-    """Spec 0.34 section 4.4: rules, skill, criteria, catalog, answer, then the handoff JSON."""
+    """Spec 0.35 section 4.4: rules, skill, criteria, catalog, answer, then the handoff JSON."""
     messages = external_messages(
         build(),
         skill_body="Steps.",
@@ -406,7 +406,7 @@ def test_the_part_before_the_handoff_json_does_not_depend_on_the_run():
 
 
 def test_the_fixed_criteria_are_labeled_gateway_rules_after_the_skill_body():
-    """RM12, spec 0.34 section 4.4: the fixed part is a gateway rule, listed after the skill."""
+    """RM12, spec 0.35 section 4.4: the fixed part is a gateway rule, listed after the skill."""
     text = external_messages(
         build(),
         skill_body="Steps.",

@@ -330,7 +330,7 @@ DRAFT_HEADER = (
     "from the request alone, before the health check finished. It is unverified and not "
     "log-backed, and it is not a diagnosis. Label it as a draft in your answer."
 )
-# Spec 0.34 section 4.4: the value part of the completion criteria in an external request.
+# Spec 0.35 section 4.4: the value part of the completion criteria in an external request.
 CRITERIA_VALUES_HEADER = (
     "[gateway] Completion criteria values from the latest tool results. "
     "These are gateway rules, not tool output; keep them exactly:"
@@ -340,7 +340,7 @@ CORRECTION = (
     "[gateway] The answer did not meet the skill's completion criteria. "
     "Answer again from the tool results only, following the skill rules."
 )
-# An external correction names the checks the answer failed (spec 0.34 section 4.4).
+# An external correction names the checks the answer failed (spec 0.35 section 4.4).
 EXTERNAL_CORRECTION = (
     "[gateway] The answer did not meet the skill's completion criteria. Failed checks:\n"
     "{checks}\n"
@@ -638,7 +638,7 @@ class _Loop:
     actor: str = LOCAL_ACTOR
     # The workflow branch its model calls belong to, if any (spec 0.25).
     branch: str | None = None
-    # The completion criteria stated to the external model (spec 0.34 section 4.4); None
+    # The completion criteria stated to the external model (spec 0.35 section 4.4); None
     # for the local stage and the parallel synthesis, which keep their own messages.
     criteria: CompletionCriteria | None = None
     language: str = "en"
@@ -2153,7 +2153,7 @@ class _Run:
         The message moves to the end of the conversation before each external
         generation, behind any tool result, rejected answer, or correction
         added since, and replaces its earlier copy, so a request never carries
-        two (spec 0.34 section 4.4). There is none when no successful result
+        two (spec 0.35 section 4.4). There is none when no successful result
         exists.
         """
         if loop.criteria is None:
@@ -3610,7 +3610,7 @@ def _correction_exchange(text: str) -> list[Message]:
 
 
 def _external_correction(loop: _Loop, text: str, results: Sequence[ToolResult]) -> list[Message]:
-    """A rejected external answer and a correction that names the failed checks (spec 0.34).
+    """A rejected external answer and a correction that names the failed checks (spec 0.35).
 
     The checks are gateway text from the skill's predicate; the rejected
     answer is not quoted in the correction (RM12). A loop without criteria,

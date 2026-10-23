@@ -2376,7 +2376,7 @@ running.
   and from 11/12 to 7/12 tool correctness.
 - Decision: the new layout is not kept. Tool correctness and local
   completion fell, which is the condition #124 sets. Spec section 10 no
-  longer asks for it (spec 0.34). The `zh-staging` failure is the known
+  longer asks for it (spec 0.35). The `zh-staging` failure is the known
   Chinese final-pass failure of the earlier entries, present at the base.
 
 ### The warm-up and the latency benchmark

@@ -669,7 +669,7 @@ feature has a test of the default as well. Later pull requests append here.
   `mechanism` and `step`, and the `prefetch_declarations` shape are checked
   by the validator and the published schema alike.
 - `pytest tests/test_external_criteria.py` (#141; RM06, RM12, RM13, RM16,
-  AC06, AC14, spec 0.34 section 4.4): every registered predicate has
+  AC06, AC14, spec 0.35 section 4.4): every registered predicate has
   criteria, and a passing answer has no failed check while every rejected
   answer has at least one (the predicate is true when none fails); the
   fixed part holds no run value; the values come from the latest successful

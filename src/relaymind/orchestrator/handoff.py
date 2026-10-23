@@ -236,7 +236,7 @@ def external_messages(
     """The external request's messages for an envelope (RM13, RM12).
 
     The system message goes from the part that never changes to the part
-    that changes with the run (spec 0.34, section 10): the rules, the skill
+    that changes with the run (spec 0.35, section 10): the rules, the skill
     instructions, the fixed completion criteria, the catalog, the answer
     instruction, and last the handoff JSON with the run ID and the
     remaining budgets. So a provider that reuses a request prefix can

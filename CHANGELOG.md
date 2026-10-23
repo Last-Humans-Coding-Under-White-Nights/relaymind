@@ -9,7 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Completion criteria in the external request, and corrections per completed
-  run (#141; RM06, RM12, RM13, RM16, RM25, spec 0.34 section 4.4,
+  run (#141; RM06, RM12, RM13, RM16, RM25, spec 0.35 section 4.4,
   finding F6). Beside each completion predicate, `skills/predicates.py` now
   holds its failed checks and its criteria, in a registry keyed like
   `COMPLETION_PREDICATES` (`COMPLETION_CRITERIA`); the predicate is true when
@@ -149,7 +149,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- The skill-stage layout is unchanged (#124, spec 0.34 section 10). Two
+- The skill-stage layout is unchanged (#124, spec 0.35 section 10). Two
   layouts of the first system message were measured on 2026-10-23 on the
   pinned model. The description and tool instruction first, then the skill
   body (`7bfe3fa`), kept live AC01 at 3 of 4 but lowered the local_only

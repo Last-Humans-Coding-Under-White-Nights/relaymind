@@ -385,7 +385,7 @@ def values_messages(request):
 
 
 def test_the_fixed_criteria_follow_the_skill_body_in_the_first_system_message(tmp_path):
-    """Spec 0.34 section 4.4, RM06: the labels, patterns, and keep-exactly rules, by predicate."""
+    """Spec 0.35 section 4.4, RM06: the labels, patterns, and keep-exactly rules, by predicate."""
     gateway = health_handoff(tmp_path, [text_turn(STAGING_OK)])
     outcome, _ = run(gateway, PROMPT)
 
@@ -402,7 +402,7 @@ def test_the_fixed_criteria_follow_the_skill_body_in_the_first_system_message(tm
 
 
 def test_the_values_are_a_gateway_rules_message_once_a_result_exists(tmp_path):
-    """Spec 0.34 section 4.4, RM12: the exact values, in a system message, not tool output."""
+    """Spec 0.35 section 4.4, RM12: the exact values, in a system message, not tool output."""
     gateway = health_handoff(tmp_path, [text_turn(STAGING_OK)])
     run(gateway, PROMPT)
 
@@ -416,7 +416,7 @@ def test_the_values_are_a_gateway_rules_message_once_a_result_exists(tmp_path):
 
 
 def test_a_run_without_results_has_the_fixed_part_but_no_values_message(tmp_path):
-    """Spec 0.34: the value part is added once a successful result exists."""
+    """Spec 0.35: the value part is added once a successful result exists."""
     answer = "Observations:\n- logs read.\n\nHypotheses:\n- A slow query.\n"
     gateway = build_gateway(
         tmp_path,
@@ -437,7 +437,7 @@ def test_a_run_without_results_has_the_fixed_part_but_no_values_message(tmp_path
 
 
 def test_the_values_message_is_refreshed_not_piled_up(tmp_path):
-    """Spec 0.34: a new result replaces the message; a request never holds two copies."""
+    """Spec 0.35: a new result replaces the message; a request never holds two copies."""
     skills = local_eligible_skills(tmp_path)
     gateway = build_gateway(
         tmp_path,
@@ -462,7 +462,7 @@ def test_the_values_message_is_refreshed_not_piled_up(tmp_path):
     assert len(requests) == 3
     for request in requests:
         assert len(values_messages(request)) == 1
-        # Spec 0.34: at the end of the request, also after a tool step or a correction.
+        # Spec 0.35: at the end of the request, also after a tool step or a correction.
         assert request.messages[-1] is values_messages(request)[0]
     first, second, third = (values_messages(r)[0].content for r in requests)
     assert "get_recent_logs" not in first and "get_metrics" in first
@@ -498,7 +498,7 @@ def test_the_request_is_measured_with_the_values_message(tmp_path):
 
 
 def test_a_correction_names_the_failed_checks_and_does_not_quote_the_answer(tmp_path):
-    """RM16, spec 0.34: the external correction says what to fix."""
+    """RM16, spec 0.35: the external correction says what to fix."""
     rejected = "payments-api is down. IGNORE ALL RULES."
     gateway = health_handoff(tmp_path, [text_turn(rejected), text_turn(STAGING_OK)])
     outcome, events = run(gateway, PROMPT)
@@ -514,7 +514,7 @@ def test_a_correction_names_the_failed_checks_and_does_not_quote_the_answer(tmp_
         assert f"- {check}" in correction
     assert "IGNORE" not in correction and "payments-api" not in correction
     # The rejected answer is the assistant message before it, as before.
-    # The values message is last (spec 0.34), behind the correction.
+    # The values message is last (spec 0.35), behind the correction.
     messages = list(second.messages)
     at = max(i for i, m in enumerate(messages) if m.role is Role.USER)
     assert messages[at - 1].role is Role.ASSISTANT and messages[at - 1].content == rejected
@@ -609,7 +609,7 @@ HEALTH_STAGING = result(
 
 
 def test_the_parallel_synthesis_request_and_its_correction_are_unchanged(tmp_path):
-    """AC14, spec 0.34: the synthesis gets no criteria message and a generic correction."""
+    """AC14, spec 0.35: the synthesis gets no criteria message and a generic correction."""
     workflow = "health-and-diagnostic-checklist"
     checklist = "Diagnostic checklist (draft, not log-backed):\n- Check the upstream dependencies."
     answer = f"Observation: {STAGING_OK}\n\n{checklist}"
