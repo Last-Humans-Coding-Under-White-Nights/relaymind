@@ -271,15 +271,13 @@ def prefix_cache_record(calls: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return {
         "adapter_sets_cache_prompt": sets,
         "note": (
-            "The llamacpp adapter sends cache_prompt; cached_tokens is what the runtime "
-            "reported for each measured model call, and a call with no reported count is "
-            "not measured."
+            "The llamacpp adapter sends cache_prompt"
             if sets
             else "The llamacpp adapter does not send cache_prompt, so llama-server's own "
-            "default prompt (prefix) cache behavior applies; cached_tokens is what the "
-            "runtime reported for each measured model call, and a call with no reported "
-            "count is not measured."
-        ),
+            "default prompt (prefix) cache behavior applies"
+        )
+        + "; cached_tokens is what the runtime reported for each measured model call, "
+        "and a call with no reported count is not measured.",
         "calls": len(calls),
         "calls_with_reported_count": len(cached),
         "calls_not_measured": len(calls) - len(cached),

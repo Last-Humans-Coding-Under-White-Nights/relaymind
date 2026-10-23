@@ -61,15 +61,21 @@ def _option_name(key: str) -> str:
     return key.strip().lower().replace("-", "_")
 
 
+def _refuse_credential(key: str, path: str) -> None:
+    if _option_name(key) in CREDENTIAL_OPTION_NAMES:
+        raise ValueError(
+            f"request_options key {path} is not allowed: the credential comes "
+            "from api_key_env and the adapter sets the headers"
+        )
+
+
 def _plain_json(value: object, path: str) -> object:
     """A plain, mutable JSON copy of an option value, or a ValueError naming the path.
 
     The message names the key path and never the value (RM12): a value
     that is refused may be a secret placed under the wrong key.
     """
-    if value is None or isinstance(value, bool | str):
-        return value
-    if isinstance(value, int):
+    if value is None or isinstance(value, bool | int | str):
         return value
     if isinstance(value, float):
         if not math.isfinite(value):
@@ -80,11 +86,7 @@ def _plain_json(value: object, path: str) -> object:
         for key, item in value.items():
             if not isinstance(key, str):
                 raise ValueError(f"request_options {path} has a key that is not text")
-            if _option_name(key) in CREDENTIAL_OPTION_NAMES:
-                raise ValueError(
-                    f"request_options key {path}.{key} is not allowed: the credential comes "
-                    "from api_key_env and the adapter sets the headers"
-                )
+            _refuse_credential(key, f"{path}.{key}")
             checked[key] = _plain_json(item, f"{path}.{key}")
         return checked
     if isinstance(value, list | tuple):
@@ -106,11 +108,7 @@ def check_request_options(options: Mapping[str, object]) -> dict[str, object]:
     for key, value in options.items():
         if not isinstance(key, str) or not key.strip():
             raise ValueError("request_options has a key that is not text")
-        if _option_name(key) in CREDENTIAL_OPTION_NAMES:
-            raise ValueError(
-                f"request_options key {key} is not allowed: the credential comes "
-                "from api_key_env and the adapter sets the headers"
-            )
+        _refuse_credential(key, key)
         if _option_name(key) in RESERVED_BODY_FIELDS:
             raise ValueError(
                 f"request_options key {key} is not allowed: the gateway sets "
@@ -215,7 +213,7 @@ class ChatCompletionsAdapter(ModelAdapter):
     @property
     def request_options(self) -> Mapping[str, object]:
         """The declared options as a plain copy; model.started records them."""
-        return check_request_options(self._config.request_options)
+        return copy.deepcopy(dict(self._config.request_options))
 
     def _api_key(self) -> str | None:
         """The credential, read fresh from the environment per call.

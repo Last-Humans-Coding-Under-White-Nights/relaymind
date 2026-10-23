@@ -566,12 +566,13 @@ _USAGE_COUNTS = ("input_tokens", "output_tokens")
 _USAGE_OPTIONAL_COUNTS = ("cached_tokens", "reasoning_tokens")
 
 
-def _check_count_or_null(name: str) -> Callable[[Any], None]:
-    def check(value: Any) -> None:
-        if value is not None and not _is_count(value, 0):
-            raise TraceEventError(f"'{name}' must be a non-negative integer or null")
+def _is_count_or_null(value: object) -> bool:
+    return value is None or _is_count(value, 0)
 
-    return check
+
+def _check_first_token_ms(value: Any) -> None:
+    if not _is_count_or_null(value):
+        raise TraceEventError("'first_token_ms' must be a non-negative integer or null")
 
 
 def _check_request_options(value: Any) -> None:
@@ -599,14 +600,14 @@ def _check_usage(value: Any) -> None:
         if not _is_count(value[name], 0):
             raise TraceEventError(f"usage '{name}' must be a non-negative integer")
     for name in _USAGE_OPTIONAL_COUNTS:
-        if name in value and value[name] is not None and not _is_count(value[name], 0):
+        if not _is_count_or_null(value.get(name)):
             raise TraceEventError(f"usage '{name}' must be a non-negative integer or null")
 
 
 _OPTIONAL_MODEL_FIELDS: dict[EventType, dict[str, Callable[[Any], None]]] = {
     EventType.MODEL_STARTED: {"request_options": _check_request_options},
     EventType.MODEL_FINISHED: {
-        "first_token_ms": _check_count_or_null("first_token_ms"),
+        "first_token_ms": _check_first_token_ms,
         "usage": _check_usage,
     },
 }
