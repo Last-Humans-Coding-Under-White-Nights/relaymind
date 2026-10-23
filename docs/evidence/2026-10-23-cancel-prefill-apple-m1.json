@@ -1,0 +1,609 @@
+{
+  "kind": "relaymind.probe.cancel_prefill",
+  "label": "single-pass observations from one run on one machine; not a benchmark result (spec 12.3); never p50 or p95",
+  "command": "python scripts/probes/probe_cancel_prefill.py scripts/probes/m7_cancel_prefill.json --out docs/evidence/2026-10-23-cancel-prefill-apple-m1.json",
+  "started_at_utc": "2026-10-23T05:59:36+00:00",
+  "finished_at_utc": "2026-10-23T06:00:00+00:00",
+  "machine": {
+    "os": "Darwin",
+    "os_version": "macOS 27.0.1",
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "cpu_count": 8,
+    "ram_bytes": 8589934592,
+    "gpu": [
+      {
+        "model": "Apple M1",
+        "cores": "7"
+      }
+    ],
+    "python": "3.14.7"
+  },
+  "application": {
+    "head": "b96c339ef0741d5497c4878f3a965ac4fdcbae01",
+    "dirty": true
+  },
+  "runtime_banner": "version: 0.7.0-dev (build 11785, commit 8baabd53b)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64",
+  "runtime_devices": "Available devices:\n  MTL0: Apple M1 (5461 MiB, 5460 MiB free)\n  BLAS: Accelerate (0 MiB, 0 MiB free)",
+  "llama_server": {
+    "argv": [
+      "--ctx-size",
+      "8192",
+      "--jinja",
+      "--reasoning",
+      "off",
+      "--reasoning-format",
+      "deepseek"
+    ],
+    "extra_args": [],
+    "cold_start_seconds": 0.719
+  },
+  "manifest": "/Users/dmitrykudryavtsev/Playground/relaymind-m7/models/qwen3-0.6b-q8_0.manifest.json",
+  "model_id": "qwen3-0.6b",
+  "model_file": "Qwen3-0.6B-Q8_0.gguf",
+  "model_sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+  "quantization": "Q8_0",
+  "runtime_log": {
+    "n_threads": 4,
+    "n_slots": 4,
+    "n_ctx_slot": 8192,
+    "model_load_ms": 654.68,
+    "lines": [
+      "0.00.038.987 I srv    load_model: loading model '/Users/dmitrykudryavtsev/Playground/relaymind-m7/models/Qwen3-0.6B-Q8_0.gguf'",
+      "0.00.593.519 I cmn          init: llama threadpool init, n_threads = 4",
+      "0.00.686.804 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'",
+      "0.00.693.667 I srv  llama_server: model loaded"
+    ]
+  },
+  "definition": {
+    "manifest": "qwen3-0.6b-q8_0.manifest.json",
+    "skill": "check-service-health",
+    "target_tokens": 6000,
+    "cancel_after_ms": 200,
+    "repetitions": 5,
+    "warmups": 2,
+    "warmup_prompt": "Is the payments-api service up at the moment?",
+    "request_timeout_seconds": 300.0,
+    "long_output_tokens": 8,
+    "long_user_prompt": "Summarize the log lines above in one sentence.",
+    "short_prompts": [
+      "Is staging-api healthy right now?",
+      "What was the latest deployment of payments-api?",
+      "How many incidents did staging-api have in the last 60 minutes?",
+      "Is the service healthy?",
+      "payments-api got slow after the last deploy. Find out why.",
+      "Delete the demo database demo-orders.",
+      "staging-api 现在健康吗？",
+      "payments-api 最近一次部署是什么？",
+      "staging-api 在过去 60 分钟内有多少个事故？",
+      "这个服务健康吗？",
+      "Is payments-api up?",
+      "Check the health of staging-api."
+    ]
+  },
+  "props": {
+    "n_ctx": 8192,
+    "total_slots": 4,
+    "build_info": "b11785-8baabd53b"
+  },
+  "sizing": {
+    "target_tokens": 6000,
+    "aimed_tokens": 6000,
+    "lines": 219,
+    "counted_tokens": 5984,
+    "reference_uncancelled": {
+      "wall_ms": 7760.962374974042,
+      "ended_by": "completed",
+      "input_tokens": 5984
+    }
+  },
+  "slots_processing_after": 0,
+  "repetitions": [
+    {
+      "repetition": 0,
+      "long_prompt_tokens": 6205,
+      "idle": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 630.3615000215359,
+        "wall_ms": 842.0592499896884,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "check-service-health",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 947,
+          "prompt_n": 15,
+          "prompt_ms": 110.83,
+          "prompt_per_token_ms": 7.3886666666666665,
+          "prompt_per_second": 135.34241631327257,
+          "predicted_n": 21,
+          "predicted_ms": 388.042,
+          "predicted_per_token_ms": 19.402099999999997,
+          "predicted_per_second": 51.54081259245133
+        },
+        "usage": {
+          "completion_tokens": 21,
+          "prompt_tokens": 962,
+          "total_tokens": 983,
+          "prompt_tokens_details": {
+            "cached_tokens": 947
+          }
+        },
+        "cache_n": 947,
+        "prompt_n": 15,
+        "prompt_ms": 110.83,
+        "predicted_n": 21,
+        "predicted_ms": 388.042,
+        "cached_tokens": 947,
+        "prompt_tokens": 962,
+        "completion_tokens": 21
+      },
+      "cancel": {
+        "requested_after_ms": 200,
+        "called_after_ms": 200.00000001164153,
+        "events_before_cancel": 0
+      },
+      "after_cancel": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 1818.2899169623852,
+        "wall_ms": 1998.4444169676863,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "lookup-latest-deployment",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 18,
+          "prompt_ms": 57.404,
+          "prompt_per_token_ms": 3.1891111111111115,
+          "prompt_per_second": 313.5669988154135,
+          "predicted_n": 23,
+          "predicted_ms": 361.87,
+          "predicted_per_token_ms": 16.448636363636364,
+          "predicted_per_second": 60.795313234034325
+        },
+        "usage": {
+          "completion_tokens": 23,
+          "prompt_tokens": 964,
+          "total_tokens": 987,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 18,
+        "prompt_ms": 57.404,
+        "predicted_n": 23,
+        "predicted_ms": 361.87,
+        "cached_tokens": 946,
+        "prompt_tokens": 964,
+        "completion_tokens": 23,
+        "sent_after_cancel_ms": 0.027375004719942808
+      },
+      "long_generation": {
+        "ended_by": "cancelled",
+        "ended_after_cancel_ms": 0.9948750375770032,
+        "events": []
+      }
+    },
+    {
+      "repetition": 1,
+      "long_prompt_tokens": 6205,
+      "idle": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 361.64904199540615,
+        "wall_ms": 548.1192079605535,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "summarize-incident-counts",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 24,
+          "prompt_ms": 48.461,
+          "prompt_per_token_ms": 2.0192083333333333,
+          "prompt_per_second": 495.24359794473907,
+          "predicted_n": 25,
+          "predicted_ms": 402.85,
+          "predicted_per_token_ms": 16.785416666666666,
+          "predicted_per_second": 59.5755243887303
+        },
+        "usage": {
+          "completion_tokens": 25,
+          "prompt_tokens": 970,
+          "total_tokens": 995,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 24,
+        "prompt_ms": 48.461,
+        "predicted_n": 25,
+        "predicted_ms": 402.85,
+        "cached_tokens": 946,
+        "prompt_tokens": 970,
+        "completion_tokens": 25
+      },
+      "cancel": {
+        "requested_after_ms": 200,
+        "called_after_ms": 200.00000001164153,
+        "events_before_cancel": 0
+      },
+      "after_cancel": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 1790.332791977562,
+        "wall_ms": 1972.015500010457,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "health-and-diagnostic-checklist",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 14,
+          "prompt_ms": 41.566,
+          "prompt_per_token_ms": 2.9690000000000003,
+          "prompt_per_second": 336.8137420006736,
+          "predicted_n": 24,
+          "predicted_ms": 379.267,
+          "predicted_per_token_ms": 16.48986956521739,
+          "predicted_per_second": 60.64329351090393
+        },
+        "usage": {
+          "completion_tokens": 24,
+          "prompt_tokens": 960,
+          "total_tokens": 984,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 14,
+        "prompt_ms": 41.566,
+        "predicted_n": 24,
+        "predicted_ms": 379.267,
+        "cached_tokens": 946,
+        "prompt_tokens": 960,
+        "completion_tokens": 24,
+        "sent_after_cancel_ms": 0.023916014470160007
+      },
+      "long_generation": {
+        "ended_by": "cancelled",
+        "ended_after_cancel_ms": 1.1833329917863011,
+        "events": []
+      }
+    },
+    {
+      "repetition": 2,
+      "long_prompt_tokens": 6205,
+      "idle": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 344.5284999907017,
+        "wall_ms": 559.8533329903148,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "investigate-performance",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 22,
+          "prompt_ms": 54.767,
+          "prompt_per_token_ms": 2.489409090909091,
+          "prompt_per_second": 401.7017547063012,
+          "predicted_n": 21,
+          "predicted_ms": 398.142,
+          "predicted_per_token_ms": 19.9071,
+          "predicted_per_second": 50.23333383566667
+        },
+        "usage": {
+          "completion_tokens": 21,
+          "prompt_tokens": 968,
+          "total_tokens": 989,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 22,
+        "prompt_ms": 54.767,
+        "predicted_n": 21,
+        "predicted_ms": 398.142,
+        "cached_tokens": 946,
+        "prompt_tokens": 968,
+        "completion_tokens": 21
+      },
+      "cancel": {
+        "requested_after_ms": 200,
+        "called_after_ms": 200.00000001164153,
+        "events_before_cancel": 0
+      },
+      "after_cancel": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 1763.1163749611005,
+        "wall_ms": 1942.9205830092542,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "delete-demo-database",
+              "arguments": "{\"language\": \"zh\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 16,
+          "prompt_ms": 45.129,
+          "prompt_per_token_ms": 2.8205625,
+          "prompt_per_second": 354.5392098207361,
+          "predicted_n": 22,
+          "predicted_ms": 354.82,
+          "predicted_per_token_ms": 16.896190476190476,
+          "predicted_per_second": 59.18493884222986
+        },
+        "usage": {
+          "completion_tokens": 22,
+          "prompt_tokens": 962,
+          "total_tokens": 984,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 16,
+        "prompt_ms": 45.129,
+        "predicted_n": 22,
+        "predicted_ms": 354.82,
+        "cached_tokens": 946,
+        "prompt_tokens": 962,
+        "completion_tokens": 22,
+        "sent_after_cancel_ms": 0.017250014934688807
+      },
+      "long_generation": {
+        "ended_by": "cancelled",
+        "ended_after_cancel_ms": 1.0222499840892851,
+        "events": []
+      }
+    },
+    {
+      "repetition": 3,
+      "long_prompt_tokens": 6205,
+      "idle": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 328.4076249692589,
+        "wall_ms": 525.5921669886447,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "check-service-health",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 19,
+          "prompt_ms": 61.844,
+          "prompt_per_token_ms": 3.254947368421053,
+          "prompt_per_second": 307.22462971347255,
+          "predicted_n": 21,
+          "predicted_ms": 343.058,
+          "predicted_per_token_ms": 17.1529,
+          "predicted_per_second": 58.29917973054119
+        },
+        "usage": {
+          "completion_tokens": 21,
+          "prompt_tokens": 965,
+          "total_tokens": 986,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 19,
+        "prompt_ms": 61.844,
+        "predicted_n": 21,
+        "predicted_ms": 343.058,
+        "cached_tokens": 946,
+        "prompt_tokens": 965,
+        "completion_tokens": 21
+      },
+      "cancel": {
+        "requested_after_ms": 200,
+        "called_after_ms": 200.00000001164153,
+        "events_before_cancel": 0
+      },
+      "after_cancel": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 1760.584709001705,
+        "wall_ms": 1936.953334021382,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "lookup-latest-deployment",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 17,
+          "prompt_ms": 51.771,
+          "prompt_per_token_ms": 3.045352941176471,
+          "prompt_per_second": 328.3691642038979,
+          "predicted_n": 23,
+          "predicted_ms": 358.344,
+          "predicted_per_token_ms": 16.288363636363638,
+          "predicted_per_second": 61.39352130913312
+        },
+        "usage": {
+          "completion_tokens": 23,
+          "prompt_tokens": 963,
+          "total_tokens": 986,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 17,
+        "prompt_ms": 51.771,
+        "predicted_n": 23,
+        "predicted_ms": 358.344,
+        "cached_tokens": 946,
+        "prompt_tokens": 963,
+        "completion_tokens": 23,
+        "sent_after_cancel_ms": 0.01775001874193549
+      },
+      "long_generation": {
+        "ended_by": "cancelled",
+        "ended_after_cancel_ms": 1.1370420106686652,
+        "events": []
+      }
+    },
+    {
+      "repetition": 4,
+      "long_prompt_tokens": 6205,
+      "idle": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 337.4818750307895,
+        "wall_ms": 521.9160410342738,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "summarize-incident-counts",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 24,
+          "prompt_ms": 47.907,
+          "prompt_per_token_ms": 1.996125,
+          "prompt_per_second": 500.97063059678123,
+          "predicted_n": 25,
+          "predicted_ms": 394.524,
+          "predicted_per_token_ms": 16.4385,
+          "predicted_per_second": 60.83280104632418
+        },
+        "usage": {
+          "completion_tokens": 25,
+          "prompt_tokens": 970,
+          "total_tokens": 995,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 24,
+        "prompt_ms": 47.907,
+        "predicted_n": 25,
+        "predicted_ms": 394.524,
+        "cached_tokens": 946,
+        "prompt_tokens": 970,
+        "completion_tokens": 25
+      },
+      "cancel": {
+        "requested_after_ms": 200,
+        "called_after_ms": 200.00000001164153,
+        "events_before_cancel": 0
+      },
+      "after_cancel": {
+        "http_status": 200,
+        "error": null,
+        "finish_reason": "tool_calls",
+        "first_delta_ms": 1770.8517080172896,
+        "wall_ms": 1949.875999998767,
+        "output": {
+          "text": null,
+          "tool_calls": [
+            {
+              "name": "health-and-diagnostic-checklist",
+              "arguments": "{\"language\": \"en\"}"
+            }
+          ]
+        },
+        "timings": {
+          "cache_n": 946,
+          "prompt_n": 14,
+          "prompt_ms": 43.274,
+          "prompt_per_token_ms": 3.091,
+          "prompt_per_second": 323.51989647363314,
+          "predicted_n": 24,
+          "predicted_ms": 371.387,
+          "predicted_per_token_ms": 16.14726086956522,
+          "predicted_per_second": 61.93000832016199
+        },
+        "usage": {
+          "completion_tokens": 24,
+          "prompt_tokens": 960,
+          "total_tokens": 984,
+          "prompt_tokens_details": {
+            "cached_tokens": 946
+          }
+        },
+        "cache_n": 946,
+        "prompt_n": 14,
+        "prompt_ms": 43.274,
+        "predicted_n": 24,
+        "predicted_ms": 371.387,
+        "cached_tokens": 946,
+        "prompt_tokens": 960,
+        "completion_tokens": 24,
+        "sent_after_cancel_ms": 0.019250030163675547
+      },
+      "long_generation": {
+        "ended_by": "cancelled",
+        "ended_after_cancel_ms": 0.9892910020425916,
+        "events": []
+      }
+    }
+  ]
+}

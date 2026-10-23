@@ -1,0 +1,6651 @@
+{
+  "kind": "relaymind.probe.prefix_cache",
+  "label": "single-pass observations from one run on one machine; not a benchmark result (spec 12.3); never p50 or p95",
+  "command": "python scripts/probes/probe_prefix_cache.py scripts/probes/m7_prefix_cache.json --out docs/evidence/2026-10-23-prefix-cache-apple-m1.json",
+  "started_at_utc": "2026-10-23T05:53:27+00:00",
+  "finished_at_utc": "2026-10-23T05:54:46+00:00",
+  "machine": {
+    "os": "Darwin",
+    "os_version": "macOS 27.0.1",
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "cpu_count": 8,
+    "ram_bytes": 8589934592,
+    "gpu": [
+      {
+        "model": "Apple M1",
+        "cores": "7"
+      }
+    ],
+    "python": "3.14.7"
+  },
+  "application": {
+    "head": "b96c339ef0741d5497c4878f3a965ac4fdcbae01",
+    "dirty": false
+  },
+  "runtime_banner": "version: 0.7.0-dev (build 11785, commit 8baabd53b)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64",
+  "runtime_devices": "Available devices:\n  MTL0: Apple M1 (5461 MiB, 5460 MiB free)\n  BLAS: Accelerate (0 MiB, 0 MiB free)",
+  "llama_server": {
+    "argv": [
+      "--ctx-size",
+      "8192",
+      "--jinja",
+      "--reasoning",
+      "off",
+      "--reasoning-format",
+      "deepseek"
+    ],
+    "extra_args": [],
+    "cold_start_seconds": 0.896
+  },
+  "manifest": "/Users/dmitrykudryavtsev/Playground/relaymind-m7/models/qwen3-0.6b-q8_0.manifest.json",
+  "model_id": "qwen3-0.6b",
+  "model_file": "Qwen3-0.6B-Q8_0.gguf",
+  "model_sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+  "quantization": "Q8_0",
+  "definition": {
+    "manifest": "qwen3-0.6b-q8_0.manifest.json",
+    "skill": "check-service-health",
+    "warmups": 3,
+    "warmup_prompts": {
+      "routing": "Is the payments-api service up at the moment?",
+      "skill": "Is the payments-api service up at the moment?"
+    },
+    "layouts": [
+      "blocked",
+      "interleaved"
+    ],
+    "routing_prompts": [
+      "Is staging-api healthy right now?",
+      "What was the latest deployment of payments-api?",
+      "How many incidents did staging-api have in the last 60 minutes?",
+      "Is the service healthy?",
+      "payments-api got slow after the last deploy. Find out why.",
+      "Delete the demo database demo-orders.",
+      "staging-api 现在健康吗？",
+      "payments-api 最近一次部署是什么？",
+      "staging-api 在过去 60 分钟内有多少个事故？",
+      "这个服务健康吗？"
+    ],
+    "skill_prompts": [
+      "Is staging-api healthy right now?",
+      "Check the health of payments-api.",
+      "Is payments-api up?",
+      "Please tell me whether staging-api is healthy.",
+      "How is payments-api doing today?",
+      "Is staging-api OK?",
+      "staging-api 现在健康吗？",
+      "检查 payments-api 的健康状况。",
+      "payments-api 正常运行吗？",
+      "请确认 staging-api 是否正常。"
+    ]
+  },
+  "request_options": {
+    "routing": {
+      "max_output_tokens": 128,
+      "temperature": 0,
+      "top_p": null
+    },
+    "skill": {
+      "max_output_tokens": null,
+      "temperature": 0,
+      "top_p": null
+    }
+  },
+  "chat_template_kwargs": {
+    "enable_thinking": false
+  },
+  "example_bodies": {
+    "routing": {
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a request router. Call exactly one function for the user's request. Each function is a skill. If the request does not name the service or resource it needs, call request_clarification instead. Never guess a service or resource name. Set language to en for an English request and zh for a Chinese request."
+        },
+        {
+          "role": "user",
+          "content": "Is staging-api healthy right now?"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "check-service-health",
+            "description": "Report the current health status of one demo service (staging-api or payments-api) with the exact status and check time the health tool returned. 查询单个演示服务的当前健康状态。",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "language": {
+                  "enum": [
+                    "en",
+                    "zh"
+                  ],
+                  "description": "en for English, zh for Chinese."
+                }
+              },
+              "required": [
+                "language"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "delete-demo-database",
+            "description": "Delete one disposable sandbox demo database after resolving its exact ID from the database list and getting the user's confirmation. 在确认后删除一个沙箱演示数据库。",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "language": {
+                  "enum": [
+                    "en",
+                    "zh"
+                  ],
+                  "description": "en for English, zh for Chinese."
+                }
+              },
+              "required": [
+                "language"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "health-and-diagnostic-checklist",
+            "description": "Run the fixed parallel demo workflow, where the local branch reads current service health and the external branch drafts a diagnostic checklist, then combine both. 并行演示：本地读取健康状态，外部模型起草诊断检查清单。",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "language": {
+                  "enum": [
+                    "en",
+                    "zh"
+                  ],
+                  "description": "en for English, zh for Chinese."
+                }
+              },
+              "required": [
+                "language"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "investigate-performance",
+            "description": "Collect deployment, metrics, and log evidence for a slow or failing demo service, then give an evidence-based assessment that keeps observations apart from hypotheses. 收集性能问题的证据，并区分观察与假设。",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "language": {
+                  "enum": [
+                    "en",
+                    "zh"
+                  ],
+                  "description": "en for English, zh for Chinese."
+                }
+              },
+              "required": [
+                "language"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "lookup-latest-deployment",
+            "description": "Report the latest deployment of one demo service (staging-api or payments-api) with its deployment ID and time, or say that no deployment exists. 查询单个演示服务的最新部署。",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "language": {
+                  "enum": [
+                    "en",
+                    "zh"
+                  ],
+                  "description": "en for English, zh for Chinese."
+                }
+              },
+              "required": [
+                "language"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "summarize-incident-counts",
+            "description": "Summarize incident counts for one demo service over a 15, 60, or 1440 minute window, using only the returned totals by severity. 汇总单个演示服务在指定时间窗口内的事件数量。",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "language": {
+                  "enum": [
+                    "en",
+                    "zh"
+                  ],
+                  "description": "en for English, zh for Chinese."
+                }
+              },
+              "required": [
+                "language"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "request_clarification",
+            "description": "Ask the user one short question when the request does not name the service or resource it needs.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "language": {
+                  "enum": [
+                    "en",
+                    "zh"
+                  ],
+                  "description": "en for English, zh for Chinese."
+                },
+                "question": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "language",
+                "question"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      },
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "reasoning_format": "deepseek",
+      "max_tokens": 128,
+      "temperature": 0,
+      "cache_prompt": true
+    },
+    "skill": {
+      "messages": [
+        {
+          "role": "system",
+          "content": "Report the current health status of one demo service (staging-api or payments-api) with the exact status and check time the health tool returned. 查询单个演示服务的当前健康状态。\nCall the get_service_health tool to get the data before you answer."
+        },
+        {
+          "role": "user",
+          "content": "Is staging-api healthy right now?"
+        },
+        {
+          "role": "system",
+          "content": "Skill instructions:\n# Check service health\n\nUse this skill when the user asks whether a demo service is up, healthy,\nor available.\n\n## Steps\n\n1. Find the service ID in the request or the conversation. The only\n   valid IDs are `staging-api` and `payments-api`.\n2. If no service is named, ask which one. Do not guess.\n3. Call `get_service_health` with that service.\n4. Answer from the tool result only.\n\n## Rules\n\n- Repeat the returned `status` word exactly: `healthy`, `degraded`, or\n  `unavailable`. An `unavailable` service is never described as healthy.\n- Repeat the returned `checked_at` time exactly, in UTC.\n- If the tool call fails, say the health check could not be completed.\n  Do not report a status.\n- Do not explain causes. This skill reports state only.\n- Answer in the language of the request (English or Chinese). Keep the\n  status word and the timestamp unchanged in a Chinese answer.\n\n## Completion criteria\n\nThe answer names the service, the exact returned status, and the exact\n`checked_at` time from the latest successful `get_service_health`\nresult. Validator: `health_status_preserved`.\n\n## Examples\n\nPaired English and Chinese examples are in `examples.json`. They are\nillustrative and use the sandbox fixture values.\n"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_service_health",
+            "description": "Read the current health status of one demo service.",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "service": {
+                  "title": "service",
+                  "x-relaymind-label": {
+                    "en": "service",
+                    "zh": "服务"
+                  },
+                  "enum": [
+                    "staging-api",
+                    "payments-api"
+                  ]
+                }
+              },
+              "required": [
+                "service"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      },
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "reasoning_format": "deepseek",
+      "temperature": 0,
+      "cache_prompt": true
+    }
+  },
+  "constant_prefixes": {
+    "routing": {
+      "constant_prefix_tokens": 946,
+      "prompt_tokens": {
+        "min": 960,
+        "max": 970
+      }
+    },
+    "skill": {
+      "constant_prefix_tokens": 257,
+      "prompt_tokens": {
+        "min": 559,
+        "max": 564
+      }
+    }
+  },
+  "launches": [
+    {
+      "layout": "blocked",
+      "cache_prompt": true,
+      "cold_start_seconds": 0.896,
+      "props": {
+        "n_ctx": 8192,
+        "total_slots": 4,
+        "build_info": "b11785-8baabd53b"
+      },
+      "runtime_log": {
+        "n_threads": 4,
+        "n_slots": 4,
+        "n_ctx_slot": 8192,
+        "model_load_ms": 739.892,
+        "lines": [
+          "0.00.118.203 I srv    load_model: loading model '/Users/dmitrykudryavtsev/Playground/relaymind-m7/models/Qwen3-0.6B-Q8_0.gguf'",
+          "0.00.737.386 I cmn          init: llama threadpool init, n_threads = 4",
+          "0.00.838.511 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'",
+          "0.00.858.095 I srv  llama_server: model loaded"
+        ]
+      }
+    },
+    {
+      "layout": "blocked",
+      "cache_prompt": false,
+      "cold_start_seconds": 0.64,
+      "props": {
+        "n_ctx": 8192,
+        "total_slots": 4,
+        "build_info": "b11785-8baabd53b"
+      },
+      "runtime_log": {
+        "n_threads": 4,
+        "n_slots": 4,
+        "n_ctx_slot": 8192,
+        "model_load_ms": 493.161,
+        "lines": [
+          "0.00.059.234 I srv    load_model: loading model '/Users/dmitrykudryavtsev/Playground/relaymind-m7/models/Qwen3-0.6B-Q8_0.gguf'",
+          "0.00.467.681 I cmn          init: llama threadpool init, n_threads = 4",
+          "0.00.546.711 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'",
+          "0.00.552.395 I srv  llama_server: model loaded"
+        ]
+      }
+    },
+    {
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "cold_start_seconds": 0.592,
+      "props": {
+        "n_ctx": 8192,
+        "total_slots": 4,
+        "build_info": "b11785-8baabd53b"
+      },
+      "runtime_log": {
+        "n_threads": 4,
+        "n_slots": 4,
+        "n_ctx_slot": 8192,
+        "model_load_ms": 489.659,
+        "lines": [
+          "0.00.044.415 I srv    load_model: loading model '/Users/dmitrykudryavtsev/Playground/relaymind-m7/models/Qwen3-0.6B-Q8_0.gguf'",
+          "0.00.452.989 I cmn          init: llama threadpool init, n_threads = 4",
+          "0.00.528.363 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'",
+          "0.00.534.074 I srv  llama_server: model loaded"
+        ]
+      }
+    },
+    {
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "cold_start_seconds": 0.563,
+      "props": {
+        "n_ctx": 8192,
+        "total_slots": 4,
+        "build_info": "b11785-8baabd53b"
+      },
+      "runtime_log": {
+        "n_threads": 4,
+        "n_slots": 4,
+        "n_ctx_slot": 8192,
+        "model_load_ms": 492.322,
+        "lines": [
+          "0.00.040.141 I srv    load_model: loading model '/Users/dmitrykudryavtsev/Playground/relaymind-m7/models/Qwen3-0.6B-Q8_0.gguf'",
+          "0.00.452.052 I cmn          init: llama threadpool init, n_threads = 4",
+          "0.00.526.704 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'",
+          "0.00.532.463 I srv  llama_server: model loaded"
+        ]
+      }
+    }
+  ],
+  "cold_requests": [
+    {
+      "layout": "blocked",
+      "cache_prompt": true,
+      "purpose": "routing",
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 698.427,
+      "first_delta_ms": 726.1960839969106,
+      "wall_ms": 1054.0411249967292,
+      "error": null
+    },
+    {
+      "layout": "blocked",
+      "cache_prompt": true,
+      "purpose": "skill",
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 386.782,
+      "first_delta_ms": 573.9343329914846,
+      "wall_ms": 749.4005829794332,
+      "error": null
+    },
+    {
+      "layout": "blocked",
+      "cache_prompt": false,
+      "purpose": "routing",
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 690.811,
+      "first_delta_ms": 716.4323330507614,
+      "wall_ms": 1044.1902080201544,
+      "error": null
+    },
+    {
+      "layout": "blocked",
+      "cache_prompt": false,
+      "purpose": "skill",
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 377.991,
+      "first_delta_ms": 532.227958959993,
+      "wall_ms": 704.5169169432484,
+      "error": null
+    },
+    {
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "purpose": "routing",
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 679.926,
+      "first_delta_ms": 706.4841670216992,
+      "wall_ms": 1028.5632089944556,
+      "error": null
+    },
+    {
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "purpose": "skill",
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 378.213,
+      "first_delta_ms": 529.2899169726297,
+      "wall_ms": 700.5441670189612,
+      "error": null
+    },
+    {
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "purpose": "routing",
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 679.309,
+      "first_delta_ms": 706.1905829468742,
+      "wall_ms": 1027.629291987978,
+      "error": null
+    },
+    {
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "purpose": "skill",
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 378.725,
+      "first_delta_ms": 533.4039590088651,
+      "wall_ms": 706.5627499832772,
+      "error": null
+    }
+  ],
+  "summary": [
+    {
+      "layout": "blocked",
+      "cache_prompt": true,
+      "purpose": "routing",
+      "requests": 10,
+      "errors": 0,
+      "reused_share": 0.981,
+      "cache_n": {
+        "min": 946,
+        "max": 947
+      },
+      "prompt_n": {
+        "min": 14,
+        "max": 24
+      },
+      "prompt_ms": {
+        "min": 35.449,
+        "max": 54.009
+      },
+      "predicted_ms": {
+        "min": 303.474,
+        "max": 372.414
+      },
+      "wall_ms": {
+        "min": 350.7970409700647,
+        "max": 411.90195799572393
+      },
+      "first_delta_ms": {
+        "min": 183.19366598734632,
+        "max": 240.52729102550074
+      },
+      "cached_tokens_reported": 10,
+      "cached_tokens": {
+        "min": 946,
+        "max": 947
+      },
+      "shared_with_previous": {
+        "min": 946,
+        "max": 947
+      },
+      "prompt_tokens_counted": {
+        "min": 960,
+        "max": 970
+      }
+    },
+    {
+      "layout": "blocked",
+      "cache_prompt": true,
+      "purpose": "skill",
+      "requests": 10,
+      "errors": 0,
+      "reused_share": 0.4585,
+      "cache_n": {
+        "min": 257,
+        "max": 258
+      },
+      "prompt_n": {
+        "min": 301,
+        "max": 307
+      },
+      "prompt_ms": {
+        "min": 217.464,
+        "max": 221.944
+      },
+      "predicted_ms": {
+        "min": 306.024,
+        "max": 332.815
+      },
+      "wall_ms": {
+        "min": 545.6249589915387,
+        "max": 570.0590829947032
+      },
+      "first_delta_ms": {
+        "min": 364.8195000132546,
+        "max": 397.0784999546595
+      },
+      "cached_tokens_reported": 10,
+      "cached_tokens": {
+        "min": 257,
+        "max": 258
+      },
+      "shared_with_previous": {
+        "min": 257,
+        "max": 258
+      },
+      "prompt_tokens_counted": {
+        "min": 559,
+        "max": 564
+      }
+    },
+    {
+      "layout": "blocked",
+      "cache_prompt": false,
+      "purpose": "routing",
+      "requests": 10,
+      "errors": 0,
+      "reused_share": 0.0,
+      "cache_n": {
+        "min": 0,
+        "max": 0
+      },
+      "prompt_n": {
+        "min": 960,
+        "max": 970
+      },
+      "prompt_ms": {
+        "min": 654.878,
+        "max": 679.797
+      },
+      "predicted_ms": {
+        "min": 314.481,
+        "max": 385.665
+      },
+      "wall_ms": {
+        "min": 994.6067910059355,
+        "max": 1068.2305410155095
+      },
+      "first_delta_ms": {
+        "min": 829.3745000264607,
+        "max": 899.4052080088295
+      },
+      "cached_tokens_reported": 10,
+      "cached_tokens": {
+        "min": 0,
+        "max": 0
+      },
+      "shared_with_previous": {
+        "min": 946,
+        "max": 947
+      },
+      "prompt_tokens_counted": {
+        "min": 960,
+        "max": 970
+      }
+    },
+    {
+      "layout": "blocked",
+      "cache_prompt": false,
+      "purpose": "skill",
+      "requests": 10,
+      "errors": 0,
+      "reused_share": 0.0,
+      "cache_n": {
+        "min": 0,
+        "max": 0
+      },
+      "prompt_n": {
+        "min": 559,
+        "max": 564
+      },
+      "prompt_ms": {
+        "min": 377.395,
+        "max": 381.886
+      },
+      "predicted_ms": {
+        "min": 310.855,
+        "max": 331.263
+      },
+      "wall_ms": {
+        "min": 708.300375030376,
+        "max": 735.5390000157058
+      },
+      "first_delta_ms": {
+        "min": 522.3317079944536,
+        "max": 550.5274999886751
+      },
+      "cached_tokens_reported": 10,
+      "cached_tokens": {
+        "min": 0,
+        "max": 0
+      },
+      "shared_with_previous": {
+        "min": 257,
+        "max": 258
+      },
+      "prompt_tokens_counted": {
+        "min": 559,
+        "max": 564
+      }
+    },
+    {
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "purpose": "routing",
+      "requests": 10,
+      "errors": 0,
+      "reused_share": 0.981,
+      "cache_n": {
+        "min": 946,
+        "max": 947
+      },
+      "prompt_n": {
+        "min": 14,
+        "max": 24
+      },
+      "prompt_ms": {
+        "min": 35.334,
+        "max": 46.192
+      },
+      "predicted_ms": {
+        "min": 304.049,
+        "max": 369.095
+      },
+      "wall_ms": {
+        "min": 355.5445829988457,
+        "max": 416.53975000372157
+      },
+      "first_delta_ms": {
+        "min": 188.31937498180196,
+        "max": 246.9146249932237
+      },
+      "cached_tokens_reported": 10,
+      "cached_tokens": {
+        "min": 946,
+        "max": 947
+      },
+      "shared_with_previous": {
+        "min": 946,
+        "max": 947
+      },
+      "prompt_tokens_counted": {
+        "min": 960,
+        "max": 970
+      }
+    },
+    {
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "purpose": "skill",
+      "requests": 10,
+      "errors": 0,
+      "reused_share": 0.4581,
+      "cache_n": {
+        "min": 257,
+        "max": 258
+      },
+      "prompt_n": {
+        "min": 302,
+        "max": 307
+      },
+      "prompt_ms": {
+        "min": 218.755,
+        "max": 234.224
+      },
+      "predicted_ms": {
+        "min": 309.631,
+        "max": 328.404
+      },
+      "wall_ms": {
+        "min": 541.9297089683823,
+        "max": 561.1941670067608
+      },
+      "first_delta_ms": {
+        "min": 369.2114580189809,
+        "max": 384.6436669700779
+      },
+      "cached_tokens_reported": 10,
+      "cached_tokens": {
+        "min": 257,
+        "max": 258
+      },
+      "shared_with_previous": {
+        "min": 257,
+        "max": 258
+      },
+      "prompt_tokens_counted": {
+        "min": 559,
+        "max": 564
+      }
+    },
+    {
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "purpose": "routing",
+      "requests": 10,
+      "errors": 0,
+      "reused_share": 0.0,
+      "cache_n": {
+        "min": 0,
+        "max": 0
+      },
+      "prompt_n": {
+        "min": 960,
+        "max": 970
+      },
+      "prompt_ms": {
+        "min": 657.748,
+        "max": 691.508
+      },
+      "predicted_ms": {
+        "min": 314.218,
+        "max": 375.159
+      },
+      "wall_ms": {
+        "min": 1003.3740000217222,
+        "max": 1069.1710829851218
+      },
+      "first_delta_ms": {
+        "min": 835.7466250308789,
+        "max": 900.7257079938427
+      },
+      "cached_tokens_reported": 10,
+      "cached_tokens": {
+        "min": 0,
+        "max": 0
+      },
+      "shared_with_previous": {
+        "min": 946,
+        "max": 947
+      },
+      "prompt_tokens_counted": {
+        "min": 960,
+        "max": 970
+      }
+    },
+    {
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "purpose": "skill",
+      "requests": 10,
+      "errors": 0,
+      "reused_share": 0.0,
+      "cache_n": {
+        "min": 0,
+        "max": 0
+      },
+      "prompt_n": {
+        "min": 559,
+        "max": 564
+      },
+      "prompt_ms": {
+        "min": 374.621,
+        "max": 393.849
+      },
+      "predicted_ms": {
+        "min": 308.87,
+        "max": 331.808
+      },
+      "wall_ms": {
+        "min": 698.4064999851398,
+        "max": 741.0884579876438
+      },
+      "first_delta_ms": {
+        "min": 525.5130840232596,
+        "max": 567.2974579501897
+      },
+      "cached_tokens_reported": 10,
+      "cached_tokens": {
+        "min": 0,
+        "max": 0
+      },
+      "shared_with_previous": {
+        "min": 257,
+        "max": 258
+      },
+      "prompt_tokens_counted": {
+        "min": 559,
+        "max": 564
+      }
+    }
+  ],
+  "rows": [
+    {
+      "generation_id": "blocked_on_00_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "cold",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": null,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 726.1960839969106,
+      "wall_ms": 1054.0411249967292,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 965,
+        "prompt_ms": 698.427,
+        "prompt_per_token_ms": 0.7237585492227979,
+        "prompt_per_second": 1381.6762524931023,
+        "predicted_n": 23,
+        "predicted_ms": 349.525,
+        "predicted_per_token_ms": 15.8875,
+        "predicted_per_second": 62.94256490952007
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 698.427,
+      "predicted_n": 23,
+      "predicted_ms": 349.525,
+      "cached_tokens": 0,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_on_01_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "cold",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": null,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 573.9343329914846,
+      "wall_ms": 749.4005829794332,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 564,
+        "prompt_ms": 386.782,
+        "prompt_per_token_ms": 0.6857836879432624,
+        "prompt_per_second": 1458.185748044118,
+        "predicted_n": 22,
+        "predicted_ms": 318.521,
+        "predicted_per_token_ms": 15.167666666666667,
+        "predicted_per_second": 65.92971891963167
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 386.782,
+      "predicted_n": 22,
+      "predicted_ms": 318.521,
+      "cached_tokens": 0,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_on_02_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "warmup",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 965,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 44.442082988098264,
+      "wall_ms": 365.8656249754131,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 964,
+        "prompt_n": 1,
+        "prompt_ms": 16.709,
+        "prompt_per_token_ms": 16.709,
+        "prompt_per_second": 59.847986115267226,
+        "predicted_n": 23,
+        "predicted_ms": 336.76,
+        "predicted_per_token_ms": 15.307272727272727,
+        "predicted_per_second": 65.32842380330206
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 964
+        }
+      },
+      "cache_n": 964,
+      "prompt_n": 1,
+      "prompt_ms": 16.709,
+      "predicted_n": 23,
+      "predicted_ms": 336.76,
+      "cached_tokens": 964,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_on_03_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "warmup",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 564,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 155.65833396976814,
+      "wall_ms": 328.8673339993693,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 563,
+        "prompt_n": 1,
+        "prompt_ms": 15.103,
+        "prompt_per_token_ms": 15.103,
+        "prompt_per_second": 66.21201085876979,
+        "predicted_n": 22,
+        "predicted_ms": 303.268,
+        "predicted_per_token_ms": 14.441333333333333,
+        "predicted_per_second": 69.24568368571693
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 563
+        }
+      },
+      "cache_n": 563,
+      "prompt_n": 1,
+      "prompt_ms": 15.103,
+      "predicted_n": 22,
+      "predicted_ms": 303.268,
+      "cached_tokens": 563,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_on_04_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "warmup",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 965,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 41.584249993320554,
+      "wall_ms": 363.88216697378084,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 964,
+        "prompt_n": 1,
+        "prompt_ms": 16.021,
+        "prompt_per_token_ms": 16.021,
+        "prompt_per_second": 62.4180762748892,
+        "predicted_n": 23,
+        "predicted_ms": 337.226,
+        "predicted_per_token_ms": 15.328454545454546,
+        "predicted_per_second": 65.23814889717875
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 964
+        }
+      },
+      "cache_n": 964,
+      "prompt_n": 1,
+      "prompt_ms": 16.021,
+      "predicted_n": 23,
+      "predicted_ms": 337.226,
+      "cached_tokens": 964,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_on_05_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "warmup",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 564,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 158.29816699260846,
+      "wall_ms": 332.451416994445,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 563,
+        "prompt_n": 1,
+        "prompt_ms": 15.142,
+        "prompt_per_token_ms": 15.142,
+        "prompt_per_second": 66.0414740457007,
+        "predicted_n": 22,
+        "predicted_ms": 306.925,
+        "predicted_per_token_ms": 14.61547619047619,
+        "predicted_per_second": 68.42062393092775
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 563
+        }
+      },
+      "cache_n": 563,
+      "prompt_n": 1,
+      "prompt_ms": 15.142,
+      "predicted_n": 22,
+      "predicted_ms": 306.925,
+      "cached_tokens": 563,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_on_06_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "warmup",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 965,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 41.90995899261907,
+      "wall_ms": 360.6926670181565,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 964,
+        "prompt_n": 1,
+        "prompt_ms": 15.712,
+        "prompt_per_token_ms": 15.712,
+        "prompt_per_second": 63.64562118126273,
+        "predicted_n": 23,
+        "predicted_ms": 334.128,
+        "predicted_per_token_ms": 15.187636363636363,
+        "predicted_per_second": 65.84303021596514
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 964
+        }
+      },
+      "cache_n": 964,
+      "prompt_n": 1,
+      "prompt_ms": 15.712,
+      "predicted_n": 23,
+      "predicted_ms": 334.128,
+      "cached_tokens": 964,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_on_07_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "warmup",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 564,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 157.1815829956904,
+      "wall_ms": 330.5154169793241,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 563,
+        "prompt_n": 1,
+        "prompt_ms": 15.074,
+        "prompt_per_token_ms": 15.074,
+        "prompt_per_second": 66.33939233116625,
+        "predicted_n": 22,
+        "predicted_ms": 303.954,
+        "predicted_per_token_ms": 14.474,
+        "predicted_per_second": 69.0894016857814
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 563
+        }
+      },
+      "cache_n": 563,
+      "prompt_n": 1,
+      "prompt_ms": 15.074,
+      "predicted_n": 22,
+      "predicted_ms": 303.954,
+      "cached_tokens": 563,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_on_08_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 0,
+      "user_text": "Is staging-api healthy right now?",
+      "prompt_tokens_counted": 962,
+      "shared_with_previous": 947,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 205.13829198898748,
+      "wall_ms": 371.6809580218978,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "check-service-health",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 947,
+        "prompt_n": 15,
+        "prompt_ms": 54.009,
+        "prompt_per_token_ms": 3.6006,
+        "prompt_per_second": 277.73148919624504,
+        "predicted_n": 21,
+        "predicted_ms": 307.238,
+        "predicted_per_token_ms": 15.3619,
+        "predicted_per_second": 65.09611441293069
+      },
+      "usage": {
+        "completion_tokens": 21,
+        "prompt_tokens": 962,
+        "total_tokens": 983,
+        "prompt_tokens_details": {
+          "cached_tokens": 947
+        }
+      },
+      "cache_n": 947,
+      "prompt_n": 15,
+      "prompt_ms": 54.009,
+      "predicted_n": 21,
+      "predicted_ms": 307.238,
+      "cached_tokens": 947,
+      "prompt_tokens": 962,
+      "completion_tokens": 21
+    },
+    {
+      "generation_id": "blocked_on_09_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 1,
+      "user_text": "What was the latest deployment of payments-api?",
+      "prompt_tokens_counted": 964,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 215.65641596680507,
+      "wall_ms": 382.5859999633394,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "lookup-latest-deployment",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 18,
+        "prompt_ms": 45.343,
+        "prompt_per_token_ms": 2.5190555555555556,
+        "prompt_per_second": 396.97417462452853,
+        "predicted_n": 23,
+        "predicted_ms": 333.952,
+        "predicted_per_token_ms": 15.179636363636364,
+        "predicted_per_second": 65.87773093139134
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 964,
+        "total_tokens": 987,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 18,
+      "prompt_ms": 45.343,
+      "predicted_n": 23,
+      "predicted_ms": 333.952,
+      "cached_tokens": 946,
+      "prompt_tokens": 964,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_on_10_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 2,
+      "user_text": "How many incidents did staging-api have in the last 60 minutes?",
+      "prompt_tokens_counted": 970,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 240.06999999983236,
+      "wall_ms": 411.90195799572393,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "summarize-incident-counts",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 24,
+        "prompt_ms": 36.204,
+        "prompt_per_token_ms": 1.5085,
+        "prompt_per_second": 662.9101756711966,
+        "predicted_n": 25,
+        "predicted_ms": 372.414,
+        "predicted_per_token_ms": 15.517249999999999,
+        "predicted_per_second": 64.44440864199521
+      },
+      "usage": {
+        "completion_tokens": 25,
+        "prompt_tokens": 970,
+        "total_tokens": 995,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 24,
+      "prompt_ms": 36.204,
+      "predicted_n": 25,
+      "predicted_ms": 372.414,
+      "cached_tokens": 946,
+      "prompt_tokens": 970,
+      "completion_tokens": 25
+    },
+    {
+      "generation_id": "blocked_on_11_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 3,
+      "user_text": "Is the service healthy?",
+      "prompt_tokens_counted": 960,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 223.09212503023446,
+      "wall_ms": 390.8446660498157,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "health-and-diagnostic-checklist",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 14,
+        "prompt_ms": 36.017,
+        "prompt_per_token_ms": 2.5726428571428572,
+        "prompt_per_second": 388.7053335924702,
+        "predicted_n": 24,
+        "predicted_ms": 351.486,
+        "predicted_per_token_ms": 15.282,
+        "predicted_per_second": 65.43646119617851
+      },
+      "usage": {
+        "completion_tokens": 24,
+        "prompt_tokens": 960,
+        "total_tokens": 984,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 14,
+      "prompt_ms": 36.017,
+      "predicted_n": 24,
+      "predicted_ms": 351.486,
+      "cached_tokens": 946,
+      "prompt_tokens": 960,
+      "completion_tokens": 24
+    },
+    {
+      "generation_id": "blocked_on_12_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 4,
+      "user_text": "payments-api got slow after the last deploy. Find out why.",
+      "prompt_tokens_counted": 968,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 183.19366598734632,
+      "wall_ms": 350.7970409700647,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "investigate-performance",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 22,
+        "prompt_ms": 38.511,
+        "prompt_per_token_ms": 1.7505000000000002,
+        "prompt_per_second": 571.2653527563552,
+        "predicted_n": 21,
+        "predicted_ms": 309.062,
+        "predicted_per_token_ms": 15.453100000000001,
+        "predicted_per_second": 64.71193482213924
+      },
+      "usage": {
+        "completion_tokens": 21,
+        "prompt_tokens": 968,
+        "total_tokens": 989,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 22,
+      "prompt_ms": 38.511,
+      "predicted_n": 21,
+      "predicted_ms": 309.062,
+      "cached_tokens": 946,
+      "prompt_tokens": 968,
+      "completion_tokens": 21
+    },
+    {
+      "generation_id": "blocked_on_13_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 5,
+      "user_text": "Delete the demo database demo-orders.",
+      "prompt_tokens_counted": 962,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 197.9850420029834,
+      "wall_ms": 364.79879199760035,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "delete-demo-database",
+            "arguments": "{\"language\": \"zh\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 16,
+        "prompt_ms": 37.583,
+        "prompt_per_token_ms": 2.3489375,
+        "prompt_per_second": 425.7243966687066,
+        "predicted_n": 22,
+        "predicted_ms": 323.986,
+        "predicted_per_token_ms": 15.427904761904761,
+        "predicted_per_second": 64.81761557598168
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 962,
+        "total_tokens": 984,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 16,
+      "prompt_ms": 37.583,
+      "predicted_n": 22,
+      "predicted_ms": 323.986,
+      "cached_tokens": 946,
+      "prompt_tokens": 962,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_on_14_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 6,
+      "user_text": "staging-api 现在健康吗？",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 186.68333301320672,
+      "wall_ms": 353.1232079840265,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "check-service-health",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 19,
+        "prompt_ms": 46.411,
+        "prompt_per_token_ms": 2.442684210526316,
+        "prompt_per_second": 409.3857059748766,
+        "predicted_n": 21,
+        "predicted_ms": 303.474,
+        "predicted_per_token_ms": 15.1737,
+        "predicted_per_second": 65.90350408931243
+      },
+      "usage": {
+        "completion_tokens": 21,
+        "prompt_tokens": 965,
+        "total_tokens": 986,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 19,
+      "prompt_ms": 46.411,
+      "predicted_n": 21,
+      "predicted_ms": 303.474,
+      "cached_tokens": 946,
+      "prompt_tokens": 965,
+      "completion_tokens": 21
+    },
+    {
+      "generation_id": "blocked_on_15_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 7,
+      "user_text": "payments-api 最近一次部署是什么？",
+      "prompt_tokens_counted": 963,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 217.82191697275266,
+      "wall_ms": 384.53495799330994,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "lookup-latest-deployment",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 17,
+        "prompt_ms": 45.022,
+        "prompt_per_token_ms": 2.6483529411764706,
+        "prompt_per_second": 377.59317666918395,
+        "predicted_n": 23,
+        "predicted_ms": 336.196,
+        "predicted_per_token_ms": 15.281636363636364,
+        "predicted_per_second": 65.43801829884947
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 963,
+        "total_tokens": 986,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 17,
+      "prompt_ms": 45.022,
+      "predicted_n": 23,
+      "predicted_ms": 336.196,
+      "cached_tokens": 946,
+      "prompt_tokens": 963,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_on_16_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 8,
+      "user_text": "staging-api 在过去 60 分钟内有多少个事故？",
+      "prompt_tokens_counted": 970,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 240.52729102550074,
+      "wall_ms": 407.31166600016877,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "summarize-incident-counts",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 24,
+        "prompt_ms": 36.563,
+        "prompt_per_token_ms": 1.5234583333333334,
+        "prompt_per_second": 656.4012799824959,
+        "predicted_n": 25,
+        "predicted_ms": 367.645,
+        "predicted_per_token_ms": 15.318541666666667,
+        "predicted_per_second": 65.2803655700472
+      },
+      "usage": {
+        "completion_tokens": 25,
+        "prompt_tokens": 970,
+        "total_tokens": 995,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 24,
+      "prompt_ms": 36.563,
+      "predicted_n": 25,
+      "predicted_ms": 367.645,
+      "cached_tokens": 946,
+      "prompt_tokens": 970,
+      "completion_tokens": 25
+    },
+    {
+      "generation_id": "blocked_on_17_routing",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 9,
+      "user_text": "这个服务健康吗？",
+      "prompt_tokens_counted": 960,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 221.44454199587926,
+      "wall_ms": 388.3017919724807,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "health-and-diagnostic-checklist",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 14,
+        "prompt_ms": 35.449,
+        "prompt_per_token_ms": 2.5320714285714283,
+        "prompt_per_second": 394.9335665322012,
+        "predicted_n": 24,
+        "predicted_ms": 349.576,
+        "predicted_per_token_ms": 15.198956521739131,
+        "predicted_per_second": 65.79399043412592
+      },
+      "usage": {
+        "completion_tokens": 24,
+        "prompt_tokens": 960,
+        "total_tokens": 984,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 14,
+      "prompt_ms": 35.449,
+      "predicted_n": 24,
+      "predicted_ms": 349.576,
+      "cached_tokens": 946,
+      "prompt_tokens": 960,
+      "completion_tokens": 24
+    },
+    {
+      "generation_id": "blocked_on_18_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 0,
+      "user_text": "Is staging-api healthy right now?",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 258,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 372.2654579905793,
+      "wall_ms": 557.794832973741,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 258,
+        "prompt_n": 303,
+        "prompt_ms": 219.043,
+        "prompt_per_token_ms": 0.7229141914191419,
+        "prompt_per_second": 1383.2900389421254,
+        "predicted_n": 23,
+        "predicted_ms": 328.247,
+        "predicted_per_token_ms": 14.920318181818182,
+        "predicted_per_second": 67.02269936968197
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 561,
+        "total_tokens": 584,
+        "prompt_tokens_details": {
+          "cached_tokens": 258
+        }
+      },
+      "cache_n": 258,
+      "prompt_n": 303,
+      "prompt_ms": 219.043,
+      "predicted_n": 23,
+      "predicted_ms": 328.247,
+      "cached_tokens": 258,
+      "prompt_tokens": 561,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_on_19_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 1,
+      "user_text": "Check the health of payments-api.",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 391.24100003391504,
+      "wall_ms": 563.18833300611,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 304,
+        "prompt_ms": 217.878,
+        "prompt_per_token_ms": 0.716703947368421,
+        "prompt_per_second": 1395.2762555191437,
+        "predicted_n": 22,
+        "predicted_ms": 310.984,
+        "predicted_per_token_ms": 14.808761904761903,
+        "predicted_per_second": 67.52758984385049
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 561,
+        "total_tokens": 583,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 304,
+      "prompt_ms": 217.878,
+      "predicted_n": 22,
+      "predicted_ms": 310.984,
+      "cached_tokens": 257,
+      "prompt_tokens": 561,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_on_20_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 2,
+      "user_text": "Is payments-api up?",
+      "prompt_tokens_counted": 559,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 379.74945799214765,
+      "wall_ms": 550.9348749765195,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 258,
+        "prompt_n": 301,
+        "prompt_ms": 220.562,
+        "prompt_per_token_ms": 0.7327641196013289,
+        "prompt_per_second": 1364.6956411349188,
+        "predicted_n": 22,
+        "predicted_ms": 306.024,
+        "predicted_per_token_ms": 14.572571428571429,
+        "predicted_per_second": 68.62206885734452
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 559,
+        "total_tokens": 581,
+        "prompt_tokens_details": {
+          "cached_tokens": 258
+        }
+      },
+      "cache_n": 258,
+      "prompt_n": 301,
+      "prompt_ms": 220.562,
+      "predicted_n": 22,
+      "predicted_ms": 306.024,
+      "cached_tokens": 258,
+      "prompt_tokens": 559,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_on_21_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 3,
+      "user_text": "Please tell me whether staging-api is healthy.",
+      "prompt_tokens_counted": 563,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 364.8195000132546,
+      "wall_ms": 554.2516250279732,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 306,
+        "prompt_ms": 220.255,
+        "prompt_per_token_ms": 0.7197875816993464,
+        "prompt_per_second": 1389.2987673378584,
+        "predicted_n": 23,
+        "predicted_ms": 328.376,
+        "predicted_per_token_ms": 14.926181818181817,
+        "predicted_per_second": 66.99637001486101
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 563,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 306,
+      "prompt_ms": 220.255,
+      "predicted_n": 23,
+      "predicted_ms": 328.376,
+      "cached_tokens": 257,
+      "prompt_tokens": 563,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_on_22_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 4,
+      "user_text": "How is payments-api doing today?",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 390.4876669985242,
+      "wall_ms": 563.5866670054384,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 304,
+        "prompt_ms": 219.253,
+        "prompt_per_token_ms": 0.7212269736842105,
+        "prompt_per_second": 1386.526068058362,
+        "predicted_n": 22,
+        "predicted_ms": 314.367,
+        "predicted_per_token_ms": 14.969857142857144,
+        "predicted_per_second": 66.80090467510902
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 561,
+        "total_tokens": 583,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 304,
+      "prompt_ms": 219.253,
+      "predicted_n": 22,
+      "predicted_ms": 314.367,
+      "cached_tokens": 257,
+      "prompt_tokens": 561,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_on_23_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 5,
+      "user_text": "Is staging-api OK?",
+      "prompt_tokens_counted": 559,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 376.96891598170623,
+      "wall_ms": 570.0590829947032,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 258,
+        "prompt_n": 301,
+        "prompt_ms": 218.775,
+        "prompt_per_token_ms": 0.7268272425249169,
+        "prompt_per_second": 1375.842760827334,
+        "predicted_n": 23,
+        "predicted_ms": 332.815,
+        "predicted_per_token_ms": 15.127954545454545,
+        "predicted_per_second": 66.10278983819839
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 559,
+        "total_tokens": 582,
+        "prompt_tokens_details": {
+          "cached_tokens": 258
+        }
+      },
+      "cache_n": 258,
+      "prompt_n": 301,
+      "prompt_ms": 218.775,
+      "predicted_n": 23,
+      "predicted_ms": 332.815,
+      "cached_tokens": 258,
+      "prompt_tokens": 559,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_on_24_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 6,
+      "user_text": "staging-api 现在健康吗？",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 365.9188750316389,
+      "wall_ms": 552.52179101808,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 307,
+        "prompt_ms": 220.236,
+        "prompt_per_token_ms": 0.7173811074918567,
+        "prompt_per_second": 1393.9592073957028,
+        "predicted_n": 23,
+        "predicted_ms": 326.49,
+        "predicted_per_token_ms": 14.840454545454547,
+        "predicted_per_second": 67.38338080798799
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 564,
+        "total_tokens": 587,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 307,
+      "prompt_ms": 220.236,
+      "predicted_n": 23,
+      "predicted_ms": 326.49,
+      "cached_tokens": 257,
+      "prompt_tokens": 564,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_on_25_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 7,
+      "user_text": "检查 payments-api 的健康状况。",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 372.906792035792,
+      "wall_ms": 545.6249589915387,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 304,
+        "prompt_ms": 217.464,
+        "prompt_per_token_ms": 0.7153421052631579,
+        "prompt_per_second": 1397.9325313615127,
+        "predicted_n": 22,
+        "predicted_ms": 312.965,
+        "predicted_per_token_ms": 14.903095238095236,
+        "predicted_per_second": 67.10015496940554
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 561,
+        "total_tokens": 583,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 304,
+      "prompt_ms": 217.464,
+      "predicted_n": 22,
+      "predicted_ms": 312.965,
+      "cached_tokens": 257,
+      "prompt_tokens": 561,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_on_26_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 8,
+      "user_text": "payments-api 正常运行吗？",
+      "prompt_tokens_counted": 562,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 397.0784999546595,
+      "wall_ms": 569.2962919711135,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 305,
+        "prompt_ms": 221.944,
+        "prompt_per_token_ms": 0.7276852459016393,
+        "prompt_per_second": 1374.2205240961684,
+        "predicted_n": 22,
+        "predicted_ms": 312.337,
+        "predicted_per_token_ms": 14.873190476190477,
+        "predicted_per_second": 67.23506981241417
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 562,
+        "total_tokens": 584,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 305,
+      "prompt_ms": 221.944,
+      "predicted_n": 22,
+      "predicted_ms": 312.337,
+      "cached_tokens": 257,
+      "prompt_tokens": 562,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_on_27_skill",
+      "layout": "blocked",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 9,
+      "user_text": "请确认 staging-api 是否正常。",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 376.77633395651355,
+      "wall_ms": 563.9322499628179,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 304,
+        "prompt_ms": 220.295,
+        "prompt_per_token_ms": 0.7246546052631578,
+        "prompt_per_second": 1379.9677704895707,
+        "predicted_n": 23,
+        "predicted_ms": 323.243,
+        "predicted_per_token_ms": 14.692863636363636,
+        "predicted_per_second": 68.06025188480493
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 561,
+        "total_tokens": 584,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 304,
+      "prompt_ms": 220.295,
+      "predicted_n": 23,
+      "predicted_ms": 323.243,
+      "cached_tokens": 257,
+      "prompt_tokens": 561,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_off_00_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "cold",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": null,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 716.4323330507614,
+      "wall_ms": 1044.1902080201544,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 965,
+        "prompt_ms": 690.811,
+        "prompt_per_token_ms": 0.7158663212435233,
+        "prompt_per_second": 1396.908850611817,
+        "predicted_n": 23,
+        "predicted_ms": 349.551,
+        "predicted_per_token_ms": 15.888681818181817,
+        "predicted_per_second": 62.93788317012397
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 690.811,
+      "predicted_n": 23,
+      "predicted_ms": 349.551,
+      "cached_tokens": 0,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_off_01_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "cold",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": null,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 532.227958959993,
+      "wall_ms": 704.5169169432484,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 564,
+        "prompt_ms": 377.991,
+        "prompt_per_token_ms": 0.6701968085106382,
+        "prompt_per_second": 1492.099018230593,
+        "predicted_n": 22,
+        "predicted_ms": 312.353,
+        "predicted_per_token_ms": 14.873952380952382,
+        "predicted_per_second": 67.23162575675597
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 377.991,
+      "predicted_n": 22,
+      "predicted_ms": 312.353,
+      "cached_tokens": 0,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_off_02_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "warmup",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 965,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 711.8093330063857,
+      "wall_ms": 1034.209916018881,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 965,
+        "prompt_ms": 679.136,
+        "prompt_per_token_ms": 0.7037678756476684,
+        "prompt_per_second": 1420.9230551759883,
+        "predicted_n": 23,
+        "predicted_ms": 343.892,
+        "predicted_per_token_ms": 15.631454545454545,
+        "predicted_per_second": 63.973573098530935
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 679.136,
+      "predicted_n": 23,
+      "predicted_ms": 343.892,
+      "cached_tokens": 0,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_off_03_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "warmup",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 564,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 532.451042032335,
+      "wall_ms": 723.5740830074064,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 564,
+        "prompt_ms": 380.454,
+        "prompt_per_token_ms": 0.6745638297872341,
+        "prompt_per_second": 1482.439401346812,
+        "predicted_n": 22,
+        "predicted_ms": 332.827,
+        "predicted_per_token_ms": 15.848904761904762,
+        "predicted_per_second": 63.09584258488644
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 380.454,
+      "predicted_n": 22,
+      "predicted_ms": 332.827,
+      "cached_tokens": 0,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_off_04_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "warmup",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 965,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 712.0602499926463,
+      "wall_ms": 1032.8846250195056,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 965,
+        "prompt_ms": 678.656,
+        "prompt_per_token_ms": 0.7032704663212435,
+        "prompt_per_second": 1421.9280460203697,
+        "predicted_n": 23,
+        "predicted_ms": 343.626,
+        "predicted_per_token_ms": 15.619363636363635,
+        "predicted_per_second": 64.02309487640633
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 678.656,
+      "predicted_n": 23,
+      "predicted_ms": 343.626,
+      "cached_tokens": 0,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_off_05_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "warmup",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 564,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 526.9440829870291,
+      "wall_ms": 698.2885419856757,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 564,
+        "prompt_ms": 380.175,
+        "prompt_per_token_ms": 0.6740691489361702,
+        "prompt_per_second": 1483.5273229433813,
+        "predicted_n": 22,
+        "predicted_ms": 307.733,
+        "predicted_per_token_ms": 14.653952380952381,
+        "predicted_per_second": 68.24097513103892
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 380.175,
+      "predicted_n": 22,
+      "predicted_ms": 307.733,
+      "cached_tokens": 0,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_off_06_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "warmup",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 965,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 708.050999965053,
+      "wall_ms": 1024.9584169941954,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 965,
+        "prompt_ms": 678.645,
+        "prompt_per_token_ms": 0.703259067357513,
+        "prompt_per_second": 1421.9510937235225,
+        "predicted_n": 23,
+        "predicted_ms": 335.758,
+        "predicted_per_token_ms": 15.261727272727272,
+        "predicted_per_second": 65.52338291269308
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 678.645,
+      "predicted_n": 23,
+      "predicted_ms": 335.758,
+      "cached_tokens": 0,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_off_07_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "warmup",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 564,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 527.7540000388399,
+      "wall_ms": 703.2788330106996,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 564,
+        "prompt_ms": 378.957,
+        "prompt_per_token_ms": 0.6719095744680851,
+        "prompt_per_second": 1488.2955058225605,
+        "predicted_n": 22,
+        "predicted_ms": 314.057,
+        "predicted_per_token_ms": 14.95509523809524,
+        "predicted_per_second": 66.86684264321444
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 378.957,
+      "predicted_n": 22,
+      "predicted_ms": 314.057,
+      "cached_tokens": 0,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_off_08_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 0,
+      "user_text": "Is staging-api healthy right now?",
+      "prompt_tokens_counted": 962,
+      "shared_with_previous": 947,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 837.6352500054054,
+      "wall_ms": 1015.9414160298184,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "check-service-health",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 962,
+        "prompt_ms": 675.518,
+        "prompt_per_token_ms": 0.7022016632016632,
+        "prompt_per_second": 1424.0923261852386,
+        "predicted_n": 21,
+        "predicted_ms": 329.756,
+        "predicted_per_token_ms": 16.4878,
+        "predicted_per_second": 60.650905518019385
+      },
+      "usage": {
+        "completion_tokens": 21,
+        "prompt_tokens": 962,
+        "total_tokens": 983,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 962,
+      "prompt_ms": 675.518,
+      "predicted_n": 21,
+      "predicted_ms": 329.756,
+      "cached_tokens": 0,
+      "prompt_tokens": 962,
+      "completion_tokens": 21
+    },
+    {
+      "generation_id": "blocked_off_09_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 1,
+      "user_text": "What was the latest deployment of payments-api?",
+      "prompt_tokens_counted": 964,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 859.4736670493148,
+      "wall_ms": 1029.1473750257865,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "lookup-latest-deployment",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 964,
+        "prompt_ms": 679.604,
+        "prompt_per_token_ms": 0.7049834024896267,
+        "prompt_per_second": 1418.47311081159,
+        "predicted_n": 23,
+        "predicted_ms": 346.128,
+        "predicted_per_token_ms": 15.733090909090908,
+        "predicted_per_second": 63.560301391392784
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 964,
+        "total_tokens": 987,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 964,
+      "prompt_ms": 679.604,
+      "predicted_n": 23,
+      "predicted_ms": 346.128,
+      "cached_tokens": 0,
+      "prompt_tokens": 964,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_off_10_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 2,
+      "user_text": "How many incidents did staging-api have in the last 60 minutes?",
+      "prompt_tokens_counted": 970,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 899.4052080088295,
+      "wall_ms": 1068.2305410155095,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "summarize-incident-counts",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 970,
+        "prompt_ms": 679.27,
+        "prompt_per_token_ms": 0.7002783505154639,
+        "prompt_per_second": 1428.00359209151,
+        "predicted_n": 25,
+        "predicted_ms": 385.665,
+        "predicted_per_token_ms": 16.069375,
+        "predicted_per_second": 62.2301738555482
+      },
+      "usage": {
+        "completion_tokens": 25,
+        "prompt_tokens": 970,
+        "total_tokens": 995,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 970,
+      "prompt_ms": 679.27,
+      "predicted_n": 25,
+      "predicted_ms": 385.665,
+      "cached_tokens": 0,
+      "prompt_tokens": 970,
+      "completion_tokens": 25
+    },
+    {
+      "generation_id": "blocked_off_11_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 3,
+      "user_text": "Is the service healthy?",
+      "prompt_tokens_counted": 960,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 859.1726669692434,
+      "wall_ms": 1024.4735829764977,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "health-and-diagnostic-checklist",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 960,
+        "prompt_ms": 655.143,
+        "prompt_per_token_ms": 0.682440625,
+        "prompt_per_second": 1465.3289434520402,
+        "predicted_n": 24,
+        "predicted_ms": 366.017,
+        "predicted_per_token_ms": 15.913782608695652,
+        "predicted_per_second": 62.838611321332074
+      },
+      "usage": {
+        "completion_tokens": 24,
+        "prompt_tokens": 960,
+        "total_tokens": 984,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 960,
+      "prompt_ms": 655.143,
+      "predicted_n": 24,
+      "predicted_ms": 366.017,
+      "cached_tokens": 0,
+      "prompt_tokens": 960,
+      "completion_tokens": 24
+    },
+    {
+      "generation_id": "blocked_off_12_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 4,
+      "user_text": "payments-api got slow after the last deploy. Find out why.",
+      "prompt_tokens_counted": 968,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 830.9536249726079,
+      "wall_ms": 996.4164170087315,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "investigate-performance",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 968,
+        "prompt_ms": 676.957,
+        "prompt_per_token_ms": 0.6993357438016529,
+        "prompt_per_second": 1429.9283410910884,
+        "predicted_n": 21,
+        "predicted_ms": 316.147,
+        "predicted_per_token_ms": 15.80735,
+        "predicted_per_second": 63.26171053339111
+      },
+      "usage": {
+        "completion_tokens": 21,
+        "prompt_tokens": 968,
+        "total_tokens": 989,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 968,
+      "prompt_ms": 676.957,
+      "predicted_n": 21,
+      "predicted_ms": 316.147,
+      "cached_tokens": 0,
+      "prompt_tokens": 968,
+      "completion_tokens": 21
+    },
+    {
+      "generation_id": "blocked_off_13_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 5,
+      "user_text": "Delete the demo database demo-orders.",
+      "prompt_tokens_counted": 962,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 844.3560830201022,
+      "wall_ms": 1011.0733330366202,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "delete-demo-database",
+            "arguments": "{\"language\": \"zh\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 962,
+        "prompt_ms": 677.077,
+        "prompt_per_token_ms": 0.7038222453222454,
+        "prompt_per_second": 1420.8132900689286,
+        "predicted_n": 22,
+        "predicted_ms": 330.689,
+        "predicted_per_token_ms": 15.74709523809524,
+        "predicted_per_second": 63.503775450650004
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 962,
+        "total_tokens": 984,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 962,
+      "prompt_ms": 677.077,
+      "predicted_n": 22,
+      "predicted_ms": 330.689,
+      "cached_tokens": 0,
+      "prompt_tokens": 962,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_off_14_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 6,
+      "user_text": "staging-api 现在健康吗？",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 829.3745000264607,
+      "wall_ms": 994.6067910059355,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "check-service-health",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 965,
+        "prompt_ms": 676.876,
+        "prompt_per_token_ms": 0.7014259067357512,
+        "prompt_per_second": 1425.667330500712,
+        "predicted_n": 21,
+        "predicted_ms": 314.481,
+        "predicted_per_token_ms": 15.72405,
+        "predicted_per_second": 63.59684686833227
+      },
+      "usage": {
+        "completion_tokens": 21,
+        "prompt_tokens": 965,
+        "total_tokens": 986,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 676.876,
+      "predicted_n": 21,
+      "predicted_ms": 314.481,
+      "cached_tokens": 0,
+      "prompt_tokens": 965,
+      "completion_tokens": 21
+    },
+    {
+      "generation_id": "blocked_off_15_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 7,
+      "user_text": "payments-api 最近一次部署是什么？",
+      "prompt_tokens_counted": 963,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 856.6644160309806,
+      "wall_ms": 1022.0086250337772,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "lookup-latest-deployment",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 963,
+        "prompt_ms": 676.647,
+        "prompt_per_token_ms": 0.7026448598130841,
+        "prompt_per_second": 1423.1940731282336,
+        "predicted_n": 23,
+        "predicted_ms": 342.099,
+        "predicted_per_token_ms": 15.549954545454545,
+        "predicted_per_second": 64.3088696546906
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 963,
+        "total_tokens": 986,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 963,
+      "prompt_ms": 676.647,
+      "predicted_n": 23,
+      "predicted_ms": 342.099,
+      "cached_tokens": 0,
+      "prompt_tokens": 963,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_off_16_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 8,
+      "user_text": "staging-api 在过去 60 分钟内有多少个事故？",
+      "prompt_tokens_counted": 970,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 896.4849159820005,
+      "wall_ms": 1061.6363750305027,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "summarize-incident-counts",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 970,
+        "prompt_ms": 679.797,
+        "prompt_per_token_ms": 0.7008216494845361,
+        "prompt_per_second": 1426.8965588256492,
+        "predicted_n": 25,
+        "predicted_ms": 378.543,
+        "predicted_per_token_ms": 15.772625,
+        "predicted_per_second": 63.40098747037985
+      },
+      "usage": {
+        "completion_tokens": 25,
+        "prompt_tokens": 970,
+        "total_tokens": 995,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 970,
+      "prompt_ms": 679.797,
+      "predicted_n": 25,
+      "predicted_ms": 378.543,
+      "cached_tokens": 0,
+      "prompt_tokens": 970,
+      "completion_tokens": 25
+    },
+    {
+      "generation_id": "blocked_off_17_routing",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 9,
+      "user_text": "这个服务健康吗？",
+      "prompt_tokens_counted": 960,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 857.1370409918018,
+      "wall_ms": 1022.3048750194721,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "health-and-diagnostic-checklist",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 960,
+        "prompt_ms": 654.878,
+        "prompt_per_token_ms": 0.6821645833333334,
+        "prompt_per_second": 1465.9218969029346,
+        "predicted_n": 24,
+        "predicted_ms": 364.084,
+        "predicted_per_token_ms": 15.829739130434783,
+        "predicted_per_second": 63.17223497874117
+      },
+      "usage": {
+        "completion_tokens": 24,
+        "prompt_tokens": 960,
+        "total_tokens": 984,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 960,
+      "prompt_ms": 654.878,
+      "predicted_n": 24,
+      "predicted_ms": 364.084,
+      "cached_tokens": 0,
+      "prompt_tokens": 960,
+      "completion_tokens": 24
+    },
+    {
+      "generation_id": "blocked_off_18_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 0,
+      "user_text": "Is staging-api healthy right now?",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 258,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 545.3842499991879,
+      "wall_ms": 735.5390000157058,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 561,
+        "prompt_ms": 378.795,
+        "prompt_per_token_ms": 0.6752139037433156,
+        "prompt_per_second": 1481.0121569714488,
+        "predicted_n": 23,
+        "predicted_ms": 331.263,
+        "predicted_per_token_ms": 15.05740909090909,
+        "predicted_per_second": 66.41248796273656
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 561,
+        "total_tokens": 584,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 561,
+      "prompt_ms": 378.795,
+      "predicted_n": 23,
+      "predicted_ms": 331.263,
+      "cached_tokens": 0,
+      "prompt_tokens": 561,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_off_19_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 1,
+      "user_text": "Check the health of payments-api.",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 535.8767500147223,
+      "wall_ms": 708.300375030376,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 561,
+        "prompt_ms": 377.407,
+        "prompt_per_token_ms": 0.6727397504456327,
+        "prompt_per_second": 1486.458915706386,
+        "predicted_n": 22,
+        "predicted_ms": 311.92,
+        "predicted_per_token_ms": 14.853333333333333,
+        "predicted_per_second": 67.32495511669659
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 561,
+        "total_tokens": 583,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 561,
+      "prompt_ms": 377.407,
+      "predicted_n": 22,
+      "predicted_ms": 311.92,
+      "cached_tokens": 0,
+      "prompt_tokens": 561,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_off_20_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 2,
+      "user_text": "Is payments-api up?",
+      "prompt_tokens_counted": 559,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 537.449416005984,
+      "wall_ms": 710.8897910220549,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 559,
+        "prompt_ms": 378.473,
+        "prompt_per_token_ms": 0.6770536672629696,
+        "prompt_per_second": 1476.9877904104123,
+        "predicted_n": 22,
+        "predicted_ms": 312.876,
+        "predicted_per_token_ms": 14.898857142857143,
+        "predicted_per_second": 67.11924212787176
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 559,
+        "total_tokens": 581,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 559,
+      "prompt_ms": 378.473,
+      "predicted_n": 22,
+      "predicted_ms": 312.876,
+      "cached_tokens": 0,
+      "prompt_tokens": 559,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_off_21_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 3,
+      "user_text": "Please tell me whether staging-api is healthy.",
+      "prompt_tokens_counted": 563,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 525.9191659861244,
+      "wall_ms": 711.7236249614507,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 563,
+        "prompt_ms": 378.015,
+        "prompt_per_token_ms": 0.6714298401420958,
+        "prompt_per_second": 1489.3588878748199,
+        "predicted_n": 23,
+        "predicted_ms": 328.119,
+        "predicted_per_token_ms": 14.914500000000002,
+        "predicted_per_second": 67.04884508364343
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 563,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 563,
+      "prompt_ms": 378.015,
+      "predicted_n": 23,
+      "predicted_ms": 328.119,
+      "cached_tokens": 0,
+      "prompt_tokens": 563,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_off_22_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 4,
+      "user_text": "How is payments-api doing today?",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 537.6501670107245,
+      "wall_ms": 710.8271669712849,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 561,
+        "prompt_ms": 377.839,
+        "prompt_per_token_ms": 0.6735098039215687,
+        "prompt_per_second": 1484.7593816413869,
+        "predicted_n": 22,
+        "predicted_ms": 312.678,
+        "predicted_per_token_ms": 14.88942857142857,
+        "predicted_per_second": 67.16174467023583
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 561,
+        "total_tokens": 583,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 561,
+      "prompt_ms": 377.839,
+      "predicted_n": 22,
+      "predicted_ms": 312.678,
+      "cached_tokens": 0,
+      "prompt_tokens": 561,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_off_23_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 5,
+      "user_text": "Is staging-api OK?",
+      "prompt_tokens_counted": 559,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 544.668415968772,
+      "wall_ms": 730.8029999840073,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 559,
+        "prompt_ms": 377.395,
+        "prompt_per_token_ms": 0.6751252236135957,
+        "prompt_per_second": 1481.2066932524278,
+        "predicted_n": 23,
+        "predicted_ms": 323.627,
+        "predicted_per_token_ms": 14.710318181818183,
+        "predicted_per_second": 67.9794949123528
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 559,
+        "total_tokens": 582,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 559,
+      "prompt_ms": 377.395,
+      "predicted_n": 23,
+      "predicted_ms": 323.627,
+      "cached_tokens": 0,
+      "prompt_tokens": 559,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_off_24_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 6,
+      "user_text": "staging-api 现在健康吗？",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 522.3317079944536,
+      "wall_ms": 710.7329170103185,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 564,
+        "prompt_ms": 379.34,
+        "prompt_per_token_ms": 0.6725886524822695,
+        "prompt_per_second": 1486.7928507407603,
+        "predicted_n": 23,
+        "predicted_ms": 325.53,
+        "predicted_per_token_ms": 14.79681818181818,
+        "predicted_per_second": 67.58209688815164
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 564,
+        "total_tokens": 587,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 379.34,
+      "predicted_n": 23,
+      "predicted_ms": 325.53,
+      "cached_tokens": 0,
+      "prompt_tokens": 564,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "blocked_off_25_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 7,
+      "user_text": "检查 payments-api 的健康状况。",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 550.5274999886751,
+      "wall_ms": 726.9609159557149,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 561,
+        "prompt_ms": 378.129,
+        "prompt_per_token_ms": 0.6740267379679145,
+        "prompt_per_second": 1483.620669136723,
+        "predicted_n": 22,
+        "predicted_ms": 318.26,
+        "predicted_per_token_ms": 15.155238095238095,
+        "predicted_per_second": 65.98378684094766
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 561,
+        "total_tokens": 583,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 561,
+      "prompt_ms": 378.129,
+      "predicted_n": 22,
+      "predicted_ms": 318.26,
+      "cached_tokens": 0,
+      "prompt_tokens": 561,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_off_26_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 8,
+      "user_text": "payments-api 正常运行吗？",
+      "prompt_tokens_counted": 562,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 541.1844580085017,
+      "wall_ms": 713.0999159999192,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 562,
+        "prompt_ms": 379.183,
+        "prompt_per_token_ms": 0.674702846975089,
+        "prompt_per_second": 1482.1339564273715,
+        "predicted_n": 22,
+        "predicted_ms": 310.855,
+        "predicted_per_token_ms": 14.802619047619048,
+        "predicted_per_second": 67.55561274549227
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 562,
+        "total_tokens": 584,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 562,
+      "prompt_ms": 379.183,
+      "predicted_n": 22,
+      "predicted_ms": 310.855,
+      "cached_tokens": 0,
+      "prompt_tokens": 562,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "blocked_off_27_skill",
+      "layout": "blocked",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 9,
+      "user_text": "请确认 staging-api 是否正常。",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 541.3040419807658,
+      "wall_ms": 727.847957983613,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 561,
+        "prompt_ms": 381.886,
+        "prompt_per_token_ms": 0.6807237076648842,
+        "prompt_per_second": 1469.0247875020293,
+        "predicted_n": 23,
+        "predicted_ms": 323.407,
+        "predicted_per_token_ms": 14.700318181818181,
+        "predicted_per_second": 68.02573846577224
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 561,
+        "total_tokens": 584,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 561,
+      "prompt_ms": 381.886,
+      "predicted_n": 23,
+      "predicted_ms": 323.407,
+      "cached_tokens": 0,
+      "prompt_tokens": 561,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_on_00_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "cold",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": null,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 706.4841670216992,
+      "wall_ms": 1028.5632089944556,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 965,
+        "prompt_ms": 679.926,
+        "prompt_per_token_ms": 0.7045865284974093,
+        "prompt_per_second": 1419.2720972576426,
+        "predicted_n": 23,
+        "predicted_ms": 344.931,
+        "predicted_per_token_ms": 15.678681818181817,
+        "predicted_per_second": 63.78087211645228
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 679.926,
+      "predicted_n": 23,
+      "predicted_ms": 344.931,
+      "cached_tokens": 0,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_on_01_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "cold",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": null,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 529.2899169726297,
+      "wall_ms": 700.5441670189612,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 564,
+        "prompt_ms": 378.213,
+        "prompt_per_token_ms": 0.670590425531915,
+        "prompt_per_second": 1491.2231996256078,
+        "predicted_n": 22,
+        "predicted_ms": 308.619,
+        "predicted_per_token_ms": 14.696142857142858,
+        "predicted_per_second": 68.04506527465904
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 378.213,
+      "predicted_n": 22,
+      "predicted_ms": 308.619,
+      "cached_tokens": 0,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_on_02_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "warmup",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 965,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 44.966167013626546,
+      "wall_ms": 363.33095899317414,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 964,
+        "prompt_n": 1,
+        "prompt_ms": 17.812,
+        "prompt_per_token_ms": 17.812,
+        "prompt_per_second": 56.141926790927464,
+        "predicted_n": 23,
+        "predicted_ms": 333.444,
+        "predicted_per_token_ms": 15.156545454545455,
+        "predicted_per_second": 65.97809527236957
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 964
+        }
+      },
+      "cache_n": 964,
+      "prompt_n": 1,
+      "prompt_ms": 17.812,
+      "predicted_n": 23,
+      "predicted_ms": 333.444,
+      "cached_tokens": 964,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_on_03_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "warmup",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 564,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 155.27725004358217,
+      "wall_ms": 327.66104204347357,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 563,
+        "prompt_n": 1,
+        "prompt_ms": 15.142,
+        "prompt_per_token_ms": 15.142,
+        "prompt_per_second": 66.0414740457007,
+        "predicted_n": 22,
+        "predicted_ms": 302.217,
+        "predicted_per_token_ms": 14.391285714285713,
+        "predicted_per_second": 69.48649480340286
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 563
+        }
+      },
+      "cache_n": 563,
+      "prompt_n": 1,
+      "prompt_ms": 15.142,
+      "predicted_n": 22,
+      "predicted_ms": 302.217,
+      "cached_tokens": 563,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_on_04_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "warmup",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 965,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 41.40279197599739,
+      "wall_ms": 363.33841702435166,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 964,
+        "prompt_n": 1,
+        "prompt_ms": 15.836,
+        "prompt_per_token_ms": 15.836,
+        "prompt_per_second": 63.14725940894165,
+        "predicted_n": 23,
+        "predicted_ms": 336.911,
+        "predicted_per_token_ms": 15.314136363636363,
+        "predicted_per_second": 65.29914428439558
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 964
+        }
+      },
+      "cache_n": 964,
+      "prompt_n": 1,
+      "prompt_ms": 15.836,
+      "predicted_n": 23,
+      "predicted_ms": 336.911,
+      "cached_tokens": 964,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_on_05_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "warmup",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 564,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 156.4422909868881,
+      "wall_ms": 330.1795410225168,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 563,
+        "prompt_n": 1,
+        "prompt_ms": 15.668,
+        "prompt_per_token_ms": 15.668,
+        "prompt_per_second": 63.82435537401073,
+        "predicted_n": 22,
+        "predicted_ms": 303.717,
+        "predicted_per_token_ms": 14.462714285714284,
+        "predicted_per_second": 69.14331433538459
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 563
+        }
+      },
+      "cache_n": 563,
+      "prompt_n": 1,
+      "prompt_ms": 15.668,
+      "predicted_n": 22,
+      "predicted_ms": 303.717,
+      "cached_tokens": 563,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_on_06_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "warmup",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 965,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 41.50412499438971,
+      "wall_ms": 359.4812090159394,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 964,
+        "prompt_n": 1,
+        "prompt_ms": 15.789,
+        "prompt_per_token_ms": 15.789,
+        "prompt_per_second": 63.33523339033504,
+        "predicted_n": 23,
+        "predicted_ms": 333.064,
+        "predicted_per_token_ms": 15.139272727272727,
+        "predicted_per_second": 66.05337112386809
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 964
+        }
+      },
+      "cache_n": 964,
+      "prompt_n": 1,
+      "prompt_ms": 15.789,
+      "predicted_n": 23,
+      "predicted_ms": 333.064,
+      "cached_tokens": 964,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_on_07_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "warmup",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 564,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 156.40837501268834,
+      "wall_ms": 333.51391600444913,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 563,
+        "prompt_n": 1,
+        "prompt_ms": 15.015,
+        "prompt_per_token_ms": 15.015,
+        "prompt_per_second": 66.6000666000666,
+        "predicted_n": 22,
+        "predicted_ms": 308.023,
+        "predicted_per_token_ms": 14.667761904761907,
+        "predicted_per_second": 68.17672706258948
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 563
+        }
+      },
+      "cache_n": 563,
+      "prompt_n": 1,
+      "prompt_ms": 15.015,
+      "predicted_n": 22,
+      "predicted_ms": 308.023,
+      "cached_tokens": 563,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_on_08_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 0,
+      "user_text": "Is staging-api healthy right now?",
+      "prompt_tokens_counted": 962,
+      "shared_with_previous": 947,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 189.6684169769287,
+      "wall_ms": 356.117749994155,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "check-service-health",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 947,
+        "prompt_n": 15,
+        "prompt_ms": 41.485,
+        "prompt_per_token_ms": 2.7656666666666667,
+        "prompt_per_second": 361.57647342412923,
+        "predicted_n": 21,
+        "predicted_ms": 304.049,
+        "predicted_per_token_ms": 15.202449999999999,
+        "predicted_per_second": 65.77887116879188
+      },
+      "usage": {
+        "completion_tokens": 21,
+        "prompt_tokens": 962,
+        "total_tokens": 983,
+        "prompt_tokens_details": {
+          "cached_tokens": 947
+        }
+      },
+      "cache_n": 947,
+      "prompt_n": 15,
+      "prompt_ms": 41.485,
+      "predicted_n": 21,
+      "predicted_ms": 304.049,
+      "cached_tokens": 947,
+      "prompt_tokens": 962,
+      "completion_tokens": 21
+    },
+    {
+      "generation_id": "interleaved_on_09_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 0,
+      "user_text": "Is staging-api healthy right now?",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 258,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 369.2114580189809,
+      "wall_ms": 557.6141669880599,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 258,
+        "prompt_n": 303,
+        "prompt_ms": 218.755,
+        "prompt_per_token_ms": 0.721963696369637,
+        "prompt_per_second": 1385.111197458344,
+        "predicted_n": 23,
+        "predicted_ms": 328.404,
+        "predicted_per_token_ms": 14.927454545454545,
+        "predicted_per_second": 66.99065784826007
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 561,
+        "total_tokens": 584,
+        "prompt_tokens_details": {
+          "cached_tokens": 258
+        }
+      },
+      "cache_n": 258,
+      "prompt_n": 303,
+      "prompt_ms": 218.755,
+      "predicted_n": 23,
+      "predicted_ms": 328.404,
+      "cached_tokens": 258,
+      "prompt_tokens": 561,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_on_10_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 1,
+      "user_text": "What was the latest deployment of payments-api?",
+      "prompt_tokens_counted": 964,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 223.25466602342203,
+      "wall_ms": 390.44975000433624,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "lookup-latest-deployment",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 18,
+        "prompt_ms": 45.102,
+        "prompt_per_token_ms": 2.5056666666666665,
+        "prompt_per_second": 399.09538379672745,
+        "predicted_n": 23,
+        "predicted_ms": 334.595,
+        "predicted_per_token_ms": 15.208863636363638,
+        "predicted_per_second": 65.75113196551054
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 964,
+        "total_tokens": 987,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 18,
+      "prompt_ms": 45.102,
+      "predicted_n": 23,
+      "predicted_ms": 334.595,
+      "cached_tokens": 946,
+      "prompt_tokens": 964,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_on_11_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 1,
+      "user_text": "Check the health of payments-api.",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 369.6957500069402,
+      "wall_ms": 541.9297089683823,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 304,
+        "prompt_ms": 218.899,
+        "prompt_per_token_ms": 0.7200625,
+        "prompt_per_second": 1388.7683360819372,
+        "predicted_n": 22,
+        "predicted_ms": 312.573,
+        "predicted_per_token_ms": 14.88442857142857,
+        "predicted_per_second": 67.1843057461777
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 561,
+        "total_tokens": 583,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 304,
+      "prompt_ms": 218.899,
+      "predicted_n": 22,
+      "predicted_ms": 312.573,
+      "cached_tokens": 257,
+      "prompt_tokens": 561,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_on_12_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 2,
+      "user_text": "How many incidents did staging-api have in the last 60 minutes?",
+      "prompt_tokens_counted": 970,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 246.9146249932237,
+      "wall_ms": 413.28604199225083,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "summarize-incident-counts",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 24,
+        "prompt_ms": 38.618,
+        "prompt_per_token_ms": 1.6090833333333334,
+        "prompt_per_second": 621.4718525040137,
+        "predicted_n": 25,
+        "predicted_ms": 363.99,
+        "predicted_per_token_ms": 15.16625,
+        "predicted_per_second": 65.93587735926812
+      },
+      "usage": {
+        "completion_tokens": 25,
+        "prompt_tokens": 970,
+        "total_tokens": 995,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 24,
+      "prompt_ms": 38.618,
+      "predicted_n": 25,
+      "predicted_ms": 363.99,
+      "cached_tokens": 946,
+      "prompt_tokens": 970,
+      "completion_tokens": 25
+    },
+    {
+      "generation_id": "interleaved_on_13_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 2,
+      "user_text": "Is payments-api up?",
+      "prompt_tokens_counted": 559,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 379.52895800117403,
+      "wall_ms": 551.1163329938427,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 302,
+        "prompt_ms": 221.326,
+        "prompt_per_token_ms": 0.7328675496688741,
+        "prompt_per_second": 1364.503040763399,
+        "predicted_n": 22,
+        "predicted_ms": 309.631,
+        "predicted_per_token_ms": 14.744333333333332,
+        "predicted_per_second": 67.8226663350892
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 559,
+        "total_tokens": 581,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 302,
+      "prompt_ms": 221.326,
+      "predicted_n": 22,
+      "predicted_ms": 309.631,
+      "cached_tokens": 257,
+      "prompt_tokens": 559,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_on_14_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 3,
+      "user_text": "Is the service healthy?",
+      "prompt_tokens_counted": 960,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 234.68595801386982,
+      "wall_ms": 401.77166601642966,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "health-and-diagnostic-checklist",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 14,
+        "prompt_ms": 35.334,
+        "prompt_per_token_ms": 2.523857142857143,
+        "prompt_per_second": 396.21893926529685,
+        "predicted_n": 24,
+        "predicted_ms": 352.348,
+        "predicted_per_token_ms": 15.319478260869566,
+        "predicted_per_second": 65.27637449339856
+      },
+      "usage": {
+        "completion_tokens": 24,
+        "prompt_tokens": 960,
+        "total_tokens": 984,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 14,
+      "prompt_ms": 35.334,
+      "predicted_n": 24,
+      "predicted_ms": 352.348,
+      "cached_tokens": 946,
+      "prompt_tokens": 960,
+      "completion_tokens": 24
+    },
+    {
+      "generation_id": "interleaved_on_15_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 3,
+      "user_text": "Please tell me whether staging-api is healthy.",
+      "prompt_tokens_counted": 563,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 370.7050000084564,
+      "wall_ms": 557.8192920074798,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 306,
+        "prompt_ms": 221.699,
+        "prompt_per_token_ms": 0.7245065359477124,
+        "prompt_per_second": 1380.2497981497434,
+        "predicted_n": 23,
+        "predicted_ms": 325.69,
+        "predicted_per_token_ms": 14.80409090909091,
+        "predicted_per_second": 67.54889618962818
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 563,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 306,
+      "prompt_ms": 221.699,
+      "predicted_n": 23,
+      "predicted_ms": 325.69,
+      "cached_tokens": 257,
+      "prompt_tokens": 563,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_on_16_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 4,
+      "user_text": "payments-api got slow after the last deploy. Find out why.",
+      "prompt_tokens_counted": 968,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 188.31937498180196,
+      "wall_ms": 355.5445829988457,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "investigate-performance",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 22,
+        "prompt_ms": 38.498,
+        "prompt_per_token_ms": 1.7499090909090909,
+        "prompt_per_second": 571.458257571822,
+        "predicted_n": 21,
+        "predicted_ms": 306.466,
+        "predicted_per_token_ms": 15.3233,
+        "predicted_per_second": 65.2600941050557
+      },
+      "usage": {
+        "completion_tokens": 21,
+        "prompt_tokens": 968,
+        "total_tokens": 989,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 22,
+      "prompt_ms": 38.498,
+      "predicted_n": 21,
+      "predicted_ms": 306.466,
+      "cached_tokens": 946,
+      "prompt_tokens": 968,
+      "completion_tokens": 21
+    },
+    {
+      "generation_id": "interleaved_on_17_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 4,
+      "user_text": "How is payments-api doing today?",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 372.024665994104,
+      "wall_ms": 547.7459160028957,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 304,
+        "prompt_ms": 220.769,
+        "prompt_per_token_ms": 0.7262138157894737,
+        "prompt_per_second": 1377.0049236985267,
+        "predicted_n": 22,
+        "predicted_ms": 316.55,
+        "predicted_per_token_ms": 15.073809523809524,
+        "predicted_per_second": 66.34023061127785
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 561,
+        "total_tokens": 583,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 304,
+      "prompt_ms": 220.769,
+      "predicted_n": 22,
+      "predicted_ms": 316.55,
+      "cached_tokens": 257,
+      "prompt_tokens": 561,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_on_18_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 5,
+      "user_text": "Delete the demo database demo-orders.",
+      "prompt_tokens_counted": 962,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 203.78116599749774,
+      "wall_ms": 372.9651249595918,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "delete-demo-database",
+            "arguments": "{\"language\": \"zh\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 16,
+        "prompt_ms": 37.842,
+        "prompt_per_token_ms": 2.365125,
+        "prompt_per_second": 422.81063368743725,
+        "predicted_n": 22,
+        "predicted_ms": 324.308,
+        "predicted_per_token_ms": 15.443238095238096,
+        "predicted_per_second": 64.75325924738212
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 962,
+        "total_tokens": 984,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 16,
+      "prompt_ms": 37.842,
+      "predicted_n": 22,
+      "predicted_ms": 324.308,
+      "cached_tokens": 946,
+      "prompt_tokens": 962,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_on_19_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 5,
+      "user_text": "Is staging-api OK?",
+      "prompt_tokens_counted": 559,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 373.962749959901,
+      "wall_ms": 561.1941670067608,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 302,
+        "prompt_ms": 221.751,
+        "prompt_per_token_ms": 0.7342748344370861,
+        "prompt_per_second": 1361.8878832564453,
+        "predicted_n": 23,
+        "predicted_ms": 326.548,
+        "predicted_per_token_ms": 14.84309090909091,
+        "predicted_per_second": 67.37141247228585
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 559,
+        "total_tokens": 582,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 302,
+      "prompt_ms": 221.751,
+      "predicted_n": 23,
+      "predicted_ms": 326.548,
+      "cached_tokens": 257,
+      "prompt_tokens": 559,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_on_20_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 6,
+      "user_text": "staging-api 现在健康吗？",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 196.9627920188941,
+      "wall_ms": 366.4538750308566,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "check-service-health",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 19,
+        "prompt_ms": 46.192,
+        "prompt_per_token_ms": 2.431157894736842,
+        "prompt_per_second": 411.3266366470384,
+        "predicted_n": 21,
+        "predicted_ms": 307.289,
+        "predicted_per_token_ms": 15.36445,
+        "predicted_per_second": 65.08531057083073
+      },
+      "usage": {
+        "completion_tokens": 21,
+        "prompt_tokens": 965,
+        "total_tokens": 986,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 19,
+      "prompt_ms": 46.192,
+      "predicted_n": 21,
+      "predicted_ms": 307.289,
+      "cached_tokens": 946,
+      "prompt_tokens": 965,
+      "completion_tokens": 21
+    },
+    {
+      "generation_id": "interleaved_on_21_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 6,
+      "user_text": "staging-api 现在健康吗？",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 371.9358330126852,
+      "wall_ms": 559.0620830189437,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 307,
+        "prompt_ms": 223.357,
+        "prompt_per_token_ms": 0.7275472312703583,
+        "prompt_per_second": 1374.4812116924923,
+        "predicted_n": 23,
+        "predicted_ms": 325.331,
+        "predicted_per_token_ms": 14.787772727272728,
+        "predicted_per_second": 67.6234358238225
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 564,
+        "total_tokens": 587,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 307,
+      "prompt_ms": 223.357,
+      "predicted_n": 23,
+      "predicted_ms": 325.331,
+      "cached_tokens": 257,
+      "prompt_tokens": 564,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_on_22_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 7,
+      "user_text": "payments-api 最近一次部署是什么？",
+      "prompt_tokens_counted": 963,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 223.9745410042815,
+      "wall_ms": 393.74670799588785,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "lookup-latest-deployment",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 17,
+        "prompt_ms": 44.572,
+        "prompt_per_token_ms": 2.6218823529411766,
+        "prompt_per_second": 381.40536659786414,
+        "predicted_n": 23,
+        "predicted_ms": 338.599,
+        "predicted_per_token_ms": 15.390863636363635,
+        "predicted_per_second": 64.97361185354947
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 963,
+        "total_tokens": 986,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 17,
+      "prompt_ms": 44.572,
+      "predicted_n": 23,
+      "predicted_ms": 338.599,
+      "cached_tokens": 946,
+      "prompt_tokens": 963,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_on_23_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 7,
+      "user_text": "检查 payments-api 的健康状况。",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 371.4690830092877,
+      "wall_ms": 544.2532919696532,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 304,
+        "prompt_ms": 222.357,
+        "prompt_per_token_ms": 0.7314375,
+        "prompt_per_second": 1367.1708109031872,
+        "predicted_n": 22,
+        "predicted_ms": 311.391,
+        "predicted_per_token_ms": 14.828142857142858,
+        "predicted_per_second": 67.43932868965383
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 561,
+        "total_tokens": 583,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 304,
+      "prompt_ms": 222.357,
+      "predicted_n": 22,
+      "predicted_ms": 311.391,
+      "cached_tokens": 257,
+      "prompt_tokens": 561,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_on_24_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 8,
+      "user_text": "staging-api 在过去 60 分钟内有多少个事故？",
+      "prompt_tokens_counted": 970,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 246.17220798972994,
+      "wall_ms": 416.53975000372157,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "summarize-incident-counts",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 24,
+        "prompt_ms": 36.644,
+        "prompt_per_token_ms": 1.5268333333333333,
+        "prompt_per_second": 654.950332933086,
+        "predicted_n": 25,
+        "predicted_ms": 369.095,
+        "predicted_per_token_ms": 15.378958333333335,
+        "predicted_per_second": 65.02390983351168
+      },
+      "usage": {
+        "completion_tokens": 25,
+        "prompt_tokens": 970,
+        "total_tokens": 995,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 24,
+      "prompt_ms": 36.644,
+      "predicted_n": 25,
+      "predicted_ms": 369.095,
+      "cached_tokens": 946,
+      "prompt_tokens": 970,
+      "completion_tokens": 25
+    },
+    {
+      "generation_id": "interleaved_on_25_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 8,
+      "user_text": "payments-api 正常运行吗？",
+      "prompt_tokens_counted": 562,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 384.6436669700779,
+      "wall_ms": 558.4093329962343,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 305,
+        "prompt_ms": 234.224,
+        "prompt_per_token_ms": 0.7679475409836065,
+        "prompt_per_second": 1302.1722795272904,
+        "predicted_n": 22,
+        "predicted_ms": 313.736,
+        "predicted_per_token_ms": 14.939809523809524,
+        "predicted_per_second": 66.93525766886809
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 562,
+        "total_tokens": 584,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 305,
+      "prompt_ms": 234.224,
+      "predicted_n": 22,
+      "predicted_ms": 313.736,
+      "cached_tokens": 257,
+      "prompt_tokens": 562,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_on_26_routing",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 9,
+      "user_text": "这个服务健康吗？",
+      "prompt_tokens_counted": 960,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 230.29724997468293,
+      "wall_ms": 399.3702919688076,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "health-and-diagnostic-checklist",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 946,
+        "prompt_n": 14,
+        "prompt_ms": 35.375,
+        "prompt_per_token_ms": 2.5267857142857144,
+        "prompt_per_second": 395.7597173144876,
+        "predicted_n": 24,
+        "predicted_ms": 353.097,
+        "predicted_per_token_ms": 15.35204347826087,
+        "predicted_per_second": 65.13790828016097
+      },
+      "usage": {
+        "completion_tokens": 24,
+        "prompt_tokens": 960,
+        "total_tokens": 984,
+        "prompt_tokens_details": {
+          "cached_tokens": 946
+        }
+      },
+      "cache_n": 946,
+      "prompt_n": 14,
+      "prompt_ms": 35.375,
+      "predicted_n": 24,
+      "predicted_ms": 353.097,
+      "cached_tokens": 946,
+      "prompt_tokens": 960,
+      "completion_tokens": 24
+    },
+    {
+      "generation_id": "interleaved_on_27_skill",
+      "layout": "interleaved",
+      "cache_prompt": true,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 9,
+      "user_text": "请确认 staging-api 是否正常。",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 371.8413329916075,
+      "wall_ms": 558.4879999514669,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 257,
+        "prompt_n": 304,
+        "prompt_ms": 222.233,
+        "prompt_per_token_ms": 0.7310296052631579,
+        "prompt_per_second": 1367.933655217722,
+        "predicted_n": 23,
+        "predicted_ms": 324.876,
+        "predicted_per_token_ms": 14.767090909090909,
+        "predicted_per_second": 67.71814476908114
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 561,
+        "total_tokens": 584,
+        "prompt_tokens_details": {
+          "cached_tokens": 257
+        }
+      },
+      "cache_n": 257,
+      "prompt_n": 304,
+      "prompt_ms": 222.233,
+      "predicted_n": 23,
+      "predicted_ms": 324.876,
+      "cached_tokens": 257,
+      "prompt_tokens": 561,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_off_00_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "cold",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": null,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 706.1905829468742,
+      "wall_ms": 1027.629291987978,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 965,
+        "prompt_ms": 679.309,
+        "prompt_per_token_ms": 0.7039471502590673,
+        "prompt_per_second": 1420.5611879130117,
+        "predicted_n": 23,
+        "predicted_ms": 344.928,
+        "predicted_per_token_ms": 15.678545454545455,
+        "predicted_per_second": 63.78142684850172
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 679.309,
+      "predicted_n": 23,
+      "predicted_ms": 344.928,
+      "cached_tokens": 0,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_off_01_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "cold",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": null,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 533.4039590088651,
+      "wall_ms": 706.5627499832772,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 564,
+        "prompt_ms": 378.725,
+        "prompt_per_token_ms": 0.6714982269503547,
+        "prompt_per_second": 1489.2072083965938,
+        "predicted_n": 22,
+        "predicted_ms": 313.519,
+        "predicted_per_token_ms": 14.92947619047619,
+        "predicted_per_second": 66.9815864429269
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 378.725,
+      "predicted_n": 22,
+      "predicted_ms": 313.519,
+      "cached_tokens": 0,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_off_02_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "warmup",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 965,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 712.5685419887304,
+      "wall_ms": 1034.2862919787876,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 965,
+        "prompt_ms": 678.82,
+        "prompt_per_token_ms": 0.7034404145077721,
+        "prompt_per_second": 1421.5845143042336,
+        "predicted_n": 23,
+        "predicted_ms": 342.611,
+        "predicted_per_token_ms": 15.573227272727273,
+        "predicted_per_second": 64.21276608164945
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 678.82,
+      "predicted_n": 23,
+      "predicted_ms": 342.611,
+      "cached_tokens": 0,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_off_03_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "warmup",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 564,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 535.3882079944015,
+      "wall_ms": 706.8402080330998,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 564,
+        "prompt_ms": 380.174,
+        "prompt_per_token_ms": 0.6740673758865248,
+        "prompt_per_second": 1483.5312251758405,
+        "predicted_n": 22,
+        "predicted_ms": 313.133,
+        "predicted_per_token_ms": 14.911095238095237,
+        "predicted_per_second": 67.06415484794002
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 380.174,
+      "predicted_n": 22,
+      "predicted_ms": 313.133,
+      "cached_tokens": 0,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_off_04_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "warmup",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 965,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 710.9461249783635,
+      "wall_ms": 1030.815917009022,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 965,
+        "prompt_ms": 678.674,
+        "prompt_per_token_ms": 0.7032891191709845,
+        "prompt_per_second": 1421.8903332085802,
+        "predicted_n": 23,
+        "predicted_ms": 341.342,
+        "predicted_per_token_ms": 15.515545454545453,
+        "predicted_per_second": 64.45148853642388
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 678.674,
+      "predicted_n": 23,
+      "predicted_ms": 341.342,
+      "cached_tokens": 0,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_off_05_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "warmup",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 564,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 529.9445419805124,
+      "wall_ms": 702.8009169735014,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 564,
+        "prompt_ms": 379.709,
+        "prompt_per_token_ms": 0.6732429078014185,
+        "prompt_per_second": 1485.3479901714206,
+        "predicted_n": 22,
+        "predicted_ms": 312.545,
+        "predicted_per_token_ms": 14.883095238095239,
+        "predicted_per_second": 67.19032459325857
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 379.709,
+      "predicted_n": 22,
+      "predicted_ms": 312.545,
+      "cached_tokens": 0,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_off_06_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "warmup",
+      "purpose": "routing",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 965,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "stop",
+      "first_delta_ms": 712.2807090054266,
+      "wall_ms": 1043.3608749881387,
+      "output": {
+        "text": "<request_clarification language=\"en\" question=\"Is the payments-api service up at the moment?\">",
+        "tool_calls": []
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 965,
+        "prompt_ms": 678.382,
+        "prompt_per_token_ms": 0.7029865284974093,
+        "prompt_per_second": 1422.5023659236242,
+        "predicted_n": 23,
+        "predicted_ms": 354.432,
+        "predicted_per_token_ms": 16.110545454545456,
+        "predicted_per_second": 62.07114481762369
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 965,
+        "total_tokens": 988,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 678.382,
+      "predicted_n": 23,
+      "predicted_ms": 354.432,
+      "cached_tokens": 0,
+      "prompt_tokens": 965,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_off_07_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "warmup",
+      "purpose": "skill",
+      "index": null,
+      "user_text": "Is the payments-api service up at the moment?",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 564,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 530.0307919969782,
+      "wall_ms": 707.7547499793582,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 564,
+        "prompt_ms": 377.809,
+        "prompt_per_token_ms": 0.6698741134751773,
+        "prompt_per_second": 1492.8177994701027,
+        "predicted_n": 22,
+        "predicted_ms": 319.675,
+        "predicted_per_token_ms": 15.222619047619048,
+        "predicted_per_second": 65.69171815124736
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 564,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 377.809,
+      "predicted_n": 22,
+      "predicted_ms": 319.675,
+      "cached_tokens": 0,
+      "prompt_tokens": 564,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_off_08_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 0,
+      "user_text": "Is staging-api healthy right now?",
+      "prompt_tokens_counted": 962,
+      "shared_with_previous": 947,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 836.6454589995556,
+      "wall_ms": 1003.773459000513,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "check-service-health",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 962,
+        "prompt_ms": 678.763,
+        "prompt_per_token_ms": 0.7055748440748442,
+        "prompt_per_second": 1417.2840888498636,
+        "predicted_n": 21,
+        "predicted_ms": 314.218,
+        "predicted_per_token_ms": 15.7109,
+        "predicted_per_second": 63.650077334843964
+      },
+      "usage": {
+        "completion_tokens": 21,
+        "prompt_tokens": 962,
+        "total_tokens": 983,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 962,
+      "prompt_ms": 678.763,
+      "predicted_n": 21,
+      "predicted_ms": 314.218,
+      "cached_tokens": 0,
+      "prompt_tokens": 962,
+      "completion_tokens": 21
+    },
+    {
+      "generation_id": "interleaved_off_09_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 0,
+      "user_text": "Is staging-api healthy right now?",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 258,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 536.692249996122,
+      "wall_ms": 724.0810840157792,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 561,
+        "prompt_ms": 381.906,
+        "prompt_per_token_ms": 0.6807593582887701,
+        "prompt_per_second": 1468.9478562787701,
+        "predicted_n": 23,
+        "predicted_ms": 330.451,
+        "predicted_per_token_ms": 15.0205,
+        "predicted_per_second": 66.57567990413101
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 561,
+        "total_tokens": 584,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 561,
+      "prompt_ms": 381.906,
+      "predicted_n": 23,
+      "predicted_ms": 330.451,
+      "cached_tokens": 0,
+      "prompt_tokens": 561,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_off_10_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 1,
+      "user_text": "What was the latest deployment of payments-api?",
+      "prompt_tokens_counted": 964,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 869.0032919985242,
+      "wall_ms": 1035.1895000203513,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "lookup-latest-deployment",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 964,
+        "prompt_ms": 680.553,
+        "prompt_per_token_ms": 0.7059678423236514,
+        "prompt_per_second": 1416.4951150020645,
+        "predicted_n": 23,
+        "predicted_ms": 343.968,
+        "predicted_per_token_ms": 15.634909090909092,
+        "predicted_per_second": 63.959438087263926
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 964,
+        "total_tokens": 987,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 964,
+      "prompt_ms": 680.553,
+      "predicted_n": 23,
+      "predicted_ms": 343.968,
+      "cached_tokens": 0,
+      "prompt_tokens": 964,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_off_11_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 1,
+      "user_text": "Check the health of payments-api.",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 532.1479580015875,
+      "wall_ms": 703.2914159935899,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 561,
+        "prompt_ms": 379.484,
+        "prompt_per_token_ms": 0.6764420677361853,
+        "prompt_per_second": 1478.323196761919,
+        "predicted_n": 22,
+        "predicted_ms": 313.558,
+        "predicted_per_token_ms": 14.931333333333333,
+        "predicted_per_second": 66.97325534669822
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 561,
+        "total_tokens": 583,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 561,
+      "prompt_ms": 379.484,
+      "predicted_n": 22,
+      "predicted_ms": 313.558,
+      "cached_tokens": 0,
+      "prompt_tokens": 561,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_off_12_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 2,
+      "user_text": "How many incidents did staging-api have in the last 60 minutes?",
+      "prompt_tokens_counted": 970,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 900.7257079938427,
+      "wall_ms": 1066.9150410103612,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "summarize-incident-counts",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 970,
+        "prompt_ms": 682.914,
+        "prompt_per_token_ms": 0.7040350515463918,
+        "prompt_per_second": 1420.3838257818702,
+        "predicted_n": 25,
+        "predicted_ms": 373.462,
+        "predicted_per_token_ms": 15.560916666666666,
+        "predicted_per_second": 64.26356630661218
+      },
+      "usage": {
+        "completion_tokens": 25,
+        "prompt_tokens": 970,
+        "total_tokens": 995,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 970,
+      "prompt_ms": 682.914,
+      "predicted_n": 25,
+      "predicted_ms": 373.462,
+      "cached_tokens": 0,
+      "prompt_tokens": 970,
+      "completion_tokens": 25
+    },
+    {
+      "generation_id": "interleaved_off_13_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 2,
+      "user_text": "Is payments-api up?",
+      "prompt_tokens_counted": 559,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 567.2974579501897,
+      "wall_ms": 741.0884579876438,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 559,
+        "prompt_ms": 384.728,
+        "prompt_per_token_ms": 0.6882432915921288,
+        "prompt_per_second": 1452.9745690461832,
+        "predicted_n": 22,
+        "predicted_ms": 308.87,
+        "predicted_per_token_ms": 14.708095238095238,
+        "predicted_per_second": 67.98976915854567
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 559,
+        "total_tokens": 581,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 559,
+      "prompt_ms": 384.728,
+      "predicted_n": 22,
+      "predicted_ms": 308.87,
+      "cached_tokens": 0,
+      "prompt_tokens": 559,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_off_14_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 3,
+      "user_text": "Is the service healthy?",
+      "prompt_tokens_counted": 960,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 861.1040419782512,
+      "wall_ms": 1030.1912080030888,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "health-and-diagnostic-checklist",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 960,
+        "prompt_ms": 657.748,
+        "prompt_per_token_ms": 0.6851541666666667,
+        "prompt_per_second": 1459.5255325747853,
+        "predicted_n": 24,
+        "predicted_ms": 361.4,
+        "predicted_per_token_ms": 15.713043478260868,
+        "predicted_per_second": 63.64139457664638
+      },
+      "usage": {
+        "completion_tokens": 24,
+        "prompt_tokens": 960,
+        "total_tokens": 984,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 960,
+      "prompt_ms": 657.748,
+      "predicted_n": 24,
+      "predicted_ms": 361.4,
+      "cached_tokens": 0,
+      "prompt_tokens": 960,
+      "completion_tokens": 24
+    },
+    {
+      "generation_id": "interleaved_off_15_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 3,
+      "user_text": "Please tell me whether staging-api is healthy.",
+      "prompt_tokens_counted": 563,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 532.8088750247844,
+      "wall_ms": 719.911583000794,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 563,
+        "prompt_ms": 378.743,
+        "prompt_per_token_ms": 0.6727229129662522,
+        "prompt_per_second": 1486.4961200603047,
+        "predicted_n": 23,
+        "predicted_ms": 327.498,
+        "predicted_per_token_ms": 14.886272727272727,
+        "predicted_per_second": 67.17598275409316
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 563,
+        "total_tokens": 586,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 563,
+      "prompt_ms": 378.743,
+      "predicted_n": 23,
+      "predicted_ms": 327.498,
+      "cached_tokens": 0,
+      "prompt_tokens": 563,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_off_16_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 4,
+      "user_text": "payments-api got slow after the last deploy. Find out why.",
+      "prompt_tokens_counted": 968,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 840.4011669917963,
+      "wall_ms": 1005.7044589775614,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "investigate-performance",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 968,
+        "prompt_ms": 679.073,
+        "prompt_per_token_ms": 0.701521694214876,
+        "prompt_per_second": 1425.4726664143618,
+        "predicted_n": 21,
+        "predicted_ms": 315.913,
+        "predicted_per_token_ms": 15.79565,
+        "predicted_per_second": 63.308569131374774
+      },
+      "usage": {
+        "completion_tokens": 21,
+        "prompt_tokens": 968,
+        "total_tokens": 989,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 968,
+      "prompt_ms": 679.073,
+      "predicted_n": 21,
+      "predicted_ms": 315.913,
+      "cached_tokens": 0,
+      "prompt_tokens": 968,
+      "completion_tokens": 21
+    },
+    {
+      "generation_id": "interleaved_off_17_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 4,
+      "user_text": "How is payments-api doing today?",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 534.76387495175,
+      "wall_ms": 707.8131249872968,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 561,
+        "prompt_ms": 381.798,
+        "prompt_per_token_ms": 0.6805668449197861,
+        "prompt_per_second": 1469.3633806358337,
+        "predicted_n": 22,
+        "predicted_ms": 312.605,
+        "predicted_per_token_ms": 14.885952380952382,
+        "predicted_per_second": 67.17742838406295
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 561,
+        "total_tokens": 583,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 561,
+      "prompt_ms": 381.798,
+      "predicted_n": 22,
+      "predicted_ms": 312.605,
+      "cached_tokens": 0,
+      "prompt_tokens": 561,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_off_18_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 5,
+      "user_text": "Delete the demo database demo-orders.",
+      "prompt_tokens_counted": 962,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 850.7642500335351,
+      "wall_ms": 1018.653417006135,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "delete-demo-database",
+            "arguments": "{\"language\": \"zh\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 962,
+        "prompt_ms": 678.701,
+        "prompt_per_token_ms": 0.705510395010395,
+        "prompt_per_second": 1417.4135591372342,
+        "predicted_n": 22,
+        "predicted_ms": 328.863,
+        "predicted_per_token_ms": 15.660142857142857,
+        "predicted_per_second": 63.85637788379963
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 962,
+        "total_tokens": 984,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 962,
+      "prompt_ms": 678.701,
+      "predicted_n": 22,
+      "predicted_ms": 328.863,
+      "cached_tokens": 0,
+      "prompt_tokens": 962,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_off_19_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 5,
+      "user_text": "Is staging-api OK?",
+      "prompt_tokens_counted": 559,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 525.5130840232596,
+      "wall_ms": 713.7284170021303,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 559,
+        "prompt_ms": 374.621,
+        "prompt_per_token_ms": 0.6701627906976744,
+        "prompt_per_second": 1492.1747579553735,
+        "predicted_n": 23,
+        "predicted_ms": 328.826,
+        "predicted_per_token_ms": 14.946636363636365,
+        "predicted_per_second": 66.90468515263392
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 559,
+        "total_tokens": 582,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 559,
+      "prompt_ms": 374.621,
+      "predicted_n": 23,
+      "predicted_ms": 328.826,
+      "cached_tokens": 0,
+      "prompt_tokens": 559,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_off_20_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 6,
+      "user_text": "staging-api 现在健康吗？",
+      "prompt_tokens_counted": 965,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 835.7466250308789,
+      "wall_ms": 1003.3740000217222,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "check-service-health",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 965,
+        "prompt_ms": 677.59,
+        "prompt_per_token_ms": 0.7021658031088083,
+        "prompt_per_second": 1424.1650555645745,
+        "predicted_n": 21,
+        "predicted_ms": 315.218,
+        "predicted_per_token_ms": 15.760900000000001,
+        "predicted_per_second": 63.448153341497
+      },
+      "usage": {
+        "completion_tokens": 21,
+        "prompt_tokens": 965,
+        "total_tokens": 986,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 965,
+      "prompt_ms": 677.59,
+      "predicted_n": 21,
+      "predicted_ms": 315.218,
+      "cached_tokens": 0,
+      "prompt_tokens": 965,
+      "completion_tokens": 21
+    },
+    {
+      "generation_id": "interleaved_off_21_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 6,
+      "user_text": "staging-api 现在健康吗？",
+      "prompt_tokens_counted": 564,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 527.9457079595886,
+      "wall_ms": 716.6822080034763,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 564,
+        "prompt_ms": 377.131,
+        "prompt_per_token_ms": 0.6686719858156028,
+        "prompt_per_second": 1495.5015631173255,
+        "predicted_n": 23,
+        "predicted_ms": 328.933,
+        "predicted_per_token_ms": 14.9515,
+        "predicted_per_second": 66.88292144600877
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 564,
+        "total_tokens": 587,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 564,
+      "prompt_ms": 377.131,
+      "predicted_n": 23,
+      "predicted_ms": 328.933,
+      "cached_tokens": 0,
+      "prompt_tokens": 564,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_off_22_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 7,
+      "user_text": "payments-api 最近一次部署是什么？",
+      "prompt_tokens_counted": 963,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 880.0715419929475,
+      "wall_ms": 1049.909709021449,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "lookup-latest-deployment",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 963,
+        "prompt_ms": 691.508,
+        "prompt_per_token_ms": 0.7180768431983385,
+        "prompt_per_second": 1392.6086176877202,
+        "predicted_n": 23,
+        "predicted_ms": 347.887,
+        "predicted_per_token_ms": 15.813045454545454,
+        "predicted_per_second": 63.238925283209774
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 963,
+        "total_tokens": 986,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 963,
+      "prompt_ms": 691.508,
+      "predicted_n": 23,
+      "predicted_ms": 347.887,
+      "cached_tokens": 0,
+      "prompt_tokens": 963,
+      "completion_tokens": 23
+    },
+    {
+      "generation_id": "interleaved_off_23_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 7,
+      "user_text": "检查 payments-api 的健康状况。",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 525.6657499703579,
+      "wall_ms": 698.4064999851398,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 561,
+        "prompt_ms": 378.124,
+        "prompt_per_token_ms": 0.674017825311943,
+        "prompt_per_second": 1483.6402873131565,
+        "predicted_n": 22,
+        "predicted_ms": 309.843,
+        "predicted_per_token_ms": 14.754428571428573,
+        "predicted_per_second": 67.77626088051045
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 561,
+        "total_tokens": 583,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 561,
+      "prompt_ms": 378.124,
+      "predicted_n": 22,
+      "predicted_ms": 309.843,
+      "cached_tokens": 0,
+      "prompt_tokens": 561,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_off_24_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 8,
+      "user_text": "staging-api 在过去 60 分钟内有多少个事故？",
+      "prompt_tokens_counted": 970,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 899.7960829874501,
+      "wall_ms": 1069.1710829851218,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "summarize-incident-counts",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 970,
+        "prompt_ms": 683.113,
+        "prompt_per_token_ms": 0.704240206185567,
+        "prompt_per_second": 1419.970048879175,
+        "predicted_n": 25,
+        "predicted_ms": 375.159,
+        "predicted_per_token_ms": 15.631625,
+        "predicted_per_second": 63.972875500787666
+      },
+      "usage": {
+        "completion_tokens": 25,
+        "prompt_tokens": 970,
+        "total_tokens": 995,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 970,
+      "prompt_ms": 683.113,
+      "predicted_n": 25,
+      "predicted_ms": 375.159,
+      "cached_tokens": 0,
+      "prompt_tokens": 970,
+      "completion_tokens": 25
+    },
+    {
+      "generation_id": "interleaved_off_25_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 8,
+      "user_text": "payments-api 正常运行吗？",
+      "prompt_tokens_counted": 562,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 538.9354579965584,
+      "wall_ms": 721.1313330335543,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"payments-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 562,
+        "prompt_ms": 393.849,
+        "prompt_per_token_ms": 0.7007989323843417,
+        "prompt_per_second": 1426.9428131085772,
+        "predicted_n": 22,
+        "predicted_ms": 315.173,
+        "predicted_per_token_ms": 15.008238095238095,
+        "predicted_per_second": 66.63007300752285
+      },
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 562,
+        "total_tokens": 584,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 562,
+      "prompt_ms": 393.849,
+      "predicted_n": 22,
+      "predicted_ms": 315.173,
+      "cached_tokens": 0,
+      "prompt_tokens": 562,
+      "completion_tokens": 22
+    },
+    {
+      "generation_id": "interleaved_off_26_routing",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "routing",
+      "index": 9,
+      "user_text": "这个服务健康吗？",
+      "prompt_tokens_counted": 960,
+      "shared_with_previous": 946,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 867.9394579958171,
+      "wall_ms": 1036.788291996345,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "health-and-diagnostic-checklist",
+            "arguments": "{\"language\": \"en\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 960,
+        "prompt_ms": 665.898,
+        "prompt_per_token_ms": 0.69364375,
+        "prompt_per_second": 1441.6622365587523,
+        "predicted_n": 24,
+        "predicted_ms": 357.986,
+        "predicted_per_token_ms": 15.564608695652174,
+        "predicted_per_second": 64.2483225601001
+      },
+      "usage": {
+        "completion_tokens": 24,
+        "prompt_tokens": 960,
+        "total_tokens": 984,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 960,
+      "prompt_ms": 665.898,
+      "predicted_n": 24,
+      "predicted_ms": 357.986,
+      "cached_tokens": 0,
+      "prompt_tokens": 960,
+      "completion_tokens": 24
+    },
+    {
+      "generation_id": "interleaved_off_27_skill",
+      "layout": "interleaved",
+      "cache_prompt": false,
+      "phase": "measured",
+      "purpose": "skill",
+      "index": 9,
+      "user_text": "请确认 staging-api 是否正常。",
+      "prompt_tokens_counted": 561,
+      "shared_with_previous": 257,
+      "http_status": 200,
+      "error": null,
+      "finish_reason": "tool_calls",
+      "first_delta_ms": 531.8417089874856,
+      "wall_ms": 718.9407919649966,
+      "output": {
+        "text": null,
+        "tool_calls": [
+          {
+            "name": "get_service_health",
+            "arguments": "{\"service\": \"staging-api\"}"
+          }
+        ]
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 561,
+        "prompt_ms": 376.63,
+        "prompt_per_token_ms": 0.6713547237076649,
+        "prompt_per_second": 1489.5255290337998,
+        "predicted_n": 23,
+        "predicted_ms": 331.808,
+        "predicted_per_token_ms": 15.082181818181818,
+        "predicted_per_second": 66.30340437843572
+      },
+      "usage": {
+        "completion_tokens": 23,
+        "prompt_tokens": 561,
+        "total_tokens": 584,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "cache_n": 0,
+      "prompt_n": 561,
+      "prompt_ms": 376.63,
+      "predicted_n": 23,
+      "predicted_ms": 331.808,
+      "cached_tokens": 0,
+      "prompt_tokens": 561,
+      "completion_tokens": 23
+    }
+  ]
+}
