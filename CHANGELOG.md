@@ -196,6 +196,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   timing statistics ignore it, so their definitions are unchanged; a
   consumer that lists every event of a stream sees one more (#120).
 
+- Specification 0.35 → 0.36 (#131, #132; RM22, RM24, RM28; sections 8 and
+  10): it states what the selection interface records. A selector chain that
+  chooses nothing makes the gateway record its own decision (route external,
+  skill_id null, reason `selection_failed`) in `route.selected` with the new
+  mechanism `selector_chain`, a `selector` with a null name, version, and
+  mechanism, the whole chain's `elapsed_ms`, and every attempt; a rejected
+  model router output still records no `route.selected` and escalates with
+  `invalid_output`. `tools_narrowed` is the narrowing intersected with the
+  skill's allowlist, in allowlist order. A `route.selected` of `model_router`
+  keeps the local model's actor, and any other selector's choice has actor
+  `gateway`. A result that names another selector, or claims a mechanism of
+  the gateway or of another built-in selector, is an error. The selection
+  time limit is recorded inside `budgets` as `selection.timeout_seconds`.
+  Section 10 names `selector_chain` among the gateway-made routes that are
+  a cache miss and never stored, and a skill another selector chose is not
+  stored either.
+
 - Specification 0.34 → 0.35 (#141, #124; RM06, RM12, RM13, RM16, RM24,
   RM25; AC14): section 4.4 gives the order of the parts of the external
   system message (the rules, the skill instructions, the fixed completion
