@@ -12,8 +12,11 @@ schemas as ``relaymind.orchestrator.identifiers`` reads them
 matches the examples of another. Latin text becomes word tokens and
 Chinese text character bigrams. The score is BM25 from the standard
 library; each distinct query word counts once. The pick is the best
-skill when its score and its margin to the second skill reach the
-thresholds, and none otherwise.
+skill when it is unique (a tie for the top score is none, as spec 0.32
+section 14.1 requires) and its score and its margin to the second skill
+reach the thresholds, and none otherwise. The scores are raw BM25 values,
+not the [0, 1] scale of section 14.1, so the thresholds found here are
+not configuration values for ``example_match``.
 
 The 52 corpus prompts are scored against the skill sidecar
 (``evaluation/corpus.v1.skills.json``, frozen in the corpus lock):
@@ -180,7 +183,11 @@ def score_query(index: Index, query: str) -> dict[str, float]:
 
 
 class Selection(NamedTuple):
-    """The best skill and its numbers; skill is None when the thresholds are not reached."""
+    """The best skill and its numbers; skill is None when it is not selected.
+
+    top names the first skill by score, then by name, so a tie is reported
+    the same way every time; it is not a pick.
+    """
 
     skill: str | None
     top: str | None
@@ -188,17 +195,32 @@ class Selection(NamedTuple):
     second: float
     margin: float
 
+    def reaches(self, min_score: float, min_margin: float) -> bool:
+        """Spec 0.32 section 14.1: a unique best skill, its score and its lead at the thresholds."""
+        return (
+            self.top is not None
+            and self.margin > 0
+            and self.score >= min_score
+            and self.margin >= min_margin
+        )
+
 
 def choose(scores: Mapping[str, float], *, min_score: float, min_margin: float) -> Selection:
-    """The best skill when its score and its margin to the second reach the thresholds."""
+    """The unique best skill when its score and its margin to the second reach the thresholds.
+
+    A tie for the top score has no unique best skill, so it is none at any
+    threshold, margin 0 included. The second-best score of a one-skill
+    catalog is 0.
+    """
     ranked = sorted(scores.items(), key=lambda item: (-item[1], item[0]))
     if not ranked or ranked[0][1] <= 0:
         return Selection(None, None, 0.0, 0.0, 0.0)
     top, score = ranked[0]
     second = ranked[1][1] if len(ranked) > 1 else 0.0
-    margin = score - second
-    reached = score >= min_score and margin >= min_margin
-    return Selection(top if reached else None, top, score, second, margin)
+    selection = Selection(None, top, score, second, score - second)
+    if selection.reaches(min_score, min_margin):
+        return selection._replace(skill=top)
+    return selection
 
 
 # -- precision, recall, Jaccard (pure; spec section 12.4) ---------------------------------
@@ -262,7 +284,7 @@ def _grid(rows: Rows) -> list[dict[str, Any]]:
         for min_margin in margins:
             right = wrong = 0
             for (expected, _), top in zip(rows, tops, strict=True):
-                if top.top is not None and top.score >= min_score and top.margin >= min_margin:
+                if top.reaches(min_score, min_margin):
                     if top.top == expected:
                         right += 1
                     else:
@@ -485,6 +507,7 @@ def analyse(
         scores = score_query(index, case.prompt)
         best = choose(scores, min_score=0.0, min_margin=0.0)
         expected = bundle.expected[case.case_id]
+        pick = best.skill
         top3 = sorted(scores.items(), key=lambda item: (-item[1], item[0]))[:3]
         cases.append(
             {
@@ -493,9 +516,9 @@ def analyse(
                 "language": case.language,
                 "expected": expected,
                 "expected_set": {expected} - {None},
-                "pick": best.top,
-                "predicted": {best.top} - {None},
-                "right": best.top == expected,
+                "pick": pick,
+                "predicted": {pick} - {None},
+                "right": pick == expected,
                 "score": round(best.score, 4),
                 "second": round(best.second, 4),
                 "margin": round(best.margin, 4),
@@ -529,7 +552,7 @@ def analyse(
         ],
         "argmax": {
             "note": "The best skill of every prompt with no thresholds (every prompt with any "
-            "word in common with the index is a pick).",
+            "word in common with the index is a pick, unless two skills tie for the top score).",
             "by_language": _by_language(cases),
             "by_language_and_class": _by_language_and_class(cases),
         },
@@ -672,13 +695,17 @@ def render_markdown(analysis: Mapping[str, Any]) -> str:
             )
     if analysis["router"] is not None:
         router = analysis["router"]
-        lines += [
-            "",
-            "## Local router in the export (the baseline)",
-            "",
-            f"The auto and local_only runs picked different skills for {router['samples_differ']} "
-            f"of {router['cases_in_both']} cases that have both.",
-        ]
+        if len(router["samples"]) > 1:
+            compared = (
+                f"The auto and local_only runs picked different skills for "
+                f"{router['samples_differ']} of {router['cases_in_both']} cases that have both."
+            )
+        else:
+            compared = (
+                f"Only the {', '.join(router['samples'])} runs are in the export, so the two "
+                "router modes are not compared."
+            )
+        lines += ["", "## Local router in the export (the baseline)", "", compared]
         for mode, sample in router["samples"].items():
             lines += _table(
                 f"Router, {mode}", sample["by_language_and_class"], sample["by_language"]
@@ -725,11 +752,13 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--export", help="a corpus export (JSON) whose router picks are the baseline"
     )
     args = parser.parse_args(argv)
+    out = Path(args.out)
+    if args.export and out.resolve() == Path(args.export).resolve():
+        parser.error("--out must differ from --export: the export is never changed")
     export = json.loads(Path(args.export).read_text("utf-8")) if args.export else None
     application = application_revision(REPO_ROOT)
     analysis = analyse(load_corpus_and_sidecar(), load_catalog(), export=export)
     analysis["analysed_with"] = {"application": application}
-    out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(analysis, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     report = render_markdown(analysis)

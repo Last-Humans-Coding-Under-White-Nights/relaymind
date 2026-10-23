@@ -159,9 +159,13 @@ def test_the_pick_needs_its_score_and_its_margin_to_the_second(probe):
     assert probe.choose(scores, min_score=5.0, min_margin=2.0).skill == "a"
     assert probe.choose(scores, min_score=5.1, min_margin=0.0).skill is None
     assert probe.choose(scores, min_score=0.0, min_margin=2.1).skill is None
-    # The top of a tie has a margin of zero; ties are broken by name, so the result is stable.
-    tie = probe.choose({"b": 2.0, "a": 2.0}, min_score=0.0, min_margin=0.0)
-    assert (tie.skill, tie.margin) == ("a", 0.0)
+    # A tie has no unique best skill, so it is never a pick, even at margin 0 (RM28,
+    # section 14.1); the top of the tie is still named by name order, so the report is stable.
+    tie = probe.choose({"b": 2.0, "a": 2.0, "c": 1.0}, min_score=0.0, min_margin=0.0)
+    assert (tie.skill, tie.top, tie.score, tie.second, tie.margin) == (None, "a", 2.0, 2.0, 0.0)
+    # A one-skill catalog: the second-best score is 0, so the lead is the score.
+    alone = probe.choose({"a": 0.7}, min_score=0.5, min_margin=0.7)
+    assert (alone.skill, alone.second, alone.margin) == ("a", 0.0, 0.7)
     # No evidence at all is never a pick.
     assert probe.choose({"a": 0.0, "b": 0.0}, min_score=0.0, min_margin=0.0).skill is None
     assert probe.choose({}, min_score=0.0, min_margin=0.0).skill is None
@@ -235,6 +239,14 @@ def test_candidate_thresholds_keep_the_wrong_picks_at_or_below_the_limit(probe):
     # ones: the low-score wrong pick can be cut without losing a right pick, the other cannot.
     loosest = probe.candidate_thresholds(rows, max_wrong=len(rows))
     assert (loosest["right"], loosest["wrong"]) == (4, 1)
+
+
+def test_a_tie_is_never_counted_as_a_pick_at_any_threshold(probe):
+    """Section 14.1: only a unique best skill is selected, so a tie is none, never right."""
+    rows = [("a", {"a": 3.0, "b": 3.0}), ("b", {"b": 5.0, "a": 1.0})]
+    assert all(point["right"] <= 1 for point in probe._grid(rows))
+    best = probe.candidate_thresholds(rows, max_wrong=0)
+    assert (best["right"], best["wrong"], best["none"]) == (1, 0, 1)
 
 
 def test_no_thresholds_are_chosen_when_no_pair_meets_the_limit(probe):
@@ -404,6 +416,39 @@ def test_a_mode_missing_from_the_export_does_not_set_the_wrong_pick_limit(probe)
     assert candidate["max_wrong"] == 1
 
 
+def test_a_report_with_one_router_mode_does_not_compare_the_modes(probe):
+    """With one mode there is nothing to compare: no "0 of 0 cases" sentence."""
+    document = _local_only_export(
+        ("simple-01", "check-service-health"), ("simple-02", "lookup-latest-deployment")
+    )
+    result = probe.analyse(
+        probe.load_corpus_and_sidecar(), probe.load_catalog(SKILLS), export=document
+    )
+    report = probe.render_markdown(result)
+    assert "picked different skills" not in report
+    assert "Only the local_only runs are in the export" in report
+
+
+def test_a_report_with_both_router_modes_compares_them(probe):
+    native = "native_function_calling"
+    document = {
+        "grades": [
+            {"case_id": "simple-01", "mode": "auto", "run_id": "r1"},
+            {"case_id": "simple-01", "mode": "local_only", "run_id": "r2"},
+        ],
+        "traces": {
+            "r1": [route_event(native, "check-service-health")],
+            "r2": [route_event(native, "lookup-latest-deployment")],
+        },
+    }
+    result = probe.analyse(
+        probe.load_corpus_and_sidecar(), probe.load_catalog(SKILLS), export=document
+    )
+    report = probe.render_markdown(result)
+    assert "The auto and local_only runs picked different skills for 1 of 1 cases" in report
+    assert "Only the" not in report
+
+
 def test_an_export_with_no_auto_or_local_only_run_is_refused(probe):
     document = {
         "grades": [{"case_id": "simple-01", "mode": "external_only", "run_id": "r1"}],
@@ -444,6 +489,18 @@ def test_the_cli_writes_the_analysis_and_a_report(probe, tmp_path):
     assert "precision" in report and "Jaccard" in report
     # Chinese is reported apart: one total row per language, none for both.
     assert "| en all |" in report and "| zh all |" in report
+
+
+def test_the_cli_refuses_to_overwrite_the_export(probe, tmp_path, capsys):
+    """As in run_corpus.py and count_multi_calls.py: the export is never changed."""
+    source = tmp_path / "export.json"
+    source.write_text("{}", "utf-8")
+    with pytest.raises(SystemExit):
+        probe.main(["--export", str(source), "--out", str(tmp_path / "." / "export.json")])
+    assert "--out must differ from --export: the export is never changed" in (
+        capsys.readouterr().err
+    )
+    assert source.read_text("utf-8") == "{}"
 
 
 def test_the_probe_does_not_change_the_corpus_or_the_sidecar(probe, tmp_path):
