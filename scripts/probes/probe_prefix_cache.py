@@ -226,26 +226,28 @@ class Surfaces:
         raise ValueError(f"unknown purpose: {purpose}")
 
 
-def build_surfaces(config: ProbeConfig, *, work_dir: Path) -> Surfaces:
+def build_surfaces(
+    *, skills_root: Path, sandbox_seed: Path, skill: str, work_dir: Path
+) -> Surfaces:
     """The router and the skill stage over the checked-in demo skills and tools (RM06, RM08)."""
     tools = ToolRegistry()
-    register_demo_tools(tools, SandboxDataService(config.sandbox_seed, work_dir=work_dir))
+    register_demo_tools(tools, SandboxDataService(sandbox_seed, work_dir=work_dir))
     skills = SkillRegistry.load(
-        [config.skills_root],
+        [skills_root],
         tools=tools,
         predicates=COMPLETION_PREDICATES.keys(),
         workflows=PARALLEL_WORKFLOWS,
     )
-    skill = skills.get(config.skill)
+    chosen = skills.get(skill)
     available = tools.available_tools(
-        skill_allowlist=skill.allowed_tools,
+        skill_allowlist=chosen.allowed_tools,
         policy=OperatorPolicy(enabled_tools=DEMO_TOOL_NAMES),
         caller=CallerContext(permissions=frozenset({READ_PERMISSION})),
     )
     return Surfaces(
         router=Router(skills, tools, budgets=LocalBudgets()),
-        skill=skill,
-        skill_tools=tools.tool_schemas(name for name in skill.allowed_tools if name in available),
+        skill=chosen,
+        skill_tools=tools.tool_schemas(name for name in chosen.allowed_tools if name in available),
     )
 
 
@@ -570,7 +572,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     template_kwargs = launch_adapter_settings(runtime.manifest.launch_settings)[1]
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
     work = Path(tempfile.mkdtemp(prefix="relaymind-prefix-cache-"))
-    surfaces = build_surfaces(config, work_dir=work / "sandbox")
+    surfaces = build_surfaces(
+        skills_root=config.skills_root,
+        sandbox_seed=config.sandbox_seed,
+        skill=config.skill,
+        work_dir=work / "sandbox",
+    )
     rows: list[dict[str, Any]] = []
     launches: list[dict[str, Any]] = []
     prefixes: dict[str, Any] | None = None

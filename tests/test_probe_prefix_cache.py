@@ -32,7 +32,12 @@ def config(probe):
 
 @pytest.fixture()
 def surfaces(probe, config, tmp_path):
-    return probe.build_surfaces(config, work_dir=tmp_path)
+    return probe.build_surfaces(
+        skills_root=config.skills_root,
+        sandbox_seed=config.sandbox_seed,
+        skill=config.skill,
+        work_dir=tmp_path,
+    )
 
 
 def chat_chunks(*, timings, usage, text="ok"):
