@@ -611,11 +611,12 @@ feature has a test of the default as well. Later pull requests append here.
   run in proposal order with their own proposal, start, and finish events,
   each charged, and the next request holds one assistant message with both
   calls and one tool message for each; three reads over the per-stage limit
-  of 2, a set the remaining stage budget cannot finish, a mutating call with
-  another, and one invalid call (schema, name, or provenance) are rejected
-  whole with nothing run, the first rejection in proposal order is the one
-  reported, the repair is used, and the rejection exchange answers every
-  call (`not_executed` for the others); a repeated call in a set replays and
+  of 2, a set with more new executions than the remaining stage budget has
+  room for, a mutating call with another, and one invalid call (schema,
+  name, or provenance) are rejected whole with nothing run, the first
+  rejection in proposal order is the one reported and belongs to the call
+  that failed, the repair is used, and the rejection exchange answers every
+  call (`not_executed` for the others, in the trace too); a repeated call in a set replays and
   is charged once; in the external stage the limit is the remaining
   `run_tool_executions` (a set of 3 passes the local limit of 2; a set over
   what the local stage left is refused). Under `one` the old rejection and its

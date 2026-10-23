@@ -65,8 +65,13 @@ One run, start to end, with the local model only:
 4a. Admitted calls per generation (spec 0.32 section 4.3, AC18). Under
    calls_per_generation many, a generation's read-only calls are judged
    as a set: more than the limit, a mutating call among several, one
-   invalid call, or a set the tool budget cannot finish rejects the whole
-   generation before anything runs, and the rejection answers every call.
+   invalid call, or a set with more new executions than the tool budget has
+   room for rejects the whole generation before anything runs, and the
+   rejection answers every call: the failed call with its own rejection,
+   the others as not executed. The room counts one execution per call, so
+   a retry of a transient read failure (section 11) can still use the last
+   of it in the middle of a set; that ends the run on budget like a single
+   call would.
    An admitted set runs in proposal order, each call as its own operation.
 4b. Prefetch (RM29, AC18). Under prefetch true, the calls a skill declares
    run before its first generation in a local stage: the gateway resolves
@@ -673,6 +678,8 @@ class _Turn:
     entry of proposal_ids, and is empty when the turn was rejected as a
     whole. answer_all says that the generation was judged as a set
     (calls_per_generation many), so a rejection answers every call.
+    offending is the position of the call that failed its own checks, which
+    the rejection belongs to; it is 0 when the rejection is about the set.
     """
 
     calls: tuple[ToolCall, ...]
@@ -680,21 +687,27 @@ class _Turn:
     rejection: dict[str, str] | None
     proposal_ids: tuple[str, ...]
     answer_all: bool = False
+    offending: int = 0
 
     def rejection_exchange(self) -> list[Message]:
         """The proposed calls and the rejection, as data for the repair (RM12).
 
         A chat provider rejects a request in which an assistant tool call
-        has no tool message, so a set answers every call: the first with
-        the rejection, the others as not executed.
+        has no tool message, so a set answers every call: the offending
+        call with the rejection, the others as not executed.
         """
         assert self.rejection is not None
         if not self.answer_all:
             return _tool_exchange(self.calls[0], {"error": self.rejection})
-        skipped = {"error": {"code": NOT_EXECUTED, "message": "not executed: the set was rejected"}}
-        return _tool_exchange_set(
-            self.calls, [{"error": self.rejection}, *[skipped] * (len(self.calls) - 1)]
-        )
+        skipped = {"error": not_executed_rejection()}
+        contents = [skipped] * len(self.calls)
+        contents[self.offending] = {"error": self.rejection}
+        return _tool_exchange_set(self.calls, contents)
+
+
+def not_executed_rejection() -> dict[str, str]:
+    """What a valid call of a rejected set is told: another call failed, so none ran."""
+    return {"code": NOT_EXECUTED, "message": "not executed: another call of the set was rejected"}
 
 
 class LocalOrchestrator:
@@ -2788,8 +2801,9 @@ class _Run:
         charged to the budgets; their exchange joins the conversation in the
         declared order, so tool output stays data (RM12). Dispatch authority
         stays with the stage's actor (RM14), and a later proposal of the same
-        call replays the recorded operation (RM10). A call the tool budget
-        cannot finish is not started.
+        call replays the recorded operation (RM10). Prefetch is not started
+        when its new executions exceed the tool budget's room (one per call;
+        a retry can still use more, and then the run ends on budget).
         """
         skill = loop.skill
         if not self.o.performance.prefetch or skill is None or not skill.prefetch:
@@ -2817,7 +2831,7 @@ class _Run:
             return
         outcomes = await asyncio.gather(
             *(
-                self._dispatch_step(loop, admitted, proposal_ids[call.call_id], by_gateway=True)
+                self._dispatch_step(loop, admitted, proposal_ids[call.call_id], mechanism=PREFETCH)
                 for call, admitted in runnable
             ),
             return_exceptions=True,
@@ -2860,11 +2874,16 @@ class _Run:
         loop.conversation += _tool_exchange(call, result.to_json_object())
 
     async def _dispatch_step(
-        self, loop: _Loop, admitted: ValidatedCall, proposal_id: str, *, by_gateway: bool = False
+        self,
+        loop: _Loop,
+        admitted: ValidatedCall,
+        proposal_id: str,
+        *,
+        mechanism: str | None = None,
     ) -> ToolResult:
         """Dispatch one admitted call as the loop's actor (RM14); a local failure escalates."""
         actor = loop.actor
-        result = await self._run_admitted(admitted, proposal_id, actor, by_gateway=by_gateway)
+        result = await self._run_admitted(admitted, proposal_id, actor, mechanism=mechanism)
         if actor == LOCAL_ACTOR and result.status is not ToolStatus.SUCCEEDED:
             raise Escalation(
                 "tool_failure",
@@ -2877,8 +2896,10 @@ class _Run:
     async def _execute_set(self, loop: _Loop, turn: _Turn) -> None:
         """Run an admitted set in proposal order, one executor call each (section 4.3).
 
-        The set fits the remaining tool budget (_admit_set), so no limit
-        stops it in the middle. A failed call of the local actor still
+        The set fits the remaining tool budget when one execution is counted
+        for each call (_admit_set); a retry of a transient failure is charged
+        too, so the budget can still run out in the middle, and the run then
+        ends on budget as it would for a single call. A failed call of the local actor still
         escalates at once, as it does for a single call (section 11),
         and so does an exhausted time budget. The conversation then holds
         one assistant message with every call and one tool message for each.
@@ -3106,25 +3127,39 @@ class _Run:
         if many is None:
             many = self.o.performance.calls_per_generation == "many"
         as_set = many and len(calls) > 1
+        offending: int | None = None
         if as_set:
-            admitted, rejection = self._admit_set(calls, available, self.results)
+            admitted, rejection, offending = self._admit_set(calls, available, self.results)
         else:
             one, rejection = self._admit(calls, available, self.results)
             admitted = [] if one is None else [one]
-        proposal_ids = tuple(self._propose(call, skill, rejection) for call in calls)
+        # A call that failed its own checks carries its rejection; the valid calls of that
+        # set are recorded as not executed, so the trace never calls a valid call malformed
+        # (RM16). A rejection about the set (a limit, a mutation) is every call's.
+        proposal_ids = tuple(
+            self._propose(
+                call,
+                skill,
+                not_executed_rejection()
+                if offending is not None and index != offending
+                else rejection,
+            )
+            for index, call in enumerate(calls)
+        )
         return _Turn(
             calls,
             tuple(admitted),
             rejection,
             proposal_ids,
             answer_all=as_set,
+            offending=offending or 0,
         )
 
     async def _run_admitted(
-        self, call: ValidatedCall, proposal_id: str, actor: str, *, by_gateway: bool = False
+        self, call: ValidatedCall, proposal_id: str, actor: str, *, mechanism: str | None = None
     ) -> ToolResult:
         """Dispatch an admitted call and keep its result as run evidence."""
-        result = await self._dispatch(call, proposal_id, actor, by_gateway=by_gateway)
+        result = await self._dispatch(call, proposal_id, actor, mechanism=mechanism)
         self.results.append(result)
         return result
 
@@ -3147,40 +3182,55 @@ class _Run:
         calls: Sequence[ToolCall],
         available: frozenset[str],
         results: Sequence[ToolResult],
-    ) -> tuple[list[ValidatedCall], dict[str, str] | None]:
+    ) -> tuple[list[ValidatedCall], dict[str, str] | None, int | None]:
         """The validated calls of a set, or one rejection of the whole generation (section 4.3).
 
         More calls than the limit, or a mutating call among several, is
         multiple_tool_calls. Then each call is validated on its own, and
         the first rejection in proposal order is the one reported, so a
-        partly valid set never runs in part. Last, the calls that need a
-        new execution must fit what the tool budget has left (section 11).
+        partly valid set never runs in part; the third value is the position
+        of the call it belongs to (None for a rejection about the set).
+        Last, the calls that need a new execution must fit what the tool
+        budget has left (section 11), counting one execution per call; a
+        retry is not reserved for.
         """
         limit = self.meter.admitted_calls_limit()
         if len(calls) > limit:
-            return [], {
-                "code": "multiple_tool_calls",
-                "message": f"propose at most {limit} tool calls at a time",
-            }
+            return (
+                [],
+                {
+                    "code": "multiple_tool_calls",
+                    "message": f"propose at most {limit} tool calls at a time",
+                },
+                None,
+            )
         if any(self._mutates(call.tool_name) for call in calls):
-            return [], {
-                "code": "multiple_tool_calls",
-                "message": "a mutating tool call must be the only call of its generation",
-            }
+            return (
+                [],
+                {
+                    "code": "multiple_tool_calls",
+                    "message": "a mutating tool call must be the only call of its generation",
+                },
+                None,
+            )
         admitted = []
-        for call in calls:
+        for index, call in enumerate(calls):
             one, rejection = self._admit_one(call, available, results)
             if rejection is not None:
-                return [], rejection
+                return [], rejection, index
             assert one is not None
             admitted.append(one)
         room = self.meter.tool_room()
         if self._new_executions(admitted) > room:
-            return [], {
-                "code": "multiple_tool_calls",
-                "message": f"only {room} more tool executions are allowed in this run",
-            }
-        return admitted, None
+            return (
+                [],
+                {
+                    "code": "multiple_tool_calls",
+                    "message": f"only {room} more tool executions are allowed in this run",
+                },
+                None,
+            )
+        return admitted, None, None
 
     def _new_executions(self, calls: Iterable[ValidatedCall]) -> int:
         """How many distinct operations the calls would execute; a repeat is a replay (RM10)."""
@@ -3290,22 +3340,28 @@ class _Run:
         return {} if self.tool_branch is None else {"branch": self.tool_branch}
 
     async def _dispatch(
-        self, call: ValidatedCall, proposal_id: str, actor: str, *, by_gateway: bool = False
+        self, call: ValidatedCall, proposal_id: str, actor: str, *, mechanism: str | None = None
     ) -> ToolResult:
         """Execute (or replay) the call, with the one retry section 11 allows.
 
         Only the actor that holds dispatch authority may dispatch (RM14).
-        by_gateway marks a call the gateway made itself, a prefetch: it
-        runs for the actor that holds authority, and its events name no model.
+        mechanism names a call the gateway made itself, a prefetch: it
+        runs for the actor that holds authority, and its events name no
+        model but carry the mechanism.
         """
         self.authority.require(actor)
-        execution = await self._execute(call, proposal_id, attempt=1, by_gateway=by_gateway)
+        execution = await self._execute(call, proposal_id, attempt=1, mechanism=mechanism)
         if self.o.executor.may_retry(call, execution.result, attempt=1):
-            execution = await self._execute(call, proposal_id, attempt=2, by_gateway=by_gateway)
+            execution = await self._execute(call, proposal_id, attempt=2, mechanism=mechanism)
         return execution.result
 
     async def _execute(
-        self, call: ValidatedCall, proposal_id: str, *, attempt: int, by_gateway: bool = False
+        self,
+        call: ValidatedCall,
+        proposal_id: str,
+        *,
+        attempt: int,
+        mechanism: str | None = None,
     ) -> Execution:
         common = {
             "proposal_id": proposal_id,
@@ -3319,7 +3375,10 @@ class _Run:
             common["approval_id"] = approval_id
         # A gateway-made call has no originating model (RM22, spec 0.31); the store
         # keeps an internal label, because its column is not nullable.
-        model_id = None if by_gateway else self.active_model.model_id
+        model_id = None if mechanism is not None else self.active_model.model_id
+        if mechanism is not None:
+            # The marker tells a gateway-made call from a model-made one that lost its model.
+            common["mechanism"] = mechanism
 
         def before_run(operation_id: str) -> None:
             # Only a real execution is charged (RM03); a replay never is.

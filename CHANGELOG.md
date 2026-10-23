@@ -17,10 +17,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `tool.started`, and `tool.finished`, is charged, and is answered by its own
   tool message after one assistant message that holds every call. A mutating
   call with others, more calls than the limit, one invalid call, or a set
-  the remaining tool budget cannot finish is rejected as a whole before
-  anything runs: `multiple_tool_calls`, or the first call's own rejection
-  code, through the format repair, and the rejection answers every call
-  (the first with the error, the others `not_executed`). A repeated call in
+  with more new executions than the remaining tool budget has room for is
+  rejected as a whole before anything runs: `multiple_tool_calls`, or the
+  first invalid call's own rejection code, through the format repair, and
+  the rejection answers every call (the call that failed with its error,
+  the others `not_executed`; the trace records them the same way). The room
+  counts one execution per call, so the retry of a transient read failure
+  can still use the last of it in the middle of a set; the run then ends on
+  budget as it would for a single call. A repeated call in
   a set is a replay and costs no execution (RM10). The default `one`, the
   client-owned alias (section 7.2), and the fixed parallel workflow's local
   branch (RM15) keep the one-call rule and their old exchange.
@@ -32,8 +36,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the registry checks it at load, without a request: a mutating tool, a
   tool outside `allowed_tools`, a constant for an identifier, a request
   binding for a non-identifier, an unknown parameter or binding, a required
-  argument with no binding, or a constant the tool schema refuses is a
-  startup error. Under `performance.prefetch = true` the gateway resolves each
+  argument with no binding, a constant the tool schema refuses, or the same
+  call declared twice is a startup error. Under `performance.prefetch = true` the gateway resolves each
   call from the user turns by the RM05 rule (exactly one allowed value
   appears; otherwise that call is skipped, not the skill), runs the
   resolved calls together through the executor with every check of a model
@@ -44,8 +48,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   skill generation. When every tool the skill allows has a result, that
   generation offers no tools. Dispatch authority does not move (RM14), and a
   later proposal of the same call replays the record (RM10). A prefetch the
-  tool budget cannot finish is not started. At construction and in the
-  launcher, a skill whose declared calls exceed `tool_calls` (a skill that
+  tool budget has no room for (one execution per call) is not started. At
+  construction and in the launcher, a skill whose declared calls exceed `tool_calls` (a skill that
   can run locally) or `run_tool_executions` stops startup under
   `prefetch = true` (exit status 2, `[performance] prefetch: ...`). The demo
   skills `check-service-health`, `lookup-latest-deployment`, and
@@ -103,12 +107,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A tool event of a gateway-made call has model null and actor `gateway`
   (RM22, spec 0.32 section 8); `tool.proposed` has an optional `mechanism`
   (`model`, the default, `prefetch`, or `workflow` with its `step`). The
-  trace schema stays at version 1 with these fields optional.
+  trace schema stays at version 1 with these fields optional. `tool.started`
+  and `tool.finished` of a gateway-made call carry the same `mechanism`, and
+  a null model is valid only with actor `gateway` and a `prefetch` or
+  `workflow` mechanism, so the check that a model-made call names its model
+  (RM22) still holds for the events of every other call. Restart recovery
+  copies the mechanism onto the recovered `tool.finished`.
 - First model action (the demo UI and `scripts/live_acceptance.py`) and tool
   correctness (`relaymind.evaluation.grading`) count model-made proposals
   only (section 12.1); a prefetch proposal is counted in the new
   `gateway_proposals` of a run grade, and a required call is met by a model
-  proposal or by an admitted gateway call. The trace view lists the
+  proposal or by an admitted gateway call (spec 12.2 now says so: with
+  prefetch on the evidence the case needs was gathered either way, and
+  prefetch correctness stays a separate measure). The trace view lists the
   `mechanism` of each proposal.
 - `scripts/run_corpus.py` takes the draft guards (run language, tool-call
   JSON) from `relaymind.orchestrator.performance`, so the offline regrade

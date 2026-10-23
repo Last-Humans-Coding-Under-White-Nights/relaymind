@@ -577,21 +577,43 @@ def is_model_proposal(payload: Mapping[str, Any]) -> bool:
     return payload.get("mechanism", "model") == "model"
 
 
+# The mechanisms of a call the gateway makes itself; only these have no originating model.
+GATEWAY_MECHANISMS: tuple[str, ...] = ("prefetch", "workflow")
+
+
 def _check_tool_model(payload: Mapping[str, Any], actor: str) -> None:
-    """Every tool event names its originating model; a gateway call names none (RM22)."""
+    """Every tool event names its originating model; a gateway-made call names none (RM22).
+
+    A null model is accepted only for actor gateway with the mechanism marker
+    (prefetch or workflow) on the event, so a model-made call that lost its
+    model is still refused.
+    """
     model = payload.get("model")
-    if model is None and actor == GATEWAY_ACTOR and "model" in payload:
+    if _is_text(model):
         return
-    if not _is_text(model):
-        raise TraceEventError(
-            "tool event payload needs a non-blank 'model' (null only for actor gateway)"
-        )
+    if (
+        model is None
+        and "model" in payload
+        and actor == GATEWAY_ACTOR
+        and payload.get("mechanism") in GATEWAY_MECHANISMS
+    ):
+        return
+    raise TraceEventError(
+        "tool event payload needs a non-blank 'model' "
+        "(null only for actor gateway with mechanism prefetch or workflow)"
+    )
 
 
-def _check_tool_mechanism(payload: Mapping[str, Any]) -> None:
-    """The optional mechanism of a proposal; a workflow call names its step (RM30)."""
+def _check_tool_mechanism(event_type: EventType, payload: Mapping[str, Any]) -> None:
+    """The optional mechanism of a tool event; a workflow proposal names its step (RM30).
+
+    tool.started and tool.finished carry the mechanism of a gateway-made
+    call too, so the null model of such a call can be told from a lost one.
+    """
     if "mechanism" in payload:
         _one_of("mechanism", TOOL_MECHANISMS)(payload["mechanism"])
+    if event_type is not EventType.TOOL_PROPOSED:
+        return
     workflow = payload.get("mechanism") == "workflow"
     if workflow and not _is_text(payload.get("step")):
         raise TraceEventError("a workflow proposal needs a non-blank 'step'")
@@ -738,8 +760,8 @@ def _check_payload(event_type: EventType, payload: Mapping[str, Any], actor: str
         _check_cancelled_payload(payload)
     if event_type is EventType.RUN_FAILED:
         _check_failed_payload(payload)
-    if event_type is EventType.TOOL_PROPOSED:
-        _check_tool_mechanism(payload)
+    if event_type in _TOOL_EVENTS:
+        _check_tool_mechanism(event_type, payload)
     if event_type is EventType.TOOL_FINISHED:
         _check_recovered_result(payload)
     if event_type in (EventType.RUN_COMPLETED, EventType.RUN_FAILED, EventType.RUN_CANCELLED):

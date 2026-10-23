@@ -91,8 +91,10 @@ enabled_workflows = []
 #     generation, up to the per-stage tool limit in a local stage and the
 #     remaining entire-run tool limit in the external stage (section 4.3).
 #     A mutating call is admitted only alone; a set with too many calls, one
-#     invalid call, or more calls than the tool budget can finish is rejected
-#     whole, and nothing in it runs. The client-owned alias keeps one call.
+#     invalid call, or more new executions than the tool budget has room for
+#     is rejected whole, and nothing in it runs. The room counts one
+#     execution per call; the retry of a failed read can still use up the
+#     last of it, and then the run ends on budget. The client-owned alias keeps one call.
 #   prefetch: true runs the read-only calls a skill declares in its manifest
 #     before its first generation, when the request names exactly one value
 #     for each identifier (RM29). A skill whose declared calls cannot fit the

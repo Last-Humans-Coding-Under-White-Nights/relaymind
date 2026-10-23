@@ -233,15 +233,33 @@
       }
     },
     {
-      "description": "Only a gateway-made call (a prefetch or workflow call) has no originating model (RM22).",
+      "description": "Only a gateway-made call (a prefetch or workflow call, marked by its mechanism) has no originating model (RM22).",
       "if": {
-        "properties": {
-          "event_type": {"enum": ["tool.proposed", "tool.started", "tool.finished"]},
-          "actor": {"not": {"const": "gateway"}}
-        },
-        "required": ["event_type"]
+        "properties": {"event_type": {"enum": ["tool.proposed", "tool.started", "tool.finished"]}},
+        "required": ["event_type"],
+        "not": {
+          "properties": {
+            "actor": {"const": "gateway"},
+            "payload": {
+              "properties": {"mechanism": {"enum": ["prefetch", "workflow"]}},
+              "required": ["mechanism"]
+            }
+          },
+          "required": ["actor", "payload"]
+        }
       },
       "then": {"properties": {"payload": {"properties": {"model": {"type": "string"}}}}}
+    },
+    {
+      "if": {
+        "properties": {"event_type": {"enum": ["tool.started", "tool.finished"]}},
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {"properties": {"mechanism": {"enum": ["model", "prefetch", "workflow"]}}}
+        }
+      }
     },
     {
       "if": {"properties": {"event_type": {"enum": ["tool.proposed"]}}, "required": ["event_type"]},

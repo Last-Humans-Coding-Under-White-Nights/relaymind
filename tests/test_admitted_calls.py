@@ -33,7 +33,7 @@ from relaymind.adapters import Completed, Role, ToolCall
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.performance import PerformanceSettings
 from relaymind.orchestrator.run_state import RunState
-from relaymind.tools import CallerContext
+from relaymind.tools import CallerContext, ToolUnavailableError
 from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
 from test_ac02_handoff import ANSWER
 
@@ -63,11 +63,11 @@ def skills(tmp_path):
 
 def local_gateway(tmp_path, skills, turns, **options):
     options.setdefault("performance", MANY)
+    options.setdefault("external_turns", [])
     return build_gateway(
         tmp_path,
         [route_turn("investigate-performance"), *turns],
         skill_roots=skills,
-        external_turns=[],
         **options,
     )
 
@@ -188,14 +188,19 @@ def test_a_repeated_call_in_a_set_replays_and_is_charged_once(tmp_path, skills):
 # -- rejection of the whole generation ---------------------------------------------------
 
 
-def assert_every_call_answered(request, rejection_code):
-    """A rejection exchange answers every call: the first with the rejection, the rest not run."""
+def assert_every_call_answered(request, rejection_code, *, offending=0):
+    """A rejection exchange answers every call: the offending one with the error, the rest not run.
+
+    offending is the position of the call that was rejected; a set-level
+    rejection (limit, mutation, budget) answers the first call.
+    """
     assistant = last_assistant_calls(request)
     answers = tool_messages(request)[-len(assistant.tool_calls) :]
     assert [m.tool_call_id for m in answers] == [c.call_id for c in assistant.tool_calls]
     bodies = [json.loads(m.content) for m in answers]
-    assert bodies[0]["error"]["code"] == rejection_code
-    assert {b["error"]["code"] for b in bodies[1:]} <= {"not_executed"}
+    assert bodies[offending]["error"]["code"] == rejection_code
+    others = bodies[:offending] + bodies[offending + 1 :]
+    assert {b["error"]["code"] for b in others} <= {"not_executed"}
     assert all("error" in b for b in bodies)
 
 
@@ -293,8 +298,9 @@ def test_one_invalid_call_rejects_the_whole_generation(tmp_path, skills, bad, co
     """AC18, RM05, RM09, section 4.3: no call of the set runs; the first rejection is reported.
 
     The valid call comes first and the invalid one second, and the whole
-    generation is refused with the invalid call's rejection, which goes
-    back through the format repair (section 11).
+    generation is refused, which goes back through the format repair
+    (section 11). The rejection belongs to the call that failed: the
+    valid call is traced and answered as not executed, never as malformed.
     """
     gateway = local_gateway(
         tmp_path,
@@ -311,11 +317,11 @@ def test_one_invalid_call_rejects_the_whole_generation(tmp_path, skills, bad, co
     assert outcome.state is RunState.COMPLETED
     refused = [p for p in proposals(events) if p["admissible"] is False]
     assert [p["call_id"] for p in refused] == ["c_deploy", "c_bad"]
-    assert {p["rejection"]["code"] for p in refused} == {code}
+    assert [p["rejection"]["code"] for p in refused] == ["not_executed", code]
     assert purposes(events)[:3] == ["routing", "skill", "repair"]
     # The refused generation ran nothing; the repair's set ran in full.
     assert executed_tools(events) == ["get_latest_deployment", "get_recent_logs"]
-    assert_every_call_answered(gateway.adapter.requests[2], code)
+    assert_every_call_answered(gateway.adapter.requests[2], code, offending=1)
 
 
 def test_the_first_rejection_of_the_set_is_the_one_reported(tmp_path, skills):
@@ -332,7 +338,46 @@ def test_the_first_rejection_of_the_set_is_the_one_reported(tmp_path, skills):
     answers = tool_messages(gateway.adapter.requests[2])
     assert json.loads(answers[0].content)["error"]["code"] == "invalid_arguments"
     assert json.loads(answers[1].content)["error"]["code"] == "not_executed"
+    assert [p["rejection"]["code"] for p in proposals(events)[:2]] == [
+        "invalid_arguments",
+        "not_executed",
+    ]
     assert executed_tools(events) == ["get_recent_logs"]
+
+
+def test_a_retry_can_use_the_last_of_the_budget_in_the_middle_of_a_set(tmp_path, skills):
+    """AC18, RM03, section 11: the room counts one execution per call; a retry is charged too.
+
+    Two reads fit the default tool budget of 2, so the set is admitted. The
+    first read fails once and its retry is a second execution, so the
+    second read finds the budget used up: the local stage stops on the
+    tool budget with the second call not run, as it would for a single
+    call, and the run hands off. The set is documented not to reserve
+    room for retries.
+    """
+    gateway = local_gateway(
+        tmp_path,
+        skills,
+        [calls_turn(LOGS, DEPLOYMENT)],
+        external_turns=[calls_turn(DEPLOYMENT, METRICS), text_turn(ANSWER)],
+    )
+    attempts = []
+    original = gateway.tools.get("get_recent_logs").declaration.handler
+
+    def flaky(arguments):
+        attempts.append(arguments)
+        if len(attempts) == 1:
+            raise ToolUnavailableError("down once")
+        return original(arguments)
+
+    replace_handler(gateway, "get_recent_logs", flaky)
+    outcome, events = run(gateway, PROMPT)
+    assert len(attempts) == 2
+    (handoff,) = of_type(events, "handoff.started")
+    assert handoff.payload["reason_code"] == "local_budget"
+    # The local stage ran the failed read and its retry; the second call never started there.
+    local = [e.payload["tool_name"] for e in of_type(events, "tool.started") if e.seq < handoff.seq]
+    assert local == ["get_recent_logs", "get_recent_logs"]
 
 
 # -- the external stage ------------------------------------------------------------------------

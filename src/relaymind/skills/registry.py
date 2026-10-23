@@ -279,9 +279,9 @@ def _prefetch_calls(
     of the tool. A request binding names an identifier with a closed
     list of values (the gateway can find one of them in a user turn); a
     constant is for a parameter that is not an identifier, and must
-    satisfy the tool schema.
+    satisfy the tool schema. An equal call declared twice is an error.
     """
-    calls = []
+    calls: list[PrefetchCall] = []
     for index, entry in enumerate(declared):
         tool_name = entry["tool"]
         where = f"prefetch[{index}] ({tool_name})"
@@ -324,8 +324,21 @@ def _prefetch_calls(
         if error is not None:
             name = ".".join(str(part) for part in error.path) or "(arguments)"
             raise _fail(package, f"{where}: constant for {name!r} fails the tool schema")
-        calls.append(PrefetchCall(tool_name, tuple(bindings)))
+        call = PrefetchCall(tool_name, tuple(bindings))
+        if any(_same_call(call, earlier) for earlier in calls):
+            # Two equal calls would race on one operation ID when run together (RM10).
+            raise _fail(package, f"{where}: the same call is declared twice")
+        calls.append(call)
     return tuple(calls)
+
+
+def _same_call(a: PrefetchCall, b: PrefetchCall) -> bool:
+    """Whether two declarations bind the same tool the same way, whatever their key order."""
+
+    def by_name(call: PrefetchCall) -> list[PrefetchBinding]:
+        return sorted(call.bindings, key=lambda binding: binding.name)
+
+    return a.tool == b.tool and by_name(a) == by_name(b)
 
 
 def _content_hash(files: Sequence[tuple[str, bytes]], tool_hashes: Sequence[str]) -> str:

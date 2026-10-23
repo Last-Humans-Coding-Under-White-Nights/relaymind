@@ -107,6 +107,8 @@ def test_the_declared_call_runs_before_the_first_skill_generation(tmp_path):
         (event,) = of_type(events, kind)
         assert event.actor == "gateway"
         assert event.payload["model"] is None
+        # RM22: the marker is what lets the store accept the null model.
+        assert event.payload["mechanism"] == "prefetch"
         assert event.payload["proposal_id"] == proposed.payload["proposal_id"]
     assert executed_tools(events) == ["get_service_health"]
 

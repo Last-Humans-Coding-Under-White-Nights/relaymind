@@ -1389,8 +1389,8 @@ GATEWAY_ACCEPTED = {
     "proposed-gateway-null-model": gateway_tool_event(
         "tool.proposed", proposal_id="p_1", mechanism="prefetch"
     ),
-    "started-gateway-null-model": gateway_tool_event("tool.started"),
-    "finished-gateway-null-model": gateway_tool_event("tool.finished"),
+    "started-gateway-null-model": gateway_tool_event("tool.started", mechanism="prefetch"),
+    "finished-gateway-null-model": gateway_tool_event("tool.finished", mechanism="workflow"),
     "proposed-model-mechanism": branch_event("tool.proposed", proposal_id="p_1", mechanism="model"),
     "proposed-workflow-mechanism": branch_event(
         "tool.proposed", proposal_id="p_1", mechanism="workflow", step="read"
@@ -1403,11 +1403,34 @@ GATEWAY_REJECTED = {
         branch_event("tool.proposed", proposal_id="p_1", model=None),
         "model",
     ),
-    "gateway-blank-model": (gateway_tool_event("tool.started", model=" "), "model"),
+    # A null model needs the gateway-made marker, so a model-made call that lost its model
+    # is still caught (RM22).
+    "gateway-proposal-null-model-no-mechanism": (
+        gateway_tool_event("tool.proposed", proposal_id="p_1"),
+        "model",
+    ),
+    "gateway-proposal-null-model-mechanism-model": (
+        gateway_tool_event("tool.proposed", proposal_id="p_1", mechanism="model"),
+        "model",
+    ),
+    "gateway-started-null-model-no-mechanism": (gateway_tool_event("tool.started"), "model"),
+    "gateway-finished-null-model-no-mechanism": (gateway_tool_event("tool.finished"), "model"),
+    "started-mechanism-unknown": (
+        gateway_tool_event("tool.started", mechanism="magic"),
+        "mechanism",
+    ),
+    "gateway-blank-model": (
+        gateway_tool_event("tool.started", model=" ", mechanism="prefetch"),
+        "model",
+    ),
     "gateway-missing-model": (
         {
             **gateway_tool_event("tool.started"),
-            "payload": {"operation_id": "op_1", "tool_name": "get_service_health"},
+            "payload": {
+                "operation_id": "op_1",
+                "tool_name": "get_service_health",
+                "mechanism": "prefetch",
+            },
         },
         "model",
     ),

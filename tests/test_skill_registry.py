@@ -869,6 +869,24 @@ def test_prefetch_changes_the_content_hash(tmp_path):
             id="unknown-field-of-a-call",
         ),
         pytest.param(
+            [HEALTH_PREFETCH, HEALTH_PREFETCH],
+            ("get_service_health",),
+            "twice",
+            id="the-same-call-declared-twice",
+        ),
+        pytest.param(
+            [
+                LOGS_PREFETCH,
+                {
+                    "tool": "get_recent_logs",
+                    "arguments": {"limit": {"constant": 50}, "service": FROM_REQUEST},
+                },
+            ],
+            ("get_recent_logs",),
+            "twice",
+            id="an-equal-call-declared-twice",
+        ),
+        pytest.param(
             [{"tool": "invented_tool", "arguments": {}}],
             ("get_service_health",),
             "allowed_tools",
@@ -882,6 +900,16 @@ def test_a_bad_prefetch_declaration_is_a_load_error(tmp_path, calls, allowed, me
     with pytest.raises(SkillPackageError, match=message) as raised:
         load([tmp_path], tools=prefetch_tools())
     assert "check-service-health" in str(raised.value)
+
+
+def test_the_same_tool_with_different_constants_is_two_calls(tmp_path):
+    """RM29: only an equal declaration is a duplicate; two limits are two operations."""
+    other = {
+        "tool": "get_recent_logs",
+        "arguments": {"service": FROM_REQUEST, "limit": {"constant": 10}},
+    }
+    registry = load_prefetch(tmp_path, LOGS_PREFETCH, other)
+    assert len(registry.get("check-service-health").prefetch) == 2
 
 
 def test_a_prefetch_that_is_not_an_array_is_a_load_error(tmp_path):
