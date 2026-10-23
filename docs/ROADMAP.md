@@ -470,14 +470,21 @@ against `glm-4.6` (one completed run with an 802 ms local branch, a
 28.0 s external branch, and a 13.9 s synthesis call; one run whose draft
 reached the 30 s external limit), in
 [`EVIDENCE.md`](EVIDENCE.md#2026-10-22--live-acceptance-runs-through-relaymind-serve---config-88-104-apple-silicon-macos).
-Still missing: a launcher start on Windows ([#110](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/issues/110)).
+Update (2026-10-23, #110): the launcher started with the pinned model
+on x86-64 Windows five times (5.25 s to 10.23 s to `/healthz`, `/readyz`
+200 on all starts), and the latency benchmark ran on the same machine
+(p95 first model action 3610 ms, 0 timeouts, 76 of 120 samples ended
+other than their label), in
+[`EVIDENCE.md`](EVIDENCE.md#2026-10-23--launcher-start-and-latency-benchmark-on-x86-64-windows-110-ac15-native-windows).
+No external model was available, so 7 of 22 acceptance scenarios are
+`not_run`. The UI session errored (Playwright Chromium not installed).
+
+The `parallel_demo` runs, cache-on runs, and launcher starts remain
+single-pass observations; they do not measure a cache speedup. The
+Windows latency benchmark is recorded separately in M6 below.
 
 Carried forward, not done in M5:
 
-- A launcher start on Windows (#110). The `parallel_demo` runs, the
-  cache-on run, and the macOS launcher starts are recorded as
-  single-pass observations; no latency result or cache speedup is
-  claimed from them.
 - The launcher reads the external credential from the environment
   variable the config file names; it does not read an OS credential
   store directly (#87).
@@ -506,8 +513,11 @@ Carried forward, not done in M5:
 - Latency experiment on both target platforms; benchmark report with
   full environment manifest (#33; RM25, section 12.3). Built and run on
   Apple Silicon macOS: p95 first model action 508 ms, so the 500 ms
-  hypothesis is not met there. #33 is closed with the macOS run; the
-  x86-64 Windows run moves to #110, so AC15 is not closed.
+  hypothesis is not met there. Built and run on x86-64 Windows
+  (#110, 2026-10-23): p95 first model action 3610 ms, 0 timeouts, 76 of
+  120 samples ended other than their label. The 500 ms hypothesis is not
+  met on either platform. #33 and #110 are closed; AC15 is closed with
+  these two runs.
 - Second local artifact and the AC08 local swap (#90; RM18, sections 6
   and 12.3): Qwen3-0.6B Q4_K_M has a manifest, passed the live smoke
   suite and the English live skill-and-tool runs, and the live suite ran
@@ -524,8 +534,7 @@ Carried forward, not done in M5:
   (international and mainland China platforms), so a second vendor's
   API is not covered.
 - Release record (section 14): [`RELEASE.md`](RELEASE.md).
-- Closes: AC08 (#90, #109), AC15 (open until the Windows run), and the
-  release record.
+- Closes: AC08 (#90, #109), AC15 (#33, #110), and the release record.
 
 ## M7 — Fewer round trips, selection, and no-local operation (spec 0.31)
 
@@ -767,3 +776,13 @@ listed here so the current order can be traced to its reason.
   the findings behind them are the 2026-10-23 analysis in
   [`EVIDENCE.md`](EVIDENCE.md). Each milestone opens with measurement
   and ends with the runs that decide the next revision's defaults.
+- 2026-10-23, #110: the launcher started and the latency benchmark ran
+  on x86-64 Windows (Intel i7-1165G7, CPU backend only, llama.cpp b11785
+  built from source). The 500 ms hypothesis is not met on Windows (p95
+  3610 ms). No Windows correctness corpus ran; 0/60 simple latency
+  requests completed, and 0/8 in each acceptance cache arm. AC15
+  is closed with the macOS and Windows runs together. No external model
+  was available on this machine, so 7 of 22 acceptance scenarios are
+  `not_run`; the UI session errored because Playwright Chromium was not
+  installed. Acceptance failures and environment gaps are retained in
+  the report.
