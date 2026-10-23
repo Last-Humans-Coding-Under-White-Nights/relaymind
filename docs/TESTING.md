@@ -678,7 +678,8 @@ feature has a test of the default as well. Later pull requests append here.
   log line nor its credential reaches them. At the gateway: the fixed part
   follows the skill body in the first system message, the values are one
   system message at the end of the request once a result exists, a new
-  result replaces it instead of adding a second, the request is measured
+  result replaces it instead of adding a second, and it stays last, also
+  after a tool step or a correction, and the request is measured
   with it (a limit that the request fits only without it ends the run as
   `context_limit_exceeded` before any call), a rejected answer is corrected
   with the failed checks and without quoting the answer, an empty answer has
