@@ -60,6 +60,10 @@ class RunGrade:
     failures: list[str] = field(default_factory=list)
     # Gateway-made proposals (prefetch, workflow steps), counted apart from the model's.
     gateway_proposals: int = 0
+    # External answer generations the completion predicate rejected in a completed run, and
+    # their summed duration; None when a rejected generation recorded no duration (RM16).
+    corrections: int = 0
+    correction_ms: int | None = 0
 
     def to_json_object(self) -> dict[str, Any]:
         return asdict(self)
@@ -147,6 +151,37 @@ def provider_calls(events: Sequence[Mapping[str, Any]]) -> tuple[int, int, dict]
     return len(calls) - external, external, tokens
 
 
+def external_corrections(events: Sequence[Mapping[str, Any]], state: str) -> tuple[int, int | None]:
+    """Corrections of a completed run: the count and the summed duration (section 12.1, F6).
+
+    An external generation without proposed calls or an error is an answer
+    attempt, and in a run completed by the external model every attempt but
+    the published one (the last) was rejected and cost a further generation.
+    The parallel draft and a generation that proposed a tool are not
+    attempts. A run that did not complete has none: the measure is per
+    completed run. The sum is None when a rejected generation recorded no
+    duration, because a missing duration is not zero (RM16).
+    """
+    published = any(e["actor"] == "external" for e in of_type(events, "answer.delta"))
+    if state != "completed" or not published:
+        return 0, 0
+    purposes = {
+        e["payload"]["call_id"]: e["payload"].get("purpose")
+        for e in of_type(events, "model.started")
+    }
+    attempts = [
+        e["payload"]
+        for e in of_type(events, "model.finished")
+        if e["actor"] == "external"
+        and purposes.get(e["payload"]["call_id"]) == "external"
+        and not e["payload"].get("error")
+        and not e["payload"].get("tool_calls")
+    ]
+    rejected = attempts[:-1]
+    durations = [a.get("duration_ms") for a in rejected]
+    return len(rejected), None if None in durations else sum(durations)
+
+
 def _escalation(case: Case, mode: str, escalated: bool) -> str | None:
     """Section 12.1 escalation quality; only auto chooses a route."""
     if mode != "auto":
@@ -221,6 +256,7 @@ def grade_run(
         databases is not None and sorted(databases) == sorted(case.expected_databases)
     )
     local_calls, external_calls, tokens = provider_calls(events)
+    corrections, correction_ms = external_corrections(events, state)
     escalated = external_calls > 0
     outcome_ok = not timed_out and state in case.expected_outcomes
 
@@ -257,6 +293,8 @@ def grade_run(
         external_calls=external_calls,
         tokens=tokens,
         gateway_proposals=len(gateway_proposals),
+        corrections=corrections,
+        correction_ms=correction_ms,
     )
     checks = [
         (

@@ -196,6 +196,61 @@ def test_the_corpus_report_renders_numerators_and_denominators():
     assert "1/2" in text and "local_only" in text
 
 
+def test_corrections_per_completed_run_count_corrections_and_their_duration():
+    """Section 12.1 (finding F6): corrections and summed duration over completed runs."""
+    grades = [
+        grade("simple-01", "auto", state="completed", corrections=2, correction_ms=13000),
+        grade("simple-02", "auto", state="completed", corrections=0, correction_ms=0),
+        grade("simple-03", "auto", state="completed", corrections=1, correction_ms=9000),
+        grade("simple-04", "auto", state="failed", corrections=0, correction_ms=0),
+    ]
+    block = summarize_corpus(grades)["modes"]["auto"]["en"]["all"]["corrections"]
+    assert block == {
+        "completed_runs": 3,
+        "corrections": 3,
+        "per_completed_run": 1.0,
+        "duration_ms": 22000,
+    }
+
+
+def test_corrections_leave_the_duration_unmeasured_when_one_is_missing():
+    grades = [
+        grade("simple-01", "auto", state="completed", corrections=1, correction_ms=None),
+        grade("simple-02", "auto", state="completed", corrections=1, correction_ms=9000),
+    ]
+    block = summarize_corpus(grades)["modes"]["auto"]["en"]["all"]["corrections"]
+    assert block["corrections"] == 2 and block["duration_ms"] is None
+
+
+def test_corrections_are_reported_apart_by_language():
+    grades = [
+        grade("simple-01", "auto", state="completed", corrections=2, correction_ms=100),
+        grade(
+            "simple-01-zh",
+            "auto",
+            language="zh",
+            state="completed",
+            corrections=0,
+            correction_ms=0,
+        ),
+    ]
+    modes = summarize_corpus(grades)["modes"]["auto"]
+    assert modes["en"]["all"]["corrections"]["corrections"] == 2
+    assert modes["zh"]["all"]["corrections"]["corrections"] == 0
+
+
+def test_grades_that_never_measured_corrections_report_none():
+    """RM16: an old export has no figure; it is not reported as zero."""
+    grades = [grade("simple-01", "auto", state="completed")]
+    assert "corrections" not in summarize_corpus(grades)["modes"]["auto"]["en"]["all"]
+
+
+def test_the_corpus_report_has_a_corrections_column():
+    grades = [grade("simple-01", "auto", state="completed", corrections=1, correction_ms=9000)]
+    text = render_corpus_markdown(summarize_corpus(grades), title="Corpus")
+    assert "corrections per completed run" in text and "1/1" in text and "9000 ms" in text
+
+
 # -- latency ---------------------------------------------------------------------------
 
 

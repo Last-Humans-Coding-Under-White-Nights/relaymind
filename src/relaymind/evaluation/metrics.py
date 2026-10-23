@@ -54,6 +54,27 @@ def rate(numerator: int, denominator: int) -> dict[str, Any]:
 # -- the correctness corpus -------------------------------------------------------------
 
 
+def _corrections(grades: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
+    """Corrections per completed run, with their summed duration (section 12.1, F6).
+
+    None when no grade measured them (an export made before this metric),
+    because that is not zero corrections (RM16). The duration is None when
+    a rejected generation recorded none.
+    """
+    measured = [g for g in grades if "corrections" in g]
+    if not measured:
+        return None
+    completed = [g for g in measured if g.get("state") == "completed"]
+    count = sum(g["corrections"] for g in completed)
+    durations = [g["correction_ms"] for g in completed if g["corrections"]]
+    return {
+        "completed_runs": len(completed),
+        "corrections": count,
+        "per_completed_run": None if not completed else count / len(completed),
+        "duration_ms": None if None in durations else sum(durations),
+    }
+
+
 def _block(grades: Sequence[Mapping[str, Any]], routes: Mapping[str, str]) -> dict[str, Any]:
     simple = [g for g in grades if g["case_class"] == "simple"]
     decided = [g for g in grades if g["confirmation"] is not None and g["case_class"] == "mutation"]
@@ -88,6 +109,9 @@ def _block(grades: Sequence[Mapping[str, Any]], routes: Mapping[str, str]) -> di
         "tokens": dict(sorted(tokens.items())),
         "rejections": dict(sorted(rejections.items())),
     }
+    corrections = _corrections(grades)
+    if corrections is not None:
+        block["corrections"] = corrections
     if simple:
         block["local_completion"] = rate(
             sum(bool(g["local_completion"]) for g in simple), len(simple)
@@ -168,6 +192,14 @@ def _rate_cell(key: str):
     return lambda block: _fraction(block.get(key))
 
 
+def _corrections_cell(block: Mapping[str, Any]) -> str:
+    value = block.get("corrections")
+    if value is None:
+        return "-"
+    duration = "not measured" if value["duration_ms"] is None else f"{value['duration_ms']} ms"
+    return f"{value['corrections']}/{value['completed_runs']}, {duration}"
+
+
 # The corpus report columns: (label, cell of a summary block).
 _COLUMNS = (
     ("runs", lambda b: str(b["runs"])),
@@ -181,6 +213,7 @@ _COLUMNS = (
     ("missed confirmations", lambda b: str(b["missed_confirmations"])),
     ("timeouts", lambda b: str(b["timeouts"])),
     ("explicit failures", lambda b: str(b["explicit_failures"])),
+    ("corrections per completed run", _corrections_cell),
     ("local calls", lambda b: str(b["provider_calls"]["local"])),
     ("external calls", lambda b: str(b["provider_calls"]["external"])),
 )

@@ -73,16 +73,25 @@ class Trace:
         )
         return self
 
-    def model(self, actor="local", model="qwen3-0.6b", purpose="skill", usage=(100, 10)):
+    def model(
+        self,
+        actor="local",
+        model="qwen3-0.6b",
+        purpose="skill",
+        usage=(100, 10),
+        duration_ms=None,
+        proposed_calls=0,
+        error=None,
+    ):
         call_id = f"gen{len(self.calls) + 1}"
         self.calls.append({"actor": actor, "call_id": call_id, "model": model, "purpose": purpose})
         self.add("model.started", actor, {"call_id": call_id, "model": model, "purpose": purpose})
         usage_payload = {"input_tokens": usage[0], "output_tokens": usage[1], "cached_tokens": 0}
-        return self.add(
-            "model.finished",
-            actor,
-            {"call_id": call_id, "model": model, "usage": usage_payload, "error": None},
-        )
+        finished = {"call_id": call_id, "model": model, "usage": usage_payload, "error": error}
+        if duration_ms is not None:
+            # The real model.finished carries these (section 8); older traces here do not.
+            finished.update(duration_ms=duration_ms, tool_calls=proposed_calls)
+        return self.add("model.finished", actor, finished)
 
     def route(self, route="local", actor="local", skill="check-service-health"):
         decision = {"route": route, "skill_id": skill, "reason_code": "simple_skill"}
@@ -505,3 +514,67 @@ def test_a_rejected_gateway_call_does_not_satisfy_a_required_call():
     )
     g = grade(make_case(), trace.answer(PAYMENTS).end(), mode="local_only")
     assert g.tool_correct is False
+
+
+# -- corrections per completed run (spec 0.31 section 12.1, finding F6, #141) ----------
+
+
+def external_run(*generations, state_event="run.completed"):
+    """An external run: each generation is (duration_ms, proposed_calls, purpose, error)."""
+    trace = Trace().route(route="external", actor="gateway")
+    for duration, calls, purpose, error in generations:
+        trace.model(
+            actor="external",
+            model="glm-4.6",
+            purpose=purpose,
+            duration_ms=duration,
+            proposed_calls=calls,
+            error=error,
+        )
+    return trace.answer(PAYMENTS, "external").end(state_event)
+
+
+def external_answers(*durations):
+    return [(ms, 0, "external", None) for ms in durations]
+
+
+def test_an_external_answer_published_at_once_is_no_correction():
+    g = grade(make_case(), external_run(*external_answers(9000)), mode="auto")
+    assert (g.corrections, g.correction_ms) == (0, 0)
+
+
+def test_each_external_text_generation_before_the_published_one_is_a_correction():
+    """Finding F6: a generation that is not the published answer counts as rejected."""
+    g = grade(make_case(), external_run(*external_answers(9000, 4000, 7000)), mode="auto")
+    assert (g.corrections, g.correction_ms) == (2, 13000)
+
+
+def test_a_tool_proposal_a_draft_and_a_failed_call_are_not_corrections():
+    """A generation with calls, the parallel draft, and an errored call are not rejected answers."""
+    generations = [
+        (3000, 1, "external", None),
+        (2000, 0, "draft", None),
+        (1500, 0, "external", {"code": "unreachable", "message": ""}),
+        (9000, 0, "external", None),
+        (8000, 0, "external", None),
+    ]
+    g = grade(make_case(), external_run(*generations), mode="auto")
+    assert (g.corrections, g.correction_ms) == (1, 9000)
+
+
+def test_a_run_that_did_not_complete_has_no_corrections_per_completed_run():
+    events = external_run(*external_answers(9000, 4000), state_event="run.failed")
+    g = grade(make_case(expected_outcomes=("failed",)), events, mode="auto", state="failed")
+    assert (g.corrections, g.correction_ms) == (0, 0)
+
+
+def test_a_local_completion_has_no_corrections():
+    g = grade(make_case(), local_health_trace())
+    assert (g.corrections, g.correction_ms) == (0, 0)
+
+
+def test_a_correction_with_no_recorded_duration_leaves_the_sum_unmeasured():
+    """RM16: a missing duration is not counted as zero."""
+    generations = [(None, 0, "external", None), (9000, 0, "external", None)]
+    g = grade(make_case(), external_run(*generations), mode="auto")
+    assert g.corrections == 1 and g.correction_ms is None
