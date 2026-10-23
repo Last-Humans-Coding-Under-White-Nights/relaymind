@@ -12,7 +12,7 @@ with model doubles only;
 gateway's public API (`/v1/chat/completions`, `/relay/v1/runs`) is
 started with `relaymind serve --config` (see
 [Starting the gateway](#starting-the-gateway)); the
-[README](../README.md#start-the-gateway) shows the requests to send it.
+[README](../README.md#use) shows the requests to send it.
 The manual JSON steps below target the llama-server endpoint that the
 `LlamaCppAdapter` talks to.
 

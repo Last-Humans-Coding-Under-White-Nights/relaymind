@@ -81,6 +81,12 @@ Keep the token in `RELAYMIND_TOKEN`; every request needs it.
 
 ## Use
 
+For the Python example, install the client SDK separately:
+
+```bash
+python -m pip install openai
+```
+
 Use the model name `relaymind`, which means "route it for me":
 
 ```python

@@ -133,7 +133,9 @@ once more by the owner:
 ## 5 Left to implementation
 
 Choices the spec leaves open and the issues settle: the timing-sample
-retention, the throughput estimator, the example matcher's method and
-thresholds, the selector endpoint path, the YAML binding and template
+retention, the throughput estimator, the example matcher's scoring
+method, the selector endpoint path, the YAML binding and template
 syntax, the generated criteria text per predicate, event field names
-beyond those the spec fixes, and the UI layout.
+beyond those the spec fixes, and the UI layout. Spec 0.32 fixes the
+matcher threshold keys, ranges, and provisional defaults in section
+14.1; implementation does not choose different defaults.
