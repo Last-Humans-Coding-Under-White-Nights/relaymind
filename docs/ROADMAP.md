@@ -548,7 +548,15 @@ a day or less on existing exports or the existing benchmark.
     latency benchmark, because every cached-token figure so far is an
     adapter default (#114);
   - regrade the corpus export offline with the skill-stage draft as the
-    answer, which decides `answer_pass` (#115);
+    answer, which decides `answer_pass` (#115). Done offline
+    (2026-10-23, [`EVIDENCE.md`](EVIDENCE.md)): of the 36 auto and
+    local_only runs with a final generation, 27 drafts pass the RM31
+    guards (the 9 blocked are all language) and 23 of those pass
+    grading; 6 runs go from failing to passing and none the other way.
+    English local completion on the simple subset would rise from 4/12
+    to 7/12 in `local_only` and to 6/12 in `auto`, still below the
+    80 % target. A prediction from one recorded run, not a measurement:
+    `final` stays the default until #128;
   - external first-token time with and without tools and with provider
     reasoning on and off, which decides the external-path lever (#116);
   - timings in a constrained configuration of the Apple M1 (a
@@ -557,9 +565,19 @@ a day or less on existing exports or the existing benchmark.
     margin (#117);
   - score an example-matching selector offline on the corpus prompts,
     with the expected-skill sidecar file (#118, P0: it decides whether
-    no-local selection works);
+    no-local selection works). Done offline (2026-10-23): the sidecar
+    `evaluation/corpus.v1.skills.json` is frozen in the corpus lock. A
+    throwaway BM25 matcher scores an English macro Jaccard of 0.675 at
+    thresholds chosen on the same cases, against 0.750 for the local
+    router, so it does not reach the hypothesis of section 12.3 on this
+    corpus; it picks where the router makes no pick (mutation: 6 right
+    against 2). #132 should not assume that the default chain changes;
   - count the round trips several read-only calls per generation would
-    have saved (#119).
+    have saved (#119). Done offline (2026-10-23): 21 generations with 73
+    proposals, all external and all read-only; the section 4.3 rule
+    admits 17 and keeps 4 rejected (identifiers the request never
+    named), and 42 later generations re-proposed a refused call. A
+    prediction, not a measurement.
 - Budgets table in the launch file, recorded in every run (#142; RM03,
   section 14.1): the one knob a slow-laptop operator needs.
 - First-token, cached, and reasoning tokens per model call, and provider

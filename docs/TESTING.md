@@ -380,15 +380,18 @@ Deterministic tests over model doubles:
   each value is a demo skill or null, a Chinese case follows its English
   case, the expected skill allows a tool of every required call group,
   the lock holds its digest under `sidecars`, a changed or missing
-  sidecar is refused, and the corpus digest is still the one that froze
-  version 1.
+  sidecar is refused, the same sidecar in another JSON layout is
+  accepted (the digest is of the canonical JSON), a lock without
+  `sidecars` still checks the corpus, and the corpus digest is still the
+  one that froze version 1.
 - `pytest tests/test_run_corpus_script.py` also covers the offline draft
   pass regrade (#115; RM31): a passing draft is published and graded as
   the local answer; a draft in the wrong language, with tool-call JSON, or
   after an answer option is blocked and keeps its measured grade; a run
   that changed the sandbox after the draft is not regraded; a draft that
   fails where the final pass succeeded shows as lost; the original export
-  is never changed; an unknown application revision is recorded as `None`.
+  is never changed and the command line refuses an `--out` equal to it;
+  an unknown application revision is recorded as `None`.
 - `pytest tests/test_probe_count_multi_calls.py` and
   `pytest tests/test_probe_example_match.py`: the two spikes over small
   exports and the checked-in corpus, with no model (#119, #118): the
@@ -399,13 +402,17 @@ Deterministic tests over model doubles:
   tokens in both languages, precision, recall, and Jaccard, and the
   threshold search. The router baseline counts only the modes the export
   ran, and the caveats state temperature 0 and each skill's example pair
-  count. Results are reported per language.
+  count. Results are reported per language, and the matcher's output is
+  the same under six values of `PYTHONHASHSEED`.
 
 The live runs are scripts, not tests: `scripts/run_corpus.py` and
 `scripts/latency_benchmark.py` (see [`scripts/README.md`](../scripts/README.md));
 their results are in [`EVIDENCE.md`](EVIDENCE.md). The three offline
 spikes of M7 (#115, #118, #119) are scripts over the stored corpus export
-and call no model; their results are in the 2026-10-23 entry there.
+(`run_corpus.py --regrade-draft-pass`, `probes/count_multi_calls.py`, and
+`probes/probe_example_match.py`; the commands are in
+[`scripts/README.md`](../scripts/README.md)). They call no model, and
+their results are in the 2026-10-23 entry of `EVIDENCE.md`.
 
 ### What is not covered yet
 

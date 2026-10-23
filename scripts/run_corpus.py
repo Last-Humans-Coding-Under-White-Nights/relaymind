@@ -436,7 +436,9 @@ def draft_block_reason(
     The final generation then runs as before. The guards are: a caller
     answer option, the run's language (a Chinese run needs Chinese text,
     an English run none, as the router reads a message, identifiers.has_cjk),
-    and tool-call JSON in the text.
+    and tool-call JSON in the text. A run with no draft text, or with no
+    language in its first decision, is blocked too (no_draft,
+    language_unknown).
     """
     if not text.strip():
         return "no_draft"
@@ -452,7 +454,7 @@ def draft_block_reason(
 
 
 def find_draft(events: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
-    """The draft: the last skill or repair generation without proposed calls before the final.
+    """The draft: the last skill or repair generation without calls or error before the final.
 
     The final generation starts only after a text answer met the skill's
     completion predicate, so that text is the draft (spec 0.31, RM31).
@@ -615,11 +617,14 @@ def regrade_draft_pass(document: dict[str, Any], corpus: Corpus) -> dict[str, An
     the draft, apply the RM31 guards, and, when it would be published,
     grade a counterfactual trace that ends with the draft as the local
     answer. A blocked run keeps its measured grade, because the final
-    generation then runs as before. No model is called, and the document
-    is not changed; the result is a separate record, labeled as an
-    offline counterfactual. Its runs say whether the measured run
-    completed locally, so the runs the final pass broke (finding F1 of
-    the 2026-10-23 analysis) are apart from the runs it did not.
+    generation then runs as before. A run that changed the sandbox after
+    the draft keeps its measured grade too and is marked not gradable,
+    because its stored sandbox state holds a change that the draft would
+    have prevented. No model is called, and the document is not changed;
+    the result is a separate record, labeled as an offline
+    counterfactual. Its runs say whether the measured run completed
+    locally, so the runs the final pass broke (finding F1 of the
+    2026-10-23 analysis) are apart from the runs it did not.
     """
     if document["corpus"]["sha256"] != corpus.digest:
         raise SystemExit("the export was made with another corpus digest; it cannot be regraded")
@@ -674,10 +679,10 @@ def draft_pass_table(runs: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Per mode, language, class, and whether the measured run completed locally: the outcomes.
 
     Each row counts the runs with a final generation, the drafts
-    published and blocked (by reason), how many published drafts pass
-    grading, how many measured runs passed, and the runs that the draft
-    turned from failing to passing (gained) or from passing to failing
-    (lost).
+    published and blocked (by reason), the runs not gradable, how many
+    published drafts pass grading, how many measured runs passed, and the
+    runs that the draft turned from failing to passing (gained) or from
+    passing to failing (lost).
     """
     rows: dict[tuple, dict[str, Any]] = {}
     for run in runs:

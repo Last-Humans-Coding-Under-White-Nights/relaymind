@@ -130,10 +130,13 @@
   answer: for each auto and local_only run with a final generation it
   takes the draft, applies the RM31 guards (no caller answer option, the
   run's language, no tool-call JSON), and grades a trace that ends with
-  the draft as the local answer. A blocked run keeps its measured grade.
-  It calls no model, never changes the export it reads, and writes a
-  separate export and Markdown report labeled "offline counterfactual,
-  not a measured run".
+  the draft as the local answer. A blocked run keeps its measured grade,
+  and so does a run that changed the sandbox after the draft (its stored
+  sandbox state holds a change that the draft would have prevented; the
+  report counts it as not gradable). It calls no model, never changes the
+  export it reads (an `--out` equal to it is refused), cannot be combined
+  with `--regrade`, and writes a separate export and Markdown report
+  labeled "offline counterfactual, not a measured run".
 
   ```bash
   python scripts/run_corpus.py \
@@ -147,7 +150,8 @@
   valid or not), applies the rule for several read-only calls per
   generation, and counts the later one-call generations that re-proposed
   a refused call. It cross-checks its totals against the
-  `multiple_tool_calls` refusals in the trace. Offline, no model.
+  `multiple_tool_calls` refusals in the trace. `--export` defaults to
+  the 2026-10-22 corpus export. Offline, no model.
 
   ```bash
   python scripts/probes/count_multi_calls.py \
@@ -162,9 +166,9 @@
   for Chinese. It scores the 52 corpus prompts against the skill sidecar
   `evaluation/corpus.v1.skills.json` (precision, recall, and Jaccard per
   language and class, the score and margin of right and wrong picks), and
-  with `--export` compares them with the local router's picks in a corpus
-  export and proposes thresholds. The scoring functions are pure so that
-  the production selector can port them. Offline, no model.
+  with `--export` (optional) compares them with the local router's picks
+  in a corpus export and proposes thresholds. The scoring functions are
+  pure so that the production selector can port them. Offline, no model.
 
   ```bash
   python scripts/probes/probe_example_match.py \
@@ -172,6 +176,11 @@
       --out docs/evidence/<date>-example-match-<machine>.json
   ```
 
-  All three label their output as an offline analysis and record the
-  application revision they ran at; their results are in
-  `docs/EVIDENCE.md`.
+  All three label their output as offline and not a measured run, and
+  record the checkout's HEAD and whether its tree has changes
+  (`regraded_with` in the draft-pass export, `analysed_with` in the
+  other two). The regrade and the multiple-calls probe refuse an `--out`
+  that is the export they read. A file that an earlier command wrote
+  into the checkout makes the tree count as changed, so write each
+  output outside the checkout and copy it into `docs/evidence/` when the
+  record needs a clean tree. Their results are in `docs/EVIDENCE.md`.

@@ -214,9 +214,10 @@ def parse_skills_sidecar(
 ) -> dict[str, str | None]:
     """Check the skill sidecar against the corpus: each case once, each value a skill or null.
 
-    The expected skill is null only for a case that expects a clarification
-    before any skill is chosen. A Chinese case expects the skill of its
-    English case.
+    The expected skill is null for a case that expects a clarification
+    before any skill is chosen (the corpus tests check that rule against
+    the acceptable calls). A Chinese case expects the skill of its English
+    case.
     """
     _check_fields("skill sidecar", document, _SIDECAR_FIELDS)
     check_schema_version(document["schema_version"], 1, CorpusError)

@@ -23,9 +23,10 @@ with the score and margin of right and wrong picks. With ``--export``
 router in that export, the first ``route.selected`` of each auto and
 local_only run with mechanism ``native_function_calling``, are the
 baseline, and the candidate thresholds are the pair that keeps the
-English wrong picks at or below the router's and gets the most right
-picks. The thresholds are chosen on the cases that score them, so the
-result is not held out. No model is called.
+English wrong picks at or below the router's (the lower count of its
+modes in the export) and gets the most right picks. The thresholds are
+chosen on the cases that score them, so the result is not held out. No
+model is called.
 
 Usage:
     python scripts/probes/probe_example_match.py \\
