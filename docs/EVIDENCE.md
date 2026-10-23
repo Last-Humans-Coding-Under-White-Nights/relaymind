@@ -2250,3 +2250,71 @@ observation does not measure that, and it does not rank the levers.
 - The `thinking` field was checked against the provider's documentation
   pages on the day, but the pages do not document the reasoning-token count
   that the provider returned.
+
+## 2026-10-23 — Cached tokens, reasoning tokens, and first token through the adapter (#120), Apple Silicon macOS
+
+A check that the counts the pinned runtime returns now reach the gateway's
+`Usage` event and that the first-token marker comes first. It is a smoke
+check, not a benchmark: one repeated prompt, two requests, one machine. It
+replaces the adapter default of 0 that finding F9 found in earlier exports
+with a figure the runtime returned.
+
+### Commands
+
+From the repository root, with the pinned runtime first on the path
+(`llama-server --version`: `version: 0.7.0-dev (build 11785, commit
+8baabd53b)`):
+
+```bash
+export PATH=/Users/dmitrykudryavtsev/llama-b11785-dl/x/llama-b11785:$PATH
+pytest -m live tests/test_llamacpp_live_smoke.py -s     # prints both usage events
+pytest -m live tests/test_llamacpp_live_smoke.py        # 8 passed in 6.63 s
+```
+
+| Field | Value |
+|-------|-------|
+| Measured code | `735c466` (branch `m7/call-timing-and-budgets`), working tree clean. Later commits on the branch change documentation only |
+| Machine | Apple M1, macOS, Metal backend, nothing else heavy running |
+| Runtime and model | llama.cpp build 11785, commit `8baabd53b`; `models/qwen3-0.6b-q8_0.manifest.json` launch settings (`--ctx-size 8192 --jinja --reasoning off --reasoning-format deepseek`); the test starts and stops its own `llama-server` and none was left running |
+| Test | `test_a_repeated_prompt_reports_cached_tokens_and_the_first_token`: the same prompt (a long system message and one user line, 559 prompt tokens in all) is sent twice through `LlamaCppAdapter`, non-thinking, `max_output_tokens` 8, temperature 0 |
+
+### Results
+
+| Request | `input_tokens` | `output_tokens` | `cached_tokens` | `reasoning_tokens` |
+|---------|----------------|-----------------|-----------------|--------------------|
+| First | 559 | 2 | 8 | `None` |
+| Second (same prompt) | 559 | 2 | 558 | `None` |
+
+- Both requests gave one `FirstToken` marker, and it was the first event of
+  the stream. The test asserts the order and not a time, so no first-token
+  figure is claimed here. The run's `first_token_ms` is covered by the
+  deterministic tests with a fake clock.
+- The pinned runtime reports the reused prompt as 558 of 559 tokens on the
+  repeated prompt, so the `cache_prompt` request and the prefix reuse work
+  through the adapter. The first request reported 8 cached tokens: the
+  server had served other requests of the same test module before it, and
+  which of them shared those 8 tokens was not checked.
+- A separate ad hoc check with a fresh server and the same request body
+  (`chat_body` of the adapter, sent over raw HTTP; the script was not
+  committed, so this line is a record and not a reproducible export) showed
+  where the counts come from. The last chunk of each stream is the usage
+  chunk, and it holds both `usage.prompt_tokens_details.cached_tokens` and
+  `timings.cache_n` with equal values: 0 and 0 on the first request, 558 and
+  558 on the second (`prompt_n` 559 and 1). Neither chunk holds
+  `completion_tokens_details`, so the runtime returns no reasoning count and
+  the gateway records `reasoning_tokens` as `null`. This was checked with
+  reasoning off; it was not checked in thinking mode.
+- Because both fields arrive on the same chunk, which one wins (the usage
+  details, by the rule in `StreamAccumulator`) did not matter for this
+  runtime.
+
+### Caveats
+
+- One prompt, two requests, one machine, one runtime build and one model
+  file. It does not say how much of a real routing or skill-stage prefix is
+  reused (that is the prefix reuse entry of 2026-10-23) and it is not a
+  latency measurement.
+- The reasoning count was not seen from any provider here. The external
+  provider's count and the value of `request_options` against a live
+  provider were not run: this change was tested with a mock transport only.
+  Nothing in this entry is an external measurement.
