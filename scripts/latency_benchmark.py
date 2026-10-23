@@ -33,6 +33,7 @@ import asyncio
 import json
 import os
 import random
+import re
 import shutil
 import sys
 import tempfile
@@ -338,6 +339,35 @@ def prefix_cache_record(calls: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
+WARMUP_LINE_PREFIX = "Local warm-up finished: "
+WARMUP_SAMPLE = re.compile(
+    r"(?P<purpose>\w+) (?P<duration>\d+) ms \(first token (?P<first>\d+ ms|n/a), "
+    r"cached (?P<cached>\d+|n/a)\)"
+)
+
+
+def startup_warmup_record(lines: Sequence[str], *, startup_warmup: bool) -> dict[str, Any]:
+    """The warm-up samples the launcher printed (spec 0.31 sections 6 and 12.2).
+
+    The launcher prints one line when the warm-up finished; a count it did not report is n/a
+    there and None here. With warm-up off, or when the launcher printed no such line (the
+    warm-up failed or timed out), there are no samples, and none are invented.
+    """
+    line = next((x for x in lines if x.startswith(WARMUP_LINE_PREFIX)), None)
+    if not startup_warmup or line is None:
+        return {"enabled": startup_warmup, "line": None, "samples": None}
+    samples = [
+        {
+            "purpose": m["purpose"],
+            "duration_ms": int(m["duration"]),
+            "first_token_ms": None if m["first"] == "n/a" else int(m["first"].split()[0]),
+            "cached_tokens": None if m["cached"] == "n/a" else int(m["cached"]),
+        }
+        for m in WARMUP_SAMPLE.finditer(line)
+    ]
+    return {"enabled": True, "line": line, "samples": samples}
+
+
 def _props(local_url: str) -> dict[str, Any] | None:
     try:
         response = httpx.get(local_url + "/props", timeout=30, trust_env=False)
@@ -450,6 +480,9 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                 "gateway_start_to_healthy_seconds": round(gateway_ready, 3),
                 "gateway_config": config.read_text("utf-8"),
                 "cold_request": samples["cold"],
+                "startup_warmup": startup_warmup_record(
+                    output.recorded_lines, startup_warmup=startup_warmup
+                ),
             },
             "prefix_cache": prefix_cache_record(calls),
             "summary": summary,

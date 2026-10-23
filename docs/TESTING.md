@@ -712,12 +712,15 @@ feature has a test of the default as well. Later pull requests append here.
   short-lived adapter is closed in its own event loop. The warm-up text is
   not in the corpus or the latency prompts. `tests/test_latency_benchmark_script.py`
   and `tests/test_live_acceptance_script.py` check `--no-startup-warmup` and
-  the `[placement]` table of the harness config.
+  the `[placement]` table of the harness config; the latency export holds
+  the warm-up samples read from the launcher line (n/a stays `None`; none
+  when warm-up is off or no line was printed).
 - Live, with the pinned runtime first on the path (#124): `pytest -m live
   tests/test_local_loop_live.py` and `scripts/run_corpus.py --modes
   local_only --languages en --cases simple-01 ... simple-12` ran with the
   skill-stage layout as it is and with the skill body before the
-  conversation; the second lowered both, so it was not kept. The runs are in
+  conversation in two variants; one lowered the corpus subset and the other
+  lowered AC01, so neither was kept. The runs are in
   [`EVIDENCE.md`](EVIDENCE.md).
 
 ### What is not covered yet

@@ -462,10 +462,12 @@ def test_the_values_message_is_refreshed_not_piled_up(tmp_path):
     assert len(requests) == 3
     for request in requests:
         assert len(values_messages(request)) == 1
+        # Spec 0.34: at the end of the request, also after a tool step or a correction.
+        assert request.messages[-1] is values_messages(request)[0]
     first, second, third = (values_messages(r)[0].content for r in requests)
     assert "get_recent_logs" not in first and "get_metrics" in first
     assert "get_recent_logs" in second
-    # An unchanged message stays where it was; the correction follows it.
+    # The same values, moved behind the rejected answer and its correction.
     assert second == third
 
 
@@ -512,7 +514,11 @@ def test_a_correction_names_the_failed_checks_and_does_not_quote_the_answer(tmp_
         assert f"- {check}" in correction
     assert "IGNORE" not in correction and "payments-api" not in correction
     # The rejected answer is the assistant message before it, as before.
-    assert second.messages[-2].role is Role.ASSISTANT and second.messages[-2].content == rejected
+    # The values message is last (spec 0.34), behind the correction.
+    messages = list(second.messages)
+    at = max(i for i, m in enumerate(messages) if m.role is Role.USER)
+    assert messages[at - 1].role is Role.ASSISTANT and messages[at - 1].content == rejected
+    assert messages[-1] is values_messages(second)[0] and at == len(messages) - 2
     (completed,) = of_type(events, "run.completed")
     assert completed.payload["final_answer_model"] == EXTERNAL_MODEL_ID
 
@@ -523,8 +529,9 @@ def test_an_empty_external_answer_is_corrected_as_empty(tmp_path):
     outcome, _ = run(gateway, PROMPT)
 
     assert outcome.state is RunState.COMPLETED
-    correction = [m.content for m in gateway.external.requests[1].messages][-1]
-    assert "empty" in correction
+    messages = list(gateway.external.requests[1].messages)
+    assert messages[-1] is values_messages(gateway.external.requests[1])[0]
+    assert "empty" in messages[-2].content
 
 
 def test_the_local_correction_is_unchanged(tmp_path):

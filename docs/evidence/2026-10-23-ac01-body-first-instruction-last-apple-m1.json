@@ -1,7 +1,7 @@
 {
   "kind": "relaymind.live_local_trace",
   "note": "Live single-pass traces; observations, not benchmark results (spec 12.3).",
-  "command": "RELAYMIND_TRACE_OUT=/private/tmp/claude-501/-Users-dmitrykudryavtsev-Playground-relaymind/ee1bc71c-0ed2-47af-9d87-03a77f9385b5/scratchpad/m7pr6/ac01-layout-new-1.json pytest -m live tests/test_local_loop_live.py",
+  "command": "RELAYMIND_TRACE_OUT=<scratch>/ac01-layout-new-1.json pytest -m live tests/test_local_loop_live.py",
   "machine": {
     "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
     "machine": "arm64",

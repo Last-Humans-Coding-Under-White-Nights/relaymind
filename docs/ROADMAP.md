@@ -634,8 +634,11 @@ a day or less on existing exports or the existing benchmark.
   `warmup` and `warmup_seconds`, the warm-up step in `main`, and the
   external system message with the handoff JSON last. The cold routing
   call took 995 ms without the warm-up and 364 ms with it, on one run each.
-  The local layout (skill body before the conversation) was measured and
-  not kept: it lowered AC01 passes and local completion.
+  The local layout (skill body before the conversation) was measured in two
+  variants and not kept: the body after the instruction kept AC01 at 3 of 4
+  but lowered corpus local completion (4/12 to 1/12) and tool correctness
+  (11/12 to 7/12); the body first lowered AC01 to 2 of 4, then 1 of 4, and was
+  not run on the corpus.
 - Completion criteria in the external request, and corrections per
   completed run as a metric (#141; section 4.4; finding F6). Done
   (2026-10-23, deterministic tests with model doubles): the criteria beside

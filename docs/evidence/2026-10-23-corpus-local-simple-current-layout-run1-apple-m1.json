@@ -1,7 +1,7 @@
 {
   "kind": "relaymind.correctness_corpus",
   "note": "Live runs of the frozen corpus (spec 0.28 section 12.2). Each case and mode ran in a new gateway from the case's seed. A failed grade is a finding, never dropped.",
-  "command": "python scripts/run_corpus.py --out /private/tmp/claude-501/-Users-dmitrykudryavtsev-Playground-relaymind/ee1bc71c-0ed2-47af-9d87-03a77f9385b5/scratchpad/m7pr6/corpus-current-1.json --modes local_only --languages en --cases simple-01 simple-02 simple-03 simple-04 simple-05 simple-06 simple-07 simple-08 simple-09 simple-10 simple-11 simple-12",
+  "command": "python scripts/run_corpus.py --out <scratch>/corpus-current-1.json --modes local_only --languages en --cases simple-01 simple-02 simple-03 simple-04 simple-05 simple-06 simple-07 simple-08 simple-09 simple-10 simple-11 simple-12",
   "corpus": {
     "file": "evaluation/corpus.v1.json",
     "version": 1,

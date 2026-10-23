@@ -2150,26 +2150,21 @@ class _Run:
         """Keep one gateway rules message with the criteria values of the latest results.
 
         The values come from the latest successful tool results only (RM12).
-        An unchanged message stays where it is. A changed one replaces its
-        earlier copy at the end of the conversation, so a request never
-        carries two (spec 0.34 section 4.4), and none when no successful
-        result exists.
+        The message moves to the end of the conversation before each external
+        generation, behind any tool result, rejected answer, or correction
+        added since, and replaces its earlier copy, so a request never carries
+        two (spec 0.34 section 4.4). There is none when no successful result
+        exists.
         """
         if loop.criteria is None:
             return
         lines = loop.criteria.values(self.results, loop.language)
-        content = (
-            None
-            if not lines
-            else "\n".join([CRITERIA_VALUES_HEADER, *(f"- {line}" for line in lines)])
-        )
         current = loop.criteria_message
-        if current is not None and current.content == content:
-            return
         if current is not None:
             loop.conversation[:] = [m for m in loop.conversation if m is not current]
             loop.criteria_message = None
-        if content is not None:
+        if lines:
+            content = "\n".join([CRITERIA_VALUES_HEADER, *(f"- {line}" for line in lines)])
             loop.criteria_message = Message(role=Role.SYSTEM, content=content)
             loop.conversation.append(loop.criteria_message)
 

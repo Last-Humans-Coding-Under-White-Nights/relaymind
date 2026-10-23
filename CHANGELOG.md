@@ -16,7 +16,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   no check fails. The fixed part of the criteria (labels, forbidden patterns,
   what to keep exactly) follows the skill instructions in the first system
   message of the external request. The value part is one gateway rules
-  message placed at the end of the conversation before each external
+  message moved to the end of the conversation before each external
   generation once a successful result exists, refreshed instead of piled up
   and measured with the request (RM13). Its values come only from
   schema-typed fields of the latest successful result (a service or database
@@ -45,7 +45,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   external request the system message now ends with the handoff JSON (run ID,
   remaining budgets). The local layout change (the skill body before the
   conversation) was measured live and not kept (see Changed).
-  `scripts/latency_benchmark.py` gains `--no-startup-warmup`.
+  `scripts/latency_benchmark.py` gains `--no-startup-warmup`, and with the
+  warm-up on its export holds the launcher's warm-up line and the samples
+  read from it (`cold_start.startup_warmup`; spec 0.31 section 12.2), with
+  `None` for a figure the launcher printed as n/a and no samples when it
+  printed no such line.
 - Admitted calls per generation (#122; RM05, RM08 to RM11, section 4.3,
   AC18): under `performance.calls_per_generation = "many"` a generation may
   propose several read-only calls. In a local stage the limit is the
@@ -145,12 +149,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- The skill-stage layout is unchanged (#124, spec 0.34 section 10). Moving
-  the skill body before the conversation in the first system message was
-  measured on 2026-10-23 on the pinned model and lowered the live AC01 pass
-  count and the local_only English simple corpus subset (4/12 local
-  completion and 11/12 tool correctness before, 1/12 and 7/12 after, twice
-  each); `docs/EVIDENCE.md` has the runs.
+- The skill-stage layout is unchanged (#124, spec 0.34 section 10). Two
+  layouts of the first system message were measured on 2026-10-23 on the
+  pinned model. The description and tool instruction first, then the skill
+  body (`7bfe3fa`), kept live AC01 at 3 of 4 but lowered the local_only
+  English simple corpus subset (4/12 local completion and 11/12 tool
+  correctness before, 1/12 and 7/12 after, twice each). The skill body first
+  (`4db75b9`) lowered live AC01 to 2 of 4, then 1 of 4, and was not run on the
+  corpus. `docs/EVIDENCE.md` has the runs.
 - A tool event of a gateway-made call has model null and actor `gateway`
   (RM22, spec 0.32 section 8); `tool.proposed` has an optional `mechanism`
   (`model`, the default, `prefetch`, or `workflow` with its `step`). The

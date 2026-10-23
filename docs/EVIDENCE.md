@@ -2337,13 +2337,13 @@ used here.
 | Local artifact | `models/qwen3-0.6b-q8_0.manifest.json` (Qwen3-0.6B Q8_0), the pinned launch settings, unchanged |
 | Test time | 2026-10-23, 10:29 to 10:45 UTC |
 | Python | 3.14.7 |
-| Applications | "before": `a4243f9` (the base of this branch, clean, checked out in a scratch worktree). "After": `0caa1cc` (this branch with the warm-up and the criteria; clean). Layout experiments: `4db75b9` (body first, then the description and tool instruction) and `7bfe3fa` (description and tool instruction, then the body), each a one-function change on top of `0caa1cc`, committed in a scratch worktree and not on any branch. Each export records `head` and `dirty: false`. |
+| Applications | "before": `a4243f9` (the base of this branch, clean, checked out in a scratch worktree). "After": `0caa1cc` (this branch with the warm-up and the criteria; clean). Layout experiments: `4db75b9` (body first, then the description and tool instruction) and `7bfe3fa` (description and tool instruction, then the body), each a one-function change on top of `0caa1cc`, committed in a scratch worktree and not on any branch. The corpus and latency exports record `head` (and `dirty: false` where the exporter records it). The three AC01 exports (`relaymind.live_local_trace`) record no revision: `...-ac01-current-layout-...` is `0caa1cc`, `...-ac01-body-first-instruction-first-...` is `7bfe3fa` (description and tool instruction first, then the body), and `...-ac01-body-first-instruction-last-...` is `4db75b9` (body first, then the description and tool instruction); the mapping follows the order of the runs and the scratch names in the recorded commands. One AC01 export per layout is committed. The base AC01 runs and the repeat AC01 runs were not exported. The `command` field of each new export had its output path rewritten to `<scratch>/...` after the run; nothing else in the exports was edited. |
 | Exports | `docs/evidence/2026-10-23-latency-before-apple-m1.json`, `...-latency-after-warmup-apple-m1.json`, `...-latency-after-no-warmup-apple-m1.json` (with `.md`); `...-corpus-local-simple-current-layout-run{1,2}-apple-m1.json` and `...-body-first-run{1,2}-...` (with `.md`); `...-ac01-current-layout-...`, `...-ac01-body-first-instruction-last-...`, `...-ac01-body-first-instruction-first-...` |
 
 ### Commands
 
 ```bash
-export PATH=/Users/dmitrykudryavtsev/llama-b11785-dl/x/llama-b11785:$PATH
+export PATH=<llama-b11785 dir>:$PATH
 # Latency benchmark, seed 20261023, 10 runs per prompt, one run of each:
 python scripts/latency_benchmark.py --out lat-base.json --seed 20261023   # at a4243f9
 python scripts/latency_benchmark.py --out lat-after.json --seed 20261023  # at 0caa1cc
@@ -2433,5 +2433,13 @@ requests, concurrency one, routing cache off, no external model.
   needs a corpus run with an external endpoint (#128); the metric is now
   reported by the evaluation code.
 - The warm-up timings are in `Launched.warmup` and one stdout line of the
-  launcher. The benchmark export keeps the launch file but not the launcher
-  output, so the warm-up's own timings are not in these exports.
+  launcher. The three latency exports here were made at `0caa1cc`, before
+  `scripts/latency_benchmark.py` wrote the launcher's warm-up line and its
+  samples (`cold_start.startup_warmup`) into the export, so
+  these exports do not hold the warm-up's own timings. A later export of the
+  runner does.
+- Changed after the measured commit `0caa1cc`: the criteria values message
+  is moved to the end of the external conversation before every external
+  generation (it stayed in place when unchanged), and the latency runner
+  gained the field above. No run here exercised the external request, and the
+  latency exports were not re-made; their figures are unchanged.

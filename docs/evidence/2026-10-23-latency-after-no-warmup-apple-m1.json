@@ -1,7 +1,7 @@
 {
   "kind": "relaymind.latency_benchmark",
   "note": "Spec 0.28 section 12.2 latency experiment on the local path, concurrency one, routing cache off. First transport event and first answer token are client times; first model action and first useful content are trace times (elapsed_ms from run.accepted). The two clocks are never subtracted. Errors and timeouts are kept.",
-  "command": "python scripts/latency_benchmark.py --out /private/tmp/claude-501/-Users-dmitrykudryavtsev-Playground-relaymind/ee1bc71c-0ed2-47af-9d87-03a77f9385b5/scratchpad/m7pr6/lat-after-nowarm.json --seed 20261023 --no-startup-warmup",
+  "command": "python scripts/latency_benchmark.py --out <scratch>/lat-after-nowarm.json --seed 20261023 --no-startup-warmup",
   "started_at_utc": "2026-10-23T10:42:16+00:00",
   "finished_at_utc": "2026-10-23T10:44:56+00:00",
   "prompts": {
