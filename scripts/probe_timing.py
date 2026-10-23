@@ -33,6 +33,7 @@ import argparse
 import asyncio
 import json
 import platform
+import re
 import shlex
 import shutil
 import socket
@@ -86,22 +87,34 @@ def parse_runtime_extra_args(text: str) -> tuple[str, ...]:
         ) from exc
 
 
+@dataclass(frozen=True)
+class _IntegerSetting:
+    """A runtime-only setting that takes one integer value of at least ``minimum``.
+
+    ``words`` are the other values llama-server accepts for it.
+    """
+
+    minimum: int
+    words: frozenset[str] = frozenset()
+
+
 # The settings an extra argument may name: how the pinned model runs on this machine, and nothing
 # that changes what it computes (the template, the reasoning mode, the tokenizer, metadata
-# overrides, the context size, or the slot count that divides it). Spellings follow llama-server
-# 0.7.0 --help; the --no- form of a switch is the same setting.
-_RUNTIME_ONLY_FLAGS = frozenset(
-    {
-        "n-gpu-layers",
-        "gpu-layers",
-        "threads",
-        "threads-batch",
-        "batch-size",
-        "ubatch-size",
-        "mlock",
-        "mmap",
-    }
-)
+# overrides, the context size, or the slot count that divides it). Spellings follow the flag
+# table of llama.cpp b11785, the runtime the manifests pin. Each takes a value, and none has a
+# --no- form there. b11785 has no --mlock or --mmap switch (it sets the loading mode with
+# --load-mode), so neither is listed. The GPU layers are a count, "auto", or "all"; -1 is the
+# number for "auto".
+_GPU_LAYERS = _IntegerSetting(minimum=-1, words=frozenset({"auto", "all"}))
+_RUNTIME_ONLY_SETTINGS: Mapping[str, _IntegerSetting] = {
+    "n-gpu-layers": _GPU_LAYERS,
+    "gpu-layers": _GPU_LAYERS,
+    "threads": _IntegerSetting(minimum=1),
+    "threads-batch": _IntegerSetting(minimum=1),
+    "batch-size": _IntegerSetting(minimum=1),
+    "ubatch-size": _IntegerSetting(minimum=1),
+}
+_INTEGER_RE = re.compile(r"-?[0-9]+")
 
 
 def _is_number(token: str) -> bool:
@@ -112,10 +125,25 @@ def _is_number(token: str) -> bool:
     return True
 
 
+def _is_flag(token: str) -> bool:
+    """A token that names a flag (short or long), and not a negative number."""
+    return token.startswith("-") and not _is_number(token)
+
+
 def _flag_name(token: str) -> str:
-    """The setting a long flag names: no dashes, no value, no --no- prefix."""
-    name = token.removeprefix("--").split("=", 1)[0]
-    return name.removeprefix("no-")
+    """The setting a long flag names: no dashes and no value."""
+    return token.removeprefix("--").split("=", 1)[0]
+
+
+def _check_value(token: str, value: str, setting: _IntegerSetting) -> None:
+    """Refuse a value llama-server would not take for the setting; token names the flag."""
+    if value in setting.words:
+        return
+    if not _INTEGER_RE.fullmatch(value):
+        words = "".join(f" or {word!r}" for word in sorted(setting.words))
+        raise ValueError(f"extra argument {token!r} needs an integer value{words}")
+    if int(value) < setting.minimum:
+        raise ValueError(f"extra argument {token!r} needs a value of at least {setting.minimum}")
 
 
 def check_runtime_extra_args(
@@ -126,34 +154,60 @@ def check_runtime_extra_args(
     The manifest pins the model, the chat template, and the launch
     settings (spec section 6), and the harness sets the bind address.
     Extra arguments only add settings next to them, such as a CPU-only
-    runtime with fewer threads (spec 0.31 section 12.2). Only long flags
-    are accepted, so a short alias cannot reach a pinned flag, and only the
-    runtime-only settings in ``_RUNTIME_ONLY_FLAGS`` are allowed, so a
-    spelling the manifest does not use (``--chat-template-kwargs``,
-    ``--reasoning-budget``, ``--override-kv``) cannot change what the
-    model computes. A number after a flag is its value. Raises ValueError
-    with the reason.
+    runtime with fewer threads (spec 0.31 section 12.2). The grammar is
+    small and explicit: a sequence of long flags from
+    ``_RUNTIME_ONLY_SETTINGS``, each with its value as the next token
+    (``--threads 2``) or after ``=`` (``--threads=2``). Refused, with the
+    token named: a positional token (llama-server reads one as the model
+    path), a short flag (so an alias cannot reach a pinned flag), a flag
+    of the harness or the manifest, any other flag (so a spelling the
+    manifest does not use, such as ``--chat-template-kwargs``,
+    ``--reasoning-budget``, or ``--override-kv``, cannot change what the
+    model computes), a ``--no-`` form, and a missing, non-integer, or
+    out-of-range value. Raises ValueError with the reason.
     """
     pinned = {_flag_name(token) for token in pinned_argv if token.startswith("--")}
-    for index, token in enumerate(extra_args):
-        if not token.startswith("-") or _is_number(token):
-            if index == 0:
-                raise ValueError(f"extra arguments must start with a flag, not {token!r}")
-            continue
+    index = 0
+    while index < len(extra_args):
+        token = extra_args[index]
+        index += 1
+        if not _is_flag(token):
+            raise ValueError(
+                f"extra argument {token!r} is a positional argument; only flags and their "
+                "values are accepted, so a positional argument (such as a model path) is refused"
+            )
         if not token.startswith("--"):
             raise ValueError(f"extra argument {token!r} is not a long flag (--name)")
+        # A refused flag is named without its value, which could be a secret (--api-key=...).
+        flag = token.split("=", 1)[0]
         name = _flag_name(token)
-        if name in _RESERVED_LAUNCH_FLAGS:
-            raise ValueError(f"extra argument {token!r} is set by the harness or selects a model")
-        if name in pinned:
+        base = name.removeprefix("no-")
+        if name in _RESERVED_LAUNCH_FLAGS or base in _RESERVED_LAUNCH_FLAGS:
+            raise ValueError(f"extra argument {flag!r} is set by the harness or selects a model")
+        if name in pinned or base in pinned:
             raise ValueError(
-                f"extra argument {token!r} would change a pinned setting of the manifest"
+                f"extra argument {flag!r} would change a pinned setting of the manifest"
             )
-        if name not in _RUNTIME_ONLY_FLAGS:
+        setting = _RUNTIME_ONLY_SETTINGS.get(name)
+        if setting is None and base != name and base in _RUNTIME_ONLY_SETTINGS:
             raise ValueError(
-                f"extra argument {token!r} is not a runtime-only setting; allowed: "
-                + ", ".join(f"--{allowed}" for allowed in sorted(_RUNTIME_ONLY_FLAGS))
+                f"extra argument {flag!r}: --{base} takes a value and has no --no- form"
             )
+        if setting is None:
+            raise ValueError(
+                f"extra argument {flag!r} is not a runtime-only setting; allowed: "
+                + ", ".join(f"--{allowed}" for allowed in sorted(_RUNTIME_ONLY_SETTINGS))
+            )
+        if "=" in token:
+            value = token.split("=", 1)[1]
+        elif index < len(extra_args) and not _is_flag(extra_args[index]):
+            value = extra_args[index]
+            index += 1
+        else:
+            value = ""
+        if not value:
+            raise ValueError(f"extra argument {token!r} needs a value")
+        _check_value(token, value, setting)
     return tuple(extra_args)
 
 
