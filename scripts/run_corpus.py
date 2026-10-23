@@ -76,7 +76,6 @@ from relaymind.orchestrator.performance import (  # noqa: E402
     draft_in_language,
     holds_tool_call_json,
 )
-from relaymind.orchestrator.route_decision import Language  # noqa: E402
 from relaymind.tools.sandbox import MUTATING_DEMO_TOOLS  # noqa: E402
 
 REPO_ROOT = harness.REPO_ROOT
@@ -443,7 +442,7 @@ def draft_block_reason(
         return "answer_options"
     if language not in ("en", "zh"):
         return "language_unknown"
-    if not draft_in_language(text, Language(language)):
+    if not draft_in_language(text, language):
         return "language"
     if holds_tool_call_json(text):
         return "tool_call_json"

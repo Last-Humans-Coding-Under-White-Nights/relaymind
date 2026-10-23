@@ -102,6 +102,26 @@ def test_the_draft_must_be_in_the_run_language(text, language, expected):
 
 
 @pytest.mark.parametrize(
+    ("text", "language", "expected"),
+    [
+        ("staging-api is healthy.", "en", True),
+        ("staging-api 的状态是 healthy。", "en", False),
+        ("staging-api 的状态是 healthy。", "zh", True),
+        ("staging-api is healthy.", "zh", False),
+    ],
+)
+def test_the_draft_language_compares_by_value(text, language, expected):
+    """RM31: a plain "zh" string is the Chinese run, as the Language member is."""
+    assert draft_in_language(text, language) is expected
+
+
+def test_an_unknown_draft_language_is_refused():
+    """RM31: a language outside spec section 1 is an error, never read as English."""
+    with pytest.raises(ValueError):
+        draft_in_language("staging-api is healthy.", "fr")
+
+
+@pytest.mark.parametrize(
     "text",
     [
         '{"name": "get_service_health", "arguments": {"service": "staging-api"}}',

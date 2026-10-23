@@ -113,13 +113,15 @@ def holds_tool_call_json(text: str) -> bool:
     )
 
 
-def draft_in_language(text: str, language: Language) -> bool:
+def draft_in_language(text: str, language: Language | str) -> bool:
     """Whether a draft is in the run's language (RM31 guard).
 
     The rule is the one the router reads a message by
     (``identifiers.has_cjk``): a Chinese run needs Chinese characters in
     the draft, and an English run needs none. A Chinese run with an
     English draft, or an English run with a Chinese one, takes the
-    final pass, which carries the language instruction.
+    final pass, which carries the language instruction. The language
+    compares by value, so a plain "zh" is the Chinese run; a value
+    outside spec section 1 raises ValueError.
     """
-    return has_cjk(text) == (language is Language.ZH)
+    return has_cjk(text) == (Language(language) == Language.ZH)
