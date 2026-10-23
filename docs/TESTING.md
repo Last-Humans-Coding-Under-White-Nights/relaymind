@@ -483,6 +483,59 @@ spikes of M7 (#115, #118, #119) are scripts over the stored corpus export
 [`scripts/README.md`](../scripts/README.md)). They call no model, and
 their results are in the 2026-10-23 entry of `EVIDENCE.md`.
 
+### Phase 2 (spec 0.31)
+
+Tests of the phase 2 features (RM26 to RM32), as they are implemented.
+Every new option keeps the earlier behavior under its default, so each
+feature has a test of the default as well. Later pull requests append here.
+
+- `pytest tests/test_launcher.py -k budget` (#142; RM03, section 14.1): the
+  `[budgets]` keys are the `LocalBudgets` field names, every key reaches
+  the budgets, a file without the table keeps the defaults, a wrong type
+  (text, a boolean, a float for an integer limit), a non-finite number, a
+  zero or negative limit, `repair_generations` above `local_generations`,
+  and an unknown key are exit status 2 with one message that starts with
+  `[budgets]`, `run.accepted` records the values in force, and the commented
+  block of `relaymind.example.toml` loads when uncommented and holds the
+  defaults.
+- `pytest tests/test_llamacpp_translation.py tests/test_chat_completions_adapter.py`
+  (#120; RM16, RM18, RM27, section 6): the usage details
+  (`prompt_tokens_details.cached_tokens`,
+  `completion_tokens_details.reasoning_tokens`) and llama-server's
+  `timings.cache_n` fill `Usage`, the usage details win when both are sent,
+  `timings` on an earlier chunk still fills the later usage chunk, a stream
+  without the counts leaves them `None` and never 0, a reported 0 stays 0,
+  a value that is not a non-negative integer is not measured, the
+  `FirstToken` marker comes once at the first answer text, reasoning text,
+  or tool-call fragment and before the call is complete (RM09), and the
+  llama.cpp body carries `cache_prompt: true`.
+  `tests/test_adapter_events.py` and `tests/test_timing_stats.py` no longer
+  assert the old default of 0 for `cached_tokens`; spec 0.31 section 6
+  forbids it (finding F9 in [`EVIDENCE.md`](EVIDENCE.md)).
+- `pytest tests/test_model_call_evidence.py` (#120; RM16, RM22, RM25): the
+  orchestrator stamps `first_token_ms` from the run's monotonic clock at
+  the marker and not at the end of a tool-call stream, a double that sends
+  no marker is dated at its first non-empty text or tool call, a generation
+  with no token has `null`, `usage` holds `cached_tokens` and
+  `reasoning_tokens` as `null` when the source reported none, and
+  `model.started` records the declared `request_options` of an external
+  call and none for a local call.
+- `pytest tests/test_trace_event.py -k model_call` (#120; RM22, section 8):
+  the optional `first_token_ms`, `usage`, and `request_options` fields are
+  checked by the validator and the published schema alike, from one table of
+  optional model-call fields, and `schema_version` stays 1.
+- `pytest tests/test_chat_completions_translation.py tests/test_launcher.py -k request_options`
+  (#120; RM12, section 6 and 14.1): the options reach the provider body
+  verbatim and `model.started`, they never replace `model`, `messages`,
+  `tools`, `stream`, or `stream_options`, and a key named `api_key` or
+  `authorization` (any case), a header key (also nested), a gateway-owned
+  key, or a value that is not JSON (a TOML date) stops startup with a
+  message that names the key and never the value.
+- `pytest -m live tests/test_llamacpp_live_smoke.py` (#120): with the
+  pinned runtime first on the path, a repeated prompt reports a cached
+  count above zero and the marker comes first. The live count is recorded
+  in [`EVIDENCE.md`](EVIDENCE.md).
+
 ### What is not covered yet
 
 - The correctness corpus ran on Apple Silicon macOS only (#32). The
@@ -522,10 +575,13 @@ their results are in the 2026-10-23 entry of `EVIDENCE.md`.
   implemented: there is no test for the draft answer pass, admitted
   calls per generation, prefetch, gated streaming, operation without a
   local model, the placement policy, the selection interface, or
-  workflow packages. The cached-token figures in the existing exports
+  workflow packages. The budgets table (#142) and the call timing and
+  count recording (#120) are implemented; their tests are in
+  [Phase 2 (spec 0.31)](#phase-2-spec-031). The cached-token figures in the existing exports
   are adapter defaults (finding F9 in [`EVIDENCE.md`](EVIDENCE.md)); the
   prefix-cache probe (#114) read the runtime's own counts once, and the
-  gateway does not record them yet. The M7 to M9
+  gateway records them for every model call since #120, so a run made
+  after it has measured counts. The M7 to M9
   issues in [`ROADMAP.md`](ROADMAP.md) carry the tests. The offline
   spikes (#115, #118, #119) and the timing probes (#114, #116, #117) test
   their own scripts, not the gateway.

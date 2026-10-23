@@ -8,6 +8,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- `Usage.cached_tokens` is `None` when the source returned no count, not
+  0 (#120; RM16, spec 0.31 section 6, finding F9), and the same holds for
+  `reasoning_tokens`. The recorded `usage` of an event, the timing
+  statistics, the latency benchmark's model calls, and the live harness
+  keep `null`. In the latency benchmark's prefix cache record, a call with
+  no reported count is counted as not measured and a total over no
+  measured call is `null`. Exports made before this change still hold the
+  adapter's default of 0.
+- Adapter event streams now start a generation with a `FirstToken` marker
+  before its first answer text, reasoning text, or tool-call fragment. The
+  timing statistics ignore it, so their definitions are unchanged; a
+  consumer that lists every event of a stream sees one more (#120).
+
 - Specification 0.31 → 0.32 (PR #146 review; RM05, RM17, RM22,
   RM26, RM28 to RM32; AC11, AC17 to AC20, AC22, AC23): distinguish
   an absent local model from an unavailable or unsuitable configured
@@ -70,6 +83,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   acceptance failures, missing external scenarios, and the unavailable
   browser driver remain recorded. A hosted-runner workflow is no longer
   needed to obtain the Windows result.
+- Budgets table in the launch file (#142; RM03, RM17, RM19, spec 0.31
+  sections 11 and 14.1): `[budgets]` sets the section 11 limits, with the
+  `LocalBudgets` field names as keys. A wrong type, a non-finite number, a
+  limit that must be positive and is not, `repair_generations` above
+  `local_generations`, and an unknown key stop startup with one message and
+  exit status 2; every run records the values in force in `run.accepted`.
+  A file without the table keeps the defaults. `relaymind.example.toml`
+  shows the block, commented.
+- First-token time, cached and reasoning tokens, and provider request
+  options per model call (#120; RM12, RM16, RM18, RM25, RM27, spec 0.31
+  sections 6, 8, and 14.1): `model.finished` carries `first_token_ms`
+  (integer milliseconds from the request start on the run's monotonic
+  clock, `null` when no token arrived) and, inside `usage`, `cached_tokens`
+  and `reasoning_tokens` (`null` when the runtime or provider returned no
+  count). The adapters read `usage.prompt_tokens_details.cached_tokens`,
+  `usage.completion_tokens_details.reasoning_tokens`, and llama-server's
+  `timings.cache_n` (the usage details win when both are sent); the
+  llama.cpp adapter sends `cache_prompt`. An internal `FirstToken` marker
+  dates the first generated fragment even when a tool call is only emitted
+  after the finish chunk (RM09). `[external_model.request_options]` is a
+  table of provider request fields sent verbatim and recorded in
+  `model.started`; a credential, a header, a key that would replace
+  `model`, `messages`, `tools`, `stream`, or `stream_options`, and a value
+  that is not JSON stop startup with a message that names the key and never
+  the value. The trace schema stays at version 1 with optional fields. The
+  pinned runtime (build 11785) reported 558 of 559 prompt tokens as cached
+  on a repeated prompt and no reasoning count; the live check is in
+  `docs/EVIDENCE.md`.
 - Runtime and provider timing probes (#114, #116, #117; RM18, RM25, RM26,
   RM27, spec 0.32 sections 6, 10, and 12.2):
   `scripts/probes/probe_prefix_cache.py` sends the gateway's own routing
