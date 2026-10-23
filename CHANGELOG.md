@@ -76,7 +76,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and skill-stage requests to llama-server with `cache_prompt` on and off
   and reads the whole `timings` and `usage` objects;
   `scripts/probes/probe_cancel_prefill.py` cancels a prompt of about 6,000
-  tokens during prefill and measures the wait of the next request;
+  tokens during prefill and measures the wait of the next request (its
+  definition lists exactly two short prompts per repetition);
   `scripts/probes/probe_external_latency.py` records the time to headers,
   to the first reasoning delta, to the first content or tool-call delta,
   and to the end of streamed provider calls, with and without tools and
@@ -85,8 +86,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   CPU-only runtime with two threads) in the live harness, the corpus
   runner, the latency benchmark, and the probes; the default adds none,
   the arguments are recorded in every export, and only runtime-only
-  settings (GPU layers, threads, batch sizes, memory locking) are accepted;
-  any other flag is refused. `skill_stage_messages` in
+  settings (GPU layers, threads, batch sizes), each with one integer value
+  in its range, are accepted; a positional argument (a model path), a
+  missing or invalid value, a `--no-` form, and any other flag are refused. `skill_stage_messages` in
   `orchestrator/local_loop.py` is the skill-stage conversation as a pure
   function, with no change in behavior. The results are in the 2026-10-23
   runtime and provider timing entry of `docs/EVIDENCE.md`. No gateway

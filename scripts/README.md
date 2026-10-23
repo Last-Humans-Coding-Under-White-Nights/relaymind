@@ -132,14 +132,19 @@
   runtime with two threads. The default adds nothing. The arguments are
   recorded in every export next to the server argv
   (`llama_server.extra_args`; `llama_server_extra_args` in the latency
-  benchmark export). Only long flags are accepted, and only
-  runtime-only settings (`--n-gpu-layers`, `--gpu-layers`, `--threads`,
-  `--threads-batch`, `--batch-size`, `--ubatch-size`, `--mlock`, `--mmap`
-  and their `--no-` forms). Any other flag is refused: a pinned setting of
-  the manifest, a model, the bind address, and also a spelling that could
-  change what the model computes (the template arguments, the reasoning
-  budget, metadata overrides, the slot count). So the manifest stays the
-  one source of the qualified launch settings. A constrained
+  benchmark export). Only the runtime-only settings of llama.cpp b11785
+  are accepted, as long flags, each with one integer value given as
+  `--threads 2` or `--threads=2`: `--n-gpu-layers` and `--gpu-layers`
+  (at least -1, or `auto` or `all`), `--threads`, `--threads-batch`,
+  `--batch-size`, and `--ubatch-size` (each at least 1). Anything else is
+  refused, with the token named: a positional argument (llama-server
+  reads one as the model path), a short flag, a missing, non-integer, or
+  out-of-range value, a `--no-` form, a pinned setting of the manifest, a
+  model, the bind address, and any other flag, including a spelling that
+  could change what the model computes (the template arguments, the
+  reasoning budget, metadata overrides, the slot count). b11785 has no
+  `--mlock` or `--mmap` switch, so neither is accepted. So the manifest
+  stays the one source of the qualified launch settings. A constrained
   configuration is reported as that configuration of that machine, never
   as another machine.
 
@@ -241,7 +246,10 @@
   short routing-shaped request at once, then compares that request's wait
   with the same kind of request on an idle runtime. Five repetitions, each
   with a long prompt of its own, and one uncancelled run for the full
-  prefill time. Definition: `probes/m7_cancel_prefill.json`.
+  prefill time. Definition: `probes/m7_cancel_prefill.json`; it lists
+  exactly two short prompts per repetition (one idle, one after the
+  cancel), and the probe refuses any other count, so the definition an
+  export records lists only the prompts that were sent.
 
   ```bash
   python scripts/probes/probe_cancel_prefill.py scripts/probes/m7_cancel_prefill.json \

@@ -322,7 +322,10 @@ failed model check is a finding, never a pass.
 llama-server arguments after the manifest's launch settings (#117; RM18,
 spec 0.31 section 12.2), for a constrained run on the same machine. The
 default adds none, and the arguments are recorded in the export as
-`llama_server.extra_args`. `scripts/run_corpus.py` and
+`llama_server.extra_args`. Each allowed setting takes one integer value
+(`--threads 2` or `--threads=2`); a positional argument, a missing,
+non-integer, or out-of-range value, a `--no-` form, and any other flag
+are refused (RM18). `scripts/run_corpus.py` and
 `scripts/latency_benchmark.py` take the same option;
 `tests/test_runtime_extra_args.py` covers it with doubles.
 
@@ -430,10 +433,15 @@ Deterministic tests over model doubles:
   `extra_args` in the export, the option text is split like a shell would,
   a short flag, a pinned setting, the model, the bind address, and any
   setting that is not runtime-only (the template arguments, the reasoning
-  budget, a metadata override, the slot count) are refused, a negative
-  number is a value, every runtime-only setting is accepted with its
-  `--no-` form, and the corpus runner, the latency runner, and the live
-  harness take the option.
+  budget, a metadata override, the slot count) are refused, so are a
+  positional argument (a model path), a missing, non-integer, or
+  out-of-range value, a `--no-` form, and the `--mlock` and `--mmap`
+  switches b11785 does not have, each refusal names the token and never
+  the value of a refused flag, a negative number is a value, every
+  runtime-only setting is accepted with its value as the next token or
+  after `=`, the extra arguments recorded in `docs/evidence/` pass the
+  check, and the corpus runner, the latency runner, and the live harness
+  take the option.
 - `pytest tests/test_probe_prefix_cache.py` (#114): the body the probe
   sends equals `build_chat_request` for the same messages plus
   `cache_prompt` (written so that it still holds when the adapter itself
@@ -446,8 +454,10 @@ Deterministic tests over model doubles:
   sized to the target and fits the slot context, a repetition sends idle,
   long, cancel, short in that order, the recorded call time is measured
   and not the requested delay, the sizing and reference prompts tokenise
-  like the repetition prompts, no two long prompts share a prefix,
-  and a definition without a short-prompt pair per repetition is refused.
+  like the repetition prompts, no two long prompts share a prefix, a
+  definition without exactly one short-prompt pair per repetition is
+  refused, a token count of zero stops the sizing with a clear error, and
+  a failed short request leaves no long generation running.
 - `pytest tests/test_probe_external_latency.py` (#116) over
   `httpx.MockTransport`, with no provider call: the checked-in definition
   is four arms of five, the answer arms offer no tool and carry the health
