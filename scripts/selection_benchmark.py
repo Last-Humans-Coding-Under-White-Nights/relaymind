@@ -122,6 +122,14 @@ def _subset(cases: list[dict], limit: int | None, seed: int) -> list[dict]:
 
 async def run(args: argparse.Namespace) -> dict:
     """Run an identified, frozen sample and export every attempt."""
+    application = application_revision(ROOT)
+    implementation_files = {
+        name: file_digest(ROOT / name)
+        for name in (
+            "scripts/selection_benchmark.py",
+            "src/relaymind/evaluation/selection_benchmark.py",
+        )
+    }
     if args.timeout is None:
         args.timeout = (
             LocalBudgets().external_seconds
@@ -237,7 +245,8 @@ async def run(args: argparse.Namespace) -> dict:
         "seed": args.seed,
         "sample_ids": [c["id"] for c in selected],
         "machine": machine_manifest(),
-        "application": application_revision(ROOT),
+        "application": application,
+        "implementation_files": implementation_files,
         "configuration": {
             "timeout_seconds": args.timeout,
             "context_limit": args.context_limit,
