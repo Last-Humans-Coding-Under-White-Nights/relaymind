@@ -42,6 +42,7 @@ from gateway_helpers import (
 from helpers import ScriptedAdapter, make_capabilities, of_type
 from relaymind.adapters import GenerationFailed, Role, TextDelta
 from relaymind.orchestrator.budgets import LocalBudgets
+from relaymind.orchestrator.handoff import RULES
 from relaymind.orchestrator.local_loop import ConfiguredModel
 from relaymind.orchestrator.run_state import RunState
 from relaymind.redaction import Redactor
@@ -530,6 +531,23 @@ def test_an_operation_without_a_known_outcome_blocks_the_handoff(tmp_path):
 
 
 # --- external failure --------------------------------------------------------------
+
+
+def test_the_external_system_message_ends_with_the_run_specific_handoff(
+    tmp_path, local_prep_skills
+):
+    """RM13, RM24 (section 10): the constant parts come first and the handoff JSON is last."""
+    gateway = after_local_collection(tmp_path, local_prep_skills, logs_then_answer())
+    outcome, _ = run(gateway, PROMPT)
+
+    assert outcome.state is RunState.COMPLETED
+    text = gateway.external.requests[0].messages[0].content
+    body = gateway.skills.get("investigate-performance").body
+    assert text.index(RULES[0]) < text.index(body) < text.index("Handoff (JSON):")
+    assert text.index("Answer in English.") < text.index("Handoff (JSON):")
+    lines = text.split("\n")
+    assert lines.index("Handoff (JSON):") == len(lines) - 2
+    assert json.loads(lines[-1]) == handoff_block(gateway.external.requests[0])
 
 
 def test_an_external_generation_failure_ends_the_run_without_a_result(tmp_path, local_prep_skills):

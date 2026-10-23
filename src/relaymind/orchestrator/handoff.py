@@ -15,8 +15,9 @@ proposal (RM13).
 
 ``external_messages`` renders the envelope as normalized messages. The
 gateway's rules and the envelope fields that are not tool output form
-the system message; each completed operation is a tool call with its
-tool result message, so tool output stays data (RM12).
+the system message, constant parts first and the handoff JSON last; each
+completed operation is a tool call with its tool result message, so tool
+output stays data (RM12).
 
 ``DispatchAuthority`` is the single-owner rule of RM14: the local actor
 dispatches until escalation, then only the external actor does, and one
@@ -221,14 +222,26 @@ RULES = (
 )
 
 
+CRITERIA_HEADER = "Completion criteria (the gateway checks the answer against these):"
+
+
 def external_messages(
     envelope: HandoffEnvelope,
     *,
     skill_body: str | None,
     catalog: Sequence[tuple[str, str]],
     answer_instruction: str,
+    completion_criteria: Sequence[str] = (),
 ) -> tuple[Message, ...]:
-    """The external request's messages for an envelope (RM13, RM12)."""
+    """The external request's messages for an envelope (RM13, RM12).
+
+    The system message goes from the part that never changes to the part
+    that changes with the run (spec 0.34, section 10): the rules, the skill
+    instructions, the fixed completion criteria, the catalog, the answer
+    instruction, and last the handoff JSON with the run ID and the
+    remaining budgets. So a provider that reuses a request prefix can
+    reuse all of it up to the handoff JSON.
+    """
     data = envelope.data
     handoff = {
         "run_id": data["run_id"],
@@ -241,13 +254,20 @@ def external_messages(
         "remaining_budgets": data["remaining_budgets"],
         "language": data["language"],
     }
-    lines = [*RULES, "Handoff (JSON):", json.dumps(handoff, ensure_ascii=False, sort_keys=True)]
+    lines = list(RULES)
     if skill_body is not None:
         lines += ["Skill instructions:", skill_body]
+    if completion_criteria:
+        lines.append(CRITERIA_HEADER)
+        lines += [f"- {rule}" for rule in completion_criteria]
     if catalog:
         lines.append("Available skills:")
         lines += [f"{name}: {description}" for name, description in catalog]
-    lines.append(answer_instruction)
+    lines += [
+        answer_instruction,
+        "Handoff (JSON):",
+        json.dumps(handoff, ensure_ascii=False, sort_keys=True),
+    ]
     messages = [Message(role=Role.SYSTEM, content="\n".join(lines))]
     messages += [
         Message(role=Role(m["role"]), content=m["content"]) for m in data["original_messages"]
@@ -348,6 +368,7 @@ class DispatchAuthority:
 
 __all__ = [
     "EXTERNAL_ACTOR",
+    "CRITERIA_HEADER",
     "HANDOFF_ENVELOPE_SCHEMA",
     "LOCAL_ACTOR",
     "DispatchAuthority",
