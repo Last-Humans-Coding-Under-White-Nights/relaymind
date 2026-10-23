@@ -358,8 +358,8 @@ class Router:
             if set(arguments) != {"language", "question"}:
                 raise RouteDecisionError("request_clarification takes language and question")
             question = arguments["question"]
-            if not isinstance(question, str):
-                raise RouteDecisionError("'question' must be a string")
+            if not isinstance(question, str) or not question.strip():
+                raise RouteDecisionError("'question' must be a non-blank string")
             return RoutingChoice(skill_id=None, question=question)
 
         skill = self._skills.get(call.tool_name)

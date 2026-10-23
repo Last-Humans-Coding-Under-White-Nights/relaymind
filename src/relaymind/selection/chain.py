@@ -19,6 +19,7 @@ injectable clock, so tests never wait on the wall clock.
 """
 
 import asyncio
+import math
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -143,7 +144,7 @@ class ChainResult[T]:
 
 
 class _GatewayStop(Exception):
-    def __init__(self, cause: Exception) -> None:
+    def __init__(self, cause: Exception | asyncio.CancelledError) -> None:
         super().__init__(str(cause))
         self.cause = cause
 
@@ -162,6 +163,12 @@ class SelectorChain:
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
     ) -> None:
+        if (
+            type(timeout_seconds) not in (int, float)
+            or not math.isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+        ):
+            raise ValueError("timeout_seconds must be a positive finite number")
         names = [selector.name for selector in selectors]
         if not names:
             raise ValueError("the selector chain needs at least one selector")
@@ -220,7 +227,7 @@ class SelectorChain:
         context: SelectionContext,
         admit: Callable[[SelectionResult], T],
     ) -> tuple[Outcome, str | None, SelectionResult | None, T | None]:
-        stops: list[Exception] = []
+        stops: list[Exception | asyncio.CancelledError] = []
         try:
             raw = await self._call(selector, request, context, stops)
         except _GatewayStop as stop:
@@ -252,7 +259,7 @@ class SelectorChain:
         selector: Selector,
         request: SelectionRequest,
         context: SelectionContext,
-        stops: list[Exception],
+        stops: list[Exception | asyncio.CancelledError],
     ) -> Any:
         if selector.model_based:
             guarded = SelectionContext(context.messages, _guard(context, stops))
@@ -263,18 +270,18 @@ class SelectorChain:
         )
         timer = asyncio.ensure_future(self._sleep(self.timeout_seconds))
         try:
-            await asyncio.wait((work, timer), return_when=asyncio.FIRST_COMPLETED)
+            done, _ = await asyncio.wait((work, timer), return_when=asyncio.FIRST_COMPLETED)
         finally:
             # Neither task outlives the attempt, also when the run is cancelled here.
             for task in (work, timer):
                 task.cancel()
             await asyncio.gather(work, timer, return_exceptions=True)
-        if work.done() and not work.cancelled():
+        if work in done and not work.cancelled():
             return work.result()
         return _TIMED_OUT
 
 
-def _guard(context: SelectionContext, stops: list[Exception]) -> Any:
+def _guard(context: SelectionContext, stops: list[Exception | asyncio.CancelledError]) -> Any:
     """The routing generation callback, with the gateway's own failures marked."""
     generate = context.generate
     if generate is None:
@@ -283,7 +290,8 @@ def _guard(context: SelectionContext, stops: list[Exception]) -> Any:
     async def guarded(messages: Any, functions: Any, options: Any) -> Any:
         try:
             return await generate(messages, functions, options)
-        except Exception as exc:
+        except (Exception, asyncio.CancelledError) as exc:
+            # Cancellation is a gateway stop too; a selector cannot swallow it.
             stops.append(exc)
             raise _GatewayStop(exc) from exc
 

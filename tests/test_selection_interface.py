@@ -341,6 +341,26 @@ def test_a_selector_past_the_time_limit_times_out_and_is_cancelled():
     assert slow.cancelled is True
 
 
+@pytest.mark.parametrize("kind", ["skill", "none"])
+def test_a_selector_cannot_return_a_result_after_its_timeout(kind):
+    """RM28, AC22: a result returned during cancellation cleanup is still a timeout."""
+
+    class LateResult(Scripted):
+        async def select(self, request, context):
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                await asyncio.sleep(0)
+                return result(self.name, kind=kind)
+
+    outcome = chain_run([LateResult("late"), pick("next")], sleep=instant)
+    assert [(a.name, a.outcome) for a in outcome.attempts] == [
+        ("late", Outcome.TIMEOUT),
+        ("next", Outcome.SELECTED),
+    ]
+    assert outcome.selector.name == "next"
+
+
 def test_the_time_limit_and_the_deadline_come_from_the_configured_timeout():
     """Section 11: the configured limit bounds the selector and is its request deadline."""
     slept = []
@@ -406,6 +426,35 @@ def test_a_failure_of_the_gateways_generation_is_not_a_selector_error():
             chain_run([selector, pick("next")], context=SelectionContext(generate=generate))
 
 
+@pytest.mark.parametrize("after_cancel", ["propagate", "return", "raise_error"])
+def test_a_selector_cannot_replace_gateway_generation_cancellation(after_cancel):
+    """RM14, RM28: gateway cancellation ends selection, even if a selector catches it."""
+    cancelled = asyncio.CancelledError("gateway stopped the routing generation")
+
+    async def generate(messages, functions, options):
+        raise cancelled
+
+    class CatchingCancellation(ModelBased):
+        async def select(self, request, context):
+            try:
+                await context.generate((), (), GenerationOptions())
+            except BaseException:
+                if after_cancel == "propagate":
+                    raise
+                if after_cancel == "raise_error":
+                    raise RuntimeError("selector cleanup failed") from None
+            return result(self.name)
+
+    fallback = pick("next")
+    with pytest.raises(asyncio.CancelledError) as caught:
+        chain_run(
+            [CatchingCancellation("catching"), fallback],
+            context=SelectionContext(generate=generate),
+        )
+    assert caught.value is cancelled
+    assert fallback.requests == []
+
+
 def test_an_exhausted_chain_admits_nothing():
     outcome = chain_run([none_of("a"), pick("b", skill_id="no-such-skill")], sleep=never)
     assert outcome.admitted is None and outcome.selector is None
@@ -433,6 +482,13 @@ def test_a_result_must_name_its_own_selector_and_no_reserved_mechanism():
 def test_a_chain_needs_distinct_selectors(names):
     with pytest.raises(ValueError):
         SelectorChain([pick(name) for name in names], timeout_seconds=2)
+
+
+@pytest.mark.parametrize("timeout", [0, -1, math.inf, -math.inf, math.nan, True, False, "1", None])
+def test_a_chain_rejects_invalid_timeout_before_selection(timeout):
+    """RM03, RM28: direct construction cannot silently weaken the configured time limit."""
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        SelectorChain([pick("a")], timeout_seconds=timeout)
 
 
 # --- model_router outside a gateway run (the injectable generation) -------------------
