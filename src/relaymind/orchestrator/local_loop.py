@@ -409,9 +409,10 @@ class AcceptedRun:
     can refuse the request (including the 429 slot) before a header is
     sent. ``LocalOrchestrator.accept`` does that synchronous part. The
     caller then drives the work in a task it owns with ``start``: the
-    task owns the run, so ``request_cancel`` maps a disconnect to it as
-    it does for ``run``. A task cancelled before it first ran ends the
-    run as cancelled and releases the slot.
+    task owns the run from the moment it is created, so
+    ``request_cancel`` maps a disconnect to it as it does for ``run``,
+    even before the task first runs. A task cancelled before it first
+    ran ends the run as cancelled and releases the slot.
     """
 
     def __init__(
@@ -428,25 +429,24 @@ class AcceptedRun:
     def run_id(self) -> str:
         return self._run.run_id
 
-    async def complete(self) -> RunOutcome:
-        """Drive the run to a terminal or waiting state, owned by the current task."""
-        with self._owner.owning(self._run):
-            return self._owner._keep_if_waiting(self._run, await self._work())
-
     def start(self, convert: Callable[[RunOutcome], _T]) -> "asyncio.Task[_T]":
         """Drive the run in a new task whose result is convert(outcome).
 
-        A task cancelled before its first step still ends the run.
+        The task owns the run as soon as it exists (request_cancel), and
+        gives it up when it ends. A task cancelled before its first step
+        still ends the run.
         """
 
         async def drive() -> _T:
-            return convert(await self.complete())
+            return convert(self._owner._keep_if_waiting(self._run, await self._work()))
 
         task = asyncio.get_running_loop().create_task(drive())
+        self._owner._owned[task] = self._run
         task.add_done_callback(self._settle)
         return task
 
     def _settle(self, task: "asyncio.Task[Any]") -> None:
+        self._owner._owned.pop(task, None)
         if task.cancelled():
             # Cancelled before its first step, the work never reached _protected,
             # so the run is ended here. A run that already ended is unchanged.

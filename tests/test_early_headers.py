@@ -426,6 +426,49 @@ def test_a_task_cancelled_before_it_starts_releases_the_slot(tmp_path):
     assert gateway.adapter.requests == []
 
 
+def test_a_cancel_before_the_task_first_runs_maps_to_the_run(tmp_path):
+    """RM14, RM17, AC12: start() registers the task as the run's owner at once.
+
+    A disconnect before the task first ran still names the run and ends
+    it as cancelled with cancel_requested; the mapping is gone afterwards.
+    """
+    gateway = build_gateway(tmp_path, HEALTH_TURNS, external_turns=[], performance=EARLY)
+    orchestrator = gateway.orchestrator
+
+    async def go():
+        accepted = orchestrator.accept((Message(role=Role.USER, content=PROMPT),))
+        task = accepted.start(lambda outcome: outcome)
+        # No yield between start() and the cancel: the task has not run yet.
+        assert orchestrator.request_cancel(task) == accepted.run_id
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert task not in orchestrator._owned
+        return accepted.run_id
+
+    run_id = asyncio.run(go())
+    cancelled_run(gateway, run_id)
+    assert gateway.store.active_run_id() is None
+    assert gateway.adapter.requests == []
+    assert orchestrator._owned == {}
+
+
+def test_a_finished_task_leaves_no_ownership_behind(tmp_path):
+    """RM14: the task-to-run mapping ends with the task that drove the run."""
+    gateway = build_gateway(tmp_path, HEALTH_TURNS, external_turns=[], performance=EARLY)
+    orchestrator = gateway.orchestrator
+
+    async def go():
+        accepted = orchestrator.accept((Message(role=Role.USER, content=PROMPT),))
+        task = accepted.start(lambda outcome: outcome)
+        assert orchestrator._owned.get(task) is not None
+        await task
+        return accepted.run_id
+
+    run_id = asyncio.run(go())
+    assert gateway.store.get_run(run_id).state == "completed"
+    assert orchestrator._owned == {}
+
+
 # -- the client-owned alias ---------------------------------------------------------------------
 
 
