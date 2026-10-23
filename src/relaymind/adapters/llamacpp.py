@@ -89,6 +89,11 @@ def build_chat_request(
     )
 
 
+# Spec section 11.2: the default read timeout of one generation. The
+# launcher raises it to active_seconds, never below this value (RM03).
+REQUEST_TIMEOUT_SECONDS = 30.0
+
+
 @dataclass(frozen=True)
 class LlamaCppConfig:
     """Operator configuration for one llama-server endpoint."""
@@ -98,7 +103,7 @@ class LlamaCppConfig:
     # Non-thinking by default (spec section 6); an operator overrides
     # this to enable thinking mode.
     chat_template_kwargs: Mapping[str, object] | None = NON_THINKING
-    request_timeout_seconds: float = 30.0
+    request_timeout_seconds: float = REQUEST_TIMEOUT_SECONDS
 
 
 class LlamaCppAdapter(ModelAdapter):

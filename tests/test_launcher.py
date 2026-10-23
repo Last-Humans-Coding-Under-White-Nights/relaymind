@@ -26,7 +26,7 @@ from helpers import (
 from launcher_helpers import toml_path, write_config
 from relaymind import launcher
 from relaymind.adapters.chat_completions import ChatCompletionsAdapter
-from relaymind.adapters.llamacpp import LlamaCppAdapter
+from relaymind.adapters.llamacpp import REQUEST_TIMEOUT_SECONDS, LlamaCppAdapter, LlamaCppConfig
 from relaymind.launcher import LaunchError, build_app, load_config, main
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import LocalOrchestrator
@@ -622,6 +622,17 @@ def test_adapter_read_timeouts_follow_the_raised_budgets(tmp_path):
         built.orchestrator.store.close()
 
 
+def test_the_local_read_timeout_floor_is_the_adapter_config_default():
+    """Section 11.2, RM03: the launcher's floor is the field default, read from the module.
+
+    The launcher does not read the default off the dataclass itself, so
+    a later field(default=...) cannot turn the floor into a Field object.
+    """
+    default = {f.name: f.default for f in dataclasses.fields(LlamaCppConfig)}
+    assert default["request_timeout_seconds"] == REQUEST_TIMEOUT_SECONDS == 30.0
+    assert launcher.REQUEST_TIMEOUT_SECONDS is REQUEST_TIMEOUT_SECONDS
+
+
 def test_adapter_read_timeouts_keep_the_30_second_floor(tmp_path):
     """Section 11.2: budgets at or under 30 s keep the 30 s adapter timeout."""
     built = build_app(load_config(write_config(tmp_path, EXTERNAL)))
@@ -662,14 +673,18 @@ def test_request_options_reach_the_adapter_config_verbatim(tmp_path):
         "logprobs": False,
     }
     built = build_app(config)
-    assert built.orchestrator.external.adapter.request_options == {
-        "seed": 7,
-        "thinking": {"type": "disabled"},
-        "logprobs": False,
-    }
+    try:
+        assert built.orchestrator.external.adapter.request_options == {
+            "seed": 7,
+            "thinking": {"type": "disabled"},
+            "logprobs": False,
+        }
+    finally:
+        built.orchestrator.store.close()
 
 
-def test_without_request_options_the_config_holds_none(tmp_path):
+def test_without_request_options_the_config_holds_an_empty_table(tmp_path):
+    """Spec 0.33 section 8: an empty table declares nothing, so model.started records nothing."""
     config = load_config(write_config(tmp_path, EXTERNAL))
     assert dict(config.external.request_options) == {}
 
@@ -689,17 +704,20 @@ def test_request_options_are_sent_to_the_provider_and_recorded(tmp_path, monkeyp
     config = load_config(write_config(tmp_path, extra))
     adapter = ChatCompletionsAdapter(config.external, transport=httpx.MockTransport(handler))
     built = build_app(config, local_adapter=ScriptedAdapter(turns=[]), external_adapter=adapter)
-    outcome = asyncio.run(
-        built.orchestrator.run_text(
-            "Is staging-api healthy right now?", execution_mode="external_only"
+    try:
+        outcome = asyncio.run(
+            built.orchestrator.run_text(
+                "Is staging-api healthy right now?", execution_mode="external_only"
+            )
         )
-    )
-    assert bodies and all(b["thinking"] == {"type": "disabled"} for b in bodies)
-    events = built.orchestrator.store.events(outcome.run_id)
-    started = [e for e in events if e.event_type is EventType.MODEL_STARTED]
-    assert started and all(
-        e.payload["request_options"] == {"thinking": {"type": "disabled"}} for e in started
-    )
+        assert bodies and all(b["thinking"] == {"type": "disabled"} for b in bodies)
+        events = built.orchestrator.store.events(outcome.run_id)
+        started = [e for e in events if e.event_type is EventType.MODEL_STARTED]
+        assert started and all(
+            e.payload["request_options"] == {"thinking": {"type": "disabled"}} for e in started
+        )
+    finally:
+        built.orchestrator.store.close()
 
 
 @pytest.mark.parametrize(

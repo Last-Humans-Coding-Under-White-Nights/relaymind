@@ -27,7 +27,7 @@ from fastapi import FastAPI
 
 from relaymind.adapters import ModelAdapter
 from relaymind.adapters.chat_completions import ChatCompletionsAdapter, ChatCompletionsConfig
-from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
+from relaymind.adapters.llamacpp import REQUEST_TIMEOUT_SECONDS, LlamaCppAdapter, LlamaCppConfig
 from relaymind.adapters.local_http import is_loopback_url
 from relaymind.adapters.manifest import (
     ManifestError,
@@ -319,9 +319,7 @@ def _local_model(config: LauncherConfig, adapter: ModelAdapter | None) -> Config
                 chat_template_kwargs=kwargs,
                 # llama-server sends nothing until prefill ends, so a raised
                 # active_seconds needs a read timeout at least as long (RM03).
-                request_timeout_seconds=max(
-                    LlamaCppConfig.request_timeout_seconds, config.budgets.active_seconds
-                ),
+                request_timeout_seconds=max(REQUEST_TIMEOUT_SECONDS, config.budgets.active_seconds),
             )
         )
     return ConfiguredModel(adapter=adapter, model_id=manifest.model_id)
