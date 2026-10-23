@@ -121,6 +121,19 @@ def test_the_config_has_the_cache_off_and_no_external_model(bench, tmp_path):
     assert config.external is None
 
 
+# -- the startup warm-up (#124; spec 0.31 sections 6 and 14.1) ---------------------------------
+
+
+def test_the_benchmark_gateway_warms_up_unless_told_not_to(bench, tmp_path):
+    """Section 6: the default launch warms the model up; --no-startup-warmup keeps it cold."""
+    _, warmed = serve(bench, tmp_path, ScriptedAdapter(turns=[]))
+    assert warmed.warmup is True
+    (tmp_path / "cold").mkdir()
+    _, cold = serve(bench, tmp_path / "cold", ScriptedAdapter(turns=[]), startup_warmup=False)
+    assert cold.warmup is False
+    assert cold.routing_cache is False and cold.external is None
+
+
 # -- early response headers (RM32, spec 0.32 sections 7.3 and 12.1; #140) ---------------------
 
 

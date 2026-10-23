@@ -25,7 +25,7 @@ sample, and the summary; a Markdown report is written next to it.
 
 Usage:
     python scripts/latency_benchmark.py --out docs/evidence/<date>-latency-<machine>.json \\
-        [--seed N] [--runs 10] [--early-headers]
+        [--seed N] [--runs 10] [--early-headers] [--no-startup-warmup]
 """
 
 import argparse
@@ -107,15 +107,23 @@ def warmup_prompts(prompts: Sequence[Mapping[str, str]]) -> list[Mapping[str, st
     return [next(p for p in prompts if p["label"] == label) for label in LABELS]
 
 
-def benchmark_config(*, early_headers: bool = False, **options) -> str:
+def benchmark_config(*, early_headers: bool = False, startup_warmup: bool = True, **options) -> str:
     """The operator file: checked-in skills, baseline sandbox, no external model, cache off.
 
     early_headers turns on performance.early_headers (RM32, spec 0.32 section 7.3) and
     nothing else; without it the file has no [performance] table, which is the baseline.
+    startup_warmup false sets placement.warmup to false (spec 0.31 section 6), so the first
+    request of the run is the first the runtime sees; the default leaves the table out and the
+    gateway warms the local model up before it serves.
     """
     performance = {"early_headers": True} if early_headers else None
+    placement = None if startup_warmup else {"warmup": False}
     return harness.gateway_config(
-        **options, routing_cache=False, external=None, performance=performance
+        **options,
+        routing_cache=False,
+        external=None,
+        performance=performance,
+        placement=placement,
     )
 
 
@@ -340,6 +348,7 @@ def _props(local_url: str) -> dict[str, Any] | None:
 
 def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     early_headers = bool(getattr(args, "early_headers", False))
+    startup_warmup = not getattr(args, "no_startup_warmup", False)
     prompts = load_prompts()
     runtime = harness.check_runtime(Path(args.manifest), extra_args=args.runtime_extra_args)
     application = harness.application_revision()
@@ -362,6 +371,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                     local_url=local_url,
                     port=harness._free_port(),
                     early_headers=early_headers,
+                    startup_warmup=startup_warmup,
                 ),
                 encoding="utf-8",
             )
@@ -416,6 +426,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                 "concurrency": 1,
                 "routing_cache": False,
                 "early_headers": early_headers,
+                "startup_warmup": startup_warmup,
                 "first_transport_event": first_transport_label(early_headers),
                 "external_model": None,
                 "path": "POST /v1/chat/completions, stream true, model relaymind",
@@ -467,6 +478,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         action="store_true",
         help="run the gateway with performance.early_headers (RM32); the first transport "
         "event is then labeled header time",
+    )
+    parser.add_argument(
+        "--no-startup-warmup",
+        action="store_true",
+        help="set placement.warmup to false, so the cold request is the first the runtime sees "
+        "(the default gateway warms the local model up before it serves)",
     )
     parser.add_argument("--runs", type=int, default=RUNS_PER_PROMPT)
     parser.add_argument("--timeout", type=float, default=REQUEST_TIMEOUT_SECONDS)
