@@ -188,20 +188,27 @@ def test_a_repeated_call_in_a_set_replays_and_is_charged_once(tmp_path, skills):
 # -- rejection of the whole generation ---------------------------------------------------
 
 
-def assert_every_call_answered(request, rejection_code, *, offending=0):
-    """A rejection exchange answers every call: the offending one with the error, the rest not run.
+def assert_every_call_answered(request, events, rejection_code, *, offending=None):
+    """A rejection exchange answers every call with what the trace records for it.
 
-    offending is the position of the call that was rejected; a set-level
-    rejection (limit, mutation, budget) answers the first call.
+    Spec 0.34 section 4.3 (RM16, RM22): offending is the position of the
+    call that failed its own validation; it gets the rejection and the
+    others not_executed. A rejection about the set (offending None: the
+    limit, a mutating call, no room in the tool budget) belongs to no
+    single call, so it answers every call. Each tool message carries the
+    rejection of that call's tool.proposed, so the model is told what the
+    trace says.
     """
     assistant = last_assistant_calls(request)
     answers = tool_messages(request)[-len(assistant.tool_calls) :]
     assert [m.tool_call_id for m in answers] == [c.call_id for c in assistant.tool_calls]
-    bodies = [json.loads(m.content) for m in answers]
-    assert bodies[offending]["error"]["code"] == rejection_code
-    others = bodies[:offending] + bodies[offending + 1 :]
-    assert {b["error"]["code"] for b in others} <= {"not_executed"}
-    assert all("error" in b for b in bodies)
+    errors = [json.loads(m.content)["error"] for m in answers]
+    assert [e["code"] for e in errors] == [
+        rejection_code if offending in (None, index) else "not_executed"
+        for index in range(len(errors))
+    ]
+    traced = {p["call_id"]: p["rejection"] for p in proposals(events) if p["admissible"] is False}
+    assert [traced[c.call_id] for c in assistant.tool_calls] == errors
 
 
 def test_three_reads_over_the_stage_limit_are_rejected_without_execution(tmp_path, skills):
@@ -225,7 +232,7 @@ def test_three_reads_over_the_stage_limit_are_rejected_without_execution(tmp_pat
     # Nothing ran for the rejected generation; the repair generation's pair did.
     assert executed_tools(events) == ["get_recent_logs", "get_latest_deployment"]
     assert purposes(events)[:3] == ["routing", "skill", "repair"]
-    assert_every_call_answered(gateway.adapter.requests[2], "multiple_tool_calls")
+    assert_every_call_answered(gateway.adapter.requests[2], events, "multiple_tool_calls")
 
 
 def test_a_set_the_remaining_stage_budget_cannot_finish_is_not_started(tmp_path, skills):
@@ -249,7 +256,7 @@ def test_a_set_the_remaining_stage_budget_cannot_finish_is_not_started(tmp_path,
     assert {p["rejection"]["code"] for p in rejected} == {"multiple_tool_calls"}
     # Only the single calls ran; neither call of the refused pair did.
     assert executed_tools(events) == ["get_recent_logs", "get_latest_deployment"]
-    assert_every_call_answered(gateway.adapter.requests[3], "multiple_tool_calls")
+    assert_every_call_answered(gateway.adapter.requests[3], events, "multiple_tool_calls")
 
 
 def test_a_mutating_call_with_other_calls_is_rejected_without_execution(tmp_path):
@@ -274,6 +281,8 @@ def test_a_mutating_call_with_other_calls_is_rejected_without_execution(tmp_path
     assert not of_type(events, "confirmation.required")
     assert {p["rejection"]["code"] for p in proposals(events)} == {"multiple_tool_calls"}
     assert len(proposals(events)) == 4
+    # The rejection is about the set, so it answers both calls (spec 0.34 section 4.3).
+    assert_every_call_answered(gateway.adapter.requests[2], events, "multiple_tool_calls")
 
 
 @pytest.mark.parametrize(
@@ -321,7 +330,7 @@ def test_one_invalid_call_rejects_the_whole_generation(tmp_path, skills, bad, co
     assert purposes(events)[:3] == ["routing", "skill", "repair"]
     # The refused generation ran nothing; the repair's set ran in full.
     assert executed_tools(events) == ["get_latest_deployment", "get_recent_logs"]
-    assert_every_call_answered(gateway.adapter.requests[2], code, offending=1)
+    assert_every_call_answered(gateway.adapter.requests[2], events, code, offending=1)
 
 
 def test_the_first_rejection_of_the_set_is_the_one_reported(tmp_path, skills):
@@ -423,7 +432,7 @@ def test_an_external_set_over_the_remaining_run_limit_is_rejected(tmp_path):
     assert [p["call_id"] for p in rejected] == ["c_logs", "c_deploy", "c_metrics"]
     assert {p["rejection"]["code"] for p in rejected} == {"multiple_tool_calls"}
     assert executed_tools(events) == ["get_recent_logs", "get_latest_deployment"]
-    assert_every_call_answered(gateway.external.requests[1], "multiple_tool_calls")
+    assert_every_call_answered(gateway.external.requests[1], events, "multiple_tool_calls")
 
 
 def test_an_external_set_counts_the_tools_the_local_stage_ran(tmp_path, skills):

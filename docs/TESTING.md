@@ -613,8 +613,10 @@ feature has a test of the default as well. Later pull requests append here.
   name, or provenance) are rejected whole with nothing run, the first
   rejection in proposal order is the one reported and belongs to the call
   that failed, the repair is used, and the rejection exchange answers every
-  call (`not_executed` for the others, in the trace too); a repeated call in a set replays and
-  is charged once; in the external stage the limit is the remaining
+  call with the rejection its `tool.proposed` records (`not_executed` for
+  the others of a set with one invalid call; the set's own rejection for
+  every call when the limit, a mutating call, or the room refused it; spec
+  0.34 section 4.3); a repeated call in a set replays and is charged once; in the external stage the limit is the remaining
   `run_tool_executions` (a set of 3 passes the local limit of 2; a set over
   what the local stage left is refused). Under `one` the old rejection and its
   one-call exchange are unchanged (`tests/test_local_loop.py` passes as it

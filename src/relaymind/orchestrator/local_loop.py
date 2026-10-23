@@ -679,7 +679,7 @@ class _Turn:
     whole. answer_all says that the generation was judged as a set
     (calls_per_generation many), so a rejection answers every call.
     offending is the position of the call that failed its own checks, which
-    the rejection belongs to; it is 0 when the rejection is about the set.
+    the rejection belongs to; it is None when the rejection is about the set.
     """
 
     calls: tuple[ToolCall, ...]
@@ -687,22 +687,35 @@ class _Turn:
     rejection: dict[str, str] | None
     proposal_ids: tuple[str, ...]
     answer_all: bool = False
-    offending: int = 0
+    offending: int | None = None
+
+    def call_rejections(self) -> list[dict[str, str] | None]:
+        """What each call is told, in proposal order; the trace records the same (section 4.3).
+
+        The call that failed its own checks gets the rejection and the
+        other calls of the set not_executed. A rejection about the set
+        belongs to no single call, so every call gets it (spec 0.34).
+        """
+        return [
+            not_executed_rejection()
+            if self.offending is not None and index != self.offending
+            else self.rejection
+            for index in range(len(self.calls))
+        ]
 
     def rejection_exchange(self) -> list[Message]:
         """The proposed calls and the rejection, as data for the repair (RM12).
 
         A chat provider rejects a request in which an assistant tool call
-        has no tool message, so a set answers every call: the offending
-        call with the rejection, the others as not executed.
+        has no tool message, so a set answers every call, each with the
+        rejection its tool.proposed records (spec 0.34 section 4.3).
         """
         assert self.rejection is not None
         if not self.answer_all:
             return _tool_exchange(self.calls[0], {"error": self.rejection})
-        skipped = {"error": not_executed_rejection()}
-        contents = [skipped] * len(self.calls)
-        contents[self.offending] = {"error": self.rejection}
-        return _tool_exchange_set(self.calls, contents)
+        return _tool_exchange_set(
+            self.calls, [{"error": rejection} for rejection in self.call_rejections()]
+        )
 
 
 def not_executed_rejection() -> dict[str, str]:
@@ -3134,27 +3147,16 @@ class _Run:
         else:
             one, rejection = self._admit(calls, available, self.results)
             admitted = [] if one is None else [one]
+        turn = _Turn(calls, tuple(admitted), rejection, (), answer_all=as_set, offending=offending)
         # A call that failed its own checks carries its rejection; the valid calls of that
         # set are recorded as not executed, so the trace never calls a valid call malformed
-        # (RM16). A rejection about the set (a limit, a mutation) is every call's.
+        # (RM16). A rejection about the set (a limit, a mutation, no room) is every call's.
+        # The repair exchange tells each call the same (spec 0.34 section 4.3).
         proposal_ids = tuple(
-            self._propose(
-                call,
-                skill,
-                not_executed_rejection()
-                if offending is not None and index != offending
-                else rejection,
-            )
-            for index, call in enumerate(calls)
+            self._propose(call, skill, call_rejection)
+            for call, call_rejection in zip(calls, turn.call_rejections(), strict=True)
         )
-        return _Turn(
-            calls,
-            tuple(admitted),
-            rejection,
-            proposal_ids,
-            answer_all=as_set,
-            offending=offending or 0,
-        )
+        return replace(turn, proposal_ids=proposal_ids)
 
     async def _run_admitted(
         self, call: ValidatedCall, proposal_id: str, actor: str, *, mechanism: str | None = None

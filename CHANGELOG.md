@@ -20,8 +20,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   with more new executions than the remaining tool budget has room for is
   rejected as a whole before anything runs: `multiple_tool_calls`, or the
   first invalid call's own rejection code, through the format repair, and
-  the rejection answers every call (the call that failed with its error,
-  the others `not_executed`; the trace records them the same way). The room
+  the rejection answers every call with what its `tool.proposed` records
+  (the call that failed its own validation with its error and the others
+  `not_executed`; for the limit, a mutating call, or the room, every call
+  with that rejection; spec 0.34 section 4.3). The room
   counts one execution per call, so the retry of a transient read failure
   can still use the last of it in the middle of a set; the run then ends on
   budget as it would for a single call. A repeated call in a set is a
