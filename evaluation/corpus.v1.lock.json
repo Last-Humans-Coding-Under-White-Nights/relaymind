@@ -8,5 +8,8 @@
     "health-unreachable": "4f4b29dc7e43f906959952a5d320bef06d03be834610efabcd0722ca0d55e7e3",
     "injected-logs": "a3126710b24fa7a17c9f91875b495a5d87bcd673117ecc093a69069f12c38076"
   },
+  "sidecars": {
+    "corpus.v1.skills.json": "0ccc6204c2cf0cd3111ce30ed4397007d4e3da78ef3c0717d9c75b35c701548e"
+  },
   "frozen_on": "2026-10-22"
 }

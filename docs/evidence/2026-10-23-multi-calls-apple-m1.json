@@ -1,0 +1,1091 @@
+{
+  "kind": "relaymind.probe.multi_call_admission",
+  "label": "offline analysis of recorded traces, not a measured run",
+  "note": "Generations that proposed two or more calls, graded against the section 4.3 rule for calls_per_generation many. Saved generations are a prediction from recorded behavior, not a measurement.",
+  "source": {
+    "corpus": {
+      "file": "evaluation/corpus.v1.json",
+      "version": 1,
+      "sha256": "83023ab1ae1d29508caf367d28a4adbb0a4e4d93e977ea4628d94823ecd5d3bd",
+      "chinese_review": "not natively reviewed"
+    },
+    "application": {
+      "head": "c3aa77aa79d9bf1213ccc4c974fc8de010641ece",
+      "dirty": false
+    }
+  },
+  "generations": [
+    {
+      "case_id": "complex-01",
+      "mode": "auto",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_5f9b87f29a7c4e1e878aef61fe752d63",
+      "call_id": "run_5f9b87f29a7c4e1e878aef61fe752d63_gen2_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_service_health",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 20,
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_incident_counts",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 5,
+      "reproposed_changed": 0
+    },
+    {
+      "case_id": "complex-01",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_2cc5edd7033642d4944aa9876a3171e7",
+      "call_id": "run_2cc5edd7033642d4944aa9876a3171e7_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_service_health",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 15
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 20,
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_incident_counts",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 4,
+      "reproposed_changed": 1
+    },
+    {
+      "case_id": "complex-02",
+      "mode": "auto",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_36c5a28df8cc48289116c565b2afecee",
+      "call_id": "run_36c5a28df8cc48289116c565b2afecee_gen2_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "staging-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 50,
+            "service": "staging-api"
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 2,
+      "reproposed_changed": 1
+    },
+    {
+      "case_id": "complex-02",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_497f075a3a44465b86279bf79e9a6d00",
+      "call_id": "run_497f075a3a44465b86279bf79e9a6d00_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 20,
+            "service": "staging-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "staging-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_incident_counts",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 1,
+      "reproposed_changed": 0
+    },
+    {
+      "case_id": "complex-03",
+      "mode": "auto",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_da43b26e9539489baa659b9ef5ffd76d",
+      "call_id": "run_da43b26e9539489baa659b9ef5ffd76d_gen2_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 15
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 50,
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 2,
+      "reproposed_changed": 1
+    },
+    {
+      "case_id": "complex-03",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_5cdf07c7b5764e608e905bee09919d24",
+      "call_id": "run_5cdf07c7b5764e608e905bee09919d24_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 15
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 30,
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_incident_counts",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 1,
+      "reproposed_changed": 1
+    },
+    {
+      "case_id": "complex-04",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_e1ce1f5ed6b44754b73351c9b79f4835",
+      "call_id": "run_e1ce1f5ed6b44754b73351c9b79f4835_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 20,
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_service_health",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_incident_counts",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 4,
+      "reproposed_changed": 0
+    },
+    {
+      "case_id": "complex-05",
+      "mode": "auto",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_6624f8a75fbd48d2b34de3c27d796b3a",
+      "call_id": "run_6624f8a75fbd48d2b34de3c27d796b3a_gen2_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 15
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 50,
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 3,
+      "reproposed_changed": 0
+    },
+    {
+      "case_id": "complex-05",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_da0111b80e174fb3b809b59429dbcc45",
+      "call_id": "run_da0111b80e174fb3b809b59429dbcc45_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 50,
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_service_health",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 15
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_incident_counts",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 15
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 1,
+      "reproposed_changed": 0
+    },
+    {
+      "case_id": "complex-06",
+      "mode": "auto",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_983e9bbcfe304761ade6af4124f761be",
+      "call_id": "run_983e9bbcfe304761ade6af4124f761be_gen2_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 1440
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 15
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 2,
+      "reproposed_changed": 0
+    },
+    {
+      "case_id": "complex-06",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_eecfa8e1d44c4e5f964655cd6ea867a9",
+      "call_id": "run_eecfa8e1d44c4e5f964655cd6ea867a9_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 1440
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 15
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 2,
+      "reproposed_changed": 0
+    },
+    {
+      "case_id": "complex-07",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_239d56d825fa471e9907e167075537cd",
+      "call_id": "run_239d56d825fa471e9907e167075537cd_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_service_health",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 15
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 20,
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_incident_counts",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 3,
+      "reproposed_changed": 1
+    },
+    {
+      "case_id": "complex-08",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_b9023cf31d244d42bea51e80b2a95d46",
+      "call_id": "run_b9023cf31d244d42bea51e80b2a95d46_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_service_health",
+          "arguments": {
+            "service": "staging-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 15
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 10,
+            "service": "staging-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_incident_counts",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "staging-api"
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 1,
+      "reproposed_changed": 0
+    },
+    {
+      "case_id": "complex-09",
+      "mode": "auto",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_14e7bb65bfad4684bb1c77ef9086b57a",
+      "call_id": "run_14e7bb65bfad4684bb1c77ef9086b57a_gen2_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 15
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 50,
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 2,
+      "reproposed_changed": 1
+    },
+    {
+      "case_id": "complex-09",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_5077759183934c80920eefbd88a8452c",
+      "call_id": "run_5077759183934c80920eefbd88a8452c_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 15
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 50,
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_service_health",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 3,
+      "reproposed_changed": 1
+    },
+    {
+      "case_id": "complex-10",
+      "mode": "auto",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_3fc4475caa2c4711abc799b082a167d2",
+      "call_id": "run_3fc4475caa2c4711abc799b082a167d2_gen2_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "staging-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_recent_logs",
+          "arguments": {
+            "limit": 20,
+            "service": "staging-api"
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 3,
+      "reproposed_changed": 0
+    },
+    {
+      "case_id": "complex-10",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "complex",
+      "run_id": "run_0efffb29902640f98c08f0a31ef31ac8",
+      "call_id": "run_0efffb29902640f98c08f0a31ef31ac8_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "staging-api"
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 15
+          },
+          "class": "read",
+          "problem": null
+        },
+        {
+          "tool": "get_metrics",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": null
+        }
+      ],
+      "limit": 6,
+      "admitted": true,
+      "reason": null,
+      "mixed": false,
+      "saved_generations": 3,
+      "reproposed_changed": 0
+    },
+    {
+      "case_id": "ambiguous-01",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "ambiguous",
+      "run_id": "run_dc188e4ad33f47719d0f21348692522f",
+      "call_id": "run_dc188e4ad33f47719d0f21348692522f_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_service_health",
+          "arguments": {
+            "service": "staging-api"
+          },
+          "class": "read",
+          "problem": "unsupported_identifier"
+        },
+        {
+          "tool": "get_service_health",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": "unsupported_identifier"
+        }
+      ],
+      "limit": 6,
+      "admitted": false,
+      "reason": "invalid_call",
+      "mixed": false,
+      "saved_generations": 0,
+      "reproposed_changed": 0
+    },
+    {
+      "case_id": "ambiguous-02",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "ambiguous",
+      "run_id": "run_0dff9725469e48be91c2397d08e048d3",
+      "call_id": "run_0dff9725469e48be91c2397d08e048d3_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "staging-api"
+          },
+          "class": "read",
+          "problem": "unsupported_identifier"
+        },
+        {
+          "tool": "get_latest_deployment",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": "unsupported_identifier"
+        }
+      ],
+      "limit": 6,
+      "admitted": false,
+      "reason": "invalid_call",
+      "mixed": false,
+      "saved_generations": 0,
+      "reproposed_changed": 0
+    },
+    {
+      "case_id": "ambiguous-03",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "ambiguous",
+      "run_id": "run_8cb7c708ed7b4b8d959e934bb303cb02",
+      "call_id": "run_8cb7c708ed7b4b8d959e934bb303cb02_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_incident_counts",
+          "arguments": {
+            "service": "staging-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": "unsupported_identifier"
+        },
+        {
+          "tool": "get_incident_counts",
+          "arguments": {
+            "service": "payments-api",
+            "window_minutes": 60
+          },
+          "class": "read",
+          "problem": "unsupported_identifier"
+        }
+      ],
+      "limit": 6,
+      "admitted": false,
+      "reason": "invalid_call",
+      "mixed": false,
+      "saved_generations": 0,
+      "reproposed_changed": 0
+    },
+    {
+      "case_id": "ambiguous-04",
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "ambiguous",
+      "run_id": "run_0e7b2748a5d44dffb495f1ec44056085",
+      "call_id": "run_0e7b2748a5d44dffb495f1ec44056085_gen1_external",
+      "actor": "external",
+      "calls": [
+        {
+          "tool": "get_service_health",
+          "arguments": {
+            "service": "staging-api"
+          },
+          "class": "read",
+          "problem": "unsupported_identifier"
+        },
+        {
+          "tool": "get_service_health",
+          "arguments": {
+            "service": "payments-api"
+          },
+          "class": "read",
+          "problem": "unsupported_identifier"
+        }
+      ],
+      "limit": 6,
+      "admitted": false,
+      "reason": "invalid_call",
+      "mixed": false,
+      "saved_generations": 0,
+      "reproposed_changed": 0
+    }
+  ],
+  "totals": {
+    "generations": 21,
+    "proposals": 73,
+    "admitted": 17,
+    "kept_rejected": {
+      "invalid_call": 4
+    },
+    "mixed": 0,
+    "saved_generations": 42,
+    "reproposed_changed": 7,
+    "actors": {
+      "external": 21
+    }
+  },
+  "totals_by_language": {
+    "en": {
+      "generations": 21,
+      "proposals": 73,
+      "admitted": 17,
+      "kept_rejected": {
+        "invalid_call": 4
+      },
+      "mixed": 0,
+      "saved_generations": 42,
+      "reproposed_changed": 7
+    }
+  },
+  "table": [
+    {
+      "mode": "auto",
+      "language": "en",
+      "case_class": "complex",
+      "runs": 7,
+      "model_calls": 49,
+      "generations": 7,
+      "proposals": 22,
+      "admitted": 7,
+      "kept_rejected": {},
+      "mixed": 0,
+      "saved_generations": 19,
+      "reproposed_changed": 3
+    },
+    {
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "complex",
+      "runs": 10,
+      "model_calls": 47,
+      "generations": 10,
+      "proposals": 43,
+      "admitted": 10,
+      "kept_rejected": {},
+      "mixed": 0,
+      "saved_generations": 23,
+      "reproposed_changed": 4
+    },
+    {
+      "mode": "external_only",
+      "language": "en",
+      "case_class": "ambiguous",
+      "runs": 4,
+      "model_calls": 10,
+      "generations": 4,
+      "proposals": 8,
+      "admitted": 0,
+      "kept_rejected": {
+        "invalid_call": 4
+      },
+      "mixed": 0,
+      "saved_generations": 0,
+      "reproposed_changed": 0
+    }
+  ],
+  "cross_check": {
+    "generations": 21,
+    "proposals_in_multi_call_generations": 73,
+    "proposals_refused_multiple_tool_calls": 73,
+    "agree": true
+  },
+  "analysed_with": {
+    "application": {
+      "head": "a1d6b6e37bab9bf0e44825638485d80519065ea5",
+      "dirty": false
+    }
+  }
+}

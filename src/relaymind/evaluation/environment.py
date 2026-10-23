@@ -12,6 +12,7 @@ import platform
 import re
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
 _CLOCK = re.compile(r"^(\d+)\.(\d+)\.(\d+)\.(\d+)\s")
@@ -142,3 +143,15 @@ def machine_manifest() -> dict[str, Any]:
 def runtime_devices() -> str | None:
     """The backend devices llama-server reports (``llama-server --list-devices``)."""
     return _run("llama-server", "--list-devices")
+
+
+def application_revision(repo_root: Path) -> dict[str, Any]:
+    """The checkout's HEAD and whether its tree has changes; None where git cannot say.
+
+    Read it before an analysis writes its files into the checkout, so the
+    files it writes do not count as changes.
+    """
+    root = str(repo_root)
+    head = _run("git", "-C", root, "rev-parse", "HEAD")
+    status = _run("git", "-C", root, "status", "--porcelain")
+    return {"head": head, "dirty": None if status is None else bool(status)}

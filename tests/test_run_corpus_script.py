@@ -9,8 +9,11 @@ with scripted model doubles in place of the models (section 13).
 """
 
 import argparse
+import ast
 import asyncio
+import inspect
 import json
+import textwrap
 from pathlib import Path
 
 import httpx
@@ -27,6 +30,7 @@ from gateway_helpers import (
 from helpers import ScriptedAdapter, StuckAdapter, load_script_module
 from launcher_helpers import make_artifact
 from relaymind.launcher import build_app, load_config
+from relaymind.store.trace_event import validate_trace_event
 
 REPO = Path(__file__).resolve().parent.parent
 DELETED = "Deleted the sandbox database demo-orders-db."
@@ -358,3 +362,518 @@ def test_an_interrupted_run_removes_its_work_dir(runner, tmp_path, monkeypatch):
         runner.run_corpus(args)
     assert not work.exists()
     assert len(stopped) == 1
+
+
+# -- the draft answer pass, regraded offline (RM31, spec 0.31 section 12.2, #115) ------------
+
+LOCAL = "qwen3-0.6b"
+EXTERNAL = "glm-4.6"
+STAGING_REPLY = "staging-api is healthy (checked at 2026-10-20T02:58:00Z)."
+TOOL_CALL_TEXT = '{"name": "get_service_health", "arguments": {"service": "staging-api"}}'
+LABEL = "offline counterfactual, not a measured run"
+
+
+def build_trace(
+    run_id,
+    *,
+    language="en",
+    tool="get_service_health",
+    arguments=None,
+    draft="",
+    final=None,
+    ending="failed",
+    answer_options=None,
+    tool_after_draft=None,
+):
+    """A stored trace of a local run, written by hand (the stored event form).
+
+    ending is failed (the final answer broke the criteria, local_only),
+    handoff (the same, then the external model answered, auto), or
+    completed (the final answer was published). final None means the run
+    never reached a final generation.
+    """
+    events = []
+
+    def add(kind, who="gateway", **payload):
+        events.append(
+            {
+                "schema_version": 1,
+                "run_id": run_id,
+                "seq": len(events) + 1,
+                "timestamp": "2026-10-22T13:00:00.000000Z",
+                "elapsed_ms": 100 * len(events),
+                "event_type": kind,
+                "actor": who,
+                "payload": payload,
+            }
+        )
+
+    calls = []
+
+    def generation(purpose, actor, model, *, text=None, proposed=(), usage=(10, 5)):
+        call_id = f"{run_id}_gen{len(calls) + 1}_{purpose}"
+        calls.append({"actor": actor, "call_id": call_id, "model": model, "purpose": purpose})
+        add("model.started", actor, actor=actor, call_id=call_id, model=model, purpose=purpose)
+        add(
+            "model.finished",
+            actor,
+            call_id=call_id,
+            model=model,
+            purpose=purpose,
+            text=text,
+            proposed_calls=[{"tool_name": n, "arguments": a} for n, a in proposed],
+            error=None,
+            finish_reason="tool_calls" if proposed else "stop",
+            usage={"input_tokens": usage[0], "output_tokens": usage[1], "cached_tokens": 0},
+        )
+
+    def run_tool(name, args):
+        add(
+            "tool.proposed",
+            LOCAL,
+            tool_name=name,
+            arguments=args,
+            proposal_id=f"p_{name}",
+            rejection=None,
+            admissible=True,
+        )
+        add("tool.started", tool_name=name, proposal_id=f"p_{name}", attempt=1)
+        add("tool.finished", tool_name=name, proposal_id=f"p_{name}", status="succeeded")
+
+    add("run.accepted", answer_options=answer_options or {})
+    generation(
+        "routing", "local", LOCAL, proposed=[("check-service-health", {"language": language})]
+    )
+    add(
+        "route.selected",
+        "local",
+        decision={"route": "local", "language": language, "skill_id": "check-service-health"},
+    )
+    add("skill.loaded", name="check-service-health")
+    arguments = arguments or {"service": "staging-api"}
+    generation("skill", "local", LOCAL, proposed=[(tool, arguments)])
+    run_tool(tool, arguments)
+    generation("skill", "local", LOCAL, text=draft)
+    if final is not None:
+        generation("final", "local", LOCAL, text=final)
+    summary = {"waiting_ms": 0, "external_calls": 0}
+    if ending == "failed":
+        add(
+            "run.failed",
+            error_code="needs_external",
+            reason_code="invalid_output",
+            model_calls=list(calls),
+            **summary,
+        )
+    elif ending == "handoff":
+        add("handoff.started", reason_code="invalid_output")
+        generation("external", "external", EXTERNAL, text="healthy", usage=(40, 12))
+        if tool_after_draft:
+            run_tool(*tool_after_draft)
+        add("answer.delta", "external", model=EXTERNAL, text="healthy")
+        add(
+            "run.completed",
+            final_answer_model=EXTERNAL,
+            answer="healthy",
+            model_calls=list(calls),
+            waiting_ms=0,
+            external_calls=1,
+        )
+    else:
+        add("answer.delta", "local", model=LOCAL, text=final if final is not None else draft)
+        add(
+            "run.completed",
+            final_answer_model=LOCAL,
+            answer=final if final is not None else draft,
+            model_calls=list(calls),
+            **summary,
+        )
+    return events
+
+
+def export_of(runner, corpus, runs):
+    """An export document of measured runs: runs is a list of (case_id, mode, events, state)."""
+    grades, records, traces = [], {}, {}
+    for case_id, mode, events, state in runs:
+        case = corpus.case(case_id)
+        run_id = events[0]["run_id"]
+        reason = events[-1]["payload"].get("reason_code")
+        record = {
+            "run_id": run_id,
+            "timed_out": False,
+            "actions": [],
+            "state": state,
+            "error_code": events[-1]["payload"].get("error_code"),
+            "reason_code": reason,
+        }
+        grades.append(
+            runner.grade_record(
+                case, mode, record, events, ["demo-analytics-db", "demo-orders-db"]
+            ).to_json_object()
+        )
+        records[f"{case_id}/{mode}"] = record
+        traces[run_id] = events
+    return {
+        "corpus": {"sha256": corpus.digest},
+        "application": {"head": "abc", "dirty": False},
+        "grades": grades,
+        "records": records,
+        "traces": traces,
+    }
+
+
+def counterfactual_by_run(result):
+    return {(r["case_id"], r["mode"]): r for r in result["runs"]}
+
+
+def three_local_runs(runner, corpus):
+    """The three cases of the issue: a draft that passed and a final that failed (published),
+    a Chinese run with an English draft (blocked), a draft holding tool-call JSON (blocked)."""
+    return export_of(
+        runner,
+        corpus,
+        [
+            (
+                "simple-01",
+                "local_only",
+                build_trace(
+                    "run_pass",
+                    arguments={"service": "payments-api"},
+                    draft=PAYMENTS_OK,
+                    final="payments-api is down.",
+                ),
+                "failed",
+            ),
+            (
+                "simple-01-zh",
+                "local_only",
+                build_trace(
+                    "run_zh",
+                    language="zh",
+                    arguments={"service": "payments-api"},
+                    draft=PAYMENTS_OK,
+                    final="payments-api 现在不可用。",
+                ),
+                "failed",
+            ),
+            (
+                "simple-02",
+                "local_only",
+                build_trace("run_json", draft=TOOL_CALL_TEXT, final="staging-api is healthy."),
+                "failed",
+            ),
+        ],
+    )
+
+
+def test_a_passing_draft_is_published_and_the_other_two_are_blocked(runner, corpus):
+    """RM31: the draft is published when it is in the run's language and holds no tool-call JSON."""
+    document = three_local_runs(runner, corpus)
+    result = runner.regrade_draft_pass(document, corpus)
+    by_run = counterfactual_by_run(result)
+
+    published = by_run[("simple-01", "local_only")]
+    assert published["outcome"] == "published" and published["reason"] is None
+    assert published["measured"]["success"] is False
+    assert published["counterfactual"]["success"] is True
+    assert published["counterfactual"]["local_completion"] is True
+    assert published["counterfactual"]["external_calls"] == 0
+    # The final generation did not run: routing, one tool call turn, and the draft.
+    assert published["measured"]["local_calls"] == 4
+    assert published["counterfactual"]["local_calls"] == 3
+
+    english_draft = by_run[("simple-01-zh", "local_only")]
+    assert english_draft["outcome"] == "blocked" and english_draft["reason"] == "language"
+    assert english_draft["run_language"] == "zh"
+    assert english_draft["counterfactual"] == english_draft["measured"]
+
+    tool_call = by_run[("simple-02", "local_only")]
+    assert tool_call["outcome"] == "blocked" and tool_call["reason"] == "tool_call_json"
+    assert tool_call["counterfactual"] == tool_call["measured"]
+
+
+def test_the_counterfactual_grades_replace_only_the_published_run(runner, corpus):
+    document = three_local_runs(runner, corpus)
+    result = runner.regrade_draft_pass(document, corpus)
+    grades = {g["case_id"]: g for g in result["grades"]}
+    assert grades["simple-01"]["success"] is True
+    assert grades["simple-01"]["answer"] == PAYMENTS_OK
+    assert grades["simple-01-zh"]["success"] is False and grades["simple-02"]["success"] is False
+    before = result["measured_summary"]["modes"]["local_only"]["en"]["all"]
+    after = result["counterfactual_summary"]["modes"]["local_only"]["en"]["all"]
+    assert (before["success"]["numerator"], after["success"]["numerator"]) == (0, 1)
+    assert before["success"]["denominator"] == after["success"]["denominator"] == 2
+    rows = {row["language"]: row for row in result["table"]}
+    english, chinese = rows["en"], rows["zh"]
+    assert (english["runs"], english["published"], english["published_pass"]) == (2, 1, 1)
+    assert (english["gained"], english["lost"], english["blocked"]) == (1, 0, {"tool_call_json": 1})
+    assert (chinese["runs"], chinese["published"], chinese["blocked"]) == (1, 0, {"language": 1})
+
+
+def test_the_result_is_labeled_a_counterfactual_and_the_export_is_untouched(runner, corpus):
+    document = three_local_runs(runner, corpus)
+    snapshot = json.dumps(document, sort_keys=True)
+    result = runner.regrade_draft_pass(document, corpus)
+    assert result["label"] == LABEL
+    assert result["kind"] != "relaymind.correctness_corpus"
+    assert result["source"]["corpus"]["sha256"] == corpus.digest
+    assert "traces" not in result
+    assert json.dumps(document, sort_keys=True) == snapshot
+
+
+def test_the_draft_pass_records_an_unknown_revision_as_unknown(
+    runner, corpus, monkeypatch, tmp_path
+):
+    """An unknown revision is None, as in the other spikes, never a clean tree (RM25)."""
+    monkeypatch.setattr(runner, "REPO_ROOT", tmp_path)
+    result = runner.regrade_draft_pass(three_local_runs(runner, corpus), corpus)
+    assert result["regraded_with"]["application"] == {"head": None, "dirty": None}
+
+
+def test_an_auto_handoff_after_a_failed_final_is_replaced_by_the_draft(runner, corpus):
+    """The external calls that followed the final pass are not made when the draft is published."""
+    document = export_of(
+        runner,
+        corpus,
+        [
+            (
+                "simple-02",
+                "auto",
+                build_trace("run_auto", draft=STAGING_REPLY, final="healthy", ending="handoff"),
+                "completed",
+            )
+        ],
+    )
+    entry = runner.regrade_draft_pass(document, corpus)["runs"][0]
+    assert entry["outcome"] == "published"
+    assert entry["measured"]["external_calls"] == 1
+    assert entry["counterfactual"]["external_calls"] == 0
+    assert entry["counterfactual"]["local_completion"] is True
+
+
+def test_a_final_pass_that_succeeded_is_also_regraded_with_the_draft(runner, corpus):
+    """A default must not lower success: a draft that fails grading where the final passed shows."""
+    document = export_of(
+        runner,
+        corpus,
+        [
+            (
+                "simple-02",
+                "local_only",
+                build_trace(
+                    "run_ok",
+                    draft="It is fine.",
+                    final=STAGING_REPLY,
+                    ending="completed",
+                ),
+                "completed",
+            )
+        ],
+    )
+    entry = runner.regrade_draft_pass(document, corpus)["runs"][0]
+    assert entry["measured"]["success"] is True
+    assert entry["outcome"] == "published"
+    assert entry["counterfactual"]["success"] is False
+    assert entry["measured_completed_locally"] is True
+    (row,) = runner.regrade_draft_pass(document, corpus)["table"]
+    assert (row["gained"], row["lost"], row["measured_pass"], row["published_pass"]) == (0, 1, 1, 0)
+
+
+def test_runs_without_a_final_generation_and_external_only_runs_are_left_alone(runner, corpus):
+    document = export_of(
+        runner,
+        corpus,
+        [
+            (
+                "simple-02",
+                "local_only",
+                build_trace("run_nofinal", draft=STAGING_REPLY, final=None, ending="completed"),
+                "completed",
+            ),
+            (
+                "simple-02",
+                "external_only",
+                build_trace("run_ext", draft=STAGING_REPLY, final="x", ending="handoff"),
+                "completed",
+            ),
+        ],
+    )
+    result = runner.regrade_draft_pass(document, corpus)
+    assert result["runs"] == []
+    assert result["grades"] == document["grades"]
+
+
+def test_a_caller_answer_option_blocks_the_draft(runner, corpus):
+    """RM31: with a non-default answer option the final generation runs as before."""
+    document = export_of(
+        runner,
+        corpus,
+        [
+            (
+                "simple-02",
+                "local_only",
+                build_trace(
+                    "run_opt",
+                    draft=STAGING_REPLY,
+                    final="x",
+                    answer_options={"max_tokens": 20},
+                ),
+                "failed",
+            )
+        ],
+    )
+    entry = runner.regrade_draft_pass(document, corpus)["runs"][0]
+    assert (entry["outcome"], entry["reason"]) == ("blocked", "answer_options")
+
+
+def test_a_run_that_changed_the_sandbox_after_the_draft_is_not_regraded(runner, corpus):
+    """The stored sandbox state is the measured run's; a later delete makes it unusable."""
+    document = export_of(
+        runner,
+        corpus,
+        [
+            (
+                "simple-02",
+                "auto",
+                build_trace(
+                    "run_late",
+                    draft=STAGING_REPLY,
+                    final="x",
+                    ending="handoff",
+                    tool_after_draft=("delete_demo_database", {"database_id": "demo-orders-db"}),
+                ),
+                "completed",
+            )
+        ],
+    )
+    result = runner.regrade_draft_pass(document, corpus)
+    entry = result["runs"][0]
+    assert (entry["outcome"], entry["reason"]) == ("not_gradable", "mutation_after_draft")
+    assert entry["counterfactual"] == entry["measured"]
+
+
+def test_the_draft_is_the_last_text_without_calls_before_the_final(runner):
+    events = build_trace("run_last", draft="the draft", final="the final")
+    draft = runner.find_draft(events)
+    assert draft["text"] == "the draft" and draft["purpose"] == "skill"
+    assert events[draft["index"]]["payload"]["text"] == "the draft"
+    # A text from the final generation, or from before the tool call, is not the draft.
+    assert runner.find_draft(events[: draft["index"] - 3]) is None
+    assert runner.find_draft([]) is None
+
+
+@pytest.mark.parametrize(
+    ("ending", "final"),
+    [("failed", "payments-api is down."), ("handoff", "x"), ("completed", "It is fine.")],
+)
+def test_every_synthetic_event_of_the_counterfactual_trace_is_a_valid_trace_event(
+    runner, ending, final
+):
+    """RM22, section 8: the events the regrade adds pass validate_trace_event.
+
+    run.completed carries every required terminal field, and records the
+    pass that produced the answer, answer_pass_applied draft (RM31, spec
+    0.32 section 8).
+    """
+    events = build_trace("run_valid", draft=STAGING_REPLY, final=final, ending=ending)
+    draft = runner.find_draft(events)
+    trace = runner.draft_trace(events, draft)
+    added = trace[draft["index"] + 1 :]
+    assert [e["event_type"] for e in added] == ["answer.delta", "run.completed"]
+    for event in added:
+        validate_trace_event(event)
+    payload = added[-1]["payload"]
+    assert payload["answer_pass_applied"] == "draft"
+    assert payload["final_answer_model"] == LOCAL and payload["external_calls"] == 0
+    assert (payload["active_ms"], payload["waiting_ms"]) == (draft["elapsed_ms"], 0)
+    assert [c["purpose"] for c in payload["model_calls"]] == ["routing", "skill", "skill"]
+
+
+def test_the_counterfactual_counts_only_the_waits_before_the_draft(runner):
+    """Section 12.1: active_ms is the draft's elapsed time less the waits that came before it."""
+    events = build_trace("run_waits", draft=STAGING_REPLY, final="x", ending="completed")
+    draft = runner.find_draft(events)
+    before = {**events[2], "event_type": "clarification.answered"}
+    before["payload"] = {"input": "staging-api", "missing": "service", "waited_ms": 300}
+    after = {**before, "payload": {**before["payload"], "waited_ms": 50}}
+    events = [
+        *events[:3],
+        before,
+        *events[3 : draft["index"] + 2],
+        after,
+        *events[draft["index"] + 2 :],
+    ]
+    events[-1]["payload"]["waiting_ms"] = 350
+    draft = runner.find_draft(events)
+    payload = runner.draft_trace(events, draft)[-1]["payload"]
+    assert payload["waiting_ms"] == 300
+    assert payload["active_ms"] == draft["elapsed_ms"] - 300
+
+
+def test_every_block_reason_is_documented_in_the_export(runner, corpus):
+    """Every code draft_block_reason can return is explained in the export's guards."""
+    source = inspect.getsource(runner.draft_block_reason)
+    returned = {
+        node.value.value
+        for node in ast.walk(ast.parse(textwrap.dedent(source)))
+        if isinstance(node, ast.Return)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    }
+    assert returned == {
+        "no_draft",
+        "answer_options",
+        "language_unknown",
+        "language",
+        "tool_call_json",
+    }
+    guards = runner.regrade_draft_pass(three_local_runs(runner, corpus), corpus)["guards"]
+    assert set(guards) == returned
+    assert all(isinstance(text, str) and text.strip() for text in guards.values())
+
+
+@pytest.mark.parametrize(
+    ("text", "language", "reason"),
+    [
+        ("staging-api is healthy.", "en", None),
+        ("staging-api 现在可用。", "zh", None),
+        ("staging-api is healthy.", "zh", "language"),
+        ("staging-api 现在可用。", "en", "language"),
+        ("", "en", "no_draft"),
+        (TOOL_CALL_TEXT, "en", "tool_call_json"),
+        ('<tool_call>{"x": 1}</tool_call>', "en", "tool_call_json"),
+        ("Call get_service_health with the service name.", "en", None),
+        ("staging-api is healthy.", None, "language_unknown"),
+    ],
+)
+def test_the_rm31_guards(runner, text, language, reason):
+    assert runner.draft_block_reason(text, language, {}) == reason
+
+
+def test_the_cli_writes_a_separate_labeled_export_and_report(runner, corpus, tmp_path, capsys):
+    document = three_local_runs(runner, corpus)
+    source = tmp_path / "source.json"
+    source.write_text(json.dumps(document), "utf-8")
+    before = source.read_bytes()
+    out = tmp_path / "draft-pass.json"
+    runner.main(["--regrade-draft-pass", str(source), "--out", str(out)])
+    assert source.read_bytes() == before
+    result = json.loads(out.read_text("utf-8"))
+    assert result["label"] == LABEL
+    report = out.with_suffix(".md").read_text("utf-8")
+    assert LABEL in report.splitlines()[0]
+    assert "published" in report and "language" in report
+
+
+def test_the_cli_refuses_to_overwrite_the_source_export(runner, tmp_path, capsys):
+    source = tmp_path / "source.json"
+    source.write_text("{}", "utf-8")
+    with pytest.raises(SystemExit):
+        runner.main(["--regrade-draft-pass", str(source), "--out", str(source)])
+    assert "must differ" in capsys.readouterr().err
+    assert source.read_text("utf-8") == "{}"
+
+
+def test_draft_pass_regrading_refuses_another_corpus_digest(runner, corpus):
+    with pytest.raises(SystemExit, match="digest"):
+        runner.regrade_draft_pass({"corpus": {"sha256": "0" * 64}, "grades": []}, corpus)

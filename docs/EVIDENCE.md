@@ -1431,3 +1431,298 @@ claims. Other documents cite these findings by their number.
 | F7 | 73 runs were answered by the external model: median answer 112 output tokens, median run active time 16121 ms. | runs whose `answer.delta` actor is external; `active_ms` of the terminal event |
 | F8 | Local outcomes per skill in auto, for runs routed local: check-service-health 4 of 8 completed locally, lookup-latest-deployment 5 of 11, summarize-incident-counts 0 of 8, delete-demo-database 0 of 4. | first `route.selected` with route local; completed with no `handoff.started` |
 | F9 | The export's `cached_tokens` values are the adapter's default 0, not measurements (the correction in the latency entry above). | `relaymind.adapters.openai_compat` reads only `prompt_tokens` and `completion_tokens` |
+
+## 2026-10-23 — Offline S0 spikes on the corpus export (#115, #118, #119), Apple Silicon macOS
+
+Three analyses of the stored traces of
+[`2026-10-22-corpus-apple-m1.json`](evidence/2026-10-22-corpus-apple-m1.json)
+(156 runs, Apple M1, Qwen3-0.6B Q8_0, external `glm-4.6`; see the corpus
+entry above). They give the phase 2 options of spec 0.31 something to
+start from: the draft answer pass (RM31, #115), the example-matching
+selector (RM28, #118), and several read-only calls per generation
+(section 4.3, #119). No model was called and no gateway code or default
+changed. The corpus, its seeds, and its digest are unchanged. Every
+figure below is a counterfactual or an offline score of one recorded run
+on one machine, and each export says so in a `label` field; none is a
+measured run of the option it studies.
+
+### Commands
+
+From the repository root, on a clean tree. Each export records the
+revision it ran at, and the files of an earlier command would make the
+tree dirty for the next one, so the three ran with `--out` in a scratch
+directory outside the checkout and the files were then copied into
+`docs/evidence/` (the commands below show the final paths):
+
+```bash
+python scripts/run_corpus.py \
+    --regrade-draft-pass docs/evidence/2026-10-22-corpus-apple-m1.json \
+    --out docs/evidence/2026-10-23-corpus-draft-pass-apple-m1.json
+python scripts/probes/count_multi_calls.py \
+    --export docs/evidence/2026-10-22-corpus-apple-m1.json \
+    --out docs/evidence/2026-10-23-multi-calls-apple-m1.json
+python scripts/probes/probe_example_match.py \
+    --export docs/evidence/2026-10-22-corpus-apple-m1.json \
+    --out docs/evidence/2026-10-23-example-match-apple-m1.json
+```
+
+Raw exports and reports (each `.json` has a `.md` beside it):
+[`2026-10-23-corpus-draft-pass-apple-m1.json`](evidence/2026-10-23-corpus-draft-pass-apple-m1.json),
+[`2026-10-23-multi-calls-apple-m1.json`](evidence/2026-10-23-multi-calls-apple-m1.json),
+[`2026-10-23-example-match-apple-m1.json`](evidence/2026-10-23-example-match-apple-m1.json).
+
+### Application revision
+
+| Field | Value |
+|-------|-------|
+| Analysis code | The draft-pass and multiple-calls exports: `a1d6b6e`, clean tree (`dirty: false` in the draft-pass export as `regraded_with`, and in the multiple-calls export as `analysed_with`). The example-matching export was made again at `d178ffe`, clean tree, after review. The three exports are identical under another Python hash seed: two seeds were compared for all three, and a test runs the matcher under six |
+| Changes after `a1d6b6e` | `19bdcee` simplified the three scripts, and `d178ffe` fixed review findings in the example-matching probe (its caveat text, the rule wording, a new `method.example_pairs` field, and the wrong-pick limit when the export lacks one of the router modes) and made the draft-pass regrade record an unknown revision as `None` like the other two scripts. No figure changed: the draft-pass and multiple-calls exports made again at `d178ffe` differ from the recorded ones only in the revision (`head`), and the example-matching export differs from the one made at `a1d6b6e` only in those text and field changes and in `head`. The draft-pass and multiple-calls files are kept as recorded at `a1d6b6e` |
+| Rebase onto master | After these runs the branch was rebased onto master once #146 merged (`f401c4a`, spec 0.31 → 0.32, documentation only; its tree equals `295b349`). The commits named above are the pre-rebase revisions, kept as recorded in the exports; their equivalents on this branch are `a1d6b6e` → `d65d6d0`, `19bdcee` → `17342f2`, and `d178ffe` → `0caaeaf`. Each pair differs only in the six documentation files spec 0.32 changed (`CHANGELOG.md`, `README.md`, `docs/SPECIFICATION.md`, `docs/TESTING.md`, the 2026-10-23 design note, `skills/README.md`); no code, script, test, or evaluation file differs, so no figure changes |
+| Review of PR #147 | The review fixes (`a83aeff`, `3be7deb`, `169e6c2`, `56e7e25`) were checked on 2026-10-23 by running the three commands again at `56e7e25`, clean tree. No figure changed, so the recorded files are kept. The draft-pass export differs only in `head` and in the two block reasons that `guards` now documents (`no_draft`, `language_unknown`); its counterfactual `run.completed` now has `active_ms` and `answer_pass_applied` `draft`, which no figure reads, and all 36 counterfactual traces pass `validate_trace_event`. The multiple-calls export differs only in `head`: the local limit is now the per-stage `tool_calls` less the tools started in the stage, and at most the remaining run limit, but all 21 generations are external. The example-matching export differs only in `head` and in the `argmax` note: a tie for the top score is now never a pick (spec 0.32 section 14.1), and no corpus prompt has a tie |
+| Source export | Made at `c3aa77a`, regraded at `68ae4c3` (the corpus entry above); corpus digest `83023ab1…d5d3bd`, unchanged |
+| Skill sidecar | `evaluation/corpus.v1.skills.json`, new in #118; its SHA-256 of the canonical JSON, `0ccc6204…01548e`, is in the `sidecars` key of `evaluation/corpus.v1.lock.json` |
+| Machine | Apple M1, macOS 27.0.1, Python 3.14.7. The analyses are deterministic and read a file, so the machine does not change them; it is the machine of the source export |
+
+### Results
+
+#### Draft answer pass (#115)
+
+`regrade_draft_pass` takes each auto and local_only run in which a
+`final` generation ran, finds its draft (the last `skill` or `repair`
+generation without proposed calls before the final one; the final
+generation starts only after that text met the completion predicate),
+and applies the RM31 guards: no caller answer option, the draft in the
+run's language (the first `route.selected` language against
+`identifiers.has_cjk`), and no tool-call tag or JSON in the text. A draft
+that passes is graded as if the run had ended with it as the local
+answer, with no later call; a blocked run keeps its measured grade,
+because the final generation would run as before. 36 of the 104 auto and
+local_only runs had a final generation. Of those, 14 did not complete
+locally (finding F1: the runs the final pass broke) and 22 did; the 22
+are in the regrade too, so that the result shows whether the draft lowers
+success anywhere.
+
+| Mode | Language | Class | Measured run | Runs | Published | Passing when published | Blocked (language) | Measured passing | Failing to passing | Passing to failing |
+|---|---|---|---|---|---|---|---|---|---|---|
+| auto | en | simple | not local (F1) | 2 | 2 | 2/2 | 0 | 2/2 | 0 | 0 |
+| auto | en | simple | completed locally | 5 | 5 | 4/5 | 0 | 4/5 | 0 | 0 |
+| auto | en | complex | completed locally | 1 | 1 | 0/1 | 0 | 0/1 | 0 | 0 |
+| auto | en | ambiguous | not local (F1) | 1 | 1 | 1/1 | 0 | 1/1 | 0 | 0 |
+| auto | en | ambiguous | completed locally | 2 | 2 | 2/2 | 0 | 1/2 | 1 | 0 |
+| auto | zh | simple | not local (F1) | 3 | 1 | 1/1 | 2 | 3/3 | 0 | 0 |
+| auto | zh | simple | completed locally | 3 | 1 | 1/1 | 2 | 2/3 | 0 | 0 |
+| local_only | en | simple | not local (F1) | 3 | 3 | 3/3 | 0 | 0/3 | 3 | 0 |
+| local_only | en | simple | completed locally | 5 | 5 | 4/5 | 0 | 4/5 | 0 | 0 |
+| local_only | en | complex | completed locally | 1 | 1 | 0/1 | 0 | 0/1 | 0 | 0 |
+| local_only | en | ambiguous | not local (F1) | 1 | 1 | 1/1 | 0 | 0/1 | 1 | 0 |
+| local_only | en | ambiguous | completed locally | 2 | 2 | 2/2 | 0 | 2/2 | 0 | 0 |
+| local_only | zh | simple | not local (F1) | 4 | 1 | 1/1 | 3 | 0/4 | 1 | 0 |
+| local_only | zh | simple | completed locally | 3 | 1 | 1/1 | 2 | 3/3 | 0 | 0 |
+
+Totals, with Chinese apart. The 14 F1 runs: English 7 published and 7
+passing (`auto` 3, `local_only` 4); Chinese 7, of which 2 are published
+and pass (simple-08-zh in both modes) and 5 are blocked because the
+draft is English (simple-01-zh and simple-02-zh in both modes,
+simple-06-zh in `local_only`), as F1 counted. The 22 runs the final pass
+did not break: English 16 published, 12 passing, against 11 measured
+passing; Chinese 6, of which 2 are published and pass and 4 are blocked
+for language. No draft was blocked for tool-call JSON or for an answer
+option. Over all 36 runs: 27 published, 23 passing when published, 9
+blocked (all for language); 6 runs go from failing to passing and none
+from passing to failing.
+
+Measured and counterfactual, from the same traces (numerator over
+denominator, Chinese simple cases apart and best-effort):
+
+| Mode | Language | Task success, simple | Local completion, simple | Task success, all | Local calls | External calls |
+|---|---|---|---|---|---|---|
+| auto | en | 11/12 to 11/12 | 4/12 to 6/12 | 24/40 to 25/40 | 102 to 91 | 99 to 95 |
+| local_only | en | 4/12 to 7/12 | 4/12 to 7/12 | 10/40 to 14/40 | 102 to 90 | 0 to 0 |
+| auto | zh | 11/12 to 11/12 | 2/12 to 3/12 | 11/12 to 11/12 | 48 to 46 | 16 to 15 |
+| local_only | zh | 3/12 to 4/12 | 3/12 to 4/12 | 3/12 to 4/12 | 48 to 46 | 0 to 0 |
+
+Does the recorded run support `answer_pass = draft` as the default? It
+supports trying it, and it does not support changing the default now.
+For the trying: among the 27 drafts the guards would publish, 23 pass
+grading, 6 runs improve, and none gets worse; English local completion
+on the simple subset would rise from 4/12 to 7/12 in `local_only` (the
+upper bound that F1 gave, now checked run by run) and to 6/12 in `auto`,
+with 11 fewer local calls in `auto` and 12 fewer in `local_only` (the
+final generation that is not made) and 4 fewer external calls in `auto`
+for English. Against the default: the 80 % target of section 12.3 is
+still not met (7/12 is below 80 %); the language guard blocks 9 of the 13
+Chinese runs that had a final generation, so those runs keep their final
+pass and their failures;
+the figures come from one recorded run of a 0.6B model, and the drafts
+were never the answer in that run; and RM31 itself requires a corpus run
+in the draft configuration (section 12.3) before the spec revises the
+default. That revision belongs to #128.
+
+#### Several read-only calls per generation (#119)
+
+Every generation that proposed two or more calls was classified with
+`DEMO_TOOL_PERMISSIONS`, and the section 4.3 rule for `calls_per_generation:
+many` was applied to it: all calls read-only; at most the limit (the
+per-stage `tool_calls` locally; externally the `run_tool_executions`
+budget less the `tool.started` events before the generation); and each
+call valid on its own (known and offered tool, schema, and the RM05
+provenance of its identifiers). A generation counts as saving round trips
+when the set is admitted, and then the saved generations are the later
+generations of the same run that re-proposed a refused call one at a
+time (same tool, same canonical arguments).
+
+| Mode | Language | Class | Runs | Model calls in these runs | Generations | Proposals | Admitted | Kept rejected | Mixed | Saved generations | Re-proposed with other arguments |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| auto | en | complex | 7 | 49 | 7 | 22 | 7 | none | 0 | 19 | 3 |
+| external_only | en | complex | 10 | 47 | 10 | 43 | 10 | none | 0 | 23 | 4 |
+| external_only | en | ambiguous | 4 | 10 | 4 | 8 | 0 | 4 (`invalid_call`) | 0 | 0 | 0 |
+| all | en | | 21 | 106 | 21 | 73 | 17 | 4 | 0 | 42 | 7 |
+
+- The count agrees with finding F4: 21 generations and 73 proposals,
+  and the trace has 73 proposals refused with `multiple_tool_calls`. All
+  21 are external; no local generation proposed more than one call. No
+  `local_only` run had one. There are no Chinese runs in the table.
+- All 73 proposed calls are read-only, so no generation mixed a mutating
+  call (0 mixed) and the mutating rule rejected nothing. The largest set
+  had 5 calls and the limit was 6 in all 21 (no tool had started before
+  any of them), so the limit rejected nothing either.
+- The 4 sets that stay rejected are the ambiguous external_only cases
+  (ambiguous-01 to ambiguous-04): the prompt names no service, so the
+  model's `staging-api` and `payments-api` are not provenance (RM05) and
+  the first call fails its own validation. The gateway would reject the
+  generation with `unsupported_identifier` instead of
+  `multiple_tool_calls`, and nothing is saved.
+- 42 later generations re-proposed a refused call one at a time: 19 in
+  the 7 auto complex runs and 23 in the 10 external_only complex runs, out
+  of the 106 model calls of those 21 runs. A further 7 re-proposed the
+  same tool with other arguments (for example `get_recent_logs` with
+  limit 20 after limit 50); they are not counted. The 42 are a prediction
+  from what the model did when it was refused: a model that sees all the
+  results at once may act differently.
+
+#### Example matcher on the corpus prompts (#118)
+
+The skill sidecar `evaluation/corpus.v1.skills.json` names the expected
+demo skill of each of the 52 cases, written by hand from the acceptable
+calls, class, and rubric (the rule is in its `note`): check-service-health
+12, lookup-latest-deployment 11, summarize-incident-counts 9,
+investigate-performance 9, delete-demo-database 9,
+health-and-diagnostic-checklist 2. No case has the value null: every
+ambiguity in corpus version 1 is a missing or unknown service or database
+ID, which the gateway asks after the skill is chosen (RM05), so no case
+expects a clarification before any skill is chosen. The corpus lock
+verifies the sidecar by digest.
+
+The throwaway matcher (`scripts/probes/probe_example_match.py`) is BM25
+(k1 1.5, b 0.75) over one document per skill, made of its description and
+the requests of its `examples.json` in both languages (two pairs for four
+skills; one pair for `delete-demo-database` and
+`health-and-diagnostic-checklist`), with `staging-api` and `payments-api`
+masked as the enum values of the allowed tools' schemas, word tokens for
+Latin text and character bigrams for Chinese. The router baseline is the first
+`route.selected` with mechanism `native_function_calling` in each run;
+the auto and local_only runs of all 52 cases picked the same skill, so
+the two samples are one. For 6 English cases (complex-01, mutation-01,
+mutation-02, mutation-04, mutation-06, adversarial-02) the routing
+generation returned no function call, so the router has no pick there.
+
+English (40 cases; macro precision, recall, and Jaccard are equal on this
+corpus because every case expects one skill):
+
+| Selector | Right | Wrong | None | Macro precision, recall, Jaccard | Micro precision | Micro Jaccard |
+|---|---|---|---|---|---|---|
+| Router | 30 | 4 | 6 | 0.750 | 30/34 = 0.882 | 0.682 |
+| Matcher, best skill always | 29 | 11 | 0 | 0.725 | 29/40 = 0.725 | 0.569 |
+| Matcher at the candidate thresholds | 27 | 4 | 9 | 0.675 | 27/31 = 0.871 | 0.614 |
+
+Chinese (12 best-effort simple cases, apart): the router 12 right; the
+matcher 12 right with no thresholds and 11 right, 0 wrong, 1 none at the
+candidate thresholds (macro 0.917).
+
+Per class, English, right/wrong/none:
+
+| Class (cases) | Router | Matcher, best skill always | Matcher at the thresholds |
+|---|---|---|---|
+| simple (12) | 11/1/0 | 9/3/0 | 9/1/2 |
+| complex (10) | 8/1/1 | 6/4/0 | 5/2/3 |
+| ambiguous (6) | 5/1/0 | 5/1/0 | 5/1/0 |
+| mutation (6) | 2/0/4 | 6/0/0 | 6/0/0 |
+| adversarial (6) | 4/1/1 | 3/3/0 | 2/0/4 |
+
+Score and margin of the matcher's best-skill picks (BM25 units;
+minimum, 25th percentile, median, 75th percentile, maximum by the
+nearest-rank method):
+
+| Language | Picks | Count | Score | Margin to the second |
+|---|---|---|---|---|
+| en | right | 29 | 2.111, 4.611, 5.777, 8.608, 11.663 | 0.127, 1.821, 4.734, 7.495, 9.972 |
+| en | wrong | 11 | 1.909, 2.623, 3.785, 4.387, 5.601 | 0.015, 0.076, 0.245, 1.296, 2.064 |
+| zh | right | 12 | 1.562, 3.318, 7.826, 10.028, 14.596 | 0.162, 0.978, 7.272, 8.738, 13.196 |
+
+Candidate thresholds for `example_match` (#132): score at least 2.8164 and
+margin at least 0.1268. They are the pair with the most right English
+picks among those whose English wrong picks (4) are at or below the
+router's (4 in each sample). They are raw BM25 values: spec 0.32
+section 14.1 sets `example_match_score` and `example_match_margin` on a
+normalized [0, 1] scale, so these numbers are not configuration values,
+and #132 chooses its thresholds on that scale. Along the frontier of right picks for each
+number of wrong English picks: 0 wrong, 19 right (score at least 4.9207,
+margin at least 2.2011); 1 wrong, 22 (4.0387, 1.8205); 2 wrong, 25
+(2.8164, 1.3343); 3 wrong, 26 (2.8164, 0.4985); 4 wrong, 27 (2.8164,
+0.1268); 5 wrong, 28 (2.1106, 0.2847); 6 wrong, 29 (2.1106, 0.1268).
+
+Findings:
+
+- On the corpus, this matcher does not reach the hypothesis of section
+  12.3 that its English Jaccard is at least the router's: 0.675 against
+  0.750 at the same 4 wrong picks, and 0.725 against 0.750 with no
+  thresholds, where it makes 11 wrong picks against 4. The matcher is
+  better where the router makes no pick (mutation: 6 right against 2).
+  The thresholds were chosen on the cases that score them, so the matcher
+  figures are, if anything, optimistic. #132 should not assume that the
+  default chain changes.
+- The margin to the second skill separates right and wrong picks better
+  than the score does: the median margin of a wrong English pick is 0.245
+  (maximum 2.064) against 4.734 for a right one, while the scores
+  overlap (the maximum wrong score, 5.601, is above the 25th percentile
+  of the right scores, 4.611).
+- The 11 English cases where the best skill is wrong: simple-01,
+  simple-03, simple-05, complex-01, complex-02, complex-04, complex-06,
+  ambiguous-04, adversarial-01, adversarial-03, adversarial-04. The
+  router's 4: simple-01, complex-04, ambiguous-04, adversarial-01.
+- The ops corpus has six skills, so it cannot tell a good selector from a
+  poor one (section 12.4). These results say nothing about selection
+  outside the six demo skills.
+
+### Caveats
+
+- One recorded run on one machine (Apple M1): one generation per case
+  and mode from Qwen3-0.6B, and one external model. The gateway ran the
+  router and the local skill, repair, and final calls at temperature 0
+  (`router.options()` and `LOCAL_OPTIONS` at `c3aa77a`, forwarded by the
+  llama.cpp adapter), not at the runtime's default 0.8, so the drafts and
+  the router picks are greedy outputs, not random draws. The two router
+  runs per case are repeats of a near-deterministic call, not independent
+  samples. A second run could still give other drafts, other router
+  picks, and other external behavior: the runtime does not promise
+  identical output across runs, and the final text of ambiguous-06
+  differs between auto and local_only although both are local calls at
+  temperature 0. Nothing here is a p50 or a distribution.
+- The draft-pass figures are a prediction. The draft pass was never run:
+  the gateway has no `answer_pass` option yet (#121). The gateway's own
+  language and tool-call guards may differ from these (the spike reads
+  the language as a message is read by the router, and looks for a tool-call
+  tag or JSON naming a tool and its arguments).
+- The multiple-calls figures assume that a model given all the results at
+  once needs none of the later one-call generations that re-proposed its
+  calls; that is a prediction from recorded behavior, not a measurement.
+- The matcher's thresholds are tuned on the 52 cases that score them,
+  with one or two example pairs per skill (one for `delete-demo-database`
+  and `health-and-diagnostic-checklist`, the expected skill of
+  complex-07 and complex-08), and the sidecar is hand-written by the
+  project, not held out. The two router samples are identical, so
+  they are one sample.
+- The Chinese cases are best-effort versions of the simple English
+  cases and have not been natively reviewed. They are reported apart.
+- No Windows run exists, and these offline analyses need none; the
+  source export is macOS only.
