@@ -1872,7 +1872,9 @@ routing 2172 ms (6/30). Platform results are not averaged with macOS.
   demonstrate early feedback; local answers are replayed after execution
   (section 7.3), and failures return error responses.
 - Prefix cache: the adapter does not send `cache_prompt`; runtime defaults
-  apply. All 101 measured calls have `cached_tokens = 0` in the export.
+  apply. Of 175 measured model calls, 101 have `cached_tokens = 0`;
+  the other 74 have no recorded count (`cached_tokens = null`). The
+  exporter's `prefix_cache.calls` counts only calls with a non-null count.
   At this revision those are adapter defaults, not measured runtime
   cache use (finding F9 above), so no reuse conclusion follows.
 - Cold startup: llama-server 1.984 s to healthy `/health`, including
