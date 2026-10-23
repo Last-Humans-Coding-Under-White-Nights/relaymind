@@ -48,6 +48,10 @@ SECTION_8_REASON_CODES = {
     "capability_missing",
     "parallel_workflow",
     "execution_mode",
+    # Spec 0.31 (RM26, RM27, RM28).
+    "local_slow",
+    "no_local_model",
+    "selection_failed",
 }
 
 INVALID_PROPOSALS = {

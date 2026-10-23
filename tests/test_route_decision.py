@@ -86,6 +86,10 @@ def test_reason_codes_are_the_section_8_labels():
         "capability_missing",
         "parallel_workflow",
         "execution_mode",
+        # Spec 0.31 section 8 (RM26, RM27, RM28).
+        "local_slow",
+        "no_local_model",
+        "selection_failed",
     }
 
 
@@ -436,3 +440,42 @@ def test_every_decoding_failure_is_reported_as_invalid_routing_output(text):
     # RM02: whatever the model wrote, the router sees one error type.
     with pytest.raises(RouteDecisionError):
         parse_route_decision_json(text, skill_ids=CATALOG)
+
+
+# --- The reason code follows the route (spec 0.31 section 8; RM26 to RM28) ----
+
+
+@pytest.mark.parametrize("reason", ["selection_failed", "no_local_model", "local_slow"])
+def test_the_phase_2_reasons_are_external_routes(reason):
+    """Section 8: route=external carries selection_failed, no_local_model, or local_slow."""
+    data = {**VALID, "route": "external", "skill_id": None, "reason_code": reason}
+    decision = parse_route_decision(data, skill_ids=CATALOG, context=MANAGED_AUTO)
+    assert decision.reason_code == reason
+    assert _schema_accepts(data)
+
+
+@pytest.mark.parametrize(
+    ("route", "reason"),
+    [
+        ("local", "selection_failed"),
+        ("local", "complex_skill"),
+        ("external", "simple_skill"),
+        ("external", "local_budget"),
+        ("external", "invalid_output"),
+        ("external", "tool_failure"),
+        ("external", "missing_input"),
+    ],
+)
+def test_a_reason_that_does_not_follow_the_route_is_refused(route, reason):
+    """Section 8: local, invalid_output, and tool_failure are escalation reasons, not routes."""
+    data = {**VALID, "route": route, "reason_code": reason}
+    with pytest.raises(RouteDecisionError, match="reason_code"):
+        parse_route_decision(data, skill_ids=CATALOG)
+    assert not _schema_accepts(data)
+
+
+def test_a_clarify_route_carries_missing_input():
+    data = {**CLARIFY, "reason_code": "selection_failed"}
+    with pytest.raises(RouteDecisionError, match="reason_code"):
+        parse_route_decision(data, skill_ids=CATALOG)
+    assert not _schema_accepts(data)
