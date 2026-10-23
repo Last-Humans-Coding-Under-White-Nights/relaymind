@@ -26,6 +26,12 @@ it.
 This version ships demo skills and tools that work on a sandbox
 (two fake services and a few fake databases).
 
+The launcher and latency benchmark have recorded runs on macOS and
+native x86-64 Windows (AC15, #110). The 500 ms first model action
+hypothesis was missed on both machines (p95 508 ms and 3610 ms). See
+[`docs/EVIDENCE.md`](docs/EVIDENCE.md) for the exports and limitations,
+and [`docs/RELEASE.md`](docs/RELEASE.md) for the acceptance status.
+
 ## Install
 
 You need Python 3.12 or newer on macOS (Apple Silicon) or Windows

@@ -59,6 +59,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Native Windows launcher and latency evidence (#110; RM12, RM17 to
+  RM19, RM25, AC15; sections 12.1 to 12.3 and 14.1): supplied exports
+  from a physical Windows 11 x86-64 machine with the pinned Q8_0 model
+  and llama.cpp b11785, built from source. Five gateway configurations
+  reached `/healthz` and `/readyz`; the local latency benchmark retained
+  all 120 samples, including 76 errors and zero request timeouts. Its
+  p95 first model action was 3610 ms, so the 500 ms hypothesis was not
+  met. AC15 closes with separate macOS and Windows latency reports;
+  acceptance failures, missing external scenarios, and the unavailable
+  browser driver remain recorded. A hosted-runner workflow is no longer
+  needed to obtain the Windows result.
 - Offline S0 spikes on the 2026-10-22 corpus export (#115, #118, #119;
   RM28, RM31, spec 0.31 sections 4.3, 12.1, 12.2, and 12.4):
   `scripts/run_corpus.py --regrade-draft-pass` grades the stored traces as
@@ -98,7 +109,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   first runs on Apple Silicon macOS are in `docs/EVIDENCE.md`: local
   completion 4/12 on the English simple subset, no missed confirmation in
   156 runs, and p95 first model action 508 ms, so the 500 ms hypothesis
-  is not met there. No Windows run is recorded (AC15 open, #110).
+  is not met there. Those first runs covered macOS only; the Windows
+  follow-up is recorded above (#110, AC15).
 - Live acceptance harness and the first live runs of the M3 to M5
   scenarios (#88, #104; RM04, RM08 to RM25, spec sections 10, 12.1, 13,
   and 14.1): `scripts/live_acceptance.py` starts llama-server from the

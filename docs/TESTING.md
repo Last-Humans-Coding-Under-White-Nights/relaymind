@@ -423,13 +423,20 @@ their results are in the 2026-10-23 entry of `EVIDENCE.md`.
 
 ### What is not covered yet
 
-- The correctness corpus and the latency benchmark ran once, on Apple
-  Silicon macOS only (#32, #33). The x86-64 Windows run is open (#110),
-  so AC15 is not closed. The latency benchmark measures the local path
-  only; no external first-transport timing was taken.
+- The correctness corpus ran on Apple Silicon macOS only (#32). The
+  latency benchmark ran on macOS (#33) and native x86-64 Windows
+  (#110), closing AC15 with separate results and environment manifests.
+  The 500 ms hypothesis is not met on either platform (macOS p95
+  508 ms, Windows p95 3610 ms). The latency
+  benchmark measures the local path only; no external first-transport
+  timing was taken.
 
-- The M3 to M5 scenarios ran live once, on Apple Silicon macOS only,
-  with one external provider ([`EVIDENCE.md`](EVIDENCE.md)).
+- The M3 to M5 scenarios ran live on Apple Silicon macOS with one
+  external provider ([`EVIDENCE.md`](EVIDENCE.md)), and on x86-64
+  Windows without an external model
+  ([`EVIDENCE.md`](EVIDENCE.md#2026-10-23--launcher-start-and-latency-benchmark-on-x86-64-windows-110-ac15-native-windows));
+  7 of 22 Windows scenarios are `not_run` (no external credential
+  available).
 - AC08 is closed by the live local swap (#90) and the live external
   swap from Z.ai to bigmodel.cn (#109), but both endpoints are
   Zhipu's (international and mainland China platforms), so a second
@@ -440,14 +447,15 @@ their results are in the 2026-10-23 entry of `EVIDENCE.md`.
 - The parallel workflow (AC14) ran live twice against one external
   model (one completed, one draft over the 30 s limit); two single runs
   are not a latency measurement.
-- No test measures a cache speedup (AC13). One cache-on run of the AC01
-  prompts is recorded next to its cache-off run (single pass, macOS
-  only).
+- No test measures a cache speedup (AC13). Cache-on and cache-off runs
+  of the AC01 prompts are recorded on macOS and Windows as single-pass
+  observations. The Windows cache-on run has 3 hits, 4 misses, and one
+  run that ended before it had a route to label; 0/8 completed in each arm.
 - No production backend forwards a live provider stream yet, so the
   mid-stream failure path is tested with a backend double.
 - The launcher (`relaymind serve --config`) has started with the pinned
-  model on macOS only (the harness above); no Windows start is recorded
-  (#110).
+  model on macOS (the harness above) and on x86-64 Windows (#110, five
+  starts, `/readyz` 200 on all).
 - Phase 2 (spec 0.31, RM26 to RM32, AC17 to AC23) is specified and not
   implemented: there is no test for the draft answer pass, admitted
   calls per generation, prefetch, gated streaming, operation without a

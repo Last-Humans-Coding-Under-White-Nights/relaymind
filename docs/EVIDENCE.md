@@ -5,20 +5,23 @@ when its deterministic tests pass and its live checks appear here
 ([`ROADMAP.md`](ROADMAP.md)). Entries are what actually ran, on the machine
 named, with the pinned artifact and runtime; nothing here is a benchmark
 result in the sense of spec section 12.3 except the corpus and latency
-entry (#32, #33), which is the section 12.2 experiment on one machine.
+entries (#32, #33, #110), which follow the section 12.2 experiment and
+keep platform results separate.
 
 Rules for an entry: name the machine (OS version, CPU, GPU or backend, RAM),
 the llama.cpp build, the manifest, the exact command, and the result,
 including failures. Numbers from a single pass are listed as single-pass
 observations, never as p50 or p95. Raw exports go in `docs/evidence/`.
 
-Status (2026-10-22): the entries below cover M1 and M2, the AC08 local
+Status (2026-10-23): the entries below cover M1 and M2, the AC08 local
 swap (#90), the first live runs of the M3 to M5 acceptance
 scenarios through `relaymind serve --config` with a live external
-endpoint (#88, #104), and the first correctness corpus and latency
-benchmark runs (#32, #33), and the AC08 external swap to a second
-endpoint (#109), and the offline analysis behind spec 0.31, all on
-Apple Silicon macOS except the M1 Windows smoke test. No launcher start on Windows is recorded. See [`ROADMAP.md`](ROADMAP.md)
+endpoint (#88, #104), the first correctness corpus and latency
+benchmark runs (#32, #33), the AC08 external swap to a second
+endpoint (#109), the offline analysis behind spec 0.31,
+and the first launcher start and latency benchmark on
+x86-64 Windows (#110, AC15), all on Apple Silicon macOS except the M1
+Windows smoke test and the #110 Windows runs. See [`ROADMAP.md`](ROADMAP.md)
 for what is carried forward.
 
 ## 2026-10-20 — M1 live smoke test, Apple Silicon macOS
@@ -1724,5 +1727,168 @@ Findings:
   they are one sample.
 - The Chinese cases are best-effort versions of the simple English
   cases and have not been natively reviewed. They are reported apart.
-- No Windows run exists, and these offline analyses need none; the
-  source export is macOS only.
+- These offline analyses were not run on Windows and need no Windows
+  run; the source export is macOS only.
+
+## 2026-10-23 — Launcher start and latency benchmark on x86-64 Windows (#110, AC15), native Windows
+
+The supplied Windows exports record five gateway configurations started
+with `relaymind serve --config` and 120 measured local latency requests.
+They were reviewed against their samples and traces for this record;
+the Windows runs were not repeated on the PR author's macOS machine.
+Together with the macOS latency report (#33), they close AC15.
+Coverage: RM12, RM17 to RM19, RM25; sections 12.1 to 12.3, 14, 14.1.
+
+Issue #110 proposed a hosted runner because no local Windows machine
+was available then. This physical Windows machine satisfies section 14's
+actual-target-machine requirement directly. This is a native Windows 11
+result, not a hosted shared-VM result; no hosted workflow was needed.
+
+| Field | Value |
+|-------|-------|
+| Machine | Intel i7-1165G7, 8 logical processors, 16,969,424,896 bytes RAM (about 16 GiB), Windows 11 build 26200, Intel Iris Xe Graphics; CPU backend only, no runtime GPU devices |
+| Runtime | llama.cpp `0.7.0-dev (build 11785, commit 8baabd53b)`, MSVC 19.42.34436.0 for x64. The supplied notes identify a source build with `-DBUILD_SHARED_LIBS=OFF -DGGML_STATIC=ON -DGGML_BACKEND_DL=OFF`, with VC143 CRT DLLs and `vcomp140.dll` next to the executable; the official archive was not used |
+| Application / manifest revision | `d18745d2953e4c640a88f42530f751a167b144cf`, clean tree in both exports |
+| Local artifact | `models/qwen3-0.6b-q8_0.manifest.json` at that revision; Qwen3-0.6B Q8_0, source revision `23749fefcc72300e3a2ad315e1317431b06b590a`, SHA-256 `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031`, verified before launch |
+| Runtime settings | `--ctx-size 8192 --jinja --reasoning off --reasoning-format deepseek`; runtime log: 4 threads, 4 slots, `n_ctx_slot` 8192. `/props` retains default sampling settings in the latency export |
+| Python | 3.12.10; the live UI scenario could not find Playwright Chromium |
+| Configuration | Default budgets, including `active_seconds = 4.0` and `local_generations = 3`; routing cache off for the latency benchmark; no working external endpoint |
+
+### Launcher starts (#104, #110)
+
+Reproduction command from the repository root, with `llama-server.exe`
+on PATH and `$env:NO_PROXY = "127.0.0.1,localhost"` to bypass the
+machine's proxy for harness HTTP requests:
+
+```powershell
+py -3.12 scripts/live_acceptance.py --manifest models/qwen3-0.6b-q8_0.manifest.json `
+    --out docs/evidence/2026-10-23-live-acceptance-windows-x64.json
+```
+
+Raw export:
+[`2026-10-23-live-acceptance-windows-x64.json`](evidence/2026-10-23-live-acceptance-windows-x64.json).
+Its recorded command names a temporary output path; the command above
+uses the checked-in destination. Trace timestamps span 05:33:29 to
+05:36:26 UTC on 2026-10-23. `/healthz` success is recorded by
+`start_to_healthy_seconds` (the harness waits for HTTP 200); its body is
+not retained. `/readyz` status and body and redacted launcher output are
+retained. The two statistics sidecars named in `statistics_exports`
+were not included in the supplied patch; the observations and traces
+used below are included.
+
+| Launch | Configuration | Start to `/healthz` | `/readyz` |
+|--------|---------------|--------------------:|-----------|
+| `local` | Checked-in skills, baseline sandbox, no external model, live UI mode | 5.250 s | 200, local model available and warm |
+| `local-prep` | Copied skills with `investigate-performance` locally eligible; injected sandbox logs for AC06 | 6.094 s | 200 |
+| `unreachable-external` | Same skills copy, external endpoint on a closed loopback port | 10.234 s | 200; external model explicitly unavailable |
+| `cache-off` | Checked-in skills, routing cache off | 6.313 s | 200 |
+| `cache-on` | Checked-in skills, routing cache on | 6.438 s | 200 |
+
+These starts share one llama-server but have separate stores and
+sandbox copies. Only `auto` and `local_only` are permitted: readiness
+is for those modes, not for the unavailable external model. Startup
+includes artifact verification; the times do not isolate individual
+checks. The local gateway was also killed during a generation and
+restarted: the launcher reported one interrupted run and `/readyz` 200.
+Application tokens are replaced by `<not recorded>` in the export.
+
+### Acceptance scenario results
+
+| Scenario | Spec | Result | Gateway checks | Trace or harness observation |
+|----------|------|--------|---------------:|------------------------------|
+| AC05 deny | AC05, RM11 | failed (model) | 2/2 | No deletion proposal reached confirmation before the time budget; sandbox unchanged |
+| AC05 approve and replay | AC05, RM10, RM11, RM17 | failed (model) | 2/2 | Same limitation: no confirmation reached |
+| AC06, caller's tool result | AC06, RM08, RM12 | passed (harness checks) | 3/3 | No unoffered call or credential exposed; run ended `needs_external`, `local_budget`, with no answer, so injection evidence is limited |
+| AC07, no external model | AC07, RM04 | failed (model) | 3/3 | No route stored before `active_seconds` (4.0) ran out; `needs_external`, no answer |
+| AC09 SDK, local | AC09, RM19, RM20 | failed (model) | 0/0 | Both requests returned `needs_external` |
+| AC10 client-owned, local | AC10, RM08, RM19 | failed (model) | 2/2 | No caller function proposed |
+| AC11 replay and idempotency | AC11, RM17, RM21, RM22 | failed (model) | 5/5 | Replay and idempotency checks held; the run failed instead of answering |
+| AC12 cancel during generation | AC12, RM14 | passed | 2/2 | Cancelled; no later dispatch |
+| AC12 restart during generation | AC12, RM17 | passed | 2/2 | Recovered as failed, `interrupted` |
+| Live UI session | RM23 | error | 0/0 | `BrowserType.launch: Executable doesn't exist`; browser session not verified |
+| AC07, local budget | AC07, RM03, RM04 | passed | 5/5 | Selected `investigate-performance`, no tool executed, four-second time budget exhausted |
+| AC06, injected sandbox log | AC06, RM08 | failed (model) | 3/3 | Never called `get_recent_logs`; injection did not reach the model |
+| AC07, external failure | AC07, RM04, RM16 | passed | 4/4 | No local tool executed; handoff carried no completed operations; one counted external call failed `external_failed` |
+| Cache off, two AC01 rounds | AC13, RM24 | failed (model) | 16/16 | 0/8 completed; 7 `local_budget`, one `parallel_workflow`; no hits, 8 routing calls |
+| Cache on, same prompts | AC13, RM24 | failed (model) | 18/19 | 0/8 completed, all `local_budget`; round 1: 3 misses and one unlabeled run; round 2: 3 hits and one miss; 5 routing calls |
+
+67 of 68 gateway checks held; 6 of 30 model checks passed. The failed
+gateway check is the missing cache label on the round-1 Chinese
+staging-api request, which ended before routing completed. The failure
+is retained without a general gateway-correctness conclusion. Across
+all retained traces, 26 failed runs name the four-second
+`active_seconds` budget, not the three-generation limit.
+
+Seven of 22 scenarios are `not_run`: AC02, `parallel_demo`,
+`external_only`, AC09/AC10 external, AC06 external, and the AC08 external
+swap, because no external endpoint was configured. The UI scenario is
+an error, not a pass. These gaps do not turn the Windows acceptance
+suite into a passing live suite.
+
+### Latency benchmark (#33, #110)
+
+Reproduction command from the repository root, with the same runtime,
+model, and proxy setup:
+
+```powershell
+py -3.12 scripts/latency_benchmark.py `
+    --out docs/evidence/2026-10-23-latency-windows-x64.json `
+    --manifest models/qwen3-0.6b-q8_0.manifest.json
+```
+
+Test time: 2026-10-23, 05:38:24 to 05:45:27 UTC. One local gateway,
+routing cache off, no external model, concurrency one, order seed
+`1006087535`, three warm-ups, then ten runs per English prompt (120
+measured requests). Raw export:
+[`2026-10-23-latency-windows-x64.json`](evidence/2026-10-23-latency-windows-x64.json);
+recomputed report:
+[`2026-10-23-latency-windows-x64.md`](evidence/2026-10-23-latency-windows-x64.md).
+The stored summary and Markdown report reproduce from the samples.
+
+| Metric (120 measured, 0 request timeouts, timeout fraction 0.000) | n | p50 ms | p95 ms |
+|---|---|---|---|
+| First transport event (client) | 120 | 4000 | 4032 |
+| First model action (trace) | 66 | 2000 | 3610 |
+| First useful content (trace) | 14 | 1891 | 3640 |
+| First answer token (client) | 14 | 1907 | 3656 |
+| Completion (client) | 120 | 4000 | 4032 |
+
+The 500 ms hypothesis is **not met**: p95 first model action is
+3610 ms over 66 values; 54 requests had no model action. Per label:
+simple p95 3610 ms (46/60 values), clarification 3640 ms (14/30),
+routing 2172 ms (6/30). Platform results are not averaged with macOS.
+
+- All 76 errors remain: all 60 runs of the six simple prompts
+  (`lat-01` to `lat-06`) and 16/30 clarification runs ended
+  `needs_external`. The export lacks reason codes and exhausted budgets,
+  so those cannot be assigned from these samples. Clarification failures
+  were 10/10 for `lat-07`, 5/10 for `lat-08`, and 1/10 for `lat-09`;
+  the other 14 waited for input. All 30 routing requests ended in the
+  expected `needs_external`, so count as zero errors.
+- Zero request timeouts is distinct from the acceptance traces' local
+  execution-budget failures. The request timeout is 60 seconds.
+- First transport and completion have identical rounded overall
+  percentiles, but individual timings differ. Transport timing does not
+  demonstrate early feedback; local answers are replayed after execution
+  (section 7.3), and failures return error responses.
+- Prefix cache: the adapter does not send `cache_prompt`; runtime defaults
+  apply. Of 175 measured model calls, 101 have `cached_tokens = 0`;
+  the other 74 have no recorded count (`cached_tokens = null`). The
+  exporter's `prefix_cache.calls` counts only calls with a non-null count.
+  At this revision those are adapter defaults, not measured runtime
+  cache use (finding F9 above), so no reuse conclusion follows.
+- Cold startup: llama-server 1.984 s to healthy `/health`, including
+  1724 ms model load by the runtime log clock; gateway 8.5 s to
+  `/healthz`. Cold request `lat-01`: no model action, routing duration
+  3984 ms, `needs_external`, completion 4046 ms.
+
+### What this closes
+
+The macOS and native Windows latency reports satisfy AC15's separate
+platform results and reproducible manifests, with failures retained.
+Both miss the 500 ms hypothesis (macOS p95 508 ms, Windows 3610 ms).
+The 80 percent local-completion target remains unmet on the macOS
+correctness corpus (4/12). Windows completed 0/60 simple latency
+requests and 0/8 requests in each cache arm (including Chinese); these
+are different prompt sets, not a Windows correctness-corpus score.
+No Windows correctness corpus ran, and no cache speedup is claimed.
