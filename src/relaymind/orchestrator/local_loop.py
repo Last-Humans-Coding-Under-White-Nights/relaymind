@@ -62,6 +62,18 @@ One run, start to end, with the local model only:
    already has a recorded operation asks for nothing (RM10).
 4. An invalid proposal gets at most the configured format-repair
    generations, inside the generation limit (RM03).
+4a. Admitted calls per generation (spec 0.32 section 4.3, AC18). Under
+   calls_per_generation many, a generation's read-only calls are judged
+   as a set: more than the limit, a mutating call among several, one
+   invalid call, or a set the tool budget cannot finish rejects the whole
+   generation before anything runs, and the rejection answers every call.
+   An admitted set runs in proposal order, each call as its own operation.
+4b. Prefetch (RM29, AC18). Under prefetch true, the calls a skill declares
+   run before its first generation in a local stage: the gateway resolves
+   each from the request by the RM05 rule, runs them together through the
+   same checks as a proposal (actor gateway, mechanism prefetch, model
+   null), charges them to the budgets, and adds the exchange to the
+   conversation. Dispatch authority does not move (RM14).
 
 Every generation is charged by its purpose in one place, ``_generate``,
 before it runs, and every tool execution is charged when the executor
@@ -187,6 +199,7 @@ from relaymind.orchestrator.performance import (
     holds_tool_call_json,
     non_default_answer_options,
 )
+from relaymind.orchestrator.prefetch import check_prefetch_budgets, resolve_arguments
 from relaymind.orchestrator.recovery import (
     RecoveryReport,
     model_calls,
@@ -247,6 +260,9 @@ WORKFLOW_UNAVAILABLE = "workflow_unavailable"
 PARALLEL_WORKFLOW = "parallel_workflow"
 # The tool result of a call in a rejected set (section 4.3).
 NOT_EXECUTED = "not_executed"
+# The mechanism of a tool.proposed event for a call the gateway makes before the skill's
+# first generation (RM29, section 8).
+PREFETCH = "prefetch"
 # The branches of the parallel workflow, as traced (spec 0.25, RM15).
 LOCAL_HEALTH, EXTERNAL_CHECKLIST, SYNTHESIS = WORKFLOW_BRANCHES
 ROUTING_MECHANISM = "native_function_calling"
@@ -700,6 +716,9 @@ class LocalOrchestrator:
         self.model = model
         # Spec 0.32 section 14.1: every default is the baseline behavior.
         self.performance = performance or PerformanceSettings()
+        if self.performance.prefetch:
+            # RM29: a skill whose prefetch calls alone exceed a limit is a startup error.
+            check_prefetch_budgets(skills, budgets or LocalBudgets())
         # Spec 0.26 section 10: None (the default) runs without a routing cache.
         self.routing_cache = routing_cache
         self.external = external
@@ -1386,10 +1405,14 @@ class _Run:
     def _phase2_accepted(self) -> dict[str, Any]:
         """The phase 2 fields of run.accepted (spec 0.32 section 8), in one place.
 
-        The performance options in force today; the placement, selection,
-        and workflow fields of later changes are added here.
+        The performance options in force, and the prefetch declarations of
+        the offered skills (RM29); the placement, selection, and workflow
+        fields of later changes are added here.
         """
-        return self.o.performance.to_json_object()
+        return {
+            **self.o.performance.to_json_object(),
+            "prefetch_declarations": self.o.skills.prefetch_declarations(self.o.router.offered),
+        }
 
     def _answer_option_record(self) -> dict[str, Any]:
         """The caller's answer options as applied, for run.accepted (spec 0.22 section 8)."""
@@ -1479,6 +1502,9 @@ class _Run:
                 await self._execute_step(
                     loop, confirmed.tool_call, confirmed.admitted, confirmed.proposal_id
                 )
+            else:
+                # A new stage: its declared calls run before its first generation (RM29).
+                await self._prefetch(loop)
             answer, answer_pass = await self._local_loop(loop)
         except _ConfirmationNeeded as needed:
             return self._await_confirmation(needed, None)
@@ -2745,6 +2771,71 @@ class _Run:
             loop.purpose = self._repair_or_stop(problem)
             loop.conversation += _correction_exchange(generation.text)
 
+    async def _prefetch(self, loop: _Loop) -> None:
+        """Run the skill's declared calls before its first generation (RM29, AC18).
+
+        Only under performance.prefetch. Each declared call is resolved from the
+        user turns by the RM05 rule; one the request does not settle is skipped,
+        and the model proposes it as before. A resolved call passes the checks
+        of a model proposal (RM08, RM09, RM05) and is recorded as a gateway
+        proposal, mechanism prefetch. The admitted calls run together and are
+        charged to the budgets; their exchange joins the conversation in the
+        declared order, so tool output stays data (RM12). Dispatch authority
+        stays with the stage's actor (RM14), and a later proposal of the same
+        call replays the recorded operation (RM10). A call the tool budget
+        cannot finish is not started.
+        """
+        skill = loop.skill
+        if not self.o.performance.prefetch or skill is None or not skill.prefetch:
+            return
+        user_text = identifiers.provenance_text(self.messages)
+        planned: list[tuple[ToolCall, ValidatedCall | None, dict[str, str] | None]] = []
+        for index, declared in enumerate(skill.prefetch):
+            schema = self.o.tools.get(declared.tool).declaration.input_schema
+            arguments = resolve_arguments(declared, schema, user_text)
+            if arguments is None:
+                continue
+            call = ToolCall(
+                call_id=f"prefetch_{index + 1}", tool_name=declared.tool, arguments=arguments
+            )
+            admitted, rejection = self._admit_one(call, loop.available, self.results)
+            planned.append((call, admitted, rejection))
+        runnable = [(call, admitted) for call, admitted, _ in planned if admitted is not None]
+        new = {
+            ToolExecutor.operation_id(self.run_id, admitted.tool_name, admitted.arguments)
+            for _, admitted in runnable
+            if not self.o.executor.has_operation(admitted)
+        }
+        if len(new) > self.meter.tool_room():
+            return
+        proposal_ids = {
+            call.call_id: self._propose(call, skill, rejection, mechanism=PREFETCH)
+            for call, _, rejection in planned
+        }
+        if not runnable:
+            return
+        outcomes = await asyncio.gather(
+            *(
+                self._dispatch_step(loop, admitted, proposal_ids[call.call_id], by_gateway=True)
+                for call, admitted in runnable
+            ),
+            return_exceptions=True,
+        )
+        failed = next((o for o in outcomes if isinstance(o, BaseException)), None)
+        if failed is not None:
+            raise failed
+        results = [o for o in outcomes if isinstance(o, ToolResult)]
+        loop.conversation += _tool_exchange_set(
+            [call for call, _ in runnable], [r.to_json_object() for r in results]
+        )
+        pending = loop.available - {
+            r.tool_name for r in self.results if r.status is ToolStatus.SUCCEEDED
+        }
+        if not pending:
+            # Every tool the skill needs has a result: an answer generation (section 7.3).
+            loop.schemas = ()
+            loop.available = frozenset()
+
     async def _tool_step(self, loop: _Loop, turn: _Turn) -> None:
         """Run an admitted turn, or hold its call for a confirmation if it mutates (RM11)."""
         if len(turn.admitted) > 1:
@@ -2768,11 +2859,11 @@ class _Run:
         loop.conversation += _tool_exchange(call, result.to_json_object())
 
     async def _dispatch_step(
-        self, loop: _Loop, admitted: ValidatedCall, proposal_id: str
+        self, loop: _Loop, admitted: ValidatedCall, proposal_id: str, *, by_gateway: bool = False
     ) -> ToolResult:
         """Dispatch one admitted call as the loop's actor (RM14); a local failure escalates."""
         actor = loop.actor
-        result = await self._run_admitted(admitted, proposal_id, actor)
+        result = await self._run_admitted(admitted, proposal_id, actor, by_gateway=by_gateway)
         if actor == LOCAL_ACTOR and result.status is not ToolStatus.SUCCEEDED:
             raise Escalation(
                 "tool_failure",
@@ -3026,9 +3117,11 @@ class _Run:
             answer_all=as_set and len(calls) > 1,
         )
 
-    async def _run_admitted(self, call: ValidatedCall, proposal_id: str, actor: str) -> ToolResult:
+    async def _run_admitted(
+        self, call: ValidatedCall, proposal_id: str, actor: str, *, by_gateway: bool = False
+    ) -> ToolResult:
         """Dispatch an admitted call and keep its result as run evidence."""
-        result = await self._dispatch(call, proposal_id, actor)
+        result = await self._dispatch(call, proposal_id, actor, by_gateway=by_gateway)
         self.results.append(result)
         return result
 
@@ -3140,13 +3233,21 @@ class _Run:
         return admitted, None
 
     def _propose(
-        self, call: ToolCall, skill: Skill | None, rejection: dict[str, str] | None
+        self,
+        call: ToolCall,
+        skill: Skill | None,
+        rejection: dict[str, str] | None,
+        *,
+        mechanism: str | None = None,
     ) -> str:
+        """Record a proposed call. mechanism names a gateway-made call (prefetch, RM29):
+        actor gateway and model null (RM22); a model's proposal leaves it out."""
         proposal_id = f"proposal_{uuid.uuid4().hex[:16]}"
         arguments = self.redact_arguments(call.arguments)
+        by_gateway = mechanism is not None
         self.emit(
             EventType.TOOL_PROPOSED,
-            self.actor,
+            GATEWAY_ACTOR if by_gateway else self.actor,
             {
                 **self._branch_label(),
                 "proposal_id": proposal_id,
@@ -3156,11 +3257,15 @@ class _Run:
                 "skill_id": None if skill is None else skill.name,
                 "skill_version": None if skill is None else skill.version,
                 "run_state_version": self.record.version,
-                "model": self.active_model.model_id,
+                "model": None if by_gateway else self.active_model.model_id,
+                **({"mechanism": mechanism} if by_gateway else {}),
                 "admissible": rejection is None,
                 "rejection": rejection,
             },
         )
+        if by_gateway:
+            # A gateway call is no proposal of a model: it is an operation or it is refused.
+            return proposal_id
         if self.authority.holder == LOCAL_ACTOR:
             # Until it produces an operation, it is only a proposal (RM13).
             self.local_proposals[proposal_id] = {
@@ -3177,18 +3282,24 @@ class _Run:
         """The workflow branch the tool events of the moment belong to (spec 0.25)."""
         return {} if self.tool_branch is None else {"branch": self.tool_branch}
 
-    async def _dispatch(self, call: ValidatedCall, proposal_id: str, actor: str) -> ToolResult:
+    async def _dispatch(
+        self, call: ValidatedCall, proposal_id: str, actor: str, *, by_gateway: bool = False
+    ) -> ToolResult:
         """Execute (or replay) the call, with the one retry section 11 allows.
 
         Only the actor that holds dispatch authority may dispatch (RM14).
+        by_gateway marks a call the gateway made itself, a prefetch: it
+        runs for the actor that holds authority, and its events name no model.
         """
         self.authority.require(actor)
-        execution = await self._execute(call, proposal_id, attempt=1)
+        execution = await self._execute(call, proposal_id, attempt=1, by_gateway=by_gateway)
         if self.o.executor.may_retry(call, execution.result, attempt=1):
-            execution = await self._execute(call, proposal_id, attempt=2)
+            execution = await self._execute(call, proposal_id, attempt=2, by_gateway=by_gateway)
         return execution.result
 
-    async def _execute(self, call: ValidatedCall, proposal_id: str, *, attempt: int) -> Execution:
+    async def _execute(
+        self, call: ValidatedCall, proposal_id: str, *, attempt: int, by_gateway: bool = False
+    ) -> Execution:
         common = {
             "proposal_id": proposal_id,
             "tool_name": call.tool_name,
@@ -3199,7 +3310,9 @@ class _Run:
         if approval_id is not None:
             # RM11: a confirmed call names the approval that authorized it.
             common["approval_id"] = approval_id
-        model_id = self.active_model.model_id
+        # A gateway-made call has no originating model (RM22, spec 0.31); the store
+        # keeps an internal label, because its column is not nullable.
+        model_id = None if by_gateway else self.active_model.model_id
 
         def before_run(operation_id: str) -> None:
             # Only a real execution is charged (RM03); a replay never is.
@@ -3233,7 +3346,7 @@ class _Run:
             execution = await self.o.executor.execute(
                 call,
                 proposal_id=proposal_id,
-                model=model_id,
+                model=GATEWAY_ACTOR if model_id is None else model_id,
                 attempt=attempt,
                 before_run=before_run,
                 time_limit=self.meter.remaining_seconds,

@@ -42,6 +42,7 @@ from relaymind.api.server import serve, validate_bind_host
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
 from relaymind.orchestrator.performance import PerformanceSettings
+from relaymind.orchestrator.prefetch import PrefetchBudgetError, check_prefetch_budgets
 from relaymind.orchestrator.recovery import RecoveryError
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.routing_cache import RoutingCache
@@ -385,6 +386,13 @@ def build_app(
         )
     except SkillConfigError as exc:
         raise LaunchError(f"skills: {exc}") from exc
+    if config.performance.prefetch:
+        # RM29: declared calls that cannot fit the configured limits stop startup, before
+        # the run store is opened. The orchestrator checks again for other callers.
+        try:
+            check_prefetch_budgets(skills, config.budgets)
+        except PrefetchBudgetError as exc:
+            raise LaunchError(f"[performance] prefetch: {exc}") from exc
     try:
         config.store_path.parent.mkdir(parents=True, exist_ok=True)
         store = RunStore(config.store_path)

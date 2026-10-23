@@ -19,6 +19,7 @@ import re
 import pytest
 
 from helpers import make_demo_skills, make_demo_tools
+from relaymind.orchestrator.prefetch import resolve_arguments
 from relaymind.skills.predicates import COMPLETION_PREDICATES
 from relaymind.tools import ToolStatus
 from relaymind.tools.sandbox import DEMO_TOOL_NAMES
@@ -200,3 +201,74 @@ def test_local_eligibility_matches_the_section_9_routes(skills):
 def test_stated_numbers_are_found_next_to_chinese_text(text, numbers):
     """RM16: a number written right next to CJK text is still a stated number."""
     assert _stated_numbers(text) == {repr(n) for n in numbers}
+
+
+# -- prefetch declarations (RM29, spec 0.32 section 9; #123) -----------------------------------
+
+# Section 9: the calls each demo skill declares; the others declare none.
+SECTION_9_PREFETCH = {
+    "check-service-health": [
+        {"tool": "get_service_health", "arguments": {"service": {"from": "request"}}}
+    ],
+    "lookup-latest-deployment": [
+        {"tool": "get_latest_deployment", "arguments": {"service": {"from": "request"}}}
+    ],
+    "investigate-performance": [
+        {"tool": "get_latest_deployment", "arguments": {"service": {"from": "request"}}},
+        {
+            "tool": "get_recent_logs",
+            "arguments": {"service": {"from": "request"}, "limit": {"constant": 50}},
+        },
+    ],
+}
+
+
+@pytest.mark.parametrize("name", sorted(SECTION_9_SKILLS))
+def test_the_prefetch_declarations_are_the_section_9_ones(skills, name):
+    """Section 9: get_metrics is not prefetched (its window is semantic); the incident summary
+    and the deletion declare none; the checklist stays the fixed parallel workflow."""
+    declared = [call.to_json_object() for call in skills.get(name).prefetch]
+    assert declared == SECTION_9_PREFETCH.get(name, [])
+
+
+@pytest.mark.parametrize("name", sorted(SECTION_9_PREFETCH))
+def test_the_declaring_skills_moved_to_a_new_version(skills, name):
+    """RM07: a changed skill changes its version; the skills left alone keep theirs."""
+    assert skills.get(name).version == "0.2.0"
+    for other in set(SECTION_9_SKILLS) - set(SECTION_9_PREFETCH):
+        assert skills.get(other).version == "0.1.1"
+
+
+@pytest.mark.parametrize("name", sorted(SECTION_9_PREFETCH))
+def test_prefetch_resolves_from_every_english_and_chinese_example_request(skills, tools, name):
+    """RM05, RM29: each request of the examples names exactly one service, in either language,
+    and the example's response still meets the predicate with the prefetched results present."""
+    skill = skills.get(name)
+    predicate = COMPLETION_PREDICATES[skill.completion_predicate]
+    for index, pair in enumerate(examples(skills, name)["pairs"]):
+        for language in ("en", "zh"):
+            request = pair[language]["request"]
+            results = []
+            for number, declared in enumerate(skill.prefetch):
+                schema = tools.get(declared.tool).declaration.input_schema
+                arguments = resolve_arguments(declared, schema, request)
+                assert arguments is not None, f"{name} pair {index} {language}"
+                results.append(
+                    tools.invoke(
+                        declared.tool,
+                        arguments,
+                        available=set(skill.allowed_tools),
+                        operation_id=f"{name}-{index}-{language}-pre{number}",
+                    )
+                )
+            for number, call in enumerate(pair["tool_calls"]):
+                results.append(
+                    tools.invoke(
+                        call["tool"],
+                        call["arguments"],
+                        available=set(skill.allowed_tools),
+                        operation_id=f"{name}-{index}-{language}-{number}",
+                    )
+                )
+            assert all(r.status is ToolStatus.SUCCEEDED for r in results)
+            assert predicate(pair[language]["response"], results), f"{name} {index} {language}"

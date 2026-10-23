@@ -230,6 +230,8 @@ def _proposals(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
                 ),
             ),
             "actor": e.actor,
+            # Who proposed it: a model (the default), or the gateway as prefetch (RM29).
+            "mechanism": e.payload.get("mechanism", "model"),
         }
         for e in _of(events, EventType.TOOL_PROPOSED)
     ]

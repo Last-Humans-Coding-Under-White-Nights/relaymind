@@ -87,8 +87,16 @@ enabled_workflows = []
 #     wants progress opens the native event stream the header names.
 #   answer_stream: only buffered exists; live is refused at startup until gated
 #     answer streaming is implemented (RM32).
-#   calls_per_generation and prefetch are recorded now and take effect in a
-#     later release (section 4.3, RM29).
+#   calls_per_generation: many admits several read-only tool calls from one
+#     generation, up to the per-stage tool limit in a local stage and the
+#     remaining entire-run tool limit in the external stage (section 4.3).
+#     A mutating call is admitted only alone; a set with too many calls, one
+#     invalid call, or more calls than the tool budget can finish is rejected
+#     whole, and nothing in it runs. The client-owned alias keeps one call.
+#   prefetch: true runs the read-only calls a skill declares in its manifest
+#     before its first generation, when the request names exactly one value
+#     for each identifier (RM29). A skill whose declared calls cannot fit the
+#     [budgets] tool_calls and run_tool_executions limits stops startup.
 # [performance]
 # answer_pass = "final"
 # answer_stream = "buffered"

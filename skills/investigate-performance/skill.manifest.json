@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "0.1.1",
+  "version": "0.2.0",
   "languages": [
     "en",
     "zh"
@@ -15,5 +15,26 @@
     "examples.json"
   ],
   "completion_predicate": "performance_evidence_separated",
-  "parallel_workflow": null
+  "parallel_workflow": null,
+  "prefetch": [
+    {
+      "tool": "get_latest_deployment",
+      "arguments": {
+        "service": {
+          "from": "request"
+        }
+      }
+    },
+    {
+      "tool": "get_recent_logs",
+      "arguments": {
+        "service": {
+          "from": "request"
+        },
+        "limit": {
+          "constant": 50
+        }
+      }
+    }
+  ]
 }

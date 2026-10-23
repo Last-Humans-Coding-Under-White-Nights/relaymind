@@ -874,6 +874,36 @@ def test_a_bad_performance_value_is_one_startup_message(tmp_path, line, word):
     assert out == [] and len(err) == 1 and "[performance]" in err[0]
 
 
+@pytest.mark.parametrize(
+    "budget, word",
+    [("tool_calls = 0", "tool_calls"), ("run_tool_executions = 0", "run_tool_executions")],
+)
+def test_prefetch_that_does_not_fit_the_budgets_is_one_startup_message(tmp_path, budget, word):
+    """RM29, section 14.1: a skill whose prefetch calls alone exceed a limit is exit 2."""
+    extra = f"\n[performance]\nprefetch = true\n\n[budgets]\n{budget}\n"
+    config = write_config(tmp_path, extra)
+    out, err = [], []
+    status = main(
+        ["serve", "--config", str(config)], stdout=out.append, stderr=err.append, **doubles()
+    )
+    assert status == 2
+    assert out == [] and len(err) == 1 and "\n" not in err[0]
+    assert "[performance] prefetch" in err[0] and word in err[0]
+
+
+def test_the_same_budgets_start_while_the_declarations_are_idle(tmp_path):
+    """Section 14.1: with prefetch false the declarations are not checked against the limits."""
+    config = write_config(tmp_path, "\n[budgets]\ntool_calls = 0\nrun_tool_executions = 0\n")
+    assert build_app(load_config(config), **doubles()).orchestrator.performance.prefetch is False
+
+
+def test_prefetch_within_the_budgets_starts(tmp_path):
+    """RM29: the default limits hold every demo skill's declarations."""
+    extra = "\n[performance]\nprefetch = true\ncalls_per_generation = 'many'\n"
+    built = build_app(load_config(write_config(tmp_path, extra)), **doubles())
+    assert built.orchestrator.performance.prefetch is True
+
+
 def test_performance_table_must_be_a_table(tmp_path):
     path = write_config(tmp_path, base=None)
     path.write_text("performance = 5\n" + path.read_text())
