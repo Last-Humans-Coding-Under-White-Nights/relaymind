@@ -128,6 +128,12 @@ curl -s http://127.0.0.1:8080/v1/chat/completions \
   is not an approval.
 - **See every run** at `http://127.0.0.1:8080/ui` (enter the token).
   The `X-RelayMind-Run-ID` response header names the run.
+- **Progress while a streamed request works.** By default the stream
+  starts when the run has finished. Set `early_headers = true` in the
+  `[performance]` table and a streamed request gets its headers at once,
+  with `X-RelayMind-Events-URL` naming the run's event stream (open it with
+  the same token to follow the run), then a keep-alive comment while it
+  works. No answer text is sent before the answer is ready.
 
 ## Coming next
 

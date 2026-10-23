@@ -494,6 +494,29 @@ def test_a_run_cancelled_during_the_request_is_409_run_terminal(tmp_path):
     assert response.headers[RUN_ID_HEADER] == "run_x"
 
 
+@pytest.mark.parametrize(
+    "error_code",
+    ["missing_input", "input_expired", "approval_expired", "interrupted", "predicate_unmet"],
+)
+def test_a_failed_run_that_is_run_state_is_409_run_terminal(tmp_path, error_code):
+    """Section 7.1, section 11 (spec 0.32): these error codes are run state, not a server error.
+
+    The message names the code and the run is never reported as a 500.
+    """
+    gateway = healthy_gateway(tmp_path)
+
+    async def failed(*args, **kwargs):
+        return RunOutcome(run_id="run_x", state=RunState.FAILED, error_code=error_code)
+
+    gateway.orchestrator.run = failed
+    response = chat(make_app(gateway))
+    assert response.status_code == 409
+    error = error_of(response)
+    assert error["code"] == "run_terminal"
+    assert error_code in error["message"]
+    assert response.headers[RUN_ID_HEADER] == "run_x"
+
+
 # -- the client-owned seam (executed by issue #24) -----------------------------------------
 
 

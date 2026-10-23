@@ -559,9 +559,10 @@ def _check_workflow_fields(event_type: EventType, payload: Mapping[str, Any]) ->
             )
 
 
-# Spec 0.31 section 8 (RM16, RM22, RM27): the optional fields of a model call. Each
-# is checked only when present, so events stored before 0.31 stay valid. A later
-# field (the placement fields of M8) is one more row here and in the schema.
+# Spec 0.31 and 0.32 section 8 (RM16, RM22, RM27, RM31, RM32): the optional fields of
+# phase 2. Each is checked only when present, so events stored before 0.31 stay valid
+# and readers never infer a missing one. A later field (the placement fields of M8,
+# the selection fields) is one more row in the table and one more entry in the schema.
 _USAGE_COUNTS = ("input_tokens", "output_tokens")
 _USAGE_OPTIONAL_COUNTS = ("cached_tokens", "reasoning_tokens")
 
@@ -604,24 +605,56 @@ def _check_usage(value: Any) -> None:
             raise TraceEventError(f"usage '{name}' must be a non-negative integer or null")
 
 
-_OPTIONAL_MODEL_FIELDS: dict[EventType, dict[str, Callable[[Any], None]]] = {
+def _one_of(name: str, allowed: tuple[str, ...]) -> Callable[[Any], None]:
+    """A check for a field whose value is one of a fixed set of texts."""
+
+    def check(value: Any) -> None:
+        if not isinstance(value, str) or value not in allowed:
+            raise TraceEventError(f"'{name}' must be one of {', '.join(allowed)}")
+
+    return check
+
+
+def _boolean(name: str) -> Callable[[Any], None]:
+    def check(value: Any) -> None:
+        if type(value) is not bool:
+            raise TraceEventError(f"'{name}' must be a boolean")
+
+    return check
+
+
+# The performance options in force (section 14.1), as run.accepted records them.
+_PERFORMANCE_ACCEPTED_FIELDS: dict[str, Callable[[Any], None]] = {
+    "answer_pass": _one_of("answer_pass", ("final", "draft")),
+    "answer_stream": _one_of("answer_stream", ("buffered", "live")),
+    "calls_per_generation": _one_of("calls_per_generation", ("one", "many")),
+    "prefetch": _boolean("prefetch"),
+    "early_headers": _boolean("early_headers"),
+}
+
+_OPTIONAL_FIELDS: dict[EventType, dict[str, Callable[[Any], None]]] = {
+    EventType.RUN_ACCEPTED: _PERFORMANCE_ACCEPTED_FIELDS,
     EventType.MODEL_STARTED: {"request_options": _check_request_options},
     EventType.MODEL_FINISHED: {
         "first_token_ms": _check_first_token_ms,
         "usage": _check_usage,
     },
+    # The pass that produced the answer; absent when no RM31 pass applies (spec 0.32).
+    EventType.RUN_COMPLETED: {
+        "answer_pass_applied": _one_of("answer_pass_applied", ("draft", "final"))
+    },
 }
 
 
-def _check_model_fields(event_type: EventType, payload: Mapping[str, Any]) -> None:
-    for name, check in _OPTIONAL_MODEL_FIELDS.get(event_type, {}).items():
+def _check_optional_fields(event_type: EventType, payload: Mapping[str, Any]) -> None:
+    for name, check in _OPTIONAL_FIELDS.get(event_type, {}).items():
         if name in payload:
             check(payload[name])
 
 
 def _check_payload(event_type: EventType, payload: Mapping[str, Any]) -> None:
     _check_workflow_fields(event_type, payload)
-    _check_model_fields(event_type, payload)
+    _check_optional_fields(event_type, payload)
     if event_type is EventType.RUN_ACCEPTED:
         _check_accepted_payload(payload)
     if event_type is EventType.CACHE_HIT:

@@ -6,8 +6,8 @@ the in-process app and over a real loopback socket. The responses are
 valid chat completions, the request ID is stable across chunks, the
 final markers are right, and no internal progress appears in the
 content. A rejected request surfaces as the SDK's own error type, with
-the documented code. Deterministic: the orchestrator runs over model
-doubles.
+the documented code. Each test runs with early_headers off and on (RM32,
+#140). Deterministic: the orchestrator runs over model doubles.
 """
 
 import asyncio
@@ -20,9 +20,16 @@ from api_helpers import RunningServer, healthy_gateway, make_app, token_of
 from gateway_helpers import STAGING_OK
 from helpers import of_type
 from relaymind.api.server import serve
+from relaymind.orchestrator.performance import PerformanceSettings
 
 PROMPT = "Is staging-api healthy right now?"
 MESSAGES = [{"role": "user", "content": PROMPT}]
+
+
+@pytest.fixture(params=[False, True], ids=["default", "early_headers"])
+def performance(request):
+    """RM32: every SDK test runs under both settings of early_headers (#140)."""
+    return PerformanceSettings(early_headers=request.param)
 
 
 def in_process_client(app, key=None):
@@ -34,16 +41,16 @@ def in_process_client(app, key=None):
     )
 
 
-def test_models_list_through_the_sdk(tmp_path):
+def test_models_list_through_the_sdk(tmp_path, performance):
     async def go():
-        client = in_process_client(make_app(healthy_gateway(tmp_path)))
+        client = in_process_client(make_app(healthy_gateway(tmp_path, performance=performance)))
         return [m.id async for m in client.models.list()]
 
     assert asyncio.run(go()) == ["relaymind"]
 
 
-def test_a_plain_completion_through_the_sdk(tmp_path):
-    gateway = healthy_gateway(tmp_path)
+def test_a_plain_completion_through_the_sdk(tmp_path, performance):
+    gateway = healthy_gateway(tmp_path, performance=performance)
 
     async def go():
         client = in_process_client(make_app(gateway))
@@ -62,8 +69,8 @@ def test_a_plain_completion_through_the_sdk(tmp_path):
     assert gateway.store.get_run(run_id).state == "completed"
 
 
-def test_a_streamed_completion_through_the_sdk(tmp_path):
-    gateway = healthy_gateway(tmp_path)
+def test_a_streamed_completion_through_the_sdk(tmp_path, performance):
+    gateway = healthy_gateway(tmp_path, performance=performance)
 
     async def go():
         client = in_process_client(make_app(gateway))
@@ -87,9 +94,9 @@ def test_a_streamed_completion_through_the_sdk(tmp_path):
     assert streamed == published
 
 
-def test_an_unsupported_parameter_is_the_sdks_bad_request(tmp_path):
+def test_an_unsupported_parameter_is_the_sdks_bad_request(tmp_path, performance):
     async def go():
-        client = in_process_client(make_app(healthy_gateway(tmp_path)))
+        client = in_process_client(make_app(healthy_gateway(tmp_path, performance=performance)))
         await client.chat.completions.create(model="relaymind", messages=MESSAGES, seed=7)
 
     with pytest.raises(openai.BadRequestError) as caught:
@@ -99,9 +106,11 @@ def test_an_unsupported_parameter_is_the_sdks_bad_request(tmp_path):
     assert "seed" in caught.value.message
 
 
-def test_a_wrong_key_is_the_sdks_authentication_error(tmp_path):
+def test_a_wrong_key_is_the_sdks_authentication_error(tmp_path, performance):
     async def go():
-        client = in_process_client(make_app(healthy_gateway(tmp_path)), key="not-the-token")
+        client = in_process_client(
+            make_app(healthy_gateway(tmp_path, performance=performance)), key="not-the-token"
+        )
         await client.chat.completions.create(model="relaymind", messages=MESSAGES)
 
     with pytest.raises(openai.AuthenticationError) as caught:
@@ -109,8 +118,8 @@ def test_a_wrong_key_is_the_sdks_authentication_error(tmp_path):
     assert caught.value.body["code"] == "unauthenticated"
 
 
-def test_the_execution_mode_header_reaches_the_run_through_the_sdk(tmp_path):
-    gateway = healthy_gateway(tmp_path)
+def test_the_execution_mode_header_reaches_the_run_through_the_sdk(tmp_path, performance):
+    gateway = healthy_gateway(tmp_path, performance=performance)
 
     async def go():
         client = in_process_client(make_app(gateway))
@@ -131,9 +140,9 @@ def test_the_execution_mode_header_reaches_the_run_through_the_sdk(tmp_path):
 
 
 @pytest.mark.parametrize("stream", [False, True])
-def test_the_sdk_round_trip_over_a_loopback_socket(tmp_path, stream):
+def test_the_sdk_round_trip_over_a_loopback_socket(tmp_path, performance, stream):
     """AC09: stream true and false against a bound server."""
-    gateway = healthy_gateway(tmp_path)
+    gateway = healthy_gateway(tmp_path, performance=performance)
     app = make_app(gateway)
     with RunningServer(app) as running:
         assert running.address[0] == "127.0.0.1"
@@ -162,7 +171,7 @@ def test_the_sdk_round_trip_over_a_loopback_socket(tmp_path, stream):
             ).models.list()
 
 
-def test_serve_refuses_a_public_address(tmp_path):
-    app = make_app(healthy_gateway(tmp_path))
+def test_serve_refuses_a_public_address(tmp_path, performance):
+    app = make_app(healthy_gateway(tmp_path, performance=performance))
     with pytest.raises(ValueError, match="loopback"):
         serve(app, host="0.0.0.0", port=0)

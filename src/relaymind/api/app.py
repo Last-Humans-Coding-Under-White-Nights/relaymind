@@ -31,8 +31,9 @@ import logging
 import secrets
 import time
 import traceback
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, replace
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -40,11 +41,14 @@ from starlette.types import Receive, Scope, Send
 
 from relaymind.api.auth import require_bearer_token
 from relaymind.api.chat import (
+    AcceptedChat,
+    AcceptingBackend,
     ChatBackend,
     ChatResult,
     ManagedChat,
     collect_live,
     completion_body,
+    early_stream,
     open_stream,
 )
 from relaymind.api.chat_request import (
@@ -92,6 +96,8 @@ __all__ = [
 ]
 
 RUN_ID_HEADER = "X-RelayMind-Run-ID"
+# Under early headers (RM32, spec 0.32 section 7.3): the run's native event stream.
+EVENTS_URL_HEADER = "X-RelayMind-Events-URL"
 MODE_HEADER = "X-RelayMind-Execution-Mode"
 MIN_TOKEN_LENGTH = 32
 
@@ -174,12 +180,26 @@ def create_app(
         mode = _execution_mode(mode_header, MODE_HEADER, chat.alias, settings)
         claim = claim_for(key, "chat", body, mode_header)
         stored = check_stored_key(orchestrator.store, claim)
+        backend = backends[chat.alias]
+        # Early headers (RM32): every check above and the slot still come first, because
+        # the run is accepted here, before a header is sent.
+        accepting = (
+            backend
+            if chat.stream
+            and orchestrator.performance.early_headers
+            and isinstance(backend, AcceptingBackend)
+            else None
+        )
         if stored is None:
+            claimed = replace(chat, idempotency=claim)
             try:
+                if accepting is not None:
+                    accepted = accepting.accept(claimed, mode)
+                    return _early_response(request, orchestrator, native, chat, accepted)
                 result = await _until_disconnect(
                     request,
                     orchestrator,
-                    _produce(backends[chat.alias], replace(chat, idempotency=claim), mode),
+                    _produce(backend, claimed, mode),
                     native.cancel_wait_seconds,
                 )
             except IdempotencyKeyTakenError as taken:
@@ -354,6 +374,76 @@ class _ClosingStream(StreamingResponse):
             aclose = getattr(self.body_iterator, "aclose", None)
             if aclose is not None:
                 await aclose()
+
+
+class _EarlyStream(_ClosingStream):
+    """A stream of an accepted run: when the response ends first, the run is cancelled.
+
+    A disconnect, a failed write, or a server shutdown ends the response
+    while the run may still work. The run's task is cancelled through the
+    orchestrator's request cancel, the path of the buffered disconnect
+    (RM14, AC12, section 7.4), so the run ends cancelled and nothing is
+    left running for a client that is gone. The response waits for the
+    run to stop only as long as for a native cancel, so the execution
+    slot is released before the connection is freed when the run stops
+    in time.
+    """
+
+    def __init__(
+        self,
+        lines: AsyncIterator[str],
+        *,
+        cancel: Callable[[], Awaitable[None]],
+        **kwargs: Any,
+    ):
+        super().__init__(lines, **kwargs)
+        self._cancel = cancel
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            await self._cancel()
+
+
+def _early_response(
+    request: Request,
+    orchestrator: LocalOrchestrator,
+    native: NativeSettings,
+    chat: ChatRequest,
+    accepted: AcceptedChat,
+) -> Response:
+    """The streamed response of an accepted run, sent before the run finishes (RM32).
+
+    The status line, X-RelayMind-Run-ID, and X-RelayMind-Events-URL go
+    out now; the stream is keep-alive comments, then the answer chunks
+    or the mid-stream error event (section 7.3).
+    """
+    task = accepted.start()
+
+    async def cancel() -> None:
+        # The bounded wait of the buffered disconnect and the native cancel (section 7.4).
+        if not task.done():
+            orchestrator.request_cancel(task)
+            await asyncio.wait({task}, timeout=native.cancel_wait_seconds)
+
+    lines = early_stream(
+        chat.alias,
+        accepted.run_id,
+        task,
+        heartbeat_seconds=native.heartbeat_seconds,
+        on_internal_error=lambda exc: _log_internal(request, exc),
+    )
+    return _EarlyStream(
+        lines,
+        cancel=cancel,
+        media_type="text/event-stream",
+        headers={
+            RUN_ID_HEADER: accepted.run_id,
+            EVENTS_URL_HEADER: events_url(accepted.run_id),
+            "Cache-Control": "no-cache",
+        },
+    )
 
 
 async def _produce(backend: ChatBackend, chat: ChatRequest, mode: ExecutionMode) -> ChatResult:

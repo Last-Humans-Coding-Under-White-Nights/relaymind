@@ -20,6 +20,7 @@ LATENCY_METRICS = (
     "first_answer_token_ms",
     "completion_ms",
 )
+TRANSPORT_METRIC = "first_transport_ms"
 HYPOTHESIS_METRIC = "first_model_action_ms"
 HYPOTHESIS_MS = 500
 # Section 12.3 proposed model-quality targets on the English simple subset.
@@ -271,8 +272,19 @@ def _ms(value: float | None) -> str:
     return "-" if value is None else f"{value:.0f}"
 
 
-def render_latency_markdown(summary: Mapping[str, Any], *, title: str) -> str:
+HEADER_TIME_NOTE = (
+    "Early response headers were on: first_transport_ms is the header time, the arrival of "
+    "the status line at acceptance; it is not first useful content (spec 0.32 section 7.3)."
+)
+
+
+def render_latency_markdown(
+    summary: Mapping[str, Any], *, title: str, early_headers: bool = False
+) -> str:
+    """The report; under early headers the first transport event is labeled header time."""
     lines = [f"# {title}", ""]
+    if early_headers:
+        lines += [HEADER_TIME_NOTE, ""]
     for name, block in [("all", summary["overall"]), *summary["by_label"].items()]:
         fraction = block["timeout_fraction"]
         shown = "-" if fraction is None else f"{fraction:.3f}"
@@ -284,7 +296,14 @@ def render_latency_markdown(summary: Mapping[str, Any], *, title: str) -> str:
             "|---|---|---|---|",
         ]
         for metric, stats in block["metrics"].items():
-            lines.append(f"| {metric} | {stats['n']} | {_ms(stats['p50'])} | {_ms(stats['p95'])} |")
+            metric_label = (
+                f"{metric} (header time)"
+                if early_headers and metric == TRANSPORT_METRIC
+                else metric
+            )
+            lines.append(
+                f"| {metric_label} | {stats['n']} | {_ms(stats['p50'])} | {_ms(stats['p95'])} |"
+            )
         lines.append("")
     h = summary["hypothesis"]
     verdict = {True: "met", False: "not met", None: "not determined"}[h["met"]]

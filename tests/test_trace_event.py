@@ -1300,3 +1300,58 @@ def test_model_call_fields_are_validated_and_published():
         with pytest.raises(TraceEventError, match=key):
             validate_trace_event(data)
         assert not SCHEMA_VALIDATOR.is_valid(data), name
+
+
+# -- Performance options and the applied answer pass (spec 0.32 section 8; RM31, RM32, #121) ---
+
+PERFORMANCE_RECORD = {
+    "answer_pass": "draft",
+    "answer_stream": "buffered",
+    "calls_per_generation": "many",
+    "prefetch": True,
+    "early_headers": True,
+}
+
+PERFORMANCE_ACCEPTED = {
+    "accepted-performance-all": accepted_with(**PERFORMANCE_RECORD),
+    "accepted-performance-defaults": accepted_with(
+        answer_pass="final",
+        answer_stream="buffered",
+        calls_per_generation="one",
+        prefetch=False,
+        early_headers=False,
+    ),
+    "accepted-performance-live-label": accepted_with(answer_stream="live"),
+    "accepted-before-0.31": ACCEPTED,
+    "completed-draft": branch_event("run.completed", answer_pass_applied="draft"),
+    "completed-final": branch_event("run.completed", answer_pass_applied="final"),
+    "completed-before-0.32": branch_event("run.completed"),
+}
+PERFORMANCE_REJECTED = {
+    "answer-pass-unknown": (accepted_with(answer_pass="later"), "answer_pass"),
+    "answer-pass-null": (accepted_with(answer_pass=None), "answer_pass"),
+    "answer-stream-unknown": (accepted_with(answer_stream="chunked"), "answer_stream"),
+    "calls-unknown": (accepted_with(calls_per_generation="two"), "calls_per_generation"),
+    "calls-number": (accepted_with(calls_per_generation=1), "calls_per_generation"),
+    "prefetch-text": (accepted_with(prefetch="yes"), "prefetch"),
+    "prefetch-number": (accepted_with(prefetch=1), "prefetch"),
+    "early-headers-text": (accepted_with(early_headers="true"), "early_headers"),
+    "early-headers-null": (accepted_with(early_headers=None), "early_headers"),
+    "applied-unknown": (branch_event("run.completed", answer_pass_applied="both"), "answer_pass"),
+    "applied-null": (branch_event("run.completed", answer_pass_applied=None), "answer_pass"),
+    "applied-bool": (branch_event("run.completed", answer_pass_applied=True), "answer_pass"),
+}
+
+
+def test_performance_fields_are_validated_and_published():
+    """RM31, RM32, spec 0.32 section 8: the validator and the schema agree on each shape.
+
+    The fields are optional, because a run stored before spec 0.31 or 0.32 has none.
+    """
+    for name, data in PERFORMANCE_ACCEPTED.items():
+        validate_trace_event(data)
+        assert SCHEMA_VALIDATOR.is_valid(data), name
+    for name, (data, key) in PERFORMANCE_REJECTED.items():
+        with pytest.raises(TraceEventError, match=key):
+            validate_trace_event(data)
+        assert not SCHEMA_VALIDATOR.is_valid(data), name

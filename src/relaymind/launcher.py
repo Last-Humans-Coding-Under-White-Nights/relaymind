@@ -41,6 +41,7 @@ from relaymind.api.chat_request import SAMPLING_OPTIONS
 from relaymind.api.server import serve, validate_bind_host
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
+from relaymind.orchestrator.performance import PerformanceSettings
 from relaymind.orchestrator.recovery import RecoveryError
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.routing_cache import RoutingCache
@@ -96,6 +97,8 @@ _TABLES: dict[str, frozenset[str]] = {
     # Spec 0.31 section 14.1: the keys are the section 11 limit names, so a new limit
     # added to LocalBudgets is configurable without a second list (RM03).
     "budgets": frozenset(f.name for f in fields(LocalBudgets)),
+    # Spec 0.32 section 14.1: the keys are the PerformanceSettings fields (RM31, RM32).
+    "performance": frozenset(f.name for f in fields(PerformanceSettings)),
 }
 
 
@@ -127,6 +130,8 @@ class LauncherConfig:
     ui: UiSettings | None = None
     # Spec 0.31 section 14.1: the section 11 limits; an omitted key keeps its default (RM03).
     budgets: LocalBudgets = field(default_factory=LocalBudgets)
+    # Spec 0.32 section 14.1: the performance options; every default is the baseline.
+    performance: PerformanceSettings = field(default_factory=PerformanceSettings)
 
 
 @dataclass(frozen=True)
@@ -243,6 +248,7 @@ def load_config(path: Path | str) -> LauncherConfig:
         raise LaunchError(f"[policy] permissions names unknown: {', '.join(unknown_permissions)}")
 
     budgets = _settings("budgets", lambda: LocalBudgets(**tables["budgets"]))
+    performance = _settings("performance", lambda: PerformanceSettings(**tables["performance"]))
 
     return LauncherConfig(
         manifest=Path(_required(local, "local_model", "manifest", str)),
@@ -267,6 +273,7 @@ def load_config(path: Path | str) -> LauncherConfig:
         native=_settings("native", lambda: NativeSettings(**native_args)),
         ui=ui,
         budgets=budgets,
+        performance=performance,
     )
 
 
@@ -395,6 +402,7 @@ def build_app(
             external=external,
             degraded_mode=config.degraded_mode,
             budgets=config.budgets,
+            performance=config.performance,
             routing_cache=RoutingCache() if config.routing_cache else None,
         )
         report = orchestrator.recover_after_restart()

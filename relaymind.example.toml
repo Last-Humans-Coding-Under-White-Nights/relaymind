@@ -72,6 +72,30 @@ enabled_workflows = []
 # external_generations = 6
 # external_seconds = 30.0        # one external generation
 
+# The performance options (spec 0.32 section 14.1). Every key is optional and the
+# values below are the defaults, which are the baseline configuration and the
+# behavior before these options existed. Each run records the values in force
+# in its run.accepted event.
+#   answer_pass: final runs a second generation with tools disabled; draft
+#     publishes the checked skill-stage draft instead (RM31). The draft is
+#     published only when it is in the run's language, holds no tool-call
+#     JSON, and the chat request set no max_completion_tokens, temperature,
+#     or top_p; otherwise the final generation runs.
+#   early_headers: a streamed chat request gets its status line, X-RelayMind-Run-ID,
+#     and X-RelayMind-Events-URL as soon as the run is accepted, then SSE comment
+#     keep-alives, and the answer chunks only at the end (RM32). A client that
+#     wants progress opens the native event stream the header names.
+#   answer_stream: only buffered exists; live is refused at startup until gated
+#     answer streaming is implemented (RM32).
+#   calls_per_generation and prefetch are recorded now and take effect in a
+#     later release (section 4.3, RM29).
+# [performance]
+# answer_pass = "final"
+# answer_stream = "buffered"
+# calls_per_generation = "one"
+# prefetch = false
+# early_headers = false
+
 # The routing-result cache (spec 0.26 section 10). Off by default and in the
 # benchmark configuration: leave it false for any measurement you report as the
 # baseline. When true, a repeated local read-only request skips only the routing
