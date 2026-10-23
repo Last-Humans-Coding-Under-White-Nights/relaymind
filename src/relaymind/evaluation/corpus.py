@@ -7,11 +7,16 @@ corpus and every seed it names; the digest is kept in a lock file, and a
 runner refuses a corpus or seed that no longer matches it. Development
 examples (the skill examples and the live harness prompts) are never
 corpus cases.
+
+Spec 0.31 adds sidecar files (RM28, section 12.2): data about the cases
+that is frozen with its own digest in the same lock file and leaves the
+corpus digest alone. The first is the expected skill of every case
+(``evaluation/corpus.v1.skills.json``).
 """
 
 import json
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -40,6 +45,8 @@ _DOCUMENT_FIELDS = (
     "chinese_review",
     "cases",
 )
+# The JSON fields of the skill sidecar (spec 0.31 section 12.2).
+_SIDECAR_FIELDS = ("schema_version", "corpus", "version", "frozen_on", "note", "skills")
 # The JSON fields of a case.
 _CASE_FIELDS = (
     "id",
@@ -136,24 +143,108 @@ def parse_corpus(document: Mapping[str, Any], *, seed_dir: Path) -> Corpus:
 
 
 def check_lock(corpus: Corpus, lock_path: Path) -> None:
-    """Refuse a corpus whose digest differs from the frozen one (section 12.2)."""
-    lock = json.loads(Path(lock_path).read_text("utf-8"))
+    """Refuse a corpus, or a sidecar, whose digest differs from the frozen one (section 12.2).
+
+    A sidecar named in the lock is read from the lock file's directory and
+    compared by the digest of its canonical JSON, so its layout on disk
+    does not matter. A lock without a sidecars key (made before spec 0.31)
+    checks the corpus alone.
+    """
+    lock_path = Path(lock_path)
+    lock = json.loads(lock_path.read_text("utf-8"))
     if lock.get("sha256") != corpus.digest:
         raise CorpusError(
             f"corpus digest {corpus.digest} differs from the frozen digest {lock.get('sha256')} "
-            f"in {Path(lock_path).name}; a changed corpus is a new version (section 12.2)"
+            f"in {lock_path.name}; a changed corpus is a new version (section 12.2)"
         )
+    for name, frozen in sorted((lock.get("sidecars") or {}).items()):
+        path = lock_path.parent / name
+        if not path.is_file():
+            raise CorpusError(f"sidecar {name} named in {lock_path.name} is missing")
+        digest = canonical_digest(_read_json(path))
+        if digest != frozen:
+            raise CorpusError(
+                f"sidecar {name} digest {digest} differs from the frozen digest {frozen} "
+                f"in {lock_path.name}; a changed sidecar is a new corpus version (section 12.2)"
+            )
 
 
-def lock_document(corpus: Corpus, corpus_name: str) -> dict[str, Any]:
-    """The lock file content that freezes a corpus."""
-    return {
+def lock_document(
+    corpus: Corpus, corpus_name: str, *, sidecars: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
+    """The lock file content that freezes a corpus and, when given, its sidecars.
+
+    sidecars maps a file name to its parsed JSON document.
+    """
+    document: dict[str, Any] = {
         "corpus": corpus_name,
         "version": corpus.document["version"],
         "sha256": corpus.digest,
         "seeds": {name: canonical_digest(seed) for name, seed in sorted(corpus.seeds.items())},
-        "frozen_on": corpus.document["frozen_on"],
     }
+    if sidecars:
+        document["sidecars"] = {
+            name: canonical_digest(data) for name, data in sorted(sidecars.items())
+        }
+    document["frozen_on"] = corpus.document["frozen_on"]
+    return document
+
+
+def demo_skill_names(skills_root: Path) -> frozenset[str]:
+    """The names of the demo skill packages under a skill root (spec 0.31 section 12.2)."""
+    return frozenset(
+        path.parent.name for path in Path(skills_root).glob("*/SKILL.md") if path.is_file()
+    )
+
+
+def load_skills_sidecar(
+    path: Path, corpus: Corpus, *, skill_names: Collection[str]
+) -> dict[str, str | None]:
+    """The expected skill of every case, read from the sidecar file and checked (RM28)."""
+    text = Path(path).read_text("utf-8")
+    try:
+        document = json.loads(text, object_pairs_hook=_once)
+    except ValueError as exc:
+        raise CorpusError(f"{Path(path).name}: {exc}") from None
+    return parse_skills_sidecar(document, corpus, skill_names=skill_names)
+
+
+def parse_skills_sidecar(
+    document: Mapping[str, Any], corpus: Corpus, *, skill_names: Collection[str]
+) -> dict[str, str | None]:
+    """Check the skill sidecar against the corpus: each case once, each value a skill or null.
+
+    The expected skill is null only for a case that expects a clarification
+    before any skill is chosen. A Chinese case expects the skill of its
+    English case.
+    """
+    _check_fields("skill sidecar", document, _SIDECAR_FIELDS)
+    check_schema_version(document["schema_version"], 1, CorpusError)
+    if document["version"] != corpus.document["version"]:
+        raise CorpusError(
+            f"skill sidecar: version {document['version']!r} is not the corpus version "
+            f"{corpus.document['version']!r}"
+        )
+    if document["corpus"] != corpus.document["corpus"]:
+        raise CorpusError(f"skill sidecar: corpus {document['corpus']!r} is not this corpus")
+    skills = document["skills"]
+    if not isinstance(skills, Mapping):
+        raise CorpusError("skill sidecar: skills must be an object of case ID to skill or null")
+    ids = {case.case_id for case in corpus.cases}
+    if unknown := sorted(set(skills) - ids):
+        raise CorpusError(f"skill sidecar: unknown case(s) {', '.join(unknown)}")
+    if missing := sorted(ids - set(skills)):
+        raise CorpusError(f"skill sidecar: missing case(s) {', '.join(missing)}")
+    for case_id, skill in skills.items():
+        if skill is not None and (not isinstance(skill, str) or skill not in skill_names):
+            raise CorpusError(f"skill sidecar: {case_id} must be a demo skill name or null")
+    for case in corpus.cases:
+        if case.english_case is not None and skills[case.case_id] != skills[case.english_case]:
+            raise CorpusError(
+                f"skill sidecar: {case.case_id} must expect the skill of its english case "
+                f"{case.english_case}"
+            )
+    return dict(skills)
 
 
 def normalize_prompt(text: str) -> str:
@@ -173,6 +264,20 @@ def development_prompts(skills_root: Path, *, extra: Iterable[str] = ()) -> set[
 
 
 # -- checks -----------------------------------------------------------------------------
+
+
+def _read_json(path: Path) -> Any:
+    return json.loads(Path(path).read_text("utf-8"))
+
+
+def _once(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """A JSON object hook that refuses a name written twice."""
+    result: dict[str, Any] = {}
+    for name, value in pairs:
+        if name in result:
+            raise ValueError(f"{name!r} is named twice")
+        result[name] = value
+    return result
 
 
 def _check_fields(where: str, data: object, fields: Sequence[str]) -> Mapping[str, Any]:
