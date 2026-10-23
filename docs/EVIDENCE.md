@@ -1475,7 +1475,7 @@ Raw exports and reports (each `.json` has a `.md` beside it):
 
 | Field | Value |
 |-------|-------|
-| Analysis code | `f6b459a`, clean tree (`dirty: false` in the draft-pass export as `regraded_with`, and in the other two as `analysed_with`) |
+| Analysis code | `a1d6b6e`, clean tree (`dirty: false` in the draft-pass export as `regraded_with`, and in the other two as `analysed_with`). The three exports are identical under another Python hash seed: two seeds were compared for all three, and a test runs the matcher under six |
 | Source export | Made at `c3aa77a`, regraded at `68ae4c3` (the corpus entry above); corpus digest `83023ab1…d5d3bd`, unchanged |
 | Skill sidecar | `evaluation/corpus.v1.skills.json`, new in #118; its SHA-256 of the canonical JSON, `0ccc6204…01548e`, is in the `sidecars` key of `evaluation/corpus.v1.lock.json` |
 | Machine | Apple M1, macOS 27.0.1, Python 3.14.7. The analyses are deterministic and read a file, so the machine does not change them; it is the machine of the source export |
