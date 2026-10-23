@@ -718,6 +718,11 @@ class _Turn:
         )
 
 
+def _count(number: int, noun: str) -> str:
+    """The number and the noun, plural unless the number is 1: "1 tool call", "2 tool calls"."""
+    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
+
+
 def not_executed_rejection() -> dict[str, str]:
     """What a valid call of a rejected set is told: another call failed, so none ran."""
     return {"code": NOT_EXECUTED, "message": "not executed: another call of the set was rejected"}
@@ -3203,7 +3208,7 @@ class _Run:
                 [],
                 {
                     "code": "multiple_tool_calls",
-                    "message": f"propose at most {limit} tool calls at a time",
+                    "message": f"propose at most {_count(limit, 'tool call')} at a time",
                 },
                 None,
             )
@@ -3229,7 +3234,10 @@ class _Run:
                 [],
                 {
                     "code": "multiple_tool_calls",
-                    "message": f"only {room} more tool executions are allowed in this run",
+                    "message": (
+                        f"only {_count(room, 'more tool execution')}"
+                        f" {'is' if room == 1 else 'are'} allowed in this run"
+                    ),
                 },
                 None,
             )

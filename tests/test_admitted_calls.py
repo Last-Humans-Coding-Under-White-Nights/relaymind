@@ -333,6 +333,60 @@ def test_one_invalid_call_rejects_the_whole_generation(tmp_path, skills, bad, co
     assert_every_call_answered(gateway.adapter.requests[2], events, code, offending=1)
 
 
+@pytest.mark.parametrize(
+    ("budgets", "turns", "message"),
+    [
+        pytest.param(
+            LocalBudgets(tool_calls=1, local_generations=5),
+            [calls_turn(LOGS, DEPLOYMENT)],
+            "propose at most 1 tool call at a time",
+            id="limit-of-one",
+        ),
+        pytest.param(
+            LocalBudgets(local_generations=5),
+            [calls_turn(LOGS, DEPLOYMENT, METRICS)],
+            "propose at most 2 tool calls at a time",
+            id="limit-of-two",
+        ),
+        pytest.param(
+            LocalBudgets(local_generations=5),
+            [calls_turn(LOGS), calls_turn(DEPLOYMENT, METRICS)],
+            "only 1 more tool execution is allowed in this run",
+            id="room-of-one",
+        ),
+        pytest.param(
+            LocalBudgets(tool_calls=3, run_tool_executions=3, local_generations=5),
+            [
+                calls_turn(LOGS),
+                calls_turn(
+                    DEPLOYMENT,
+                    METRICS,
+                    call("c_logs_5", "get_recent_logs", service="staging-api", limit=5),
+                ),
+            ],
+            "only 2 more tool executions are allowed in this run",
+            id="room-of-two",
+        ),
+    ],
+)
+def test_a_set_rejection_message_counts_in_the_singular_and_the_plural(
+    tmp_path, skills, budgets, turns, message
+):
+    """Section 4.3, 11: the message names the limit or the room in plain English."""
+    gateway = local_gateway(
+        tmp_path,
+        skills,
+        [*turns, text_turn(ANSWER), text_turn(ANSWER), text_turn(ANSWER)],
+        budgets=budgets,
+        external_turns=None,
+    )
+    _, events = run(gateway, PROMPT)
+    rejected = [p for p in proposals(events) if p["admissible"] is False]
+    assert rejected
+    assert {p["rejection"]["code"] for p in rejected} == {"multiple_tool_calls"}
+    assert {p["rejection"]["message"] for p in rejected} == {message}
+
+
 def test_the_first_rejection_of_the_set_is_the_one_reported(tmp_path, skills):
     """Section 4.3: with two invalid calls, the first in proposal order is reported."""
     first = call("c_first", "get_recent_logs", service="staging-api", limit=500)
