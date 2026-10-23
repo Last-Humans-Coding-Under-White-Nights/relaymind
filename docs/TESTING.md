@@ -8,6 +8,7 @@ candidate presentation, inert handlers, loopback HTTP selectors, proposal
 validation and source derivation. ToolRet fixture rows are synthetic; no
 download or model call is needed in the default test suite. Real benchmark
 commands and the optional `bench` extra are described in `scripts/README.md`.
+
 Phase 2 runner configurations (#128; RM03, RM25, RM26, RM29, RM31, RM32)
 are covered by `tests/test_runner_configurations.py`, alongside the corpus
 and latency script tests. The tests check launch-file round trips, validation,
