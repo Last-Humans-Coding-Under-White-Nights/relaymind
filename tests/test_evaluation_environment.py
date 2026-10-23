@@ -6,12 +6,18 @@ parameters, runtime and application revisions, external endpoint region
 if known, and test time. Cold startup is reported with model load time.
 """
 
+import re
+import subprocess
 import sys
 
 import pytest
 
 from relaymind.evaluation import environment
-from relaymind.evaluation.environment import machine_manifest, parse_runtime_log
+from relaymind.evaluation.environment import (
+    application_revision,
+    machine_manifest,
+    parse_runtime_log,
+)
 
 LOG = """\
 0.00.003.203 I srv  llama_server: initializing ...
@@ -62,3 +68,29 @@ def test_command_output_that_does_not_decode_is_kept_with_replacements():
     """A system tool may print bytes the locale cannot decode; the manifest still builds."""
     script = "import sys; sys.stdout.buffer.write(b'\\xff\\xfe GPU')"
     assert environment._run(sys.executable, "-c", script).endswith(" GPU")
+
+
+def git(path, *args):
+    subprocess.run(
+        ["git", "-c", "user.name=test", "-c", "user.email=test@example.invalid", *args],
+        cwd=path,
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_the_application_revision_is_the_head_and_whether_the_tree_is_dirty(tmp_path):
+    """An offline analysis records the revision it ran at (spec 0.31 section 12.2)."""
+    git(tmp_path, "init", "-q")
+    (tmp_path / "a.txt").write_text("a", "utf-8")
+    git(tmp_path, "add", "a.txt")
+    git(tmp_path, "commit", "-q", "-m", "first")
+    clean = application_revision(tmp_path)
+    assert re.fullmatch(r"[0-9a-f]{40}", clean["head"]) and clean["dirty"] is False
+    (tmp_path / "b.txt").write_text("b", "utf-8")
+    dirty = application_revision(tmp_path)
+    assert dirty["head"] == clean["head"] and dirty["dirty"] is True
+
+
+def test_the_application_revision_of_a_directory_that_is_not_a_checkout_is_unknown(tmp_path):
+    assert application_revision(tmp_path) == {"head": None, "dirty": None}

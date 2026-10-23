@@ -370,7 +370,9 @@ def test_the_router_baseline_and_the_candidate_thresholds_come_from_the_export(p
 def test_the_cli_writes_the_analysis_and_a_report(probe, tmp_path):
     out = tmp_path / "example-match.json"
     probe.main(["--out", str(out)])
-    assert json.loads(out.read_text("utf-8"))["label"] == LABEL
+    written = json.loads(out.read_text("utf-8"))
+    assert written["label"] == LABEL
+    assert set(written["analysed_with"]["application"]) == {"head", "dirty"}
     report = out.with_suffix(".md").read_text("utf-8")
     assert LABEL in report.splitlines()[0]
     assert "precision" in report and "Jaccard" in report

@@ -52,6 +52,7 @@ from relaymind.evaluation.corpus import (
     load_corpus,
     load_skills_sidecar,
 )
+from relaymind.evaluation.environment import application_revision
 from relaymind.evaluation.metrics import nearest_rank
 from relaymind.orchestrator.identifiers import required_enum_identifiers
 from relaymind.tools.sandbox import DEMO_TOOL_SCHEMAS
@@ -672,7 +673,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
     export = json.loads(Path(args.export).read_text("utf-8")) if args.export else None
+    application = application_revision(REPO_ROOT)
     analysis = analyse(load_corpus_and_sidecar(), load_catalog(), export=export)
+    analysis["analysed_with"] = {"application": application}
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(analysis, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

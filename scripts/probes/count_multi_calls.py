@@ -41,6 +41,7 @@ from typing import Any
 
 from relaymind.canonical import canonical_digest
 from relaymind.evaluation.corpus import CLASSES, MODES
+from relaymind.evaluation.environment import application_revision
 from relaymind.orchestrator.identifiers import unsupported_identifiers
 from relaymind.tools.registry import StrictValidator
 from relaymind.tools.sandbox import (
@@ -351,7 +352,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     source, out = Path(args.export), Path(args.out)
     if out.resolve() == source.resolve():
         parser.error("--out must differ from --export: the export is never changed")
+    application = application_revision(REPO_ROOT)
     result = analyse_export(json.loads(source.read_text("utf-8")))
+    result["analysed_with"] = {"application": application}
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     report = render_markdown(result)

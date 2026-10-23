@@ -319,7 +319,9 @@ def test_the_cli_writes_the_analysis_and_a_report(probe, tmp_path):
     source.write_text(json.dumps(document), "utf-8")
     out = tmp_path / "multi-calls.json"
     probe.main(["--export", str(source), "--out", str(out)])
-    assert json.loads(out.read_text("utf-8"))["label"] == LABEL
+    written = json.loads(out.read_text("utf-8"))
+    assert written["label"] == LABEL
+    assert set(written["analysed_with"]["application"]) == {"head", "dirty"}
     report = out.with_suffix(".md").read_text("utf-8")
     assert LABEL in report.splitlines()[0]
     assert "complex" in report and "external_only" in report
