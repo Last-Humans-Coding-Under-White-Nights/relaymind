@@ -304,3 +304,12 @@ def test_the_report_labels_the_first_transport_event_as_header_time_under_early_
     assert "| first_transport_ms |" in plain and "header time" not in plain
     assert "| first_transport_ms (header time) |" in early
     assert "not first useful content" in early
+
+
+def test_each_section_keeps_its_label_under_early_headers():
+    """RM25, section 12.1: the metric label never takes the place of the section name."""
+    samples = [sample("simple", first_transport_ms=40.0), sample("tool", first_transport_ms=50.0)]
+    text = render_latency_markdown(summarize_latency(samples), title="Latency", early_headers=True)
+    headings = [line for line in text.splitlines() if line.startswith("## ")]
+    assert [h.split(":")[0] for h in headings] == ["## all", "## simple", "## tool"]
+    assert text.count("| first_transport_ms (header time) |") == 3

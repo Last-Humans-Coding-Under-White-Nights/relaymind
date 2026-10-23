@@ -296,12 +296,14 @@ def render_latency_markdown(
             "|---|---|---|---|",
         ]
         for metric, stats in block["metrics"].items():
-            name = (
+            metric_label = (
                 f"{metric} (header time)"
                 if early_headers and metric == TRANSPORT_METRIC
                 else metric
             )
-            lines.append(f"| {name} | {stats['n']} | {_ms(stats['p50'])} | {_ms(stats['p95'])} |")
+            lines.append(
+                f"| {metric_label} | {stats['n']} | {_ms(stats['p50'])} | {_ms(stats['p95'])} |"
+            )
         lines.append("")
     h = summary["hypothesis"]
     verdict = {True: "met", False: "not met", None: "not determined"}[h["met"]]
