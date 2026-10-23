@@ -136,7 +136,10 @@ def _model_calls(events: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
                 "purpose": event["payload"].get("purpose"),
                 "duration_ms": event["payload"].get("duration_ms"),
                 "input_tokens": usage.get("input_tokens"),
+                # None when the runtime reported no count: not measured (spec 0.31 section 6).
                 "cached_tokens": usage.get("cached_tokens"),
+                "reasoning_tokens": usage.get("reasoning_tokens"),
+                "first_token_ms": event["payload"].get("first_token_ms"),
             }
         )
     return calls
@@ -255,7 +258,11 @@ async def run_samples(
 
 
 def prefix_cache_record(calls: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Whether the adapter sets cache_prompt, and the cached prompt tokens the runtime reported."""
+    """Whether the adapter sets cache_prompt, and the cached prompt tokens the runtime reported.
+
+    A call whose cached count is None was not measured (spec 0.31 section 6): it is
+    counted apart, never as 0, and a total over no measured call is null.
+    """
     request = GenerationRequest(
         generation_id="probe", messages=(Message(role=Role.USER, content="x"),)
     )
@@ -263,14 +270,19 @@ def prefix_cache_record(calls: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     cached = [c["cached_tokens"] for c in calls if c.get("cached_tokens") is not None]
     return {
         "adapter_sets_cache_prompt": sets,
-        "note": "The llamacpp adapter does not send cache_prompt, so llama-server's own default "
-        "prompt (prefix) cache behavior applies; cached_tokens is what the runtime reported "
-        "for each measured model call."
-        if not sets
-        else "The llamacpp adapter sends cache_prompt.",
-        "calls": len(cached),
-        "calls_with_cached_tokens": sum(1 for c in cached if c > 0),
-        "cached_tokens_total": sum(cached),
+        "note": (
+            "The llamacpp adapter sends cache_prompt"
+            if sets
+            else "The llamacpp adapter does not send cache_prompt, so llama-server's own "
+            "default prompt (prefix) cache behavior applies"
+        )
+        + "; cached_tokens is what the runtime reported for each measured model call, "
+        "and a call with no reported count is not measured.",
+        "calls": len(calls),
+        "calls_with_reported_count": len(cached),
+        "calls_not_measured": len(calls) - len(cached),
+        "calls_with_cached_tokens": sum(1 for c in cached if c > 0) if cached else None,
+        "cached_tokens_total": sum(cached) if cached else None,
     }
 
 

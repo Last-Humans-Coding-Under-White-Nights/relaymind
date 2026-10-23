@@ -504,7 +504,13 @@ def test_routing_generation_reports_the_scripted_usage(swapped):
             if e.payload["purpose"] == "routing"
         ]
         assert [e.payload["usage"] for e in routing] == [
-            {"input_tokens": 800, "output_tokens": 12, "cached_tokens": 0}
+            {
+                "input_tokens": 800,
+                "output_tokens": 12,
+                # The double reports no counts: absent, never a defaulted 0 (RM16).
+                "cached_tokens": None,
+                "reasoning_tokens": None,
+            }
         ], observed.config.name
 
 

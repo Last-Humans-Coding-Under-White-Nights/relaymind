@@ -600,9 +600,16 @@ a day or less on existing exports or the existing benchmark.
     named), and 42 later generations re-proposed a refused call. A
     prediction, not a measurement.
 - Budgets table in the launch file, recorded in every run (#142; RM03,
-  section 14.1): the one knob a slow-laptop operator needs.
+  section 14.1): the one knob a slow-laptop operator needs. Done
+  (2026-10-23): `[budgets]` takes the `LocalBudgets` field names and
+  `run.accepted` records the values in force.
 - First-token, cached, and reasoning tokens per model call, and provider
-  request options (#120; sections 6, 8, 14.1).
+  request options (#120; sections 6, 8, 14.1). Done (2026-10-23):
+  `model.finished` carries `first_token_ms` and, inside `usage`, the
+  counts (`null` when the source returned none), `model.started` carries
+  the declared `request_options` (no field when none is declared; spec
+  0.33), and the pinned runtime reported 558 of 559 prompt
+  tokens as cached on a repeated prompt and no reasoning count.
 - Draft answer pass (#121; RM31, AC17): `answer_pass = draft` publishes
   the validated draft; `final` stays the default until #115 and #128
   report.

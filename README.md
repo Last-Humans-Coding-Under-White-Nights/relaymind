@@ -60,6 +60,11 @@ export RELAYMIND_EXTERNAL_API_KEY=...        # macOS
 $env:RELAYMIND_EXTERNAL_API_KEY = "..."      # Windows PowerShell
 ```
 
+The limits that bound each run (time, model generations, tool calls)
+have defaults. If the local model is slow on your machine, raise them in
+the `[budgets]` table; the example file shows the keys, and every run
+records the values it used.
+
 Without an external model, a task that needs one ends with a clear
 `needs_external` error. Every setting is described in
 [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md), section 14.1.

@@ -181,11 +181,12 @@ def test_the_probe_adapter_records_its_cache_setting_in_every_generation_body(pr
     request = probe.build_request("json_envelope", config.prompts[0], config, "g")
     collect_events(adapter, request)
 
-    body = dict(seen["body"])
-    assert body.pop("cache_prompt") is False
-    assert body == build_chat_request(
-        request, chat_template_kwargs=LLAMACPP_CONFIG.chat_template_kwargs
-    )
+    # Written so it holds with the adapter's own cache_prompt true (spec 0.31 section 6):
+    # the probe's arm replaces it.
+    assert seen["body"] == {
+        **build_chat_request(request, chat_template_kwargs=LLAMACPP_CONFIG.chat_template_kwargs),
+        "cache_prompt": False,
+    }
 
 
 def test_the_checked_in_probe_states_its_cache_setting(config):
@@ -213,10 +214,10 @@ def test_the_grammar_adapter_adds_response_format_to_the_generation_body(probe, 
         "type": "json_schema",
         "json_schema": {"name": "route_decision", "schema": schema},
     }
-    assert body.pop("cache_prompt") is True
-    assert body == build_chat_request(
-        request, chat_template_kwargs=LLAMACPP_CONFIG.chat_template_kwargs
-    )
+    assert body == {
+        **build_chat_request(request, chat_template_kwargs=LLAMACPP_CONFIG.chat_template_kwargs),
+        "cache_prompt": True,
+    }
 
 
 def test_a_pass_records_one_graded_row_per_prompt(probe, config):

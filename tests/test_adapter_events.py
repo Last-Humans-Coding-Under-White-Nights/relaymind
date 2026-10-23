@@ -7,11 +7,14 @@ Issue #1.
 """
 
 import dataclasses
+import typing
 
 import pytest
 
 from relaymind.adapters import (
+    AdapterEvent,
     Completed,
+    FirstToken,
     GenerationFailed,
     TextDelta,
     ToolCall,
@@ -70,9 +73,30 @@ def test_tool_call_requires_nonempty_identifiers():
 def test_usage_records_cached_tokens_when_provided():
     usage = Usage(input_tokens=100, output_tokens=5, cached_tokens=80)
     assert usage.cached_tokens == 80
-    assert Usage(input_tokens=1, output_tokens=1).cached_tokens == 0
     with pytest.raises(ValueError):
         Usage(input_tokens=1, output_tokens=1, cached_tokens=-1)
+
+
+def test_usage_counts_the_source_did_not_report_are_none_never_zero():
+    """RM16, spec 0.31 section 6 (finding F9): an unreported count is absent, not 0."""
+    usage = Usage(input_tokens=1, output_tokens=1)
+    assert usage.cached_tokens is None
+    assert usage.reasoning_tokens is None
+    # A reported zero is a measurement and stays 0.
+    assert Usage(input_tokens=1, output_tokens=1, cached_tokens=0).cached_tokens == 0
+
+
+def test_usage_records_reasoning_tokens_when_provided():
+    usage = Usage(input_tokens=10, output_tokens=40, reasoning_tokens=32)
+    assert usage.reasoning_tokens == 32
+    with pytest.raises(ValueError):
+        Usage(input_tokens=1, output_tokens=1, reasoning_tokens=-1)
+
+
+def test_first_token_is_a_marker_event_without_fields():
+    """Spec 0.31 section 6: the marker carries no time; the consumer stamps it."""
+    assert FirstToken() == FirstToken()
+    assert FirstToken in typing.get_args(AdapterEvent)
 
 
 def test_completed_carries_finish_reason():

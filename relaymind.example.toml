@@ -30,6 +30,18 @@ base_url = "http://127.0.0.1:8033"   # the llama-server from models/README.md
 # model = "your-model-id"
 # context_limit = 128000
 # api_key_env = "RELAYMIND_EXTERNAL_API_KEY"
+#
+# Optional provider request fields (spec 0.31 section 6): a table sent verbatim
+# with every external request and recorded in model.started, for example to turn
+# a provider's reasoning off where its API allows it. The field names are the
+# provider's own; this one is an example. A key named api_key or authorization,
+# a headers key, a key that would replace model, messages, tools, stream, or
+# stream_options, a sampling key a request sets (max_tokens, temperature,
+# top_p), a blank key at any depth, and a value that is not JSON stop
+# startup. The message names the key and never prints the value. Only
+# declared options are recorded in model.started.
+# [external_model.request_options]
+# thinking = { type = "disabled" }
 
 [policy]
 degraded_mode = false
@@ -37,6 +49,28 @@ enabled_workflows = []
 # To run parallel_demo (needs [external_model]):
 # enabled_workflows = ["health-and-diagnostic-checklist"]
 # allowed_modes = ["auto", "local_only", "external_only", "parallel_demo"]
+
+# The section 11 limits (spec 0.31 section 14.1, RM03). Every key is optional and
+# the values below are the defaults. Raise a limit here, for example
+# active_seconds on a machine where the local model is slow, and every run
+# records the values in force in its run.accepted event, so the change is on
+# the record. A wrong type, a non-finite number, a zero where a positive limit
+# is required, or repair_generations above local_generations stops startup.
+# [budgets]
+# routing_generations = 1
+# local_generations = 3
+# tool_calls = 2
+# repair_generations = 1
+# active_seconds = 4.0           # per local stage
+# routing_input_tokens = 2048
+# routing_output_tokens = 128
+# run_active_seconds = 60.0      # the entire run
+# run_generations = 8
+# run_tool_executions = 6
+# waiting_seconds = 300.0        # one wait for input or confirmation
+# clarification_rounds = 2
+# external_generations = 6
+# external_seconds = 30.0        # one external generation
 
 # The routing-result cache (spec 0.26 section 10). Off by default and in the
 # benchmark configuration: leave it false for any measurement you report as the

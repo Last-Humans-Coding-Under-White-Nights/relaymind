@@ -16,6 +16,7 @@ import httpx
 from relaymind.adapters.base import (
     AdapterEvent,
     Completed,
+    FirstToken,
     GenerationFailed,
     GenerationRequest,
     Message,
@@ -97,6 +98,24 @@ def base_chat_body(request: GenerationRequest) -> dict[str, object]:
     return streamed_chat_body(encode_prompt(request.messages, request.tool_schemas))
 
 
+def _count(value: object) -> int | None:
+    """A reported token count, or None when the source sent none (RM16).
+
+    Only a non-negative integer is a count. A boolean, a float, text, or
+    a negative number is not a measurement, so it is treated as absent
+    instead of being coerced into one.
+    """
+    if type(value) is int and value >= 0:
+        return value
+    return None
+
+
+def _detail(container: object, key: str, name: str) -> int | None:
+    """The count usage[key][name], or None when either level is missing."""
+    details = container.get(key) if isinstance(container, Mapping) else None
+    return _count(details.get(name)) if isinstance(details, Mapping) else None
+
+
 @dataclass
 class _PartialToolCall:
     call_id: str = ""
@@ -114,6 +133,20 @@ class StreamAccumulator:
     Completed is the terminal event: it is deferred to flush() at the
     end of the stream, because with include_usage the usage chunk
     arrives after the finish chunk and must still be emitted first.
+
+    Counts (spec 0.31 section 6). The cached prompt tokens come from
+    usage.prompt_tokens_details.cached_tokens, and the reasoning tokens
+    from usage.completion_tokens_details.reasoning_tokens. llama-server
+    also reports the reused prompt tokens as timings.cache_n, on the
+    final chunk or on the usage chunk. When both are present the usage
+    object wins, because it is the provider's own accounting and the
+    standard field; timings.cache_n is the fallback for a runtime that
+    sends no details. A count that is missing or not a non-negative
+    integer stays None (absent), never 0.
+
+    The first token (RM25). take_first_token() is True once, after the
+    first chunk with non-empty answer text, reasoning text, or a
+    tool-call fragment. The pump turns it into the FirstToken marker.
     """
 
     _tool_calls: dict[int, _PartialToolCall] = field(default_factory=dict)
@@ -122,6 +155,20 @@ class StreamAccumulator:
     # True once a terminal event went out (failure or flush); nothing
     # may be emitted after it.
     _terminal: bool = False
+    # llama-server's timings.cache_n, kept for the usage chunk that may follow.
+    _cache_n: int | None = None
+    _first_token_seen: bool = False
+    _first_token_pending: bool = False
+
+    def take_first_token(self) -> bool:
+        """True exactly once, after the first generated fragment arrived."""
+        pending, self._first_token_pending = self._first_token_pending, False
+        return pending
+
+    def _note_token(self) -> None:
+        if not self._first_token_seen:
+            self._first_token_seen = True
+            self._first_token_pending = True
 
     def feed(self, chunk: Mapping[str, object]) -> list[AdapterEvent]:
         if self._terminal:
@@ -139,12 +186,20 @@ class StreamAccumulator:
                 )
             ]
         events: list[AdapterEvent] = []
+        timings = chunk.get("timings")
+        if isinstance(timings, Mapping) and (cache_n := _count(timings.get("cache_n"))) is not None:
+            self._cache_n = cache_n
         usage = chunk.get("usage")
         if isinstance(usage, Mapping):
+            cached = _detail(usage, "prompt_tokens_details", "cached_tokens")
             events.append(
                 Usage(
                     input_tokens=int(usage.get("prompt_tokens") or 0),
                     output_tokens=int(usage.get("completion_tokens") or 0),
+                    cached_tokens=self._cache_n if cached is None else cached,
+                    reasoning_tokens=_detail(
+                        usage, "completion_tokens_details", "reasoning_tokens"
+                    ),
                 )
             )
         for choice in chunk.get("choices") or []:
@@ -152,8 +207,14 @@ class StreamAccumulator:
             if self._finish_reason is None:
                 content = delta.get("content")
                 if content:
+                    self._note_token()
                     events.append(TextDelta(text=content))
+                # llama-server names reasoning text reasoning_content; some
+                # providers name it reasoning. It is never answer text.
+                if delta.get("reasoning_content") or delta.get("reasoning"):
+                    self._note_token()
                 for fragment in delta.get("tool_calls") or []:
+                    self._note_token()
                     self._absorb_tool_fragment(fragment)
                 finish_reason = choice.get("finish_reason")
                 if finish_reason:
@@ -295,7 +356,12 @@ async def stream_chat_events(
                 chunk = parse_sse_line(line)
                 if chunk is None:
                     continue
-                for event in accumulator.feed(chunk):
+                events = accumulator.feed(chunk)
+                if accumulator.take_first_token():
+                    # Before the chunk's own events, so a consumer dates the
+                    # token when it arrived, not when the call is complete.
+                    yield FirstToken()
+                for event in events:
                     yield event
             for event in accumulator.flush():
                 yield event

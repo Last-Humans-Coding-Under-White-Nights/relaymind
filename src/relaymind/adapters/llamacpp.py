@@ -65,6 +65,9 @@ def chat_body(fields: Mapping[str, object], options: GenerationOptions) -> dict[
     # b11785 still supports the HTTP template boolean for both modes;
     # reasoning_effort alone cannot enable thinking after --reasoning off.
     body["reasoning_format"] = "deepseek"
+    # Spec 0.31 section 6: ask for prompt caching explicitly, so the trace
+    # records a request the gateway made and not a server default.
+    body["cache_prompt"] = True
     if options.max_output_tokens is not None:
         body["max_tokens"] = options.max_output_tokens
     if options.temperature is not None:
@@ -86,6 +89,11 @@ def build_chat_request(
     )
 
 
+# Spec section 11.2: the default read timeout of one generation. The
+# launcher raises it to active_seconds, never below this value (RM03).
+REQUEST_TIMEOUT_SECONDS = 30.0
+
+
 @dataclass(frozen=True)
 class LlamaCppConfig:
     """Operator configuration for one llama-server endpoint."""
@@ -95,7 +103,7 @@ class LlamaCppConfig:
     # Non-thinking by default (spec section 6); an operator overrides
     # this to enable thinking mode.
     chat_template_kwargs: Mapping[str, object] | None = NON_THINKING
-    request_timeout_seconds: float = 30.0
+    request_timeout_seconds: float = REQUEST_TIMEOUT_SECONDS
 
 
 class LlamaCppAdapter(ModelAdapter):

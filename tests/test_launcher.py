@@ -4,18 +4,31 @@ All model output comes from doubles; the local artifact is a tiny
 synthetic GGUF file, and nothing here starts a real model server.
 """
 
+import asyncio
+import dataclasses
+import json
+import re
 import tomllib
 
+import httpx
 import pytest
 
 from api_helpers import call
-from gateway_helpers import build_gateway
-from helpers import ACCEPTED_PAYLOAD, BASELINE, REPO_ROOT, ScriptedAdapter
+from gateway_helpers import STAGING_OK, build_gateway, clarify_turn
+from helpers import (
+    ACCEPTED_PAYLOAD,
+    BASELINE,
+    REPO_ROOT,
+    ScriptedAdapter,
+    delta_chunk,
+    sse_response,
+)
 from launcher_helpers import toml_path, write_config
 from relaymind import launcher
 from relaymind.adapters.chat_completions import ChatCompletionsAdapter
-from relaymind.adapters.llamacpp import LlamaCppAdapter
+from relaymind.adapters.llamacpp import REQUEST_TIMEOUT_SECONDS, LlamaCppAdapter, LlamaCppConfig
 from relaymind.launcher import LaunchError, build_app, load_config, main
+from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import LocalOrchestrator
 from relaymind.orchestrator.run_state import RunState
 from relaymind.store import RunStore, RunStoreError
@@ -472,3 +485,317 @@ def test_example_config_is_valid():
     """The checked-in example loads, so the documented command starts from a sound file."""
     config = load_config(REPO_ROOT / "relaymind.example.toml")
     assert config.host == "127.0.0.1" and config.ui is not None
+
+
+# -- the [budgets] table (#142; RM03, RM17, RM19, sections 11 and 14.1) -----------------
+
+BUDGET_FIELDS = tuple(f.name for f in dataclasses.fields(LocalBudgets))
+
+
+def test_budget_keys_are_the_local_budgets_fields():
+    """Section 14.1: the table's keys are the section 11 limit names, derived from one list."""
+    assert set(launcher._TABLES["budgets"]) == set(BUDGET_FIELDS)
+    assert "active_seconds" in BUDGET_FIELDS and "external_seconds" in BUDGET_FIELDS
+
+
+def test_without_the_table_the_budget_defaults_apply(tmp_path):
+    """RM03, section 14.1: a file without [budgets] keeps the section 11 defaults."""
+    config = load_config(write_config(tmp_path))
+    assert config.budgets == LocalBudgets()
+    built = build_app(config, **doubles())
+    assert built.orchestrator.budgets == LocalBudgets()
+
+
+def test_every_budget_key_reaches_local_budgets(tmp_path):
+    """RM03, section 14.1: each key sets its limit; the others keep the default."""
+    values = {
+        "routing_generations": 2,
+        "local_generations": 5,
+        "tool_calls": 3,
+        "repair_generations": 2,
+        "active_seconds": 12,
+        "routing_input_tokens": 4096,
+        "routing_output_tokens": 256,
+        "run_active_seconds": 90.5,
+        "run_generations": 10,
+        "run_tool_executions": 7,
+        "waiting_seconds": 120,
+        "clarification_rounds": 1,
+        "external_generations": 4,
+        "external_seconds": 45.5,
+    }
+    assert set(values) == set(BUDGET_FIELDS)
+    lines = "".join(f"{key} = {value}\n" for key, value in values.items())
+    config = load_config(write_config(tmp_path, f"\n[budgets]\n{lines}"))
+    assert config.budgets == LocalBudgets(**values)
+    one = tmp_path / "one"
+    one.mkdir()
+    single = load_config(write_config(one, "\n[budgets]\nactive_seconds = 9\n"))
+    assert single.budgets == dataclasses.replace(LocalBudgets(), active_seconds=9)
+
+
+@pytest.mark.parametrize(
+    "line, word",
+    [
+        ("active_seconds = 'fast'", "active_seconds"),
+        ("local_generations = true", "local_generations"),
+        ("active_seconds = false", "active_seconds"),
+        ("local_generations = 2.5", "local_generations"),
+        ("tool_calls = 1.0", "tool_calls"),
+        ("active_seconds = inf", "active_seconds"),
+        ("active_seconds = nan", "active_seconds"),
+        ("external_seconds = -inf", "external_seconds"),
+        ("active_seconds = 0", "active_seconds"),
+        ("active_seconds = -1", "active_seconds"),
+        ("local_generations = 0", "local_generations"),
+        ("run_generations = 0", "run_generations"),
+        ("routing_input_tokens = 0", "routing_input_tokens"),
+        ("tool_calls = -1", "tool_calls"),
+        ("repair_generations = 4", "repair"),
+        ("local_generations = 1\nrepair_generations = 2", "repair"),
+        ("surprise = 1", "surprise"),
+    ],
+)
+def test_a_bad_budget_value_is_one_startup_message(tmp_path, line, word):
+    """RM03, section 14.1: a wrong type or range is exit status 2 with one message."""
+    config = write_config(tmp_path, f"\n[budgets]\n{line}\n")
+    with pytest.raises(LaunchError, match=r"\[budgets\].*" + word) as raised:
+        load_config(config)
+    assert "\n" not in str(raised.value)
+    out, err = [], []
+    assert main(["serve", "--config", str(config)], stdout=out.append, stderr=err.append) == 2
+    assert out == [] and len(err) == 1 and "[budgets]" in err[0]
+
+
+def test_budgets_table_must_be_a_table(tmp_path):
+    path = write_config(tmp_path, base=None)
+    path.write_text("budgets = 5\n" + path.read_text())
+    with pytest.raises(LaunchError, match="budgets must be a table"):
+        load_config(path)
+
+
+def test_the_configured_budgets_are_recorded_in_run_accepted(tmp_path):
+    """RM03, RM17: run.accepted holds the limits in force; a raised limit is on the record."""
+    extra = "\n[budgets]\nactive_seconds = 20\nlocal_generations = 4\nrun_generations = 9\n"
+    built = build_app(
+        load_config(write_config(tmp_path, extra)),
+        local_adapter=ScriptedAdapter(turns=[clarify_turn()]),
+    )
+    outcome = asyncio.run(built.orchestrator.run_text("Which service is it?"))
+    accepted = built.orchestrator.store.events(outcome.run_id)[0]
+    assert accepted.event_type is EventType.RUN_ACCEPTED
+    recorded = accepted.payload["budgets"]
+    assert recorded["active_seconds"] == 20.0
+    assert recorded["local_generations"] == 4
+    assert recorded["run_generations"] == 9
+    assert (
+        recorded
+        == LocalBudgets(active_seconds=20, local_generations=4, run_generations=9).to_json_object()
+    )
+    # The default file records the section 11 defaults.
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    built = build_app(
+        load_config(write_config(plain)), local_adapter=ScriptedAdapter(turns=[clarify_turn()])
+    )
+    outcome = asyncio.run(built.orchestrator.run_text("Which service is it?"))
+    accepted = built.orchestrator.store.events(outcome.run_id)[0]
+    assert accepted.payload["budgets"] == LocalBudgets().to_json_object()
+
+
+def _read_timeouts(built):
+    """The read timeouts of the real local and external adapters a built gateway holds."""
+    orchestrator = built.orchestrator
+    return (
+        orchestrator.model.adapter._client.timeout.read,
+        orchestrator.external.adapter._client.timeout.read,
+    )
+
+
+def test_adapter_read_timeouts_follow_the_raised_budgets(tmp_path):
+    """RM03: a raised active_seconds or external_seconds is not cut off by a hidden 30 s limit."""
+    extra = EXTERNAL + "\n[budgets]\nactive_seconds = 90\nexternal_seconds = 120\n"
+    built = build_app(load_config(write_config(tmp_path, extra)))
+    try:
+        assert _read_timeouts(built) == (90.0, 120.0)
+    finally:
+        built.orchestrator.store.close()
+
+
+def test_the_local_read_timeout_floor_is_the_adapter_config_default():
+    """Section 11.2, RM03: the launcher's floor is the field default, read from the module.
+
+    The launcher does not read the default off the dataclass itself, so
+    a later field(default=...) cannot turn the floor into a Field object.
+    """
+    default = {f.name: f.default for f in dataclasses.fields(LlamaCppConfig)}
+    assert default["request_timeout_seconds"] == REQUEST_TIMEOUT_SECONDS == 30.0
+    assert launcher.REQUEST_TIMEOUT_SECONDS is REQUEST_TIMEOUT_SECONDS
+
+
+def test_adapter_read_timeouts_keep_the_30_second_floor(tmp_path):
+    """Section 11.2: budgets at or under 30 s keep the 30 s adapter timeout."""
+    built = build_app(load_config(write_config(tmp_path, EXTERNAL)))
+    try:
+        assert _read_timeouts(built) == (30.0, 30.0)
+    finally:
+        built.orchestrator.store.close()
+
+
+def test_example_config_documents_the_budgets_table(tmp_path):
+    """Section 14.1: the commented [budgets] block loads when uncommented and holds the defaults."""
+    lines = (REPO_ROOT / "relaymind.example.toml").read_text(encoding="utf-8").splitlines()
+    start = lines.index("# [budgets]")
+    block = []
+    for line in lines[start:]:
+        if not line.startswith("# "):
+            break
+        block.append(line[2:])
+    assert len(block) == 1 + len(BUDGET_FIELDS)
+    config = load_config(write_config(tmp_path, "\n" + "\n".join(block) + "\n"))
+    assert config.budgets == LocalBudgets()
+
+
+# -- [external_model] request_options (#120; RM12, spec 0.31 sections 6 and 14.1) -----------------
+
+
+def options_config(options_toml: str) -> str:
+    return EXTERNAL + f"\n[external_model.request_options]\n{options_toml}\n"
+
+
+def test_request_options_reach_the_adapter_config_verbatim(tmp_path):
+    """Spec 0.31 section 14.1: a table of provider request fields, kept as written."""
+    extra = options_config("seed = 7\nthinking = { type = 'disabled' }\nlogprobs = false")
+    config = load_config(write_config(tmp_path, extra))
+    assert dict(config.external.request_options) == {
+        "seed": 7,
+        "thinking": {"type": "disabled"},
+        "logprobs": False,
+    }
+    built = build_app(config)
+    try:
+        assert built.orchestrator.external.adapter.request_options == {
+            "seed": 7,
+            "thinking": {"type": "disabled"},
+            "logprobs": False,
+        }
+    finally:
+        built.orchestrator.store.close()
+
+
+def test_without_request_options_the_config_holds_an_empty_table(tmp_path):
+    """Spec 0.33 section 8: an empty table declares nothing, so model.started records nothing."""
+    config = load_config(write_config(tmp_path, EXTERNAL))
+    assert dict(config.external.request_options) == {}
+
+
+def test_request_options_are_sent_to_the_provider_and_recorded(tmp_path, monkeypatch):
+    """Spec 0.31 sections 6 and 8: the body carries them and model.started records them."""
+    monkeypatch.setenv("TEST_EXTERNAL_KEY", "sk-test-123")
+    bodies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return sse_response(
+            [delta_chunk({"content": STAGING_OK}), delta_chunk({}, finish_reason="stop")]
+        )
+
+    extra = options_config("thinking = { type = 'disabled' }")
+    config = load_config(write_config(tmp_path, extra))
+    adapter = ChatCompletionsAdapter(config.external, transport=httpx.MockTransport(handler))
+    built = build_app(config, local_adapter=ScriptedAdapter(turns=[]), external_adapter=adapter)
+    try:
+        outcome = asyncio.run(
+            built.orchestrator.run_text(
+                "Is staging-api healthy right now?", execution_mode="external_only"
+            )
+        )
+        assert bodies and all(b["thinking"] == {"type": "disabled"} for b in bodies)
+        events = built.orchestrator.store.events(outcome.run_id)
+        started = [e for e in events if e.event_type is EventType.MODEL_STARTED]
+        assert started and all(
+            e.payload["request_options"] == {"thinking": {"type": "disabled"}} for e in started
+        )
+    finally:
+        built.orchestrator.store.close()
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "api_key",
+        "API_KEY",
+        "Authorization",
+        "authorization",
+        "headers",
+        "extra_headers",
+        "Extra-Headers",
+        "model",
+        "messages",
+        "tools",
+        "stream",
+        "stream_options",
+    ],
+)
+def test_a_credential_header_or_override_key_stops_startup_without_its_value(tmp_path, key):
+    """RM12, spec 0.31 section 14.1: the message names the key, never the value."""
+    extra = options_config(f"{key} = 'sk-secret-value-123'")
+    with pytest.raises(LaunchError, match="request_options") as raised:
+        load_config(write_config(tmp_path, extra))
+    assert key in str(raised.value)
+    assert "sk-secret-value-123" not in str(raised.value)
+    out, err = [], []
+    assert (
+        main(
+            ["serve", "--config", str(tmp_path / "relaymind.toml")],
+            stdout=out.append,
+            stderr=err.append,
+        )
+        == 2
+    )
+    assert out == [] and len(err) == 1 and "sk-secret-value-123" not in err[0]
+
+
+@pytest.mark.parametrize("key", ["max_tokens", "temperature", "top_p", "Max-Tokens"])
+def test_a_sampling_option_key_is_refused_so_the_trace_matches_the_body(tmp_path, key):
+    """RM16, spec 0.31 section 8: a request sets these, so a declared one would be replaced."""
+    extra = options_config(f"{key} = 100")
+    with pytest.raises(LaunchError, match="request_options") as raised:
+        load_config(write_config(tmp_path, extra))
+    assert key in str(raised.value)
+
+
+def test_a_nested_credential_key_is_refused_too(tmp_path):
+    """A header or credential key one level down is still a credential (RM12)."""
+    extra = options_config("extra_body = { headers = { Authorization = 'Bearer sk-secret-9' } }")
+    with pytest.raises(LaunchError, match="request_options") as raised:
+        load_config(write_config(tmp_path, extra))
+    assert "sk-secret-9" not in str(raised.value)
+
+
+def test_a_value_that_is_not_json_is_refused(tmp_path):
+    """Spec 0.31 section 14.1: a TOML date cannot be sent as a provider field."""
+    extra = options_config("since = 2026-10-23")
+    with pytest.raises(LaunchError, match="since") as raised:
+        load_config(write_config(tmp_path, extra))
+    assert "2026" not in str(raised.value)
+
+
+def test_request_options_must_be_a_table(tmp_path):
+    extra = EXTERNAL.replace("api_key_env", "request_options = 'off'\napi_key_env")
+    with pytest.raises(LaunchError, match="request_options"):
+        load_config(write_config(tmp_path, extra))
+
+
+def test_example_config_documents_request_options(tmp_path):
+    """Spec 0.31 section 14.1: the commented external_model block loads when uncommented."""
+    lines = (REPO_ROOT / "relaymind.example.toml").read_text(encoding="utf-8").splitlines()
+    block = []
+    for line in lines[lines.index("# [external_model]") :]:
+        if not line.startswith("#"):
+            break
+        if re.fullmatch(r"# (\[[a-z_.]+\]|[a-z_]+ = .*)", line):
+            block.append(line[2:])
+    config = load_config(write_config(tmp_path, "\n" + "\n".join(block) + "\n"))
+    assert config.external.model == "your-model-id"
+    assert dict(config.external.request_options) == {"thinking": {"type": "disabled"}}

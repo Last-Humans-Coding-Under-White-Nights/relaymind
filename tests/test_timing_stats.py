@@ -15,6 +15,7 @@ import pytest
 from helpers import HEALTH_TOOL, ScriptedAdapter, collect_events, make_capabilities, make_request
 from relaymind.adapters import (
     Completed,
+    FirstToken,
     GenerationFailed,
     Message,
     Role,
@@ -320,6 +321,39 @@ def test_cached_tokens_are_recorded_per_call():
     )
     collector, _ = collect_with_stats(adapter, scripted_clock(0.0, 1.0, 2.0))
     assert collector.records[0].cached_tokens == 900
+
+
+def test_counts_the_source_did_not_report_are_none_never_zero():
+    """RM16, spec 0.31 section 6 (finding F9): the record holds None, not a defaulted 0."""
+    adapter = ScriptedAdapter([Usage(input_tokens=10, output_tokens=2), Completed("stop")])
+    collector, _ = collect_with_stats(adapter, scripted_clock(0.0, 1.0, 2.0))
+    record = collector.records[0]
+    assert record.cached_tokens is None and record.reasoning_tokens is None
+
+
+def test_reasoning_tokens_are_recorded_per_call():
+    adapter = ScriptedAdapter(
+        [Usage(input_tokens=10, output_tokens=40, reasoning_tokens=32), Completed("stop")]
+    )
+    collector, _ = collect_with_stats(adapter, scripted_clock(0.0, 1.0, 2.0))
+    assert collector.records[0].reasoning_tokens == 32
+
+
+def test_the_first_token_marker_does_not_move_the_section_12_1_metrics():
+    """The marker is not a provider event: first_transport_event keeps its definition."""
+    adapter = ScriptedAdapter(
+        [
+            FirstToken(),
+            ToolCall(call_id="c", tool_name="t", arguments={}),
+            Completed("tool_calls"),
+        ]
+    )
+    collector, events = collect_with_stats(adapter, scripted_clock(0.0, 1.0, 2.0, 3.0))
+    record = collector.records[0]
+    # The marker came at 1.0; the first provider event the metric counts is the tool call at 2.0.
+    assert record.first_transport_event_seconds == 2.0
+    assert record.first_model_action_seconds == 2.0
+    assert FirstToken() in events
 
 
 def test_each_generation_records_a_utc_start_timestamp():

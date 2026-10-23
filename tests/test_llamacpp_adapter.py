@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from helpers import collect_events, delta_chunk, make_llamacpp_adapter, make_request, sse_response
-from relaymind.adapters import Completed, GenerationFailed, TextDelta, ToolCall
+from relaymind.adapters import Completed, FirstToken, GenerationFailed, TextDelta, ToolCall, Usage
 from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 
 
@@ -41,7 +41,7 @@ def test_generate_streams_normalized_events():
     assert seen["path"] == "/v1/chat/completions"
     # Non-thinking mode rides on every request via chat template settings.
     assert seen["body"]["chat_template_kwargs"] == {"enable_thinking": False}
-    assert events == [TextDelta(text="hi"), Completed(finish_reason="stop")]
+    assert events == [FirstToken(), TextDelta(text="hi"), Completed(finish_reason="stop")]
 
 
 def test_config_defaults_to_non_thinking_mode():
@@ -73,6 +73,7 @@ def test_generate_streams_tool_call_over_http():
 
     events = collect_events(make_llamacpp_adapter(handler), make_request())
     assert events == [
+        FirstToken(),
         ToolCall(call_id="call_1", tool_name="get_service_health", arguments={"service": "s"}),
         Completed(finish_reason="tool_calls"),
     ]
@@ -100,6 +101,7 @@ def test_stream_ending_without_finish_reason_still_completes():
 
     events = collect_events(make_llamacpp_adapter(handler), make_request())
     assert events == [
+        FirstToken(),
         ToolCall(call_id="call_1", tool_name="get_service_health", arguments={}),
         Completed(finish_reason="end_of_stream"),
     ]
@@ -234,7 +236,7 @@ def test_cancel_interrupts_an_idle_stream():
         return events
 
     events = asyncio.run(run())
-    assert events == [TextDelta(text="hi")]
+    assert events == [FirstToken(), TextDelta(text="hi")]
 
 
 def test_done_marker_ends_the_stream_without_waiting_for_eof():
@@ -266,7 +268,7 @@ def test_done_marker_ends_the_stream_without_waiting_for_eof():
             return [event async for event in adapter.generate(make_request())]
 
     events = asyncio.run(asyncio.wait_for(run(), timeout=2))
-    assert events == [TextDelta(text="hi"), Completed(finish_reason="stop")]
+    assert events == [FirstToken(), TextDelta(text="hi"), Completed(finish_reason="stop")]
 
 
 @pytest.mark.parametrize("thinking", [None, False, True])
@@ -290,4 +292,78 @@ def test_every_request_extracts_reasoning_and_never_streams_it_as_answer(thinkin
     events = collect_events(adapter, make_request())
     assert seen["reasoning_format"] == "deepseek"
     assert seen["chat_template_kwargs"] == {"enable_thinking": thinking is True}
-    assert events == [TextDelta(text="pong"), Completed(finish_reason="stop")]
+    assert events == [FirstToken(), TextDelta(text="pong"), Completed(finish_reason="stop")]
+
+
+# -- prompt caching, counts, and the first-token marker (#120; RM18, RM27) -----------------
+
+
+def test_every_request_asks_for_prompt_caching():
+    """Spec 0.31 section 6: the adapter sends cache_prompt true, not the server default."""
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return sse_response([delta_chunk({}, finish_reason="stop")])
+
+    collect_events(make_llamacpp_adapter(handler), make_request())
+    assert seen["body"]["cache_prompt"] is True
+
+
+def test_the_runtime_counts_reach_the_usage_event_over_http():
+    """Spec 0.31 section 6: cache_n from timings and the usage details are read live."""
+    chunks = [
+        delta_chunk({"content": "ok"}),
+        {**delta_chunk({}, finish_reason="stop"), "timings": {"cache_n": 40, "prompt_n": 10}},
+        {
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 50,
+                "completion_tokens": 2,
+                "completion_tokens_details": {"reasoning_tokens": 0},
+            },
+            "timings": {"cache_n": 40, "prompt_n": 10},
+        },
+    ]
+    events = collect_events(make_llamacpp_adapter(lambda r: sse_response(chunks)), make_request())
+    assert Usage(input_tokens=50, output_tokens=2, cached_tokens=40, reasoning_tokens=0) in events
+
+
+def test_first_token_marker_comes_before_the_first_text_and_is_sent_once():
+    """Spec 0.31 section 6: the marker precedes the first fragment's events."""
+    chunks = [
+        delta_chunk({"role": "assistant", "content": ""}),
+        delta_chunk({"content": "hi"}),
+        delta_chunk({"content": " there"}),
+        delta_chunk({}, finish_reason="stop"),
+    ]
+    events = collect_events(make_llamacpp_adapter(lambda r: sse_response(chunks)), make_request())
+    assert events == [
+        FirstToken(),
+        TextDelta(text="hi"),
+        TextDelta(text=" there"),
+        Completed(finish_reason="stop"),
+    ]
+
+
+def test_first_token_marker_comes_at_the_first_tool_fragment_not_at_the_call():
+    """RM09: the ToolCall exists only after the finish chunk; the marker does not wait for it."""
+    fragment = {
+        "tool_calls": [{"index": 0, "id": "c1", "function": {"name": "t", "arguments": ""}}]
+    }
+    rest = {"tool_calls": [{"index": 0, "function": {"arguments": "{}"}}]}
+    chunks = [
+        delta_chunk(fragment),
+        delta_chunk(rest),
+        delta_chunk({}, finish_reason="tool_calls"),
+    ]
+    events = collect_events(make_llamacpp_adapter(lambda r: sse_response(chunks)), make_request())
+    assert [type(e) for e in events] == [FirstToken, ToolCall, Completed]
+
+
+def test_a_stream_with_no_fragment_has_no_marker():
+    events = collect_events(
+        make_llamacpp_adapter(lambda r: sse_response([delta_chunk({}, finish_reason="stop")])),
+        make_request(),
+    )
+    assert events == [Completed(finish_reason="stop")]

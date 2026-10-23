@@ -114,7 +114,14 @@
   environment manifest (machine, backend devices, runtime log facts,
   llama-server `/props`, model hashes, revisions, test time), the prefix
   cache record, every sample, and p50, p95, sample count, and timeout
-  fraction; a Markdown report is written next to it.
+  fraction; a Markdown report is written next to it. Each sample's model
+  calls also carry `cached_tokens`, `reasoning_tokens`, and
+  `first_token_ms` from the trace (#120). The adapter now sends
+  `cache_prompt`, so the prefix cache record says so, and a call whose
+  runtime reported no cached count is counted as not measured
+  (`calls_not_measured`), never as 0; a total over no measured call is
+  `null`. Exports made before #120 hold the adapter's default of 0 and
+  are not comparable on this field.
 
   ```bash
   python scripts/latency_benchmark.py \
