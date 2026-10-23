@@ -23,6 +23,7 @@ changes the hash (RM07). Later edits on disk do not change a loaded
 registry. Skills never run code: the registry only reads text.
 """
 
+import copy
 import hashlib
 import json
 import re
@@ -34,13 +35,19 @@ from typing import Any
 
 import yaml
 
+from relaymind.orchestrator import identifiers
 from relaymind.schema_util import (
     check_schema_version,
     first_schema_error,
     load_packaged_schema,
 )
 from relaymind.skills.cache import ContentCache
-from relaymind.tools.registry import StrictValidator, ToolRegistry
+from relaymind.tools.registry import (
+    SideEffect,
+    StrictValidator,
+    ToolRegistry,
+    parameters_validator,
+)
 
 MANIFEST_FILENAME = "skill.manifest.json"
 SKILL_FILENAME = "SKILL.md"
@@ -90,6 +97,55 @@ class SkillDescription:
     description: str
 
 
+REQUEST = "request"
+CONSTANT = "constant"
+
+
+@dataclass(frozen=True)
+class PrefetchBinding:
+    """How one argument of a prefetch call gets its value (RM29).
+
+    source is request: an identifier the gateway finds in a user turn
+    under the RM05 rule. Or it is constant: a documented value for an
+    argument that is not an identifier, held in value.
+    """
+
+    name: str
+    source: str
+    value: Any = None
+
+    def to_json_object(self) -> dict[str, Any]:
+        """The binding as the manifest declares it."""
+        if self.source == REQUEST:
+            return {"from": REQUEST}
+        return {"constant": copy.deepcopy(self.value)}
+
+
+@dataclass(frozen=True)
+class PrefetchCall:
+    """A read-only call a skill declares for the gateway to run first (RM29)."""
+
+    tool: str
+    bindings: tuple[PrefetchBinding, ...]
+
+    @property
+    def from_request(self) -> tuple[str, ...]:
+        """The names of the arguments the gateway resolves from the request."""
+        return tuple(b.name for b in self.bindings if b.source == REQUEST)
+
+    @property
+    def constants(self) -> Mapping[str, Any]:
+        """The constant arguments, by name."""
+        return MappingProxyType({b.name: b.value for b in self.bindings if b.source == CONSTANT})
+
+    def to_json_object(self) -> dict[str, Any]:
+        """The declaration as the manifest and run.accepted record it (section 8)."""
+        return {
+            "tool": self.tool,
+            "arguments": {b.name: b.to_json_object() for b in self.bindings},
+        }
+
+
 @dataclass(frozen=True)
 class Skill:
     """A validated skill package snapshot (RM06)."""
@@ -107,6 +163,8 @@ class Skill:
     package_dir: Path
     # Declared resource paths, in manifest order, and their text.
     resource_texts: Mapping[str, str] = field(repr=False)
+    # The read-only calls to run before the first generation (RM29), in order.
+    prefetch: tuple[PrefetchCall, ...] = ()
 
 
 # Section 4.2: the default root list is ["skills/"].
@@ -207,6 +265,69 @@ def _resource_path(package: Path, relpath: str) -> Path:
     return resolved
 
 
+def _prefetch_calls(
+    package: Path,
+    declared: Sequence[Mapping[str, Any]],
+    *,
+    tools: ToolRegistry,
+    allowed: Sequence[str],
+) -> tuple[PrefetchCall, ...]:
+    """Check the declared prefetch calls without a request and build them (RM29, section 4.2).
+
+    Each tool must be in the allowlist and read-only. Every required
+    parameter needs a binding, and every bound name must be a parameter
+    of the tool. A request binding names an identifier with a closed
+    list of values (the gateway can find one of them in a user turn); a
+    constant is for a parameter that is not an identifier, and must
+    satisfy the tool schema.
+    """
+    calls = []
+    for index, entry in enumerate(declared):
+        tool_name = entry["tool"]
+        where = f"prefetch[{index}] ({tool_name})"
+        if tool_name not in allowed:
+            raise _fail(package, f"{where}: the tool is not in allowed_tools")
+        tool = tools.get(tool_name)
+        if tool.side_effect is not SideEffect.READ_ONLY:
+            raise _fail(package, f"{where}: only a read-only tool can be prefetched")
+        schema = tool.declaration.input_schema
+        properties = schema.get("properties", {})
+        bindings = []
+        for name, binding in entry["arguments"].items():
+            if name not in properties:
+                raise _fail(package, f"{where}: {name!r} is not a parameter of the tool")
+            spec = properties[name]
+            if "from" in binding:
+                if not (identifiers.is_identifier_property(spec) and spec.get("enum")):
+                    raise _fail(
+                        package,
+                        f"{where}: {name!r} is not an identifier with a closed list of values,"
+                        " so it cannot be read from the request",
+                    )
+                bindings.append(PrefetchBinding(name, REQUEST))
+                continue
+            if identifiers.is_identifier_property(spec):
+                raise _fail(
+                    package,
+                    f"{where}: {name!r} is an identifier, so it comes from the request,"
+                    " never from a constant (RM05)",
+                )
+            bindings.append(PrefetchBinding(name, CONSTANT, copy.deepcopy(binding["constant"])))
+        missing = [name for name in schema.get("required", ()) if name not in entry["arguments"]]
+        if missing:
+            raise _fail(package, f"{where}: required parameters without a binding: {missing}")
+        # The tool's own schema judges the constants. The request-bound names are left out
+        # and "required" is lifted, because their values exist only at run time.
+        constants = {b.name: b.value for b in bindings if b.source == CONSTANT}
+        partial = parameters_validator({**schema, "required": []})
+        error = first_schema_error(partial, constants)
+        if error is not None:
+            name = ".".join(str(part) for part in error.path) or "(arguments)"
+            raise _fail(package, f"{where}: constant for {name!r} fails the tool schema")
+        calls.append(PrefetchCall(tool_name, tuple(bindings)))
+    return tuple(calls)
+
+
 def _content_hash(files: Sequence[tuple[str, bytes]], tool_hashes: Sequence[str]) -> str:
     """files are (relative path, SHA-256 digest of the file's bytes) pairs."""
     digest = hashlib.sha256()
@@ -289,6 +410,9 @@ def _load_package(
             raise _fail(package, f"resource {relpath!r} is not UTF-8 text") from exc
         files.append((relpath, data_digest))
 
+    prefetch = _prefetch_calls(
+        package, manifest.get("prefetch", ()), tools=tools, allowed=manifest["allowed_tools"]
+    )
     tool_hashes = [tools.get(tool).schema_hash for tool in manifest["allowed_tools"]]
     return Skill(
         name=name,
@@ -303,6 +427,7 @@ def _load_package(
         parallel_workflow=workflow,
         package_dir=package.resolve(),
         resource_texts=MappingProxyType(texts),
+        prefetch=prefetch,
     )
 
 
@@ -447,6 +572,15 @@ class SkillRegistry:
                 for s in offered
             ],
         }
+
+    def prefetch_declarations(self, names: Iterable[str]) -> dict[str, list[dict[str, Any]]]:
+        """The prefetch_declarations field of run.accepted (RM29, section 8).
+
+        One entry per offered skill, an empty array for a skill that
+        declares none. The objects are copies; changing them changes
+        no skill.
+        """
+        return {name: [c.to_json_object() for c in self.get(name).prefetch] for name in names}
 
     def load_skill(
         self,

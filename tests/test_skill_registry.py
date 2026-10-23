@@ -42,7 +42,7 @@ from relaymind.skills import (
 )
 from relaymind.skills.predicates import COMPLETION_PREDICATES
 from relaymind.store.trace_event import validate_trace_event
-from relaymind.tools import ToolRegistry
+from relaymind.tools import SideEffect, ToolRegistry
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -677,3 +677,257 @@ def test_the_default_root_is_recorded_as_configured(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     registry = SkillRegistry.load(tools=make_tools(), predicates=PREDICATES, workflows=WORKFLOWS)
     assert registry.offered_snapshot([])["skill_roots"] == ["skills/"]
+
+
+# --- RM29: prefetch declarations (spec 0.32 sections 4.2, 8; AC18, #123) -----------
+
+LOGS_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "service": {"enum": ["staging-api", "payments-api"]},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+        "note": {"type": "string", "pattern": "^[a-z]+$"},
+    },
+    "required": ["service", "limit"],
+    "additionalProperties": False,
+}
+DELETE_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {"service": {"enum": ["staging-api", "payments-api"]}},
+    "required": ["service"],
+    "additionalProperties": False,
+}
+FROM_REQUEST = {"from": "request"}
+HEALTH_PREFETCH = {"tool": "get_service_health", "arguments": {"service": FROM_REQUEST}}
+LOGS_PREFETCH = {
+    "tool": "get_recent_logs",
+    "arguments": {"service": FROM_REQUEST, "limit": {"constant": 50}},
+}
+
+
+def prefetch_tools() -> ToolRegistry:
+    tools = make_tools()
+    tools.register(make_tool_declaration(name="get_recent_logs", input_schema=LOGS_INPUT_SCHEMA))
+    tools.register(
+        make_tool_declaration(
+            name="restart_service",
+            input_schema=DELETE_INPUT_SCHEMA,
+            side_effect=SideEffect.MUTATING,
+            confirmation_target="service",
+        )
+    )
+    return tools
+
+
+def prefetch_manifest(*calls, allowed=("get_service_health", "get_recent_logs")) -> dict:
+    return manifest(allowed_tools=list(allowed), prefetch=list(calls))
+
+
+def load_prefetch(tmp_path, *calls, allowed=("get_service_health", "get_recent_logs")):
+    write_package(tmp_path, manifest_data=prefetch_manifest(*calls, allowed=allowed))
+    return load([tmp_path], tools=prefetch_tools())
+
+
+def test_a_prefetch_declaration_loads_and_is_kept_on_the_skill(tmp_path):
+    """RM29: bindings to the request or to a documented constant load."""
+    registry = load_prefetch(tmp_path, HEALTH_PREFETCH, LOGS_PREFETCH)
+    skill = registry.get("check-service-health")
+    assert [call.tool for call in skill.prefetch] == ["get_service_health", "get_recent_logs"]
+    health, logs = skill.prefetch
+    assert health.from_request == ("service",) and dict(health.constants) == {}
+    assert logs.from_request == ("service",) and dict(logs.constants) == {"limit": 50}
+    assert [call.to_json_object() for call in skill.prefetch] == [HEALTH_PREFETCH, LOGS_PREFETCH]
+
+
+def test_a_skill_without_prefetch_declares_none(tmp_path):
+    """RM29: the key is optional, so every earlier manifest still loads."""
+    write_package(tmp_path)
+    assert load([tmp_path]).get("check-service-health").prefetch == ()
+
+
+def test_prefetch_changes_the_content_hash(tmp_path):
+    """RM07: the manifest is hashed, so a declaration is part of the skill's identity."""
+    plain = tmp_path / "plain"
+    write_package(plain)
+    before = load([plain]).get("check-service-health").content_hash
+    declared = load_prefetch(tmp_path / "declared", HEALTH_PREFETCH)
+    assert declared.get("check-service-health").content_hash != before
+
+
+@pytest.mark.parametrize(
+    ("calls", "allowed", "message"),
+    [
+        pytest.param(
+            [{"tool": "restart_service", "arguments": {"service": FROM_REQUEST}}],
+            ("get_service_health", "restart_service"),
+            "read-only",
+            id="mutating-tool",
+        ),
+        pytest.param(
+            [LOGS_PREFETCH],
+            ("get_service_health",),
+            "allowed_tools",
+            id="tool-outside-the-allowlist",
+        ),
+        pytest.param(
+            [{"tool": "get_service_health", "arguments": {"service": {"constant": "staging-api"}}}],
+            ("get_service_health",),
+            "identifier",
+            id="constant-for-a-required-enum-identifier",
+        ),
+        pytest.param(
+            [
+                {
+                    "tool": "get_recent_logs",
+                    "arguments": {
+                        "service": FROM_REQUEST,
+                        "limit": {"constant": 50},
+                        "note": {"constant": "abc"},
+                    },
+                }
+            ],
+            ("get_recent_logs",),
+            "identifier",
+            id="constant-for-an-optional-pattern-identifier",
+        ),
+        pytest.param(
+            [
+                {
+                    "tool": "get_recent_logs",
+                    "arguments": {"service": FROM_REQUEST, "limit": FROM_REQUEST},
+                }
+            ],
+            ("get_recent_logs",),
+            "identifier",
+            id="request-binding-for-a-non-identifier",
+        ),
+        pytest.param(
+            [
+                {
+                    "tool": "get_recent_logs",
+                    "arguments": {
+                        "service": FROM_REQUEST,
+                        "note": FROM_REQUEST,
+                        "limit": {"constant": 5},
+                    },
+                }
+            ],
+            ("get_recent_logs",),
+            "closed list",
+            id="request-binding-for-a-pattern-without-a-closed-list",
+        ),
+        pytest.param(
+            [{"tool": "get_service_health", "arguments": {"service": {"from": "history"}}}],
+            ("get_service_health",),
+            "from",
+            id="unknown-binding-source",
+        ),
+        pytest.param(
+            [{"tool": "get_service_health", "arguments": {"service": {"value": 1}}}],
+            ("get_service_health",),
+            "service",
+            id="unknown-binding-shape",
+        ),
+        pytest.param(
+            [{"tool": "get_service_health", "arguments": {"region": FROM_REQUEST}}],
+            ("get_service_health",),
+            "region",
+            id="unknown-parameter-name",
+        ),
+        pytest.param(
+            [{"tool": "get_recent_logs", "arguments": {"service": FROM_REQUEST}}],
+            ("get_recent_logs",),
+            "limit",
+            id="required-argument-without-a-binding",
+        ),
+        pytest.param(
+            [
+                {
+                    "tool": "get_recent_logs",
+                    "arguments": {"service": FROM_REQUEST, "limit": {"constant": 500}},
+                }
+            ],
+            ("get_recent_logs",),
+            "limit",
+            id="constant-outside-the-tool-schema",
+        ),
+        pytest.param(
+            [
+                {
+                    "tool": "get_recent_logs",
+                    "arguments": {"service": FROM_REQUEST, "limit": {"constant": 5.0}},
+                }
+            ],
+            ("get_recent_logs",),
+            "limit",
+            id="constant-of-the-wrong-type",
+        ),
+        pytest.param(
+            [{"tool": "get_service_health", "arguments": {"service": FROM_REQUEST}, "when": "x"}],
+            ("get_service_health",),
+            "when",
+            id="unknown-field-of-a-call",
+        ),
+        pytest.param(
+            [{"tool": "invented_tool", "arguments": {}}],
+            ("get_service_health",),
+            "allowed_tools",
+            id="unregistered-tool",
+        ),
+    ],
+)
+def test_a_bad_prefetch_declaration_is_a_load_error(tmp_path, calls, allowed, message):
+    """RM29, section 4.2: a violation is a manifest validation error at load, never skipped."""
+    write_package(tmp_path, manifest_data=prefetch_manifest(*calls, allowed=allowed))
+    with pytest.raises(SkillPackageError, match=message) as raised:
+        load([tmp_path], tools=prefetch_tools())
+    assert "check-service-health" in str(raised.value)
+
+
+def test_a_prefetch_that_is_not_an_array_is_a_load_error(tmp_path):
+    write_package(tmp_path, manifest_data=manifest(prefetch={"tool": "get_service_health"}))
+    with pytest.raises(SkillPackageError, match="prefetch"):
+        load([tmp_path], tools=prefetch_tools())
+
+
+def test_a_declaration_does_not_depend_on_the_request(tmp_path):
+    """RM29: a request that names no service is a run-time skip, never a manifest error."""
+    registry = load_prefetch(tmp_path, HEALTH_PREFETCH)
+    assert registry.get("check-service-health").prefetch
+
+
+def test_the_declarations_of_offered_skills_include_empty_arrays(tmp_path):
+    """RM29, section 8: prefetch_declarations is keyed by skill, empty for a skill with none."""
+    write_package(
+        tmp_path, "check-service-health", manifest_data=prefetch_manifest(HEALTH_PREFETCH)
+    )
+    write_package(tmp_path, "lookup-latest-deployment")
+    registry = load([tmp_path], tools=prefetch_tools())
+    declarations = registry.prefetch_declarations(
+        ["check-service-health", "lookup-latest-deployment"]
+    )
+    assert declarations == {
+        "check-service-health": [HEALTH_PREFETCH],
+        "lookup-latest-deployment": [],
+    }
+    with pytest.raises(SkillNotFoundError):
+        registry.prefetch_declarations(["invented-skill"])
+
+
+def test_the_run_declarations_are_a_copy(tmp_path):
+    """The trace record cannot change the skill: each call returns fresh objects."""
+    registry = load_prefetch(tmp_path, HEALTH_PREFETCH)
+    declared = registry.prefetch_declarations(["check-service-health"])
+    declared["check-service-health"][0]["arguments"]["service"]["from"] = "elsewhere"
+    assert registry.prefetch_declarations(["check-service-health"]) == {
+        "check-service-health": [HEALTH_PREFETCH]
+    }
+
+
+def test_the_published_manifest_schema_states_prefetch():
+    """The JSON Schema documents the keys a prefetch declaration accepts."""
+    prefetch = SKILL_MANIFEST_SCHEMA["properties"]["prefetch"]
+    assert prefetch["type"] == "array"
+    assert prefetch["items"]["required"] == ["tool", "arguments"]
+    assert prefetch["items"]["additionalProperties"] is False
+    assert "prefetch" not in SKILL_MANIFEST_SCHEMA["required"]
