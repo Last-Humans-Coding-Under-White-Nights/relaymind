@@ -143,6 +143,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   timing statistics ignore it, so their definitions are unchanged; a
   consumer that lists every event of a stream sees one more (#120).
 
+- Specification 0.33 → 0.34 (PR #153 review; RM05, RM09, RM10, RM15,
+  RM16, RM22, RM29; sections 4.3, 4.4, 8, 11, and 12.2; AC18): it states
+  what #122 and #123 implement. Section 4.3: under
+  `calls_per_generation = many` a set within the limit is also rejected
+  whole, with `multiple_tool_calls`, when the tool budget has no room left
+  for it (the room is the tighter of the per-stage and the entire-run limit
+  left in a local stage, the entire-run limit left in the external stage;
+  the room counts one execution per call that needs one, so a replay needs
+  none, while the limit on the number of calls counts every call); the
+  rejection of a set is one exchange that answers every call, and each
+  tool message carries what the trace records for that call: the call
+  that failed its own validation gets its rejection and the others
+  `not_executed`, and a rejection about the set (the limit, a mutating
+  call, no room) is recorded on every call and answers every call; a retry
+  is not reserved for, and exhausted time can stop a set in the middle; an
+  admitted set runs in proposal order, a failed call of the local actor
+  escalates with `tool_failure` and the later calls do not run, and the
+  external actor gets every result as data; under `one` a generation with
+  several calls keeps its old one-call exchange. Sections 4.3 and 4.4: the
+  `local_health` branch of the fixed parallel workflow keeps the one-call
+  rule under either value (RM15). Section 11: the admitted-calls row names
+  the room rejection. RM29: the declarations are checked against the
+  budgets at startup, only when `performance.prefetch` is true, the
+  per-stage limit only for a skill not marked external-required (0.31 to
+  0.33 said a manifest validation error at load); resolved calls the tool
+  budget has no room for are not started or recorded; nothing is pending
+  when every tool the stage offers has a succeeded result; constants are
+  checked against the tool's full schema with every combination of the
+  allowed values of the request-bound identifiers; and the same call
+  declared twice is a manifest validation error. Section 8: `tool.started`
+  and `tool.finished` of a gateway-made call carry its `mechanism` and
+  model null, and a null model is valid only with actor `gateway` and a
+  `prefetch` or `workflow` mechanism. Section 12.2: an admitted
+  gateway-made proposal counts toward a required call group of tool
+  correctness and is reported apart as `gateway_proposals`.
+
 - Specification 0.32 → 0.33 (PR #150 review; RM03, RM12, RM16, RM22;
   sections 6, 8, and 14.1): `model.finished` holds `cached_tokens` and
   `reasoning_tokens` inside `usage`, next to the input and output counts,
