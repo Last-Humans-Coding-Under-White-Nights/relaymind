@@ -41,7 +41,11 @@ One run, start to end, with the local model only:
    meet the skill's completion predicate; then a final generation runs
    with tools disabled (section 7.3), its answer is checked by the same
    predicate, and only then published as answer.delta events, in one
-   batch.
+   batch. Under answer_pass draft (RM31, spec 0.32) the draft that met
+   the predicate is published as the answer without that second
+   generation, when it is in the run's language, holds no tool-call
+   JSON, and the caller sent no answer option; run.completed records
+   answer_pass_applied, the pass that produced the answer.
 3a. Confirmation (RM11; spec 0.10 sections 4.3 and 5). A mutating tool
    that passed the checks above suspends the run in waiting_confirmation,
    from local_running or from external_running. The gateway issues a
@@ -176,6 +180,11 @@ from relaymind.orchestrator.handoff import (
     external_messages,
     measure_request,
     unsettled_operations,
+)
+from relaymind.orchestrator.performance import (
+    PerformanceSettings,
+    draft_in_language,
+    holds_tool_call_json,
 )
 from relaymind.orchestrator.recovery import (
     RecoveryReport,
@@ -595,8 +604,11 @@ class LocalOrchestrator:
         external: ConfiguredModel | None = None,
         degraded_mode: bool = False,
         routing_cache: RoutingCache | None = None,
+        performance: PerformanceSettings | None = None,
     ) -> None:
         self.model = model
+        # Spec 0.32 section 14.1: every default is the baseline behavior.
+        self.performance = performance or PerformanceSettings()
         # Spec 0.26 section 10: None (the default) runs without a routing cache.
         self.routing_cache = routing_cache
         self.external = external
@@ -1242,6 +1254,7 @@ class _Run:
                     "budgets": self.o.budgets.to_json_object(),
                     **self.offered,
                     **({"routing_cache": True} if self.o.routing_cache is not None else {}),
+                    **self._phase2_accepted(),
                     "original_messages": self._original_messages(),
                     "answer_options": self._answer_option_record(),
                 },
@@ -1258,6 +1271,14 @@ class _Run:
         except BaseException as exc:
             self._abort(exc)
             raise
+
+    def _phase2_accepted(self) -> dict[str, Any]:
+        """The phase 2 fields of run.accepted (spec 0.32 section 8), in one place.
+
+        The performance options in force today; the placement, selection,
+        and workflow fields of later changes are added here.
+        """
+        return {**self.o.performance.to_json_object()}
 
     def _answer_option_record(self) -> dict[str, Any]:
         """The caller's answer options as applied, for run.accepted (spec 0.22 section 8)."""
@@ -1347,7 +1368,7 @@ class _Run:
                 await self._execute_step(
                     loop, confirmed.tool_call, confirmed.admitted, confirmed.proposal_id
                 )
-            answer = await self._local_loop(loop)
+            answer, answer_pass = await self._local_loop(loop)
         except _ConfirmationNeeded as needed:
             return self._await_confirmation(needed, None)
         except Escalation as stop:
@@ -1361,7 +1382,13 @@ class _Run:
             event=(
                 EventType.RUN_COMPLETED,
                 GATEWAY_ACTOR,
-                {"final_answer_model": self.o.model.model_id, "answer": answer, **self._summary()},
+                {
+                    "final_answer_model": self.o.model.model_id,
+                    "answer": answer,
+                    # The pass that produced the answer (RM31, spec 0.32 section 8).
+                    "answer_pass_applied": answer_pass,
+                    **self._summary(),
+                },
             ),
         )
         return RunOutcome(self.run_id, RunState.COMPLETED, answer=answer, decision=self.decision)
@@ -2569,8 +2596,12 @@ class _Run:
         predicate = COMPLETION_PREDICATES[skill.completion_predicate]
         return _Loop(conversation, schemas, available, skill, predicate)
 
-    async def _local_loop(self, loop: _Loop) -> str:
-        """The local generation loop: propose tools, then finalize (RM02, RM03, RM09)."""
+    async def _local_loop(self, loop: _Loop) -> tuple[str, str]:
+        """The local generation loop: propose tools, then finalize (RM02, RM03, RM09).
+
+        Returns the published answer and the pass that produced it,
+        draft or final (RM31).
+        """
         skill = loop.skill
         predicate = loop.predicate
         assert skill is not None and predicate is not None
@@ -2594,7 +2625,10 @@ class _Run:
 
             # A text answer is a finalize proposal (section 7.3).
             if generation.text.strip() and predicate(generation.text, results):
-                return await self._final(loop.conversation, predicate, results)
+                if self._draft_publishable(generation.text):
+                    # RM31: the checked draft is the answer; no second generation.
+                    return self._publish(generation, LOCAL_ACTOR), "draft"
+                return await self._final(loop.conversation, predicate, results), "final"
             self._keep_draft(generation.text)
             problem = {
                 "code": "completion_predicate_unmet" if generation.text.strip() else "empty_output",
@@ -3037,6 +3071,23 @@ class _Run:
                 "invalid_output", "the final answer does not meet the completion criteria"
             )
         return self._publish(generation, LOCAL_ACTOR)
+
+    def _draft_publishable(self, draft: str) -> bool:
+        """Whether a draft that met the predicate may be the answer (RM31, AC17).
+
+        Only under answer_pass draft. The caller must have sent no
+        answer option, because the options shape the final generation
+        and the recorded answer_options must be what shaped the answer
+        (a native run never sets any). The draft must be in the run's
+        language and hold no tool-call JSON. Otherwise the final
+        generation runs as before.
+        """
+        if self.o.performance.answer_pass != "draft":
+            return False
+        if any(value is not None for value in asdict(self.final_options).values()):
+            return False
+        assert self.language is not None
+        return draft_in_language(draft, self.language) and not holds_tool_call_json(draft)
 
     def _answer_options(
         self, defaults: GenerationOptions, *, tools_offered: bool = False
