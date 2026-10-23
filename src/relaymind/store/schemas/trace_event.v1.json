@@ -169,6 +169,22 @@
               "answer_stream": {"enum": ["buffered", "live"]},
               "calls_per_generation": {"enum": ["one", "many"]},
               "prefetch": {"type": "boolean"},
+              "prefetch_declarations": {
+                "type": "object",
+                "propertyNames": {"pattern": "\\S"},
+                "additionalProperties": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "tool": {"type": "string", "pattern": "\\S"},
+                      "arguments": {"type": "object"}
+                    },
+                    "required": ["tool", "arguments"],
+                    "additionalProperties": false
+                  }
+                }
+              },
               "early_headers": {"type": "boolean"},
               "answer_options": {
                 "type": "object",
@@ -199,7 +215,7 @@
         "properties": {
           "payload": {
             "properties": {
-              "model": {"type": "string", "pattern": "\\S"},
+              "model": {"type": ["string", "null"], "pattern": "\\S"},
               "operation_id": {"type": "string", "pattern": "\\S"},
               "proposal_id": {"type": "string", "pattern": "\\S"},
               "result_ref": {"$ref": "#/$defs/artifact_ref"},
@@ -212,6 +228,33 @@
             "required": ["model"],
             "not": {"required": ["result", "result_ref"]},
             "anyOf": [{"required": ["operation_id"]}, {"required": ["proposal_id"]}]
+          }
+        }
+      }
+    },
+    {
+      "description": "Only a gateway-made call (a prefetch or workflow call) has no originating model (RM22).",
+      "if": {
+        "properties": {
+          "event_type": {"enum": ["tool.proposed", "tool.started", "tool.finished"]},
+          "actor": {"not": {"const": "gateway"}}
+        },
+        "required": ["event_type"]
+      },
+      "then": {"properties": {"payload": {"properties": {"model": {"type": "string"}}}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["tool.proposed"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "mechanism": {"enum": ["model", "prefetch", "workflow"]},
+              "step": {"type": "string", "pattern": "\\S"}
+            },
+            "if": {"properties": {"mechanism": {"const": "workflow"}}, "required": ["mechanism"]},
+            "then": {"required": ["step"]},
+            "else": {"not": {"required": ["step"]}}
           }
         }
       }

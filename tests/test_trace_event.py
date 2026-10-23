@@ -138,7 +138,11 @@ TERMINAL_FIELDS = {
         for key in ("active_ms", "waiting_ms", "external_calls")
     },
 }
+# Spec 0.31 (RM22): a gateway-made tool call has no originating model; the schema
+# makes the model nullable and a second rule requires text for every other actor.
+NULLABLE_MODEL = {"model": {"type": ["string", "null"], "pattern": "\\S"}}
 NON_TEXT_PAYLOAD = {
+    **dict.fromkeys(("tool.proposed", "tool.started", "tool.finished"), NULLABLE_MODEL),
     "run.completed": TERMINAL_FIELDS,
     "run.failed": TERMINAL_FIELDS,
     # Spec 0.17 section 8: run.cancelled names one of two reasons.
@@ -1352,6 +1356,114 @@ def test_performance_fields_are_validated_and_published():
         validate_trace_event(data)
         assert SCHEMA_VALIDATOR.is_valid(data), name
     for name, (data, key) in PERFORMANCE_REJECTED.items():
+        with pytest.raises(TraceEventError, match=key):
+            validate_trace_event(data)
+        assert not SCHEMA_VALIDATOR.is_valid(data), name
+
+
+# -- Gateway tool events and prefetch declarations (spec 0.32 sections 4.2, 8; RM22, RM29) ---
+
+DECLARATIONS = {
+    "check-service-health": [
+        {"tool": "get_service_health", "arguments": {"service": {"from": "request"}}}
+    ],
+    "summarize-incident-counts": [],
+    "investigate-performance": [
+        {"tool": "get_latest_deployment", "arguments": {"service": {"from": "request"}}},
+        {
+            "tool": "get_recent_logs",
+            "arguments": {"service": {"from": "request"}, "limit": {"constant": 50}},
+        },
+    ],
+}
+
+
+def gateway_tool_event(event_type, **extra):
+    """A tool event of a gateway-made call: actor gateway, model null (RM22)."""
+    data = branch_event(event_type, **{"model": None, **extra})
+    data["actor"] = "gateway"
+    return data
+
+
+GATEWAY_ACCEPTED = {
+    "proposed-gateway-null-model": gateway_tool_event(
+        "tool.proposed", proposal_id="p_1", mechanism="prefetch"
+    ),
+    "started-gateway-null-model": gateway_tool_event("tool.started"),
+    "finished-gateway-null-model": gateway_tool_event("tool.finished"),
+    "proposed-model-mechanism": branch_event("tool.proposed", proposal_id="p_1", mechanism="model"),
+    "proposed-workflow-mechanism": branch_event(
+        "tool.proposed", proposal_id="p_1", mechanism="workflow", step="read"
+    ),
+    "accepted-declarations": accepted_with(prefetch_declarations=DECLARATIONS),
+    "accepted-no-skills-offered": accepted_with(prefetch_declarations={}),
+}
+GATEWAY_REJECTED = {
+    "local-actor-null-model": (
+        branch_event("tool.proposed", proposal_id="p_1", model=None),
+        "model",
+    ),
+    "gateway-blank-model": (gateway_tool_event("tool.started", model=" "), "model"),
+    "gateway-missing-model": (
+        {
+            **gateway_tool_event("tool.started"),
+            "payload": {"operation_id": "op_1", "tool_name": "get_service_health"},
+        },
+        "model",
+    ),
+    "mechanism-unknown": (
+        branch_event("tool.proposed", proposal_id="p_1", mechanism="magic"),
+        "mechanism",
+    ),
+    "mechanism-null": (
+        branch_event("tool.proposed", proposal_id="p_1", mechanism=None),
+        "mechanism",
+    ),
+    "workflow-without-step": (
+        branch_event("tool.proposed", proposal_id="p_1", mechanism="workflow"),
+        "step",
+    ),
+    "step-on-prefetch": (
+        branch_event("tool.proposed", proposal_id="p_1", mechanism="prefetch", step="read"),
+        "step",
+    ),
+    "declarations-list": (accepted_with(prefetch_declarations=[]), "prefetch_declarations"),
+    "declarations-skill-not-list": (
+        accepted_with(prefetch_declarations={"a-skill": {}}),
+        "prefetch_declarations",
+    ),
+    "declarations-call-not-object": (
+        accepted_with(prefetch_declarations={"a-skill": ["get_service_health"]}),
+        "prefetch_declarations",
+    ),
+    "declarations-blank-tool": (
+        accepted_with(prefetch_declarations={"a-skill": [{"tool": " ", "arguments": {}}]}),
+        "prefetch_declarations",
+    ),
+    "declarations-arguments-list": (
+        accepted_with(prefetch_declarations={"a-skill": [{"tool": "t", "arguments": []}]}),
+        "prefetch_declarations",
+    ),
+    "declarations-unknown-field": (
+        accepted_with(
+            prefetch_declarations={"a-skill": [{"tool": "t", "arguments": {}, "guess": 1}]}
+        ),
+        "prefetch_declarations",
+    ),
+}
+
+
+def test_gateway_tool_events_and_prefetch_declarations_are_validated_and_published():
+    """RM22, RM29, spec 0.32 section 8: a gateway-made tool event has model null.
+
+    The mechanism of a proposal and the run's prefetch declarations are
+    optional, so events stored before 0.31 stay valid; the validator and
+    the published schema agree on each shape.
+    """
+    for name, data in GATEWAY_ACCEPTED.items():
+        validate_trace_event(data)
+        assert SCHEMA_VALIDATOR.is_valid(data), name
+    for name, (data, key) in GATEWAY_REJECTED.items():
         with pytest.raises(TraceEventError, match=key):
             validate_trace_event(data)
         assert not SCHEMA_VALIDATOR.is_valid(data), name
