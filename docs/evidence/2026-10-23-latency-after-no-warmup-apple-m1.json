@@ -1,0 +1,5146 @@
+{
+  "kind": "relaymind.latency_benchmark",
+  "note": "Spec 0.28 section 12.2 latency experiment on the local path, concurrency one, routing cache off. First transport event and first answer token are client times; first model action and first useful content are trace times (elapsed_ms from run.accepted). The two clocks are never subtracted. Errors and timeouts are kept.",
+  "command": "python scripts/latency_benchmark.py --out /private/tmp/claude-501/-Users-dmitrykudryavtsev-Playground-relaymind/ee1bc71c-0ed2-47af-9d87-03a77f9385b5/scratchpad/m7pr6/lat-after-nowarm.json --seed 20261023 --no-startup-warmup",
+  "started_at_utc": "2026-10-23T10:42:16+00:00",
+  "finished_at_utc": "2026-10-23T10:44:56+00:00",
+  "prompts": {
+    "file": "evaluation/latency_prompts.v1.json",
+    "sha256": "1438a7fd6e0e0fdc835ba4636f3dc46a70853b623083d4aad7e5b1fae2ece547",
+    "language": "en"
+  },
+  "design": {
+    "seed": 20261023,
+    "warmups": 3,
+    "runs_per_prompt": 10,
+    "request_timeout_seconds": 60.0,
+    "concurrency": 1,
+    "routing_cache": false,
+    "early_headers": false,
+    "startup_warmup": false,
+    "first_transport_event": "the response status, sent when the run has finished (the baseline)",
+    "external_model": null,
+    "path": "POST /v1/chat/completions, stream true, model relaymind"
+  },
+  "environment": {
+    "machine": {
+      "os": "Darwin",
+      "os_version": "macOS 27.0.1",
+      "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "cpu": "Apple M1",
+      "cpu_count": 8,
+      "ram_bytes": 8589934592,
+      "gpu": [
+        {
+          "model": "Apple M1",
+          "cores": "7"
+        }
+      ],
+      "python": "3.14.7"
+    },
+    "application": {
+      "head": "0caa1cc2dbd0ac58e9e897ccda4ec91d57ada0d2",
+      "dirty": false
+    },
+    "runtime_banner": "version: 0.7.0-dev (build 11785, commit 8baabd53b)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64",
+    "runtime_devices": "Available devices:\n  MTL0: Apple M1 (5461 MiB, 5460 MiB free)\n  BLAS: Accelerate (0 MiB, 0 MiB free)",
+    "runtime_log": {
+      "n_threads": 4,
+      "n_slots": 4,
+      "n_ctx_slot": 8192,
+      "model_load_ms": 596.505,
+      "lines": [
+        "0.00.043.727 I srv    load_model: loading model '<repo>/models/Qwen3-0.6B-Q8_0.gguf'",
+        "0.00.549.753 I cmn          init: llama threadpool init, n_threads = 4",
+        "0.00.633.794 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'",
+        "0.00.640.232 I srv  llama_server: model loaded"
+      ]
+    },
+    "llama_server_argv": [
+      "--ctx-size",
+      "8192",
+      "--jinja",
+      "--reasoning",
+      "off",
+      "--reasoning-format",
+      "deepseek"
+    ],
+    "llama_server_extra_args": [],
+    "llama_server_props": {
+      "default_generation_settings": {
+        "params": {
+          "seed": 4294967295,
+          "temperature": 0.800000011920929,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_k": 40,
+          "top_p": 0.949999988079071,
+          "min_p": 0.05000000074505806,
+          "top_n_sigma": -1.0,
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "typical_p": 1.0,
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "presence_penalty": 0.0,
+          "frequency_penalty": 0.0,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "max_tokens": -1,
+          "n_predict": -1,
+          "n_keep": 0,
+          "n_discard": 0,
+          "ignore_eos": false,
+          "stream": false,
+          "n_probs": 0,
+          "min_keep": 0,
+          "chat_format": "Content-only",
+          "reasoning_format": "none",
+          "reasoning_in_content": false,
+          "generation_prompt": "",
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "speculative.types": "none",
+          "timings_per_token": false,
+          "post_sampling_probs": false,
+          "backend_sampling": false,
+          "lora": []
+        },
+        "n_ctx": 8192
+      },
+      "total_slots": 4,
+      "model_ftype": "Q8_0",
+      "build_info": "b11785-8baabd53b"
+    },
+    "manifest": "models/qwen3-0.6b-q8_0.manifest.json",
+    "model_id": "qwen3-0.6b",
+    "model_file": "Qwen3-0.6B-Q8_0.gguf",
+    "model_sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+    "quantization": "Q8_0",
+    "context": {
+      "ctx_size": 8192
+    },
+    "external_endpoint_region": null
+  },
+  "cold_start": {
+    "llama_server_start_to_healthy_seconds": 0.673,
+    "model_load_ms": 596.505,
+    "gateway_start_to_healthy_seconds": 1.41,
+    "gateway_config": "[server]\nhost = \"127.0.0.1\"\nport = 62569\n[store]\npath = \"<work>/runs.sqlite3\"\n[skills]\nroots = [\"<repo>/skills\"]\n[sandbox]\nseed = \"<repo>/tests/fixtures/sandbox/baseline.json\"\nwork_dir = \"<work>/sandbox\"\n[local_model]\nmanifest = \"<repo>/models/qwen3-0.6b-q8_0.manifest.json\"\nartifact = \"<repo>/models/Qwen3-0.6B-Q8_0.gguf\"\nbase_url = \"http://127.0.0.1:62554\"\n[policy]\nenabled_workflows = []\nallowed_modes = [\"auto\", \"local_only\"]\n[cache]\nrouting = false\n[placement]\nwarmup = false\n",
+    "cold_request": {
+      "prompt_id": "lat-01",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:18.231+00:00",
+      "run_id": "run_2a031b0f9a9e4e7580c2f49ad0832c1d",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 1013,
+          "input_tokens": 960,
+          "cached_tokens": 0,
+          "reasoning_tokens": null,
+          "first_token_ms": 839
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 765,
+          "input_tokens": 559,
+          "cached_tokens": 0,
+          "reasoning_tokens": null,
+          "first_token_ms": 568
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 684,
+          "input_tokens": 813,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 218
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 975,
+          "input_tokens": 641,
+          "cached_tokens": 0,
+          "reasoning_tokens": null,
+          "first_token_ms": 510
+        }
+      ],
+      "first_transport_ms": 3500.386,
+      "first_model_action_ms": 1033.0,
+      "first_useful_content_ms": 3461.0,
+      "first_answer_token_ms": 3500.65,
+      "completion_ms": 3501.415
+    }
+  },
+  "prefix_cache": {
+    "adapter_sets_cache_prompt": true,
+    "note": "The llamacpp adapter sends cache_prompt; cached_tokens is what the runtime reported for each measured model call, and a call with no reported count is not measured.",
+    "calls": 270,
+    "calls_with_reported_count": 270,
+    "calls_not_measured": 0,
+    "calls_with_cached_tokens": 266,
+    "cached_tokens_total": 196150
+  },
+  "summary": {
+    "overall": {
+      "samples": 120,
+      "timeouts": 0,
+      "errors": 50,
+      "timeout_fraction": 0.0,
+      "metrics": {
+        "first_transport_ms": {
+          "n": 120,
+          "p50": 566.765,
+          "p95": 2691.348
+        },
+        "first_model_action_ms": {
+          "n": 90,
+          "p50": 456.0,
+          "p95": 558.0
+        },
+        "first_useful_content_ms": {
+          "n": 40,
+          "p50": 531.0,
+          "p95": 2506.0
+        },
+        "first_answer_token_ms": {
+          "n": 40,
+          "p50": 536.764,
+          "p95": 2516.97
+        },
+        "completion_ms": {
+          "n": 120,
+          "p50": 567.938,
+          "p95": 2693.118
+        }
+      }
+    },
+    "by_label": {
+      "clarification": {
+        "samples": 30,
+        "timeouts": 0,
+        "errors": 10,
+        "timeout_fraction": 0.0,
+        "metrics": {
+          "first_transport_ms": {
+            "n": 30,
+            "p50": 441.437,
+            "p95": 536.171
+          },
+          "first_model_action_ms": {
+            "n": 20,
+            "p50": 442.0,
+            "p95": 520.0
+          },
+          "first_useful_content_ms": {
+            "n": 20,
+            "p50": 442.0,
+            "p95": 520.0
+          },
+          "first_answer_token_ms": {
+            "n": 20,
+            "p50": 447.933,
+            "p95": 524.531
+          },
+          "completion_ms": {
+            "n": 30,
+            "p50": 442.096,
+            "p95": 537.105
+          }
+        }
+      },
+      "routing": {
+        "samples": 30,
+        "timeouts": 0,
+        "errors": 0,
+        "timeout_fraction": 0.0,
+        "metrics": {
+          "first_transport_ms": {
+            "n": 30,
+            "p50": 437.202,
+            "p95": 1056.919
+          },
+          "first_model_action_ms": {
+            "n": 10,
+            "p50": 428.0,
+            "p95": 536.0
+          },
+          "first_useful_content_ms": {
+            "n": 0,
+            "p50": null,
+            "p95": null
+          },
+          "first_answer_token_ms": {
+            "n": 0,
+            "p50": null,
+            "p95": null
+          },
+          "completion_ms": {
+            "n": 30,
+            "p50": 437.908,
+            "p95": 1057.376
+          }
+        }
+      },
+      "simple": {
+        "samples": 60,
+        "timeouts": 0,
+        "errors": 40,
+        "timeout_fraction": 0.0,
+        "metrics": {
+          "first_transport_ms": {
+            "n": 60,
+            "p50": 2192.609,
+            "p95": 2875.766
+          },
+          "first_model_action_ms": {
+            "n": 60,
+            "p50": 459.0,
+            "p95": 569.0
+          },
+          "first_useful_content_ms": {
+            "n": 20,
+            "p50": 2222.0,
+            "p95": 2627.0
+          },
+          "first_answer_token_ms": {
+            "n": 20,
+            "p50": 2225.173,
+            "p95": 2638.503
+          },
+          "completion_ms": {
+            "n": 60,
+            "p50": 2194.001,
+            "p95": 2879.594
+          }
+        }
+      }
+    },
+    "hypothesis": {
+      "metric": "first_model_action_ms",
+      "threshold_ms": 500,
+      "p95": 558.0,
+      "n": 90,
+      "samples": 120,
+      "timeouts": 0,
+      "met": false
+    }
+  },
+  "warmups": [
+    {
+      "prompt_id": "lat-01",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:21.739+00:00",
+      "run_id": "run_f804cc794a734e0e930b9d97f9bdf3c0",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 378,
+          "input_tokens": 960,
+          "cached_tokens": 959,
+          "reasoning_tokens": null,
+          "first_token_ms": 204
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 386,
+          "input_tokens": 559,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 192
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 680,
+          "input_tokens": 813,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 221
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 671,
+          "input_tokens": 641,
+          "cached_tokens": 395,
+          "reasoning_tokens": null,
+          "first_token_ms": 211
+        }
+      ],
+      "first_transport_ms": 2132.758,
+      "first_model_action_ms": 386.0,
+      "first_useful_content_ms": 2128.0,
+      "first_answer_token_ms": 2133.212,
+      "completion_ms": 2134.089
+    },
+    {
+      "prompt_id": "lat-07",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:42:23.879+00:00",
+      "run_id": "run_e89e88bd4d9e4688a58df1b15c4b31fc",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected waiting_input",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 336,
+          "input_tokens": 959,
+          "cached_tokens": 947,
+          "reasoning_tokens": null,
+          "first_token_ms": 72
+        }
+      ],
+      "first_transport_ms": 347.234,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 347.623
+    },
+    {
+      "prompt_id": "lat-10",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:42:24.231+00:00",
+      "run_id": "run_8e3ecde11c954d38a01448acfab0c1a6",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 328,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 61
+        }
+      ],
+      "first_transport_ms": 339.556,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 340.017
+    }
+  ],
+  "samples": [
+    {
+      "prompt_id": "lat-03",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:24.575+00:00",
+      "run_id": "run_b0e137af837741e0ae14dead9e65d440",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 389,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 217
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 769,
+          "input_tokens": 537,
+          "cached_tokens": 0,
+          "reasoning_tokens": null,
+          "first_token_ms": 577
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 808,
+          "input_tokens": 817,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 234
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 655,
+          "input_tokens": 891,
+          "cached_tokens": 813,
+          "reasoning_tokens": null,
+          "first_token_ms": 87
+        }
+      ],
+      "first_transport_ms": 2638.199,
+      "first_model_action_ms": 399.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2638.625,
+      "order": 0
+    },
+    {
+      "prompt_id": "lat-03",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:27.219+00:00",
+      "run_id": "run_caae5a5b843047a29076ffd41dbf05e7",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 381,
+          "input_tokens": 960,
+          "cached_tokens": 959,
+          "reasoning_tokens": null,
+          "first_token_ms": 207
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 380,
+          "input_tokens": 537,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 186
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 812,
+          "input_tokens": 815,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 232
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 661,
+          "input_tokens": 889,
+          "cached_tokens": 811,
+          "reasoning_tokens": null,
+          "first_token_ms": 88
+        }
+      ],
+      "first_transport_ms": 2250.371,
+      "first_model_action_ms": 390.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2250.853,
+      "order": 1
+    },
+    {
+      "prompt_id": "lat-12",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:42:29.475+00:00",
+      "run_id": "run_2f7de3846e1c487c897f9c0a73bd9a77",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 962,
+          "input_tokens": 963,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 61
+        }
+      ],
+      "first_transport_ms": 974.48,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 974.932,
+      "order": 2
+    },
+    {
+      "prompt_id": "lat-11",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:42:30.454+00:00",
+      "run_id": "run_990b46d8b1e44b72b939c31c3cf59227",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 413,
+          "input_tokens": 962,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 237
+        }
+      ],
+      "first_transport_ms": 426.006,
+      "first_model_action_ms": 423.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 426.514,
+      "order": 3
+    },
+    {
+      "prompt_id": "lat-05",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:30.886+00:00",
+      "run_id": "run_5d37a599a28643e0828d7cf52a5300a5",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 451,
+          "input_tokens": 964,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 255
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 993,
+          "input_tokens": 634,
+          "cached_tokens": 0,
+          "reasoning_tokens": null,
+          "first_token_ms": 669
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 435,
+          "input_tokens": 895,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 234
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 252,
+          "input_tokens": 944,
+          "cached_tokens": 891,
+          "reasoning_tokens": null,
+          "first_token_ms": 67
+        }
+      ],
+      "first_transport_ms": 2149.28,
+      "first_model_action_ms": 460.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2149.798,
+      "order": 4
+    },
+    {
+      "prompt_id": "lat-03",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:33.041+00:00",
+      "run_id": "run_3ff2ab10035640fc9ef17685f38302c8",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 398,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 225
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 386,
+          "input_tokens": 537,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 190
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 817,
+          "input_tokens": 815,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 238
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 666,
+          "input_tokens": 889,
+          "cached_tokens": 811,
+          "reasoning_tokens": null,
+          "first_token_ms": 88
+        }
+      ],
+      "first_transport_ms": 2285.631,
+      "first_model_action_ms": 407.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2286.194,
+      "order": 5
+    },
+    {
+      "prompt_id": "lat-09",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:42:35.334+00:00",
+      "run_id": "run_2bd2d576b1c04164b659532772bc5c8e",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 430,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 256
+        }
+      ],
+      "first_transport_ms": 445.214,
+      "first_model_action_ms": 442.0,
+      "first_useful_content_ms": 442.0,
+      "first_answer_token_ms": 445.545,
+      "completion_ms": 445.789,
+      "order": 6
+    },
+    {
+      "prompt_id": "lat-03",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:35.789+00:00",
+      "run_id": "run_3a113e6f8c7048bdb7d8a01453d99546",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 388,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 215
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 379,
+          "input_tokens": 537,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 184
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 806,
+          "input_tokens": 813,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 231
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 665,
+          "input_tokens": 887,
+          "cached_tokens": 809,
+          "reasoning_tokens": null,
+          "first_token_ms": 87
+        }
+      ],
+      "first_transport_ms": 2254.776,
+      "first_model_action_ms": 397.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2255.559,
+      "order": 7
+    },
+    {
+      "prompt_id": "lat-03",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:38.053+00:00",
+      "run_id": "run_feacfa0dcf024a11a3f634edd2fd1175",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 396,
+          "input_tokens": 960,
+          "cached_tokens": 959,
+          "reasoning_tokens": null,
+          "first_token_ms": 224
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 380,
+          "input_tokens": 537,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 184
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 816,
+          "input_tokens": 811,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 237
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 678,
+          "input_tokens": 885,
+          "cached_tokens": 807,
+          "reasoning_tokens": null,
+          "first_token_ms": 91
+        }
+      ],
+      "first_transport_ms": 2294.815,
+      "first_model_action_ms": 410.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2295.377,
+      "order": 8
+    },
+    {
+      "prompt_id": "lat-01",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:40.356+00:00",
+      "run_id": "run_63fc1c0aea0e4865819867e552674954",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 373,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 198
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 400,
+          "input_tokens": 559,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 205
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 686,
+          "input_tokens": 809,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 213
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 713,
+          "input_tokens": 637,
+          "cached_tokens": 395,
+          "reasoning_tokens": null,
+          "first_token_ms": 252
+        }
+      ],
+      "first_transport_ms": 2192.609,
+      "first_model_action_ms": 384.0,
+      "first_useful_content_ms": 2187.0,
+      "first_answer_token_ms": 2193.039,
+      "completion_ms": 2194.001,
+      "order": 9
+    },
+    {
+      "prompt_id": "lat-11",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:42:42.557+00:00",
+      "run_id": "run_31afb02cd075448090e9c3129996f507",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 445,
+          "input_tokens": 962,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 272
+        }
+      ],
+      "first_transport_ms": 459.009,
+      "first_model_action_ms": 456.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 459.499,
+      "order": 10
+    },
+    {
+      "prompt_id": "lat-01",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:43.022+00:00",
+      "run_id": "run_271dc5e5bd9c4505a95953335184dd07",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 357,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 184
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 370,
+          "input_tokens": 559,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 173
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 695,
+          "input_tokens": 807,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 220
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 680,
+          "input_tokens": 635,
+          "cached_tokens": 394,
+          "reasoning_tokens": null,
+          "first_token_ms": 216
+        }
+      ],
+      "first_transport_ms": 2120.477,
+      "first_model_action_ms": 367.0,
+      "first_useful_content_ms": 2116.0,
+      "first_answer_token_ms": 2120.794,
+      "completion_ms": 2121.628,
+      "order": 11
+    },
+    {
+      "prompt_id": "lat-08",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:42:45.150+00:00",
+      "run_id": "run_595effd70b6c4aa2b0acd63a6c34ab87",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 402,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 225
+        }
+      ],
+      "first_transport_ms": 414.799,
+      "first_model_action_ms": 412.0,
+      "first_useful_content_ms": 412.0,
+      "first_answer_token_ms": 415.162,
+      "completion_ms": 415.545,
+      "order": 12
+    },
+    {
+      "prompt_id": "lat-11",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:42:45.575+00:00",
+      "run_id": "run_8dc3a3000c82484eb56f10556df2408c",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 415,
+          "input_tokens": 962,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 238
+        }
+      ],
+      "first_transport_ms": 428.72,
+      "first_model_action_ms": 426.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 429.215,
+      "order": 13
+    },
+    {
+      "prompt_id": "lat-07",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:42:46.010+00:00",
+      "run_id": "run_b19013ceb4cf4776acf3ac52ee967a3e",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected waiting_input",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 314,
+          "input_tokens": 959,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 43
+        }
+      ],
+      "first_transport_ms": 328.515,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 329.005,
+      "order": 14
+    },
+    {
+      "prompt_id": "lat-05",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:46.344+00:00",
+      "run_id": "run_3e4fcdc0febf4984ac2e4c9ae77526e5",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 457,
+          "input_tokens": 964,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 262
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 532,
+          "input_tokens": 634,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 191
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 456,
+          "input_tokens": 895,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 255
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 274,
+          "input_tokens": 944,
+          "cached_tokens": 891,
+          "reasoning_tokens": null,
+          "first_token_ms": 76
+        }
+      ],
+      "first_transport_ms": 1741.49,
+      "first_model_action_ms": 467.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1742.088,
+      "order": 15
+    },
+    {
+      "prompt_id": "lat-03",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:48.092+00:00",
+      "run_id": "run_93cdbfa272704daab9fb5d8a87a701a9",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 449,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 272
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 404,
+          "input_tokens": 537,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 201
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 962,
+          "input_tokens": 803,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 234
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 701,
+          "input_tokens": 877,
+          "cached_tokens": 799,
+          "reasoning_tokens": null,
+          "first_token_ms": 92
+        }
+      ],
+      "first_transport_ms": 2542.746,
+      "first_model_action_ms": 461.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2544.821,
+      "order": 16
+    },
+    {
+      "prompt_id": "lat-09",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:42:50.657+00:00",
+      "run_id": "run_e679ad0c64a64da2a6dad813d4cf4e29",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 506,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 330
+        }
+      ],
+      "first_transport_ms": 523.898,
+      "first_model_action_ms": 520.0,
+      "first_useful_content_ms": 520.0,
+      "first_answer_token_ms": 524.531,
+      "completion_ms": 525.04,
+      "order": 17
+    },
+    {
+      "prompt_id": "lat-08",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:42:51.194+00:00",
+      "run_id": "run_b20438d7b3e04048837f325169574c2c",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 398,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 218
+        }
+      ],
+      "first_transport_ms": 411.139,
+      "first_model_action_ms": 408.0,
+      "first_useful_content_ms": 408.0,
+      "first_answer_token_ms": 411.486,
+      "completion_ms": 411.89,
+      "order": 18
+    },
+    {
+      "prompt_id": "lat-02",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:51.615+00:00",
+      "run_id": "run_fb338f8c3bfc4e549f60b97da1f60546",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 410,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 235
+        }
+      ],
+      "first_transport_ms": 423.171,
+      "first_model_action_ms": 420.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 424.452,
+      "order": 19
+    },
+    {
+      "prompt_id": "lat-11",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:42:52.045+00:00",
+      "run_id": "run_0844bfb4ff3e4084847d092d04f99381",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 414,
+          "input_tokens": 962,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 237
+        }
+      ],
+      "first_transport_ms": 428.412,
+      "first_model_action_ms": 425.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 429.014,
+      "order": 20
+    },
+    {
+      "prompt_id": "lat-06",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:52.481+00:00",
+      "run_id": "run_bcf749334c5542df839f26dbf774673b",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 467,
+          "input_tokens": 965,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 264
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 801,
+          "input_tokens": 635,
+          "cached_tokens": 305,
+          "reasoning_tokens": null,
+          "first_token_ms": 496
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 512,
+          "input_tokens": 902,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 242
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 332,
+          "input_tokens": 955,
+          "cached_tokens": 898,
+          "reasoning_tokens": null,
+          "first_token_ms": 70
+        }
+      ],
+      "first_transport_ms": 2133.587,
+      "first_model_action_ms": 478.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2134.155,
+      "order": 21
+    },
+    {
+      "prompt_id": "lat-06",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:54.622+00:00",
+      "run_id": "run_579cedbd0ec449b7b8c8c6c9f49f7b2a",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 510,
+          "input_tokens": 965,
+          "cached_tokens": 964,
+          "reasoning_tokens": null,
+          "first_token_ms": 301
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 562,
+          "input_tokens": 635,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 202
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 604,
+          "input_tokens": 900,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 247
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 390,
+          "input_tokens": 953,
+          "cached_tokens": 896,
+          "reasoning_tokens": null,
+          "first_token_ms": 80
+        }
+      ],
+      "first_transport_ms": 2098.755,
+      "first_model_action_ms": 523.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2101.644,
+      "order": 22
+    },
+    {
+      "prompt_id": "lat-01",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:56.735+00:00",
+      "run_id": "run_fbe249cf384240fdaa6805dbb0faa9a2",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 409,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 226
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 451,
+          "input_tokens": 559,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 246
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 769,
+          "input_tokens": 811,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 217
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 854,
+          "input_tokens": 639,
+          "cached_tokens": 394,
+          "reasoning_tokens": null,
+          "first_token_ms": 328
+        }
+      ],
+      "first_transport_ms": 2516.086,
+      "first_model_action_ms": 423.0,
+      "first_useful_content_ms": 2506.0,
+      "first_answer_token_ms": 2516.97,
+      "completion_ms": 2518.211,
+      "order": 23
+    },
+    {
+      "prompt_id": "lat-02",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:42:59.265+00:00",
+      "run_id": "run_93cc5500094f475aad1173a93faeddbe",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 479,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 297
+        }
+      ],
+      "first_transport_ms": 500.949,
+      "first_model_action_ms": 494.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 501.554,
+      "order": 24
+    },
+    {
+      "prompt_id": "lat-09",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:42:59.773+00:00",
+      "run_id": "run_212cf59a541c479dad58829bad8b6f2a",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 478,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 266
+        }
+      ],
+      "first_transport_ms": 497.699,
+      "first_model_action_ms": 492.0,
+      "first_useful_content_ms": 493.0,
+      "first_answer_token_ms": 498.351,
+      "completion_ms": 498.793,
+      "order": 25
+    },
+    {
+      "prompt_id": "lat-05",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:00.294+00:00",
+      "run_id": "run_e1996f145b40468686148d9653e88f90",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 627,
+          "input_tokens": 964,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 292
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 923,
+          "input_tokens": 634,
+          "cached_tokens": 305,
+          "reasoning_tokens": null,
+          "first_token_ms": 588
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 481,
+          "input_tokens": 897,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 264
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 293,
+          "input_tokens": 946,
+          "cached_tokens": 893,
+          "reasoning_tokens": null,
+          "first_token_ms": 82
+        }
+      ],
+      "first_transport_ms": 2370.799,
+      "first_model_action_ms": 649.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2373.608,
+      "order": 26
+    },
+    {
+      "prompt_id": "lat-09",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:02.679+00:00",
+      "run_id": "run_157fd5c4c6554c16b2e89578a3ff7a1b",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 514,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 326
+        }
+      ],
+      "first_transport_ms": 536.171,
+      "first_model_action_ms": 530.0,
+      "first_useful_content_ms": 531.0,
+      "first_answer_token_ms": 536.764,
+      "completion_ms": 537.105,
+      "order": 27
+    },
+    {
+      "prompt_id": "lat-06",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:03.230+00:00",
+      "run_id": "run_47c5bc5c362e493f8d2cbe7400427421",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 555,
+          "input_tokens": 965,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 283
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 967,
+          "input_tokens": 635,
+          "cached_tokens": 305,
+          "reasoning_tokens": null,
+          "first_token_ms": 603
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 632,
+          "input_tokens": 892,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 290
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 434,
+          "input_tokens": 945,
+          "cached_tokens": 888,
+          "reasoning_tokens": null,
+          "first_token_ms": 102
+        }
+      ],
+      "first_transport_ms": 2653.65,
+      "first_model_action_ms": 569.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2659.322,
+      "order": 28
+    },
+    {
+      "prompt_id": "lat-10",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:05.912+00:00",
+      "run_id": "run_78fc1602409a463f91478e848afef86c",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 496,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 204
+        }
+      ],
+      "first_transport_ms": 525.52,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 526.177,
+      "order": 29
+    },
+    {
+      "prompt_id": "lat-02",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:06.445+00:00",
+      "run_id": "run_c2755758e9b2481199d6a231f9f26aef",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 464,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 250
+        }
+      ],
+      "first_transport_ms": 489.169,
+      "first_model_action_ms": 480.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 490.337,
+      "order": 30
+    },
+    {
+      "prompt_id": "lat-09",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:06.946+00:00",
+      "run_id": "run_c7a9c301510047049d1dda72a95b8dcb",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 448,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 263
+        }
+      ],
+      "first_transport_ms": 474.99,
+      "first_model_action_ms": 468.0,
+      "first_useful_content_ms": 469.0,
+      "first_answer_token_ms": 475.62,
+      "completion_ms": 476.048,
+      "order": 31
+    },
+    {
+      "prompt_id": "lat-04",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:07.440+00:00",
+      "run_id": "run_7597eaba84d14b1d9e97d6909ea59cf6",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 434,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 238
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 734,
+          "input_tokens": 538,
+          "cached_tokens": 258,
+          "reasoning_tokens": null,
+          "first_token_ms": 500
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 424,
+          "input_tokens": 773,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 214
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 647,
+          "input_tokens": 601,
+          "cached_tokens": 0,
+          "reasoning_tokens": null,
+          "first_token_ms": 477
+        }
+      ],
+      "first_transport_ms": 2276.165,
+      "first_model_action_ms": 449.0,
+      "first_useful_content_ms": 2271.0,
+      "first_answer_token_ms": 2276.488,
+      "completion_ms": 2276.828,
+      "order": 32
+    },
+    {
+      "prompt_id": "lat-12",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:09.722+00:00",
+      "run_id": "run_291b329d89f643c29eceb523e94e1a49",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 1004,
+          "input_tokens": 963,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 64
+        }
+      ],
+      "first_transport_ms": 1016.538,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1017.164,
+      "order": 33
+    },
+    {
+      "prompt_id": "lat-09",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:10.745+00:00",
+      "run_id": "run_03d57246c9db46c78bf06409121a9048",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 462,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 271
+        }
+      ],
+      "first_transport_ms": 488.507,
+      "first_model_action_ms": 483.0,
+      "first_useful_content_ms": 484.0,
+      "first_answer_token_ms": 489.1,
+      "completion_ms": 489.709,
+      "order": 34
+    },
+    {
+      "prompt_id": "lat-12",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:11.250+00:00",
+      "run_id": "run_d7ede50175f448069f449e69fd752f16",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 1170,
+          "input_tokens": 963,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 64
+        }
+      ],
+      "first_transport_ms": 1196.737,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1197.94,
+      "order": 35
+    },
+    {
+      "prompt_id": "lat-09",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:12.457+00:00",
+      "run_id": "run_4288ca74d540473ebb4eb92dc7119fdb",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 449,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 259
+        }
+      ],
+      "first_transport_ms": 470.51,
+      "first_model_action_ms": 464.0,
+      "first_useful_content_ms": 465.0,
+      "first_answer_token_ms": 471.084,
+      "completion_ms": 471.491,
+      "order": 36
+    },
+    {
+      "prompt_id": "lat-07",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:12.941+00:00",
+      "run_id": "run_f3b20f0cbcee4e7ab1c1e6b9a9585b47",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected waiting_input",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 320,
+          "input_tokens": 959,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 43
+        }
+      ],
+      "first_transport_ms": 338.96,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 339.541,
+      "order": 37
+    },
+    {
+      "prompt_id": "lat-06",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:13.286+00:00",
+      "run_id": "run_db392febb53b432eb1f6fde4d2bee1e4",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 473,
+          "input_tokens": 965,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 268
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 592,
+          "input_tokens": 635,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 284
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 533,
+          "input_tokens": 900,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 247
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 351,
+          "input_tokens": 953,
+          "cached_tokens": 896,
+          "reasoning_tokens": null,
+          "first_token_ms": 82
+        }
+      ],
+      "first_transport_ms": 1983.007,
+      "first_model_action_ms": 490.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1983.731,
+      "order": 38
+    },
+    {
+      "prompt_id": "lat-01",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:15.277+00:00",
+      "run_id": "run_bda802823805476b9217e566fb64c518",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 424,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 236
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 428,
+          "input_tokens": 559,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 229
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 729,
+          "input_tokens": 815,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 244
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 756,
+          "input_tokens": 643,
+          "cached_tokens": 394,
+          "reasoning_tokens": null,
+          "first_token_ms": 276
+        }
+      ],
+      "first_transport_ms": 2373.547,
+      "first_model_action_ms": 441.0,
+      "first_useful_content_ms": 2364.0,
+      "first_answer_token_ms": 2374.13,
+      "completion_ms": 2375.632,
+      "order": 39
+    },
+    {
+      "prompt_id": "lat-08",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:17.665+00:00",
+      "run_id": "run_4a24c5ef30174c9fbe4bb8dff604c799",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 492,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 291
+        }
+      ],
+      "first_transport_ms": 519.03,
+      "first_model_action_ms": 511.0,
+      "first_useful_content_ms": 512.0,
+      "first_answer_token_ms": 520.107,
+      "completion_ms": 520.978,
+      "order": 40
+    },
+    {
+      "prompt_id": "lat-10",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:18.210+00:00",
+      "run_id": "run_48411e3eac0d477aa032a63e306b0613",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 346,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 75
+        }
+      ],
+      "first_transport_ms": 363.942,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 364.504,
+      "order": 41
+    },
+    {
+      "prompt_id": "lat-02",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:18.579+00:00",
+      "run_id": "run_ad04645f626444f38f6a42585c57ef6e",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 414,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 233
+        }
+      ],
+      "first_transport_ms": 428.039,
+      "first_model_action_ms": 425.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 428.776,
+      "order": 42
+    },
+    {
+      "prompt_id": "lat-01",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:19.014+00:00",
+      "run_id": "run_9d583761640448e3acfa0df712e61544",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 368,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 191
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 412,
+          "input_tokens": 559,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 207
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 717,
+          "input_tokens": 811,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 229
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 711,
+          "input_tokens": 639,
+          "cached_tokens": 395,
+          "reasoning_tokens": null,
+          "first_token_ms": 230
+        }
+      ],
+      "first_transport_ms": 2239.004,
+      "first_model_action_ms": 381.0,
+      "first_useful_content_ms": 2230.0,
+      "first_answer_token_ms": 2239.438,
+      "completion_ms": 2240.538,
+      "order": 43
+    },
+    {
+      "prompt_id": "lat-02",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:21.264+00:00",
+      "run_id": "run_22e0bbbcf2904ffdad56bcfa4ae102bc",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 443,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 257
+        }
+      ],
+      "first_transport_ms": 461.292,
+      "first_model_action_ms": 457.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 461.879,
+      "order": 44
+    },
+    {
+      "prompt_id": "lat-08",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:21.732+00:00",
+      "run_id": "run_8c7483f1a45242e7b13e24ee9935e53e",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 419,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 237
+        }
+      ],
+      "first_transport_ms": 441.025,
+      "first_model_action_ms": 436.0,
+      "first_useful_content_ms": 436.0,
+      "first_answer_token_ms": 441.513,
+      "completion_ms": 441.857,
+      "order": 45
+    },
+    {
+      "prompt_id": "lat-06",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:22.185+00:00",
+      "run_id": "run_93290d92e132437683f78af4997c6a20",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 476,
+          "input_tokens": 965,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 264
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 583,
+          "input_tokens": 635,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 275
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 526,
+          "input_tokens": 900,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 254
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 348,
+          "input_tokens": 953,
+          "cached_tokens": 896,
+          "reasoning_tokens": null,
+          "first_token_ms": 74
+        }
+      ],
+      "first_transport_ms": 1956.51,
+      "first_model_action_ms": 488.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1957.106,
+      "order": 46
+    },
+    {
+      "prompt_id": "lat-06",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:24.149+00:00",
+      "run_id": "run_9ad8ecec8a2344828de0e1c2dde65975",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 496,
+          "input_tokens": 965,
+          "cached_tokens": 964,
+          "reasoning_tokens": null,
+          "first_token_ms": 288
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 535,
+          "input_tokens": 635,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 208
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 782,
+          "input_tokens": 888,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 261
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 498,
+          "input_tokens": 956,
+          "cached_tokens": 884,
+          "reasoning_tokens": null,
+          "first_token_ms": 92
+        }
+      ],
+      "first_transport_ms": 2337.609,
+      "first_model_action_ms": 509.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2338.208,
+      "order": 47
+    },
+    {
+      "prompt_id": "lat-08",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:26.494+00:00",
+      "run_id": "run_24e2cf94cb634f13a6524cd72f598f9d",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 428,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 246
+        }
+      ],
+      "first_transport_ms": 447.149,
+      "first_model_action_ms": 442.0,
+      "first_useful_content_ms": 442.0,
+      "first_answer_token_ms": 447.933,
+      "completion_ms": 448.417,
+      "order": 48
+    },
+    {
+      "prompt_id": "lat-11",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:26.953+00:00",
+      "run_id": "run_63edff41e18d4d8596f8ba886c86a210",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 416,
+          "input_tokens": 962,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 239
+        }
+      ],
+      "first_transport_ms": 432.419,
+      "first_model_action_ms": 428.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 432.986,
+      "order": 49
+    },
+    {
+      "prompt_id": "lat-09",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:27.392+00:00",
+      "run_id": "run_5114d40bb59540be80d4ef3605d34232",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 429,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 252
+        }
+      ],
+      "first_transport_ms": 444.426,
+      "first_model_action_ms": 441.0,
+      "first_useful_content_ms": 442.0,
+      "first_answer_token_ms": 444.775,
+      "completion_ms": 445.211,
+      "order": 50
+    },
+    {
+      "prompt_id": "lat-06",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:27.846+00:00",
+      "run_id": "run_ea1cac5ad5364fc69188dbfd29ca07e4",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 461,
+          "input_tokens": 965,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 265
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 531,
+          "input_tokens": 635,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 216
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 799,
+          "input_tokens": 898,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 261
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 1013,
+          "input_tokens": 692,
+          "cached_tokens": 0,
+          "reasoning_tokens": null,
+          "first_token_ms": 534
+        }
+      ],
+      "first_transport_ms": 2828.443,
+      "first_model_action_ms": 472.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2829.112,
+      "order": 51
+    },
+    {
+      "prompt_id": "lat-07",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:30.685+00:00",
+      "run_id": "run_f462a6eae76046f58789a695e698a756",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected waiting_input",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 358,
+          "input_tokens": 959,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 74
+        }
+      ],
+      "first_transport_ms": 378.186,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 378.788,
+      "order": 52
+    },
+    {
+      "prompt_id": "lat-10",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:31.071+00:00",
+      "run_id": "run_182ab248520249f39f642bde7126e252",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 335,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 62
+        }
+      ],
+      "first_transport_ms": 353.72,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 354.32,
+      "order": 53
+    },
+    {
+      "prompt_id": "lat-03",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:31.430+00:00",
+      "run_id": "run_e08032128cd74d618235daf020ed6b33",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 400,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 220
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 660,
+          "input_tokens": 537,
+          "cached_tokens": 258,
+          "reasoning_tokens": null,
+          "first_token_ms": 463
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 859,
+          "input_tokens": 815,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 239
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 708,
+          "input_tokens": 889,
+          "cached_tokens": 811,
+          "reasoning_tokens": null,
+          "first_token_ms": 92
+        }
+      ],
+      "first_transport_ms": 2655.888,
+      "first_model_action_ms": 412.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2657.718,
+      "order": 54
+    },
+    {
+      "prompt_id": "lat-07",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:34.099+00:00",
+      "run_id": "run_c24252a8d15043eab626ac9fdc9f6d4a",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected waiting_input",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 343,
+          "input_tokens": 959,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 67
+        }
+      ],
+      "first_transport_ms": 363.923,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 364.901,
+      "order": 55
+    },
+    {
+      "prompt_id": "lat-07",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:34.470+00:00",
+      "run_id": "run_98fb53905bc34e7ab4296d4dd7672a2b",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected waiting_input",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 299,
+          "input_tokens": 959,
+          "cached_tokens": 958,
+          "reasoning_tokens": null,
+          "first_token_ms": 23
+        }
+      ],
+      "first_transport_ms": 315.293,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 315.867,
+      "order": 56
+    },
+    {
+      "prompt_id": "lat-09",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:34.792+00:00",
+      "run_id": "run_46562e65ff224b7c87ec0beb14256cc6",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 446,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 261
+        }
+      ],
+      "first_transport_ms": 465.171,
+      "first_model_action_ms": 460.0,
+      "first_useful_content_ms": 461.0,
+      "first_answer_token_ms": 465.651,
+      "completion_ms": 465.999,
+      "order": 57
+    },
+    {
+      "prompt_id": "lat-02",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:35.269+00:00",
+      "run_id": "run_5f19ed7ff6924d4294332c5db7f44cac",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 410,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 236
+        }
+      ],
+      "first_transport_ms": 426.418,
+      "first_model_action_ms": 422.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 427.04,
+      "order": 58
+    },
+    {
+      "prompt_id": "lat-02",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:35.702+00:00",
+      "run_id": "run_c7f575cfa93c4b6a92a9e17b8ada2ee6",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 390,
+          "input_tokens": 960,
+          "cached_tokens": 959,
+          "reasoning_tokens": null,
+          "first_token_ms": 215
+        }
+      ],
+      "first_transport_ms": 406.253,
+      "first_model_action_ms": 403.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 406.735,
+      "order": 59
+    },
+    {
+      "prompt_id": "lat-09",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:36.113+00:00",
+      "run_id": "run_1216e0dd35e3436b8925c5159a7fae57",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 427,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 250
+        }
+      ],
+      "first_transport_ms": 441.437,
+      "first_model_action_ms": 438.0,
+      "first_useful_content_ms": 438.0,
+      "first_answer_token_ms": 441.815,
+      "completion_ms": 442.096,
+      "order": 60
+    },
+    {
+      "prompt_id": "lat-07",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:36.565+00:00",
+      "run_id": "run_0f8140248faa4cc39ed8a4fac192f30a",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected waiting_input",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 317,
+          "input_tokens": 959,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 42
+        }
+      ],
+      "first_transport_ms": 330.292,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 330.864,
+      "order": 61
+    },
+    {
+      "prompt_id": "lat-02",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:36.903+00:00",
+      "run_id": "run_8cb5ada67b2d42bfb8fdfc2a48ccf10c",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 436,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 245
+        }
+      ],
+      "first_transport_ms": 457.918,
+      "first_model_action_ms": 451.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 458.928,
+      "order": 62
+    },
+    {
+      "prompt_id": "lat-08",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:37.372+00:00",
+      "run_id": "run_3e0f678afd6b484ba5fc4522ec5af9d7",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 418,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 237
+        }
+      ],
+      "first_transport_ms": 447.331,
+      "first_model_action_ms": 441.0,
+      "first_useful_content_ms": 442.0,
+      "first_answer_token_ms": 447.843,
+      "completion_ms": 448.193,
+      "order": 63
+    },
+    {
+      "prompt_id": "lat-04",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:37.832+00:00",
+      "run_id": "run_a146133b6f7345faa01b8562fcd59766",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 404,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 227
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 623,
+          "input_tokens": 538,
+          "cached_tokens": 258,
+          "reasoning_tokens": null,
+          "first_token_ms": 440
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 411,
+          "input_tokens": 781,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 208
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 397,
+          "input_tokens": 609,
+          "cached_tokens": 374,
+          "reasoning_tokens": null,
+          "first_token_ms": 233
+        }
+      ],
+      "first_transport_ms": 1856.496,
+      "first_model_action_ms": 417.0,
+      "first_useful_content_ms": 1853.0,
+      "first_answer_token_ms": 1856.773,
+      "completion_ms": 1857.202,
+      "order": 64
+    },
+    {
+      "prompt_id": "lat-10",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:39.694+00:00",
+      "run_id": "run_cd581e44a6654d4a8e85cd276078b900",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 366,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 71
+        }
+      ],
+      "first_transport_ms": 378.938,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 379.528,
+      "order": 65
+    },
+    {
+      "prompt_id": "lat-10",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:40.080+00:00",
+      "run_id": "run_2731aa8b041f4c39848750fbfe0590c3",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 311,
+          "input_tokens": 961,
+          "cached_tokens": 960,
+          "reasoning_tokens": null,
+          "first_token_ms": 39
+        }
+      ],
+      "first_transport_ms": 326.253,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 326.841,
+      "order": 66
+    },
+    {
+      "prompt_id": "lat-04",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:40.413+00:00",
+      "run_id": "run_b020448deb424df8ab1b1788984fec98",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 401,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 224
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 408,
+          "input_tokens": 538,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 225
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 419,
+          "input_tokens": 783,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 224
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 393,
+          "input_tokens": 611,
+          "cached_tokens": 374,
+          "reasoning_tokens": null,
+          "first_token_ms": 222
+        }
+      ],
+      "first_transport_ms": 1647.023,
+      "first_model_action_ms": 413.0,
+      "first_useful_content_ms": 1643.0,
+      "first_answer_token_ms": 1647.309,
+      "completion_ms": 1647.856,
+      "order": 67
+    },
+    {
+      "prompt_id": "lat-10",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:42.067+00:00",
+      "run_id": "run_11a27edde4164d9fb2c99643398223a2",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 353,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 81
+        }
+      ],
+      "first_transport_ms": 364.236,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 364.668,
+      "order": 68
+    },
+    {
+      "prompt_id": "lat-07",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:42.436+00:00",
+      "run_id": "run_fbcee35985a84baea3be7189c240922a",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected waiting_input",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 314,
+          "input_tokens": 959,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 41
+        }
+      ],
+      "first_transport_ms": 325.416,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 326.131,
+      "order": 69
+    },
+    {
+      "prompt_id": "lat-05",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:42.768+00:00",
+      "run_id": "run_0f890c2861ca47b78265fdd8fad1f303",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 494,
+          "input_tokens": 964,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 273
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 865,
+          "input_tokens": 634,
+          "cached_tokens": 305,
+          "reasoning_tokens": null,
+          "first_token_ms": 533
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 474,
+          "input_tokens": 897,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 266
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 277,
+          "input_tokens": 946,
+          "cached_tokens": 893,
+          "reasoning_tokens": null,
+          "first_token_ms": 81
+        }
+      ],
+      "first_transport_ms": 2134.573,
+      "first_model_action_ms": 509.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2135.1,
+      "order": 70
+    },
+    {
+      "prompt_id": "lat-12",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:44.910+00:00",
+      "run_id": "run_8c698de2e8d04b3596a07289fefa74a5",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 1027,
+          "input_tokens": 963,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 82
+        }
+      ],
+      "first_transport_ms": 1041.299,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1041.89,
+      "order": 71
+    },
+    {
+      "prompt_id": "lat-07",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:45.959+00:00",
+      "run_id": "run_32a3d8d62a9e4cfaa625a187db1bc8b6",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected waiting_input",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 332,
+          "input_tokens": 959,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 48
+        }
+      ],
+      "first_transport_ms": 351.777,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 352.327,
+      "order": 72
+    },
+    {
+      "prompt_id": "lat-07",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:43:46.319+00:00",
+      "run_id": "run_adef5a0afc4146e5828d1a8cf49140e9",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected waiting_input",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 299,
+          "input_tokens": 959,
+          "cached_tokens": 958,
+          "reasoning_tokens": null,
+          "first_token_ms": 23
+        }
+      ],
+      "first_transport_ms": 316.712,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 317.22,
+      "order": 73
+    },
+    {
+      "prompt_id": "lat-02",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:46.641+00:00",
+      "run_id": "run_041f8555cf114732b71903d7a05fa34f",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 421,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 238
+        }
+      ],
+      "first_transport_ms": 436.338,
+      "first_model_action_ms": 433.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 436.91,
+      "order": 74
+    },
+    {
+      "prompt_id": "lat-12",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:47.084+00:00",
+      "run_id": "run_2cd733e9cdb3401fb615372aecabf4ef",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 993,
+          "input_tokens": 963,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 56
+        }
+      ],
+      "first_transport_ms": 1009.058,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1009.642,
+      "order": 75
+    },
+    {
+      "prompt_id": "lat-04",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:48.101+00:00",
+      "run_id": "run_a5a597512bea4a5f90534a5bd1b7c6ff",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 419,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 233
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 451,
+          "input_tokens": 538,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 263
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 435,
+          "input_tokens": 769,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 230
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 459,
+          "input_tokens": 597,
+          "cached_tokens": 373,
+          "reasoning_tokens": null,
+          "first_token_ms": 209
+        }
+      ],
+      "first_transport_ms": 1791.979,
+      "first_model_action_ms": 434.0,
+      "first_useful_content_ms": 1784.0,
+      "first_answer_token_ms": 1793.089,
+      "completion_ms": 1793.865,
+      "order": 76
+    },
+    {
+      "prompt_id": "lat-01",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:49.905+00:00",
+      "run_id": "run_eb62d7b13dc74c7dabe92065905b90c9",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 392,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 215
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 467,
+          "input_tokens": 559,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 257
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 739,
+          "input_tokens": 809,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 246
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 760,
+          "input_tokens": 637,
+          "cached_tokens": 395,
+          "reasoning_tokens": null,
+          "first_token_ms": 282
+        }
+      ],
+      "first_transport_ms": 2382.986,
+      "first_model_action_ms": 403.0,
+      "first_useful_content_ms": 2377.0,
+      "first_answer_token_ms": 2383.908,
+      "completion_ms": 2385.315,
+      "order": 77
+    },
+    {
+      "prompt_id": "lat-10",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:52.305+00:00",
+      "run_id": "run_18a4c04da4b24fa18f52f779574a86ee",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 393,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 122
+        }
+      ],
+      "first_transport_ms": 409.143,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 409.858,
+      "order": 78
+    },
+    {
+      "prompt_id": "lat-10",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:52.720+00:00",
+      "run_id": "run_3da2a0e1f24541fe89c27c03253e7b09",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 316,
+          "input_tokens": 961,
+          "cached_tokens": 960,
+          "reasoning_tokens": null,
+          "first_token_ms": 38
+        }
+      ],
+      "first_transport_ms": 330.689,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 331.258,
+      "order": 79
+    },
+    {
+      "prompt_id": "lat-05",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:53.058+00:00",
+      "run_id": "run_225cba9da665497a871bb82399f02ee6",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 472,
+          "input_tokens": 964,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 265
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 562,
+          "input_tokens": 634,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 232
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 471,
+          "input_tokens": 897,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 261
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 267,
+          "input_tokens": 946,
+          "cached_tokens": 893,
+          "reasoning_tokens": null,
+          "first_token_ms": 76
+        }
+      ],
+      "first_transport_ms": 1798.006,
+      "first_model_action_ms": 485.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1798.494,
+      "order": 80
+    },
+    {
+      "prompt_id": "lat-05",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:54.863+00:00",
+      "run_id": "run_42fc4148820c4034868fa2918ed61116",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 506,
+          "input_tokens": 964,
+          "cached_tokens": 963,
+          "reasoning_tokens": null,
+          "first_token_ms": 295
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 586,
+          "input_tokens": 634,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 251
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 482,
+          "input_tokens": 895,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 260
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 269,
+          "input_tokens": 944,
+          "cached_tokens": 891,
+          "reasoning_tokens": null,
+          "first_token_ms": 77
+        }
+      ],
+      "first_transport_ms": 1868.969,
+      "first_model_action_ms": 517.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1870.377,
+      "order": 81
+    },
+    {
+      "prompt_id": "lat-11",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:56.742+00:00",
+      "run_id": "run_066985b514c4401cb31e9813ab267195",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 449,
+          "input_tokens": 962,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 274
+        }
+      ],
+      "first_transport_ms": 466.032,
+      "first_model_action_ms": 461.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 466.625,
+      "order": 82
+    },
+    {
+      "prompt_id": "lat-11",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:57.215+00:00",
+      "run_id": "run_adb52a932fa44378a968180fc732cf50",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 398,
+          "input_tokens": 962,
+          "cached_tokens": 961,
+          "reasoning_tokens": null,
+          "first_token_ms": 217
+        }
+      ],
+      "first_transport_ms": 412.649,
+      "first_model_action_ms": 409.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 413.382,
+      "order": 83
+    },
+    {
+      "prompt_id": "lat-12",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:43:57.634+00:00",
+      "run_id": "run_c0d96d1da78d489eb431eca01ac8b649",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 1027,
+          "input_tokens": 963,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 54
+        }
+      ],
+      "first_transport_ms": 1042.114,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1042.721,
+      "order": 84
+    },
+    {
+      "prompt_id": "lat-03",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:43:58.690+00:00",
+      "run_id": "run_7d374793eafe4b6fa5c21678fc844655",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 413,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 234
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 642,
+          "input_tokens": 537,
+          "cached_tokens": 258,
+          "reasoning_tokens": null,
+          "first_token_ms": 448
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 913,
+          "input_tokens": 813,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 245
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 861,
+          "input_tokens": 887,
+          "cached_tokens": 809,
+          "reasoning_tokens": null,
+          "first_token_ms": 108
+        }
+      ],
+      "first_transport_ms": 2875.766,
+      "first_model_action_ms": 427.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2879.594,
+      "order": 85
+    },
+    {
+      "prompt_id": "lat-04",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:01.586+00:00",
+      "run_id": "run_00ddb36c397741679810398e87b6af69",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 496,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 311
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 639,
+          "input_tokens": 538,
+          "cached_tokens": 258,
+          "reasoning_tokens": null,
+          "first_token_ms": 454
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 433,
+          "input_tokens": 769,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 228
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 371,
+          "input_tokens": 597,
+          "cached_tokens": 373,
+          "reasoning_tokens": null,
+          "first_token_ms": 215
+        }
+      ],
+      "first_transport_ms": 1981.825,
+      "first_model_action_ms": 522.0,
+      "first_useful_content_ms": 1975.0,
+      "first_answer_token_ms": 1982.351,
+      "completion_ms": 1982.897,
+      "order": 86
+    },
+    {
+      "prompt_id": "lat-01",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:03.575+00:00",
+      "run_id": "run_05123aece80045b2a05f15ba4218cc3d",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 395,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 216
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 439,
+          "input_tokens": 559,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 233
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 752,
+          "input_tokens": 815,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 253
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 750,
+          "input_tokens": 643,
+          "cached_tokens": 395,
+          "reasoning_tokens": null,
+          "first_token_ms": 278
+        }
+      ],
+      "first_transport_ms": 2363.799,
+      "first_model_action_ms": 406.0,
+      "first_useful_content_ms": 2356.0,
+      "first_answer_token_ms": 2364.456,
+      "completion_ms": 2365.686,
+      "order": 87
+    },
+    {
+      "prompt_id": "lat-11",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:44:05.950+00:00",
+      "run_id": "run_6e2beda62f98429e9a0bb957aa3418ad",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 470,
+          "input_tokens": 962,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 290
+        }
+      ],
+      "first_transport_ms": 487.39,
+      "first_model_action_ms": 484.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 487.878,
+      "order": 88
+    },
+    {
+      "prompt_id": "lat-10",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:44:06.445+00:00",
+      "run_id": "run_e97c5ac2a5b34252bca68a4681ecb6ad",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 338,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 62
+        }
+      ],
+      "first_transport_ms": 364.821,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 365.306,
+      "order": 89
+    },
+    {
+      "prompt_id": "lat-05",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:06.816+00:00",
+      "run_id": "run_8db4c5eb68d040a8ace46f4f90e7d47f",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 468,
+          "input_tokens": 964,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 266
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 579,
+          "input_tokens": 634,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 250
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 574,
+          "input_tokens": 899,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 283
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 277,
+          "input_tokens": 948,
+          "cached_tokens": 895,
+          "reasoning_tokens": null,
+          "first_token_ms": 83
+        }
+      ],
+      "first_transport_ms": 1932.551,
+      "first_model_action_ms": 479.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1933.03,
+      "order": 90
+    },
+    {
+      "prompt_id": "lat-08",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:44:08.755+00:00",
+      "run_id": "run_c20e717328c74d86bd0a6db5efdc3179",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 435,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 259
+        }
+      ],
+      "first_transport_ms": 451.299,
+      "first_model_action_ms": 446.0,
+      "first_useful_content_ms": 446.0,
+      "first_answer_token_ms": 452.03,
+      "completion_ms": 452.504,
+      "order": 91
+    },
+    {
+      "prompt_id": "lat-06",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:09.219+00:00",
+      "run_id": "run_832ff87c72f4409fbcb288fb10a1bf66",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 464,
+          "input_tokens": 965,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 266
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 833,
+          "input_tokens": 635,
+          "cached_tokens": 305,
+          "reasoning_tokens": null,
+          "first_token_ms": 524
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 765,
+          "input_tokens": 894,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 259
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 602,
+          "input_tokens": 688,
+          "cached_tokens": 445,
+          "reasoning_tokens": null,
+          "first_token_ms": 243
+        }
+      ],
+      "first_transport_ms": 2689.278,
+      "first_model_action_ms": 476.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2690.025,
+      "order": 92
+    },
+    {
+      "prompt_id": "lat-02",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:11.917+00:00",
+      "run_id": "run_dd00645bf57548318889d478954e41a3",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 439,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 256
+        }
+      ],
+      "first_transport_ms": 457.938,
+      "first_model_action_ms": 453.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 458.539,
+      "order": 93
+    },
+    {
+      "prompt_id": "lat-12",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:44:12.381+00:00",
+      "run_id": "run_47846220a2654d78a931f34b5beea678",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 987,
+          "input_tokens": 963,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 54
+        }
+      ],
+      "first_transport_ms": 1009.853,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1010.575,
+      "order": 94
+    },
+    {
+      "prompt_id": "lat-11",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:44:13.399+00:00",
+      "run_id": "run_2c75d7e88bc04bc8a2c7b2dc977499d6",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 421,
+          "input_tokens": 962,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 241
+        }
+      ],
+      "first_transport_ms": 437.202,
+      "first_model_action_ms": 433.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 437.908,
+      "order": 95
+    },
+    {
+      "prompt_id": "lat-08",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:44:13.843+00:00",
+      "run_id": "run_3bd6117627af48b3ab832c046f71ee27",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 405,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 225
+        }
+      ],
+      "first_transport_ms": 424.681,
+      "first_model_action_ms": 420.0,
+      "first_useful_content_ms": 421.0,
+      "first_answer_token_ms": 425.113,
+      "completion_ms": 425.439,
+      "order": 96
+    },
+    {
+      "prompt_id": "lat-01",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:14.279+00:00",
+      "run_id": "run_7d3e46e2a02e4a709784f81e65256142",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 364,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 188
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 418,
+          "input_tokens": 559,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 219
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 743,
+          "input_tokens": 813,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 243
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 747,
+          "input_tokens": 641,
+          "cached_tokens": 394,
+          "reasoning_tokens": null,
+          "first_token_ms": 257
+        }
+      ],
+      "first_transport_ms": 2298.842,
+      "first_model_action_ms": 377.0,
+      "first_useful_content_ms": 2292.0,
+      "first_answer_token_ms": 2299.293,
+      "completion_ms": 2300.488,
+      "order": 97
+    },
+    {
+      "prompt_id": "lat-12",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:44:16.588+00:00",
+      "run_id": "run_e4cb56f5d6f44075a75bcc83d82e6091",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 1042,
+          "input_tokens": 963,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 76
+        }
+      ],
+      "first_transport_ms": 1056.919,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1057.376,
+      "order": 98
+    },
+    {
+      "prompt_id": "lat-12",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:44:17.650+00:00",
+      "run_id": "run_654e7dc2cfe542bb99e9ecd4b5a13b4e",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 1013,
+          "input_tokens": 963,
+          "cached_tokens": 962,
+          "reasoning_tokens": null,
+          "first_token_ms": 23
+        }
+      ],
+      "first_transport_ms": 1026.061,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1026.503,
+      "order": 99
+    },
+    {
+      "prompt_id": "lat-12",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:44:18.681+00:00",
+      "run_id": "run_46c240ba115448b7a45337fb180c57b2",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 994,
+          "input_tokens": 963,
+          "cached_tokens": 962,
+          "reasoning_tokens": null,
+          "first_token_ms": 23
+        }
+      ],
+      "first_transport_ms": 1006.812,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 1007.192,
+      "order": 100
+    },
+    {
+      "prompt_id": "lat-08",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:44:19.692+00:00",
+      "run_id": "run_f274cc83d82f4e79ac73f0b9688a96ff",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 425,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 235
+        }
+      ],
+      "first_transport_ms": 436.382,
+      "first_model_action_ms": 433.0,
+      "first_useful_content_ms": 434.0,
+      "first_answer_token_ms": 436.699,
+      "completion_ms": 436.949,
+      "order": 101
+    },
+    {
+      "prompt_id": "lat-04",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:20.137+00:00",
+      "run_id": "run_b048ab6e5c5c430fad9129448475c3aa",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 428,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 236
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 476,
+          "input_tokens": 538,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 276
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 464,
+          "input_tokens": 779,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 247
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 445,
+          "input_tokens": 607,
+          "cached_tokens": 373,
+          "reasoning_tokens": null,
+          "first_token_ms": 261
+        }
+      ],
+      "first_transport_ms": 1830.858,
+      "first_model_action_ms": 437.0,
+      "first_useful_content_ms": 1827.0,
+      "first_answer_token_ms": 1831.116,
+      "completion_ms": 1831.505,
+      "order": 102
+    },
+    {
+      "prompt_id": "lat-05",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:21.974+00:00",
+      "run_id": "run_d0bd307ee8d74042a09d12d3867cdca6",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 512,
+          "input_tokens": 964,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 296
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 920,
+          "input_tokens": 634,
+          "cached_tokens": 305,
+          "reasoning_tokens": null,
+          "first_token_ms": 557
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 521,
+          "input_tokens": 895,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 288
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 309,
+          "input_tokens": 944,
+          "cached_tokens": 891,
+          "reasoning_tokens": null,
+          "first_token_ms": 88
+        }
+      ],
+      "first_transport_ms": 2278.873,
+      "first_model_action_ms": 520.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2279.397,
+      "order": 103
+    },
+    {
+      "prompt_id": "lat-04",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:24.257+00:00",
+      "run_id": "run_3843a059118c497aa2ddadc86f7816bc",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 470,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 271
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 454,
+          "input_tokens": 538,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 247
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 485,
+          "input_tokens": 769,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 255
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 403,
+          "input_tokens": 597,
+          "cached_tokens": 373,
+          "reasoning_tokens": null,
+          "first_token_ms": 215
+        }
+      ],
+      "first_transport_ms": 1827.952,
+      "first_model_action_ms": 478.0,
+      "first_useful_content_ms": 1825.0,
+      "first_answer_token_ms": 1828.187,
+      "completion_ms": 1828.507,
+      "order": 104
+    },
+    {
+      "prompt_id": "lat-03",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:26.090+00:00",
+      "run_id": "run_5ac9571d59774632bd0ff33da6e6757e",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 457,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 259
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 733,
+          "input_tokens": 537,
+          "cached_tokens": 258,
+          "reasoning_tokens": null,
+          "first_token_ms": 479
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 996,
+          "input_tokens": 811,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 296
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 819,
+          "input_tokens": 885,
+          "cached_tokens": 807,
+          "reasoning_tokens": null,
+          "first_token_ms": 117
+        }
+      ],
+      "first_transport_ms": 3024.654,
+      "first_model_action_ms": 464.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 3026.343,
+      "order": 105
+    },
+    {
+      "prompt_id": "lat-11",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:44:29.129+00:00",
+      "run_id": "run_bb1a27df4fe546fbb15ba4f8a7c296d0",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 522,
+          "input_tokens": 962,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 318
+        }
+      ],
+      "first_transport_ms": 541.369,
+      "first_model_action_ms": 536.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 541.759,
+      "order": 106
+    },
+    {
+      "prompt_id": "lat-06",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:29.676+00:00",
+      "run_id": "run_e16e910ef7c047568534a68fe10c693a",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 524,
+          "input_tokens": 965,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 298
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 978,
+          "input_tokens": 635,
+          "cached_tokens": 305,
+          "reasoning_tokens": null,
+          "first_token_ms": 618
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 896,
+          "input_tokens": 888,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 317
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 723,
+          "input_tokens": 682,
+          "cached_tokens": 444,
+          "reasoning_tokens": null,
+          "first_token_ms": 296
+        }
+      ],
+      "first_transport_ms": 3146.05,
+      "first_model_action_ms": 534.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 3147.145,
+      "order": 107
+    },
+    {
+      "prompt_id": "lat-01",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:32.828+00:00",
+      "run_id": "run_08cf5ac395da42768bdfabf73f38969f",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 448,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 245
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 447,
+          "input_tokens": 559,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 217
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 871,
+          "input_tokens": 815,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 299
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 843,
+          "input_tokens": 643,
+          "cached_tokens": 394,
+          "reasoning_tokens": null,
+          "first_token_ms": 293
+        }
+      ],
+      "first_transport_ms": 2637.832,
+      "first_model_action_ms": 459.0,
+      "first_useful_content_ms": 2627.0,
+      "first_answer_token_ms": 2638.503,
+      "completion_ms": 2639.322,
+      "order": 108
+    },
+    {
+      "prompt_id": "lat-06",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:35.475+00:00",
+      "run_id": "run_65802288472d4117bf801858eaed8466",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 550,
+          "input_tokens": 965,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 331
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 593,
+          "input_tokens": 635,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 228
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 895,
+          "input_tokens": 898,
+          "cached_tokens": 631,
+          "reasoning_tokens": null,
+          "first_token_ms": 306
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 694,
+          "input_tokens": 692,
+          "cached_tokens": 444,
+          "reasoning_tokens": null,
+          "first_token_ms": 278
+        }
+      ],
+      "first_transport_ms": 2749.545,
+      "first_model_action_ms": 558.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2750.334,
+      "order": 109
+    },
+    {
+      "prompt_id": "lat-01",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:38.229+00:00",
+      "run_id": "run_44226564e5894f058461b797ec22deca",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 450,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 248
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 479,
+          "input_tokens": 559,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 245
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 857,
+          "input_tokens": 815,
+          "cached_tokens": 555,
+          "reasoning_tokens": null,
+          "first_token_ms": 294
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 865,
+          "input_tokens": 643,
+          "cached_tokens": 394,
+          "reasoning_tokens": null,
+          "first_token_ms": 297
+        }
+      ],
+      "first_transport_ms": 2691.348,
+      "first_model_action_ms": 458.0,
+      "first_useful_content_ms": 2686.0,
+      "first_answer_token_ms": 2692.115,
+      "completion_ms": 2693.118,
+      "order": 110
+    },
+    {
+      "prompt_id": "lat-05",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:40.931+00:00",
+      "run_id": "run_e4505bd4fed1401c87f5e242c7ac3a9f",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 573,
+          "input_tokens": 964,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 340
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 965,
+          "input_tokens": 634,
+          "cached_tokens": 305,
+          "reasoning_tokens": null,
+          "first_token_ms": 596
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 538,
+          "input_tokens": 901,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 303
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 317,
+          "input_tokens": 950,
+          "cached_tokens": 897,
+          "reasoning_tokens": null,
+          "first_token_ms": 90
+        }
+      ],
+      "first_transport_ms": 2417.469,
+      "first_model_action_ms": 587.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2418.182,
+      "order": 111
+    },
+    {
+      "prompt_id": "lat-08",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:44:43.354+00:00",
+      "run_id": "run_9b43e03070794808afb78949afb2c68c",
+      "http_status": 200,
+      "state": "waiting_input",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": true,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 470,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 266
+        }
+      ],
+      "first_transport_ms": 481.392,
+      "first_model_action_ms": 477.0,
+      "first_useful_content_ms": 478.0,
+      "first_answer_token_ms": 481.737,
+      "completion_ms": 481.939,
+      "order": 112
+    },
+    {
+      "prompt_id": "lat-04",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:43.843+00:00",
+      "run_id": "run_9f740f9c024b45faa969aab553618fdb",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 459,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 257
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 755,
+          "input_tokens": 538,
+          "cached_tokens": 258,
+          "reasoning_tokens": null,
+          "first_token_ms": 538
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 501,
+          "input_tokens": 779,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 269
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 517,
+          "input_tokens": 607,
+          "cached_tokens": 373,
+          "reasoning_tokens": null,
+          "first_token_ms": 320
+        }
+      ],
+      "first_transport_ms": 2248.553,
+      "first_model_action_ms": 466.0,
+      "first_useful_content_ms": 2246.0,
+      "first_answer_token_ms": 2248.992,
+      "completion_ms": 2249.494,
+      "order": 113
+    },
+    {
+      "prompt_id": "lat-05",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:46.097+00:00",
+      "run_id": "run_cf0235ff8bc349d492ce498c29233189",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 537,
+          "input_tokens": 964,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 315
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 647,
+          "input_tokens": 634,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 273
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 538,
+          "input_tokens": 899,
+          "cached_tokens": 630,
+          "reasoning_tokens": null,
+          "first_token_ms": 304
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 315,
+          "input_tokens": 948,
+          "cached_tokens": 895,
+          "reasoning_tokens": null,
+          "first_token_ms": 89
+        }
+      ],
+      "first_transport_ms": 2056.935,
+      "first_model_action_ms": 545.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 2058.38,
+      "order": 114
+    },
+    {
+      "prompt_id": "lat-07",
+      "label": "clarification",
+      "started_at_utc": "2026-10-23T10:44:48.161+00:00",
+      "run_id": "run_dbf46a9cf4364e2198efc37dbbe1d328",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected waiting_input",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 549,
+          "input_tokens": 959,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 90
+        }
+      ],
+      "first_transport_ms": 566.765,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 567.938,
+      "order": 115
+    },
+    {
+      "prompt_id": "lat-03",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:48.736+00:00",
+      "run_id": "run_60b701aea6f24632bccbc8f013878ad6",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": "ended failed (needs_external), expected completed",
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 648,
+          "input_tokens": 960,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 436
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 735,
+          "input_tokens": 537,
+          "cached_tokens": 258,
+          "reasoning_tokens": null,
+          "first_token_ms": 505
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 996,
+          "input_tokens": 815,
+          "cached_tokens": 533,
+          "reasoning_tokens": null,
+          "first_token_ms": 290
+        },
+        {
+          "purpose": "repair",
+          "duration_ms": 783,
+          "input_tokens": 889,
+          "cached_tokens": 811,
+          "reasoning_tokens": null,
+          "first_token_ms": 110
+        }
+      ],
+      "first_transport_ms": 3208.127,
+      "first_model_action_ms": 677.0,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 3210.655,
+      "order": 116
+    },
+    {
+      "prompt_id": "lat-10",
+      "label": "routing",
+      "started_at_utc": "2026-10-23T10:44:51.957+00:00",
+      "run_id": "run_acae62c0a89b451db9e35789e29941d7",
+      "http_status": 422,
+      "state": "failed",
+      "error_code": "needs_external",
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 421,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 99
+        }
+      ],
+      "first_transport_ms": 436.331,
+      "first_model_action_ms": null,
+      "first_useful_content_ms": null,
+      "first_answer_token_ms": null,
+      "completion_ms": 436.799,
+      "order": 117
+    },
+    {
+      "prompt_id": "lat-04",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:52.398+00:00",
+      "run_id": "run_da25b1ac27684262824dbac4e6825482",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 451,
+          "input_tokens": 961,
+          "cached_tokens": 946,
+          "reasoning_tokens": null,
+          "first_token_ms": 249
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 747,
+          "input_tokens": 538,
+          "cached_tokens": 258,
+          "reasoning_tokens": null,
+          "first_token_ms": 512
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 516,
+          "input_tokens": 773,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 279
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 492,
+          "input_tokens": 601,
+          "cached_tokens": 373,
+          "reasoning_tokens": null,
+          "first_token_ms": 282
+        }
+      ],
+      "first_transport_ms": 2224.966,
+      "first_model_action_ms": 460.0,
+      "first_useful_content_ms": 2222.0,
+      "first_answer_token_ms": 2225.173,
+      "completion_ms": 2225.473,
+      "order": 118
+    },
+    {
+      "prompt_id": "lat-04",
+      "label": "simple",
+      "started_at_utc": "2026-10-23T10:44:54.629+00:00",
+      "run_id": "run_dd8a76c9f4e54ad2a62059dabd2cd53c",
+      "http_status": 200,
+      "state": "completed",
+      "error_code": null,
+      "timed_out": false,
+      "error": null,
+      "stream_error_code": null,
+      "cancelled_after": false,
+      "model_calls": [
+        {
+          "purpose": "routing",
+          "duration_ms": 479,
+          "input_tokens": 961,
+          "cached_tokens": 960,
+          "reasoning_tokens": null,
+          "first_token_ms": 269
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 448,
+          "input_tokens": 538,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 231
+        },
+        {
+          "purpose": "skill",
+          "duration_ms": 521,
+          "input_tokens": 779,
+          "cached_tokens": 534,
+          "reasoning_tokens": null,
+          "first_token_ms": 281
+        },
+        {
+          "purpose": "final",
+          "duration_ms": 486,
+          "input_tokens": 607,
+          "cached_tokens": 373,
+          "reasoning_tokens": null,
+          "first_token_ms": 285
+        }
+      ],
+      "first_transport_ms": 1950.531,
+      "first_model_action_ms": 486.0,
+      "first_useful_content_ms": 1946.0,
+      "first_answer_token_ms": 1950.983,
+      "completion_ms": 1951.429,
+      "order": 119
+    }
+  ]
+}
