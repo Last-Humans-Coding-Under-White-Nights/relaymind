@@ -60,6 +60,12 @@ def test_the_launcher_line_names_the_class_and_the_cause():
     )
 
 
+def test_a_ready_model_has_no_external_execution_launcher_line():
+    """RM16, RM26: a ready model must not be labeled as managed external execution."""
+    with pytest.raises(ValueError, match="ready local model"):
+        LocalStatus.ready().line()
+
+
 def test_the_orchestrator_refuses_a_class_that_contradicts_its_model(tmp_path):
     """RM26: absent exactly when no local model is configured."""
     configured = build_gateway(tmp_path / "configured", [])

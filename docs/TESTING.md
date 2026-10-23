@@ -802,14 +802,19 @@ feature has a test of the default as well. Later pull requests append here.
   when absent), `local_model_status`, and `local_model_reason`; a ready model
   records `ready`. `/readyz` reports the class in `local_model`, auto is
   ready when the external model is, and an unavailable model is never shown
-  available. With detection on, readiness makes a model that answers again
-  ready (or unsuitable again, when it was measured so) and one that stops
-  answering unavailable; with it off the class never changes. `external_only`
+  available. With detection on, readiness classifies a runtime that stops
+  answering or whose model is no longer loaded as unavailable. Recovery
+  waits for the model to be warm and restores ready or its earlier unsuitable
+  classification. With detection off the class never changes. `external_only`
   keeps its own `route.selected`, degraded mode never applies, a gateway
   without an external model ends as `needs_external`, and the client-owned
   alias runs on the external model. Every model output is a scripted double;
   the local double has no turns, so any local call fails the test. The UI
   clause of AC20 is #127.
+- `pytest tests/test_ac20_no_local_chinese.py` (AC20, RM05, RM26, RM28)
+  covers the demo skill's Chinese examples in all three no-local classes,
+  Chinese clarification for a missing service, and an identifier-only resume
+  that preserves `language: zh`, with no local generation.
 - `pytest tests/test_launcher.py -k local_model` and
   `pytest tests/test_launcher_warmup.py` (#126; RM26, section 14.1): a file without
   `[local_model]` starts, with `auto` and `external_only` and the

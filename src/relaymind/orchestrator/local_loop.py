@@ -949,20 +949,23 @@ class LocalOrchestrator:
     def observe_local_health(self, available: bool, warm: bool, detail: str | None) -> None:
         """Readiness repeated the availability check (RM26, section 7.4).
 
-        Only with detection on. A model that stops answering is unavailable;
-        one that answers again with the model loaded is used again, and a
-        model last measured unsuitable is unsuitable again.
+        Only with detection on. A model that stops answering or is no longer
+        loaded is unavailable; one that answers again with the model loaded
+        is used again, and a model last measured unsuitable is unsuitable again.
         """
         if not self.detect or self.model is None:
             return
         current = self._local_status.status
         if current == LocalModelClass.UNAVAILABLE and available and warm:
             self._local_status = self._unsuitable or LocalStatus.ready()
-        elif current != LocalModelClass.UNAVAILABLE and not available:
-            cause = detail.strip() if detail and detail.strip() else "no answer"
-            self._local_status = LocalStatus(
-                LocalModelClass.UNAVAILABLE, f"the runtime stopped answering: {cause}"
+        elif current != LocalModelClass.UNAVAILABLE and not (available and warm):
+            cause = detail.strip() if detail and detail.strip() else None
+            reason = (
+                f"the model is not loaded: {cause or 'the model is loading'}"
+                if available
+                else f"the runtime stopped answering: {cause or 'no answer'}"
             )
+            self._local_status = LocalStatus(LocalModelClass.UNAVAILABLE, reason)
 
     def mode_refusal(self, mode: ExecutionMode) -> str | None:
         """Why the class of the local model does not permit mode, or None (section 7.4)."""
@@ -2063,7 +2066,7 @@ class _Run:
         # so the skill's declared calls run before its first generation.
         first_stage = False
         if skill is None and self.decision is not None and self.decision.skill_id is not None:
-            skill = self._load_skill(self.decision.skill_id)
+            skill = self.skill = self._load_skill(self.decision.skill_id)
             first_stage = True
         if skill is not None:
             allowlist: tuple[str, ...] = self._skill_allowlist(skill)

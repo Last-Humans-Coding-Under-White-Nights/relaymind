@@ -97,6 +97,8 @@ class LocalStatus:
 
     def line(self) -> str:
         """The one line the launcher prints for a class other than ready (RM26)."""
+        if self.usable:
+            raise ValueError("a ready local model has no launcher class line")
         return (
             f"Local model: {self.status.value} ({self.reason});"
             " auto runs as managed external execution."

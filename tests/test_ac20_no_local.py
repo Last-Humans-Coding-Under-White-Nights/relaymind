@@ -527,6 +527,51 @@ def test_a_model_that_stops_answering_is_unavailable_again(tmp_path):
     assert "connection refused" in status.reason
 
 
+@pytest.mark.parametrize("initial", [LocalStatus.ready(), CLASSES["unsuitable"]])
+@pytest.mark.parametrize("detail", ["loading model", None, "   "])
+def test_a_loading_model_routes_auto_externally_until_warm(tmp_path, initial, detail):
+    """AC20, RM26: a responding but unloaded model is unavailable, including on recovery."""
+    gateway = build_gateway(
+        tmp_path,
+        [],
+        local_status=initial,
+        external_turns=[text_turn(STAGING_OK)],
+        detect=True,
+        performance=PerformanceSettings(prefetch=True),
+    )
+    warm_health = gateway.adapter.health
+
+    async def loading():
+        return AdapterHealth(available=True, warm=False, detail=detail)
+
+    gateway.adapter.health = loading
+    app = make_app(gateway, settings=AUTO_AND_EXTERNAL)
+    response = readyz(app)
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["local_model"]["status"] == "unavailable"
+    assert "loading" in body["local_model"]["reason"]
+    assert "stopped answering" not in body["local_model"]["reason"]
+    assert body["models"]["local"]["available"] is True
+    assert body["models"]["local"]["warm"] is False
+    assert body["modes"]["auto"] == {"ready": True, "reason": None}
+
+    outcome, events = run(gateway)
+    assert outcome.state is RunState.COMPLETED and outcome.answer == STAGING_OK
+    assert events[0].payload["local_model_status"] == "unavailable"
+    assert events[0].payload["local_model_reason"] == body["local_model"]["reason"]
+    (route,) = of_type(events, "route.selected")
+    assert route.payload["decision"]["reason_code"] == "no_local_model"
+    assert_no_local_call(gateway, events)
+
+    # A repeated cold check must not restore readiness before the model loaded.
+    assert readyz(app).json()["local_model"]["status"] == "unavailable"
+    gateway.adapter.health = warm_health
+    assert readyz(app).json()["local_model"]["status"] == initial.status.value
+    assert gateway.orchestrator.local_status == initial
+
+
 def test_an_unsuitable_model_that_comes_back_stays_unsuitable(tmp_path):
     """RM26: the measured class is kept; availability alone does not make a slow model fit."""
     gateway = build_gateway(
