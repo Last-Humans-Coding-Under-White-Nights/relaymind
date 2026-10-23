@@ -1354,7 +1354,7 @@ class _Run:
         The performance options in force today; the placement, selection,
         and workflow fields of later changes are added here.
         """
-        return {**self.o.performance.to_json_object()}
+        return self.o.performance.to_json_object()
 
     def _answer_option_record(self) -> dict[str, Any]:
         """The caller's answer options as applied, for run.accepted (spec 0.22 section 8)."""
@@ -3160,7 +3160,7 @@ class _Run:
         """
         if self.o.performance.answer_pass != "draft":
             return False
-        if any(value is not None for value in asdict(self.final_options).values()):
+        if self._answer_option_record():
             return False
         assert self.language is not None
         return draft_in_language(draft, self.language) and not holds_tool_call_json(draft)

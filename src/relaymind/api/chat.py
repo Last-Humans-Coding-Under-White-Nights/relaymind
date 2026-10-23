@@ -436,7 +436,7 @@ KEEP_ALIVE = ": keep-alive\n\n"
 
 async def early_stream(
     alias: str,
-    accepted: AcceptedChat,
+    run_id: str,
     task: "asyncio.Task[ChatResult]",
     *,
     heartbeat_seconds: float,
@@ -462,14 +462,12 @@ async def early_stream(
             yield KEEP_ALIVE
     try:
         if task.cancelled():
-            raise ApiError(
-                "run_terminal", f"run {accepted.run_id} was cancelled", run_id=accepted.run_id
-            )
+            raise ApiError("run_terminal", f"run {run_id} was cancelled", run_id=run_id)
         result = task.result()
     except Exception as exc:
-        error = error_from_exception(exc, run_id=accepted.run_id)
+        error = error_from_exception(exc, run_id=run_id)
         if error.run_id is None:
-            error.run_id = accepted.run_id
+            error.run_id = run_id
         if error.code == "internal_error":
             on_internal_error(exc)
         yield f"data: {json.dumps(error.body())}\n\n"

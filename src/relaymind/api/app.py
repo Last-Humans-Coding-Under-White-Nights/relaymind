@@ -191,14 +191,15 @@ def create_app(
             else None
         )
         if stored is None:
+            claimed = replace(chat, idempotency=claim)
             try:
                 if accepting is not None:
-                    accepted = accepting.accept(replace(chat, idempotency=claim), mode)
+                    accepted = accepting.accept(claimed, mode)
                     return _early_response(request, orchestrator, native, chat, accepted)
                 result = await _until_disconnect(
                     request,
                     orchestrator,
-                    _produce(backend, replace(chat, idempotency=claim), mode),
+                    _produce(backend, claimed, mode),
                     native.cancel_wait_seconds,
                 )
             except IdempotencyKeyTakenError as taken:
@@ -417,7 +418,7 @@ def _early_response(
 
     lines = early_stream(
         chat.alias,
-        accepted,
+        accepted.run_id,
         task,
         heartbeat_seconds=native.heartbeat_seconds,
         on_internal_error=lambda exc: _log_internal(request, exc),

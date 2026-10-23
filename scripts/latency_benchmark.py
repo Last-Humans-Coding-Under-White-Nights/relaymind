@@ -373,7 +373,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
             "first model action and first useful content are trace times (elapsed_ms from "
             "run.accepted). The two clocks are never subtracted. Errors and timeouts are kept."
             + (
-                " First transport event: " + first_transport_label(True) + "."
+                " First transport event: " + first_transport_label(early_headers) + "."
                 if early_headers
                 else ""
             ),
