@@ -40,6 +40,8 @@ from relaymind.orchestrator.run_state import RunState
 from relaymind.skills import PrefetchBinding, PrefetchCall
 from relaymind.skills.registry import CONSTANT, REQUEST
 from relaymind.tools import ToolUnavailableError
+from relaymind.ui import UiSettings
+from relaymind.ui.render import render_trace
 from relaymind.ui.trace_view import build_trace_view
 from test_ac02_handoff import ANSWER
 
@@ -530,3 +532,56 @@ def test_the_resolution_follows_the_declaration_and_the_rm05_rule():
         "service": "staging-api",
         "limit": 50,
     }
+
+
+def test_the_rendered_trace_says_the_gateway_made_a_prefetch_call(tmp_path):
+    """RM23: the page names who made the call and invents no model for it."""
+    gateway = prefetch_gateway(tmp_path, health_turns(text_turn(STAGING_OK), text_turn(STAGING_OK)))
+    outcome, _ = run(gateway, HEALTHY)
+    page = render_trace(build_trace_view(gateway.store, outcome.run_id), UiSettings(mode="double"))
+    assert "made by the gateway (prefetch)" in page
+    assert "proposed by None" not in page and "proposed by  " not in page
+
+
+def test_prefetch_can_run_before_an_external_loop(tmp_path, monkeypatch):
+    """RM14, RM29: the same call serves an external stage (wired for a run with no local model
+    later): the calls run for the external actor, and are charged to the run only."""
+    from relaymind.orchestrator.local_loop import _Run
+
+    original = _Run._run_external
+
+    async def prefetching(self, loop, stop, confirmed=None):
+        await self._prefetch(loop)
+        return await original(self, loop, stop, confirmed)
+
+    monkeypatch.setattr(_Run, "_run_external", prefetching)
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn("investigate-performance")],
+        performance=PREFETCH,
+        external_turns=[
+            tool_turn("get_metrics", call_id="e1", service="staging-api", window_minutes=60),
+            text_turn(ANSWER),
+        ],
+    )
+    outcome, events = run(gateway, SLOW)
+    assert outcome.state is RunState.COMPLETED
+    prefetched = [e for e in proposals(events) if e.payload.get("mechanism") == "prefetch"]
+    assert [e.payload["tool_name"] for e in prefetched] == [
+        "get_latest_deployment",
+        "get_recent_logs",
+    ]
+    assert {e.actor for e in prefetched} == {"gateway"}
+    first = gateway.external.requests[0]
+    assistant = [m for m in first.messages if m.role is Role.ASSISTANT and m.tool_calls]
+    assert [c.tool_name for m in assistant for c in m.tool_calls][-2:] == [
+        "get_latest_deployment",
+        "get_recent_logs",
+    ]
+    assert [t.name for t in first.tool_schemas] == [
+        "get_latest_deployment",
+        "get_metrics",
+        "get_recent_logs",
+    ]
+    assert executed_tools(events) == ["get_latest_deployment", "get_recent_logs", "get_metrics"]
+    assert of_type(events, "run.completed")[0].payload["budget_usage"]["tool_calls"] == 3
