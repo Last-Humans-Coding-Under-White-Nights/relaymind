@@ -165,6 +165,11 @@
                 }
               },
               "routing_cache": {"type": "boolean"},
+              "answer_pass": {"enum": ["final", "draft"]},
+              "answer_stream": {"enum": ["buffered", "live"]},
+              "calls_per_generation": {"enum": ["one", "many"]},
+              "prefetch": {"type": "boolean"},
+              "early_headers": {"type": "boolean"},
               "answer_options": {
                 "type": "object",
                 "properties": {
@@ -277,6 +282,7 @@
           "payload": {
             "properties": {
               "final_answer_model": {"type": "string", "pattern": "\\S"},
+              "answer_pass_applied": {"enum": ["draft", "final"]},
               "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}},
               "external_calls": {"type": "integer", "minimum": 0},
               "active_ms": {"type": "integer", "minimum": 0},
