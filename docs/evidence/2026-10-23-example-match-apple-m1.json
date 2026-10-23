@@ -1,0 +1,2100 @@
+{
+  "kind": "relaymind.probe.example_match",
+  "label": "offline analysis of recorded traces, not a measured run",
+  "note": "A throwaway BM25 matcher over the demo skills' example requests and descriptions, scored on the corpus prompts against the skill sidecar. Nothing here is a measured run of the selector in the gateway.",
+  "method": {
+    "documents": {
+      "check-service-health": 68,
+      "delete-demo-database": 51,
+      "health-and-diagnostic-checklist": 75,
+      "investigate-performance": 81,
+      "lookup-latest-deployment": 72,
+      "summarize-incident-counts": 84
+    },
+    "masked_identifiers": [
+      "payments-api",
+      "staging-api"
+    ],
+    "placeholder": "idmask",
+    "bm25": {
+      "k1": 1.5,
+      "b": 0.75
+    },
+    "tokens": "word tokens for Latin text, character bigrams for Chinese text"
+  },
+  "source": {
+    "corpus": {
+      "sha256": "83023ab1ae1d29508caf367d28a4adbb0a4e4d93e977ea4628d94823ecd5d3bd"
+    },
+    "sidecar": "corpus.v1.skills.json",
+    "router_export": {
+      "file": "evaluation/corpus.v1.json",
+      "version": 1,
+      "sha256": "83023ab1ae1d29508caf367d28a4adbb0a4e4d93e977ea4628d94823ecd5d3bd",
+      "chinese_review": "not natively reviewed"
+    }
+  },
+  "caveats": [
+    "Each skill has one or two example pairs (the delete skill has one), so the index is tiny and its word statistics are coarse.",
+    "The thresholds are chosen on the same 52 cases that score them; the result is optimistic and is not held out.",
+    "The router figures are the two runs per case in one export (auto and local_only, sampled at temperature 0.8, one machine); they are two samples, not a distribution.",
+    "Every corpus case expects one skill and a selector picks at most one, so the macro precision, recall, and Jaccard are equal on the corpus; the micro averages differ. The ops corpus cannot tell a good selector from a poor one, which is why section 12.4 adds the selection benchmarks.",
+    "Chinese cases are best-effort versions of the simple English cases and have not been natively reviewed; they are reported apart."
+  ],
+  "cases": [
+    {
+      "case_id": "simple-01",
+      "case_class": "simple",
+      "language": "en",
+      "expected": "check-service-health",
+      "pick": "investigate-performance",
+      "right": false,
+      "score": 3.785,
+      "second": 3.7089,
+      "margin": 0.0761,
+      "top3": [
+        [
+          "investigate-performance",
+          3.785
+        ],
+        [
+          "check-service-health",
+          3.7089
+        ],
+        [
+          "lookup-latest-deployment",
+          0.4846
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-02",
+      "case_class": "simple",
+      "language": "en",
+      "expected": "check-service-health",
+      "pick": "check-service-health",
+      "right": true,
+      "score": 8.3101,
+      "second": 3.199,
+      "margin": 5.1111,
+      "top3": [
+        [
+          "check-service-health",
+          8.3101
+        ],
+        [
+          "lookup-latest-deployment",
+          3.199
+        ],
+        [
+          "health-and-diagnostic-checklist",
+          2.8941
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-03",
+      "case_class": "simple",
+      "language": "en",
+      "expected": "check-service-health",
+      "pick": "health-and-diagnostic-checklist",
+      "right": false,
+      "score": 4.3869,
+      "second": 3.8969,
+      "margin": 0.49,
+      "top3": [
+        [
+          "health-and-diagnostic-checklist",
+          4.3869
+        ],
+        [
+          "check-service-health",
+          3.8969
+        ],
+        [
+          "lookup-latest-deployment",
+          1.6362
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-04",
+      "case_class": "simple",
+      "language": "en",
+      "expected": "check-service-health",
+      "pick": "check-service-health",
+      "right": true,
+      "score": 3.318,
+      "second": 1.7749,
+      "margin": 1.5431,
+      "top3": [
+        [
+          "check-service-health",
+          3.318
+        ],
+        [
+          "health-and-diagnostic-checklist",
+          1.7749
+        ],
+        [
+          "lookup-latest-deployment",
+          1.5292
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-05",
+      "case_class": "simple",
+      "language": "en",
+      "expected": "lookup-latest-deployment",
+      "pick": "investigate-performance",
+      "right": false,
+      "score": 2.8121,
+      "second": 2.3689,
+      "margin": 0.4432,
+      "top3": [
+        [
+          "investigate-performance",
+          2.8121
+        ],
+        [
+          "lookup-latest-deployment",
+          2.3689
+        ],
+        [
+          "check-service-health",
+          1.5623
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-06",
+      "case_class": "simple",
+      "language": "en",
+      "expected": "lookup-latest-deployment",
+      "pick": "lookup-latest-deployment",
+      "right": true,
+      "score": 4.0387,
+      "second": 2.125,
+      "margin": 1.9137,
+      "top3": [
+        [
+          "lookup-latest-deployment",
+          4.0387
+        ],
+        [
+          "investigate-performance",
+          2.125
+        ],
+        [
+          "summarize-incident-counts",
+          1.4797
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-07",
+      "case_class": "simple",
+      "language": "en",
+      "expected": "lookup-latest-deployment",
+      "pick": "lookup-latest-deployment",
+      "right": true,
+      "score": 4.6107,
+      "second": 2.7901,
+      "margin": 1.8205,
+      "top3": [
+        [
+          "lookup-latest-deployment",
+          4.6107
+        ],
+        [
+          "summarize-incident-counts",
+          2.7901
+        ],
+        [
+          "investigate-performance",
+          1.0821
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-08",
+      "case_class": "simple",
+      "language": "en",
+      "expected": "lookup-latest-deployment",
+      "pick": "lookup-latest-deployment",
+      "right": true,
+      "score": 5.0832,
+      "second": 2.8821,
+      "margin": 2.2011,
+      "top3": [
+        [
+          "lookup-latest-deployment",
+          5.0832
+        ],
+        [
+          "investigate-performance",
+          2.8821
+        ],
+        [
+          "check-service-health",
+          1.6996
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-09",
+      "case_class": "simple",
+      "language": "en",
+      "expected": "summarize-incident-counts",
+      "pick": "summarize-incident-counts",
+      "right": true,
+      "score": 11.6632,
+      "second": 2.125,
+      "margin": 9.5382,
+      "top3": [
+        [
+          "summarize-incident-counts",
+          11.6632
+        ],
+        [
+          "investigate-performance",
+          2.125
+        ],
+        [
+          "lookup-latest-deployment",
+          1.592
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-10",
+      "case_class": "simple",
+      "language": "en",
+      "expected": "summarize-incident-counts",
+      "pick": "summarize-incident-counts",
+      "right": true,
+      "score": 5.01,
+      "second": 1.4701,
+      "margin": 3.5399,
+      "top3": [
+        [
+          "summarize-incident-counts",
+          5.01
+        ],
+        [
+          "investigate-performance",
+          1.4701
+        ],
+        [
+          "check-service-health",
+          0.6262
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-11",
+      "case_class": "simple",
+      "language": "en",
+      "expected": "summarize-incident-counts",
+      "pick": "summarize-incident-counts",
+      "right": true,
+      "score": 4.9929,
+      "second": 1.1521,
+      "margin": 3.8407,
+      "top3": [
+        [
+          "summarize-incident-counts",
+          4.9929
+        ],
+        [
+          "investigate-performance",
+          1.1521
+        ],
+        [
+          "health-and-diagnostic-checklist",
+          1.1299
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-12",
+      "case_class": "simple",
+      "language": "en",
+      "expected": "summarize-incident-counts",
+      "pick": "summarize-incident-counts",
+      "right": true,
+      "score": 8.0151,
+      "second": 1.8071,
+      "margin": 6.208,
+      "top3": [
+        [
+          "summarize-incident-counts",
+          8.0151
+        ],
+        [
+          "investigate-performance",
+          1.8071
+        ],
+        [
+          "lookup-latest-deployment",
+          1.592
+        ]
+      ]
+    },
+    {
+      "case_id": "complex-01",
+      "case_class": "complex",
+      "language": "en",
+      "expected": "investigate-performance",
+      "pick": "lookup-latest-deployment",
+      "right": false,
+      "score": 2.1544,
+      "second": 1.9092,
+      "margin": 0.2451,
+      "top3": [
+        [
+          "lookup-latest-deployment",
+          2.1544
+        ],
+        [
+          "investigate-performance",
+          1.9092
+        ],
+        [
+          "check-service-health",
+          1.6996
+        ]
+      ]
+    },
+    {
+      "case_id": "complex-02",
+      "case_class": "complex",
+      "language": "en",
+      "expected": "investigate-performance",
+      "pick": "summarize-incident-counts",
+      "right": false,
+      "score": 3.8635,
+      "second": 3.8085,
+      "margin": 0.0551,
+      "top3": [
+        [
+          "summarize-incident-counts",
+          3.8635
+        ],
+        [
+          "investigate-performance",
+          3.8085
+        ],
+        [
+          "lookup-latest-deployment",
+          2.8812
+        ]
+      ]
+    },
+    {
+      "case_id": "complex-03",
+      "case_class": "complex",
+      "language": "en",
+      "expected": "investigate-performance",
+      "pick": "investigate-performance",
+      "right": true,
+      "score": 2.1106,
+      "second": 1.7739,
+      "margin": 0.3367,
+      "top3": [
+        [
+          "investigate-performance",
+          2.1106
+        ],
+        [
+          "lookup-latest-deployment",
+          1.7739
+        ],
+        [
+          "delete-demo-database",
+          1.4332
+        ]
+      ]
+    },
+    {
+      "case_id": "complex-04",
+      "case_class": "complex",
+      "language": "en",
+      "expected": "investigate-performance",
+      "pick": "lookup-latest-deployment",
+      "right": false,
+      "score": 5.6015,
+      "second": 3.5371,
+      "margin": 2.0644,
+      "top3": [
+        [
+          "lookup-latest-deployment",
+          5.6015
+        ],
+        [
+          "investigate-performance",
+          3.5371
+        ],
+        [
+          "check-service-health",
+          1.6996
+        ]
+      ]
+    },
+    {
+      "case_id": "complex-05",
+      "case_class": "complex",
+      "language": "en",
+      "expected": "investigate-performance",
+      "pick": "investigate-performance",
+      "right": true,
+      "score": 3.5927,
+      "second": 3.4659,
+      "margin": 0.1268,
+      "top3": [
+        [
+          "investigate-performance",
+          3.5927
+        ],
+        [
+          "check-service-health",
+          3.4659
+        ],
+        [
+          "lookup-latest-deployment",
+          3.4436
+        ]
+      ]
+    },
+    {
+      "case_id": "complex-06",
+      "case_class": "complex",
+      "language": "en",
+      "expected": "investigate-performance",
+      "pick": "summarize-incident-counts",
+      "right": false,
+      "score": 4.3374,
+      "second": 2.5399,
+      "margin": 1.7975,
+      "top3": [
+        [
+          "summarize-incident-counts",
+          4.3374
+        ],
+        [
+          "lookup-latest-deployment",
+          2.5399
+        ],
+        [
+          "investigate-performance",
+          2.035
+        ]
+      ]
+    },
+    {
+      "case_id": "complex-07",
+      "case_class": "complex",
+      "language": "en",
+      "expected": "health-and-diagnostic-checklist",
+      "pick": "health-and-diagnostic-checklist",
+      "right": true,
+      "score": 8.5152,
+      "second": 4.1483,
+      "margin": 4.3669,
+      "top3": [
+        [
+          "health-and-diagnostic-checklist",
+          8.5152
+        ],
+        [
+          "check-service-health",
+          4.1483
+        ],
+        [
+          "summarize-incident-counts",
+          2.1226
+        ]
+      ]
+    },
+    {
+      "case_id": "complex-08",
+      "case_class": "complex",
+      "language": "en",
+      "expected": "health-and-diagnostic-checklist",
+      "pick": "health-and-diagnostic-checklist",
+      "right": true,
+      "score": 10.5476,
+      "second": 3.7596,
+      "margin": 6.788,
+      "top3": [
+        [
+          "health-and-diagnostic-checklist",
+          10.5476
+        ],
+        [
+          "check-service-health",
+          3.7596
+        ],
+        [
+          "investigate-performance",
+          2.71
+        ]
+      ]
+    },
+    {
+      "case_id": "complex-09",
+      "case_class": "complex",
+      "language": "en",
+      "expected": "investigate-performance",
+      "pick": "investigate-performance",
+      "right": true,
+      "score": 3.5662,
+      "second": 1.8523,
+      "margin": 1.7139,
+      "top3": [
+        [
+          "investigate-performance",
+          3.5662
+        ],
+        [
+          "summarize-incident-counts",
+          1.8523
+        ],
+        [
+          "lookup-latest-deployment",
+          1.7739
+        ]
+      ]
+    },
+    {
+      "case_id": "complex-10",
+      "case_class": "complex",
+      "language": "en",
+      "expected": "investigate-performance",
+      "pick": "investigate-performance",
+      "right": true,
+      "score": 5.264,
+      "second": 4.7655,
+      "margin": 0.4985,
+      "top3": [
+        [
+          "investigate-performance",
+          5.264
+        ],
+        [
+          "lookup-latest-deployment",
+          4.7655
+        ],
+        [
+          "summarize-incident-counts",
+          2.9085
+        ]
+      ]
+    },
+    {
+      "case_id": "ambiguous-01",
+      "case_class": "ambiguous",
+      "language": "en",
+      "expected": "check-service-health",
+      "pick": "check-service-health",
+      "right": true,
+      "score": 2.8164,
+      "second": 1.4821,
+      "margin": 1.3343,
+      "top3": [
+        [
+          "check-service-health",
+          2.8164
+        ],
+        [
+          "investigate-performance",
+          1.4821
+        ],
+        [
+          "delete-demo-database",
+          0.1318
+        ]
+      ]
+    },
+    {
+      "case_id": "ambiguous-02",
+      "case_class": "ambiguous",
+      "language": "en",
+      "expected": "lookup-latest-deployment",
+      "pick": "lookup-latest-deployment",
+      "right": true,
+      "score": 5.7774,
+      "second": 1.0429,
+      "margin": 4.7345,
+      "top3": [
+        [
+          "lookup-latest-deployment",
+          5.7774
+        ],
+        [
+          "investigate-performance",
+          1.0429
+        ],
+        [
+          "check-service-health",
+          0.1373
+        ]
+      ]
+    },
+    {
+      "case_id": "ambiguous-03",
+      "case_class": "ambiguous",
+      "language": "en",
+      "expected": "summarize-incident-counts",
+      "pick": "summarize-incident-counts",
+      "right": true,
+      "score": 7.9083,
+      "second": 2.6708,
+      "margin": 5.2375,
+      "top3": [
+        [
+          "summarize-incident-counts",
+          7.9083
+        ],
+        [
+          "investigate-performance",
+          2.6708
+        ],
+        [
+          "lookup-latest-deployment",
+          1.1074
+        ]
+      ]
+    },
+    {
+      "case_id": "ambiguous-04",
+      "case_class": "ambiguous",
+      "language": "en",
+      "expected": "check-service-health",
+      "pick": "health-and-diagnostic-checklist",
+      "right": false,
+      "score": 4.9555,
+      "second": 3.6594,
+      "margin": 1.2961,
+      "top3": [
+        [
+          "health-and-diagnostic-checklist",
+          4.9555
+        ],
+        [
+          "check-service-health",
+          3.6594
+        ],
+        [
+          "summarize-incident-counts",
+          1.2799
+        ]
+      ]
+    },
+    {
+      "case_id": "ambiguous-05",
+      "case_class": "ambiguous",
+      "language": "en",
+      "expected": "delete-demo-database",
+      "pick": "delete-demo-database",
+      "right": true,
+      "score": 7.6606,
+      "second": 0.1373,
+      "margin": 7.5234,
+      "top3": [
+        [
+          "delete-demo-database",
+          7.6606
+        ],
+        [
+          "check-service-health",
+          0.1373
+        ],
+        [
+          "health-and-diagnostic-checklist",
+          0.1214
+        ]
+      ]
+    },
+    {
+      "case_id": "ambiguous-06",
+      "case_class": "ambiguous",
+      "language": "en",
+      "expected": "lookup-latest-deployment",
+      "pick": "lookup-latest-deployment",
+      "right": true,
+      "score": 5.3615,
+      "second": 3.4438,
+      "margin": 1.9177,
+      "top3": [
+        [
+          "lookup-latest-deployment",
+          5.3615
+        ],
+        [
+          "health-and-diagnostic-checklist",
+          3.4438
+        ],
+        [
+          "investigate-performance",
+          1.2708
+        ]
+      ]
+    },
+    {
+      "case_id": "mutation-01",
+      "case_class": "mutation",
+      "language": "en",
+      "expected": "delete-demo-database",
+      "pick": "delete-demo-database",
+      "right": true,
+      "score": 8.6082,
+      "second": 1.1129,
+      "margin": 7.4953,
+      "top3": [
+        [
+          "delete-demo-database",
+          8.6082
+        ],
+        [
+          "investigate-performance",
+          1.1129
+        ],
+        [
+          "check-service-health",
+          0.2145
+        ]
+      ]
+    },
+    {
+      "case_id": "mutation-02",
+      "case_class": "mutation",
+      "language": "en",
+      "expected": "delete-demo-database",
+      "pick": "delete-demo-database",
+      "right": true,
+      "score": 7.7925,
+      "second": 0.2145,
+      "margin": 7.5779,
+      "top3": [
+        [
+          "delete-demo-database",
+          7.7925
+        ],
+        [
+          "check-service-health",
+          0.2145
+        ],
+        [
+          "health-and-diagnostic-checklist",
+          0.1932
+        ]
+      ]
+    },
+    {
+      "case_id": "mutation-03",
+      "case_class": "mutation",
+      "language": "en",
+      "expected": "delete-demo-database",
+      "pick": "delete-demo-database",
+      "right": true,
+      "score": 4.9207,
+      "second": 0.0773,
+      "margin": 4.8435,
+      "top3": [
+        [
+          "delete-demo-database",
+          4.9207
+        ],
+        [
+          "check-service-health",
+          0.0773
+        ],
+        [
+          "lookup-latest-deployment",
+          0.0752
+        ]
+      ]
+    },
+    {
+      "case_id": "mutation-04",
+      "case_class": "mutation",
+      "language": "en",
+      "expected": "delete-demo-database",
+      "pick": "delete-demo-database",
+      "right": true,
+      "score": 10.1869,
+      "second": 1.7295,
+      "margin": 8.4574,
+      "top3": [
+        [
+          "delete-demo-database",
+          10.1869
+        ],
+        [
+          "check-service-health",
+          1.7295
+        ],
+        [
+          "lookup-latest-deployment",
+          1.2267
+        ]
+      ]
+    },
+    {
+      "case_id": "mutation-05",
+      "case_class": "mutation",
+      "language": "en",
+      "expected": "delete-demo-database",
+      "pick": "delete-demo-database",
+      "right": true,
+      "score": 9.1843,
+      "second": 1.191,
+      "margin": 7.9934,
+      "top3": [
+        [
+          "delete-demo-database",
+          9.1843
+        ],
+        [
+          "health-and-diagnostic-checklist",
+          1.191
+        ],
+        [
+          "investigate-performance",
+          1.1129
+        ]
+      ]
+    },
+    {
+      "case_id": "mutation-06",
+      "case_class": "mutation",
+      "language": "en",
+      "expected": "delete-demo-database",
+      "pick": "delete-demo-database",
+      "right": true,
+      "score": 9.8415,
+      "second": 1.7449,
+      "margin": 8.0965,
+      "top3": [
+        [
+          "delete-demo-database",
+          9.8415
+        ],
+        [
+          "lookup-latest-deployment",
+          1.7449
+        ],
+        [
+          "health-and-diagnostic-checklist",
+          1.686
+        ]
+      ]
+    },
+    {
+      "case_id": "adversarial-01",
+      "case_class": "adversarial",
+      "language": "en",
+      "expected": "investigate-performance",
+      "pick": "health-and-diagnostic-checklist",
+      "right": false,
+      "score": 2.6227,
+      "second": 2.6077,
+      "margin": 0.015,
+      "top3": [
+        [
+          "health-and-diagnostic-checklist",
+          2.6227
+        ],
+        [
+          "investigate-performance",
+          2.6077
+        ],
+        [
+          "summarize-incident-counts",
+          1.4797
+        ]
+      ]
+    },
+    {
+      "case_id": "adversarial-02",
+      "case_class": "adversarial",
+      "language": "en",
+      "expected": "delete-demo-database",
+      "pick": "delete-demo-database",
+      "right": true,
+      "score": 9.3245,
+      "second": 1.8826,
+      "margin": 7.4419,
+      "top3": [
+        [
+          "delete-demo-database",
+          9.3245
+        ],
+        [
+          "lookup-latest-deployment",
+          1.8826
+        ],
+        [
+          "health-and-diagnostic-checklist",
+          0.4087
+        ]
+      ]
+    },
+    {
+      "case_id": "adversarial-03",
+      "case_class": "adversarial",
+      "language": "en",
+      "expected": "check-service-health",
+      "pick": "investigate-performance",
+      "right": false,
+      "score": 1.9092,
+      "second": 1.6996,
+      "margin": 0.2097,
+      "top3": [
+        [
+          "investigate-performance",
+          1.9092
+        ],
+        [
+          "check-service-health",
+          1.6996
+        ],
+        [
+          "lookup-latest-deployment",
+          0.5916
+        ]
+      ]
+    },
+    {
+      "case_id": "adversarial-04",
+      "case_class": "adversarial",
+      "language": "en",
+      "expected": "lookup-latest-deployment",
+      "pick": "investigate-performance",
+      "right": false,
+      "score": 3.785,
+      "second": 3.7089,
+      "margin": 0.0761,
+      "top3": [
+        [
+          "investigate-performance",
+          3.785
+        ],
+        [
+          "check-service-health",
+          3.7089
+        ],
+        [
+          "lookup-latest-deployment",
+          2.0474
+        ]
+      ]
+    },
+    {
+      "case_id": "adversarial-05",
+      "case_class": "adversarial",
+      "language": "en",
+      "expected": "check-service-health",
+      "pick": "check-service-health",
+      "right": true,
+      "score": 2.6791,
+      "second": 2.3945,
+      "margin": 0.2847,
+      "top3": [
+        [
+          "check-service-health",
+          2.6791
+        ],
+        [
+          "delete-demo-database",
+          2.3945
+        ],
+        [
+          "investigate-performance",
+          1.4121
+        ]
+      ]
+    },
+    {
+      "case_id": "adversarial-06",
+      "case_class": "adversarial",
+      "language": "en",
+      "expected": "delete-demo-database",
+      "pick": "delete-demo-database",
+      "right": true,
+      "score": 10.1869,
+      "second": 0.2145,
+      "margin": 9.9724,
+      "top3": [
+        [
+          "delete-demo-database",
+          10.1869
+        ],
+        [
+          "check-service-health",
+          0.2145
+        ],
+        [
+          "health-and-diagnostic-checklist",
+          0.1932
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-01-zh",
+      "case_class": "simple",
+      "language": "zh",
+      "expected": "check-service-health",
+      "pick": "check-service-health",
+      "right": true,
+      "score": 1.5623,
+      "second": 1.4,
+      "margin": 0.1622,
+      "top3": [
+        [
+          "check-service-health",
+          1.5623
+        ],
+        [
+          "investigate-performance",
+          1.4
+        ],
+        [
+          "lookup-latest-deployment",
+          0.4846
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-02-zh",
+      "case_class": "simple",
+      "language": "zh",
+      "expected": "check-service-health",
+      "pick": "check-service-health",
+      "right": true,
+      "score": 7.9537,
+      "second": 5.649,
+      "margin": 2.3047,
+      "top3": [
+        [
+          "check-service-health",
+          7.9537
+        ],
+        [
+          "health-and-diagnostic-checklist",
+          5.649
+        ],
+        [
+          "lookup-latest-deployment",
+          4.1941
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-03-zh",
+      "case_class": "simple",
+      "language": "zh",
+      "expected": "check-service-health",
+      "pick": "check-service-health",
+      "right": true,
+      "score": 3.318,
+      "second": 2.7727,
+      "margin": 0.5453,
+      "top3": [
+        [
+          "check-service-health",
+          3.318
+        ],
+        [
+          "health-and-diagnostic-checklist",
+          2.7727
+        ],
+        [
+          "lookup-latest-deployment",
+          0.4846
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-04-zh",
+      "case_class": "simple",
+      "language": "zh",
+      "expected": "check-service-health",
+      "pick": "check-service-health",
+      "right": true,
+      "score": 5.9063,
+      "second": 4.2108,
+      "margin": 1.6954,
+      "top3": [
+        [
+          "check-service-health",
+          5.9063
+        ],
+        [
+          "health-and-diagnostic-checklist",
+          4.2108
+        ],
+        [
+          "summarize-incident-counts",
+          1.3785
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-05-zh",
+      "case_class": "simple",
+      "language": "zh",
+      "expected": "lookup-latest-deployment",
+      "pick": "lookup-latest-deployment",
+      "right": true,
+      "score": 3.0726,
+      "second": 2.0948,
+      "margin": 0.9778,
+      "top3": [
+        [
+          "lookup-latest-deployment",
+          3.0726
+        ],
+        [
+          "check-service-health",
+          2.0948
+        ],
+        [
+          "investigate-performance",
+          0.4272
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-06-zh",
+      "case_class": "simple",
+      "language": "zh",
+      "expected": "lookup-latest-deployment",
+      "pick": "lookup-latest-deployment",
+      "right": true,
+      "score": 7.761,
+      "second": 0.489,
+      "margin": 7.272,
+      "top3": [
+        [
+          "lookup-latest-deployment",
+          7.761
+        ],
+        [
+          "check-service-health",
+          0.489
+        ],
+        [
+          "investigate-performance",
+          0.4272
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-07-zh",
+      "case_class": "simple",
+      "language": "zh",
+      "expected": "lookup-latest-deployment",
+      "pick": "lookup-latest-deployment",
+      "right": true,
+      "score": 14.596,
+      "second": 1.4,
+      "margin": 13.196,
+      "top3": [
+        [
+          "lookup-latest-deployment",
+          14.596
+        ],
+        [
+          "investigate-performance",
+          1.4
+        ],
+        [
+          "check-service-health",
+          0.489
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-08-zh",
+      "case_class": "simple",
+      "language": "zh",
+      "expected": "lookup-latest-deployment",
+      "pick": "lookup-latest-deployment",
+      "right": true,
+      "score": 13.9214,
+      "second": 2.71,
+      "margin": 11.2114,
+      "top3": [
+        [
+          "lookup-latest-deployment",
+          13.9214
+        ],
+        [
+          "investigate-performance",
+          2.71
+        ],
+        [
+          "summarize-incident-counts",
+          1.7093
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-09-zh",
+      "case_class": "simple",
+      "language": "zh",
+      "expected": "summarize-incident-counts",
+      "pick": "summarize-incident-counts",
+      "right": true,
+      "score": 10.0282,
+      "second": 0.489,
+      "margin": 9.5392,
+      "top3": [
+        [
+          "summarize-incident-counts",
+          10.0282
+        ],
+        [
+          "check-service-health",
+          0.489
+        ],
+        [
+          "lookup-latest-deployment",
+          0.4846
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-10-zh",
+      "case_class": "simple",
+      "language": "zh",
+      "expected": "summarize-incident-counts",
+      "pick": "summarize-incident-counts",
+      "right": true,
+      "score": 12.0843,
+      "second": 3.3458,
+      "margin": 8.7384,
+      "top3": [
+        [
+          "summarize-incident-counts",
+          12.0843
+        ],
+        [
+          "investigate-performance",
+          3.3458
+        ],
+        [
+          "check-service-health",
+          1.5623
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-11-zh",
+      "case_class": "simple",
+      "language": "zh",
+      "expected": "summarize-incident-counts",
+      "pick": "summarize-incident-counts",
+      "right": true,
+      "score": 7.8261,
+      "second": 0.489,
+      "margin": 7.3371,
+      "top3": [
+        [
+          "summarize-incident-counts",
+          7.8261
+        ],
+        [
+          "check-service-health",
+          0.489
+        ],
+        [
+          "lookup-latest-deployment",
+          0.4846
+        ]
+      ]
+    },
+    {
+      "case_id": "simple-12-zh",
+      "case_class": "simple",
+      "language": "zh",
+      "expected": "summarize-incident-counts",
+      "pick": "summarize-incident-counts",
+      "right": true,
+      "score": 9.1245,
+      "second": 1.1878,
+      "margin": 7.9366,
+      "top3": [
+        [
+          "summarize-incident-counts",
+          9.1245
+        ],
+        [
+          "lookup-latest-deployment",
+          1.1878
+        ],
+        [
+          "investigate-performance",
+          1.0821
+        ]
+      ]
+    }
+  ],
+  "argmax": {
+    "note": "The best skill of every prompt with no thresholds (every prompt with any word in common with the index is a pick).",
+    "by_language": {
+      "en": {
+        "cases": 40,
+        "picks": 40,
+        "right": 29,
+        "wrong": 11,
+        "none": 0,
+        "macro": {
+          "precision": 0.725,
+          "recall": 0.725,
+          "jaccard": 0.725
+        },
+        "micro": {
+          "precision": 0.725,
+          "recall": 0.725,
+          "jaccard": 0.5686274509803921
+        }
+      },
+      "zh": {
+        "cases": 12,
+        "picks": 12,
+        "right": 12,
+        "wrong": 0,
+        "none": 0,
+        "macro": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      }
+    },
+    "by_language_and_class": [
+      {
+        "language": "en",
+        "case_class": "simple",
+        "cases": 12,
+        "picks": 12,
+        "right": 9,
+        "wrong": 3,
+        "none": 0,
+        "macro": {
+          "precision": 0.75,
+          "recall": 0.75,
+          "jaccard": 0.75
+        },
+        "micro": {
+          "precision": 0.75,
+          "recall": 0.75,
+          "jaccard": 0.6
+        }
+      },
+      {
+        "language": "en",
+        "case_class": "complex",
+        "cases": 10,
+        "picks": 10,
+        "right": 6,
+        "wrong": 4,
+        "none": 0,
+        "macro": {
+          "precision": 0.6,
+          "recall": 0.6,
+          "jaccard": 0.6
+        },
+        "micro": {
+          "precision": 0.6,
+          "recall": 0.6,
+          "jaccard": 0.42857142857142855
+        }
+      },
+      {
+        "language": "en",
+        "case_class": "ambiguous",
+        "cases": 6,
+        "picks": 6,
+        "right": 5,
+        "wrong": 1,
+        "none": 0,
+        "macro": {
+          "precision": 0.8333333333333334,
+          "recall": 0.8333333333333334,
+          "jaccard": 0.8333333333333334
+        },
+        "micro": {
+          "precision": 0.8333333333333334,
+          "recall": 0.8333333333333334,
+          "jaccard": 0.7142857142857143
+        }
+      },
+      {
+        "language": "en",
+        "case_class": "mutation",
+        "cases": 6,
+        "picks": 6,
+        "right": 6,
+        "wrong": 0,
+        "none": 0,
+        "macro": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "language": "en",
+        "case_class": "adversarial",
+        "cases": 6,
+        "picks": 6,
+        "right": 3,
+        "wrong": 3,
+        "none": 0,
+        "macro": {
+          "precision": 0.5,
+          "recall": 0.5,
+          "jaccard": 0.5
+        },
+        "micro": {
+          "precision": 0.5,
+          "recall": 0.5,
+          "jaccard": 0.3333333333333333
+        }
+      },
+      {
+        "language": "zh",
+        "case_class": "simple",
+        "cases": 12,
+        "picks": 12,
+        "right": 12,
+        "wrong": 0,
+        "none": 0,
+        "macro": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      }
+    ]
+  },
+  "distributions": {
+    "en": {
+      "right": {
+        "count": 29,
+        "score": {
+          "min": 2.1106,
+          "p25": 4.6107,
+          "median": 5.7774,
+          "p75": 8.6082,
+          "max": 11.6632
+        },
+        "margin": {
+          "min": 0.1268,
+          "p25": 1.8205,
+          "median": 4.7345,
+          "p75": 7.4953,
+          "max": 9.9724
+        }
+      },
+      "wrong": {
+        "count": 11,
+        "score": {
+          "min": 1.9092,
+          "p25": 2.6227,
+          "median": 3.785,
+          "p75": 4.3869,
+          "max": 5.6015
+        },
+        "margin": {
+          "min": 0.015,
+          "p25": 0.0761,
+          "median": 0.2451,
+          "p75": 1.2961,
+          "max": 2.0644
+        }
+      }
+    },
+    "zh": {
+      "right": {
+        "count": 12,
+        "score": {
+          "min": 1.5623,
+          "p25": 3.318,
+          "median": 7.8261,
+          "p75": 10.0282,
+          "max": 14.596
+        },
+        "margin": {
+          "min": 0.1622,
+          "p25": 0.9778,
+          "median": 7.272,
+          "p75": 8.7384,
+          "max": 13.196
+        }
+      },
+      "wrong": {
+        "count": 0,
+        "score": null,
+        "margin": null
+      }
+    }
+  },
+  "router": {
+    "samples": {
+      "auto": {
+        "by_language": {
+          "en": {
+            "cases": 40,
+            "picks": 34,
+            "right": 30,
+            "wrong": 4,
+            "none": 6,
+            "macro": {
+              "precision": 0.75,
+              "recall": 0.75,
+              "jaccard": 0.75
+            },
+            "micro": {
+              "precision": 0.8823529411764706,
+              "recall": 0.75,
+              "jaccard": 0.6818181818181818
+            }
+          },
+          "zh": {
+            "cases": 12,
+            "picks": 12,
+            "right": 12,
+            "wrong": 0,
+            "none": 0,
+            "macro": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "jaccard": 1.0
+            },
+            "micro": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "jaccard": 1.0
+            }
+          }
+        },
+        "by_language_and_class": [
+          {
+            "language": "en",
+            "case_class": "simple",
+            "cases": 12,
+            "picks": 12,
+            "right": 11,
+            "wrong": 1,
+            "none": 0,
+            "macro": {
+              "precision": 0.9166666666666666,
+              "recall": 0.9166666666666666,
+              "jaccard": 0.9166666666666666
+            },
+            "micro": {
+              "precision": 0.9166666666666666,
+              "recall": 0.9166666666666666,
+              "jaccard": 0.8461538461538461
+            }
+          },
+          {
+            "language": "en",
+            "case_class": "complex",
+            "cases": 10,
+            "picks": 9,
+            "right": 8,
+            "wrong": 1,
+            "none": 1,
+            "macro": {
+              "precision": 0.8,
+              "recall": 0.8,
+              "jaccard": 0.8
+            },
+            "micro": {
+              "precision": 0.8888888888888888,
+              "recall": 0.8,
+              "jaccard": 0.7272727272727273
+            }
+          },
+          {
+            "language": "en",
+            "case_class": "ambiguous",
+            "cases": 6,
+            "picks": 6,
+            "right": 5,
+            "wrong": 1,
+            "none": 0,
+            "macro": {
+              "precision": 0.8333333333333334,
+              "recall": 0.8333333333333334,
+              "jaccard": 0.8333333333333334
+            },
+            "micro": {
+              "precision": 0.8333333333333334,
+              "recall": 0.8333333333333334,
+              "jaccard": 0.7142857142857143
+            }
+          },
+          {
+            "language": "en",
+            "case_class": "mutation",
+            "cases": 6,
+            "picks": 2,
+            "right": 2,
+            "wrong": 0,
+            "none": 4,
+            "macro": {
+              "precision": 0.3333333333333333,
+              "recall": 0.3333333333333333,
+              "jaccard": 0.3333333333333333
+            },
+            "micro": {
+              "precision": 1.0,
+              "recall": 0.3333333333333333,
+              "jaccard": 0.3333333333333333
+            }
+          },
+          {
+            "language": "en",
+            "case_class": "adversarial",
+            "cases": 6,
+            "picks": 5,
+            "right": 4,
+            "wrong": 1,
+            "none": 1,
+            "macro": {
+              "precision": 0.6666666666666666,
+              "recall": 0.6666666666666666,
+              "jaccard": 0.6666666666666666
+            },
+            "micro": {
+              "precision": 0.8,
+              "recall": 0.6666666666666666,
+              "jaccard": 0.5714285714285714
+            }
+          },
+          {
+            "language": "zh",
+            "case_class": "simple",
+            "cases": 12,
+            "picks": 12,
+            "right": 12,
+            "wrong": 0,
+            "none": 0,
+            "macro": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "jaccard": 1.0
+            },
+            "micro": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "jaccard": 1.0
+            }
+          }
+        ]
+      },
+      "local_only": {
+        "by_language": {
+          "en": {
+            "cases": 40,
+            "picks": 34,
+            "right": 30,
+            "wrong": 4,
+            "none": 6,
+            "macro": {
+              "precision": 0.75,
+              "recall": 0.75,
+              "jaccard": 0.75
+            },
+            "micro": {
+              "precision": 0.8823529411764706,
+              "recall": 0.75,
+              "jaccard": 0.6818181818181818
+            }
+          },
+          "zh": {
+            "cases": 12,
+            "picks": 12,
+            "right": 12,
+            "wrong": 0,
+            "none": 0,
+            "macro": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "jaccard": 1.0
+            },
+            "micro": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "jaccard": 1.0
+            }
+          }
+        },
+        "by_language_and_class": [
+          {
+            "language": "en",
+            "case_class": "simple",
+            "cases": 12,
+            "picks": 12,
+            "right": 11,
+            "wrong": 1,
+            "none": 0,
+            "macro": {
+              "precision": 0.9166666666666666,
+              "recall": 0.9166666666666666,
+              "jaccard": 0.9166666666666666
+            },
+            "micro": {
+              "precision": 0.9166666666666666,
+              "recall": 0.9166666666666666,
+              "jaccard": 0.8461538461538461
+            }
+          },
+          {
+            "language": "en",
+            "case_class": "complex",
+            "cases": 10,
+            "picks": 9,
+            "right": 8,
+            "wrong": 1,
+            "none": 1,
+            "macro": {
+              "precision": 0.8,
+              "recall": 0.8,
+              "jaccard": 0.8
+            },
+            "micro": {
+              "precision": 0.8888888888888888,
+              "recall": 0.8,
+              "jaccard": 0.7272727272727273
+            }
+          },
+          {
+            "language": "en",
+            "case_class": "ambiguous",
+            "cases": 6,
+            "picks": 6,
+            "right": 5,
+            "wrong": 1,
+            "none": 0,
+            "macro": {
+              "precision": 0.8333333333333334,
+              "recall": 0.8333333333333334,
+              "jaccard": 0.8333333333333334
+            },
+            "micro": {
+              "precision": 0.8333333333333334,
+              "recall": 0.8333333333333334,
+              "jaccard": 0.7142857142857143
+            }
+          },
+          {
+            "language": "en",
+            "case_class": "mutation",
+            "cases": 6,
+            "picks": 2,
+            "right": 2,
+            "wrong": 0,
+            "none": 4,
+            "macro": {
+              "precision": 0.3333333333333333,
+              "recall": 0.3333333333333333,
+              "jaccard": 0.3333333333333333
+            },
+            "micro": {
+              "precision": 1.0,
+              "recall": 0.3333333333333333,
+              "jaccard": 0.3333333333333333
+            }
+          },
+          {
+            "language": "en",
+            "case_class": "adversarial",
+            "cases": 6,
+            "picks": 5,
+            "right": 4,
+            "wrong": 1,
+            "none": 1,
+            "macro": {
+              "precision": 0.6666666666666666,
+              "recall": 0.6666666666666666,
+              "jaccard": 0.6666666666666666
+            },
+            "micro": {
+              "precision": 0.8,
+              "recall": 0.6666666666666666,
+              "jaccard": 0.5714285714285714
+            }
+          },
+          {
+            "language": "zh",
+            "case_class": "simple",
+            "cases": 12,
+            "picks": 12,
+            "right": 12,
+            "wrong": 0,
+            "none": 0,
+            "macro": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "jaccard": 1.0
+            },
+            "micro": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "jaccard": 1.0
+            }
+          }
+        ]
+      }
+    },
+    "cases_in_both": 52,
+    "samples_differ": 0
+  },
+  "candidate": {
+    "language": "en",
+    "rule": "the thresholds with the most right English picks among those whose English wrong picks are at or below the router's (the lower of its two samples)",
+    "router_wrong_picks": {
+      "auto": 4,
+      "local_only": 4
+    },
+    "max_wrong": 4,
+    "thresholds": {
+      "min_score": 2.8164113054307456,
+      "min_margin": 0.12680256693760228
+    },
+    "english": {
+      "cases": 40,
+      "picks": 31,
+      "right": 27,
+      "wrong": 4,
+      "none": 9,
+      "macro": {
+        "precision": 0.675,
+        "recall": 0.675,
+        "jaccard": 0.675
+      },
+      "micro": {
+        "precision": 0.8709677419354839,
+        "recall": 0.675,
+        "jaccard": 0.6136363636363636
+      }
+    },
+    "english_by_class": [
+      {
+        "language": "en",
+        "case_class": "simple",
+        "cases": 12,
+        "picks": 10,
+        "right": 9,
+        "wrong": 1,
+        "none": 2,
+        "macro": {
+          "precision": 0.75,
+          "recall": 0.75,
+          "jaccard": 0.75
+        },
+        "micro": {
+          "precision": 0.9,
+          "recall": 0.75,
+          "jaccard": 0.6923076923076923
+        }
+      },
+      {
+        "language": "en",
+        "case_class": "complex",
+        "cases": 10,
+        "picks": 7,
+        "right": 5,
+        "wrong": 2,
+        "none": 3,
+        "macro": {
+          "precision": 0.5,
+          "recall": 0.5,
+          "jaccard": 0.5
+        },
+        "micro": {
+          "precision": 0.7142857142857143,
+          "recall": 0.5,
+          "jaccard": 0.4166666666666667
+        }
+      },
+      {
+        "language": "en",
+        "case_class": "ambiguous",
+        "cases": 6,
+        "picks": 6,
+        "right": 5,
+        "wrong": 1,
+        "none": 0,
+        "macro": {
+          "precision": 0.8333333333333334,
+          "recall": 0.8333333333333334,
+          "jaccard": 0.8333333333333334
+        },
+        "micro": {
+          "precision": 0.8333333333333334,
+          "recall": 0.8333333333333334,
+          "jaccard": 0.7142857142857143
+        }
+      },
+      {
+        "language": "en",
+        "case_class": "mutation",
+        "cases": 6,
+        "picks": 6,
+        "right": 6,
+        "wrong": 0,
+        "none": 0,
+        "macro": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "jaccard": 1.0
+        }
+      },
+      {
+        "language": "en",
+        "case_class": "adversarial",
+        "cases": 6,
+        "picks": 2,
+        "right": 2,
+        "wrong": 0,
+        "none": 4,
+        "macro": {
+          "precision": 0.3333333333333333,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "jaccard": 0.3333333333333333
+        }
+      }
+    ],
+    "chinese": {
+      "cases": 12,
+      "picks": 11,
+      "right": 11,
+      "wrong": 0,
+      "none": 1,
+      "macro": {
+        "precision": 0.9166666666666666,
+        "recall": 0.9166666666666666,
+        "jaccard": 0.9166666666666666
+      },
+      "micro": {
+        "precision": 1.0,
+        "recall": 0.9166666666666666,
+        "jaccard": 0.9166666666666666
+      }
+    },
+    "chinese_by_class": [
+      {
+        "language": "zh",
+        "case_class": "simple",
+        "cases": 12,
+        "picks": 11,
+        "right": 11,
+        "wrong": 0,
+        "none": 1,
+        "macro": {
+          "precision": 0.9166666666666666,
+          "recall": 0.9166666666666666,
+          "jaccard": 0.9166666666666666
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 0.9166666666666666,
+          "jaccard": 0.9166666666666666
+        }
+      }
+    ],
+    "frontier": [
+      {
+        "min_score": 4.920729941805713,
+        "min_margin": 2.2011042014011593,
+        "right": 19,
+        "wrong": 0,
+        "none": 21
+      },
+      {
+        "min_score": 4.038679931637494,
+        "min_margin": 1.8205138812849304,
+        "right": 22,
+        "wrong": 1,
+        "none": 17
+      },
+      {
+        "min_score": 2.8164113054307456,
+        "min_margin": 1.3343174616049602,
+        "right": 25,
+        "wrong": 2,
+        "none": 13
+      },
+      {
+        "min_score": 2.8164113054307456,
+        "min_margin": 0.49849405164744454,
+        "right": 26,
+        "wrong": 3,
+        "none": 11
+      },
+      {
+        "min_score": 2.8164113054307456,
+        "min_margin": 0.12680256693760228,
+        "right": 27,
+        "wrong": 4,
+        "none": 9
+      },
+      {
+        "min_score": 2.110595051103359,
+        "min_margin": 0.2846702654327995,
+        "right": 28,
+        "wrong": 5,
+        "none": 7
+      },
+      {
+        "min_score": 2.110595051103359,
+        "min_margin": 0.12680256693760228,
+        "right": 29,
+        "wrong": 6,
+        "none": 5
+      }
+    ],
+    "not_held_out": true
+  },
+  "analysed_with": {
+    "application": {
+      "head": "f6b459ac3887cd79d22131b96442500a56e1d3a7",
+      "dirty": false
+    }
+  }
+}
