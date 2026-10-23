@@ -224,7 +224,8 @@ async def size_long_prompt(
 
     The count is the runtime's own (``/apply-template`` and ``/tokenize``),
     never an estimate, and the lines are adjusted until it is within 1 % of
-    the target (at most five rounds). The prompt is written with the
+    the target (at most five rounds); a count of zero raises RuntimeError
+    instead of sizing from it. The prompt is written with the
     reference label, which tokenises like a repetition's label, so the
     count holds for the prompts that are measured.
     """
@@ -235,6 +236,11 @@ async def size_long_prompt(
             config, repetition=reference_label(config), lines=lines, generation_id="size"
         )
         tokens = await adapter.count_tokens(request.messages, ())
+        if tokens <= 0:
+            raise RuntimeError(
+                f"the runtime counted no tokens ({tokens}) for a sizing prompt of {lines} "
+                "lines; check its /apply-template and /tokenize answers"
+            )
         if abs(tokens - target) <= target * 0.01:
             break
         lines = max(1, round(lines * target / tokens))
@@ -310,21 +316,25 @@ async def run_repetition(
     ended: list = []
     started = time.monotonic()
     task = asyncio.create_task(_drain(adapter, request, seen, ended))
-    await asyncio.sleep(config.cancel_after_ms / 1000)
-    cancel_called = time.monotonic()
-    events_before_cancel = len(seen)
-    await adapter.cancel(request.generation_id)
-    sent_at = time.monotonic()
-    after = await asyncio.to_thread(short, config.short_prompts[2 * repetition + 1], "after")
-    after["sent_after_cancel_ms"] = (sent_at - cancel_called) * 1000
-
     try:
-        await asyncio.wait_for(asyncio.shield(task), config.request_timeout_seconds)
-        ended_by = _ended_by(seen)
-    except TimeoutError:
-        task.cancel()
+        await asyncio.sleep(config.cancel_after_ms / 1000)
+        cancel_called = time.monotonic()
+        events_before_cancel = len(seen)
+        await adapter.cancel(request.generation_id)
+        sent_at = time.monotonic()
+        after = await asyncio.to_thread(short, config.short_prompts[2 * repetition + 1], "after")
+        after["sent_after_cancel_ms"] = (sent_at - cancel_called) * 1000
+        try:
+            await asyncio.wait_for(asyncio.shield(task), config.request_timeout_seconds)
+            ended_by = _ended_by(seen)
+        except TimeoutError:
+            ended_by = "timed_out_waiting"
+    finally:
+        # Whatever ended the steps above (a timeout, a failed request, a cancelled probe), the
+        # long generation is not left running. After the measurements, so they do not move.
+        if not task.done():
+            task.cancel()
         await asyncio.gather(task, return_exceptions=True)
-        ended_by = "timed_out_waiting"
     return {
         "repetition": repetition,
         "long_prompt_tokens": long_tokens,

@@ -253,3 +253,61 @@ def test_the_definition_needs_a_short_prompt_pair_for_every_repetition(probe, tm
     bad.write_text(json.dumps(raw), "utf-8")
     with pytest.raises(ValueError, match="short_prompts"):
         probe.load_probe_config(bad)
+
+
+class _ZeroCounter:
+    """An adapter whose tokenizer counts nothing, as an empty /tokenize answer would."""
+
+    def __init__(self, count: int) -> None:
+        self.count = count
+
+    async def count_tokens(self, messages, tools):
+        return self.count
+
+
+@pytest.mark.parametrize("count", [0, -1])
+def test_the_sizing_stops_with_a_clear_error_when_the_runtime_counts_no_tokens(
+    probe, config, count
+):
+    """RM16: an empty count is reported, never divided by."""
+    with pytest.raises(RuntimeError, match="counted no tokens"):
+        asyncio.run(probe.size_long_prompt(_ZeroCounter(count), config, target=400))
+
+
+def test_a_failed_short_request_leaves_no_long_generation_running(
+    probe, config, surfaces, monkeypatch
+):
+    """RM14: a step that fails after the long generation starts leaves no task running."""
+    config = small(config, probe)
+    server = FakeLlamaServer(long_seconds=30)
+    real_observe = probe.observe
+    calls = []
+
+    def observe(client, body):
+        calls.append(body)
+        if len(calls) == 2:
+            raise RuntimeError("the short request failed")
+        return real_observe(client, body)
+
+    monkeypatch.setattr(probe, "observe", observe)
+
+    async def go():
+        async with server.adapter() as adapter:
+
+            async def cancel_nothing(generation_id):
+                return None
+
+            # The long generation keeps running after the cancel call, as on a slow runtime.
+            adapter.cancel = cancel_nothing
+            with server.client() as client:
+                with pytest.raises(RuntimeError, match="short request failed"):
+                    await probe.run_repetition(
+                        adapter, client, surfaces, config, KWARGS, repetition=0, lines=20
+                    )
+            current = asyncio.current_task()
+            return [task for task in asyncio.all_tasks() if task is not current]
+
+    started = time.monotonic()
+    assert asyncio.run(go()) == []
+    # The 30 s long generation was cancelled, not waited for.
+    assert time.monotonic() - started < 10
