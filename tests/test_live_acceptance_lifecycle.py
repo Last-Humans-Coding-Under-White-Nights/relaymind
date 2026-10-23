@@ -118,6 +118,7 @@ def lifecycle(harness, monkeypatch, tmp_path):
     state.args = SimpleNamespace(
         manifest=str(harness.DEFAULT_MANIFEST),
         out=str(tmp_path / "evidence.json"),
+        runtime_extra_args=(),
         external_base_url=None,
         external_model=None,
         external_context_limit=None,
