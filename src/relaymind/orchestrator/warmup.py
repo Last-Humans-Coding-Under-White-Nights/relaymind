@@ -407,7 +407,8 @@ class IdleProbe:
     async def _schedule(self) -> None:
         while not self._closing:
             await self.tick()
-            await asyncio.sleep(0.05)
+            active = self._task is not None and not self._task.done()
+            await asyncio.sleep(0.05 if active else 1.0)
 
     async def tick(self) -> None:
         if self._closing or not self.enabled:
@@ -423,6 +424,9 @@ class IdleProbe:
             if (reservation and reservation["cancel_requested"]) or elapsed >= limit:
                 self._cancel()
             return
+        if self._task is not None:
+            # Do not silently replace a task whose timing persistence failed.
+            self._task.result()
         assert self.o.model is not None
         token = "probe_" + uuid.uuid4().hex
         if not self.o.store.try_reserve_probe(
@@ -482,6 +486,8 @@ class IdleProbe:
                 samples = self.o.store.model_timings(
                     model=self.o.model.model_id, purpose="routing", actor="local"
                 )
+                if not samples:
+                    return
                 prediction = self.o.placement.predict(
                     self.o.model.model_id,
                     "routing",
@@ -494,8 +500,9 @@ class IdleProbe:
                     and prediction.predicted_ms <= self.o.budgets.active_seconds * 1000
                 ):
                     self.o.set_local_status(LocalStatus.ready())
-        except (Exception, asyncio.CancelledError):
-            # The sample records failed/cancelled attempts; maintenance cannot fail a run.
+        except (_NotReady, _WarmupTimeout, asyncio.CancelledError):
+            # Runtime failures are recorded attempts. Evidence/storage failures
+            # must remain visible, just as they do for startup warm-up.
             pass
         finally:
             timer.cancel()
@@ -509,3 +516,7 @@ class IdleProbe:
         self._cancel()
         if self._task is not None and not self._task.done():
             await asyncio.wait((self._task,), timeout=self.cancel_wait_seconds)
+        if self._scheduler is not None and not self._scheduler.cancelled():
+            self._scheduler.result()
+        if self._task is not None and self._task.done():
+            self._task.result()

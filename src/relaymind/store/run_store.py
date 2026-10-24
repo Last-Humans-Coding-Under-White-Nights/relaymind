@@ -239,6 +239,10 @@ class SlotUnavailableError(RunStoreError):
 
     http_status = 429
 
+    def __init__(self, message: str, *, probe: bool = False) -> None:
+        super().__init__(message)
+        self.probe: bool = probe
+
 
 class IdempotencyKeyTakenError(RunStoreError):
     """The caller's idempotency key already belongs to a run (spec 0.18 section 7.4).
@@ -574,7 +578,7 @@ class RunStore:
                 self._conn.execute("COMMIT")
             except BaseException as exc:
                 self._rollback()
-                if isinstance(exc, SlotUnavailableError) and getattr(exc, "probe", False):
+                if isinstance(exc, SlotUnavailableError) and exc.probe:
                     # The admission transaction (including an approval) rolled back.
                     # Persist cancellation separately, while holding the connection lock.
                     self._conn.execute("BEGIN IMMEDIATE")
@@ -615,7 +619,24 @@ class RunStore:
         self, token: str, owner_instance: str, *, model: str, after_seconds: float
     ) -> bool:
         """Atomically reserve only stale, idle work, with persisted attempt cooldown."""
+        # This optimistic read only rejects work; it never grants a reservation.
+        if not self._probe_eligible(model=model, after_seconds=after_seconds):
+            return False
         with self._write():
+            # Another connection may have admitted a run, reserved a probe, or
+            # refreshed timings/cooldown since the read. Recheck all conditions.
+            if not self._probe_eligible(model=model, after_seconds=after_seconds):
+                return False
+            self._conn.execute(
+                "UPDATE idle_probe SET token=?, owner_instance=?, started_at=?,"
+                " cancel_requested=0 WHERE singleton=1",
+                (token, owner_instance, _iso(self.clock.utc_now())),
+            )
+            return True
+
+    def _probe_eligible(self, *, model: str, after_seconds: float) -> bool:
+        with self._lock:
+            self._check_open()
             row = self._conn.execute("SELECT * FROM idle_probe").fetchone()
             if row["token"] is not None or self.active_run_id() is not None:
                 return False
@@ -629,18 +650,7 @@ class RunStore:
                 for s in self.model_timings(model=model, purpose="routing", actor="local")
                 if s.succeeded
             ]
-            if samples and (now - samples[-1].recorded_at).total_seconds() <= after_seconds:
-                return False
-            self._conn.execute(
-                "UPDATE idle_probe SET token=?, owner_instance=?, started_at=?,"
-                " cancel_requested=0 WHERE singleton=1",
-                (token, owner_instance, _iso(now)),
-            )
-            return True
-
-    def request_probe_cancel(self) -> None:
-        with self._write():
-            self._conn.execute("UPDATE idle_probe SET cancel_requested=1 WHERE token IS NOT NULL")
+            return not samples or (now - samples[-1].recorded_at).total_seconds() > after_seconds
 
     def finish_probe(self, token: str, owner_instance: str) -> bool:
         """Release only after the matching owner's generation task has actually ended."""
@@ -914,12 +924,11 @@ class RunStore:
                 current = self._require_run(run_id)
                 if current["version"] != expected_version or current["state"] != from_state:
                     raise StaleVersionError(run_id, expected_version, current["version"])
-                error = SlotUnavailableError(
+                raise SlotUnavailableError(
                     "another active run or idle maintenance probe holds the execution slot; "
-                    f"{run_id} is unchanged"
+                    f"{run_id} is unchanged",
+                    probe=self.probe_reservation() is not None,
                 )
-                error.probe = self.probe_reservation() is not None
-                raise error
             self.start_run_clock(run_id)
             self._conn.execute(
                 "INSERT INTO state_intervals (run_id, version, state, elapsed_ms)"
