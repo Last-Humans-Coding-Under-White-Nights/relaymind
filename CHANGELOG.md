@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.42 defines validated frozen placement-history imports, measured
+  serial local active time, honest evaluation denominators and durable M8 matrix
+  execution (#134; RM03, RM16, RM17, RM22, RM25–RM28, RM32/AC19).
+  Defaults and live evidence remain unchanged pending reviewed measurements.
+
 - Opt-in verified managed answer streaming (#125; RM12, RM16, RM17, RM20,
   RM32; AC09, AC19): cumulative predicate gates, exact generation ownership,
   persisted live deltas, safe terminal SSE errors, and configured/effective

@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.41 | 24 October 2026 | Proposed implementation baseline
+Version 0.42 | 24 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that makes the best use of external language models from a PC with limited resources: it keeps simple, bounded work on a small local model when the machine can run it fast enough, sends everything else to an external model with as few round trips and tokens as the task allows, preserves completed work across that switch, and shows every decision in a trace. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -983,3 +983,114 @@ All attempted cases, including transport errors, timeout, invalid identity and i
 ### Standard-library example
 
 Ship `scripts/example_selector.py`: a loopback-bound standard-library HTTP server (http.server/json; no model/API call), configured fixed identity example_keyword/1, accepting POST /select and returning the published SelectionResult shape. A small deterministic keyword rule selects only an ID present in the request catalog, otherwise none; use a custom mechanism such as keyword_rule, confidence null and model_calls []. It never executes tools, requests permissions or returns gateway route/reason fields. Serve bounded JSON errors for unsupported method/path/body and no arbitrary filesystem content. The production transport's boundary tests provide full schema enforcement; the example need not claim to implement a JSON Schema engine using only the standard library. README links the two schema files and RM28, provides the launch item/server command, and states this example has no model and no measured accuracy claim.
+
+
+## 19 Reproducible placement evaluation (specification 0.42)
+
+These rules refine RM03, RM16, RM17, RM22, RM25–RM28 and RM32/AC19.
+They define measurement infrastructure, not measured results or a default change.
+
+### 19.1 Frozen placement priors
+
+Both evaluation runners accept `--timing-samples FILE`, a closed versioned
+`relaymind.placement_prior` bundle with exact configuration partitions. Each
+partition binds the local manifest/artifact, runtime arguments, generation
+settings and external endpoint/model/context/request options. Policy and selector
+chain are experimental factors, not interchangeable machine configurations.
+Sources carry export byte SHA-256 and explicit terminal source run IDs. All
+partitions and sources MUST validate before any store write or model launch.
+Source exports labeled counterfactual are ineligible. Full traces begin with
+run.accepted at sequence one, have contiguous sequence, consistent run identity,
+monotonic elapsed time, exactly one final terminal event, and agree with the
+source record and observed model-call counts. Every event passes the published
+TraceEvent validator. Unknown measurements remain unknown.
+
+Timings retain actual actor, purpose, kind, nullable counts and original UTC
+measurement timestamps, with source call identity; imported run samples are
+unowned and create no runs. Terminal outcomes MUST use the same pure projector
+as live recording: selected-skill non-routing local attempts count completed
+only with local final ownership and no handoff/external calls; they count
+escalated after actual handoff (even if the external stage fails/cancels), or
+an auto needs_external terminal. Pure cancellation, routing-only and local_only
+failure are not failed skill attempts. External cost includes actual external
+generations only for completed selected-skill runs. Grader success and HTTP
+selector claims do not substitute for those observations.
+
+A dedicated imported-history table retains source digest/run identity,
+configuration/bundle digest, original terminal timestamp and projector version.
+Import is atomic and immutable-source idempotent; conflicts fail. It creates no
+run, event, approval or tool operation. Evaluation imports require a fresh
+isolated store, preventing ambiguous overlap with live provenance. Imported
+outcomes combine with live estimates under existing model/skill filters only
+inside the selected exact configuration partition. Original seven-day retention
+and timing row limits apply; stale or truncated priors MUST fail the frozen-prior
+contract rather than be rebased. Import reports include byte/config/source
+digests, imported and retained counts, ineligible outcomes and reasons.
+
+Seed every case store before recovery/warm-up/startup. Preserve genuine startup
+samples and per-run measured class; hardware labels never replace measured
+class. A latency gateway learns online, labeled as such. Freeze independent
+normal/constrained calibration priors before candidate cells; every policy and
+chain, including controls, uses the same initial configuration-specific prior.
+Timing-only priors explicitly leave expected_wait outcome prerequisites unknown.
+
+### 19.2 Local active time
+
+`run.completed`, `run.failed`, `run.cancelled` and `handoff.started` MAY include
+`local_active_ms`, an exact nonnegative integer or null. Missing legacy values
+mean not recorded. It measures cumulative serial local-phase monotonic wall time
+using the existing active-stage clock, includes selection/tools/preparation,
+excludes suspended waits, and never changes a budget. Sum interval seconds then
+round once. At a snapshot it cannot exceed active_ms. Local attribution starts
+for local_only or usable-local auto/parallel_demo, and is measured zero for
+external_only or managed external execution with absent/unavailable/unsuitable
+local models. Successful handoff captures one boundary immediately before its
+transition and permanently freezes attribution at that same boundary only after
+the transition succeeds. Resumes after handoff never reopen it. Failed handoff
+preparation leaves the serial local phase active. Entering overlapping parallel
+branches marks the complete field unsupported/null. Recovery/untracked terminal
+paths without a live clock report null, never reconstructed model duration.
+
+### 19.3 Metrics and execution durability
+
+Report prediction error as predicted_ms minus matched actual local duration_ms,
+with observations, nearest-rank p50/p95, min/max, n and missing counts. Wasted
+local time uses terminal local_active_ms only for external-answer completions
+(proven by final owner and actual answer evidence) or needs_external failures.
+Waiting, cancellation, failed external and local completion are excluded; null
+and unsupported values stay missing, genuine zero remains zero. Model-duration
+sums MUST NOT substitute for local active time.
+
+Generations per completed run use terminal completed runs, grouped by actor and
+purpose. Selection precision/recall/Jaccard use the locked expected-skill sidecar,
+empty predictions score zero, and all attempts/failures remain in denominators.
+Report admitted selector versus attempts separately; a skipped/fall-through
+selector did not select the winner. External calls/tokens per completed task
+use all candidate attempts' gateway-observed external usage in the numerator
+and corpus task successes in the denominator, including failed attempts' cost.
+Unknown counts have explicit missing counts and zero denominators yield null.
+Separate configuration, mode, language, measured class and selector provenance.
+Expected_wait reports evaluated/declined counts and prerequisite applicability;
+a policy label alone proves no effect. Latency completion distributions include
+successful final answers only; errors/timeouts/stream durations remain separately
+recorded. Calibration cost stays outside candidate denominators.
+
+The fixed M8 driver records exact argv, source revision/file fingerprint, model
+and runtime pins, seed/source digests, UTC interval and counts. Child processes
+MUST import the measured checkout explicitly. Outputs remain outside source.
+Durable per-case/cell checkpoints preserve started/interrupted/failed attempts
+and actual available usage. Resume verifies immutable settings/source/prior
+identity, never silently retries a measured case or substitutes cached results
+from another identity. An interrupted latency online sequence is not silently
+restarted as the same cell. No calibration or provider calls precede code review.
+
+The required matrix is normal/constrained × three policies × two chains, full
+52-case three-mode corpus (156 grades/cell), and normative latency 120 measured
+plus four cold/warm-up requests/cell. Preserve baseline budgets, provider options,
+final answer pass, one call per generation, no prefetch/workflows/cache, buffered
+and early_headers=false. Add same-revision/prior local buffered/live corpus
+comparison; a none-class streaming claim additionally needs its own buffered/live
+104-run corpus and 120-sample latency cells. No silent retries, caps or omitted
+failures. Report every section 12.3 hypothesis met/not met/not measured with its
+provenance. A subsequent evidence-backed spec revision decides defaults;
+local_first, model_router and buffered remain unchanged in this revision.
