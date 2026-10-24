@@ -219,6 +219,7 @@ def test_deadline_miss_keeps_prediction_and_failed_sample_discards_route(tmp_pat
     assert finished["deadline_missed"] is True
     assert not of_type(events, "route.selected")
     assert of_type(events, "handoff.started")[0].payload["reason_code"] == "local_slow"
+    assert "placement" not in of_type(events, "run.failed")[0].payload
     assert not gateway.store.model_timings(model=LOCAL_MODEL_ID)[-1].succeeded
     assert len(gateway.adapter.cancelled) == 1
 
@@ -371,6 +372,26 @@ def test_selected_skill_decline_retains_skill_body_and_predicate(tmp_path):
     assert handoff["reason_code"] == "local_slow"
     assert len(gateway.adapter.requests) == 1
     assert "Completion" in str(gateway.external.requests[0].messages)
+
+
+def test_declined_skill_handoff_consumes_placement_before_external_failure(tmp_path):
+    """RM27/AC21: the declined call's full placement belongs to its handoff only."""
+    from gateway_helpers import LOCAL_MODEL_ID, build_gateway, route_turn, run
+    from helpers import of_type
+
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn("check-service-health")],
+        external_turns=[[GenerationFailed(code="unavailable", message="test")]],
+        placement=PlacementSettings(policy="device_aware"),
+    )
+    seed(gateway.store, model=LOCAL_MODEL_ID, purpose="skill", duration_ms=10000)
+    _, events = run(gateway)
+    placement = of_type(events, "handoff.started")[0].payload["placement"]
+    assert placement["reason"] == "local_slow"
+    assert placement["inputs"]["purpose"] == "skill"
+    assert placement["predicted_ms"] is not None
+    assert "placement" not in of_type(events, "run.failed")[0].payload
 
 
 @pytest.mark.parametrize("run_limit,reason", [(0.2, "local_budget"), (60, "local_slow")])
@@ -657,3 +678,57 @@ def test_placement_expiry_cancels_provider_before_resistant_iterator_finishes(tm
     assert of_type(events, "handoff.started")[0].payload["reason_code"] == "local_slow"
     assert len(gateway.adapter.cancelled) == 1
     assert gateway.store.active_run_id() is None
+
+
+def test_blocked_handoff_retains_declined_skill_placement_on_failure(tmp_path):
+    """RM13/RM27/AC21: without handoff.started, run.failed retains the full decline."""
+    from gateway_helpers import LOCAL_MODEL_ID, build_gateway, route_turn, run
+    from helpers import make_capabilities, of_type
+
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn("check-service-health")],
+        external_turns=[],
+        external_capabilities=make_capabilities(tokenizer_available=False, context_limit=1),
+        placement=PlacementSettings(policy="device_aware"),
+    )
+    seed(gateway.store, model=LOCAL_MODEL_ID, purpose="skill", duration_ms=10000)
+    _, events = run(gateway)
+    assert not of_type(events, "handoff.started")
+    assert gateway.external.requests == []
+    failed = of_type(events, "run.failed")[0].payload
+    assert failed["error_code"] == "context_limit_exceeded"
+    assert failed["placement"]["reason"] == "local_slow"
+    assert failed["placement"]["inputs"]["purpose"] == "skill"
+    assert failed["placement"]["predicted_ms"] is not None
+
+
+@pytest.mark.parametrize("boundary", ["emit", "move", "stale_move"])
+def test_failed_handoff_emission_preserves_pending_placement(tmp_path, boundary):
+    """RM17/RM27/AC21: only successfully persisted evidence consumes a snapshot."""
+    from gateway_helpers import LOCAL_MODEL_ID, build_gateway
+    from relaymind.adapters import Message, Role
+    from relaymind.orchestrator.local_loop import _Run
+    from relaymind.orchestrator.run_state import RunState
+    from relaymind.store import StaleVersionError
+    from relaymind.store.trace_event import TraceEventError
+
+    gateway = build_gateway(tmp_path, [])
+    seed(gateway.store, model=LOCAL_MODEL_ID, purpose="skill", duration_ms=10000)
+    run = _Run(gateway.orchestrator, (Message(role=Role.USER, content="hello"),), None, None)
+    run.open()
+    run.pending_placement = gateway.orchestrator.placement.predict(
+        LOCAL_MODEL_ID, "skill", 100, output_cap=100
+    )
+    snapshot = run.pending_placement.to_json_object()
+    error = TraceEventError
+    if boundary == "stale_move":
+        run.record = dataclasses.replace(run.record, version=run.record.version - 1)
+        error = StaleVersionError
+    with pytest.raises(error):
+        if boundary == "emit":
+            run.emit("handoff.started", "gateway", {})
+        else:
+            run.move(RunState.EXTERNAL_RUNNING, event=("handoff.started", "gateway", {}))
+    assert run.pending_placement.to_json_object() == snapshot
+    assert not any(e.event_type == "handoff.started" for e in gateway.store.events(run.run_id))

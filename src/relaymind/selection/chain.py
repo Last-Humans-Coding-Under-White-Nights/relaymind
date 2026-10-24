@@ -226,21 +226,55 @@ class SelectorChain:
         *,
         on_progress: Callable[[ChainResult], None] | None = None,
         remaining_seconds: Callable[[], float] | None = None,
+        time_exhausted: Callable[[], Exception] | None = None,
     ) -> ChainResult[T]:
-        """Try each selector until one result is admitted; admit raises InadmissibleError."""
+        """Try each selector until one result is admitted; admit raises InadmissibleError.
+
+        remaining_seconds supplies the owner's unrounded budget allowance. On
+        exhaustion, time_exhausted supplies its authoritative stop; without an
+        owner callback the chain raises TimeoutError. Neither permits fallthrough.
+        Model-based selectors still give their generation sole deadline ownership.
+        """
+
+        def budget_stop() -> Exception:
+            return time_exhausted() if time_exhausted else TimeoutError("gateway time budget spent")
+
         attempts: list[Attempt] = []
         started = self._clock()
         for selector in self.selectors:
             began = self._clock()
-            if remaining_seconds is not None and not selector.model_based:
-                request = request.with_deadline(
-                    max(1, round(min(self.timeout_seconds, remaining_seconds()) * 1000))
-                )
+            remaining = remaining_seconds() if remaining_seconds is not None else math.inf
+            # This check also precedes model selectors: an exhausted gateway must
+            # not start another callback merely because it owns its own timer.
+            if remaining <= 0:
+                raise budget_stop()
+            allowance = min(
+                self.timeout_seconds,
+                request.deadline_ms / 1000 if request.deadline_ms is not None else math.inf,
+                remaining,
+            )
             transport = getattr(selector, "transport", "in_process")
             try:
                 outcome, detail, parsed, admitted = await self._attempt(
-                    selector, request, context, admit
+                    selector, request, context, admit, allowance
                 )
+                if not selector.model_based:
+                    spent = self._clock() - began >= allowance or (
+                        outcome == Outcome.TIMEOUT and detail == "selector deadline spent"
+                    )
+                    # Check the originally limiting budget before refreshing the
+                    # meter: the owner preserves its run/stage reason and priority.
+                    if spent and remaining <= allowance:
+                        raise budget_stop()
+                    if remaining_seconds is not None and remaining_seconds() <= 0:
+                        raise budget_stop()
+                    if spent:
+                        outcome, detail, parsed, admitted = (
+                            Outcome.TIMEOUT,
+                            "selector deadline spent",
+                            None,
+                            None,
+                        )
             except (Exception, asyncio.CancelledError) as exc:
                 outcome = (
                     Outcome.CANCELLED if isinstance(exc, asyncio.CancelledError) else Outcome.ERROR
@@ -258,13 +292,6 @@ class SelectorChain:
                 if on_progress:
                     on_progress(ChainResult(tuple(attempts), self._elapsed_ms(started)))
                 raise
-            if not selector.model_based and self._clock() - began >= self.timeout_seconds:
-                outcome, detail, parsed, admitted = (
-                    Outcome.TIMEOUT,
-                    "selector deadline spent",
-                    None,
-                    None,
-                )
             attempts.append(
                 Attempt(
                     selector.name,
@@ -295,10 +322,11 @@ class SelectorChain:
         request: SelectionRequest,
         context: SelectionContext,
         admit: Callable[[SelectionResult], T],
+        allowance: float,
     ) -> tuple[Outcome, str | None, SelectionResult | None, T | None]:
         stops: list[Exception | asyncio.CancelledError] = []
         try:
-            raw = await self._call(selector, request, context, stops)
+            raw = await self._call(selector, request, context, stops, allowance)
         except _GatewayStop as stop:
             if isinstance(stop.cause, PlacementDeclined):
                 return Outcome.NOT_PLACED, str(stop.cause), None, None
@@ -317,7 +345,7 @@ class SelectorChain:
                 return Outcome.NOT_PLACED, str(stops[0]), None, None
             raise stops[0]
         if raw is _TIMED_OUT:
-            return Outcome.TIMEOUT, f"no result within {self.timeout_seconds} seconds", None, None
+            return Outcome.TIMEOUT, "selector deadline spent", None, None
         try:
             result = parse_selection_result(raw)
         except SelectionError:
@@ -340,17 +368,17 @@ class SelectorChain:
         request: SelectionRequest,
         context: SelectionContext,
         stops: list[Exception | asyncio.CancelledError],
+        allowance: float,
     ) -> Any:
         if selector.model_based:
             guarded = SelectionContext(context.messages, _guard(context, stops))
             return await selector.select(request.with_deadline(None), guarded)
-        deadline_ms = min(
-            request.deadline_ms or math.inf, max(1, round(self.timeout_seconds * 1000))
-        )
+        # Milliseconds are only the wire encoding, never the actual timer limit.
+        deadline_ms = max(1, round(allowance * 1000))
         work = asyncio.ensure_future(
             selector.select(request.with_deadline(deadline_ms), context.without_generation())
         )
-        timer = asyncio.ensure_future(self._sleep(self.timeout_seconds))
+        timer = asyncio.ensure_future(self._sleep(allowance))
         try:
             done, _ = await asyncio.wait((work, timer), return_when=asyncio.FIRST_COMPLETED)
         finally:
