@@ -2471,6 +2471,25 @@ The [sanitized aggregate](evidence/2026-10-23-selection-benchmarks-apple-m1.json
 
 External endpoint: `https://api.z.ai/api/paas/v4`, model `glm-4.6`; request options `{}`. Endpoint region and shared provider load were not measured. The credential remained in the operator's environment.
 
+### Protocol review, 2026-10-24 (spec 0.37.1)
+
+The review repairs cross-case diagnostics, HTTP timeout labels and identity
+claims, failed narrowing arms, and call-budget scoring; it strengthens source
+and case lock checks and rejects tool-proposal options on the skills track.
+These are deterministic protocol repairs, with no new model measurements.
+The measured revision remains `749e40f797da047d3180baf587748e9920800d16`.
+The five local raw reports were checked against the aggregate's recorded
+SHA-256 values. Every SkillsBench case expects at most seven skills, so none
+took the early greater-than-eight bypass. The two router input-cap bypasses
+retain their actual 3094 and 2395 token counts, without copied usage. All tool
+runs used `calls_per_generation=many`, with no invalid-output proposal cases;
+all narrowing statuses were `ok` (500 baseline, 500 local, 100 external).
+Their valid abstention and empty-tool-set generations remain measurements.
+No report used an HTTP selector, and both skills runs used `proposal=none`.
+All 87 self-excluding case digests and the published skills file digest still
+match. No historical scores, token totals, statuses, raw bytes, or report hashes
+are changed. Future runs record the repaired protocol and their own revision.
+
 ### Skill selection
 
 All 87 cases remain in the macro-score denominator, including timeouts, invalid outputs, and bypasses. Example requests use leave-one-task-out derivation. The router's score applies to its expected-preserving eight-skill catalog; a single router pick also limits recall on tasks requiring several skills.

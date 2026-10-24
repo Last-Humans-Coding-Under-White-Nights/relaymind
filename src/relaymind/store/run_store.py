@@ -981,7 +981,8 @@ class RunStore:
             self._conn.execute(
                 "DELETE FROM model_timings WHERE recorded_at <= ?", (self._retention_cutoff(),)
             )
-            # Bound each model/purpose, including ties and backdated imports.
+            # Spec section 8: actors share the model/purpose retention quota;
+            # estimates below filter by actor independently of that bound.
             self._conn.execute(
                 "DELETE FROM model_timings WHERE model = ? AND purpose = ? AND sample_id NOT IN"
                 " (SELECT sample_id FROM model_timings WHERE model = ? AND purpose = ?"
@@ -993,7 +994,11 @@ class RunStore:
         self, *, model: str | None = None, purpose: str | None = None, actor: str | None = None
     ) -> list[ModelTiming]:
         """Unexpired observations, oldest first, then insertion order for timestamp ties."""
-        query = "SELECT * FROM model_timings WHERE recorded_at > ?"
+        query = (
+            "SELECT model, actor, purpose, kind, input_tokens, cached_tokens, first_token_ms,"
+            " duration_ms, output_tokens, succeeded, run_id, recorded_at"
+            " FROM model_timings WHERE recorded_at > ?"
+        )
         params: list[Any] = [self._retention_cutoff()]
         for name, value in (("model", model), ("purpose", purpose), ("actor", actor)):
             if value is not None:
@@ -1007,7 +1012,7 @@ class RunStore:
                 **{
                     key: value
                     for key, value in dict(row).items()
-                    if key not in ("sample_id", "succeeded", "recorded_at")
+                    if key not in ("succeeded", "recorded_at")
                 },
                 succeeded=bool(row["succeeded"]),
                 recorded_at=_parse(row["recorded_at"]),
@@ -1107,6 +1112,8 @@ class RunStore:
                     ),
                 )
             elif event.actor == "external":
+                # A configured gateway has one external model for a run;
+                # provider changes across runs retain separate outcome identities.
                 self._conn.execute(
                     "UPDATE model_run_progress SET external_model = ?,"
                     " external_generations = external_generations + 1 WHERE run_id = ?",
