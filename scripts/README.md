@@ -330,6 +330,19 @@
   track sends the production first skill-stage prompt, validates complete calls,
   and never executes a tool handler.
 
+  Skills case hashes exclude the embedded `sha256` field from their canonical
+  payload; verification checks that digest against both the embedded value and
+  the ordered case lock, in addition to checking the exact file bytes. ToolRet
+  derivation and measurement share `~/.cache/relaymind/toolret` by default;
+  explicit cache flags override it. `derive_toolret.py --verify --parquet`
+  checks the six supplied shards in declared source order without fetching or
+  rewriting the lock. The skills track requires `--proposal none`.
+
+  HTTP reports distinguish the endpoint/transport from response-reported
+  selector identities. A single observed identity is labeled as a response
+  claim; mixed or absent observations leave the report's name/version unknown.
+  Per-case selections retain the reported claims.
+
   ```bash
   python scripts/selection_benchmark.py --track skills --selector example_match \
       --output /tmp/skills-example-match.json
