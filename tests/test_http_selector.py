@@ -18,6 +18,10 @@ from relaymind.selection import (
 )
 from test_selection_interface import Scripted, request_data, result
 
+# Protocol integration checks behavior, not OS/TLS setup speed. Actual deadline
+# tests below use injected transport and retain their short configured limits.
+SOCKET_TIMEOUT_SECONDS = 5
+
 
 def async_test(fn):
     @wraps(fn)
@@ -28,7 +32,7 @@ def async_test(fn):
 
 
 @contextmanager
-def endpoint(body=None, status=200, *, delay=0):
+def endpoint(body=None, status=200, *, response_release=None, on_request=None):
     requests = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -40,10 +44,10 @@ def endpoint(body=None, status=200, *, delay=0):
                     json.loads(self.rfile.read(int(self.headers["Content-Length"]))),
                 )
             )
-            if delay:
-                import time
-
-                time.sleep(delay)
+            if on_request is not None:
+                on_request()
+            if response_release is not None:
+                response_release.wait(SOCKET_TIMEOUT_SECONDS)
             self.send_response(status)
             self.send_header("Location", "/redirected")
             self.end_headers()
@@ -52,7 +56,7 @@ def endpoint(body=None, status=200, *, delay=0):
                 self.wfile.write(
                     answer if isinstance(answer, bytes) else json.dumps(answer).encode()
                 )
-            except BrokenPipeError:
+            except (BrokenPipeError, ConnectionResetError):
                 pass
 
         def log_message(self, *args):
@@ -89,7 +93,7 @@ def injected_http(monkeypatch, handler):
     return http("http://127.0.0.1:8051/select")
 
 
-async def attempt(selector, *, timeout=0.5, admit=lambda r: r):
+async def attempt(selector, *, timeout=SOCKET_TIMEOUT_SECONDS, admit=lambda r: r):
     return await SelectorChain([selector], timeout_seconds=timeout).run(
         parse_selection_request(request_data()), SelectionContext(), admit
     )
@@ -153,7 +157,7 @@ async def test_one_post_no_ambient_headers_or_proxy(monkeypatch):
     path, headers, sent = requests[0]
     assert path == "/select"
     assert not {"authorization", "cookie"} & {h.lower() for h in headers}
-    assert sent["deadline_ms"] == 500
+    assert sent["deadline_ms"] == SOCKET_TIMEOUT_SECONDS * 1000
     assert chosen.attempts[0].to_json_object() == dict(
         name="remote",
         version="1",
@@ -227,27 +231,37 @@ async def test_claims_immutable_and_inadmissible_falls_through():
 
 
 @async_test
-async def test_cancel_keeps_attempt_and_never_falls_through():
+async def test_cancel_keeps_attempt_and_never_falls_through(monkeypatch):
     seen = []
-    with endpoint(result("remote"), delay=0.2) as (url, requests):
-        chain = SelectorChain([http(url), Scripted("next", result("next"))], timeout_seconds=1)
-        task = asyncio.create_task(
-            chain.run(
-                parse_selection_request(request_data()),
-                SelectionContext(),
-                lambda r: r,
-                on_progress=seen.append,
-            )
+    entered = asyncio.Event()
+
+    async def pending_response(_):
+        entered.set()
+        await asyncio.Event().wait()
+
+    fallback = Scripted("next", result("next"))
+    chain = SelectorChain(
+        [injected_http(monkeypatch, pending_response), fallback], timeout_seconds=1
+    )
+    task = asyncio.create_task(
+        chain.run(
+            parse_selection_request(request_data()),
+            SelectionContext(),
+            lambda r: r,
+            on_progress=seen.append,
         )
-        for _ in range(100):
-            if requests:
-                break
-            await asyncio.sleep(0.002)
+    )
+    try:
+        await asyncio.wait_for(entered.wait(), SOCKET_TIMEOUT_SECONDS)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
     assert len(seen[-1].attempts) == 1
     assert seen[-1].attempts[0].outcome == "cancelled"
+    assert fallback.requests == []
 
 
 def test_http_gateway_fallback_claims_redacted_and_not_measured(tmp_path):
@@ -287,7 +301,8 @@ def test_gateway_stop_preserves_completed_http_attempts(tmp_path):
 
         gateway.adapter.on_generate = stop
         gateway.orchestrator.selection_chain = SelectorChain(
-            [http(url), ModelRouterSelector(gateway.orchestrator.router)], timeout_seconds=0.5
+            [http(url), ModelRouterSelector(gateway.orchestrator.router)],
+            timeout_seconds=SOCKET_TIMEOUT_SECONDS,
         )
         outcome, events = run(gateway, "Is staging-api healthy right now?")
     summaries = [e.payload["selector"] for e in events if "selector" in e.payload]
@@ -353,7 +368,7 @@ def test_example_script_serves_via_production_transport():
 
         selector = HttpSelector(name="example_keyword", version="1", url=url)
         chosen = asyncio.run(
-            SelectorChain([selector], timeout_seconds=0.5).run(
+            SelectorChain([selector], timeout_seconds=SOCKET_TIMEOUT_SECONDS).run(
                 parse_selection_request(
                     request_data(conversation=[{"role": "user", "content": "Check service health"}])
                 ),
@@ -495,7 +510,7 @@ def test_tool_benchmark_uses_production_identity_boundary():
                 [case],
                 http(url),
                 adapter=None,
-                timeout=0.5,
+                timeout=SOCKET_TIMEOUT_SECONDS,
                 context_limit=4096,
                 calls_per_generation="many",
                 seed=42,
@@ -506,28 +521,53 @@ def test_tool_benchmark_uses_production_identity_boundary():
     assert row["selector_attempt"]["model_calls_claim"] == []
 
 
-def test_cancelled_gateway_keeps_http_attempt(tmp_path):
-    """RM14/RM28: actual cancellation persists provenance on run.cancelled."""
+@async_test
+async def test_cancelled_gateway_keeps_http_attempt(tmp_path, monkeypatch):
+    """RM14/RM28: a genuine socket POST is cancelled after explicit handler entry."""
     from gateway_helpers import build_gateway
+    from relaymind.orchestrator.budgets import LocalBudgets
 
-    async def execute(url, requests):
-        gateway = build_gateway(tmp_path, [], selectors=[http(url)])
+    client_type = httpx.AsyncClient
+    clients = []
+
+    def client(**kwargs):
+        made = client_type(**kwargs)
+        clients.append(made)
+        return made
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    entered = asyncio.Event()
+    release = threading.Event()
+    loop = asyncio.get_running_loop()
+    with endpoint(
+        result("remote"),
+        response_release=release,
+        on_request=lambda: loop.call_soon_threadsafe(entered.set),
+    ) as (url, requests):
+        gateway = build_gateway(
+            tmp_path,
+            [],
+            selectors=[http(url)],
+            selection=SelectionSettings(timeout_seconds=SOCKET_TIMEOUT_SECONDS),
+            budgets=LocalBudgets(active_seconds=SOCKET_TIMEOUT_SECONDS * 2),
+        )
         task = asyncio.create_task(gateway.orchestrator.run_text("Check service health"))
-        for _ in range(100):
-            if requests:
-                break
-            await asyncio.sleep(0.002)
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
-        events = gateway.store.events(requests[0][2]["run_id"])
-        terminal = events[-1]
-        assert terminal.event_type.value == "run.cancelled"
-        assert terminal.payload["selector"]["attempts"][0]["outcome"] == "cancelled"
-        assert not gateway.adapter.requests
-
-    with endpoint(result("remote"), delay=0.15) as (url, requests):
-        asyncio.run(execute(url, requests))
+        try:
+            await asyncio.wait_for(entered.wait(), SOCKET_TIMEOUT_SECONDS)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert len(requests) == 1
+            events = gateway.store.events(requests[0][2]["run_id"])
+            terminal = events[-1]
+            assert terminal.event_type.value == "run.cancelled"
+            assert terminal.payload["selector"]["attempts"][0]["outcome"] == "cancelled"
+            assert not gateway.adapter.requests
+            assert len(clients) == 1 and clients[0].is_closed
+        finally:
+            release.set()
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
 
 def test_short_run_budget_is_gateway_error_and_caps_post_deadline(tmp_path, monkeypatch):
@@ -823,7 +863,7 @@ def test_caught_generation_stop_cannot_leave_selector_waiting(tmp_path):
 
 
 @pytest.mark.parametrize("catch_stop", [False, True])
-def test_real_user_cancel_beats_suspended_gateway_deadline(tmp_path, catch_stop):
+def test_real_user_cancel_beats_suspended_gateway_deadline(tmp_path, catch_stop, monkeypatch):
     """RM14/RM27/AC21: real cancellation wins even after late provider cleanup or a caught stop."""
     from gateway_helpers import LOCAL_MODEL_ID, build_gateway, route_turn
     from helpers import of_type
@@ -833,7 +873,7 @@ def test_real_user_cancel_beats_suspended_gateway_deadline(tmp_path, catch_stop)
     from relaymind.selection import ModelRouterSelector
     from test_placement import seed
 
-    async def execute(url):
+    async def execute():
         gateway = build_gateway(
             tmp_path,
             [],
@@ -854,7 +894,12 @@ def test_real_user_cancel_beats_suspended_gateway_deadline(tmp_path, catch_stop)
                     await asyncio.Event().wait()
 
         gateway.orchestrator.selection_chain = SelectorChain(
-            [http(url), Catching() if catch_stop else router],
+            [
+                injected_http(
+                    monkeypatch, lambda _: httpx.Response(200, json=result("remote", kind="none"))
+                ),
+                Catching() if catch_stop else router,
+            ],
             timeout_seconds=1,
             clock=gateway.clock.monotonic,
         )
@@ -887,8 +932,7 @@ def test_real_user_cancel_beats_suspended_gateway_deadline(tmp_path, catch_stop)
         assert [a["outcome"] for a in cancelled["selector"]["attempts"]] == ["none", "cancelled"]
         assert cancelled["selector"]["attempts"][0]["model_calls_claim"] == []
 
-    with endpoint(result("remote", kind="none")) as (url, _):
-        asyncio.run(asyncio.wait_for(execute(url), 1))
+    asyncio.run(asyncio.wait_for(execute(), 1))
 
 
 def test_http_budget_guard_resumes_after_real_placement_decline(tmp_path, monkeypatch):
