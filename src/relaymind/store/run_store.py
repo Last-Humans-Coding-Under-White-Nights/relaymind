@@ -43,10 +43,17 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from statistics import median
 from types import TracebackType
 from typing import Any, Self
 
 from relaymind.canonical import canonical_json
+from relaymind.store.model_timings import (
+    ModelTiming,
+    SkillOutcomeEstimate,
+    TimingEstimate,
+    timing_estimate,
+)
 from relaymind.store.trace_event import (
     SCHEMA_VERSION,
     EventType,
@@ -159,6 +166,49 @@ MIGRATIONS: tuple[str, ...] = (
         run_id TEXT NOT NULL UNIQUE REFERENCES runs(run_id) ON DELETE CASCADE,
         PRIMARY KEY (caller, idempotency_key)
     );
+    """,
+    """
+    CREATE TABLE model_timings (
+        sample_id INTEGER PRIMARY KEY,
+        model TEXT NOT NULL,
+        actor TEXT NOT NULL CHECK (actor IN ('local', 'external')),
+        purpose TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('run', 'warm_up', 'probe')),
+        input_tokens INTEGER,
+        cached_tokens INTEGER,
+        first_token_ms INTEGER,
+        duration_ms INTEGER NOT NULL,
+        output_tokens INTEGER,
+        succeeded INTEGER NOT NULL CHECK (succeeded IN (0, 1)),
+        run_id TEXT REFERENCES runs(run_id) ON DELETE CASCADE,
+        recorded_at TEXT NOT NULL
+    );
+    CREATE INDEX model_timings_lookup
+        ON model_timings(model, purpose, recorded_at, sample_id);
+    CREATE INDEX model_timings_run_id ON model_timings(run_id);
+    CREATE INDEX model_timings_recorded_at ON model_timings(recorded_at);
+    CREATE TABLE model_run_progress (
+        run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE CASCADE,
+        local_model TEXT,
+        skill_id TEXT,
+        execution_mode TEXT,
+        local_attempt INTEGER NOT NULL DEFAULT 0,
+        handoff INTEGER NOT NULL DEFAULT 0,
+        external_model TEXT,
+        external_generations INTEGER NOT NULL DEFAULT 0,
+        terminal INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE skill_outcomes (
+        run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE CASCADE,
+        local_model TEXT,
+        skill_id TEXT NOT NULL,
+        local_completed INTEGER NOT NULL,
+        local_escalated INTEGER NOT NULL,
+        external_model TEXT,
+        external_generations INTEGER NOT NULL
+    );
+    CREATE INDEX skill_outcomes_local ON skill_outcomes(local_model, skill_id);
+    CREATE INDEX skill_outcomes_external ON skill_outcomes(external_model, skill_id);
     """,
 )
 
@@ -813,6 +863,7 @@ class RunStore:
         cutoff = self._retention_cutoff()
         with self._lock:
             with self._write():
+                self._conn.execute("DELETE FROM model_timings WHERE recorded_at <= ?", (cutoff,))
                 rows = self._conn.execute(
                     "DELETE FROM runs WHERE created_at <= ? RETURNING run_id", (cutoff,)
                 ).fetchall()
@@ -820,6 +871,210 @@ class RunStore:
             for run_id in run_ids:
                 self._run_started.pop(run_id, None)
         return run_ids
+
+    # -- measured model calls and terminal skill outcomes (RM27) ----------
+
+    def add_model_timing(self, sample: ModelTiming) -> None:
+        """Validate and retain one sample, using the same boundary for imported data."""
+        if not isinstance(sample, ModelTiming):
+            raise ValueError("sample must be a ModelTiming")
+        data = sample.to_json_object()
+        data.pop("schema_version")
+        data["succeeded"] = int(sample.succeeded)
+        with self._write():
+            if sample.run_id is not None:
+                self._require_run(sample.run_id)
+            columns = list(data)
+            self._conn.execute(
+                f"INSERT INTO model_timings ({', '.join(columns)})"
+                f" VALUES ({', '.join(':' + c for c in columns)})",
+                data,
+            )
+            self._conn.execute(
+                "DELETE FROM model_timings WHERE recorded_at <= ?", (self._retention_cutoff(),)
+            )
+            # Spec section 8: actors share the model/purpose retention quota;
+            # estimates below filter by actor independently of that bound.
+            self._conn.execute(
+                "DELETE FROM model_timings WHERE model = ? AND purpose = ? AND sample_id NOT IN"
+                " (SELECT sample_id FROM model_timings WHERE model = ? AND purpose = ?"
+                " ORDER BY recorded_at DESC, sample_id DESC LIMIT 1000)",
+                (sample.model, sample.purpose, sample.model, sample.purpose),
+            )
+
+    def model_timings(
+        self, *, model: str | None = None, purpose: str | None = None, actor: str | None = None
+    ) -> list[ModelTiming]:
+        """Unexpired observations, oldest first, then insertion order for timestamp ties."""
+        query = (
+            "SELECT model, actor, purpose, kind, input_tokens, cached_tokens, first_token_ms,"
+            " duration_ms, output_tokens, succeeded, run_id, recorded_at"
+            " FROM model_timings WHERE recorded_at > ?"
+        )
+        params: list[Any] = [self._retention_cutoff()]
+        for name, value in (("model", model), ("purpose", purpose), ("actor", actor)):
+            if value is not None:
+                query += f" AND {name} = ?"
+                params.append(value)
+        with self._lock:
+            self._check_open()
+            rows = self._conn.execute(query + " ORDER BY recorded_at, sample_id", params).fetchall()
+        return [
+            ModelTiming(
+                **{
+                    key: value
+                    for key, value in dict(row).items()
+                    if key not in ("succeeded", "recorded_at")
+                },
+                succeeded=bool(row["succeeded"]),
+                recorded_at=_parse(row["recorded_at"]),
+            )
+            for row in rows
+        ]
+
+    def timing_estimate(self, model: str, purpose: str, *, actor: str = "local") -> TimingEstimate:
+        """Read measured prediction inputs without inference or run/event-history scans."""
+        return timing_estimate(
+            model, purpose, actor, self.model_timings(model=model, purpose=purpose, actor=actor)
+        )
+
+    def outcome_estimate(
+        self, model: str | None, skill_id: str, *, external_model: str | None = None
+    ) -> SkillOutcomeEstimate:
+        """Local outcomes by local model/skill; external costs by external model/skill.
+
+        An unspecified external model has no external estimate. Both sets
+        omit expired runs before physical maintenance deletes their rows.
+        """
+        with self._lock:
+            self._check_open()
+            completed, escalated = self._conn.execute(
+                "SELECT COALESCE(SUM(local_completed), 0), COALESCE(SUM(local_escalated), 0)"
+                " FROM skill_outcomes JOIN runs USING (run_id)"
+                " WHERE local_model IS ? AND skill_id = ? AND runs.created_at > ?",
+                (model, skill_id, self._retention_cutoff()),
+            ).fetchone()
+            external = (
+                []
+                if external_model is None
+                else self._conn.execute(
+                    "SELECT external_generations FROM skill_outcomes JOIN runs USING (run_id)"
+                    " WHERE external_model = ? AND skill_id = ? AND external_generations > 0"
+                    " AND runs.created_at > ? ORDER BY runs.created_at, run_id",
+                    (external_model, skill_id, self._retention_cutoff()),
+                ).fetchall()
+            )
+        return SkillOutcomeEstimate(
+            local_completed=completed,
+            local_escalated=escalated,
+            local_success_rate=completed / (completed + escalated)
+            if completed + escalated
+            else None,
+            external_completed=len(external),
+            median_external_generations=float(median([r[0] for r in external]))
+            if external
+            else None,
+        )
+
+    def _record_outcome_event(self, event: TraceEvent) -> None:
+        """Update bounded per-run progress inside the event transaction; finalize once.
+
+        Old databases are not reinterpreted as measured outcomes. A run
+        still active during migration can start collecting new evidence.
+        """
+        run_id, kind, payload = event.run_id, event.event_type, event.payload
+        if kind not in (
+            EventType.RUN_ACCEPTED,
+            EventType.SKILL_LOADED,
+            EventType.MODEL_STARTED,
+            EventType.HANDOFF_STARTED,
+            EventType.RUN_COMPLETED,
+            EventType.RUN_FAILED,
+            EventType.RUN_CANCELLED,
+        ):
+            return
+        self._conn.execute(
+            "INSERT OR IGNORE INTO model_run_progress (run_id) VALUES (?)", (run_id,)
+        )
+        progress = self._conn.execute(
+            "SELECT * FROM model_run_progress WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        if progress["terminal"]:
+            return
+        if kind is EventType.RUN_ACCEPTED:
+            self._conn.execute(
+                "UPDATE model_run_progress SET local_model = ?, execution_mode = ?"
+                " WHERE run_id = ?",
+                (payload.get("local_model"), payload["effective_execution_mode"], run_id),
+            )
+        elif kind is EventType.SKILL_LOADED:
+            self._conn.execute(
+                "UPDATE model_run_progress SET skill_id = ? WHERE run_id = ?",
+                (payload["name"], run_id),
+            )
+        elif kind is EventType.MODEL_STARTED:
+            if event.actor == "local":
+                self._conn.execute(
+                    "UPDATE model_run_progress SET local_model = COALESCE(local_model, ?),"
+                    " local_attempt = MAX(local_attempt, ?) WHERE run_id = ?",
+                    (
+                        payload["model"],
+                        int(payload.get("purpose") not in (None, "routing")),
+                        run_id,
+                    ),
+                )
+            elif event.actor == "external":
+                # A configured gateway has one external model for a run;
+                # provider changes across runs retain separate outcome identities.
+                self._conn.execute(
+                    "UPDATE model_run_progress SET external_model = ?,"
+                    " external_generations = external_generations + 1 WHERE run_id = ?",
+                    (payload["model"], run_id),
+                )
+        elif kind is EventType.HANDOFF_STARTED:
+            self._conn.execute(
+                "UPDATE model_run_progress SET handoff = 1 WHERE run_id = ?", (run_id,)
+            )
+        elif kind in (EventType.RUN_COMPLETED, EventType.RUN_FAILED, EventType.RUN_CANCELLED):
+            self._conn.execute(
+                "UPDATE model_run_progress SET terminal = 1 WHERE run_id = ?", (run_id,)
+            )
+            if progress["skill_id"] is None:
+                return
+            completed = kind is EventType.RUN_COMPLETED
+            local_completed = bool(
+                completed
+                and progress["local_attempt"]
+                and not progress["handoff"]
+                and not progress["external_generations"]
+                and payload["final_answer_model"] == progress["local_model"]
+            )
+            local_escalated = bool(
+                progress["local_attempt"]
+                and (
+                    progress["handoff"]
+                    or (
+                        kind is EventType.RUN_FAILED
+                        and payload["error_code"] == "needs_external"
+                        and progress["execution_mode"] == "auto"
+                    )
+                )
+            )
+            external_generations = progress["external_generations"] if completed else 0
+            self._conn.execute(
+                "INSERT OR IGNORE INTO skill_outcomes"
+                " (run_id, local_model, skill_id, local_completed, local_escalated,"
+                " external_model, external_generations) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    run_id,
+                    progress["local_model"],
+                    progress["skill_id"],
+                    int(local_completed),
+                    int(local_escalated),
+                    progress["external_model"],
+                    external_generations,
+                ),
+            )
 
     # -- events ----------------------------------------------------------
 
@@ -895,6 +1150,8 @@ class RunStore:
             f" VALUES ({', '.join(f':{c}' for c in columns)})",
             rows,
         )
+        for event in events:
+            self._record_outcome_event(event)
         return events
 
     def events(

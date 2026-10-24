@@ -194,8 +194,8 @@ class StreamAccumulator:
             cached = _detail(usage, "prompt_tokens_details", "cached_tokens")
             events.append(
                 Usage(
-                    input_tokens=int(usage.get("prompt_tokens") or 0),
-                    output_tokens=int(usage.get("completion_tokens") or 0),
+                    input_tokens=_count(usage.get("prompt_tokens")),
+                    output_tokens=_count(usage.get("completion_tokens")),
                     cached_tokens=self._cache_n if cached is None else cached,
                     reasoning_tokens=_detail(
                         usage, "completion_tokens_details", "reasoning_tokens"

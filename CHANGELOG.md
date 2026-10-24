@@ -8,6 +8,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.38.1 clarifies rejected optional cache measurements
+  (RM14, RM16, RM25, RM27): an actual call reporting more cached tokens
+  than known input tokens records only that cached count as unavailable,
+  with a fixed credential-free warning. Execution outcomes and other
+  measurements are preserved; imported timing samples remain strictly validated.
+- Persisted timing samples and skill outcome estimates (#129; RM17, RM25,
+  RM27, spec 0.38): a versioned sample schema, an additive SQLite migration,
+  seven-day retention and a 1,000-sample bound per model/purpose. Every
+  managed, client-owned, fixed-workflow and startup warm-up call records
+  success or failure with reported measurements; estimates keep warm,
+  cold and unknown prefixes separate. Terminal skill outcomes are counted
+  once and external costs stay grouped by provider model. Partial provider
+  usage now preserves unknown input/output counts as null instead of zero.
 - Demo UI phase 2 evidence (#127; RM12, RM23, RM25–RM29, RM31, AC20):
   each trace and the shell show the displayed run's recorded local model
   status and performance options. Every route shows its selector attempts,
@@ -251,6 +264,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.38 clarifies the timing records and estimates required by
+  #129 (RM17, RM25, RM27): actual call actor and kind, nullable measurements,
+  bounded retention, separate warm/cold effective throughput, and terminal
+  skill outcomes. Predictions remain estimates and no execution default changes.
 - Specification 0.37 → 0.37.1 (RM03, RM09, RM25, RM28; section 12.4):
   a first generation exceeding its call budget receives no set-score credit
   while preserving raw proposals, usage and independent schema validity. A failed

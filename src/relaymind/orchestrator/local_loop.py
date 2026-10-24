@@ -285,7 +285,15 @@ from relaymind.skills.predicates import (
     CompletionCriteria,
     Predicate,
 )
-from relaymind.store import IdempotencyClaim, RunRecord, RunStore, StaleVersionError, TraceClock
+from relaymind.store import (
+    IdempotencyClaim,
+    ModelTiming,
+    RunRecord,
+    RunStore,
+    StaleVersionError,
+    TraceClock,
+)
+from relaymind.store.model_timings import observed_cached_tokens
 from relaymind.store.run_store import EventDraft, utc_iso
 from relaymind.store.trace_event import WORKFLOW_BRANCHES, EventType
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry, ToolRejectedError
@@ -3029,8 +3037,7 @@ class _Run:
             duration_ms = round((self.o.clock.monotonic() - started) * 1000)
             if self.workflow is not None and branch is not None:
                 self._measure_workflow_call(self.workflow, branch, call_id, duration_ms, failure)
-            self.emit(
-                EventType.MODEL_FINISHED,
+            self._finish_model_call(
                 actor,
                 {
                     "call_id": call_id,
@@ -3073,6 +3080,39 @@ class _Run:
             raise self._local_unavailable(f"local generation failed: {failure.code}")
         self.meter.check_time(on_external)
         return call_id, generation
+
+    def _finish_model_call(self, actor: str, payload: Mapping[str, Any]) -> None:
+        """Keep the sample and completion event in one transaction (RM17, RM27).
+
+        Client-owned and fixed-workflow calls use this same boundary.
+        Task/predicate success is distinct from the provider call's success.
+        """
+        usage = payload["usage"]
+        if usage is not None:
+            usage = {
+                **usage,
+                "cached_tokens": observed_cached_tokens(
+                    usage["input_tokens"], usage["cached_tokens"]
+                ),
+            }
+            payload = {**payload, "usage": usage}
+        sample = ModelTiming(
+            model=payload["model"],
+            actor=actor,
+            purpose=payload["purpose"],
+            kind="run",
+            input_tokens=None if usage is None else usage["input_tokens"],
+            cached_tokens=None if usage is None else usage["cached_tokens"],
+            output_tokens=None if usage is None else usage["output_tokens"],
+            first_token_ms=payload["first_token_ms"],
+            duration_ms=payload["duration_ms"],
+            succeeded=payload["error"] is None,
+            run_id=self.run_id,
+            recorded_at=self.o.store.clock.utc_now(),
+        )
+        with self.o.store.transaction():
+            self.o.store.add_model_timing(sample)
+            self.emit(EventType.MODEL_FINISHED, actor, payload)
 
     @staticmethod
     def _measure_workflow_call(
