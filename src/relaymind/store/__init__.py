@@ -3,6 +3,12 @@
 See AGENTS.md (repository map) and docs/ARCHITECTURE.md.
 """
 
+from relaymind.store.model_timings import (
+    ModelTiming,
+    SkillOutcomeEstimate,
+    ThroughputEstimate,
+    TimingEstimate,
+)
 from relaymind.store.run_store import (
     DEFAULT_APPROVAL_TTL,
     DEFAULT_RETENTION,
@@ -32,6 +38,10 @@ __all__ = [
     "DEFAULT_APPROVAL_TTL",
     "DEFAULT_RETENTION",
     "MIGRATIONS",
+    "ModelTiming",
+    "SkillOutcomeEstimate",
+    "ThroughputEstimate",
+    "TimingEstimate",
     "EventType",
     "IdempotencyClaim",
     "IdempotencyKeyTakenError",

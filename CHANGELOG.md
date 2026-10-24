@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Persisted timing samples and skill outcome estimates (#129; RM17, RM25,
+  RM27, spec 0.38): a versioned sample schema, an additive SQLite migration,
+  seven-day retention and a 1,000-sample bound per model/purpose. Every
+  managed, client-owned, fixed-workflow and startup warm-up call records
+  success or failure with reported measurements; estimates keep warm,
+  cold and unknown prefixes separate. Terminal skill outcomes are counted
+  once and external costs stay grouped by provider model. Partial provider
+  usage now preserves unknown input/output counts as null instead of zero.
 - Demo UI phase 2 evidence (#127; RM12, RM23, RM25–RM29, RM31, AC20):
   each trace and the shell show the displayed run's recorded local model
   status and performance options. Every route shows its selector attempts,

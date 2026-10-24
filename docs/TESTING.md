@@ -1,5 +1,17 @@
 # Testing RelayMind (Milestones 1 to 5)
 
+Timing storage and placement inputs (#129; RM17, RM25, RM27, spec 0.38):
+`pytest tests/test_model_timings.py tests/test_run_store.py tests/test_launcher_warmup.py`
+checks the previous-schema upgrade, validated sample imports, seven-day
+retention, explicit deletion and deterministic 1,000-sample bounds. Synthetic
+measurements check medians, separate warm/cold rates, unknown usage and
+zero-duration intervals. Model doubles cover managed local/external,
+client-owned, fixed-workflow, failed, cancelled and warm-up calls. Terminal
+outcome tests distinguish local completion from escalation, omit routing-only
+and local-only failures, isolate external models, and verify transaction
+rollback and estimate reads without event-history scans. These are
+deterministic checks, not live performance evidence.
+
 Selection benchmark tests (#143, #144; RM02, RM08, RM09, RM25, RM28) run
 with `pytest tests/test_selection_benchmark.py`. They cover frozen digests,
 set scoring and macro/micro summaries, leave-one-task-out examples, router

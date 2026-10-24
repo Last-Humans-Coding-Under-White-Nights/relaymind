@@ -47,6 +47,7 @@ from relaymind.adapters import (
 )
 from relaymind.orchestrator.local_loop import LOCAL_OPTIONS, LocalOrchestrator, skill_stage_messages
 from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
+from relaymind.store import ModelTiming
 
 # Not a corpus or latency prompt (a repeated text would be served whole from the
 # cache and inflate the cached count), and not a request any run sends.
@@ -146,18 +147,41 @@ async def _send(
     started = clock.monotonic()
     first_token: float | None = None
     usage: Usage | None = None
-    async with contextlib.aclosing(adapter.generate(request)) as stream:
-        async for event in stream:
-            if first_token is None and (
-                isinstance(event, FirstToken | ToolCall)
-                or (isinstance(event, TextDelta) and event.text)
-            ):
-                first_token = clock.monotonic()
-            if isinstance(event, Usage):
-                usage = event
-            elif isinstance(event, GenerationFailed):
-                raise _NotReady(f"the local runtime reported {event.code}")
-    finished = clock.monotonic()
+    succeeded = False
+    try:
+        async with contextlib.aclosing(adapter.generate(request)) as stream:
+            async for event in stream:
+                if first_token is None and (
+                    isinstance(event, FirstToken | ToolCall)
+                    or (isinstance(event, TextDelta) and event.text)
+                ):
+                    first_token = clock.monotonic()
+                if isinstance(event, Usage):
+                    usage = event
+                elif isinstance(event, GenerationFailed):
+                    raise _NotReady(f"the local runtime reported {event.code}")
+        succeeded = True
+    finally:
+        finished = clock.monotonic()
+        assert orchestrator.model is not None
+        orchestrator.store.add_model_timing(
+            ModelTiming(
+                model=orchestrator.model.model_id,
+                actor=orchestrator.model.actor,
+                purpose=purpose,
+                kind="warm_up",
+                run_id=None,
+                duration_ms=round((finished - started) * 1000),
+                first_token_ms=None
+                if first_token is None
+                else round((first_token - started) * 1000),
+                input_tokens=None if usage is None else usage.input_tokens,
+                cached_tokens=None if usage is None else usage.cached_tokens,
+                output_tokens=None if usage is None else usage.output_tokens,
+                succeeded=succeeded,
+                recorded_at=orchestrator.store.clock.utc_now(),
+            )
+        )
     return WarmupSample(
         purpose=purpose,
         duration_ms=round((finished - started) * 1000),

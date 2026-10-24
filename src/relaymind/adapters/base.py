@@ -132,21 +132,19 @@ class ToolCall:
 class Usage:
     """Token usage for one model call.
 
-    cached_tokens and reasoning_tokens are what the runtime or provider
-    reported for this call (spec 0.31 section 6). None means the source
+    Counts are what the runtime or provider reported for this call
+    (spec 0.38 section 6). None means the source
     returned no count: it is absent, never 0, because a default of 0 is
     not a measurement (RM16, finding F9). A reported 0 stays 0.
     """
 
-    input_tokens: int
-    output_tokens: int
+    input_tokens: int | None
+    output_tokens: int | None
     cached_tokens: int | None = None
     reasoning_tokens: int | None = None
 
     def __post_init__(self) -> None:
-        if self.input_tokens < 0 or self.output_tokens < 0:
-            raise ValueError("token counts must be nonnegative")
-        for name in ("cached_tokens", "reasoning_tokens"):
+        for name in ("input_tokens", "output_tokens", "cached_tokens", "reasoning_tokens"):
             value = getattr(self, name)
             if value is not None and value < 0:
                 raise ValueError("token counts must be nonnegative")
