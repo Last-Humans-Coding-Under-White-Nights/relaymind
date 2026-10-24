@@ -113,7 +113,10 @@ transport without claiming useful selection accuracy. HTTP attempts and their
 nullable model-call self-reports are labeled separately in traces and evaluation;
 those reports never verify total external inference cost. The same production
 transport can be benchmarked with explicit `--selector-name example_keyword
---selector-version 1`; see [scripts/README.md](scripts/README.md).
+--selector-version 1`; see [scripts/README.md](scripts/README.md). The
+[87-case keyword HTTP capture](docs/EVIDENCE.md#2026-10-24--m8-keyword-http-selector-apple-m1)
+records the actual scores, transport timings and limitations separately from the
+built-in selector evidence.
 
 ## Start
 
