@@ -23,6 +23,7 @@ from gateway_helpers import (
 )
 from helpers import ACCEPTED_PAYLOAD, of_type
 from relaymind.adapters import GenerationOptions
+from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
 from relaymind.orchestrator.performance import PerformanceSettings
 from relaymind.store import RunRecord, RunStore, TraceEvent
 from relaymind.store.trace_event import EventType, validate_trace_event
@@ -209,6 +210,104 @@ def test_unsupported_placement_shapes_do_not_break_a_stored_trace(tmp_path, plac
     assert view["route"]["placement"] is None
     assert all(c["placement"] is None and c["predicted_ms"] is None for c in view["model_calls"])
     assert "Placement: not recorded" in render_trace(view, UiSettings(mode="double"))
+
+
+@pytest.mark.parametrize(
+    "selector",
+    [
+        None,
+        "unknown",
+        [],
+        {},
+        {"name": "example_match"},
+        {"attempts": None},
+        {"attempts": "unknown"},
+        {"attempts": [None, 1, {}, {"name": "example_match"}]},
+    ],
+)
+def test_incomplete_selector_evidence_remains_readable(tmp_path, selector):
+    """RM23, RM28: malformed historical input never prevents reading the trace."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway)
+    events = [
+        replace(e, payload={**e.payload, "selector": selector})
+        if e.event_type is EventType.ROUTE_SELECTED
+        else e
+        for e in gateway.store.events(outcome.run_id)
+    ]
+    view = trace_view_from(gateway.store.get_run(outcome.run_id), events)
+    if not isinstance(selector, dict):
+        assert view["route"]["selector"] is None
+    # Exercise direct rendering too: callers may supply a partial view dictionary.
+    view["route"]["selector"] = selector
+    shown = render_trace(view, UiSettings(mode="double"))
+    skill_section = shown.split('<section class="skill">')[1].split("</section>")[0]
+    assert "Selector:" in skill_section
+    assert "not recorded" in skill_section
+    if isinstance(selector, dict):
+        assert (
+            "version: not recorded; mechanism: not recorded; elapsed: not recorded" in skill_section
+        )
+    assert STAGING_OK in shown
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        None,
+        "unknown",
+        {},
+        {"local_model": None},
+        {"selection": []},
+        {"selection": [1, {"name": "<selector>"}]},
+    ],
+)
+def test_partial_configuration_views_remain_readable(config):
+    """RM12, RM23: missing labels remain explicit and unexpected values stay escaped."""
+    view = trace_view_from(FRESH_RECORD, [])
+    view["configuration"] = config
+    shown = render_trace(view, UiSettings(mode="double"))
+    assert "Local model: not recorded" in shown
+    assert "Local model status: not recorded" in shown
+    if isinstance(config, dict) and config.get("selection") == []:
+        assert "Selector chain: none" in shown
+    if isinstance(config, dict) and config.get("selection"):
+        assert "Selector chain: 1," in shown
+        assert "&lt;selector&gt;" in shown
+        assert "<selector>" not in shown
+
+
+def test_absent_local_model_is_explicit_in_a_trace(tmp_path):
+    """RM23, RM26, AC20: explicit absence differs from unrecorded model identity."""
+    gateway = timed_gateway(
+        tmp_path,
+        [],
+        local_status=LocalStatus(LocalModelClass.ABSENT, "not configured"),
+        external_turns=external_health_turns(),
+    )
+    outcome = run_to_rest(gateway)
+    shown = render_trace(view_of(gateway, outcome), UiSettings(mode="double"))
+    assert "Local model: none configured" in shown
+    assert "Local model status: absent" in shown
+    assert "Local model reason: not configured" in shown
+
+
+@pytest.mark.parametrize("state", ["routing", "waiting_input", "waiting_confirmation"])
+def test_active_run_does_not_claim_answer_pass_evidence_is_missing(state):
+    """RM23, RM31: an active run has not yet recorded its applied answer pass."""
+    view = trace_view_from(replace(FRESH_RECORD, state=state), [])
+    shown = render_trace(view, UiSettings(mode="double"))
+    assert "Answer pass applied: known when the run ends" in shown
+
+
+def test_model_call_duration_is_shown_once(tmp_path):
+    """RM23, RM27: the result column does not repeat measured placement duration."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway)
+    shown = render_trace(view_of(gateway, outcome), UiSettings(mode="double"))
+    models = shown.split('<section class="models">')[1].split("</section>")[0]
+    assert "stop, 250 ms" not in models
+    assert models.count("actual: 250 ms") == 4
 
 
 # -- a completed local run: every listed field ----------------------------------------
