@@ -182,9 +182,13 @@
   `--selection-chain SELECTOR ...`, and `--no-local-model`.
   Repeat `--performance` or `--budgets` to add more distinct keys. Boolean
   values are `true` or `false`; keys, types, ranges, and implemented options
-  are validated before runtime startup. Unsupported `answer_stream=live`
-  remains rejected. Baseline defaults remain unchanged and every export
-  and report header records the effective settings.
+  are validated before runtime startup. `answer_stream=live` enables the
+  managed statement gate; buffered remains the default. Every export
+  and report header records the effective settings. Corpus grades also retain
+  configured/effective stream policy and terminal error codes; report tables
+  keep live/buffered task success and `predicate_unmet` failures separate.
+  The actual paired provider corpus comparison is pending; this support is
+  not parity evidence.
 
   ```bash
   python scripts/run_corpus.py --out docs/evidence/<date>-draft-many.json \

@@ -112,6 +112,19 @@ def _block(grades: Sequence[Mapping[str, Any]], routes: Mapping[str, str]) -> di
             }
             for scope in ("http_attempted", "gateway_observed", "unknown")
         },
+        "answer_stream_policies": {
+            policy: {
+                "runs": len(group),
+                "success": rate(sum(g["success"] for g in group), len(group)),
+                "predicate_unmet": sum(g.get("error_code") == "predicate_unmet" for g in group),
+            }
+            for policy in ("buffered", "live", "unknown")
+            if (
+                group := [
+                    g for g in grades if (g.get("answer_stream_effective") or "unknown") == policy
+                ]
+            )
+        },
         "runs": len(grades),
         "success": rate(sum(g["success"] for g in grades), len(grades)),
         "tool_correct": rate(sum(g["tool_correct"] for g in grades), len(grades)),
@@ -264,6 +277,16 @@ def render_corpus_markdown(summary: Mapping[str, Any], *, title: str) -> str:
                 lines.append(f"| {name} | " + " | ".join(cells) + " |")
             lines.append("")
             lines += _provenance_rows(data["all"].get("selector_provenance", {}), "runs")
+            lines += [
+                "| effective answer stream | runs | task success | predicate_unmet |",
+                "|---|---|---|---|",
+            ]
+            for policy, entry in data["all"].get("answer_stream_policies", {}).items():
+                lines.append(
+                    f"| {policy} | {entry['runs']} | {_fraction(entry['success'])} | "
+                    f"{entry['predicate_unmet']} |"
+                )
+            lines.append("")
     lines += ["## Section 12.3 targets (English simple subset)", ""]
     for mode, entry in summary["targets"].items():
         parts = []

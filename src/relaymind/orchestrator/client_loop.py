@@ -195,7 +195,15 @@ class _ClientRun(_Run):
         final_options: GenerationOptions | None,
         idempotency: IdempotencyClaim | None = None,
     ) -> None:
-        super().__init__(owner, messages, requested_mode, model_alias, final_options, idempotency)
+        super().__init__(
+            owner,
+            messages,
+            requested_mode,
+            model_alias,
+            final_options,
+            idempotency,
+            answer_stream_effective="buffered",
+        )
         self.offer = offer
         # The offered catalog is empty for this alias (section 8).
         self.offered = owner.skills.offered_snapshot(())

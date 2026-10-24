@@ -7,9 +7,7 @@ as it did. The orchestrator records the options in force in each run's
 ``run.accepted`` event (section 8), so a measurement names its
 configuration.
 
-An option that the gateway cannot honor is refused, never accepted and
-ignored. ``answer_stream = "live"`` is a spec value (RM32), but gated
-answer streaming is not implemented yet, so it stops startup. The
+``answer_stream = "live"`` enables verified managed answer generations (RM32). The
 orchestrator acts on ``calls_per_generation`` (the admitted-calls rule
 of section 4.3) and on ``prefetch`` (RM29, ``orchestrator/prefetch.py``);
 under their defaults, ``one`` and false, a run takes the path it took
@@ -42,7 +40,6 @@ ANSWER_PASSES = ("final", "draft")
 CALLS_PER_GENERATION = ("one", "many")
 # Every value the spec names, and the ones the gateway implements.
 ANSWER_STREAMS = ("buffered", "live")
-_IMPLEMENTED_STREAMS = ("buffered",)
 
 
 def _choice(name: str, value: object, allowed: tuple[str, ...]) -> None:
@@ -64,8 +61,8 @@ class PerformanceSettings:
     draft (publish the validated skill-stage draft when the RM31 guards
     pass). calls_per_generation: one, or many (the admitted-calls rule
     of section 4.3). prefetch: run the read-only calls a skill declares
-    before its first generation (RM29). answer_stream: buffered; live
-    (RM32) is refused until it exists. early_headers: send the status
+    before its first generation (RM29). answer_stream: buffered, or verified
+    live publication (RM32). early_headers: send the status
     line, the run ID, and the events URL of a streamed chat request as
     soon as the run is accepted (section 7.3).
     """
@@ -81,11 +78,6 @@ class PerformanceSettings:
         _choice("calls_per_generation", self.calls_per_generation, CALLS_PER_GENERATION)
         _flag("prefetch", self.prefetch)
         _choice("answer_stream", self.answer_stream, ANSWER_STREAMS)
-        if self.answer_stream not in _IMPLEMENTED_STREAMS:
-            raise ValueError(
-                f"answer_stream {self.answer_stream} is not implemented yet"
-                " (gated answer streaming, RM32); use buffered"
-            )
         _flag("early_headers", self.early_headers)
 
     def to_json_object(self) -> dict[str, str | bool]:

@@ -104,6 +104,7 @@ def test_phase_two_launch_file_round_trip(settings, runner_name, tmp_path):
         settings,
         "--performance",
         "answer_pass=draft",
+        "answer_stream=live",
         "prefetch=true",
         "calls_per_generation=many",
         "--budgets",
@@ -128,6 +129,7 @@ def test_phase_two_launch_file_round_trip(settings, runner_name, tmp_path):
     path.write_text(text)
     loaded = load_config(path)
     assert loaded.performance.answer_pass == "draft"
+    assert loaded.performance.answer_stream == "live"
     assert loaded.performance.prefetch is True
     assert loaded.performance.calls_per_generation == "many"
     assert loaded.budgets.active_seconds == 12.5
@@ -140,7 +142,6 @@ def test_phase_two_launch_file_round_trip(settings, runner_name, tmp_path):
     [
         ["--performance", "prefetch=1"],
         ["--performance", "prefetch=TRUE"],
-        ["--performance", "answer_stream=live"],
         ["--performance", "unknown=true"],
         ["--performance", "prefetch=true", "prefetch=false"],
         ["--performance", "prefetch"],

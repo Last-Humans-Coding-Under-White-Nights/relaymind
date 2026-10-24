@@ -64,7 +64,9 @@ STATUS_BY_CODE: dict[str, int] = {
 }
 
 # Time limits: a run stopped by one of these is a deadline, not an outage.
-DEADLINE_BUDGETS = frozenset({"run_active_seconds", "external_seconds"})
+DEADLINE_BUDGETS = frozenset(
+    {"run_active_seconds", "external_seconds", "active_seconds", "placement.deadline"}
+)
 # A live answer stream that ended after forwarded statements failed its completeness
 # check (RM32, spec 0.31 section 11). Only a run that streamed live ends this way.
 PREDICATE_UNMET = "predicate_unmet"

@@ -46,8 +46,10 @@ One run, start to end, with the local model only:
    failure. A finalize proposal must
    meet the skill's completion predicate; then a final generation runs
    with tools disabled (section 7.3), its answer is checked by the same
-   predicate, and only then published as answer.delta events, in one
-   batch. Under answer_pass draft (RM31, spec 0.32) the draft that met
+   predicate, and published as answer.delta events. Buffered uses one
+   batch; effective live verifies stable statements before each publication
+   and checks completeness at normal EOF (RM32). Under answer_pass draft
+   (RM31, spec 0.32) the draft that met
    the predicate is published as the answer without that second
    generation, when it is in the run's language, holds no tool-call
    JSON, and the caller sent no answer option; run.completed records
@@ -286,6 +288,9 @@ from relaymind.skills.predicates import (
     COMPLETION_PREDICATES,
     CompletionCriteria,
     Predicate,
+    StatementGate,
+    StatementRejected,
+    pending_evidence_complete,
 )
 from relaymind.store import (
     IdempotencyClaim,
@@ -747,8 +752,19 @@ class _ConfirmationNeeded(Exception):
         self.proposal_id = proposal_id
 
 
+class _LivePredicateFailure(Exception):
+    """A committed generation failed its syntactic completion contract."""
+
+
+class _PublicationFailure(Exception):
+    """Persisting verified content failed; this is an internal error."""
+
+
 @dataclass
 class _Generation:
+    call_id: str | None = None
+    published: bool = False
+    rejected: bool = False
     calls: list[ToolCall] = field(default_factory=list)
     pieces: list[str] = field(default_factory=list)
 
@@ -1002,6 +1018,7 @@ class LocalOrchestrator:
         model_alias: str | None = None,
         final_options: GenerationOptions | None = None,
         idempotency: IdempotencyClaim | None = None,
+        answer_stream_effective: str | None = None,
     ) -> RunOutcome:
         """Run one managed request to a terminal or waiting state.
 
@@ -1020,7 +1037,15 @@ class LocalOrchestrator:
         Raises SlotUnavailableError (429) when another run holds the
         execution slot; no run is created then.
         """
-        run = _Run(self, tuple(messages), execution_mode, model_alias, final_options, idempotency)
+        run = _Run(
+            self,
+            tuple(messages),
+            execution_mode,
+            model_alias,
+            final_options,
+            idempotency,
+            answer_stream_effective,
+        )
         with self.owning(run):
             return self._keep_if_waiting(run, await run.execute())
 
@@ -1193,6 +1218,7 @@ class LocalOrchestrator:
         model_alias: str | None = None,
         final_options: GenerationOptions | None = None,
         idempotency: IdempotencyClaim | None = None,
+        answer_stream_effective: str | None = None,
     ) -> StartedRun:
         """Accept a managed request and run it in a background task (RM21).
 
@@ -1203,7 +1229,15 @@ class LocalOrchestrator:
         running event loop. idempotency is stored with the run as run()
         stores it.
         """
-        run = _Run(self, tuple(messages), execution_mode, model_alias, final_options, idempotency)
+        run = _Run(
+            self,
+            tuple(messages),
+            execution_mode,
+            model_alias,
+            final_options,
+            idempotency,
+            answer_stream_effective,
+        )
         run.open()
         return self._start(run, run.drive)
 
@@ -1215,6 +1249,7 @@ class LocalOrchestrator:
         model_alias: str | None = None,
         final_options: GenerationOptions | None = None,
         idempotency: IdempotencyClaim | None = None,
+        answer_stream_effective: str | None = None,
     ) -> AcceptedRun:
         """Accept a managed request and return the run before any work starts (RM32).
 
@@ -1223,7 +1258,15 @@ class LocalOrchestrator:
         run.accepted is written. The caller drives the work with
         AcceptedRun.start, and its task owns the run (request_cancel).
         """
-        run = _Run(self, tuple(messages), execution_mode, model_alias, final_options, idempotency)
+        run = _Run(
+            self,
+            tuple(messages),
+            execution_mode,
+            model_alias,
+            final_options,
+            idempotency,
+            answer_stream_effective,
+        )
         run.open()
         return AcceptedRun(self, run, run.drive)
 
@@ -1467,7 +1510,15 @@ class _Run:
         model_alias: str | None,
         final_options: GenerationOptions | None = None,
         idempotency: IdempotencyClaim | None = None,
+        answer_stream_effective: str | None = None,
     ) -> None:
+        self.answer_stream_effective = (
+            "buffered"
+            if model_alias == "relaymind-client-tools"
+            else answer_stream_effective or owner.performance.answer_stream
+        )
+        if self.answer_stream_effective not in ("buffered", "live"):
+            raise ValueError("invalid effective answer stream")
         self.o = owner
         self.idempotency = idempotency
         # The caller's answer options, laid over each answer generation's defaults.
@@ -1721,6 +1772,7 @@ class _Run:
             # RM26: the configured local model (null only when absent) and its class.
             **self.local.to_json_object(None if self.o.model is None else self.o.model.model_id),
             **self.o.performance.to_json_object(),
+            "answer_stream_effective": self.answer_stream_effective,
             "prefetch_declarations": self.o.skills.prefetch_declarations(self.o.router.offered),
             # RM28: the selector chain in force, and the matcher thresholds (section 14.1).
             **self.o.selection.to_json_object(),
@@ -1760,6 +1812,10 @@ class _Run:
         """Run work; any unexpected exception ends the run (RM17, section 5)."""
         try:
             return await work()
+        except _LivePredicateFailure:
+            return self._fail(
+                "predicate_unmet", detail="the answer did not meet the completion criteria"
+            )
         except BaseException as exc:
             self._abort(exc)
             raise
@@ -2121,6 +2177,10 @@ class _Run:
         anything is sent (RM13). A stop the external stage could not
         resolve either does not hand off (section 4.4).
         """
+        if self.authority.answer_owner is not None:
+            return self._fail(
+                EXTERNAL_FAILED, detail=stop.detail, reason_code=stop.reason_code, **stop.extra
+            )
         external = self.o.external
         if external is None or self.mode is ExecutionMode.LOCAL_ONLY or not stop.hand_off:
             return self._needs_external(stop)
@@ -2403,13 +2463,23 @@ class _Run:
         (RM10). The answer is buffered, checked against the skill's
         completion predicate, and published once (RM20).
         """
+        offered = tuple(t.name for t in loop.schemas)
         while True:
+            eligible = (
+                self.answer_stream_effective == "live"
+                and loop.skill is not None
+                and pending_evidence_complete(
+                    offered, loop.skill.completion_predicate, self.results
+                )
+            )
+            schemas = () if eligible else loop.schemas
             _, generation = await self._generate(
                 "external",
                 loop.conversation,
-                loop.schemas,
-                self._answer_options(EXTERNAL_OPTIONS, tools_offered=bool(loop.schemas)),
+                schemas,
+                self._answer_options(EXTERNAL_OPTIONS, tools_offered=bool(schemas)),
                 branch=loop.branch,
+                answer_predicate=loop.skill.completion_predicate if eligible else None,
             )
             if generation.calls:
                 turn = self._tool_turn(generation, loop.available, loop.skill)
@@ -2417,8 +2487,10 @@ class _Run:
                     loop.conversation += turn.rejection_exchange()
                 else:
                     await self._tool_step(loop, turn)
-            elif generation.text.strip() and (
-                loop.predicate is None or loop.predicate(generation.text, self.results)
+            elif (
+                not generation.rejected
+                and generation.text.strip()
+                and (loop.predicate is None or loop.predicate(generation.text, self.results))
             ):
                 return self._publish(generation, EXTERNAL_ACTOR)
             else:
@@ -3085,6 +3157,7 @@ class _Run:
         *,
         model: ConfiguredModel | None = None,
         branch: str | None = None,
+        answer_predicate: str | None = None,
     ) -> tuple[str, _Generation]:
         """Charge, run, and trace one model call (RM03, RM16); the only budget path.
 
@@ -3094,7 +3167,10 @@ class _Run:
         the call and its events with its workflow branch.
         Returns the call ID and what the model produced.
         """
+        if self.authority.answer_owner is not None:
+            raise RuntimeError("an answer generation already owns this run")
         model = model or self.active_model
+        dispatch_role = self.authority.holder
         on_external = purpose in EXTERNAL_PURPOSES
         label = {} if branch is None else {"branch": branch}
         self.meter.check_generation(purpose)
@@ -3174,9 +3250,17 @@ class _Run:
         started = self.o.clock.monotonic()
         # The monotonic time of the first generated fragment (spec 0.31 section 6).
         first_token: float | None = None
-        generation = _Generation()
+        generation = _Generation(call_id=call_id)
+        gate = (
+            StatementGate(answer_predicate, self.results, hold=bool(self.secrets))
+            if self.answer_stream_effective == "live" and answer_predicate is not None
+            else None
+        )
+        if gate is not None and tool_schemas:
+            raise RuntimeError("a live answer cannot offer tools")
         usage: Usage | None = None
         finish: str | None = None
+        completed = False
         failure: GenerationFailed | None = None
         exhausted: BudgetExceededError | None = None
         deadline_missed = False
@@ -3189,6 +3273,15 @@ class _Run:
         adapter = model.adapter
         self.generating[call_id] = adapter
         provider_cancel_timer: asyncio.TimerHandle | None = None
+
+        def check_live() -> None:
+            task = asyncio.current_task()
+            if task is not None and task.cancelling():
+                raise asyncio.CancelledError
+            if self.o.clock.monotonic() - started >= limit:
+                raise TimeoutError
+            self._publication_ready(on_external)
+
         try:
             async with asyncio.timeout(max(limit, 0.001)) as timeout:
                 if placement.deadline_seconds is not None:
@@ -3202,24 +3295,60 @@ class _Run:
                     provider_cancel_timer = asyncio.get_running_loop().call_at(
                         deadline, self._cancel_call, call_id
                     )
-                async for event in adapter.generate(request):
-                    # The marker is consumed here and never forwarded. An adapter
-                    # that sends none is dated at its first text or tool call.
-                    if first_token is None and (
-                        isinstance(event, FirstToken | ToolCall)
-                        or (isinstance(event, TextDelta) and event.text)
-                    ):
-                        first_token = self.o.clock.monotonic()
-                    if isinstance(event, ToolCall):
-                        generation.calls.append(event)
-                    elif isinstance(event, TextDelta):
-                        generation.pieces.append(event.text)
-                    elif isinstance(event, Usage):
-                        usage = event
-                    elif isinstance(event, Completed):
-                        finish = event.finish_reason
-                    elif isinstance(event, GenerationFailed):
-                        failure = event
+                stream = adapter.generate(request)
+                async with (
+                    contextlib.aclosing(stream)
+                    if gate is not None and callable(getattr(stream, "aclose", None))
+                    else contextlib.nullcontext()
+                ):
+                    async for event in stream:
+                        if gate is not None:
+                            check_live()
+                        # The marker is consumed here and never forwarded. An adapter
+                        # that sends none is dated at its first text or tool call.
+                        if first_token is None and (
+                            isinstance(event, FirstToken | ToolCall)
+                            or (isinstance(event, TextDelta) and event.text)
+                        ):
+                            first_token = self.o.clock.monotonic()
+                        if isinstance(event, ToolCall):
+                            generation.calls.append(event)
+                            if gate is not None:
+                                failure = GenerationFailed(
+                                    code="invalid_output",
+                                    message="answer generation proposed a tool call",
+                                )
+                                self._cancel_call(call_id)
+                                break
+                        elif isinstance(event, TextDelta):
+                            generation.pieces.append(event.text)
+                            if gate is not None:
+                                try:
+                                    for piece in gate.push(event.text):
+                                        self._publish_live(
+                                            generation,
+                                            piece,
+                                            model,
+                                            check_live,
+                                            dispatch_role=dispatch_role,
+                                        )
+                                except StatementRejected:
+                                    generation.rejected = True
+                                    failure = GenerationFailed(
+                                        code="interrupted", message="statement rejected"
+                                    )
+                                    self._cancel_call(call_id)
+                                    break
+                        elif isinstance(event, Usage):
+                            usage = event
+                        elif isinstance(event, Completed):
+                            finish = event.finish_reason
+                            completed = True
+                        elif isinstance(event, GenerationFailed):
+                            failure = event
+                            if gate is not None:
+                                self._cancel_call(call_id)
+                                break
             task = asyncio.current_task()
             if task is not None and task.cancelling():
                 # A provider that ignored the cancel answered late. Its
@@ -3232,6 +3361,27 @@ class _Run:
                 and self.o.clock.monotonic() - started >= limit
             ):
                 raise TimeoutError
+            if gate is not None:
+                check_live()
+                if not completed and failure is None:
+                    failure = GenerationFailed(
+                        code="incomplete_output", message="answer generation did not complete"
+                    )
+                if failure is None and not generation.rejected:
+                    try:
+                        tail = gate.finish()
+                    except StatementRejected:
+                        check_live()
+                        generation.rejected = True
+                    else:
+                        check_live()
+                        self._publish_live(
+                            generation,
+                            self.scrub(tail) if gate.hold else tail,
+                            model,
+                            check_live,
+                            dispatch_role=dispatch_role,
+                        )
         except TimeoutError:
             # The trace names the limit that bounded this generation, local
             # or external, not always local time (RM03, RM16).
@@ -3253,6 +3403,14 @@ class _Run:
                     )
                 failure = GenerationFailed(code="time_budget", message=f"{exhausted.budget} spent")
             self._cancel_call(call_id)
+        except BudgetExceededError as exc:
+            exhausted = exc
+            failure = GenerationFailed(code="time_budget", message=f"{exc.budget} spent")
+            self._cancel_call(call_id)
+        except Exception as exc:
+            failure = GenerationFailed(code="interrupted", message="model generation interrupted")
+            if gate is None or isinstance(exc, _PublicationFailure):
+                raise
         except BaseException as exc:
             failure = GenerationFailed(
                 code="cancelled" if isinstance(exc, asyncio.CancelledError) else "interrupted",
@@ -3305,7 +3463,15 @@ class _Run:
         if exhausted is not None:
             raise exhausted
         if deadline_missed:
-            raise Escalation("local_slow", "local generation missed placement deadline")
+            raise Escalation(
+                "local_slow",
+                "local generation missed placement deadline",
+                budget="placement.deadline",
+            )
+        if gate is not None and generation.rejected:
+            if generation.published:
+                raise _LivePredicateFailure
+            return call_id, generation
         if failure is not None:
             if model is not self.o.model:
                 raise ExternalFailure(
@@ -4115,11 +4281,12 @@ class _Run:
             ),
             (),
             self._answer_options(LOCAL_OPTIONS),
+            answer_predicate=None if self.skill is None else self.skill.completion_predicate,
         )
         if generation.calls:
             raise Escalation("invalid_output", "the final generation proposed a tool call")
         answer = generation.text
-        if not answer.strip() or not predicate(answer, results):
+        if generation.rejected or not answer.strip() or not predicate(answer, results):
             self._keep_draft(answer)
             raise Escalation(
                 "invalid_output", "the final answer does not meet the completion criteria"
@@ -4160,12 +4327,57 @@ class _Run:
             requested.pop("max_output_tokens", None)
         return replace(defaults, **requested)
 
+    def _publication_ready(self, external: bool) -> None:
+        task = asyncio.current_task()
+        if task is not None and task.cancelling():
+            raise asyncio.CancelledError
+        record = self.o.machine.get(self.run_id)
+        if record.state in TERMINAL_STATES or record.version != self.record.version:
+            raise asyncio.CancelledError
+        self.meter.check_time(external)
+
+    def _publish_live(
+        self,
+        generation: _Generation,
+        piece: str,
+        model: ConfiguredModel,
+        check_deadline: Callable[[], None],
+        *,
+        dispatch_role: str,
+    ) -> None:
+        if not piece:
+            return
+        identity = (generation.call_id, model.model_id, dispatch_role)
+        if self.authority.answer_generation not in (None, identity):
+            raise _PublicationFailure("answer generation changed")
+        try:
+            # Serialize the version/state check with append against other store users.
+            # The transaction must commit before in-memory ownership is claimed.
+            with self.o.store.transaction():
+                check_deadline()
+                self.authority.require(dispatch_role)
+                self.o.store.append_event(
+                    self.run_id,
+                    EventType.ANSWER_DELTA,
+                    model.actor,
+                    {"text": piece, "model": model.model_id, "call_id": generation.call_id},
+                )
+        except (BudgetExceededError, TimeoutError):
+            raise
+        except Exception as exc:
+            raise _PublicationFailure from exc
+        # No await separates persistence, ownership and transport visibility.
+        self.authority.claim_final_answer(dispatch_role, generation=identity)
+        generation.published = True
+
     def _publish(self, generation: _Generation, role: str) -> str:
         """Publish a validated answer as answer.delta events, once (RM14, RM20).
 
         role is the dispatch role of the model, local or external; the
         events are labeled with the locality its adapter declares.
         """
+        if generation.published:
+            return self.scrub(generation.text)
         self.authority.claim_final_answer(role)
         model = self.active_model
         answer = generation.text

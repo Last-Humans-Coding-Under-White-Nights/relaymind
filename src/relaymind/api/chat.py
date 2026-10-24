@@ -74,6 +74,20 @@ class StreamAborted(Exception):
     """
 
 
+class StreamFailure(Exception):
+    """A recorded stream-only terminal error, with no invented HTTP status."""
+
+    def __init__(self, run_id: str) -> None:
+        self.run_id = run_id
+        self.code = "predicate_unmet"
+        self.message = (
+            "the answer did not meet the skill's completion criteria; no answer was completed"
+        )
+
+    def body(self) -> dict[str, Any]:
+        return {"error": {"code": self.code, "message": self.message, "run_id": self.run_id}}
+
+
 @dataclass(frozen=True)
 class LiveAnswer:
     """Answer text that a backend forwards while the provider still generates it.
@@ -83,8 +97,8 @@ class LiveAnswer:
     provider fails (RM20, spec 0.15 section 7.3). When the client goes
     away first, the gateway closes pieces (aclose), which is the
     cancellation request of a chat disconnect (section 7.4); fail is
-    not called then. The managed alias has no live answer: its run has
-    finished before the first byte.
+    not called then. Managed streams read persisted verified deltas and retain
+    their recorded terminal error instead of invoking this generic callback.
     """
 
     pieces: AsyncIterator[str]
@@ -153,6 +167,7 @@ class AcceptedChat:
 
     run: AcceptedRun
     to_result: Callable[[RunOutcome], ChatResult]
+    progress: Callable[[asyncio.Task[ChatResult]], ChatResult] | None = None
 
     @property
     def run_id(self) -> str:
@@ -190,6 +205,8 @@ class _RunChat:
             case RunState.CANCELLED:
                 raise ApiError("run_terminal", f"run {run_id} was cancelled", run_id=run_id)
             case RunState.FAILED:
+                if stream and outcome.error_code == "predicate_unmet":
+                    raise StreamFailure(run_id)
                 error = error_from_outcome(outcome)
                 if error is not None:
                     raise error
@@ -216,25 +233,84 @@ class ManagedChat(_RunChat):
     """The ``relaymind`` alias: managed skills and tools through the orchestrator."""
 
     async def complete(self, request: ChatRequest, mode: ExecutionMode) -> ChatResult:
+        if request.stream and self.orchestrator.performance.answer_stream == "live":
+            accepted = self.accept(request, mode)
+            task = accepted.start()
+            assert accepted.progress is not None
+            return accepted.progress(task)
         outcome = await self.orchestrator.run(
             request.messages,
             execution_mode=mode.value,
             model_alias=MANAGED,
             final_options=request.final_options,
             idempotency=request.idempotency,
+            answer_stream_effective="buffered",
         )
         return self._result(outcome, stream=request.stream)
 
     def accept(self, request: ChatRequest, mode: ExecutionMode) -> AcceptedChat:
-        """Take the slot and write run.accepted; the work starts with ``AcceptedChat.start``."""
+        effective = self.orchestrator.performance.answer_stream if request.stream else "buffered"
         run = self.orchestrator.accept(
             request.messages,
             execution_mode=mode.value,
             model_alias=MANAGED,
             final_options=request.final_options,
             idempotency=request.idempotency,
+            answer_stream_effective=effective,
         )
-        return self._accepted(run, request)
+        return AcceptedChat(
+            run,
+            lambda outcome: self._result(outcome, stream=request.stream),
+            (lambda task: self._progress(run.run_id, task)) if effective == "live" else None,
+        )
+
+    def _progress(self, run_id: str, task: asyncio.Task[ChatResult]) -> ChatResult:
+        async def pieces() -> AsyncIterator[str]:
+            cursor = 0
+            delivered = False
+            try:
+                while True:
+                    # Snapshot termination BEFORE reading: a final append can never
+                    # slip between the last drain and a terminal check (RM17/RM32).
+                    ended = task.done()
+                    events = self.orchestrator.store.events(
+                        run_id, after_seq=cursor, event_type=EventType.ANSWER_DELTA
+                    )
+                    for event in events:
+                        cursor = event.seq
+                        delivered = True
+                        yield event.payload["text"]
+                    if ended:
+                        if task.cancelled():
+                            raise ApiError("run_terminal", "the run was cancelled", run_id=run_id)
+                        try:
+                            result = task.result()
+                        except (ApiError, StreamFailure):
+                            raise
+                        except Exception as exc:
+                            raise error_from_exception(exc, run_id=run_id) from None
+                        if not delivered:
+                            for piece in result.stream_pieces:
+                                yield piece
+                        return
+                    # Store-backed cursor: bounded memory and no native consumer needed.
+                    await asyncio.wait({task}, timeout=0.01)
+            finally:
+                if not task.done() and not task.cancelling():
+                    self.orchestrator.request_cancel(task)
+
+                # The response owns the configured native cancellation wait. Closing
+                # this cursor must not introduce a second, hard-coded wait or cancel.
+                def retrieve(ended: asyncio.Task[ChatResult]) -> None:
+                    if not ended.cancelled():
+                        ended.exception()
+
+                if task.done():
+                    retrieve(task)
+                else:
+                    task.add_done_callback(retrieve)
+
+        return ChatResult(run_id, None, live=LiveAnswer(pieces(), lambda: None))
 
 
 class ClientToolsChat(_RunChat):
@@ -465,7 +541,7 @@ async def early_stream(
             raise ApiError("run_terminal", f"run {run_id} was cancelled", run_id=run_id)
         result = task.result()
     except Exception as exc:
-        error = error_from_exception(exc, run_id=run_id)
+        error = exc if isinstance(exc, StreamFailure) else error_from_exception(exc, run_id=run_id)
         if error.run_id is None:
             error.run_id = run_id
         if error.code == "internal_error":
@@ -491,15 +567,45 @@ async def _close(pieces: AsyncIterator[str]) -> None:
         await aclose()
 
 
-def _failed(run_id: str, live: LiveAnswer, exc: Exception) -> ApiError:
+def _failed(run_id: str, live: LiveAnswer, exc: Exception) -> ApiError | StreamFailure:
     """Record the failed run and return its fixed error (RM20, section 11).
 
     The message is fixed: provider text never reaches the client
     (RM12). The operator log names the failure type only.
     """
+    if isinstance(exc, ApiError | StreamFailure):
+        return exc
     logger.error("answer stream of %s failed: %s", run_id, type(exc).__name__)
     try:
         live.fail()
     except Exception as recorder:
         logger.error("could not record run.failed for %s: %s", run_id, type(recorder).__name__)
     return ApiError(STREAM_FAILED_CODE, STREAM_FAILED_MESSAGE, run_id=run_id)
+
+
+async def live_with_heartbeats(
+    lines: AsyncIterator[str], heartbeat_seconds: float
+) -> AsyncGenerator[str]:
+    """Comments while waiting for a verified chunk; one iterator owns the cursor."""
+    pending = None
+    try:
+        yield KEEP_ALIVE
+        while True:
+            pending = asyncio.create_task(anext(lines))
+            while not pending.done():
+                await asyncio.wait({pending}, timeout=heartbeat_seconds)
+                if not pending.done():
+                    yield KEEP_ALIVE
+            try:
+                line = pending.result()
+            except StopAsyncIteration:
+                return
+            except (ApiError, StreamFailure) as error:
+                yield f"data: {json.dumps(error.body())}\n\n"
+                raise StreamAborted from None
+            yield line
+    finally:
+        if pending is not None and not pending.done():
+            pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+        await _close(lines)
