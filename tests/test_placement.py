@@ -417,13 +417,17 @@ def test_actual_tokenizer_request_is_reused_only_when_identical(tmp_path):
         assert event.payload["placement"]["inputs"]["input_source"] == "tokenizer"
 
 
-def test_only_placement_tokenizer_failure_does_not_fail_the_generation(tmp_path):
+@pytest.mark.parametrize("error", [RuntimeError, TimeoutError])
+@pytest.mark.parametrize("policy,mode", [("local_first", "auto"), ("device_aware", "local_only")])
+def test_only_placement_tokenizer_failure_does_not_fail_the_generation(
+    tmp_path, error, policy, mode
+):
     """RM27: optional measurement failures remain null, with no capability failure."""
     from gateway_helpers import build_gateway, run
     from helpers import of_type
     from test_local_loop import HEALTH_RUN
 
-    gateway = build_gateway(tmp_path, HEALTH_RUN)
+    gateway = build_gateway(tmp_path, HEALTH_RUN, placement=PlacementSettings(policy=policy))
     original = gateway.adapter.count_tokens
     calls = 0
 
@@ -431,11 +435,11 @@ def test_only_placement_tokenizer_failure_does_not_fail_the_generation(tmp_path)
         nonlocal calls
         calls += 1
         if calls > 1:
-            raise RuntimeError("tokenizer unavailable")
+            raise error("tokenizer unavailable")
         return await original(messages, schemas)
 
     gateway.adapter.count_tokens = count
-    result, events = run(gateway)
+    result, events = run(gateway, execution_mode=mode)
     assert result.state.value == "completed"
     skill = of_type(events, "model.started")[1].payload["placement"]
     assert skill["predicted_ms"] is None and skill["inputs"]["input_tokens"] is None
@@ -582,3 +586,73 @@ def test_prediction_is_immutable_and_overflow_is_unavailable(tmp_path):
     with pytest.raises(TypeError):
         p.inputs["input_tokens"] = 999
     assert placement.predict("local", "routing", 10**1000).predicted_ms is None
+
+
+def test_placement_expiry_cancels_provider_before_resistant_iterator_finishes(tmp_path):
+    """AC21/RM14: provider cancellation releases cleanup; the slot stays held until then."""
+    import asyncio
+
+    from gateway_helpers import LOCAL_MODEL_ID, build_gateway, route_turn
+    from helpers import of_type
+    from relaymind.adapters import Message, Role
+
+    gateway = build_gateway(
+        tmp_path,
+        [],
+        input_tokens=100,
+        external_turns=[[GenerationFailed(code="unavailable", message="test")]],
+        placement=PlacementSettings(policy="device_aware", margin=0.1),
+    )
+    seed(gateway.store, model=LOCAL_MODEL_ID)
+
+    async def go():
+        entered = asyncio.Event()
+        provider_cancelled = asyncio.Event()
+        cleanup_entered = asyncio.Event()
+        cleanup_release = asyncio.Event()
+
+        async def resistant(request):
+            gateway.adapter.requests.append(request)
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cleanup_entered.set()
+                # Real transport cleanup may need the provider's cancellation request.
+                await provider_cancelled.wait()
+                await cleanup_release.wait()
+                for event in route_turn("check-service-health"):
+                    yield event
+
+        async def cancel(generation_id):
+            gateway.adapter.cancelled.append(generation_id)
+            provider_cancelled.set()
+
+        gateway.adapter.generate = resistant
+        gateway.adapter.cancel = cancel
+        started = gateway.orchestrator.start([Message(role=Role.USER, content="hi")])
+        await entered.wait()
+        try:
+            # Bounded assertion: teardown below releases even the buggy implementation.
+            await asyncio.wait_for(provider_cancelled.wait(), timeout=0.5)
+            await asyncio.wait_for(cleanup_entered.wait(), timeout=0.5)
+            assert not started.task.done()
+            assert gateway.store.active_run_id() == started.run_id
+            assert gateway.external.requests == []
+            assert not of_type(gateway.store.events(started.run_id), "model.finished")
+            assert len(gateway.adapter.cancelled) == 1
+        finally:
+            provider_cancelled.set()
+            cleanup_release.set()
+            await asyncio.wait_for(started.task, timeout=1)
+        return gateway.store.events(started.run_id)
+
+    events = asyncio.run(go())
+    finished = of_type(events, "model.finished")[0].payload
+    assert finished["deadline_missed"] is True
+    assert finished["predicted_ms"] == 100
+    assert finished["deadline_ms"] == 10
+    assert not gateway.store.model_timings(model=LOCAL_MODEL_ID)[-1].succeeded
+    assert of_type(events, "handoff.started")[0].payload["reason_code"] == "local_slow"
+    assert len(gateway.adapter.cancelled) == 1
+    assert gateway.store.active_run_id() is None

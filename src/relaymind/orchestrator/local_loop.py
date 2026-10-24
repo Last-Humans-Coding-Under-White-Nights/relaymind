@@ -2955,11 +2955,15 @@ class _Run:
 
     def cancel_generation(self) -> None:
         """Ask the adapter of the generation in flight, if any, to cancel it (RM14, AC12)."""
-        for call_id, adapter in list(self.generating.items()):
-            # Once per generation: a failed branch and a cancel may both ask.
-            if call_id not in self.cancel_asked:
-                self.cancel_asked.add(call_id)
-                self.o.ask_provider_to_cancel(adapter, call_id)
+        for call_id in list(self.generating):
+            self._cancel_call(call_id)
+
+    def _cancel_call(self, call_id: str) -> None:
+        """Fence deadline, branch and user cancellation to one request per live call."""
+        adapter = self.generating.get(call_id)
+        if adapter is not None and call_id not in self.cancel_asked:
+            self.cancel_asked.add(call_id)
+            self.o.ask_provider_to_cancel(adapter, call_id)
 
     async def _generate(
         self,
@@ -2991,13 +2995,23 @@ class _Run:
                 tokens = measured[2]
             else:
                 try:
-                    async with asyncio.timeout(max(self.meter.remaining_seconds(), 0.001)):
+                    async with asyncio.timeout(
+                        max(self.meter.remaining_seconds(), 0.001)
+                    ) as token_timeout:
                         tokens = await model.adapter.count_tokens(messages, tool_schemas)
                 except TimeoutError:
-                    raise self.meter.time_exhausted() from None
+                    if token_timeout.expired():
+                        raise self.meter.time_exhausted() from None
+                    # The adapter's own tokenizer timeout is an unavailable measurement,
+                    # not evidence that the gateway's active-time budget was spent.
+                    tokens = None
                 except Exception:
                     # Counting solely for placement must not create a capability failure.
                     tokens = None
+                else:
+                    if token_timeout.expired():
+                        # A tokenizer that suppressed cancellation still used its budget.
+                        raise self.meter.time_exhausted()
             self.meter.check_generation(purpose)
             prediction = self.o.placement.predict(
                 model.model_id, purpose, tokens, output_cap=options.max_output_tokens
@@ -3063,8 +3077,18 @@ class _Run:
             limit = min(limit, placement.deadline_seconds)
         adapter = model.adapter
         self.generating[call_id] = adapter
+        provider_cancel_timer: asyncio.TimerHandle | None = None
         try:
             async with asyncio.timeout(max(limit, 0.001)) as timeout:
+                if placement.deadline_seconds is not None:
+                    # Request provider cancellation at expiry even if the iterator
+                    # suppresses task cancellation and needs the provider to stop
+                    # before its cleanup can finish. This timer never releases the slot.
+                    deadline = timeout.when()
+                    assert deadline is not None
+                    provider_cancel_timer = asyncio.get_running_loop().call_at(
+                        deadline, self._cancel_call, call_id
+                    )
                 async for event in adapter.generate(request):
                     # The marker is consumed here and never forwarded. An adapter
                     # that sends none is dated at its first text or tool call.
@@ -3115,7 +3139,7 @@ class _Run:
                         "run_active_seconds", self.o.budgets.run_active_seconds
                     )
                 failure = GenerationFailed(code="time_budget", message=f"{exhausted.budget} spent")
-            self.o.ask_provider_to_cancel(adapter, call_id)
+            self._cancel_call(call_id)
         except BaseException as exc:
             failure = GenerationFailed(
                 code="cancelled" if isinstance(exc, asyncio.CancelledError) else "interrupted",
@@ -3123,6 +3147,8 @@ class _Run:
             )
             raise
         finally:
+            if provider_cancel_timer is not None:
+                provider_cancel_timer.cancel()
             self.generating.pop(call_id, None)
             duration_ms = round((self.o.clock.monotonic() - started) * 1000)
             if self.workflow is not None and branch is not None:
