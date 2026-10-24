@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.41 defines verified live answer publication, cumulative predicate
+  safety/completeness, exact generation commitment, full-answer redaction, effective
+  stream policy, terminal SSE behavior and labeled corpus comparison (#125;
+  RM12, RM16, RM17, RM20, RM32; AC09, AC19). Buffered remains the default.
+
 - Loopback HTTP selectors (#133; RM12, RM22, RM25, RM28; AC22): fixed
   configured identity, proxy/redirect isolation, bounded cancellable requests,
   immutable unverified claims and trace fallback on gateway stops. Evaluation
