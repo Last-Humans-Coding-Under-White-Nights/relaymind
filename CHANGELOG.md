@@ -246,6 +246,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.37 → 0.37.1 (RM03, RM09, RM25, RM28; section 12.4):
+  a first generation exceeding its call budget receives no set-score credit
+  while preserving raw proposals, usage and independent schema validity. A failed
+  narrowing arm records its failure without model work and stays in the denominator;
+  valid abstentions retain the empty-set experiment. Ordinary schema-invalid names
+  retain their existing independent name metrics.
+
 - RouteDecision and HandoffEnvelope accept the reason codes
   `selection_failed`, `no_local_model`, and `local_slow` under schema version
   1, and the RouteDecision validator and schema now check that the reason
@@ -428,6 +435,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and `docs/RELEASE.md`.
 
 ### Fixed
+
+- Selection benchmark review (RM03, RM09, RM16, RM25, RM28): clear stale
+  diagnostics before early bypasses, classify HTTP timeouts, preserve failed
+  narrowed arms without inference, and remove score credit for generations
+  exceeding their call budget while retaining proposal evidence. Export distinct
+  HTTP response identity claims, reject skills proposal options before work,
+  share the persistent ToolRet cache, and enforce source/case locks without
+  changing the frozen files or historical measurement exports.
 
 - Correct the skill guide's workflow-key description, repair the testing
   guide's README link, and install the client SDK before the Python

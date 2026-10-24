@@ -31,6 +31,7 @@ from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 from relaymind.adapters.local_http import is_loopback_url
 from relaymind.evaluation.environment import application_revision, machine_manifest
 from relaymind.evaluation.selection_benchmark import (
+    DEFAULT_TOOLRET_CACHE,
     RouterBenchmarkSelector,
     file_digest,
     load_locked,
@@ -47,17 +48,39 @@ from relaymind.tools import ToolRegistry
 class HttpSelector:
     """RM28 JSON transport. The caller owns its client and timeout."""
 
-    name, version, model_based = "http", "reported-per-case", False
+    name, version, model_based = "http", None, False
 
     def __init__(self, url: str, client: httpx.AsyncClient):
         if not is_loopback_url(url):
             raise ValueError("HTTP selector endpoint must be loopback")
         self.url, self.client = url, client
+        self.response_identities: set[tuple[str, str]] = set()
 
     async def select(self, request: SelectionRequest, context: SelectionContext) -> dict:
         response = await self.client.post(self.url, json=request.to_json_object())
         response.raise_for_status()
-        return parse_selection_result(response.json()).to_json_object()
+        result = parse_selection_result(response.json()).to_json_object()
+        identity = result["selector"]
+        self.response_identities.add((identity["name"], identity["version"]))
+        return result
+
+    def report_identity(self) -> dict:
+        """Export observed response claims without inventing a configured identity."""
+        identities = [
+            {"name": name, "version": version} for name, version in sorted(self.response_identities)
+        ]
+        single = identities[0] if len(identities) == 1 else {"name": None, "version": None}
+        return {
+            **single,
+            "transport": "http",
+            "endpoint": self.url,
+            "identity_provenance": "response_claim"
+            if len(identities) == 1
+            else "mixed_response_claims"
+            if identities
+            else "unknown",
+            "response_reported_identities": identities,
+        }
 
 
 def parser() -> argparse.ArgumentParser:
@@ -91,9 +114,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--external-model", default=os.environ.get("RELAYMIND_EXTERNAL_MODEL"))
     result.add_argument("--api-key-env", default="RELAYMIND_EXTERNAL_API_KEY")
     result.add_argument("--external-request-options", type=json.loads, default={})
-    result.add_argument(
-        "--toolret-cache", type=Path, default=Path.home() / ".cache/relaymind/toolret"
-    )
+    result.add_argument("--toolret-cache", type=Path, default=DEFAULT_TOOLRET_CACHE)
     result.add_argument("--example-score", type=float, default=0.5)
     result.add_argument("--example-margin", type=float, default=0.1)
     result.add_argument(
@@ -122,6 +143,8 @@ def _subset(cases: list[dict], limit: int | None, seed: int) -> list[dict]:
 
 async def run(args: argparse.Namespace) -> dict:
     """Run an identified, frozen sample and export every attempt."""
+    if args.track == "skills" and args.proposal != "none":
+        raise ValueError("--proposal is only supported for the tools track")
     application = application_revision(ROOT)
     implementation_files = {
         name: file_digest(ROOT / name)
@@ -223,11 +246,11 @@ async def run(args: argparse.Namespace) -> dict:
                     calls_per_generation=args.calls_per_generation,
                     seed=args.seed,
                 )
-            selector_identity = {
-                "name": selector.name,
-                "version": selector.version,
-                "endpoint": args.selector if selector.name == "http" else None,
-            }
+            selector_identity = (
+                selector.report_identity()
+                if isinstance(selector, HttpSelector)
+                else {"name": selector.name, "version": selector.version, "endpoint": None}
+            )
     finally:
         if local is not None:
             await local.aclose()

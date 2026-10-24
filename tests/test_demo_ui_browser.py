@@ -145,6 +145,54 @@ def test_shell_and_trace_show_the_runs_phase_two_configuration(tmp_path, browser
         expect(page.locator(".trace .models")).to_contain_text("First token")
 
 
+def test_configuration_panels_stay_compact_below_the_page_controls(tmp_path, browser):
+    """RM23: configuration stays accessible without displacing heading and token controls."""
+    gateway = waiting_input_gateway(tmp_path)
+    with served(gateway) as (base, token), browser_page(browser) as (page, _):
+        open_ui(page, base, token)
+        start_from_page(page, "Is the service healthy?")
+        expect(trace(page, "waiting_input")).to_be_visible()
+        panel = page.locator("#run-configurations details")
+        expect(panel).to_have_count(1)
+        assert page.locator("header.top #run-configurations").count() == 0
+        assert not panel.evaluate("element => element.open")
+        assert panel.evaluate("element => getComputedStyle(element).borderTopStyle") == "solid"
+        assert page.locator("#token").bounding_box()["y"] < panel.bounding_box()["y"]
+
+
+@pytest.mark.parametrize("expanded", [False, True])
+def test_configuration_panel_retains_its_node_and_toggle_state_on_poll(tmp_path, browser, expanded):
+    """RM23: completed polling retains the reader's panel state and the unchanged DOM."""
+    gateway = waiting_input_gateway(tmp_path)
+    with served(gateway) as (base, token), browser_page(browser) as (page, _):
+        # Observe the next poll's scheduling: refresh has finished by then, so the
+        # assertion cannot race the response handler that replaces the panel.
+        page.add_init_script("""(() => {
+          window.configurationPollsScheduled = 0;
+          const schedule = window.setTimeout;
+          window.setTimeout = (callback, delay, ...args) => {
+            if (delay === 1000) window.configurationPollsScheduled += 1;
+            return schedule(callback, delay, ...args);
+          };
+        })();""")
+        open_ui(page, base, token)
+        start_from_page(page, "Is the service healthy?")
+        expect(trace(page, "waiting_input")).to_be_visible()
+        panel = page.locator("#run-configurations details")
+        expect(panel).to_have_count(1)
+        panel.evaluate(
+            "(element, expanded) => { element.open = expanded; "
+            "window.savedConfigurationPanel = element; }",
+            expanded,
+        )
+        scheduled = page.evaluate("window.configurationPollsScheduled")
+        page.wait_for_function(
+            "previous => window.configurationPollsScheduled > previous", arg=scheduled
+        )
+        assert panel.evaluate("element => element === window.savedConfigurationPanel")
+        assert panel.evaluate("element => element.open") is expanded
+
+
 def test_a_clarification_is_answered_through_the_native_resume_endpoint(tmp_path, browser):
     """RM05, RM21, AC03: the answer goes to resume with the version the trace carried."""
     gateway = waiting_input_gateway(tmp_path)

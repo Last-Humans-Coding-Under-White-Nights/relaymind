@@ -87,11 +87,12 @@ def render_shell(settings: UiSettings) -> str:
         "<title>RelayMind demo trace</title>"
         '<link rel="stylesheet" href="/ui/app.css"></head><body>'
         f'<header class="top">{mode_banner(settings)}'
-        '<div id="run-configurations" aria-live="polite">No run selected.</div>'
         "<h1>RelayMind demo trace</h1>"
         f"{sandbox_line(settings)}"
         '<label class="token">Application token<input id="token" type="password" '
         'autocomplete="off" spellcheck="false"></label></header>'
+        '<aside id="run-configurations" aria-label="Run configurations" '
+        'aria-live="polite">No run selected.</aside>'
         f"<main>{forms}"
         '<form id="open-form"><label>Open a run by ID<input id="open-id" type="text" '
         'autocomplete="off" spellcheck="false"></label><button type="submit">Open</button></form>'
@@ -148,7 +149,9 @@ def _answer_options(view: Mapping[str, Any]) -> str:
 
 def _configuration(view: Mapping[str, Any]) -> str:
     """Only this run's recorded settings, including explicit absence (RM23, RM26)."""
-    config = view["configuration"]
+    config = view.get("configuration")
+    if not isinstance(config, Mapping):
+        config = {}
     labels = (
         ("local_model", "Local model"),
         ("local_model_status", "Local model status"),
@@ -163,13 +166,13 @@ def _configuration(view: Mapping[str, Any]) -> str:
     )
     parts = []
     for key, label in labels:
-        value = config[key]
-        if key == "local_model" and value is None and config["local_model_status"] == "absent":
+        value = config.get(key)
+        if key == "local_model" and value is None and config.get("local_model_status") == "absent":
             value = "none configured"
         elif isinstance(value, bool):
             value = "on" if value else "off"
         elif isinstance(value, list):
-            value = ", ".join(value)
+            value = ", ".join(str(item) for item in value) or "none"
         parts.append(f"<p>{label}: {_t(value) if value is not None else 'not recorded'}</p>")
     return "<div data-run-configuration>" + "".join(parts) + "</div>"
 
@@ -238,18 +241,45 @@ def _call_status(call: Mapping[str, Any]) -> str:
     if not call["finished"]:
         return "running"
     error = f", error: {_error(call['error'])}" if call["error"] else ""
-    return f"{_t(call['finish_reason'])}, {_t(call['duration_ms'])} ms{error}"
+    return f"{_t(call['finish_reason'])}{error}"
+
+
+def _selector(selector: object) -> str:
+    """Incomplete evidence stays readable; only an explicit null means no selection (RM23)."""
+    if not isinstance(selector, Mapping):
+        return "<p>Selector: not recorded</p>"
+    name = selector.get("name", "not recorded")
+    attempts = selector.get("attempts")
+    if isinstance(attempts, list):
+        attempts_text = (
+            "; ".join(
+                f"{attempt.get('name', 'not recorded')}: {attempt.get('outcome', 'not recorded')}"
+                if isinstance(attempt, Mapping)
+                else "not recorded"
+                for attempt in attempts
+            )
+            or "none"
+        )
+    else:
+        attempts_text = "not recorded"
+    return (
+        f"<p>Selector: {_t('none selected' if name is None else name)}; "
+        f"version: {_t(selector.get('version') or 'not recorded')}; "
+        f"mechanism: {_t(selector.get('mechanism') or 'not recorded')}; "
+        f"elapsed: {_ms(selector.get('elapsed_ms'), 'not recorded')}. "
+        f"Attempts: {_t(attempts_text)}</p>"
+    )
 
 
 def _skill_and_route(view: Mapping[str, Any]) -> str:
-    skill, route = view["skill"], view["route"]
+    skill = view["skill"]
     skill_text = (
         _NONE.format("No skill loaded.")
         if skill is None
         else f"<p>Skill: <strong>{_t(skill['name'])}</strong> version {_t(skill['version'])} "
         f"<code>{_t(skill['content_hash'])}</code></p>"
     )
-    if route is None:
+    if view["route"] is None:
         return skill_text + _NONE.format("No route decision yet.")
     parts = [skill_text]
     for route in view["routes"]:
@@ -257,17 +287,7 @@ def _skill_and_route(view: Mapping[str, Any]) -> str:
             f"<p>Route: <strong>{_t(route['route'])}</strong>, skill {_t(route['skill_id'])}, "
             f"reason {_t(route['reason_code'])}, mechanism {_t(route['mechanism'])}.</p>"
         )
-        selector = route["selector"]
-        if selector is None:
-            parts.append("<p>Selector: not recorded</p>")
-        else:
-            attempts = "; ".join(f"{a['name']}: {a['outcome']}" for a in selector["attempts"])
-            parts.append(
-                f"<p>Selector: {_t(selector['name'] or 'none selected')}; "
-                f"version: {_t(selector['version'])}; mechanism: {_t(selector['mechanism'])}; "
-                f"elapsed: {_ms(selector['elapsed_ms'], 'not recorded')}. "
-                f"Attempts: {_t(attempts) or 'none'}</p>"
-            )
+        parts.append(_selector(route.get("selector")))
         placement = route["placement"]
         parts.append(
             "<p>Placement: not recorded</p>"
@@ -446,6 +466,9 @@ def _controls(view: Mapping[str, Any], settings: UiSettings) -> str:
 def render_trace(view: Mapping[str, Any], settings: UiSettings) -> str:
     """One run's trace as an HTML fragment; every value is escaped."""
     terminal = RunState(view["state"]) in TERMINAL_STATES
+    answer_pass = view["answer_pass_applied"] or (
+        "not recorded" if terminal else "known when the run ends"
+    )
     codes = ""
     if view["error_code"]:
         codes += f" Error code: {_t(view['error_code'])}."
@@ -481,8 +504,7 @@ def render_trace(view: Mapping[str, Any], settings: UiSettings) -> str:
         _section("Confirmation", _confirmation(view), "confirmation"),
         _section(
             "Final answer",
-            _answer(view)
-            + f"<p>Answer pass applied: {_t(view['answer_pass_applied'] or 'not recorded')}</p>",
+            _answer(view) + f"<p>Answer pass applied: {_t(answer_pass)}</p>",
             "answer",
         ),
         _section("Timing", _timing(view), "timing"),
