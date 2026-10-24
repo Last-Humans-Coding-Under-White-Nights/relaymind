@@ -22,7 +22,7 @@ from relaymind.adapters import Completed, GenerationFailed, Message, Role, TextD
 from relaymind.orchestrator.client_loop import ToolOffer, run_client_request
 from relaymind.orchestrator.local_loop import ConfiguredModel
 from relaymind.orchestrator.warmup import warm_up
-from relaymind.store import MIGRATIONS, ModelTiming, RunStore
+from relaymind.store import MIGRATIONS, ModelTiming, RunNotFoundError, RunStore
 from relaymind.store.run_store import split_sql_statements
 from relaymind.store.trace_event import EventType
 
@@ -31,6 +31,7 @@ def sample(clock, **changes):
     return dataclasses.replace(
         ModelTiming(
             model="local",
+            actor="local",
             purpose="skill",
             kind="run",
             input_tokens=100,
@@ -647,3 +648,91 @@ def test_warmup_timeout_records_failed_sample_without_a_run(tmp_path):
     assert len(values) == 1
     assert not values[0].succeeded and values[0].kind == "warm_up"
     assert values[0].run_id is None
+
+
+def test_sample_constructor_requires_explicit_actor():
+    """RM16/RM27: Python callers must declare locality, as JSON imports do."""
+    fields = dataclasses.asdict(sample(FakeClock()))
+    fields.pop("actor")
+    with pytest.raises(TypeError, match="actor"):
+        ModelTiming(**fields)
+
+
+def test_nonexistent_run_cannot_own_a_timing_sample():
+    """RM17/RM27: a missing owner fails atomically; imported run samples may be unowned."""
+    with RunStore(clock=FakeClock()) as store:
+        with pytest.raises(RunNotFoundError):
+            store.add_model_timing(sample(store.clock, run_id="missing"))
+        assert store.model_timings() == []
+        store.add_model_timing(sample(store.clock, run_id=None))
+        assert len(store.model_timings()) == 1
+
+
+def test_run_deletion_cascades_to_progress_outcomes_and_linked_timings():
+    """RM17/RM27: every run-owned timing/outcome row leaves; warmups remain."""
+    with RunStore(clock=FakeClock()) as store:
+        run_id = terminal_skill_run(store)
+        store.add_model_timing(sample(store.clock, run_id=run_id))
+        warmup = sample(store.clock, kind="warm_up")
+        store.add_model_timing(warmup)
+        for table in ("model_run_progress", "skill_outcomes"):
+            assert store._conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 1
+        store.delete_run(run_id)
+        for table in ("model_run_progress", "skill_outcomes"):
+            assert store._conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+        assert store.model_timings() == [warmup]
+
+
+def test_retention_quota_is_shared_but_estimates_are_isolated_by_actor():
+    """RM27/section 8: 1,000 per model/purpose across actors; estimates never mix them."""
+    with RunStore(clock=FakeClock()) as store:
+        for _ in range(500):
+            store.add_model_timing(sample(store.clock))
+        for _ in range(501):
+            store.add_model_timing(sample(store.clock, actor="external", duration_ms=200))
+        assert len(store.model_timings()) == 1000
+        local = store.timing_estimate("local", "skill")
+        external = store.timing_estimate("local", "skill", actor="external")
+        assert (local.sample_count, local.median_duration_ms) == (499, 100)
+        assert (external.sample_count, external.median_duration_ms) == (501, 200)
+
+
+def test_latest_success_uses_measurement_time_then_insertion_order():
+    """RM27: backdated, tied and failed observations preserve latest prefix evidence."""
+    clock = FakeClock()
+    with RunStore(clock=clock) as store:
+        now = clock.utc_now()
+        store.add_model_timing(sample(clock, cached_tokens=20))
+        store.add_model_timing(sample(clock, recorded_at=now - timedelta(seconds=1)))
+        assert store.timing_estimate("local", "skill").latest_cache_class == "warm"
+        store.add_model_timing(sample(clock, cached_tokens=0))
+        estimate = store.timing_estimate("local", "skill")
+        assert estimate.latest_cache_class == "cold"
+        assert estimate.warm.recorded_at == estimate.cold.recorded_at == now
+        store.add_model_timing(sample(clock, cached_tokens=None))
+        store.add_model_timing(
+            sample(clock, cached_tokens=20, succeeded=False, recorded_at=now + timedelta(seconds=1))
+        )
+        estimate = store.timing_estimate("local", "skill")
+        assert estimate.latest_cache_class == "unknown"
+        assert estimate.recorded_at == now
+
+
+def test_contradictory_imported_counts_remain_invalid():
+    """RM27/spec 0.38.1: actual-call normalization never repairs malformed seed files."""
+    data = sample(FakeClock()).to_json_object()
+    data["cached_tokens"] = data["input_tokens"] + 1
+    with pytest.raises(ValueError, match="cached_tokens cannot exceed input_tokens"):
+        ModelTiming.from_json_object(data)
+
+
+@pytest.mark.parametrize(
+    "field", ["input_tokens", "cached_tokens", "output_tokens", "first_token_ms", "duration_ms"]
+)
+@pytest.mark.parametrize("value", [True, False, 1.0])
+def test_imported_sample_counts_require_exact_integers(field, value):
+    """RM25/RM27: JSON bools/floats cannot enter persisted integer measurements."""
+    data = sample(FakeClock()).to_json_object()
+    data[field] = value
+    with pytest.raises(ValueError):
+        ModelTiming.from_json_object(data)

@@ -295,6 +295,7 @@ from relaymind.store import (
     StaleVersionError,
     TraceClock,
 )
+from relaymind.store.model_timings import observed_cached_tokens
 from relaymind.store.run_store import EventDraft, utc_iso
 from relaymind.store.trace_event import WORKFLOW_BRANCHES, EventType
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry, ToolRejectedError
@@ -3302,6 +3303,14 @@ class _Run:
         Task/predicate success is distinct from the provider call's success.
         """
         usage = payload["usage"]
+        if usage is not None:
+            usage = {
+                **usage,
+                "cached_tokens": observed_cached_tokens(
+                    usage["input_tokens"], usage["cached_tokens"]
+                ),
+            }
+            payload = {**payload, "usage": usage}
         sample = ModelTiming(
             model=payload["model"],
             actor=actor,

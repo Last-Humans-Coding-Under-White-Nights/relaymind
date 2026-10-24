@@ -13,6 +13,7 @@ from relaymind.store import ModelTiming, RunStore
 def seed(store, **changes):
     value = ModelTiming(
         model="local",
+        actor="local",
         purpose="routing",
         kind="run",
         input_tokens=100,
