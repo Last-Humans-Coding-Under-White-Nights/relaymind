@@ -35,6 +35,7 @@ from relaymind.selection.contract import (
     SelectionRequest,
     SelectionResult,
     Selector,
+    SelectorTimeout,
     parse_selection_result,
 )
 
@@ -307,6 +308,8 @@ class SelectorChain:
                 if isinstance(stops[0], PlacementDeclined):
                     return Outcome.NOT_PLACED, str(stops[0]), None, None
                 raise stops[0] from None
+            if isinstance(exc, SelectorTimeout):
+                return Outcome.TIMEOUT, "selector transport timeout", None, None
             return Outcome.ERROR, "selector failure", getattr(exc, "result", None), None
         if stops:
             # A selector cannot swallow a callback stop.

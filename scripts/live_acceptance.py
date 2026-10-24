@@ -1804,6 +1804,8 @@ def gateway_config(
     for example {"warmup": False}; without it the startup warm-up of the
     local model runs, which is the default.
     """
+    if local_model and (manifest is None or artifact is None or local_url is None):
+        raise ValueError("local model requires manifest, artifact, and local_url")
     lines = [
         "[server]",
         'host = "127.0.0.1"',

@@ -49,6 +49,7 @@ from relaymind.adapters import (
 from relaymind.orchestrator.local_loop import LOCAL_OPTIONS, LocalOrchestrator, skill_stage_messages
 from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
 from relaymind.store import ModelTiming
+from relaymind.store.model_timings import observed_cached_tokens
 
 # Not a corpus or latency prompt (a repeated text would be served whole from the
 # cache and inflate the cached count), and not a request any run sends.
@@ -148,34 +149,52 @@ async def _send(
     *,
     kind: str = "warm_up",
     success_allowed: Callable[[], bool] = lambda: True,
+    deadline: float | None = None,
 ) -> WarmupSample:
     """Send one request, drop the output, and time it with the monotonic clock (RM25)."""
+    model = orchestrator.model
+    if model is None:
+        raise _NotReady("no local model is configured")
     clock = orchestrator.clock
     started = clock.monotonic()
     first_token: float | None = None
     usage: Usage | None = None
     succeeded = False
     try:
-        async with contextlib.aclosing(adapter.generate(request)) as stream:
-            async for event in stream:
-                if first_token is None and (
-                    isinstance(event, FirstToken | ToolCall)
-                    or (isinstance(event, TextDelta) and event.text)
-                ):
-                    first_token = clock.monotonic()
-                if isinstance(event, Usage):
-                    usage = event
-                elif isinstance(event, GenerationFailed):
-                    raise _NotReady(f"the local runtime reported {event.code}")
+        try:
+            # Only runtime execution belongs to the tolerant warm-up boundary.
+            # Persistence below must escape unchanged, even for TimeoutError.
+            async with asyncio.timeout_at(deadline):
+                async with contextlib.aclosing(adapter.generate(request)) as stream:
+                    async for event in stream:
+                        if first_token is None and (
+                            isinstance(event, FirstToken | ToolCall)
+                            or (isinstance(event, TextDelta) and event.text)
+                        ):
+                            first_token = clock.monotonic()
+                        if isinstance(event, Usage):
+                            usage = event
+                        elif isinstance(event, GenerationFailed):
+                            raise _NotReady(f"the local runtime reported {event.code}")
+        except TimeoutError as exc:
+            raise _WarmupTimeout from exc
+        except _NotReady:
+            raise
+        except Exception as exc:
+            # Adapter exceptions are a not-ready result; cancellation is not.
+            raise _NotReady(_one_line(f"{type(exc).__name__}: {exc}".rstrip(": "))) from exc
         task = asyncio.current_task()
         succeeded = success_allowed() and (task is None or not task.cancelling())
     finally:
         finished = clock.monotonic()
-        assert orchestrator.model is not None
+        if usage is not None:
+            usage = replace(
+                usage, cached_tokens=observed_cached_tokens(usage.input_tokens, usage.cached_tokens)
+            )
         orchestrator.store.add_model_timing(
             ModelTiming(
-                model=orchestrator.model.model_id,
-                actor=orchestrator.model.actor,
+                model=model.model_id,
+                actor=model.actor,
                 purpose=purpose,
                 kind=kind,
                 run_id=None,
@@ -204,6 +223,10 @@ class _NotReady(Exception):
     """The runtime answered, but with a failure."""
 
 
+class _WarmupTimeout(Exception):
+    """Runtime execution timed out, distinct from a timing-store failure."""
+
+
 def _one_line(text: str, limit: int = 120) -> str:
     line = " ".join(text.split())
     return line if len(line) <= limit else line[: limit - 3] + "..."
@@ -216,24 +239,20 @@ async def warm_up(
 
     Any failure of the adapter, including one a test double raises, is a
     result with ready False and a one-line detail: a runtime that is not
-    ready is not a startup error. Cancelling the caller still propagates.
+    ready is not a startup error. Cancelling the caller still propagates,
+    as do timing validation and persistence errors.
     """
     samples: list[WarmupSample] = []
+    deadline = asyncio.get_running_loop().time() + seconds
     try:
-        async with asyncio.timeout(seconds):
-            for purpose, request in warmup_requests(orchestrator):
-                samples.append(await _send(adapter, purpose, request, orchestrator))
-    except TimeoutError:
+        for purpose, request in warmup_requests(orchestrator):
+            samples.append(await _send(adapter, purpose, request, orchestrator, deadline=deadline))
+    except _WarmupTimeout:
         return WarmupResult(
             tuple(samples), False, f"no answer within {seconds:g} s", timed_out=True
         )
     except _NotReady as exc:
         return WarmupResult(tuple(samples), False, str(exc))
-    except Exception as exc:
-        # Any adapter failure, a double's included, is the one printed line.
-        return WarmupResult(
-            tuple(samples), False, _one_line(f"{type(exc).__name__}: {exc}".rstrip(": "))
-        )
     return WarmupResult(tuple(samples), True)
 
 

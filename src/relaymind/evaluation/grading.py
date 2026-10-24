@@ -228,6 +228,7 @@ def grade_run(
     error_code: str | None = None,
     reason_code: str | None = None,
     timed_out: bool = False,
+    local_model_configured: bool | None = None,
 ) -> RunGrade:
     """Grade one run of a case in one mode (spec 0.28 section 12.2)."""
     answer = answer_text(events)
@@ -348,10 +349,15 @@ def grade_run(
     grade.failures = [reason for ok, reason in checks if not ok]
     grade.success = not grade.failures
     if case.case_class == "simple":
-        accepted = next(iter(of_type(events, "run.accepted")), {}).get("payload", {})
+        acceptance = of_type(events, "run.accepted")
+        accepted = next(iter(acceptance), {}).get("payload", {})
         absent = accepted.get("local_model_status") == "absent" or (
             "local_model" in accepted and accepted["local_model"] is None
         )
+        # A startup failure may have no acceptance event. Use its launch configuration
+        # only then, and never hide recorded local execution with a conflicting label.
+        if not acceptance and local_calls == 0 and local_model_configured is False:
+            absent = True
         terminal = (terminal_event(events) or {}).get("payload", {})
         # Legacy traces omitted the owner; preserve their historical grading. New
         # traces must name a model that actually made a local call, never gateway.

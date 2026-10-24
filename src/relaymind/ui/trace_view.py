@@ -243,10 +243,12 @@ def _routes(
         payload = event.payload
         call = by_id.get(payload.get("call_id"), {})
         placement = payload.get("placement")
+        selector = payload.get("selector")
         routes.append(
             {
                 **_pick(payload["decision"], ("route", "skill_id", "reason_code", "language")),
-                **_pick(payload, ("mechanism", "model", "selector")),
+                **_pick(payload, ("mechanism", "model")),
+                "selector": selector if isinstance(selector, Mapping) else None,
                 "placement": placement if isinstance(placement, Mapping) else None,
                 "duration_ms": call.get("duration_ms"),
             }

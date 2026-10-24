@@ -1,5 +1,6 @@
-"""Measured model calls and placement statistics (RM25, RM27, spec 0.38 section 8)."""
+"""Measured model calls and placement statistics (RM25, RM27, spec 0.38.1 section 8)."""
 
+import logging
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -13,6 +14,17 @@ from relaymind.schema_util import check_schema_version, first_schema_error, load
 MODEL_TIMING_SCHEMA = load_packaged_schema("relaymind.store", "model_timing.v1.json")
 _VALIDATOR = jsonschema.Draft202012Validator(MODEL_TIMING_SCHEMA)
 CacheClass = Literal["warm", "cold", "unknown"]
+_LOGGER = logging.getLogger(__name__)
+
+
+def observed_cached_tokens(input_tokens: int | None, cached_tokens: int | None) -> int | None:
+    """Reject an impossible optional observation, never repair imported samples (RM27)."""
+    if input_tokens is not None and cached_tokens is not None and cached_tokens > input_tokens:
+        _LOGGER.warning(
+            "invalid_cached_tokens: cached_tokens exceeds input_tokens; recorded as unknown"
+        )
+        return None
+    return cached_tokens
 
 
 @dataclass(frozen=True)
@@ -20,6 +32,7 @@ class ModelTiming:
     """One observed generation; unknown provider measurements stay None."""
 
     model: str
+    actor: Literal["local", "external"]
     purpose: str
     kind: Literal["run", "warm_up", "probe"]
     input_tokens: int | None
@@ -30,7 +43,6 @@ class ModelTiming:
     succeeded: bool
     run_id: str | None
     recorded_at: datetime
-    actor: Literal["local", "external"] = "local"
 
     def to_json_object(self) -> dict[str, Any]:
         """Return the published versioned sample shape, validated for seeding."""
@@ -161,7 +173,10 @@ def _throughput(samples: Sequence[ModelTiming]) -> ThroughputEstimate:
 def timing_estimate(
     model: str, purpose: str, actor: str, samples: Sequence[ModelTiming]
 ) -> TimingEstimate:
-    """Summarize samples already filtered and ordered by the store; perform no inference."""
+    """Summarize filtered samples in ascending timestamp, then insertion order.
+
+    The store supplies that order, including ties; perform no inference.
+    """
     successful = [s for s in samples if s.succeeded]
     return TimingEstimate(
         model=model,

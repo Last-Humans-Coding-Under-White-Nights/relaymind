@@ -146,8 +146,8 @@ class Usage:
     def __post_init__(self) -> None:
         for name in ("input_tokens", "output_tokens", "cached_tokens", "reasoning_tokens"):
             value = getattr(self, name)
-            if value is not None and value < 0:
-                raise ValueError("token counts must be nonnegative")
+            if value is not None and (type(value) is not int or value < 0):
+                raise ValueError("token counts must be nonnegative integers or None")
 
 
 @dataclass(frozen=True)
