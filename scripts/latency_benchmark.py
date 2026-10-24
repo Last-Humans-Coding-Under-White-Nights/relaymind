@@ -49,6 +49,11 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import live_acceptance as harness  # noqa: E402
+from evaluation_config import (  # noqa: E402
+    add_configuration_arguments,
+    configuration_from_args,
+    label_report,
+)
 
 from relaymind.adapters import GenerationRequest, Message, Role  # noqa: E402
 from relaymind.adapters.llamacpp import build_chat_request  # noqa: E402
@@ -117,12 +122,22 @@ def benchmark_config(*, early_headers: bool = False, startup_warmup: bool = True
     request of the run is the first the runtime sees; the default leaves the table out and the
     gateway warms the local model up before it serves.
     """
-    performance = {"early_headers": True} if early_headers else None
+    performance = dict(options.pop("performance", None) or {})
+    if early_headers:
+        if performance.get("early_headers") is False:
+            raise ValueError("early_headers conflicts with performance.early_headers=false")
+        performance["early_headers"] = True
     placement = None if startup_warmup else {"warmup": False}
+    external = options.pop("external", None)
     return harness.gateway_config(
         **options,
         routing_cache=False,
-        external=None,
+        external=external,
+        modes=(
+            ("auto", "external_only")
+            if not options.get("local_model", True)
+            else harness.LOCAL_MODES
+        ),
         performance=performance,
         placement=placement,
     )
@@ -163,6 +178,9 @@ def _model_calls(events: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
         usage = event["payload"].get("usage") or {}
         calls.append(
             {
+                "call_id": event["payload"].get("call_id"),
+                "actor": event.get("actor"),
+                "model": event["payload"].get("model"),
                 "purpose": event["payload"].get("purpose"),
                 "duration_ms": event["payload"].get("duration_ms"),
                 "input_tokens": usage.get("input_tokens"),
@@ -221,7 +239,9 @@ async def _stream(api: harness.Api, prompt: str, sample: dict[str, Any]) -> None
     sample["completion_ms"] = _elapsed_ms(started)
 
 
-async def measure(api: harness.Api, prompt: Mapping[str, str], *, timeout: float) -> dict[str, Any]:
+async def measure(
+    api: harness.Api, prompt: Mapping[str, str], *, timeout: float, external: bool = False
+) -> dict[str, Any]:
     """One sample: the client timings, then the trace timings; a waiting run is cancelled."""
     sample: dict[str, Any] = {
         "prompt_id": prompt["id"],
@@ -258,7 +278,11 @@ async def measure(api: harness.Api, prompt: Mapping[str, str], *, timeout: float
     except (TimeoutError, httpx.HTTPError) as exc:
         sample["error"] = sample["error"] or f"trace: {type(exc).__name__}: {exc}"
         return sample
-    expected = EXPECTED[prompt["label"]]
+    expected = (
+        ("completed", None)
+        if external and prompt["label"] == "routing"
+        else EXPECTED[prompt["label"]]
+    )
     if sample["error"] is None and (sample["state"], sample["error_code"]) != expected:
         sample["error"] = (
             f"ended {sample['state']} ({sample['error_code']}), expected {expected[0]}"
@@ -297,14 +321,16 @@ async def run_samples(
     runs: int = RUNS_PER_PROMPT,
     timeout: float = REQUEST_TIMEOUT_SECONDS,
     measure_one: Measure = measure,
+    external: bool = False,
 ) -> dict[str, Any]:
     """The cold request, the warm-ups, then the measured runs in the seeded order."""
+    options = {"timeout": timeout, **({"external": True} if external else {})}
     by_id = {p["id"]: p for p in prompts}
-    cold = await measure_one(api, prompts[0], timeout=timeout)
-    warmups = [await measure_one(api, p, timeout=timeout) for p in warmup_prompts(prompts)]
+    cold = await measure_one(api, prompts[0], **options)
+    warmups = [await measure_one(api, p, **options) for p in warmup_prompts(prompts)]
     measured = []
     for index, prompt_id in enumerate(schedule(list(by_id), runs=runs, seed=seed)):
-        sample = await measure_one(api, by_id[prompt_id], timeout=timeout)
+        sample = await measure_one(api, by_id[prompt_id], **options)
         measured.append({**sample, "order": index})
         print(f"{index:3} {prompt_id} {sample.get('error') or 'ok'}", flush=True)
     return {"cold": cold, "warmups": warmups, "measured": measured}
@@ -316,6 +342,9 @@ def prefix_cache_record(calls: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     A call whose cached count is None was not measured (spec 0.31 section 6): it is
     counted apart, never as 0, and a total over no measured call is null.
     """
+    # Earlier exports had no actor and this runner supported local calls only.
+    # Current mixed configurations must not attribute external cache usage to llama.cpp.
+    calls = [call for call in calls if call.get("actor", "local") == "local"]
     request = GenerationRequest(
         generation_id="probe", messages=(Message(role=Role.USER, content="x"),)
     )
@@ -377,10 +406,26 @@ def _props(local_url: str) -> dict[str, Any] | None:
 
 
 def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
-    early_headers = bool(getattr(args, "early_headers", False))
-    startup_warmup = not getattr(args, "no_startup_warmup", False)
+    configuration = configuration_from_args(args)
+    early_headers = configuration.performance.early_headers
+    startup_warmup = configuration.local_model_configured and not getattr(
+        args, "no_startup_warmup", False
+    )
+    external = None
+    if getattr(args, "external_base_url", None):
+        external = harness.ExternalEndpoint(
+            args.external_base_url, args.external_model, args.external_context_limit
+        )
+    if (external is not None and not os.environ.get(harness.EXTERNAL_KEY_ENV)) or (
+        not configuration.local_model_configured and external is None
+    ):
+        raise ValueError("an external endpoint and its API key are required for this configuration")
     prompts = load_prompts()
-    runtime = harness.check_runtime(Path(args.manifest), extra_args=args.runtime_extra_args)
+    runtime = (
+        harness.check_runtime(Path(args.manifest), extra_args=args.runtime_extra_args)
+        if configuration.local_model_configured
+        else None
+    )
     application = harness.application_revision()
     seed = args.seed if args.seed is not None else random.SystemRandom().randrange(2**31)
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
@@ -389,15 +434,17 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     with ExitStack() as cleanup:
         cleanup.callback(shutil.rmtree, work, ignore_errors=True)
         llama_log = work / "llama-server.log"
-        llama, local_url, cold_start = runtime.launch(llama_log)
+        llama, local_url, cold_start = runtime.launch(llama_log) if runtime else (None, None, None)
         try:
-            props = _props(local_url)
+            props = _props(local_url) if runtime else None
             config = work / "relaymind.toml"
             config.write_text(
                 benchmark_config(
                     work=work,
-                    manifest=runtime.manifest_path.resolve(),
-                    artifact=runtime.artifact,
+                    manifest=runtime.manifest_path.resolve() if runtime else None,
+                    artifact=runtime.artifact if runtime else None,
+                    external=external,
+                    **configuration.gateway_options(),
                     local_url=local_url,
                     port=harness._free_port(),
                     early_headers=early_headers,
@@ -414,7 +461,12 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
             async def drive():
                 try:
                     return await run_samples(
-                        api, prompts, seed=seed, runs=args.runs, timeout=args.timeout
+                        api,
+                        prompts,
+                        seed=seed,
+                        runs=args.runs,
+                        timeout=args.timeout,
+                        external=external is not None,
                     )
                 finally:
                     await api.aclose()
@@ -424,14 +476,22 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
             finally:
                 gateway.stop()
         finally:
-            harness._stop(llama)
-        runtime_log = parse_runtime_log(llama_log.read_text("utf-8", errors="replace"))
+            if llama is not None:
+                harness._stop(llama)
+        runtime_log = (
+            parse_runtime_log(llama_log.read_text("utf-8", errors="replace")) if runtime else None
+        )
         measured = samples["measured"]
         summary = summarize_latency(measured)
         calls = [call for sample in measured for call in sample["model_calls"]]
         document = {
             "kind": "relaymind.latency_benchmark",
-            "note": "Spec 0.28 section 12.2 latency experiment on the local path, concurrency one, "
+            "configuration": {
+                **configuration.to_json_object(),
+                "placement": {"policy": "local_first", "warmup": startup_warmup},
+            },
+            "note": "Section 12.2 latency experiment in the recorded configuration, "
+            "concurrency one, "
             "routing cache off. First transport event and first answer token are client times; "
             "first model action and first useful content are trace times (elapsed_ms from "
             "run.accepted). The two clocks are never subtracted. Errors and timeouts are kept."
@@ -458,25 +518,48 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                 "early_headers": early_headers,
                 "startup_warmup": startup_warmup,
                 "first_transport_event": first_transport_label(early_headers),
-                "external_model": None,
+                "external_model": external.model if external else None,
                 "path": "POST /v1/chat/completions, stream true, model relaymind",
             },
             "environment": {
                 "machine": machine_manifest(),
                 "application": application,
-                "runtime_banner": runtime.banner,
-                "runtime_devices": runtime_devices(),
+                "runtime_banner": runtime.banner if runtime else None,
+                "runtime_devices": runtime_devices() if runtime else None,
                 "runtime_log": runtime_log,
-                "llama_server_argv": runtime.server_argv,
-                "llama_server_extra_args": list(runtime.extra_args),
+                "llama_server_argv": runtime.server_argv if runtime else None,
+                "llama_server_extra_args": list(runtime.extra_args) if runtime else None,
                 "llama_server_props": props,
-                **runtime.model_record(),
-                "context": {"ctx_size": runtime.manifest.launch_settings.get("ctx_size")},
-                "external_endpoint_region": None,
+                **(
+                    runtime.model_record()
+                    if runtime
+                    else {
+                        "model_id": None,
+                        "manifest": None,
+                        "model_file": None,
+                        "model_sha256": None,
+                        "quantization": None,
+                    }
+                ),
+                "context": {"ctx_size": runtime.manifest.launch_settings.get("ctx_size")}
+                if runtime
+                else None,
+                "external_endpoint_region": getattr(args, "external_region", None)
+                if external
+                else None,
+                "external_endpoint": {
+                    "base_url": external.base_url,
+                    "model": external.model,
+                    "context_limit": external.context_limit,
+                }
+                if external
+                else None,
             },
             "cold_start": {
-                "llama_server_start_to_healthy_seconds": round(cold_start, 3),
-                "model_load_ms": runtime_log["model_load_ms"],
+                "llama_server_start_to_healthy_seconds": round(cold_start, 3)
+                if cold_start is not None
+                else None,
+                "model_load_ms": runtime_log["model_load_ms"] if runtime_log else None,
                 "gateway_start_to_healthy_seconds": round(gateway_ready, 3),
                 "gateway_config": config.read_text("utf-8"),
                 "cold_request": samples["cold"],
@@ -484,7 +567,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                     output.recorded_lines, startup_warmup=startup_warmup
                 ),
             },
-            "prefix_cache": prefix_cache_record(calls),
+            "prefix_cache": prefix_cache_record(calls) if runtime else None,
             "summary": summary,
             "warmups": samples["warmups"],
             "samples": measured,
@@ -494,6 +577,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         report = render_latency_markdown(
             summary, title=f"Latency benchmark: {out.stem}", early_headers=early_headers
         )
+        report = label_report(report, document["configuration"])
         out.with_suffix(".md").write_text(report, encoding="utf-8")
         return document
 
@@ -505,6 +589,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--manifest", default=os.fspath(harness.DEFAULT_MANIFEST.relative_to(REPO_ROOT))
     )
     harness.add_runtime_extra_args(parser)
+    add_configuration_arguments(parser)
+    parser.add_argument("--external-base-url")
+    parser.add_argument("--external-model")
+    parser.add_argument("--external-context-limit", type=int)
+    parser.add_argument("--external-region")
     parser.add_argument("--seed", type=int, help="the order seed (random when not given)")
     parser.add_argument(
         "--early-headers",
@@ -520,12 +609,24 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     parser.add_argument("--runs", type=int, default=RUNS_PER_PROMPT)
     parser.add_argument("--timeout", type=float, default=REQUEST_TIMEOUT_SECONDS)
-    document = run_benchmark(parser.parse_args(argv))
+    args = parser.parse_args(argv)
+    external_args = (args.external_base_url, args.external_model, args.external_context_limit)
+    if any(external_args) and not all(external_args):
+        parser.error(
+            "--external-base-url, --external-model, and --external-context-limit go together"
+        )
+    try:
+        document = run_benchmark(args)
+    except ValueError as exc:
+        parser.error(str(exc))
     print(
-        render_latency_markdown(
-            document["summary"],
-            title="Latency benchmark",
-            early_headers=document["design"]["early_headers"],
+        label_report(
+            render_latency_markdown(
+                document["summary"],
+                title="Latency benchmark",
+                early_headers=document["design"]["early_headers"],
+            ),
+            document.get("configuration"),
         )
     )
 

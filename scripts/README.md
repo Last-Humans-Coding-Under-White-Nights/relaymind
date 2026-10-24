@@ -176,6 +176,42 @@
   configuration is reported as that configuration of that machine, never
   as another machine.
 
+- Phase 2 runner configurations (#128; RM03, RM25, RM26, RM29, RM31,
+  RM32): both `run_corpus.py` and `latency_benchmark.py` accept
+  `--performance KEY=VALUE ...`, `--budgets KEY=VALUE ...`,
+  `--selection-chain SELECTOR ...`, and `--no-local-model`.
+  Repeat `--performance` or `--budgets` to add more distinct keys. Boolean
+  values are `true` or `false`; keys, types, ranges, and implemented options
+  are validated before runtime startup. Unsupported `answer_stream=live`
+  remains rejected. Baseline defaults remain unchanged and every export
+  and report header records the effective settings.
+
+  ```bash
+  python scripts/run_corpus.py --out docs/evidence/<date>-draft-many.json \
+      --modes auto local_only --performance answer_pass=draft calls_per_generation=many \
+      --budgets active_seconds=12 --selection-chain example_match model_router
+  python scripts/latency_benchmark.py --out docs/evidence/<date>-early-headers.json \
+      --performance early_headers=true
+  ```
+
+  The latency runner also accepts the corpus runner's external endpoint
+  arguments: `--external-base-url`, `--external-model`,
+  `--external-context-limit`, and optional `--external-region`. The credential
+  stays in `RELAYMIND_EXTERNAL_API_KEY`. With an external endpoint, a routing
+  prompt is expected to complete, while clarification prompts still wait
+  for input. `--no-local-model` requires that external endpoint and credential,
+  defaults the selector chain to `example_match`, and starts no local runtime.
+  Local runtime measurements are null; the corpus records `local_only` as
+  not run and local completion as not applicable. It refuses `model_router`
+  in this configuration. The existing `--early-headers` alias remains available
+  and cannot conflict with `--performance early_headers=false`.
+
+  Offline regrading preserves the source configuration and rejects new
+  configuration flags. Older exports without a configuration remain labeled
+  as not recorded. This runner change supplies no new live measurements or
+  default decisions. Timing-sample import, placement and workflow options,
+  the full metrics expansion, and the measured comparison matrix remain in #128.
+
 - `run_corpus.py --regrade-draft-pass` — the offline draft-pass
   counterfactual (#115; RM31, spec 0.31). It grades the stored traces of
   a corpus export as if the skill-stage draft had been published as the

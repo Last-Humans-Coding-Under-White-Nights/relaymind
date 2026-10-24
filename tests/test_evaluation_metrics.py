@@ -368,3 +368,13 @@ def test_each_section_keeps_its_label_under_early_headers():
     headings = [line for line in text.splitlines() if line.startswith("## ")]
     assert [h.split(":")[0] for h in headings] == ["## all", "## simple", "## tool"]
     assert text.count("| first_transport_ms (header time) |") == 3
+
+
+def test_local_completion_omits_not_applicable_runs():
+    """RM25, RM26: no-local runs have no local completion denominator or target verdict."""
+    summary = summarize_corpus([grade("simple-01", "auto", local_completion=None)])
+    assert summary["modes"]["auto"]["en"]["all"]["local_completion"] == rate(0, 0)
+    assert summary["targets"]["auto"]["local_completion"]["met"] is None
+    assert "local_completion 0/0 (target 80%, not applicable)" in render_corpus_markdown(
+        summary, title="No local model"
+    )

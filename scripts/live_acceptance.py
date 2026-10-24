@@ -1776,9 +1776,9 @@ def _per_launch(table: str, *values: str) -> list[str]:
 def gateway_config(
     *,
     work: Path,
-    manifest: Path,
-    artifact: Path,
-    local_url: str,
+    manifest: Path | None,
+    artifact: Path | None,
+    local_url: str | None,
     port: int,
     routing_cache: bool = False,
     external: ExternalEndpoint | None = None,
@@ -1790,6 +1790,9 @@ def gateway_config(
     permissions: Sequence[str] | None = None,
     performance: Mapping[str, Any] | None = None,
     placement: Mapping[str, Any] | None = None,
+    selection: Mapping[str, Any] | None = None,
+    budgets: Mapping[str, Any] | None = None,
+    local_model: bool = True,
 ) -> str:
     """The operator's TOML file for one launch (spec section 14.1); it holds no credential.
 
@@ -1801,6 +1804,8 @@ def gateway_config(
     for example {"warmup": False}; without it the startup warm-up of the
     local model runs, which is the default.
     """
+    if local_model and (manifest is None or artifact is None or local_url is None):
+        raise ValueError("local model requires manifest, artifact, and local_url")
     lines = [
         "[server]",
         'host = "127.0.0.1"',
@@ -1811,10 +1816,16 @@ def gateway_config(
         *_per_launch("skills", f"[{_toml(skill_root)}]"),
         "[sandbox]",
         *_per_launch("sandbox", _toml(seed), _toml(work / "sandbox")),
-        "[local_model]",
-        f"manifest = {_toml(manifest)}",
-        f"artifact = {_toml(artifact)}",
-        f"base_url = {_toml(local_url)}",
+        *(
+            [
+                "[local_model]",
+                f"manifest = {_toml(manifest)}",
+                f"artifact = {_toml(artifact)}",
+                f"base_url = {_toml(local_url)}",
+            ]
+            if local_model
+            else []
+        ),
         "[policy]",
         f"enabled_workflows = {_toml(list(workflows))}",
         f"allowed_modes = {_toml(list(modes))}",
@@ -1832,7 +1843,12 @@ def gateway_config(
         ]
     if ui:
         lines += ["[ui]", 'mode = "live"']
-    for name, table in (("performance", performance), ("placement", placement)):
+    for name, table in (
+        ("performance", performance),
+        ("placement", placement),
+        ("selection", selection),
+        ("budgets", budgets),
+    ):
         if table:
             lines += [f"[{name}]", *(f"{key} = {_toml(value)}" for key, value in table.items())]
     return "\n".join(lines) + "\n"
