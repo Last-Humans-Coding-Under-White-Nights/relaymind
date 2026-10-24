@@ -400,6 +400,7 @@ class _ClientRun(_Run):
             )
         if not size.fits:
             return self._fail_context(size)
+        local_boundary = self.o.clock.monotonic()
         self.move(
             RunState.EXTERNAL_RUNNING,
             event=(
@@ -407,6 +408,7 @@ class _ClientRun(_Run):
                 GATEWAY_ACTOR,
                 {
                     "reason_code": stop.reason_code,
+                    "local_active_ms": self.meter.local_active_ms(local_boundary),
                     "model": external.model_id,
                     "skill": None,
                     "operation_ids": [],
@@ -422,6 +424,7 @@ class _ClientRun(_Run):
         )
         # RM14: from here only the external actor answers.
         self.authority.hand_off_to_external()
+        self.meter.close_local(local_boundary)
         self.meter.start_external()
         try:
             reply = await self._converse(

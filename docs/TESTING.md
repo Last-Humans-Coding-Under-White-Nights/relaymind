@@ -1310,3 +1310,18 @@ effectively buffered. Corpus grades retain configured/effective policy and
 terminal failure code, and report task success and `predicate_unmet` separately
 for each effective policy. The actual paired provider corpus run on one final
 revision and frozen timing prior is still required before changing defaults.
+
+### M8 evaluation infrastructure (RM17, RM25–RM28, RM32)
+
+Run the importer, local-phase clock, metric, checkpoint, matrix and runner
+regressions with model doubles before executing the matrix:
+
+```sh
+.venv/bin/python -m pytest -o pythonpath=src tests/test_placement_prior.py tests/test_local_active_measurement.py tests/test_m8_metrics.py tests/test_evaluation_checkpoints.py tests/test_m8_matrix_driver.py tests/test_runner_configurations.py tests/test_run_corpus_script.py tests/test_latency_benchmark_script.py
+```
+
+The prior tests use declared synthetic test fixtures to validate projection and
+retention, including an expected-wait decision from imported terminal history.
+They establish no performance, provider parity, or model capability. The
+checkpoint tests verify preservation/refusal behavior without inference.
+Repository completion checks remain the entire pytest suite and Ruff lint/format.

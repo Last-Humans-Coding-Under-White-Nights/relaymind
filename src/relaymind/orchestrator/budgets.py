@@ -159,11 +159,17 @@ class BudgetMeter:
     it when the run waits; new_stage opens the next one on resume.
     """
 
-    def __init__(self, budgets: LocalBudgets, *, clock: TraceClock) -> None:
+    def __init__(
+        self, budgets: LocalBudgets, *, clock: TraceClock, local_active: bool = True
+    ) -> None:
         self.budgets = budgets
         self._clock = clock
         self._stages = 1
         self._stage_started: float | None = clock.monotonic()
+        self._local_open = self._stage_started if local_active else None
+        self._local_enabled = local_active
+        self._local_total = 0.0
+        self._local_supported = True
         self._closed_active = 0.0  # active seconds of the stages that ended
         self._stage = dict.fromkeys(_STAGE_COUNTERS, 0)
         self._total = dict.fromkeys(_STAGE_COUNTERS, 0)
@@ -179,8 +185,12 @@ class BudgetMeter:
 
     def end_stage(self) -> None:
         """Close the current stage: the run waits, and waiting is not active."""
+        boundary = self._clock.monotonic()
+        if self._local_open is not None:
+            self._local_total += boundary - self._local_open
+            self._local_open = None
         if self._stage_started is not None:
-            self._closed_active += self.elapsed_seconds()
+            self._closed_active += boundary - self._stage_started
             self._stage_started = None
 
     def new_stage(self) -> None:
@@ -188,8 +198,32 @@ class BudgetMeter:
         self.end_stage()
         self._stages += 1
         self._stage_started = self._clock.monotonic()
+        if self._local_enabled:
+            self._local_open = self._stage_started
         self._stage = dict.fromkeys(_STAGE_COUNTERS, 0)
         self._bounds = {False: None, True: None}
+
+    def local_active_ms(self, boundary: float | None = None) -> int | None:
+        """Snapshot the serial local phase, excluding suspended waits (RM25/RM27)."""
+        if not self._local_supported:
+            return None
+        elapsed = self._local_total
+        if self._local_open is not None:
+            elapsed += (
+                self._clock.monotonic() if boundary is None else boundary
+            ) - self._local_open
+        return round(elapsed * 1000)
+
+    def close_local(self, boundary: float) -> None:
+        """Freeze only after the handoff transition succeeded, at its captured boundary."""
+        if self._local_open is not None:
+            self._local_total += boundary - self._local_open
+        self._local_open = None
+        self._local_enabled = False
+
+    def mark_local_unsupported(self) -> None:
+        """Overlapping parallel phases have no serial local-time measurement."""
+        self._local_supported = False
 
     # -- the external stage ---------------------------------------------------
 
@@ -382,11 +416,16 @@ class BudgetMeter:
             and self._run["generations"] < self.budgets.run_generations
         )
 
-    def usage(self) -> dict[str, int]:
+    def usage(self) -> dict[str, int | None]:
         """What the run used over all stages, as recorded in its trace."""
+        boundary = self._clock.monotonic()
+        active = self._closed_active + (
+            0 if self._stage_started is None else boundary - self._stage_started
+        )
         return {
             **self._total,
             "external_generations": self._external_generations,
-            "active_ms": round(self.active_seconds() * 1000),
+            "active_ms": round(active * 1000),
+            "local_active_ms": self.local_active_ms(boundary),
             "stages": self._stages,
         }

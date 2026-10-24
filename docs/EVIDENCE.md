@@ -2650,3 +2650,13 @@ implementation task. The paired live/buffered corpus run on the same final
 revision and frozen timing prior remains pending under the M8 comparison work.
 Failures must remain in both arms; neither a parity claim nor a default change
 follows from these deterministic tests. Buffered remains the default.
+
+### M8 matrix preparation — measurements pending
+
+Specification 0.42 defines reproducible placement priors, serial local active
+time, evaluation denominators and durable matrix attempts (#134). The fixed
+execution driver and deterministic model-double tests are preparation only.
+No new provider/model runs or live/buffered parity measurements are claimed.
+Normal and constrained calibration priors must be collected on the reviewed
+committed implementation before the candidate matrix. Existing historical
+exports are unchanged and do not substitute for the new controls.

@@ -1529,7 +1529,14 @@ class _Run:
         self.model_alias = model_alias
         # RM26: the class of the local model this run was accepted under; it keeps it.
         self.local = owner.local_status
-        self.meter = BudgetMeter(owner.budgets, clock=owner.clock)
+        self.meter = BudgetMeter(
+            owner.budgets,
+            clock=owner.clock,
+            local_active=(
+                self.mode == ExecutionMode.LOCAL_ONLY
+                or (self.mode != ExecutionMode.EXTERNAL_ONLY and self.local.usable)
+            ),
+        )
         self.model_calls: list[dict[str, str]] = []
         # Set when a cancel request stops the run (run.cancelled reason).
         # The adapter of every generation in flight, by call ID, for a cancel
@@ -1682,6 +1689,7 @@ class _Run:
             "budget_usage": usage,
             # Active and waiting time, reported separately.
             "active_ms": usage["active_ms"],
+            "local_active_ms": usage["local_active_ms"],
             "waiting_ms": self.waiting_ms,
         }
         if self.workflow is not None:
@@ -2329,6 +2337,7 @@ class _Run:
             )
         if not size.fits:
             return self._fail_context(size)
+        local_boundary = self.o.clock.monotonic()
         self.move(
             RunState.EXTERNAL_RUNNING,
             event=(
@@ -2336,6 +2345,7 @@ class _Run:
                 GATEWAY_ACTOR,
                 {
                     "reason_code": stop.reason_code,
+                    "local_active_ms": self.meter.local_active_ms(local_boundary),
                     "model": external.model_id,
                     "skill": None if envelope.skill is None else dict(envelope.skill),
                     "operation_ids": list(envelope.operation_ids),
@@ -2347,6 +2357,7 @@ class _Run:
         )
         # RM14: from here only the external actor dispatches or answers.
         self.authority.hand_off_to_external()
+        self.meter.close_local(local_boundary)
         self.meter.start_external()
         self.tool_branch = None
         loop.capabilities = capabilities
@@ -2589,6 +2600,7 @@ class _Run:
         if not size.fits:
             return self._fail_context(size)
         self.move(RunState.PARALLEL_RUNNING)
+        self.meter.mark_local_unsupported()
         workflow = self.workflow = _Workflow(skill.parallel_workflow, self.o.clock.monotonic())
         self.tool_branch = LOCAL_HEALTH
         tool_names = " or ".join(schema.name for schema in loop.schemas)

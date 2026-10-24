@@ -184,7 +184,8 @@ def test_a_routing_prompt_under_early_headers_is_not_a_transport_error(bench, tm
     assert sample["error"] is None
     assert sample["stream_error_code"] == "needs_external"
     assert (sample["state"], sample["error_code"]) == ("failed", "needs_external")
-    assert isinstance(sample["completion_ms"], float)
+    assert sample["completion_ms"] is None
+    assert isinstance(sample["stream_duration_ms"], float)
     assert sample["first_answer_token_ms"] is None
 
 
@@ -497,6 +498,7 @@ def test_an_interrupted_benchmark_removes_its_work_dir(bench, tmp_path, monkeypa
         bench.harness, "check_runtime", lambda manifest, extra_args=(): _FakeRuntime()
     )
     monkeypatch.setattr(bench.harness, "application_revision", lambda: {})
+    monkeypatch.setattr(bench.session, "prior_configuration", lambda *args: {})
     monkeypatch.setattr(bench.harness, "_stop", stopped.append)
     monkeypatch.setattr(bench.tempfile, "mkdtemp", lambda prefix: str(work))
     monkeypatch.setattr(bench, "_props", interrupt)

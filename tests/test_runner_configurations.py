@@ -521,3 +521,30 @@ def test_local_latency_export_has_no_dangling_external_region(monkeypatch, tmp_p
     environment = runner.run_benchmark(args)["environment"]
     assert environment["external_endpoint"] is None
     assert environment["external_endpoint_region"] is None
+
+
+def test_placement_arguments_export_and_launch_match(settings):
+    """RM27: runner policy is validated and preserved in launch and evidence."""
+    config = parse(settings, "--placement", "policy=expected_wait", "margin=3")
+    assert config.to_json_object()["placement"]["policy"] == "expected_wait"
+    assert config.gateway_options()["placement"]["margin"] == 3
+    with pytest.raises(ValueError):
+        parse(settings, "--placement", "policy=invented")
+
+
+def test_benchmark_preserves_placement_with_warmup_setting(settings, tmp_path):
+    """RM27: latency warm-up control must not overwrite placement policy."""
+    runner = load_script_module("latency_benchmark")
+    config = parse(settings, "--placement", "policy=device_aware")
+    text = runner.benchmark_config(
+        work=tmp_path,
+        manifest=tmp_path / "model.json",
+        artifact=tmp_path / "model.gguf",
+        local_url="http://127.0.0.1:8081",
+        port=8099,
+        startup_warmup=False,
+        **config.gateway_options(),
+    )
+    raw = tomllib.loads(text)
+    assert raw["placement"]["policy"] == "device_aware"
+    assert raw["placement"]["warmup"] is False

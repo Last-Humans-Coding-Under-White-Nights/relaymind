@@ -1099,6 +1099,10 @@
           }
         }
       }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["handoff.started", "run.completed", "run.failed", "run.cancelled"]}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"properties": {"local_active_ms": {"type": ["integer", "null"], "minimum": 0}}}}}
     }
   ]
 }

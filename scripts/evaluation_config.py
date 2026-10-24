@@ -2,11 +2,12 @@
 
 import argparse
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.performance import PerformanceSettings
+from relaymind.orchestrator.placement import PlacementSettings
 from relaymind.selection.settings import SelectionSettings
 
 
@@ -17,6 +18,9 @@ def add_configuration_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--budgets", nargs="+", action="extend", default=[], metavar="KEY=VALUE")
     parser.add_argument("--selection-chain", nargs="+", action="extend", metavar="SELECTOR")
     parser.add_argument("--no-local-model", action="store_true")
+    parser.add_argument("--placement", nargs="+", action="extend", default=[], metavar="KEY=VALUE")
+    parser.add_argument("--timing-samples", type=str)
+    parser.add_argument("--checkpoint", type=str)
 
 
 def _settings(values: list[str], defaults: dict[str, Any], name: str) -> dict[str, Any]:
@@ -47,6 +51,7 @@ class RunnerConfiguration:
     budgets: LocalBudgets
     selection: SelectionSettings
     local_model_configured: bool
+    placement: PlacementSettings = field(default_factory=PlacementSettings)
 
     def gateway_options(self) -> dict[str, Any]:
         return {
@@ -54,6 +59,7 @@ class RunnerConfiguration:
             "budgets": self.budgets.to_json_object(),
             "selection": {**asdict(self.selection), "chain": list(self.selection.chain)},
             "local_model": self.local_model_configured,
+            "placement": asdict(self.placement),
         }
 
     def to_json_object(self) -> dict[str, Any]:
@@ -62,7 +68,7 @@ class RunnerConfiguration:
             "budgets": self.budgets.to_json_object(),
             "selection": {**asdict(self.selection), "chain": list(self.selection.chain)},
             "local_model_configured": self.local_model_configured,
-            "placement": {"policy": "local_first"},
+            "placement": asdict(self.placement),
             "enabled_workflows": [],
             "routing_cache": False,
         }
@@ -89,6 +95,9 @@ def configuration_from_args(args: argparse.Namespace) -> RunnerConfiguration:
         ),
         SelectionSettings(chain=tuple(chain)),
         local,
+        PlacementSettings(
+            **_settings(getattr(args, "placement", []), asdict(PlacementSettings()), "placement")
+        ),
     )
 
 

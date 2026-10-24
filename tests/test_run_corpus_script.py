@@ -352,6 +352,7 @@ def test_an_interrupted_run_removes_its_work_dir(runner, tmp_path, monkeypatch):
         runner.harness, "check_runtime", lambda manifest, extra_args=(): FakeRuntime()
     )
     monkeypatch.setattr(runner.harness, "application_revision", lambda: {})
+    monkeypatch.setattr(runner.session, "prior_configuration", lambda *args: {})
     monkeypatch.setattr(runner.harness, "_stop", stopped.append)
     monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: str(work))
     monkeypatch.setattr(runner, "_run_one", interrupt)
