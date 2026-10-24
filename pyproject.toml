@@ -32,6 +32,8 @@ dependencies = [
 relaymind = "relaymind.launcher:cli"
 
 [project.optional-dependencies]
+# On-demand ToolRet parquet derivation; never needed by the gateway.
+bench = ["pyarrow>=17"]
 dev = [
     # The standard SDK client of the AC09 round trip.
     "openai>=1.50",

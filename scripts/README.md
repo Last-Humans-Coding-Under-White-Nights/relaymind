@@ -319,3 +319,58 @@
   revision. As with the offline spikes, a file an earlier command wrote
   into the checkout makes the tree count as changed. Their results are in
   `docs/EVIDENCE.md`.
+
+- `selection_benchmark.py` — the independent skill and tool selection benchmarks
+  (RM02, RM08, RM09, RM25, RM28; section 12.4). The skills file and lock are
+  checked in. ToolRet source rows stay in an operator cache because the dataset
+  states no licence; install `pip install -e '.[bench]'` for parquet derivation.
+  Every selector receives the published RM28 request and returns a validated
+  result. HTTP selector addresses must be loopback. The model router uses the
+  production routing prompt, tokenizer and eight-skill cap. The tool proposal
+  track sends the production first skill-stage prompt, validates complete calls,
+  and never executes a tool handler.
+
+  Skills case hashes exclude the embedded `sha256` field from their canonical
+  payload; verification checks that digest against both the embedded value and
+  the ordered case lock, in addition to checking the exact file bytes. ToolRet
+  derivation and measurement share `~/.cache/relaymind/toolret` by default;
+  explicit cache flags override it. `derive_toolret.py --verify --parquet`
+  checks the six supplied shards in declared source order without fetching or
+  rewriting the lock. The skills track requires `--proposal none`.
+
+  HTTP reports distinguish the endpoint/transport from response-reported
+  selector identities. A single observed identity is labeled as a response
+  claim; mixed or absent observations leave the report's name/version unknown.
+  Per-case selections retain the reported claims.
+
+  ```bash
+  python scripts/selection_benchmark.py --track skills --selector example_match \
+      --output /tmp/skills-example-match.json
+  python scripts/selection_benchmark.py --track skills --selector model_router \
+      --local-url http://127.0.0.1:8033 --model Qwen3-0.6B-Q8_0 \
+      --model-manifest models/qwen3-0.6b-q8_0.manifest.json \
+      --output /tmp/skills-model-router.json
+  python scripts/selection_benchmark.py --track tools --selector model_router \
+      --toolret-cache /tmp/toolret --proposal local --output /tmp/tools-local.json
+  python scripts/selection_benchmark.py --track tools \
+      --selector http://127.0.0.1:9000/select --toolret-cache /tmp/toolret \
+      --proposal external --context-limit 32768 --output /tmp/tools-external.json
+  ```
+
+  The tool baseline keeps every candidate. A custom selector narrows the synthetic
+  skill's tools; the proposal track compares the full and narrowed sets. The
+  external endpoint, model and credential environment variable follow the
+  external latency probe above. External proposal runs default to a seeded
+  100-case subset; local runs use the full 500-case lock. `--limit` records an
+  explicitly smaller subset, while leave-one-task-out skill examples still use
+  all other source tasks. Declare known training or tuning on either source with
+  `--source-training trained|tuned|neither`; the default is `unknown`.
+
+  Reports include per-case latency, failures and bypasses, file digests, selector
+  versions, machine metadata, and macro/micro precision, recall and Jaccard.
+  Skill reports group category and difficulty; tool reports separate narrowing
+  and the two proposal arms. No result is merged with the ops corpus. The full
+  ToolRet report includes the source instruction as export metadata only; keep
+  it outside the repository and publish aggregate metrics with row IDs. Source
+  derivation commands live in `scripts/benchmarks/` and require pinned revisions;
+  a changed row or file fails verification before measurement.
