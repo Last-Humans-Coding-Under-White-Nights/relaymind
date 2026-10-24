@@ -326,6 +326,9 @@ def test_an_export_is_regraded_from_its_stored_traces(runner, corpus, tmp_path):
     assert regraded["grades"][0]["success"] is True
     assert regraded["summary"]["modes"]["local_only"]["en"]["all"]["success"]["numerator"] == 1
     assert regraded["regraded_with"]["application"]["head"]
+    # RM25, RM26: recorded local execution takes precedence over a conflicting label.
+    document["configuration"] = {"local_model_configured": False}
+    assert runner.regrade(document, corpus)["grades"][0]["local_completion"] is True
 
 
 def test_regrading_refuses_another_corpus_digest(runner, corpus):

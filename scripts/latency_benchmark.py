@@ -530,11 +530,23 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                 "llama_server_argv": runtime.server_argv if runtime else None,
                 "llama_server_extra_args": list(runtime.extra_args) if runtime else None,
                 "llama_server_props": props,
-                **(runtime.model_record() if runtime else {"model_id": None}),
+                **(
+                    runtime.model_record()
+                    if runtime
+                    else {
+                        "model_id": None,
+                        "manifest": None,
+                        "model_file": None,
+                        "model_sha256": None,
+                        "quantization": None,
+                    }
+                ),
                 "context": {"ctx_size": runtime.manifest.launch_settings.get("ctx_size")}
                 if runtime
                 else None,
-                "external_endpoint_region": getattr(args, "external_region", None),
+                "external_endpoint_region": getattr(args, "external_region", None)
+                if external
+                else None,
                 "external_endpoint": {
                     "base_url": external.base_url,
                     "model": external.model,
