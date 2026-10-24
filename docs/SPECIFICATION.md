@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.39 | 24 October 2026 | Proposed implementation baseline
+Version 0.40 | 24 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that makes the best use of external language models from a PC with limited resources: it keeps simple, bounded work on a small local model when the machine can run it fast enough, sends everything else to an external model with as few round trips and tokens as the task allows, preserves completed work across that switch, and shows every decision in a trace. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -808,3 +808,71 @@ Primary sources checked on 20 October 2026. These references support platform an
 - S9 Leviathan et al, Fast Inference from Transformers via Speculative Decoding: https://arxiv.org/abs/2211.17192
 - S10 llama.cpp server documentation: https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
 - S11 llama.cpp b11785 controls (checked 21 October 2026): https://github.com/ggml-org/llama.cpp/blob/8baabd53b77d1c48c6ef8d3b620436292f3f6231/tools/server/README.md and request parser https://github.com/ggml-org/llama.cpp/blob/8baabd53b77d1c48c6ef8d3b620436292f3f6231/tools/server/server-common.cpp
+
+## 14.3 Loopback HTTP selector contract (0.40)
+
+This section extends sections 4.1, 8, 12.2, 12.4 and 14.1 for RM01, RM02, RM08, RM12, RM18, RM22, RM25, RM28 and AC22.
+
+### Configured identity — section 14.1: configured identity
+
+An HTTP selector item in selection.chain is a closed table with exactly four required keys: `transport="http"`, `name`, `version`, and `url`. name and version are nonblank strings; names MUST be unique across the chain and MUST NOT equal a built-in selector name. Existing built-in string entries and defaults remain unchanged. The configured identity is authoritative: a SelectionResult MUST name exactly that name and version. A response cannot establish or change its identity. Existing gateway/built-in mechanism reservations remain enforced.
+
+url MUST be an absolute http or https URL whose host passes the existing loopback-host rule (localhost or an IP loopback literal, never a resolved arbitrary hostname), with a valid port and without userinfo or fragment. Query strings are not required by the protocol; the protocol refuses them as well, keeping credentials out of this unauthenticated local transport. Unknown keys, duplicate/reserved names, malformed URLs, unsupported schemes and non-loopback endpoints are startup errors before a socket. Error messages name the setting/cause and never echo a potentially credential-bearing URL. Startup MUST NOT contact the selector or make a model call. Absence of a local model permits HTTP selectors and retains the existing prohibition on model_router.
+
+Example:
+
+```toml
+[selection]
+chain = [{ transport = "http", name = "example_keyword", version = "1", url = "http://127.0.0.1:8051/select" }, "example_match"]
+timeout_seconds = 2
+```
+
+run.accepted.selection remains the effective ordered array of selector names. Routing-cache identity uses each configured selector's name/version as before; changing the endpoint alone does not claim to be a selector implementation revision, so the operator MUST bump version when its behavior changes. An HTTP selector's own choices remain ineligible for the model-router routing cache under section 10.
+
+### RM28: HTTP behavior and cancellation
+
+Each reached HTTP selector receives exactly one POST, with the already validated/redacted SelectionRequest as JSON and its deadline_ms set to that attempt's allowed duration. No prompt or permission is added outside the published request shape. The client MUST disable environment proxies and redirects. A redirect is an error even when its target appears loopback; no request is sent to its Location. There are no automatic connection/status retries. Authentication headers, gateway bearer token, provider API keys and ambient cookies MUST NOT be forwarded.
+
+Only status 200 with a parsable, schema-valid SelectionResult can be admitted. A connection/read/protocol failure, any other status, invalid JSON, invalid result, mismatched identity or reserved mechanism is an error and falls through. A valid none result falls through as none. A valid but inadmissible skill/tool/mode choice falls through as inadmissible; the gateway retains all existing membership, identifier, permissions, narrowing and confirmation checks. No HTTP response executes a tool or changes a budget.
+
+selection.timeout_seconds is the total per-attempt monotonic time limit, covering connection, response body, parsing/validation and admission, also bounded by the remaining run time. A shorter exhausted run budget is a gateway budget stop, not a selector timeout. Normal selector timeout records timeout and falls through. Cancelling the run aborts/closes the HTTP operation and propagates cancellation; it MUST NOT become error/timeout or start the next selector. Cancellation of this POST does not prove the out-of-process selector stopped its own model work. The gateway has no selector-model cancellation API. HTTP resources close on every path and at app/benchmark shutdown; client ownership must not leak between event loops.
+
+Fixed outcome/error labels may be recorded; raw response bodies, exception messages with URLs, and selector error text MUST NOT be persisted or returned as gateway error messages. Redaction is applied before sending the request and before storing any allowed claim fields. A null/unknown claim is preserved as such rather than fabricated from a transport failure.
+
+### Section 8: exact per-attempt provenance
+
+Keep the existing closed route.selected.selector object: name, version, mechanism, elapsed_ms and attempts. The top-level identity/mechanism remain those of the admitted selector, or nulls for an exhausted/aborted chain; elapsed_ms remains the admitted attempt's time or the whole chain's otherwise. Add `cancelled` to the attempt outcome enum solely for a run-cancelled in-flight attempt. For newly recorded attempts the exact closed object is:
+
+```text
+{
+  name: nonblank configured selector name,
+  version: nonblank configured selector version,
+  transport: "in_process" | "http",
+  outcome: "selected" | "none" | "timeout" | "error" |
+           "inadmissible" | "not_placed" | "cancelled",
+  elapsed_ms: integer >= 0,
+  model_calls_claim: null | [
+    { model: nonblank string, call_id?: nonblank string }
+  ]
+}
+```
+
+Each array entry is closed and matches the existing SelectionResult.model_calls item schema; omission of call_id retains its published meaning. model_calls_claim is always null for an in_process attempt: gateway-owned calls are observed separately in model.started/model.finished. For an HTTP attempt it is the schema-valid response's model_calls array **as an unverified selector claim**, even when the response later fails identity/mechanism/admission checks or returns none. A timeout, non-200 response, unparsable body or schema-invalid result has null claims. A schema-valid reported empty array is `[]`, meaning “selector claims zero”, never “gateway verified zero”. A null claim means unknown, not zero. No endpoint URL, prompt, request payload or raw error body belongs to an attempt.
+
+Schema-valid claims are attributed to the configured endpoint/name/version regardless of an inconsistent identity inside the response; the latter still makes the attempt error and grants nothing. Unknown fields inside a model-call claim make the SelectionResult invalid as before. All previous spec-version attempt objects with just name/outcome remain readable; their missing transport/version/claims mean not recorded, never inferred HTTP-free or empty. Update both the Python TraceEvent validator and published JSON Schema together.
+
+Every completed attempt, including one which returns none or is refused, MUST survive in the next route.selected selector summary. There is one existing exceptional path to cover: an earlier HTTP attempt can finish and a later model-router gateway stop can exit the chain before route.selected. In that case preserve the same optional `selector` summary on handoff.started, or on run.failed/run.cancelled when no handoff/route event is written. Include the interrupted current attempt as cancelled only for actual cancellation; a gateway generation/budget failure otherwise uses error and keeps its original gateway failure mapping. This fallback adds no new event type and MUST NOT fabricate a routing decision solely to hold provenance. If a normal route.selected already preserved the complete summary, later events need not repeat it. Gateway cancellation/budget stops continue propagating; recording their attempt does not turn them into selector fallthrough.
+
+HTTP claims MUST NOT enter run.completed.model_calls, external_calls, generation/token budgets, model timing samples, first-model-action latency, placement estimates or model/skill outcome counters. route.selected of a selected HTTP selector has actor gateway and a custom unreserved mechanism, never actor local/external. The gateway can prove only its own observed calls. A run with an HTTP attempt, including error/timeout/none followed by a successful built-in selector, cannot claim fully observed zero external inference calls from an empty self-report.
+
+### Sections 12.2 and 12.4: evaluation and transport reuse
+
+Reports MUST separate runs that attempted any HTTP selector from fully gateway-observed runs. Read all preserved attempt summaries, including the handoff/terminal fallback; do not classify by only the final selected mechanism. Show transport and configured name/version and retain nullable model_calls_claim per attempt/case. Report claims separately from measured gateway call/token totals and mark total selector-internal model cost not verified. Historical traces lacking transport evidence have unknown provenance rather than a newly asserted HTTP-free status. Configuring an HTTP item that was never reached is not an HTTP attempt.
+
+`scripts/selection_benchmark.py` MUST instantiate the production HTTP selector implementation and reuse its URL policy, identity/mechanism validation, request/result boundary checks, timeout/cancellation behavior and HTTP client policy. Remove the benchmark-only placeholder identity (`http`, `reported-per-case`) and transport implementation. HTTP benchmark invocation MUST supply expected selector name/version explicitly (for example --selector-name and --selector-version alongside the existing endpoint argument); it MUST NOT infer identity from a case response. Endpoint metadata remains operator-supplied and credential-free. Built-in benchmark tracks, frozen cases/digests/seeds, catalog rules and scoring definitions remain unchanged. Benchmark validation does not run application tools.
+
+All attempted cases, including transport errors, timeout, invalid identity and invalid bodies, remain in the denominator. Record outcome, latency and claim provenance for each; a failed case does not inherit the previous case's claims. The same production boundary must validate both skills and tool-narrowing tracks. A deterministic example selector may be measured on the checked-in skills file without a local/external model; that result demonstrates transport/evaluation behavior, not useful selection accuracy or live model capability. Record its actual command/config, name/version, file digests, seed, environment and measured result in EVIDENCE; do not manufacture those numbers in the contract.
+
+### Standard-library example
+
+Ship `scripts/example_selector.py`: a loopback-bound standard-library HTTP server (http.server/json; no model/API call), configured fixed identity example_keyword/1, accepting POST /select and returning the published SelectionResult shape. A small deterministic keyword rule selects only an ID present in the request catalog, otherwise none; use a custom mechanism such as keyword_rule, confidence null and model_calls []. It never executes tools, requests permissions or returns gateway route/reason fields. Serve bounded JSON errors for unsupported method/path/body and no arbitrary filesystem content. The production transport's boundary tests provide full schema enforcement; the example need not claim to implement a JSON Schema engine using only the standard library. README links the two schema files and RM28, provides the launch item/server command, and states this example has no model and no measured accuracy claim.
