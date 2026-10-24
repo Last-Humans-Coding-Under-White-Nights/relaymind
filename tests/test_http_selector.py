@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from functools import wraps
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import httpx
 import pytest
 
 from relaymind.selection import (
@@ -75,6 +76,17 @@ def http(url):
     from relaymind.selection.http import HttpSelector
 
     return HttpSelector(name="remote", version="1", url=url)
+
+
+def injected_http(monkeypatch, handler):
+    """Exercise the production HTTP boundary without OS connection/setup timing."""
+    client_type = httpx.AsyncClient
+
+    def client(**kwargs):
+        return client_type(transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    return http("http://127.0.0.1:8051/select")
 
 
 async def attempt(selector, *, timeout=0.5, admit=lambda r: r):
@@ -176,13 +188,24 @@ async def test_failure_and_none_claims(body, status, outcome, claims):
 
 
 @async_test
-async def test_connection_error_and_timeout_claims_unknown():
-    failed = await attempt(http("http://127.0.0.1:1/select"))
+async def test_connection_error_and_timeout_claims_unknown(monkeypatch):
+    """RM28: refusal versus no response is independent of OS refusal latency."""
+    requests = []
+
+    async def handler(request):
+        requests.append(request)
+        if len(requests) == 1:
+            raise httpx.ConnectError("injected connection refusal", request=request)
+        await asyncio.Event().wait()
+
+    selector = injected_http(monkeypatch, handler)
+    failed = await attempt(selector)
     assert failed.attempts[0].outcome == "error"
-    with endpoint(result("remote"), delay=0.15) as (url, _):
-        timed = await attempt(http(url), timeout=0.02)
+    assert failed.attempts[0].to_json_object()["model_calls_claim"] is None
+    timed = await attempt(selector, timeout=0.02)
     assert timed.attempts[0].outcome == "timeout"
     assert timed.attempts[0].to_json_object()["model_calls_claim"] is None
+    assert len(requests) == 2
 
 
 @async_test
@@ -507,23 +530,30 @@ def test_cancelled_gateway_keeps_http_attempt(tmp_path):
         asyncio.run(execute(url, requests))
 
 
-def test_short_run_budget_is_gateway_error_and_caps_post_deadline(tmp_path):
+def test_short_run_budget_is_gateway_error_and_caps_post_deadline(tmp_path, monkeypatch):
     """RM03/RM28: exhausted gateway time is neither selector timeout nor not_placed."""
     from gateway_helpers import build_gateway, run
     from relaymind.orchestrator.budgets import LocalBudgets
 
-    with endpoint(result("remote"), delay=0.2) as (url, requests):
-        gateway = build_gateway(
-            tmp_path,
-            [],
-            selectors=[http(url)],
-            budgets=LocalBudgets(active_seconds=0.03, run_active_seconds=0.03),
-        )
-        _, events = run(gateway)
+    requests = []
+
+    async def pending_response(request):
+        # Capture the production POST before entering the timed response wait.
+        requests.append(json.loads(request.content))
+        await asyncio.Event().wait()
+
+    gateway = build_gateway(
+        tmp_path,
+        [],
+        selectors=[injected_http(monkeypatch, pending_response)],
+        budgets=LocalBudgets(active_seconds=0.03, run_active_seconds=0.03),
+    )
+    _, events = run(gateway)
     terminal = events[-1]
     assert terminal.event_type.value == "run.failed"
     assert terminal.payload["selector"]["attempts"][0]["outcome"] == "error"
-    assert requests[0][2]["deadline_ms"] <= 30
+    assert len(requests) == 1
+    assert requests[0]["deadline_ms"] <= 30
     assert not gateway.adapter.requests
 
 
@@ -661,11 +691,9 @@ def test_failed_benchmark_case_does_not_inherit_prior_claims():
 )
 @pytest.mark.parametrize("prior_http", [False, True])
 def test_routing_generation_owns_real_awaiting_deadline(
-    tmp_path, policy, stage_seconds, run_seconds, reason, error, missed, prior_http
+    tmp_path, policy, stage_seconds, run_seconds, reason, error, missed, prior_http, monkeypatch
 ):
     """AC21/AC22, RM03/RM14/RM27: HTTP budget guards cannot preempt generation expiry."""
-    from contextlib import nullcontext
-
     from gateway_helpers import LOCAL_MODEL_ID, build_gateway
     from helpers import of_type
     from relaymind.adapters import Completed, GenerationFailed
@@ -674,7 +702,7 @@ def test_routing_generation_owns_real_awaiting_deadline(
     from relaymind.selection import ModelRouterSelector
     from test_placement import seed
 
-    async def execute(url):
+    async def execute():
         gateway = build_gateway(
             tmp_path,
             [],
@@ -683,9 +711,19 @@ def test_routing_generation_owns_real_awaiting_deadline(
             placement=PlacementSettings(policy=policy),
             external_turns=[[GenerationFailed(code="unavailable", message="test")]],
         )
-        selectors = ([http(url)] if prior_http else []) + [
-            ModelRouterSelector(gateway.orchestrator.router)
-        ]
+        # Transport setup is unrelated to the generation timer competition.
+        # The preceding HTTP response is deterministic; the generation below
+        # still awaits through the real stage/placement/run deadline.
+        prefix = (
+            [
+                injected_http(
+                    monkeypatch, lambda _: httpx.Response(200, json=result("remote", kind="none"))
+                )
+            ]
+            if prior_http
+            else []
+        )
+        selectors = prefix + [ModelRouterSelector(gateway.orchestrator.router)]
         gateway.orchestrator.selection_chain = SelectorChain(
             selectors, timeout_seconds=1, clock=gateway.clock.monotonic
         )
@@ -713,13 +751,7 @@ def test_routing_generation_owns_real_awaiting_deadline(
             assert attempts[0]["transport"] == "http"
             assert attempts[0]["model_calls_claim"] == []
 
-    with (
-        endpoint(result("remote", kind="none")) if prior_http else nullcontext((None, [])) as (
-            url,
-            _,
-        )
-    ):
-        asyncio.run(execute(url))
+    asyncio.run(execute())
 
 
 def test_caught_generation_stop_cannot_leave_selector_waiting(tmp_path):
@@ -859,7 +891,7 @@ def test_real_user_cancel_beats_suspended_gateway_deadline(tmp_path, catch_stop)
         asyncio.run(asyncio.wait_for(execute(url), 1))
 
 
-def test_http_budget_guard_resumes_after_real_placement_decline(tmp_path):
+def test_http_budget_guard_resumes_after_real_placement_decline(tmp_path, monkeypatch):
     """RM03/RM27/RM28: not_placed continues the chain with the gateway time bound intact."""
     from gateway_helpers import LOCAL_MODEL_ID, build_gateway, run
     from relaymind.adapters import GenerationFailed
@@ -868,25 +900,35 @@ def test_http_budget_guard_resumes_after_real_placement_decline(tmp_path):
     from relaymind.selection import ModelRouterSelector
     from test_placement import seed
 
-    with endpoint(result("remote", kind="none"), delay=0.3) as (url, requests):
-        gateway = build_gateway(
-            tmp_path,
-            [],
-            input_tokens=100,
-            external_turns=[[GenerationFailed(code="unavailable", message="test")]],
-            budgets=LocalBudgets(active_seconds=0.15, run_active_seconds=60),
-            placement=PlacementSettings(policy="device_aware"),
-        )
-        gateway.orchestrator.selection_chain = SelectorChain(
-            [ModelRouterSelector(gateway.orchestrator.router), http(url)],
-            timeout_seconds=1,
-            clock=gateway.clock.monotonic,
-        )
-        seed(gateway.store, model=LOCAL_MODEL_ID, duration_ms=10000)
-        _, events = run(gateway)
+    requests = []
+
+    async def pending_response(request):
+        requests.append(json.loads(request.content))
+        # Keep the response pending until the real gateway deadline cancels it.
+        await asyncio.Event().wait()
+
+    gateway = build_gateway(
+        tmp_path,
+        [],
+        input_tokens=100,
+        external_turns=[[GenerationFailed(code="unavailable", message="test")]],
+        budgets=LocalBudgets(active_seconds=0.15, run_active_seconds=60),
+        placement=PlacementSettings(policy="device_aware"),
+    )
+    gateway.orchestrator.selection_chain = SelectorChain(
+        [
+            ModelRouterSelector(gateway.orchestrator.router),
+            injected_http(monkeypatch, pending_response),
+        ],
+        timeout_seconds=1,
+        clock=gateway.clock.monotonic,
+    )
+    seed(gateway.store, model=LOCAL_MODEL_ID, duration_ms=10000)
+    _, events = run(gateway)
     failed = next(e.payload for e in events if e.event_type.value == "handoff.started")
     assert failed["reason_code"] == "local_budget"
     assert [a["outcome"] for a in failed["selector"]["attempts"]] == ["not_placed", "error"]
     assert failed["selector"]["attempts"][1]["model_calls_claim"] is None
-    assert requests[0][2]["deadline_ms"] <= 150
+    assert len(requests) == 1
+    assert requests[0]["deadline_ms"] <= 150
     assert not gateway.adapter.requests
