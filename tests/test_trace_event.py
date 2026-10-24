@@ -1306,6 +1306,34 @@ def test_model_call_fields_are_validated_and_published():
         assert not SCHEMA_VALIDATOR.is_valid(data), name
 
 
+@pytest.mark.parametrize("field", ["input_tokens", "output_tokens"])
+def test_required_usage_counts_can_be_null_in_both_validators(field):
+    """RM25/RM27, spec 0.38: a required count may be explicitly unreported."""
+    data = branch_event("model.finished", usage={**FULL_USAGE, field: None})
+    assert validate_trace_event(data).payload["usage"][field] is None
+    assert SCHEMA_VALIDATOR.is_valid(data)
+
+
+@pytest.mark.parametrize("field", ["input_tokens", "output_tokens"])
+@pytest.mark.parametrize("invalid", [-1, True, 0.5, "unknown"])
+def test_nullable_usage_still_rejects_invalid_non_null_counts(field, invalid):
+    """RM25/RM27: nullable measurements do not admit malformed known counts."""
+    data = branch_event("model.finished", usage={**FULL_USAGE, field: invalid})
+    with pytest.raises(TraceEventError, match=field):
+        validate_trace_event(data)
+    assert not SCHEMA_VALIDATOR.is_valid(data)
+
+
+@pytest.mark.parametrize("field", ["input_tokens", "output_tokens"])
+def test_nullable_usage_counts_are_still_required(field):
+    """RM25/RM27: an omitted usage field is distinct from an explicit null."""
+    usage = {key: value for key, value in FULL_USAGE.items() if key != field}
+    data = branch_event("model.finished", usage=usage)
+    with pytest.raises(TraceEventError, match=field):
+        validate_trace_event(data)
+    assert not SCHEMA_VALIDATOR.is_valid(data)
+
+
 # -- Performance options and the applied answer pass (spec 0.32 section 8; RM31, RM32, #121) ---
 
 PERFORMANCE_RECORD = {

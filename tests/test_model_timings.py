@@ -16,10 +16,11 @@ from gateway_helpers import (
     text_turn,
     tool_turn,
 )
-from helpers import ACCEPTED_PAYLOAD, TERMINAL_EVIDENCE, FakeClock
+from helpers import ACCEPTED_PAYLOAD, TERMINAL_EVIDENCE, FakeClock, ScriptedAdapter
 from native_helpers import gated_gateway
-from relaymind.adapters import Completed, GenerationFailed, Message, Role
+from relaymind.adapters import Completed, GenerationFailed, Message, Role, TextDelta, Usage
 from relaymind.orchestrator.client_loop import ToolOffer, run_client_request
+from relaymind.orchestrator.local_loop import ConfiguredModel
 from relaymind.orchestrator.warmup import warm_up
 from relaymind.store import MIGRATIONS, ModelTiming, RunStore
 from relaymind.store.run_store import split_sql_statements
@@ -440,6 +441,82 @@ def test_partial_provider_usage_does_not_invent_input_or_output_counts():
     usage = StreamAccumulator().feed({"usage": {"prompt_tokens_details": {"cached_tokens": 80}}})[0]
     assert usage.input_tokens is None
     assert usage.output_tokens is None
+
+
+@pytest.mark.parametrize(
+    "counts",
+    [
+        {"input_tokens": None, "output_tokens": 1},
+        {"input_tokens": 5, "output_tokens": None},
+        {"input_tokens": None, "output_tokens": None},
+    ],
+)
+def test_partial_usage_completes_and_persists_one_actual_generation(tmp_path, counts):
+    """RM25/RM27: nullable usage survives the shared sample/trace transaction."""
+    gateway = build_gateway(
+        tmp_path, [[TextDelta(text="Hello"), Usage(**counts), Completed(finish_reason="stop")]]
+    )
+    outcome = asyncio.run(
+        run_client_request(
+            gateway.orchestrator,
+            (Message(role=Role.USER, content="Hello"),),
+            ToolOffer(),
+        )
+    )
+    assert outcome.state.value == "completed"
+    assert outcome.answer == "Hello"
+    values = gateway.store.model_timings()
+    assert len(values) == 1
+    assert values[0].succeeded
+    finished = gateway.store.events(outcome.run_id, event_type=EventType.MODEL_FINISHED)
+    assert len(finished) == 1
+    for field, count in counts.items():
+        assert getattr(values[0], field) == count
+        assert finished[0].payload["usage"][field] == count
+
+
+@pytest.mark.parametrize("field", ["input_tokens", "output_tokens"])
+@pytest.mark.parametrize("interruption", [RuntimeError, asyncio.CancelledError])
+def test_partial_usage_recording_preserves_original_interruption(tmp_path, field, interruption):
+    """RM14/RM25/RM27: trace recording cannot replace a provider exception or cancellation."""
+    counts = {"input_tokens": 5, "output_tokens": 1, field: None}
+    original = interruption("original interruption")
+
+    class InterruptedAdapter(ScriptedAdapter):
+        async def generate(self, request):
+            self.requests.append(request)
+            yield Usage(**counts)
+            raise original
+
+    gateway = build_gateway(
+        tmp_path,
+        None,
+        local_model=ConfiguredModel(
+            adapter=InterruptedAdapter(),
+            model_id="interrupted",
+        ),
+    )
+
+    async def exercise():
+        with pytest.raises(interruption) as caught:
+            await run_client_request(
+                gateway.orchestrator, (Message(role=Role.USER, content="Hello"),), ToolOffer()
+            )
+        assert caught.value is original
+
+    asyncio.run(exercise())
+    values = gateway.store.model_timings()
+    assert len(values) == 1 and not values[0].succeeded
+    assert getattr(values[0], field) is None
+    finished = gateway.store.events(values[0].run_id, event_type=EventType.MODEL_FINISHED)
+    assert len(finished) == 1
+    assert finished[0].payload["usage"][field] is None
+    assert finished[0].payload["error"]["code"] == (
+        "cancelled" if interruption is asyncio.CancelledError else "interrupted"
+    )
+    assert gateway.store.get_run(values[0].run_id).state == (
+        "cancelled" if interruption is asyncio.CancelledError else "failed"
+    )
 
 
 def terminal_skill_run(
