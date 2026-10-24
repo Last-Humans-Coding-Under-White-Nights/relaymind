@@ -429,6 +429,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Selection benchmark review (RM03, RM09, RM16, RM25, RM28): clear stale
+  diagnostics before early bypasses, classify HTTP timeouts, preserve failed
+  narrowed arms without inference, and remove score credit for generations
+  exceeding their call budget while retaining proposal evidence. Export distinct
+  HTTP response identity claims, reject skills proposal options before work,
+  share the persistent ToolRet cache, and enforce source/case locks without
+  changing the frozen files or historical measurement exports.
+
 - Correct the skill guide's workflow-key description, repair the testing
   guide's README link, and install the client SDK before the Python
   quickstart example (PR #146 review).
