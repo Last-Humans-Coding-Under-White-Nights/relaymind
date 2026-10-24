@@ -649,3 +649,244 @@ def test_failed_benchmark_case_does_not_inherit_prior_claims():
     assert report["cases"][0]["selector_attempt"]["model_calls_claim"] == first["model_calls"]
     assert report["cases"][1]["selector_attempt"]["model_calls_claim"] is None
     assert report["cases"][1]["status"] == "invalid_output"
+
+
+@pytest.mark.parametrize(
+    "policy,stage_seconds,run_seconds,reason,error,missed",
+    [
+        ("local_first", 0.15, 60, "local_budget", "time_budget", False),
+        ("device_aware", 0.2, 60, "local_slow", "deadline_exceeded", True),
+        ("device_aware", 0.2, 0.2, "local_budget", "time_budget", True),
+    ],
+)
+@pytest.mark.parametrize("prior_http", [False, True])
+def test_routing_generation_owns_real_awaiting_deadline(
+    tmp_path, policy, stage_seconds, run_seconds, reason, error, missed, prior_http
+):
+    """AC21/AC22, RM03/RM14/RM27: HTTP budget guards cannot preempt generation expiry."""
+    from contextlib import nullcontext
+
+    from gateway_helpers import LOCAL_MODEL_ID, build_gateway
+    from helpers import of_type
+    from relaymind.adapters import Completed, GenerationFailed
+    from relaymind.orchestrator.budgets import LocalBudgets
+    from relaymind.orchestrator.placement import PlacementSettings
+    from relaymind.selection import ModelRouterSelector
+    from test_placement import seed
+
+    async def execute(url):
+        gateway = build_gateway(
+            tmp_path,
+            [],
+            input_tokens=100,
+            budgets=LocalBudgets(active_seconds=stage_seconds, run_active_seconds=run_seconds),
+            placement=PlacementSettings(policy=policy),
+            external_turns=[[GenerationFailed(code="unavailable", message="test")]],
+        )
+        selectors = ([http(url)] if prior_http else []) + [
+            ModelRouterSelector(gateway.orchestrator.router)
+        ]
+        gateway.orchestrator.selection_chain = SelectorChain(
+            selectors, timeout_seconds=1, clock=gateway.clock.monotonic
+        )
+        seed(gateway.store, model=LOCAL_MODEL_ID)
+
+        async def awaiting(request):
+            gateway.adapter.requests.append(request)
+            await asyncio.sleep(1)
+            yield Completed(finish_reason="stop")
+
+        gateway.adapter.generate = awaiting
+        outcome = await gateway.orchestrator.run_text("Is staging-api healthy right now?")
+        await asyncio.sleep(0)
+        events = gateway.store.events(outcome.run_id)
+        local = next(e.payload for e in of_type(events, "model.finished") if e.actor == "local")
+        assert local["deadline_missed"] is missed
+        assert local["error"]["code"] == error
+        assert gateway.adapter.cancelled == [local["call_id"]]
+        handoff = of_type(events, "handoff.started")[0].payload
+        assert handoff["reason_code"] == reason
+        assert not of_type(events, "route.selected")
+        attempts = handoff["selector"]["attempts"]
+        assert [a["outcome"] for a in attempts] == (["none", "error"] if prior_http else ["error"])
+        if prior_http:
+            assert attempts[0]["transport"] == "http"
+            assert attempts[0]["model_calls_claim"] == []
+
+    with (
+        endpoint(result("remote", kind="none")) if prior_http else nullcontext((None, [])) as (
+            url,
+            _,
+        )
+    ):
+        asyncio.run(execute(url))
+
+
+def test_caught_generation_stop_cannot_leave_selector_waiting(tmp_path):
+    """AC21/AC22, RM14/RM27: a caught gateway stop retains its owner and ends selection."""
+    from gateway_helpers import LOCAL_MODEL_ID, build_gateway
+    from helpers import of_type
+    from relaymind.adapters import Completed, GenerationFailed
+    from relaymind.orchestrator.budgets import LocalBudgets
+    from relaymind.orchestrator.placement import PlacementSettings
+    from relaymind.selection import ModelRouterSelector
+    from test_placement import seed
+
+    async def execute():
+        gateway = build_gateway(
+            tmp_path,
+            [],
+            input_tokens=100,
+            budgets=LocalBudgets(active_seconds=0.2, run_active_seconds=60),
+            placement=PlacementSettings(policy="device_aware"),
+            external_turns=[[GenerationFailed(code="unavailable", message="test")]],
+        )
+        router = ModelRouterSelector(gateway.orchestrator.router)
+        caught = asyncio.Event()
+
+        class Catching:
+            name, version, model_based = "catching", "1", True
+
+            async def select(self, request, context):
+                try:
+                    return await router.select(request, context)
+                except BaseException:
+                    caught.set()
+                    try:
+                        # A poisoned callback cannot start another generation or
+                        # disarm the interrupt before yielding to selector work.
+                        await router.select(request, context)
+                    except BaseException:
+                        await asyncio.Event().wait()
+
+        gateway.orchestrator.selection_chain = SelectorChain(
+            [Catching()], timeout_seconds=1, clock=gateway.clock.monotonic
+        )
+        seed(gateway.store, model=LOCAL_MODEL_ID)
+
+        async def awaiting(request):
+            await asyncio.sleep(1)
+            yield Completed(finish_reason="stop")
+
+        gateway.adapter.generate = awaiting
+        # The test's bound releases a broken swallowed-stop task rather than hanging pytest.
+        outcome = await asyncio.wait_for(
+            gateway.orchestrator.run_text("Is staging-api healthy right now?"), 0.8
+        )
+        assert caught.is_set()
+        events = gateway.store.events(outcome.run_id)
+        local = next(e.payload for e in of_type(events, "model.finished") if e.actor == "local")
+        assert len([e for e in of_type(events, "model.finished") if e.actor == "local"]) == 1
+        assert local["deadline_missed"] is True
+        assert local["error"]["code"] == "deadline_exceeded"
+        assert gateway.adapter.cancelled == [local["call_id"]]
+        assert of_type(events, "handoff.started")[0].payload["reason_code"] == "local_slow"
+        assert (
+            of_type(events, "handoff.started")[0].payload["selector"]["attempts"][0]["outcome"]
+            == "error"
+        )
+        assert not of_type(events, "route.selected")
+
+    asyncio.run(execute())
+
+
+@pytest.mark.parametrize("catch_stop", [False, True])
+def test_real_user_cancel_beats_suspended_gateway_deadline(tmp_path, catch_stop):
+    """RM14/RM27/AC21: real cancellation wins even after late provider cleanup or a caught stop."""
+    from gateway_helpers import LOCAL_MODEL_ID, build_gateway, route_turn
+    from helpers import of_type
+    from relaymind.adapters import Message, Role
+    from relaymind.orchestrator.budgets import LocalBudgets
+    from relaymind.orchestrator.placement import PlacementSettings
+    from relaymind.selection import ModelRouterSelector
+    from test_placement import seed
+
+    async def execute(url):
+        gateway = build_gateway(
+            tmp_path,
+            [],
+            input_tokens=100,
+            external_turns=[],
+            budgets=LocalBudgets(active_seconds=0.2, run_active_seconds=60),
+            placement=PlacementSettings(policy="device_aware"),
+        )
+        router = ModelRouterSelector(gateway.orchestrator.router)
+
+        class Catching:
+            name, version, model_based = "catching", "1", True
+
+            async def select(self, request, context):
+                try:
+                    return await router.select(request, context)
+                except BaseException:
+                    await asyncio.Event().wait()
+
+        gateway.orchestrator.selection_chain = SelectorChain(
+            [http(url), Catching() if catch_stop else router],
+            timeout_seconds=1,
+            clock=gateway.clock.monotonic,
+        )
+        seed(gateway.store, model=LOCAL_MODEL_ID)
+        entered = asyncio.Event()
+
+        async def resistant(request):
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                gateway.clock.advance(0.3)
+                for event in route_turn("check-service-health"):
+                    yield event
+
+        gateway.adapter.generate = resistant
+        started = gateway.orchestrator.start(
+            [Message(role=Role.USER, content="Is staging-api healthy right now?")]
+        )
+        await entered.wait()
+        version = gateway.store.get_run(started.run_id).version
+        await gateway.orchestrator.cancel(started.run_id, version)
+        events = gateway.store.events(started.run_id)
+        finished = next(e.payload for e in of_type(events, "model.finished") if e.actor == "local")
+        assert finished["error"]["code"] == "cancelled"
+        assert finished["deadline_missed"] is False
+        assert gateway.adapter.cancelled == [finished["call_id"]]
+        assert not of_type(events, "handoff.started")
+        cancelled = of_type(events, "run.cancelled")[0].payload
+        assert [a["outcome"] for a in cancelled["selector"]["attempts"]] == ["none", "cancelled"]
+        assert cancelled["selector"]["attempts"][0]["model_calls_claim"] == []
+
+    with endpoint(result("remote", kind="none")) as (url, _):
+        asyncio.run(asyncio.wait_for(execute(url), 1))
+
+
+def test_http_budget_guard_resumes_after_real_placement_decline(tmp_path):
+    """RM03/RM27/RM28: not_placed continues the chain with the gateway time bound intact."""
+    from gateway_helpers import LOCAL_MODEL_ID, build_gateway, run
+    from relaymind.adapters import GenerationFailed
+    from relaymind.orchestrator.budgets import LocalBudgets
+    from relaymind.orchestrator.placement import PlacementSettings
+    from relaymind.selection import ModelRouterSelector
+    from test_placement import seed
+
+    with endpoint(result("remote", kind="none"), delay=0.3) as (url, requests):
+        gateway = build_gateway(
+            tmp_path,
+            [],
+            input_tokens=100,
+            external_turns=[[GenerationFailed(code="unavailable", message="test")]],
+            budgets=LocalBudgets(active_seconds=0.15, run_active_seconds=60),
+            placement=PlacementSettings(policy="device_aware"),
+        )
+        gateway.orchestrator.selection_chain = SelectorChain(
+            [ModelRouterSelector(gateway.orchestrator.router), http(url)],
+            timeout_seconds=1,
+            clock=gateway.clock.monotonic,
+        )
+        seed(gateway.store, model=LOCAL_MODEL_ID, duration_ms=10000)
+        _, events = run(gateway)
+    failed = next(e.payload for e in events if e.event_type.value == "handoff.started")
+    assert failed["reason_code"] == "local_budget"
+    assert [a["outcome"] for a in failed["selector"]["attempts"]] == ["not_placed", "error"]
+    assert failed["selector"]["attempts"][1]["model_calls_claim"] is None
+    assert requests[0][2]["deadline_ms"] <= 150
+    assert not gateway.adapter.requests

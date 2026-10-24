@@ -2768,11 +2768,35 @@ class _Run:
         with reason no_local_model, and every route.selected records the class.
         """
         generations: list[tuple[str, _Generation]] = []
+        generation_stop: Exception | asyncio.CancelledError | None = None
 
         async def generate(
             messages: Sequence[Message], functions: Sequence[ToolSchema], options: GenerationOptions
         ) -> RoutingGeneration:
-            call_id, generation = await self._generate("routing", messages, functions, options)
+            nonlocal generation_stop
+            if generation_stop is not None:
+                raise generation_stop
+            # The generation owns tokenizer, stage/run and placement deadlines,
+            # including provider cancellation. An enclosing timer must not turn
+            # its expiry into apparent user cancellation. Keep the gateway's
+            # original deadline for subsequent non-model selector work.
+            gateway_deadline = timeout.when()
+            timeout.reschedule(None)
+            try:
+                call_id, generation = await self._generate("routing", messages, functions, options)
+            except PlacementDeclined:
+                # A genuine pre-dispatch decline continues the configured chain.
+                timeout.reschedule(gateway_deadline)
+                raise
+            except (Exception, asyncio.CancelledError) as stopped:
+                generation_stop = stopped
+                # A selector may catch the guarded callback stop. Interrupt any
+                # further await immediately, then preserve this original stop
+                # instead of replacing it with an enclosing timeout's budget.
+                timeout.reschedule(asyncio.get_running_loop().time())
+                raise
+            else:
+                timeout.reschedule(gateway_deadline)
             generations.append((call_id, generation))
             return RoutingGeneration(
                 calls=tuple(generation.calls), model=self.active_model.model_id, call_id=call_id
@@ -2810,9 +2834,17 @@ class _Run:
                 )
         except TimeoutError:
             if timeout.expired():
-                # This is a gateway time budget, not an ordinary selector timeout.
+                # Preserve an authoritative callback stop when the guard had to
+                # interrupt a selector that caught it; otherwise this guard owns
+                # the gateway time budget, not an ordinary selector timeout.
                 if self.pending_selector:
-                    self.pending_selector["attempts"][-1]["outcome"] = "error"
+                    self.pending_selector["attempts"][-1]["outcome"] = (
+                        "cancelled"
+                        if isinstance(generation_stop, asyncio.CancelledError)
+                        else "error"
+                    )
+                if generation_stop is not None:
+                    raise generation_stop from None
                 raise self.meter.time_exhausted() from None
             raise
 
