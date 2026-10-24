@@ -1566,6 +1566,8 @@ class _Run:
                 payload = {"placement": self.pending_placement.to_json_object(), **payload}
         payload = self._selector_fallback(event_type, payload)
         self.o.store.append_event(self.run_id, EventType(event_type), actor, payload)
+        if event_type in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED):
+            self.pending_placement = None
 
     def move(self, state: RunState, **kwargs: Any) -> None:
         event = kwargs.get("event")
@@ -1581,6 +1583,8 @@ class _Run:
             kind, actor, payload = kwargs["event"]
             kwargs["event"] = (kind, actor, self._selector_fallback(kind, payload))
         self.record = self.o.machine.transition(self.run_id, self.record.version, state, **kwargs)
+        if event is not None and event[0] in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED):
+            self.pending_placement = None
 
     def _selector_fallback(
         self, kind: EventType | str, payload: Mapping[str, Any]
@@ -3179,6 +3183,8 @@ class _Run:
                     # suppresses task cancellation and needs the provider to stop
                     # before its cleanup can finish. This timer never releases the slot.
                     deadline = timeout.when()
+                    # timeout() above always receives a finite duration, never None;
+                    # this timer must not be silently omitted for a placement deadline.
                     assert deadline is not None
                     provider_cancel_timer = asyncio.get_running_loop().call_at(
                         deadline, self._cancel_call, call_id
