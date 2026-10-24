@@ -275,3 +275,178 @@ def test_successful_probe_can_reclassify_unsuitable_model(tmp_path):
 
     asyncio.run(go())
     assert gateway.orchestrator.local_status.status == LocalModelClass.READY
+
+
+@pytest.mark.parametrize("reason", ["cooldown", "active_run", "reserved", "fresh_sample"])
+def test_ineligible_probe_does_not_open_write_transaction(tmp_path, reason):
+    """RM17/AC21: idle checks must leave the writer available to foreground work."""
+    from helpers import ACCEPTED_PAYLOAD
+    from test_placement import seed
+
+    store = RunStore(tmp_path / "store", clock=FakeClock())
+    if reason in ("cooldown", "reserved"):
+        assert store.try_reserve_probe("first", "owner", model="local", after_seconds=600)
+        if reason == "cooldown":
+            store.finish_probe("first", "owner")
+    elif reason == "active_run":
+        run = store.create_run("accepted", accepted=("run.accepted", "gateway", ACCEPTED_PAYLOAD))
+        store.set_state(
+            run.run_id,
+            expected_version=1,
+            from_state="accepted",
+            to_state="routing",
+            holds_slot=True,
+        )
+    else:
+        seed(store)
+    statements = []
+    store._conn.set_trace_callback(statements.append)
+    assert not store.try_reserve_probe("new", "owner", model="local", after_seconds=600)
+    assert not any(sql.startswith("BEGIN") for sql in statements)
+
+
+@pytest.mark.parametrize("reason", ["cooldown", "active_run", "reserved", "fresh_sample"])
+def test_probe_rechecks_eligibility_under_write_lock(tmp_path, monkeypatch, reason):
+    """RM17/AC21: another connection can invalidate an optimistic idle check."""
+    from contextlib import contextmanager
+
+    from helpers import ACCEPTED_PAYLOAD
+    from test_placement import seed
+
+    store = RunStore(tmp_path / "store", clock=FakeClock())
+    other = RunStore(tmp_path / "store", clock=store.clock)
+    run = other.create_run("accepted", accepted=("run.accepted", "gateway", ACCEPTED_PAYLOAD))
+    write = store._write
+
+    @contextmanager
+    def raced_write():
+        if reason in ("cooldown", "reserved"):
+            assert other.try_reserve_probe("first", "other", model="local", after_seconds=600)
+            if reason == "cooldown":
+                other.finish_probe("first", "other")
+        elif reason == "active_run":
+            other.set_state(
+                run.run_id,
+                expected_version=1,
+                from_state="accepted",
+                to_state="routing",
+                holds_slot=True,
+            )
+        else:
+            seed(other)
+        with write():
+            yield
+
+    monkeypatch.setattr(store, "_write", raced_write)
+    assert not store.try_reserve_probe("new", "owner", model="local", after_seconds=600)
+    reservation = store.probe_reservation()
+    assert reservation is None or reservation["token"] == "first"
+
+
+def test_idle_scheduler_limits_wakeups_without_delaying_active_cancellation(tmp_path, monkeypatch):
+    """RM27/AC21: coarse idle polling retains prompt checks while this owner is probing."""
+    from relaymind.adapters import Completed
+    from relaymind.orchestrator.warmup import IdleProbe
+
+    gateway = build_gateway(
+        tmp_path, [], external_turns=[], placement=PlacementSettings(policy="device_aware")
+    )
+    sleep = asyncio.sleep
+
+    async def go():
+        gate = asyncio.Event()
+
+        async def generate(request):
+            await gate.wait()
+            yield Completed("stop")
+
+        gateway.adapter.generate = generate
+        probe = IdleProbe(gateway.orchestrator)
+        await probe.tick()
+        delays = []
+
+        async def scheduled_sleep(delay):
+            delays.append(delay)
+            probe._closing = True
+            await sleep(0)
+
+        monkeypatch.setattr(asyncio, "sleep", scheduled_sleep)
+        await probe._schedule()
+        assert delays and max(delays) <= 0.05
+        await probe.stop()
+        assert gateway.store.probe_reservation() is None
+
+        idle = IdleProbe(gateway.orchestrator)
+        probe = idle
+        delays.clear()
+        await idle._schedule()
+        assert delays and min(delays) >= 1
+        await idle.stop()
+
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize("boundary", ["tick", "stop", "scheduler_stop"])
+@pytest.mark.parametrize("error_type", [TimeoutError, ValueError])
+def test_probe_timing_evidence_errors_remain_visible(tmp_path, monkeypatch, boundary, error_type):
+    """RM17/RM25/AC21: persistence failures are not tolerant runtime failures."""
+    from relaymind.adapters import Completed
+    from relaymind.orchestrator.warmup import IdleProbe
+
+    gateway = build_gateway(
+        tmp_path,
+        [[Completed("stop")]],
+        external_turns=[],
+        placement=PlacementSettings(policy="device_aware"),
+    )
+    error = error_type("cannot record timing")
+
+    def fail_write(sample):
+        raise error
+
+    monkeypatch.setattr(gateway.store, "add_model_timing", fail_write)
+
+    async def go():
+        probe = IdleProbe(gateway.orchestrator)
+        await probe.tick()
+        assert probe._task.done()
+        assert gateway.store.probe_reservation() is None
+        if boundary == "scheduler_stop":
+            probe._scheduler = asyncio.create_task(probe._schedule())
+            await asyncio.sleep(0)
+        with pytest.raises(error_type) as caught:
+            await (probe.tick() if boundary == "tick" else probe.stop())
+        assert caught.value is error
+        assert len(gateway.adapter.requests) == 1
+        # Retrieve any task error even when the scheduler was the reporting boundary.
+        if not probe._task.cancelled():
+            probe._task.exception()
+
+    asyncio.run(go())
+
+
+def test_probe_with_no_retained_sample_does_not_reclassify_model(tmp_path, monkeypatch):
+    """RM26/RM27/AC21: missing evidence cannot invent a prediction or readiness."""
+    from relaymind.adapters import Completed, Usage
+    from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
+    from relaymind.orchestrator.warmup import IdleProbe
+
+    gateway = build_gateway(
+        tmp_path,
+        [[Usage(100, 10, 0), Completed("stop")]],
+        external_turns=[],
+        local_status=LocalStatus(LocalModelClass.UNSUITABLE, "routing too slow"),
+        placement=PlacementSettings(policy="device_aware"),
+    )
+    # Simulate evidence expiring between recording the attempt and reading it.
+    monkeypatch.setattr(gateway.store, "model_timings", lambda **kwargs: [])
+
+    async def go():
+        probe = IdleProbe(gateway.orchestrator)
+        await probe.tick()
+        await probe._task
+        await probe.stop()
+
+    asyncio.run(go())
+    assert gateway.orchestrator.local_status.status == LocalModelClass.UNSUITABLE
+    assert gateway.store.probe_reservation() is None

@@ -1605,18 +1605,16 @@ class _Run:
         return self.active_model.actor
 
     def emit(self, event_type: EventType | str, actor: str, payload: Mapping[str, Any]) -> None:
-        if "selector" in payload:
-            payload = {
-                **payload,
-                "selector": self.o.redactor.redact_with_repeats(payload["selector"], self.secrets),
-            }
         if event_type == EventType.ROUTE_SELECTED:
             payload = {"placement": self.routing_placement.to_json_object(), **payload}
         elif event_type in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED):
             if self.pending_placement is not None:
                 payload = {"placement": self.pending_placement.to_json_object(), **payload}
-        payload = self._selector_fallback(event_type, payload)
+        payload = self._selector_payload(event_type, payload)
         self.o.store.append_event(self.run_id, EventType(event_type), actor, payload)
+        self._selector_persisted(event_type)
+        if event_type in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED):
+            self.pending_placement = None
 
     def move(self, state: RunState, **kwargs: Any) -> None:
         event = kwargs.get("event")
@@ -1630,21 +1628,38 @@ class _Run:
                 )
         if event is not None:
             kind, actor, payload = kwargs["event"]
-            kwargs["event"] = (kind, actor, self._selector_fallback(kind, payload))
+            kwargs["event"] = (kind, actor, self._selector_payload(kind, payload))
         self.record = self.o.machine.transition(self.run_id, self.record.version, state, **kwargs)
+        if event is not None:
+            self._selector_persisted(event[0])
+        if event is not None and event[0] in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED):
+            self.pending_placement = None
 
-    def _selector_fallback(
+    def _selector_payload(
         self, kind: EventType | str, payload: Mapping[str, Any]
     ) -> Mapping[str, Any]:
-        if kind == EventType.ROUTE_SELECTED:
-            self.pending_selector = None
-        elif (
+        """Inject pending evidence, then scrub with the secrets known at persistence (RM12)."""
+        if (
             kind in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED, EventType.RUN_CANCELLED)
             and self.pending_selector is not None
         ):
             payload = {"selector": self.pending_selector, **payload}
-            self.pending_selector = None
+        if "selector" in payload:
+            payload = {
+                **payload,
+                "selector": self.o.redactor.redact_with_repeats(payload["selector"], self.secrets),
+            }
         return payload
+
+    def _selector_persisted(self, kind: EventType | str) -> None:
+        """Only a successful write consumes a phase's pending selector evidence (RM17/RM28)."""
+        if kind in (
+            EventType.ROUTE_SELECTED,
+            EventType.HANDOFF_STARTED,
+            EventType.RUN_FAILED,
+            EventType.RUN_CANCELLED,
+        ):
+            self.pending_selector = None
 
     def scrub(self, text: str) -> str:
         return redact_text(text, self.secrets)
@@ -2114,7 +2129,7 @@ class _Run:
                 # A cancel that reaches the task, from the native cancel,
                 # a chat disconnect, or the event loop, is a cancel
                 # request (spec 0.17 sections 7.4 and 8).
-                payload = self._selector_fallback(
+                payload = self._selector_payload(
                     EventType.RUN_CANCELLED, {"reason": CANCEL_REQUESTED, **self._summary()}
                 )
                 self.record = self.o.machine.cancel(
@@ -2123,6 +2138,7 @@ class _Run:
                     reason=CANCEL_REQUESTED,
                     event=(EventType.RUN_CANCELLED, GATEWAY_ACTOR, payload),
                 )
+                self._selector_persisted(EventType.RUN_CANCELLED)
                 return
             self.move(
                 RunState.FAILED,
@@ -2904,6 +2920,7 @@ class _Run:
                     admit_result,
                     on_progress=progress,
                     remaining_seconds=self.meter.remaining_seconds,
+                    time_exhausted=self.meter.time_exhausted,
                 )
         except TimeoutError:
             if timeout.expired():
@@ -3272,6 +3289,8 @@ class _Run:
                     # suppresses task cancellation and needs the provider to stop
                     # before its cleanup can finish. This timer never releases the slot.
                     deadline = timeout.when()
+                    # timeout() above always receives a finite duration, never None;
+                    # this timer must not be silently omitted for a placement deadline.
                     assert deadline is not None
                     provider_cancel_timer = asyncio.get_running_loop().call_at(
                         deadline, self._cancel_call, call_id

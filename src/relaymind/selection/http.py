@@ -73,7 +73,12 @@ class HttpResultError(SelectorError):
 
 
 class HttpSelector:
-    """One fresh client per POST; no resource or cookie crosses attempts/event loops."""
+    """One fresh client per POST; no resource or cookie crosses attempts/event loops.
+
+    Call through SelectorChain (as the gateway and benchmark do), or have the
+    caller enforce a total deadline. httpx phase timeouts do not bound parsing,
+    admission, or the total response duration and must not race the gateway budget.
+    """
 
     model_based = False
     transport = "http"

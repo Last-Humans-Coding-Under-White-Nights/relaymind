@@ -77,7 +77,8 @@ def selector_provenance(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     attempts = [
         dict(a)
         for event in events
-        for a in event["payload"].get("selector", {}).get("attempts", [])
+        if (selector := event["payload"].get("selector")) is not None
+        for a in selector.get("attempts", [])
     ]
     scope = (
         "http_attempted"
