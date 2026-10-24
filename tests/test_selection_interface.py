@@ -327,7 +327,14 @@ def test_the_chain_records_every_attempt_in_order_and_stops_at_the_first_admitte
     record = outcome.selector_record()
     assert record["name"] == "e" and record["version"] == "1"
     assert record["mechanism"] == "scripted_match"
-    assert record["attempts"][0] == {"name": "a", "outcome": "none"}
+    assert record["attempts"][0] == {
+        "name": "a",
+        "outcome": "none",
+        "version": "1",
+        "transport": "in_process",
+        "elapsed_ms": 0,
+        "model_calls_claim": None,
+    }
 
 
 def test_a_selector_past_the_time_limit_times_out_and_is_cancelled():
@@ -590,7 +597,16 @@ def test_the_default_chain_is_model_router_alone_and_route_selected_names_it(tmp
         "version": "1",
         "mechanism": "native_function_calling",
         "elapsed_ms": 0,
-        "attempts": [{"name": MODEL_ROUTER, "outcome": "selected"}],
+        "attempts": [
+            {
+                "name": MODEL_ROUTER,
+                "outcome": "selected",
+                "version": "1",
+                "transport": "in_process",
+                "elapsed_ms": 0,
+                "model_calls_claim": None,
+            }
+        ],
     }
     assert "tools_narrowed" not in route.payload
     (accepted,) = of_type(events, "run.accepted")
@@ -613,8 +629,22 @@ def test_an_unknown_skill_is_inadmissible_and_the_next_selector_is_tried(tmp_pat
     assert route.payload["decision"]["skill_id"] == HEALTH
     assert route.payload["decision"]["reason_code"] == "simple_skill"
     assert route.payload["selector"]["attempts"] == [
-        {"name": "first", "outcome": "inadmissible"},
-        {"name": "second", "outcome": "selected"},
+        {
+            "name": "first",
+            "outcome": "inadmissible",
+            "version": "1",
+            "transport": "in_process",
+            "elapsed_ms": 0,
+            "model_calls_claim": None,
+        },
+        {
+            "name": "second",
+            "outcome": "selected",
+            "version": "1",
+            "transport": "in_process",
+            "elapsed_ms": 0,
+            "model_calls_claim": None,
+        },
     ]
     assert "model" not in route.payload and "call_id" not in route.payload
     (accepted,) = of_type(events, "run.accepted")
@@ -775,7 +805,16 @@ def test_an_exhausted_chain_hands_off_with_the_catalog(tmp_path):
         "selection_failed",
     )
     assert route.payload["selector"]["name"] is None
-    assert route.payload["selector"]["attempts"] == [{"name": "nothing", "outcome": "none"}]
+    assert route.payload["selector"]["attempts"] == [
+        {
+            "name": "nothing",
+            "outcome": "none",
+            "version": "1",
+            "transport": "in_process",
+            "elapsed_ms": 0,
+            "model_calls_claim": None,
+        }
+    ]
     (handoff,) = of_type(events, "handoff.started")
     assert handoff.payload["reason_code"] == "selection_failed"
     assert handoff.payload["skill"] is None

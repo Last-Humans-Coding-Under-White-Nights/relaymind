@@ -277,7 +277,7 @@ def test_tools_full_and_narrowed_generation_and_instructions_are_data():
     assert report["proposal_narrowed"]["summary"]["macro"]["recall"] == 1
 
 
-def test_http_selector_uses_published_request_and_validates_response():
+def test_http_selector_uses_published_request_and_validates_response(monkeypatch):
     import httpx
 
     from helpers import load_script_module
@@ -299,12 +299,25 @@ def test_http_selector_uses_published_request_and_validates_response():
             },
         )
 
+    client_type = httpx.AsyncClient
+
+    def client(**kwargs):
+        assert kwargs["trust_env"] is False
+        assert kwargs["follow_redirects"] is False
+        return client_type(transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    from relaymind.selection.http import HttpSelector
+
+    assert script.HttpSelector is HttpSelector
+
     async def run():
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            selector = script.HttpSelector("http://127.0.0.1:9000/select", client)
-            request = bench.selection_request({"id": "http", "request": "hello"}, [])
-            result = await selector.select(request, None)
-            assert result["selector"]["version"] == "2"
+        selector = script.HttpSelector(
+            url="http://127.0.0.1:9000/select", name="http-test", version="2"
+        )
+        request = bench.selection_request({"id": "http", "request": "hello"}, [])
+        result = await selector.select(request, None)
+        assert result["selector"]["version"] == "2"
 
     asyncio.run(run())
     assert seen[0]["conversation"] == [{"role": "user", "content": "hello"}]
@@ -366,13 +379,12 @@ def test_external_proposal_context_uses_production_size_guard():
 
 
 def test_http_selector_refuses_nonloopback_addresses():
-    import httpx
 
     from helpers import load_script_module
 
     script = load_script_module("selection_benchmark")
     with pytest.raises(ValueError, match="loopback"):
-        script.HttpSelector("https://example.org/select", httpx.AsyncClient())
+        script.HttpSelector(url="https://example.org/select", name="test", version="1")
 
 
 def test_router_catalog_overflow_is_counted_as_bypass():

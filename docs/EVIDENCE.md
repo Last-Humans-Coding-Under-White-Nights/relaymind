@@ -2542,3 +2542,99 @@ python scripts/selection_benchmark.py --track tools --selector example_match --p
 ```
 
 These are one-pass observations on one shared Apple M1 host. They do not change defaults or replace the phase 2 corpus/latency matrix in #128. A third-party narrowing selector and workflow-plan evaluation (#133, #145) remain separate work. No Windows live selection measurement was made in this entry; Windows CI verifies portability only.
+
+## 2026-10-24 — M8 keyword HTTP selector, Apple M1
+
+This is the deterministic loopback transport/evaluation evidence for #133 (RM12,
+RM16, RM22, RM25, RM28; AC22; spec 0.40). The
+[complete raw export](evidence/2026-10-24-selection-skills-example-keyword-http-apple-m1.json)
+retains all 87 SkillsBench cases, their expected and predicted sets, catalog order,
+latencies, status and per-attempt unverified claims. Its SHA-256 is
+`fce31561e73601ec22075f3e84c7c3a00acc8001b7a02a95237d25503eedbce0`.
+This HTTP run is separate from the
+[earlier built-in comparisons](#2026-10-23--m7-skill-and-tool-selection-benchmarks-apple-m1)
+and changes no default selector or acceptance threshold.
+
+The actual capture ran outside the filesystem/network sandbox at
+`2026-10-24T13:25:41.439327+00:00` (UTC), against committed implementation
+`0636f1f74d8057c2d71e1bea96d1e1f2733c1a99`, after its complete deterministic
+suite passed. The export honestly records `application.dirty=true`: git status
+contained only the pre-existing untracked `.venv` environment symlink, with no
+tracked differences. Every exported implementation fingerprint matches that
+commit and the measured files. This evidence-only follow-up changes no measured
+source file.
+
+The server and benchmark commands were:
+
+```bash
+.venv/bin/python scripts/example_selector.py --port 8051
+.venv/bin/python scripts/selection_benchmark.py --track skills \
+  --selector http://127.0.0.1:8051/select \
+  --selector-name example_keyword --selector-version 1 \
+  --seed 42 --timeout 2 --source-training neither \
+  --output /tmp/relaymind-m8-example-keyword-http.json
+```
+
+The server was stopped after capture. No local model, external model or tool
+proposal adapter was configured (`model=null`, `proposal=none`); no model process
+or provider call was started for this experiment. The fixed standard-library
+server uses English word overlap between the request and catalog IDs/descriptions,
+returns at most one catalog ID, and resolves equal scores by presented catalog
+order. It does not learn from the cases; `source_training=neither` is the operator's
+declaration for this deterministic method. The benchmark supplies the same frozen
+195-skill pool and leave-one-task-out examples as the earlier full-pool track,
+using seed 42. The example ignores those examples. The capped model-router track
+has a different catalog size and its earlier scores do not establish a controlled
+accuracy comparison with this run.
+
+| Environment/configuration | Recorded value |
+|---|---|
+| Machine | Apple M1, 8 CPU cores, 8 GiB RAM, 7 GPU cores; macOS 27.0.1 arm64; Python 3.14.7 |
+| Selector | `example_keyword/1`, transport `http`, mechanism `keyword_rule`, null confidence |
+| Endpoint and deadline | `http://127.0.0.1:8051/select`, 2 seconds per attempt, one production-transport POST per reached case |
+| Frozen skills file SHA-256 | `1e89686583aa2334c266bd0b6c26d22129d43a218885b7617e65f2b0bc8670c8` |
+| Skills lock SHA-256 | `93b19cd289525d297a6ec0d6e4b19b2250cb17ce5f407a22526dc1347a7aa5ac` |
+| Source | SkillsBench registry commit `f860ecf02ef53412a030f8661c83d644b739ff01`, task commit `b63b7b2850226b6aa4fb5929a8c1ac7bc4d9a6af`; retained Apache-2.0 attribution |
+
+| Measured implementation file | SHA-256 |
+|---|---|
+| `scripts/selection_benchmark.py` | `a125f1c94fd5c1767f47a1b0c806d82732e496b266e05537c06ca5a3acb2983f` |
+| `src/relaymind/evaluation/selection_benchmark.py` | `91f90c8583027294b90ab2687c09a5efc86daadbf60084bdf101b68743530885` |
+| `src/relaymind/selection/http.py` | `ad14f0314f6108a39749c7d0f7bffa957b611c31bc1a29aaeae6e5e9784dc566` |
+| `src/relaymind/selection/chain.py` | `be11cf0c4a84201db693caeab9b670ef8044e4819c8fe4ec0729b22936d94149` |
+| `scripts/example_selector.py` | `423846a635915e40225f56f6f285a579fb84efd0ed65c5b3effdea82156b0d4a` |
+
+| Selector/transport | Cases | Macro P / R / J | Micro P / R / J | Complete expected sets |
+|---|---:|---|---|---:|
+| example_keyword / HTTP | 87 | 40.23% / 20.45% / 20.45% | 40.23% / 15.09% / 12.32% | 9/87 (10.34%) |
+
+All 87 attempts were `selected` and all case statuses were `ok`; there were zero
+abstentions, timeouts, bypasses, invalid outputs or transport errors in this
+capture. Transport/schema success is distinct from selection correctness: only
+35 of the 87 chosen skills were expected, 52 were wrong, and the picks covered
+35 of 232 expected skill labels. All cases, including those wrong picks and
+incomplete expected sets, remain in the denominator. Exact unrounded macro/micro
+values, category/difficulty breakdowns and all case scores are in the raw export.
+
+Case latency (catalog construction plus production transport and selection
+validation/admission) was p50 **42.65608394052833 ms**, p95
+**43.83437498472631 ms**, range **42.21620794851333–93.65862503182143 ms**
+(nearest-rank percentiles). The recorded selector-attempt interval was p50 **29 ms**
+and p95 **30 ms**. These are local HTTP/evaluation timings with fresh per-attempt
+clients, not model inference latency or gateway task-completion latency.
+
+Every attempt retains `model_calls_claim=[]`, meaning the selector claims zero
+model calls. Those claims are distinct from gateway-observed calls and do not
+verify arbitrary selector-internal model cost; the report explicitly labels that
+cost `not_verified`. The deterministic example's inspected method/configuration
+uses no model, but HTTP transports generally cannot prove a remote process's
+internal calls or stop that work by cancelling a POST.
+
+An earlier attempt inside the sandbox could not reach the loopback server and
+recorded 87 boundary rejections. That environment-denied diagnostic is retained
+separately at `/tmp/relaymind-m8-example-keyword-http-sandbox-attempt.json`; it is
+not combined with this successful capture or the earlier built-in aggregate.
+The keyword method has no semantic understanding, no Chinese word handling, no
+argument generation and only one pick for tasks that often require several
+skills. This run demonstrates production transport and honest evaluation, not
+useful general selection accuracy or live model capability.

@@ -378,3 +378,20 @@ def test_local_completion_omits_not_applicable_runs():
     assert "local_completion 0/0 (target 80%, not applicable)" in render_corpus_markdown(
         summary, title="No local model"
     )
+
+
+def test_http_attempts_have_separate_corpus_and_latency_report_rows():
+    """RM16/RM25/RM28: text and JSON reports retain the observed-cost boundary."""
+    provenance = {
+        "scope": "http_attempted",
+        "attempts": [],
+        "selector_internal_model_cost": "not_verified",
+    }
+    corpus = summarize_corpus([grade("simple-http", "auto", selector_provenance=provenance)])
+    text = render_corpus_markdown(corpus, title="HTTP")
+    assert "| http_attempted | 1 |" in text
+    assert "selector-internal model cost is not verified" in text
+    latency = summarize_latency([sample(selector_provenance=provenance, completion_ms=10)])
+    assert latency["by_selector_provenance"]["http_attempted"]["samples"] == 1
+    assert latency["by_selector_provenance"]["gateway_observed"]["samples"] == 0
+    assert "| http_attempted | 1 |" in render_latency_markdown(latency, title="HTTP")

@@ -282,7 +282,16 @@ def test_example_match_in_the_gateway_makes_no_model_call(tmp_path):
     assert route.payload["mechanism"] == EXAMPLE_MATCH
     assert route.payload["decision"]["skill_id"] == "check-service-health"
     assert route.payload["selector"]["name"] == EXAMPLE_MATCH
-    assert route.payload["selector"]["attempts"] == [{"name": EXAMPLE_MATCH, "outcome": "selected"}]
+    assert route.payload["selector"]["attempts"] == [
+        {
+            "name": EXAMPLE_MATCH,
+            "outcome": "selected",
+            "version": "1",
+            "transport": "in_process",
+            "elapsed_ms": 0,
+            "model_calls_claim": None,
+        }
+    ]
     (accepted,) = of_type(events, "run.accepted")
     assert accepted.payload["selection"] == [EXAMPLE_MATCH]
 

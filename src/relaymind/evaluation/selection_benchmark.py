@@ -265,6 +265,37 @@ class RouterBenchmarkSelector:
         )
 
 
+async def _select_recorded(
+    selector: Any, request: SelectionRequest, timeout: float, row: dict
+) -> Any:
+    """Use the production chain for HTTP boundaries and per-case claim lifetime (RM28)."""
+    if getattr(selector, "transport", None) != "http":
+        return await asyncio.wait_for(selector.select(request, SelectionContext()), timeout)
+    from relaymind.selection.chain import InadmissibleError, SelectorChain
+
+    def progress(chain):
+        row["selector_attempt"] = chain.attempts[-1].to_json_object()
+
+    def admit(result):
+        offered = {entry["id"] for entry in request.catalog}
+        if (
+            result.candidate.kind == "skill"
+            and not {result.candidate.skill_id, *result.alternatives} <= offered
+        ):
+            raise InadmissibleError("selector returned a skill outside the catalog")
+        return result
+
+    chain = await SelectorChain([selector], timeout_seconds=timeout).run(
+        request, SelectionContext(), admit, on_progress=progress
+    )
+    result = chain.result or chain.none_result
+    if result is not None:
+        return result.to_json_object()
+    if chain.attempts[-1].outcome == "timeout":
+        raise TimeoutError
+    raise SelectorError("HTTP selector boundary rejected response")
+
+
 async def run_skills(
     data: Mapping[str, Any],
     selector: Any,
@@ -292,7 +323,7 @@ async def run_skills(
             )
             row["catalog_ids"] = [e["id"] for e in catalog]
             request = selection_request(case, catalog, timeout)
-            raw = await asyncio.wait_for(selector.select(request, SelectionContext()), timeout)
+            raw = await _select_recorded(selector, request, timeout, row)
             result = parse_selection_result(raw)
             row["selection"] = result.to_json_object()
             if result.candidate.kind == "skill":
@@ -600,11 +631,8 @@ async def run_tools(
                 row.update(predicted=names, baseline="model_router keeps all candidates")
             else:
                 result = parse_selection_result(
-                    await asyncio.wait_for(
-                        selector.select(
-                            selection_request(case, [entry], timeout), SelectionContext()
-                        ),
-                        timeout,
+                    await _select_recorded(
+                        selector, selection_request(case, [entry], timeout), timeout, row
                     )
                 )
                 row["selection"] = result.to_json_object()
