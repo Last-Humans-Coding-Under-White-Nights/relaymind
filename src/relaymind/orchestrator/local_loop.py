@@ -227,6 +227,7 @@ from relaymind.orchestrator.performance import (
     holds_tool_call_json,
     non_default_answer_options,
 )
+from relaymind.orchestrator.placement import Placement, PlacementDeclined, PlacementSettings, marker
 from relaymind.orchestrator.prefetch import check_prefetch_budgets, resolve_arguments
 from relaymind.orchestrator.recovery import (
     RecoveryReport,
@@ -838,6 +839,7 @@ class LocalOrchestrator:
         selectors: Sequence[Selector] | None = None,
         local_status: LocalStatus | None = None,
         detect: bool = False,
+        placement: PlacementSettings | None = None,
     ) -> None:
         """selection is the [selection] table (spec 0.31 section 14.1); its default is the
         baseline chain, model_router alone. selectors replaces the configured chain with
@@ -871,6 +873,7 @@ class LocalOrchestrator:
         self.skills = skills
         self.tools = tools
         self.enabled_workflows = frozenset(enabled_workflows)
+        self.placement = Placement(store, placement)
         self.store = store
         self.policy = policy
         self.caller = caller
@@ -1095,6 +1098,7 @@ class LocalOrchestrator:
         """
         if self._accepted_a_run:
             raise RuntimeError("restart recovery is a startup step; this process accepted a run")
+        self.store.recover_probe_after_restart()
         return recover_interrupted_runs(self.store, self.machine, self.executor)
 
     async def resume_confirmation(
@@ -1498,6 +1502,9 @@ class _Run:
         # Secret values seen in tool results, scrubbed from model text (RM12).
         self.secrets: set[str] = set()
         self._calls = 0
+        self.routing_placement = marker()
+        self.pending_placement = None
+        self._routing_count = None
         # RM14: who may dispatch and who owns the final answer.
         self.authority = DispatchAuthority()
         # The skill the local loop loaded, and every tool result of the run.
@@ -1538,10 +1545,28 @@ class _Run:
         return self.active_model.actor
 
     def emit(self, event_type: EventType | str, actor: str, payload: Mapping[str, Any]) -> None:
+        if event_type == EventType.ROUTE_SELECTED:
+            payload = {"placement": self.routing_placement.to_json_object(), **payload}
+        elif event_type in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED):
+            if self.pending_placement is not None:
+                payload = {"placement": self.pending_placement.to_json_object(), **payload}
         self.o.store.append_event(self.run_id, EventType(event_type), actor, payload)
+        if event_type in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED):
+            self.pending_placement = None
 
     def move(self, state: RunState, **kwargs: Any) -> None:
+        event = kwargs.get("event")
+        if event is not None and self.pending_placement is not None:
+            kind, actor, payload = event
+            if kind in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED):
+                kwargs["event"] = (
+                    kind,
+                    actor,
+                    {"placement": self.pending_placement.to_json_object(), **payload},
+                )
         self.record = self.o.machine.transition(self.run_id, self.record.version, state, **kwargs)
+        if event is not None and event[0] in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED):
+            self.pending_placement = None
 
     def scrub(self, text: str) -> str:
         return redact_text(text, self.secrets)
@@ -1612,40 +1637,34 @@ class _Run:
         # RM22: run.accepted is written with the run in one transaction,
         # so an invalid payload creates no run, and a run can always fail
         # or be cancelled from accepted (section 5).
-        self.record = self.o.machine.create(
-            accepted=(
-                EventType.RUN_ACCEPTED,
-                GATEWAY_ACTOR,
-                {
-                    "requested_execution_mode": self.requested_mode,
-                    "effective_execution_mode": self.mode.value,
-                    "model_alias": self.model_alias,
-                    "budgets": self._budget_record(),
-                    **self.offered,
-                    **({"routing_cache": True} if self.o.routing_cache is not None else {}),
-                    **self._phase2_accepted(),
-                    "original_messages": self._original_messages(),
-                    "answer_options": self._answer_option_record(),
-                },
-            ),
-            idempotency=self.idempotency,
-        )
-        try:
+        with self.o.store.transaction():
+            self.record = self.o.machine.create(
+                accepted=(
+                    EventType.RUN_ACCEPTED,
+                    GATEWAY_ACTOR,
+                    {
+                        "requested_execution_mode": self.requested_mode,
+                        "effective_execution_mode": self.mode.value,
+                        "model_alias": self.model_alias,
+                        "budgets": self._budget_record(),
+                        **self.offered,
+                        **({"routing_cache": True} if self.o.routing_cache is not None else {}),
+                        **self._phase2_accepted(),
+                        "original_messages": self._original_messages(),
+                        "answer_options": self._answer_option_record(),
+                    },
+                ),
+                idempotency=self.idempotency,
+            )
             self.move(RunState.ROUTING)
-        except SlotUnavailableError:
-            # Another run took the slot between the check and here: this
-            # run never started, so it leaves no record (429).
-            self.o.machine.delete_run(self.run_id)
-            raise
-        except BaseException as exc:
-            self._abort(exc)
-            raise
 
     def _budget_record(self) -> dict[str, Any]:
         """The limits in force for run.accepted: section 11, and the selection limit (RM03)."""
         return {
             **self.o.budgets.to_json_object(),
             SELECTION_TIMEOUT_BUDGET: self.o.selection.timeout_seconds,
+            "placement.margin": self.o.placement.settings.margin,
+            "placement.probe_after_seconds": self.o.placement.settings.probe_after_seconds,
         }
 
     def _phase2_accepted(self) -> dict[str, Any]:
@@ -1664,6 +1683,7 @@ class _Run:
             # RM28: the selector chain in force, and the matcher thresholds (section 14.1).
             **self.o.selection.to_json_object(),
             "selection": list(self.o.selection_chain.names),
+            "placement_policy": self.o.placement.settings.policy,
         }
 
     def _answer_option_record(self) -> dict[str, Any]:
@@ -1913,6 +1933,7 @@ class _Run:
             )
         except RouteDecisionError as exc:
             raise Escalation("invalid_output", f"resume decision rejected: {exc}") from exc
+        self.routing_placement = marker()
         self.emit(
             EventType.ROUTE_SELECTED,
             GATEWAY_ACTOR,
@@ -2645,6 +2666,7 @@ class _Run:
     # -- routing ---------------------------------------------------------------
 
     async def _route(self) -> Routing:
+        self.routing_placement = marker()
         router = self.o.router
         if self.mode is ExecutionMode.EXTERNAL_ONLY:
             decision = router.execution_mode_decision(self.messages)
@@ -2683,6 +2705,7 @@ class _Run:
         except (TokenCountError, UnsupportedCapabilityError) as exc:
             raise self._local_unavailable(f"router input could not be counted: {exc}") from exc
 
+        self._routing_count = (tuple(routing_messages), tuple(functions), input_tokens)
         if not router.within_input_cap(input_tokens):
             decision = router.bypass_decision(self.messages, self.mode, language=self.language)
             self.emit(
@@ -2749,6 +2772,8 @@ class _Run:
             decision = self.o.router.selection_failed_decision(
                 self.messages, self.mode, language=self.language
             )
+            if any(a.outcome.value == "not_placed" for a in chain.attempts):
+                decision = replace(decision, reason_code="local_slow")
             self.emit(
                 EventType.ROUTE_SELECTED,
                 GATEWAY_ACTOR,
@@ -2786,6 +2811,8 @@ class _Run:
             self._store_route(routing, cache_key)
             return routing
         assert chain.result is not None
+        if self.routing_placement.role != "none":
+            self.routing_placement = marker()
         self.emit(
             EventType.ROUTE_SELECTED,
             GATEWAY_ACTOR,
@@ -2933,11 +2960,15 @@ class _Run:
 
     def cancel_generation(self) -> None:
         """Ask the adapter of the generation in flight, if any, to cancel it (RM14, AC12)."""
-        for call_id, adapter in list(self.generating.items()):
-            # Once per generation: a failed branch and a cancel may both ask.
-            if call_id not in self.cancel_asked:
-                self.cancel_asked.add(call_id)
-                self.o.ask_provider_to_cancel(adapter, call_id)
+        for call_id in list(self.generating):
+            self._cancel_call(call_id)
+
+    def _cancel_call(self, call_id: str) -> None:
+        """Fence deadline, branch and user cancellation to one request per live call."""
+        adapter = self.generating.get(call_id)
+        if adapter is not None and call_id not in self.cancel_asked:
+            self.cancel_asked.add(call_id)
+            self.o.ask_provider_to_cancel(adapter, call_id)
 
     async def _generate(
         self,
@@ -2960,6 +2991,51 @@ class _Run:
         model = model or self.active_model
         on_external = purpose in EXTERNAL_PURPOSES
         label = {} if branch is None else {"branch": branch}
+        self.meter.check_generation(purpose)
+        placement = marker(external=True)
+        if model.actor == "local":
+            tokens = None
+            measured = self._routing_count
+            if measured is not None and (tuple(messages), tuple(tool_schemas)) == measured[:2]:
+                tokens = measured[2]
+            else:
+                try:
+                    async with asyncio.timeout(
+                        max(self.meter.remaining_seconds(), 0.001)
+                    ) as token_timeout:
+                        tokens = await model.adapter.count_tokens(messages, tool_schemas)
+                except TimeoutError:
+                    if token_timeout.expired():
+                        raise self.meter.time_exhausted() from None
+                    # The adapter's own tokenizer timeout is an unavailable measurement,
+                    # not evidence that the gateway's active-time budget was spent.
+                    tokens = None
+                except Exception:
+                    # Counting solely for placement must not create a capability failure.
+                    tokens = None
+                else:
+                    if token_timeout.expired():
+                        # A tokenizer that suppressed cancellation still used its budget.
+                        raise self.meter.time_exhausted()
+            self.meter.check_generation(purpose)
+            prediction = self.o.placement.predict(
+                model.model_id, purpose, tokens, output_cap=options.max_output_tokens
+            )
+            placement = self.o.placement.admit(
+                prediction,
+                mode=self.mode.value,
+                external_model=None if self.o.external is None else self.o.external.model_id,
+                stage_seconds=self.o.budgets.active_seconds - self.meter.elapsed_seconds(),
+                run_seconds=self.o.budgets.run_active_seconds - self.meter.active_seconds(),
+                skill_id=None if self.skill is None else self.skill.name,
+            )
+            if purpose == "routing":
+                self.routing_placement = placement
+            if placement.role == "none":
+                self.pending_placement = placement
+                if purpose == "routing":
+                    raise PlacementDeclined(placement)
+                raise Escalation("local_slow", "local generation declined by placement")
         self.meter.charge_generation(purpose)
         self._calls += 1
         call_id = f"{self.run_id}_gen{self._calls}_{purpose}"
@@ -2981,7 +3057,13 @@ class _Run:
         self.emit(
             EventType.MODEL_STARTED,
             actor,
-            {**call, "tools_offered": [t.name for t in request.tool_schemas], **sent, **label},
+            {
+                **call,
+                "tools_offered": [t.name for t in request.tool_schemas],
+                **sent,
+                **label,
+                "placement": placement.to_json_object(),
+            },
         )
         started = self.o.clock.monotonic()
         # The monotonic time of the first generated fragment (spec 0.31 section 6).
@@ -2991,10 +3073,29 @@ class _Run:
         finish: str | None = None
         failure: GenerationFailed | None = None
         exhausted: BudgetExceededError | None = None
+        deadline_missed = False
+        limit = self.meter.remaining_seconds(on_external)
+        placement_bound = False
+        if placement.deadline_seconds is not None:
+            run_left = self.o.budgets.run_active_seconds - self.meter.active_seconds()
+            placement_bound = placement.deadline_seconds < run_left
+            limit = min(limit, placement.deadline_seconds)
         adapter = model.adapter
         self.generating[call_id] = adapter
+        provider_cancel_timer: asyncio.TimerHandle | None = None
         try:
-            async with asyncio.timeout(max(self.meter.remaining_seconds(on_external), 0.001)):
+            async with asyncio.timeout(max(limit, 0.001)) as timeout:
+                if placement.deadline_seconds is not None:
+                    # Request provider cancellation at expiry even if the iterator
+                    # suppresses task cancellation and needs the provider to stop
+                    # before its cleanup can finish. This timer never releases the slot.
+                    deadline = timeout.when()
+                    # timeout() above always receives a finite duration, never None;
+                    # this timer must not be silently omitted for a placement deadline.
+                    assert deadline is not None
+                    provider_cancel_timer = asyncio.get_running_loop().call_at(
+                        deadline, self._cancel_call, call_id
+                    )
                 async for event in adapter.generate(request):
                     # The marker is consumed here and never forwarded. An adapter
                     # that sends none is dated at its first text or tool call.
@@ -3020,12 +3121,32 @@ class _Run:
                 # nothing (spec 0.19 section 7.4).
                 generation, finish = _Generation(), None
                 raise asyncio.CancelledError
+            if timeout.expired() or (
+                placement.deadline_seconds is not None
+                and self.o.clock.monotonic() - started >= limit
+            ):
+                raise TimeoutError
         except TimeoutError:
             # The trace names the limit that bounded this generation, local
             # or external, not always local time (RM03, RM16).
-            exhausted = self.meter.time_exhausted(on_external)
-            failure = GenerationFailed(code="time_budget", message=f"{exhausted.budget} spent")
-            self.o.ask_provider_to_cancel(adapter, call_id)
+            task = asyncio.current_task()
+            if task is not None and task.cancelling():
+                failure = GenerationFailed(code="cancelled", message="model generation interrupted")
+                raise asyncio.CancelledError from None
+            deadline_missed = placement.deadline_seconds is not None
+            if placement_bound:
+                self.pending_placement = placement
+                failure = GenerationFailed(
+                    code="deadline_exceeded", message="placement.deadline spent"
+                )
+            else:
+                exhausted = self.meter.time_exhausted(on_external)
+                if placement.deadline_seconds is not None:
+                    exhausted = BudgetExceededError(
+                        "run_active_seconds", self.o.budgets.run_active_seconds
+                    )
+                failure = GenerationFailed(code="time_budget", message=f"{exhausted.budget} spent")
+            self._cancel_call(call_id)
         except BaseException as exc:
             failure = GenerationFailed(
                 code="cancelled" if isinstance(exc, asyncio.CancelledError) else "interrupted",
@@ -3033,6 +3154,8 @@ class _Run:
             )
             raise
         finally:
+            if provider_cancel_timer is not None:
+                provider_cancel_timer.cancel()
             self.generating.pop(call_id, None)
             duration_ms = round((self.o.clock.monotonic() - started) * 1000)
             if self.workflow is not None and branch is not None:
@@ -3045,6 +3168,9 @@ class _Run:
                     "purpose": purpose,
                     **label,
                     "duration_ms": duration_ms,
+                    "predicted_ms": placement.predicted_ms,
+                    "deadline_ms": placement.deadline_ms,
+                    "deadline_missed": deadline_missed,
                     # Integer ms from the request start; null when no token arrived.
                     "first_token_ms": None
                     if first_token is None
@@ -3072,6 +3198,8 @@ class _Run:
             )
         if exhausted is not None:
             raise exhausted
+        if deadline_missed:
+            raise Escalation("local_slow", "local generation missed placement deadline")
         if failure is not None:
             if model is not self.o.model:
                 raise ExternalFailure(

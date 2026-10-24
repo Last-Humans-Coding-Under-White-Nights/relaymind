@@ -66,7 +66,7 @@ def test_phase_two_evidence_is_read_from_the_run(tmp_path):
     assert view["configuration"]["local_model_status"] == "ready"
     assert view["configuration"]["answer_pass"] == "draft"
     assert view["configuration"]["selection"] == accepted["selection"]
-    assert view["configuration"]["placement_policy"] is None
+    assert view["configuration"]["placement_policy"] == accepted["placement_policy"]
     assert view["answer_pass_applied"] == events[-1].payload["answer_pass_applied"]
     route = of_type(events, "route.selected")[0]
     assert view["route"]["selector"] == route.payload["selector"]
@@ -99,6 +99,11 @@ def test_historical_phase_two_fields_are_not_inferred(tmp_path):
         "selector",
         "answer_pass_applied",
         "first_token_ms",
+        "placement_policy",
+        "placement",
+        "predicted_ms",
+        "deadline_ms",
+        "deadline_missed",
     }
     events = [
         replace(e, payload={k: v for k, v in e.payload.items() if k not in removed})
@@ -131,7 +136,7 @@ def test_predictions_and_route_call_durations_stay_distinct(tmp_path):
     for event in events:
         payload = dict(event.payload)
         if event.event_type is EventType.ROUTE_SELECTED:
-            payload["placement"] = {"role": "local", "predicted_ms": 900, "reason": "sample"}
+            payload["placement"] = {**payload["placement"], "predicted_ms": 900}
         if event.event_type is EventType.MODEL_FINISHED:
             payload["first_token_ms"] = 0
             payload["predicted_ms"] = 900
@@ -182,9 +187,6 @@ def test_phase_two_labels_escape_recorded_strings(tmp_path):
         if event.event_type is EventType.ROUTE_SELECTED:
             payload["selector"]["name"] = hostile
             payload["selector"]["attempts"][0]["name"] = hostile
-            payload["placement"] = {"predicted_ms": hostile}
-        if event.event_type is EventType.MODEL_FINISHED:
-            payload["predicted_ms"] = hostile
         changed.append(replace(event, payload=payload))
         validate_trace_event(changed[-1].to_json_object())
     view = trace_view_from(gateway.store.get_run(outcome.run_id), changed)
@@ -195,7 +197,7 @@ def test_phase_two_labels_escape_recorded_strings(tmp_path):
 
 @pytest.mark.parametrize("placement", [None, [], "unknown"])
 def test_unsupported_placement_shapes_do_not_break_a_stored_trace(tmp_path, placement):
-    """RM23: optional placement fields not yet constrained by the schema stay readable."""
+    """RM23: historical pre-0.39 placement fields remain readable; new writes reject them."""
     gateway = health_gateway(tmp_path)
     outcome = run_to_rest(gateway)
     events = [
@@ -204,8 +206,12 @@ def test_unsupported_placement_shapes_do_not_break_a_stored_trace(tmp_path, plac
         else e
         for e in gateway.store.events(outcome.run_id)
     ]
+    from relaymind.store.trace_event import TraceEventError
+
     for event in events:
-        validate_trace_event(event.to_json_object())
+        if event.event_type in (EventType.MODEL_STARTED, EventType.ROUTE_SELECTED):
+            with pytest.raises(TraceEventError):
+                validate_trace_event(event.to_json_object())
     view = trace_view_from(gateway.store.get_run(outcome.run_id), events)
     assert view["route"]["placement"] is None
     assert all(c["placement"] is None and c["predicted_ms"] is None for c in view["model_calls"])

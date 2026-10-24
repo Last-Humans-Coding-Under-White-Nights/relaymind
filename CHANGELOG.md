@@ -8,6 +8,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.39 freezes device placement prediction, trace and readiness
+  fields, selector declines, deadline precedence and exclusive idle-probe
+  admission/cancellation (#130; RM03, RM04, RM17, RM21, RM22, RM27, RM28; AC21).
+- Device placement (#130): actual-request token predictions, production-output
+  medians, device-aware deadlines and experimental expected-wait admission.
+  Runs record policy and prediction evidence; readiness labels its representative
+  estimate. Idle routing probes share the SQLite execution slot with every run
+  acquisition, retain failed attempts and cooldowns, and keep the reservation
+  until cancellation cleanup ends. The default remains local_first.
 - Specification 0.38.1 clarifies rejected optional cache measurements
   (RM14, RM16, RM25, RM27): an actual call reporting more cached tokens
   than known input tokens records only that cached count as unavailable,

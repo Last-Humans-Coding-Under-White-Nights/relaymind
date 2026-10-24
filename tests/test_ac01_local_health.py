@@ -177,6 +177,8 @@ def test_the_budgets_and_their_use_are_recorded(tmp_path, case):
     assert accepted.payload["budgets"] == {
         **LocalBudgets().to_json_object(),
         "selection.timeout_seconds": 2.0,
+        "placement.margin": 2,
+        "placement.probe_after_seconds": 600,
     }
     assert LocalBudgets().to_json_object() == {
         "routing_generations": 1,

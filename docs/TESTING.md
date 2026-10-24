@@ -1,5 +1,17 @@
 # Testing RelayMind (Milestones 1 to 5)
 
+Device placement and idle maintenance (#130; AC21, RM03, RM04, RM17, RM21,
+RM22, RM27, RM28, spec 0.39): `pytest tests/test_placement.py tests/test_idle_probe.py`
+uses measured fixtures and fake clocks to check production-only output estimates,
+latest prefix classes, exact tokenization requests, policy exemptions, hard caps,
+expected-wait observations, stage/run deadline precedence and rejected late output.
+The same generation boundary covers client-owned calls and fixed parallel branches.
+Readiness uses representative samples without tokenization. Probe tests cover
+SQLite slot races across connections, failed/cancelled cooldowns, confirmation
+rollback, input resume, cancellation-resistant shutdown and genuine restart cleanup.
+New trace writes validate the closed placement object; historical UI readers still
+accept missing or previously unconstrained fields. No test claims live performance.
+
 Timing storage and placement inputs (#129; RM17, RM25, RM27, spec 0.38):
 `pytest tests/test_model_timings.py tests/test_run_store.py tests/test_launcher_warmup.py`
 checks the previous-schema upgrade, validated sample imports, seven-day

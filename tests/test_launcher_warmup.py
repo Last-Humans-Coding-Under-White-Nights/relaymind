@@ -127,10 +127,9 @@ def test_a_bad_value_stops_startup(tmp_path, body):
         load_config(write_config(tmp_path, f"\n[placement]\n{body}\n"))
 
 
-@pytest.mark.parametrize("key", ["policy", "margin", "probe_after_seconds", "other"])
-def test_the_placement_policy_keys_stay_unknown_until_they_exist(tmp_path, key):
-    """Section 14.1: only warmup, warmup_seconds, and detect are implemented; the rest is
-    refused."""
+@pytest.mark.parametrize("key", ["other"])
+def test_unknown_placement_keys_are_rejected(tmp_path, key):
+    """RM27, section 14.1: placement remains a closed settings table."""
     with pytest.raises(LaunchError, match=rf"unknown key in \[placement\]: {key}"):
         load_config(write_config(tmp_path, f"\n[placement]\n{key} = 1\n"))
 
@@ -151,7 +150,7 @@ def test_the_example_file_documents_the_placement_table(tmp_path):
         if not line.startswith("# "):
             break
         block.append(line[2:])
-    assert len(block) == 4
+    assert len(block) == 7
     config = load_config(write_config(tmp_path, "\n" + "\n".join(block) + "\n"))
     assert (config.warmup, config.warmup_seconds, config.detect) == (True, 30.0, True)
 

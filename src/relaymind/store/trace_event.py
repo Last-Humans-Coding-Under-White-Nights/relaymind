@@ -800,6 +800,154 @@ _LOCAL_MODEL_ACCEPTED_FIELDS: dict[str, Callable[[Any], None]] = {
     "local_model_reason": _optional_text("local_model_reason"),
 }
 
+
+# RM27: closed placement evidence, shared by started/route/handoff/failure events.
+def _check_placement(value: Any) -> None:
+    fields = {"role", "reason", "predicted_ms", "deadline_ms", "inputs"}
+    if not isinstance(value, dict) or set(value) != fields:
+        raise TraceEventError("placement must have exactly the published fields")
+    _one_of("role", ("local", "external", "none"))(value["role"])
+    _one_of(
+        "reason",
+        (
+            "local_first",
+            "local_only",
+            "no_external_path",
+            "prediction_unavailable",
+            "within_budget",
+            "local_slow",
+            "expected_wait",
+            "external_path",
+            "no_generation",
+        ),
+    )(value["reason"])
+    for name in ("predicted_ms", "deadline_ms"):
+        if value[name] is not None and not _is_count(value[name], 1):
+            raise TraceEventError(f"{name} must be a positive integer or null")
+    reason, role = value["reason"], value["role"]
+    if role == "external" and reason != "external_path":
+        raise TraceEventError("external placement requires external_path")
+    if reason == "external_path" and role != "external":
+        raise TraceEventError("external_path requires external placement")
+    if reason == "no_generation" and role != "none":
+        raise TraceEventError("no_generation requires role none")
+    if role == "none" and reason not in ("no_generation", "local_slow", "expected_wait"):
+        raise TraceEventError("role none requires no_generation or a declined placement")
+    if role == "local" and reason in (
+        "local_slow",
+        "expected_wait",
+        "external_path",
+        "no_generation",
+    ):
+        raise TraceEventError("local placement must have an admission reason")
+    if reason in ("within_budget", "local_slow", "expected_wait") and value["predicted_ms"] is None:
+        raise TraceEventError("placement rules require an available prediction")
+    if reason == "within_budget" and value["deadline_ms"] is None:
+        raise TraceEventError("an admitted placement rule requires a deadline")
+    if reason == "prediction_unavailable" and value["predicted_ms"] is not None:
+        raise TraceEventError("prediction_unavailable requires null prediction")
+    inputs = value["inputs"]
+    names = {
+        "model",
+        "purpose",
+        "input_tokens",
+        "input_source",
+        "expected_output_tokens",
+        "output_source",
+        "cache_class",
+        "sample_count",
+        "sample_recorded_at",
+        "prefill_tokens_per_ms",
+        "decode_tokens_per_ms",
+        "local_success_rate",
+        "expected_external_ms",
+    }
+    if not isinstance(inputs, dict) or set(inputs) != names:
+        raise TraceEventError("placement inputs must have exactly the published fields")
+    for name in ("model", "purpose"):
+        _optional_text(name)(inputs[name])
+    _one_of("input_source", ("tokenizer", "none"))(inputs["input_source"])
+    _one_of("output_source", ("run_samples", "purpose_cap", "unavailable"))(inputs["output_source"])
+    _one_of("cache_class", ("warm", "cold", "unknown"))(inputs["cache_class"])
+    if not _is_count(inputs["sample_count"], 0):
+        raise TraceEventError("sample_count must be a nonnegative integer")
+    if inputs["input_tokens"] is not None and not _is_count(inputs["input_tokens"], 0):
+        raise TraceEventError("input_tokens must be a nonnegative integer or null")
+    if inputs["sample_recorded_at"] is not None:
+        _check_timestamp(inputs["sample_recorded_at"])
+    for name in (
+        "expected_output_tokens",
+        "prefill_tokens_per_ms",
+        "decode_tokens_per_ms",
+        "local_success_rate",
+        "expected_external_ms",
+    ):
+        number = inputs[name]
+        if number is None:
+            continue
+        if type(number) not in (int, float) or not math.isfinite(number) or number < 0:
+            raise TraceEventError(f"{name} must be a finite nonnegative number or null")
+        if name in ("prefill_tokens_per_ms", "decode_tokens_per_ms") and number <= 0:
+            raise TraceEventError(f"{name} must be positive")
+        if name == "local_success_rate" and number > 1:
+            raise TraceEventError("local_success_rate must be at most one")
+
+
+def _check_placement_event(event_type: EventType, payload: Mapping[str, Any], actor: str) -> None:
+    if "placement" in payload:
+        if event_type not in (
+            EventType.MODEL_STARTED,
+            EventType.ROUTE_SELECTED,
+            EventType.HANDOFF_STARTED,
+            EventType.RUN_FAILED,
+        ):
+            raise TraceEventError("placement is not valid on this event")
+        value = payload["placement"]
+        _check_placement(value)
+        if event_type == EventType.MODEL_STARTED:
+            expected = "external" if actor == "external" else "local"
+            if value["role"] != expected:
+                raise TraceEventError("model.started placement must describe its actor")
+        if value["role"] == "external" or value["reason"] == "no_generation":
+            if value["predicted_ms"] is not None or value["deadline_ms"] is not None:
+                raise TraceEventError("empty placement marker cannot contain a prediction")
+            empty = {
+                "input_source": "none",
+                "output_source": "unavailable",
+                "cache_class": "unknown",
+                "sample_count": 0,
+            }
+            if any(v != empty.get(k) for k, v in value["inputs"].items()):
+                raise TraceEventError("empty placement marker cannot contain local inputs")
+        if value["deadline_ms"] is not None and (
+            value["role"] != "local"
+            or value["reason"] != "within_budget"
+            or value["predicted_ms"] is None
+        ):
+            raise TraceEventError("only an admitted available prediction has a deadline")
+    if event_type == EventType.MODEL_FINISHED:
+        for name in ("predicted_ms", "deadline_ms"):
+            if name in payload and payload[name] is not None and not _is_count(payload[name], 1):
+                raise TraceEventError(f"{name} must be a positive integer or null")
+        if "deadline_missed" in payload and type(payload["deadline_missed"]) is not bool:
+            raise TraceEventError("deadline_missed must be boolean")
+    if event_type == EventType.RUN_ACCEPTED:
+        if "placement_policy" in payload:
+            _one_of("placement_policy", ("local_first", "device_aware", "expected_wait"))(
+                payload["placement_policy"]
+            )
+        budgets = payload.get("budgets", {})
+        if not isinstance(budgets, Mapping):
+            raise TraceEventError("budgets must be an object")
+        if "placement" in budgets:
+            raise TraceEventError("placement budgets use dotted numeric keys")
+        for name in ("placement.margin", "placement.probe_after_seconds"):
+            if name in budgets:
+                number = budgets[name]
+                if type(number) not in (int, float) or not math.isfinite(number) or number <= 0:
+                    raise TraceEventError(f"{name} must be a positive finite number")
+
+
 _OPTIONAL_FIELDS: dict[EventType, dict[str, Callable[[Any], None]]] = {
     EventType.RUN_ACCEPTED: {
         **_PERFORMANCE_ACCEPTED_FIELDS,
@@ -832,6 +980,7 @@ def _check_optional_fields(event_type: EventType, payload: Mapping[str, Any]) ->
 
 
 def _check_payload(event_type: EventType, payload: Mapping[str, Any], actor: str) -> None:
+    _check_placement_event(event_type, payload, actor)
     _check_workflow_fields(event_type, payload)
     _check_optional_fields(event_type, payload)
     if event_type is EventType.RUN_ACCEPTED:
