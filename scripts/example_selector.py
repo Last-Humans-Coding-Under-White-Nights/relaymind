@@ -5,6 +5,7 @@ import argparse
 import json
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import TCPServer
 
 MAX_BODY = 2 * 1024 * 1024
 
@@ -87,8 +88,7 @@ class LoopbackServer(ThreadingHTTPServer):
     """Avoid hostname resolution; only a literal loopback socket is bound."""
 
     def server_bind(self) -> None:
-        self.socket.bind(self.server_address)
-        self.server_address = self.socket.getsockname()
+        TCPServer.server_bind(self)
         self.server_name = "localhost"
         self.server_port = self.server_address[1]
 
