@@ -68,6 +68,7 @@ def trace_view_from(
     operations = _operations(events, read_artifact)
     model_calls = _model_calls(events)
     answer = _final_answer(events)
+    routes = _routes(events, model_calls)
     return {
         "run_id": record.run_id,
         "state": record.state,
@@ -79,6 +80,26 @@ def trace_view_from(
         "prompt": _prompt(accepted_payload),
         # None: a run stored before spec 0.22. {}: a run without options.
         "answer_options": accepted_payload.get("answer_options"),
+        "configuration": _pick(
+            accepted_payload,
+            (
+                "local_model",
+                "local_model_status",
+                "local_model_reason",
+                "placement_policy",
+                "answer_pass",
+                "answer_stream",
+                "calls_per_generation",
+                "prefetch",
+                "early_headers",
+                "selection",
+            ),
+        ),
+        "answer_pass_applied": (
+            terminal.payload.get("answer_pass_applied")
+            if terminal is not None and terminal.event_type is EventType.RUN_COMPLETED
+            else None
+        ),
         "execution_mode": {
             "requested": accepted_payload.get("requested_execution_mode"),
             "effective": accepted_payload.get("effective_execution_mode"),
@@ -87,7 +108,8 @@ def trace_view_from(
         "workflow": _workflow(events, model_calls, terminal),
         "active_model": _active_model(events, model_calls, terminal),
         "skill": _skill(events),
-        "route": _route(events),
+        "route": routes[-1] if routes else None,
+        "routes": routes,
         "proposals": _proposals(events),
         "operations": operations,
         "failed_operations": [op for op in operations if op["status"] in _FAILED],
@@ -112,6 +134,9 @@ def _model_calls(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
     calls = []
     for event in _of(events, EventType.MODEL_STARTED):
         done = finished.get(event.payload["call_id"])
+        placement = event.payload.get("placement")
+        if not isinstance(placement, Mapping):
+            placement = None
         calls.append(
             {
                 "call_id": event.payload["call_id"],
@@ -123,6 +148,13 @@ def _model_calls(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
                 "duration_ms": None if done is None else done.get("duration_ms"),
                 "finish_reason": None if done is None else done.get("finish_reason"),
                 "error": None if done is None else done.get("error"),
+                "first_token_ms": None if done is None else done.get("first_token_ms"),
+                "placement": placement,
+                "predicted_ms": (
+                    done.get("predicted_ms")
+                    if done is not None and "predicted_ms" in done
+                    else (placement or {}).get("predicted_ms")
+                ),
             }
         )
     return calls
@@ -201,17 +233,27 @@ def _skill(events: Sequence[TraceEvent]) -> dict[str, Any] | None:
     return _pick(loaded[-1].payload, ("name", "version", "content_hash")) if loaded else None
 
 
-def _route(events: Sequence[TraceEvent]) -> dict[str, Any] | None:
+def _routes(
+    events: Sequence[TraceEvent], calls: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
     selected = _of(events, EventType.ROUTE_SELECTED)
-    if not selected:
-        return None
-    payload = selected[-1].payload
-    decision = payload["decision"]
-    return {
-        **_pick(decision, ("route", "skill_id", "reason_code", "language")),
-        "mechanism": payload.get("mechanism"),
-        "model": payload.get("model"),
-    }
+    by_id = {call["call_id"]: call for call in calls}
+    routes = []
+    for event in selected:
+        payload = event.payload
+        call = by_id.get(payload.get("call_id"), {})
+        placement = payload.get("placement")
+        selector = payload.get("selector")
+        routes.append(
+            {
+                **_pick(payload["decision"], ("route", "skill_id", "reason_code", "language")),
+                **_pick(payload, ("mechanism", "model")),
+                "selector": selector if isinstance(selector, Mapping) else None,
+                "placement": placement if isinstance(placement, Mapping) else None,
+                "duration_ms": call.get("duration_ms"),
+            }
+        )
+    return routes
 
 
 def _proposals(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:

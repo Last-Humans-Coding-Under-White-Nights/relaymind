@@ -11,6 +11,7 @@
   const lostTokens = new Set(); // approval_id whose token the native view no longer returns
   const tokenReads = new Map(); // approval_id -> the one native read in flight for it
   const submittedAt = new Map(); // run_id -> browser clock time of the submission
+  const configurations = new Map(); // run_id -> its persistent configuration panel
 
   const byId = (id) => document.getElementById(id);
   const say = (text) => { byId("status").textContent = text; };
@@ -45,6 +46,41 @@
     return slot;
   }
 
+  function showConfigurations() {
+    const banner = byId("run-configurations");
+    const visible = new Set();
+    // One label per visible run also keeps comparison arms distinct (RM23).
+    for (const trace of document.querySelectorAll("main .trace")) {
+      const config = trace.querySelector("[data-run-configuration]");
+      if (!config) continue;
+      const runId = trace.dataset.runId;
+      visible.add(runId);
+      let panel = configurations.get(runId);
+      if (!panel) {
+        if (!configurations.size) banner.replaceChildren();
+        const item = document.createElement("details");
+        const title = document.createElement("summary");
+        title.textContent = "Run " + runId + " configuration";
+        item.append(title, config.cloneNode(true));
+        panel = { item, html: config.innerHTML };
+        configurations.set(runId, panel);
+        banner.append(item);
+      } else if (panel.html !== config.innerHTML) {
+        panel.item.lastElementChild.replaceWith(config.cloneNode(true));
+        panel.html = config.innerHTML;
+      }
+    }
+    for (const [runId, panel] of configurations) {
+      if (!visible.has(runId)) {
+        panel.item.remove();
+        configurations.delete(runId);
+      }
+    }
+    if (!configurations.size && banner.textContent !== "No run selected.") {
+      banner.textContent = "No run selected.";
+    }
+  }
+
   async function refresh(runId, container) {
     const response = await api("GET", "/ui/runs/" + encodeURIComponent(runId));
     if (!response.ok) {
@@ -65,6 +101,7 @@
       }
     }
     const trace = slot.querySelector(".trace");
+    showConfigurations();
     if (trace && trace.dataset.terminal === "true") open.delete(runId);
     if (trace) await prepareApproval(trace, slot);
   }
@@ -190,6 +227,7 @@
     const result = await response.json();
     const area = byId("comparison");
     area.replaceChildren();
+    showConfigurations();
     const grid = document.createElement("div");
     grid.className = "compare";
     area.append(grid);
