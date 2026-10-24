@@ -246,6 +246,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.38 clarifies the timing records and estimates required by
+  #129 (RM17, RM25, RM27): actual call actor and kind, nullable measurements,
+  bounded retention, separate warm/cold effective throughput, and terminal
+  skill outcomes. Predictions remain estimates and no execution default changes.
 - RouteDecision and HandoffEnvelope accept the reason codes
   `selection_failed`, `no_local_model`, and `local_slow` under schema version
   1, and the RouteDecision validator and schema now check that the reason
