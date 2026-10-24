@@ -71,6 +71,7 @@ def test_timing_and_outcome_writes_join_the_event_transaction(store, clock):
             store.add_model_timing(
                 ModelTiming(
                     model="local",
+                    actor="local",
                     purpose="skill",
                     kind="run",
                     input_tokens=None,
@@ -112,7 +113,14 @@ def test_tables_owned_by_a_run_are_indexed_by_run_id(tmp_path):
     with RunStore(tmp_path / "runs.sqlite"):
         pass
     with sqlite3.connect(tmp_path / "runs.sqlite") as conn:
-        for table in ("tool_operations", "approvals", "artifact_refs"):
+        for table in (
+            "tool_operations",
+            "approvals",
+            "artifact_refs",
+            "model_timings",
+            "model_run_progress",
+            "skill_outcomes",
+        ):
             indexed = {
                 column
                 for (_seq, index, *_rest) in conn.execute(f"PRAGMA index_list({table})")

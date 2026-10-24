@@ -17,6 +17,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   estimate. Idle routing probes share the SQLite execution slot with every run
   acquisition, retain failed attempts and cooldowns, and keep the reservation
   until cancellation cleanup ends. The default remains local_first.
+- Specification 0.38.1 clarifies rejected optional cache measurements
+  (RM14, RM16, RM25, RM27): an actual call reporting more cached tokens
+  than known input tokens records only that cached count as unavailable,
+  with a fixed credential-free warning. Execution outcomes and other
+  measurements are preserved; imported timing samples remain strictly validated.
 - Persisted timing samples and skill outcome estimates (#129; RM17, RM25,
   RM27, spec 0.38): a versioned sample schema, an additive SQLite migration,
   seven-day retention and a 1,000-sample bound per model/purpose. Every
