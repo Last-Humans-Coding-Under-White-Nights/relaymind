@@ -29,6 +29,7 @@ from relaymind.adapters.llamacpp import LlamaCppAdapter, LlamaCppConfig
 from relaymind.adapters.local_http import is_loopback_url
 from relaymind.evaluation.environment import application_revision, machine_manifest
 from relaymind.evaluation.selection_benchmark import (
+    DEFAULT_TOOLRET_CACHE,
     RouterBenchmarkSelector,
     file_digest,
     load_locked,
@@ -75,9 +76,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--external-model", default=os.environ.get("RELAYMIND_EXTERNAL_MODEL"))
     result.add_argument("--api-key-env", default="RELAYMIND_EXTERNAL_API_KEY")
     result.add_argument("--external-request-options", type=json.loads, default={})
-    result.add_argument(
-        "--toolret-cache", type=Path, default=Path.home() / ".cache/relaymind/toolret"
-    )
+    result.add_argument("--toolret-cache", type=Path, default=DEFAULT_TOOLRET_CACHE)
     result.add_argument("--example-score", type=float, default=0.5)
     result.add_argument("--example-margin", type=float, default=0.1)
     result.add_argument(
@@ -106,6 +105,8 @@ def _subset(cases: list[dict], limit: int | None, seed: int) -> list[dict]:
 
 async def run(args: argparse.Namespace) -> dict:
     """Run an identified, frozen sample and export every attempt."""
+    if args.track == "skills" and args.proposal != "none":
+        raise ValueError("--proposal is only supported for the tools track")
     application = application_revision(ROOT)
     implementation_files = {
         name: file_digest(ROOT / name)

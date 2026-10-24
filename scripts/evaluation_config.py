@@ -2,7 +2,7 @@
 
 import argparse
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from relaymind.orchestrator.budgets import LocalBudgets
@@ -15,7 +15,7 @@ def add_configuration_arguments(parser: argparse.ArgumentParser) -> None:
         "--performance", nargs="+", action="extend", default=[], metavar="KEY=VALUE"
     )
     parser.add_argument("--budgets", nargs="+", action="extend", default=[], metavar="KEY=VALUE")
-    parser.add_argument("--selection-chain", nargs="+", metavar="SELECTOR")
+    parser.add_argument("--selection-chain", nargs="+", action="extend", metavar="SELECTOR")
     parser.add_argument("--no-local-model", action="store_true")
 
 
@@ -23,6 +23,7 @@ def _settings(values: list[str], defaults: dict[str, Any], name: str) -> dict[st
     result = {}
     for item in values:
         key, separator, raw = item.partition("=")
+        key, raw = key.strip(), raw.strip()
         if not separator or not raw or key not in defaults:
             raise ValueError(f"{name}: expected a known key=value, got {item!r}")
         if key in result:
@@ -51,7 +52,7 @@ class RunnerConfiguration:
         return {
             "performance": self.performance.to_json_object(),
             "budgets": self.budgets.to_json_object(),
-            "selection": {"chain": list(self.selection.chain)},
+            "selection": {**asdict(self.selection), "chain": list(self.selection.chain)},
             "local_model": self.local_model_configured,
         }
 
@@ -59,7 +60,7 @@ class RunnerConfiguration:
         return {
             "performance": self.performance.to_json_object(),
             "budgets": self.budgets.to_json_object(),
-            "selection": {"chain": list(self.selection.chain)},
+            "selection": {**asdict(self.selection), "chain": list(self.selection.chain)},
             "local_model_configured": self.local_model_configured,
             "placement": {"policy": "local_first"},
             "enabled_workflows": [],
@@ -100,4 +101,4 @@ def label_report(report: str, configuration: dict[str, Any] | None) -> str:
         + json.dumps(configuration, indent=2, sort_keys=True)
         + "\n```\n"
     )
-    return heading + "\n\n" + label + "\n" + body
+    return heading + "\n\n" + label + "\n" + body.lstrip("\n")

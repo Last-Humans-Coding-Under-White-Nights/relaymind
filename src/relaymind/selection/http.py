@@ -14,6 +14,7 @@ from relaymind.selection.contract import (
     SelectionRequest,
     SelectionResult,
     SelectorError,
+    SelectorTimeout,
     parse_selection_request,
     parse_selection_result,
 )
@@ -95,6 +96,8 @@ class HttpSelector:
                     result = parse_selection_result(response.json())
                 except (ValueError, SelectionError):
                     raise SelectorError("HTTP selector invalid response") from None
+        except httpx.TimeoutException:
+            raise SelectorTimeout("HTTP selector transport timeout") from None
         except httpx.HTTPError:
             raise SelectorError("HTTP selector transport failure") from None
         try:

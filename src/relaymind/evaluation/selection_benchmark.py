@@ -16,6 +16,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from relaymind.adapters import GenerationRequest, Message, Role, ToolCall
 from relaymind.adapters.base import Completed, GenerationFailed, Usage
 from relaymind.canonical import canonical_digest
@@ -36,6 +38,7 @@ from relaymind.selection.model_router import ModelRouterSelector
 from relaymind.skills import Skill, SkillRegistry
 from relaymind.tools import SideEffect, ToolDeclaration, ToolRegistry, ToolRejectedError
 
+DEFAULT_TOOLRET_CACHE = Path.home() / ".cache/relaymind/toolret"
 TOOLRET_DATASET = "mangopy/ToolRet-Training-20w"
 TOOLRET_REVISION = "fdf5a317455b1e60785de7ba587496aa6cc878e4"
 
@@ -50,7 +53,18 @@ def load_locked(path: Path, lock_path: Path) -> dict[str, Any]:
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
     if file_digest(path) != lock["sha256"]:
         raise ValueError("benchmark file digest differs from lock")
-    return json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if "cases" in lock:
+        if [case["id"] for case in data["cases"]] != [case["id"] for case in lock["cases"]]:
+            raise ValueError("benchmark case identities differ from lock")
+        for case, locked in zip(data["cases"], lock["cases"], strict=True):
+            # The embedded sha256 is excluded from its own canonical payload.
+            digest = canonical_digest(
+                {key: value for key, value in case.items() if key != "sha256"}
+            )
+            if case.get("sha256") != digest or locked["sha256"] != digest:
+                raise ValueError("benchmark case digest differs from payload or lock")
+    return data
 
 
 def set_metrics(predicted: Iterable[str], expected: Iterable[str]) -> dict[str, float]:
@@ -295,6 +309,9 @@ async def run_skills(
     for case in data["cases"]:
         if case_ids is not None and case["id"] not in case_ids:
             continue
+        diagnostics = getattr(selector, "diagnostics", None)
+        if isinstance(diagnostics, dict):
+            diagnostics.clear()
         row = {k: case.get(k) for k in ("id", "category", "difficulty", "expected")}
         row.update(predicted=[], status="ok", none=False)
         started = time.monotonic()
@@ -318,7 +335,7 @@ async def run_skills(
                 row["clarify"] = result.candidate.kind == "clarify"
         except InputBypass as exc:
             row.update(status="bypass", error=str(exc))
-        except TimeoutError:
+        except (TimeoutError, httpx.TimeoutException):
             row.update(status="timeout", error="selector timeout")
         except (SelectionError, SelectorError) as exc:
             row.update(status="invalid_output", error=str(exc), predicted=[])
@@ -628,7 +645,7 @@ async def run_tools(
                         if result.tools is None
                         else [name for name in names if name in result.tools]
                     )
-        except TimeoutError:
+        except (TimeoutError, httpx.TimeoutException):
             row.update(status="timeout", error="selector timeout")
         except (SelectionError, SelectorError) as exc:
             row.update(status="invalid_output", error=str(exc))
@@ -653,6 +670,17 @@ async def run_tools(
                 "proposal_count": 0,
             }
             started = time.monotonic()
+            if label == "narrowed" and row["status"] != "ok":
+                proposal.update(
+                    status=row["status"],
+                    narrowing_status=row["status"],
+                    generation_attempted=False,
+                    error="narrowing failed",
+                    latency_ms=(time.monotonic() - started) * 1000,
+                    metrics=set_metrics([], proposal["expected"]),
+                )
+                output.append(proposal)
+                continue
             try:
                 registry = benchmark_registry(case["tools"])
                 skill = synthetic_skill(
@@ -687,10 +715,15 @@ async def run_tools(
                 calls, usage = await asyncio.wait_for(collect_generation(adapter, request), timeout)
                 proposal.update(score_proposals(case, calls, registry, offered), usage=usage)
                 if calls_per_generation == "one" and len(calls) > 1:
-                    proposal.update(status="invalid_output", call_budget_exceeded=True)
+                    proposal.update(
+                        status="invalid_output",
+                        call_budget_exceeded=True,
+                        proposed_tools=list(proposal["predicted"]),
+                        predicted=[],
+                    )
             except InputBypass as exc:
                 proposal.update(status="bypass", error=str(exc))
-            except TimeoutError:
+            except (TimeoutError, httpx.TimeoutException):
                 proposal.update(status="timeout", error="generation timeout")
             except SelectorError as exc:
                 proposal.update(status="invalid_output", error=str(exc))

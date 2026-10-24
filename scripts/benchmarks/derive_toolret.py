@@ -16,6 +16,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from relaymind.evaluation.selection_benchmark import (  # noqa: E402
+    DEFAULT_TOOLRET_CACHE,
     TOOLRET_DATASET,
     TOOLRET_REVISION,
     derive_toolret,
@@ -68,8 +69,20 @@ def load_cases(lock_path: Path, cache_dir: Path, *, revision: str = TOOLRET_REVI
     if lock["dataset"] != TOOLRET_DATASET or lock["revision"] != revision:
         raise ValueError("ToolRet dataset or revision differs from lock")
     paths = fetch_shards(Path(cache_dir), revision=revision)
+    return verify_cases(paths, lock, revision=revision)
+
+
+def verify_cases(
+    paths: Sequence[Path], lock: dict, *, revision: str = TOOLRET_REVISION
+) -> list[dict]:
+    """Verify ordered source bytes and selected payloads, including explicit paths."""
+    if lock["dataset"] != TOOLRET_DATASET or lock["revision"] != revision:
+        raise ValueError("ToolRet dataset or revision differs from lock")
     if "shards" in lock:
-        actual = [{"name": path.name, "sha256": _digest(path)} for path in paths]
+        actual = [
+            {"name": name, "sha256": _digest(path)}
+            for name, path in zip(SHARDS, paths, strict=True)
+        ]
         if actual != lock["shards"]:
             raise ValueError("ToolRet source shard digest differs from lock")
     wanted = {case["row_index"] for case in lock["cases"]}
@@ -83,7 +96,7 @@ def load_cases(lock_path: Path, cache_dir: Path, *, revision: str = TOOLRET_REVI
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--cache-dir", type=Path, default=Path("/tmp/relaymind-toolret"))
+    parser.add_argument("--cache-dir", type=Path, default=DEFAULT_TOOLRET_CACHE)
     parser.add_argument(
         "--parquet",
         type=Path,
@@ -99,11 +112,7 @@ def main() -> None:
     paths = args.parquet or fetch_shards(args.cache_dir)
     if args.verify:
         lock = json.loads(args.lock.read_text(encoding="utf-8"))
-        if lock["revision"] != TOOLRET_REVISION or lock["dataset"] != TOOLRET_DATASET:
-            raise ValueError("ToolRet dataset or revision differs from lock")
-        wanted = {case["row_index"] for case in lock["cases"]}
-        cases = [normalize_toolret(row, i) for i, row in enumerate(iter_rows(paths)) if i in wanted]
-        verify_toolret(cases, lock, revision=TOOLRET_REVISION)
+        cases = verify_cases(paths, lock)
     else:
         cases, lock = derive_toolret(
             iter_rows(paths), revision=TOOLRET_REVISION, seed=args.seed, size=500

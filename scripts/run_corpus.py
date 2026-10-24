@@ -230,6 +230,8 @@ def grade_record(
     record: Mapping[str, Any],
     events: Sequence[Mapping[str, Any]],
     databases: Sequence[str] | None,
+    *,
+    local_model_configured: bool | None = None,
 ) -> RunGrade:
     return grade_run(
         case,
@@ -241,6 +243,7 @@ def grade_record(
         error_code=record["error_code"],
         reason_code=record["reason_code"],
         timed_out=record["timed_out"],
+        local_model_configured=local_model_configured,
     )
 
 
@@ -287,7 +290,18 @@ def _run_one(
     finally:
         gateway.stop()
     events = harness._traces(plan_dir / "runs.sqlite3", [record["run_id"]])[record["run_id"]]
-    return grade_record(case, mode, record, events, databases), record, events
+    return (
+        grade_record(
+            case,
+            mode,
+            record,
+            events,
+            databases,
+            local_model_configured=configuration.local_model_configured,
+        ),
+        record,
+        events,
+    )
 
 
 def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
@@ -348,9 +362,14 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
                             "runner_error": f"{type(exc).__name__}: {exc}",
                         }
                         events = []
-                        grade = grade_record(case, mode, record, events, None)
-                    if not configuration.local_model_configured:
-                        grade.local_completion = None
+                        grade = grade_record(
+                            case,
+                            mode,
+                            record,
+                            events,
+                            None,
+                            local_model_configured=configuration.local_model_configured,
+                        )
                     grades.append(grade.to_json_object())
                     records[f"{case.case_id}/{mode}"] = record
                     if record["run_id"] is not None:
@@ -386,7 +405,17 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
             "runtime_banner": runtime.banner if runtime else None,
             "runtime_devices": runtime_devices() if runtime else None,
             "llama_server": runtime.server_record(cold_start) if runtime else None,
-            **(runtime.model_record() if runtime else {"model_id": None}),
+            **(
+                runtime.model_record()
+                if runtime
+                else {
+                    "model_id": None,
+                    "manifest": None,
+                    "model_file": None,
+                    "model_sha256": None,
+                    "quantization": None,
+                }
+            ),
             "external_endpoint": None
             if external is None
             else {
@@ -426,9 +455,14 @@ def regrade(document: dict[str, Any], corpus: Corpus) -> dict[str, Any]:
         case, mode = corpus.case(old["case_id"]), old["mode"]
         record = document["records"][f"{case.case_id}/{mode}"]
         events = document["traces"].get(record["run_id"], [])
-        grade = grade_record(case, mode, record, events, old["databases"])
-        if document.get("configuration", {}).get("local_model_configured") is False:
-            grade.local_completion = None
+        grade = grade_record(
+            case,
+            mode,
+            record,
+            events,
+            old["databases"],
+            local_model_configured=document.get("configuration", {}).get("local_model_configured"),
+        )
         grades.append(grade.to_json_object())
     return {
         **document,

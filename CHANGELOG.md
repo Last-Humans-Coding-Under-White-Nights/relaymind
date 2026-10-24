@@ -62,6 +62,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   local runtime and report local completion as not applicable. Gateway-owned
   final answers no longer count as local-model completions. The live matrix
   and evidence-backed default decisions remain follow-up work for #128.
+  Review repairs preserve repeated selector flags, trim settings whitespace,
+  export all selector limits and consistent null model metadata, and reject
+  incomplete local launch inputs before producing TOML. Local-completion
+  grading uses the no-local configuration for failures before acceptance;
+  recorded trace evidence takes precedence over a conflicting label.
 - Operation without a usable local model (#126; AC20, RM01, RM05, RM11,
   RM21, RM26, RM28, RM29, spec 0.37 sections 7.4, 8, 11, and 14.1). The
   `[local_model]` table is optional: without it `allowed_modes` defaults to
@@ -278,6 +283,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   #129 (RM17, RM25, RM27): actual call actor and kind, nullable measurements,
   bounded retention, separate warm/cold effective throughput, and terminal
   skill outcomes. Predictions remain estimates and no execution default changes.
+- Specification 0.37 → 0.37.1 (RM03, RM09, RM25, RM28; section 12.4):
+  a first generation exceeding its call budget receives no set-score credit
+  while preserving raw proposals, usage and independent schema validity. A failed
+  narrowing arm records its failure without model work and stays in the denominator;
+  valid abstentions retain the empty-set experiment. Ordinary schema-invalid names
+  retain their existing independent name metrics.
+
 - RouteDecision and HandoffEnvelope accept the reason codes
   `selection_failed`, `no_local_model`, and `local_slow` under schema version
   1, and the RouteDecision validator and schema now check that the reason
@@ -460,6 +472,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and `docs/RELEASE.md`.
 
 ### Fixed
+
+- Selection benchmark review (RM03, RM09, RM16, RM25, RM28): clear stale
+  diagnostics before early bypasses, classify HTTP timeouts, preserve failed
+  narrowed arms without inference, and remove score credit for generations
+  exceeding their call budget while retaining proposal evidence. Export distinct
+  HTTP response identity claims, reject skills proposal options before work,
+  share the persistent ToolRet cache, and enforce source/case locks without
+  changing the frozen files or historical measurement exports.
 
 - Correct the skill guide's workflow-key description, repair the testing
   guide's README link, and install the client SDK before the Python
