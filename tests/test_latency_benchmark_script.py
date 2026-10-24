@@ -534,3 +534,28 @@ def test_no_warmup_samples_are_invented(bench):
     assert off == {"enabled": False, "line": None, "samples": None}
     silent = bench.startup_warmup_record(["Serving on http://127.0.0.1:8099"], startup_warmup=True)
     assert silent == {"enabled": True, "line": None, "samples": None}
+
+
+def test_latency_trace_collection_retains_http_fallback_claims(bench):
+    """RM16/RM25/RM28: HTTP attempts remain separate from observed generation samples."""
+    attempt = dict(
+        name="remote",
+        version="1",
+        transport="http",
+        outcome="none",
+        elapsed_ms=1,
+        model_calls_claim=[],
+    )
+
+    class Api:
+        async def view(self, run_id):
+            return {"state": "failed", "error_code": "needs_external"}
+
+        async def events(self, run_id):
+            return [{"event_type": "run.failed", "payload": {"selector": {"attempts": [attempt]}}}]
+
+    sample = {"run_id": "r", "state": "failed", "error_code": None}
+    asyncio.run(bench._read_trace(Api(), "r", sample))
+    assert sample["selector_provenance"]["scope"] == "http_attempted"
+    assert sample["selector_provenance"]["attempts"] == [attempt]
+    assert sample["model_calls"] == []

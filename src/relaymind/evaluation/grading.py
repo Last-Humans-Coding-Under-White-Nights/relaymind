@@ -64,9 +64,33 @@ class RunGrade:
     # their summed duration; None when a rejected generation recorded no duration (RM16).
     corrections: int = 0
     correction_ms: int | None = 0
+    selector_provenance: dict[str, Any] = field(default_factory=dict)
 
     def to_json_object(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def selector_provenance(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Unverified HTTP claims from route or fallback evidence, apart from calls (RM25/RM28)."""
+    attempts = [
+        dict(a)
+        for event in events
+        for a in event["payload"].get("selector", {}).get("attempts", [])
+    ]
+    scope = (
+        "http_attempted"
+        if any(a.get("transport") == "http" for a in attempts)
+        else "gateway_observed"
+        if attempts and all(a.get("transport") == "in_process" for a in attempts)
+        else "unknown"
+    )
+    return {
+        "scope": scope,
+        "attempts": attempts,
+        "selector_internal_model_cost": "not_verified"
+        if scope != "gateway_observed"
+        else "gateway_observed",
+    }
 
 
 def call_matches(pattern: Mapping[str, Any], tool: str, arguments: Mapping[str, Any]) -> bool:
@@ -295,6 +319,7 @@ def grade_run(
         gateway_proposals=len(gateway_proposals),
         corrections=corrections,
         correction_ms=correction_ms,
+        selector_provenance=selector_provenance(events),
     )
     checks = [
         (
@@ -329,6 +354,6 @@ def grade_run(
                 for call in terminal.get("model_calls", [])
             )
         )
-        if not absent:
+        if not absent and grade.selector_provenance["scope"] != "http_attempted":
             grade.local_completion = grade.success and external_calls == 0 and local_owner
     return grade

@@ -991,9 +991,9 @@ def test_every_selection_key_reaches_the_settings(tmp_path):
         ("chain = []", "chain"),
         ("chain = 'model_router'", "chain"),
         ("chain = ['model_router', 'model_router']", "chain"),
-        ("chain = ['oracle']", "oracle"),
+        ("chain = ['oracle']", "chain"),
         ("chain = [1]", "chain"),
-        ("chain = [{ transport = 'http', url = 'http://127.0.0.1:9000/select' }]", "#133"),
+        ("chain = [{ transport = 'http', url = 'http://127.0.0.1:9000/select' }]", "name, version"),
         ("timeout_seconds = 0", "timeout_seconds"),
         ("timeout_seconds = -1", "timeout_seconds"),
         ("timeout_seconds = inf", "timeout_seconds"),
@@ -1009,7 +1009,7 @@ def test_every_selection_key_reaches_the_settings(tmp_path):
     ],
 )
 def test_a_bad_selection_value_is_one_startup_message(tmp_path, line, word):
-    """RM28, section 14.1: a wrong type or range, or an http selector before #133, is exit 2."""
+    """RM28, section 14.1: a wrong type or range, or an incomplete HTTP selector item, is exit 2."""
     config = write_config(tmp_path, f"\n[selection]\n{line}\n")
     with pytest.raises(LaunchError, match=r"\[selection\].*" + word) as raised:
         load_config(config)

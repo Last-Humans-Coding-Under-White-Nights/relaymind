@@ -93,6 +93,25 @@ def _block(grades: Sequence[Mapping[str, Any]], routes: Mapping[str, str]) -> di
         for code, count in g.get("rejections", {}).items():
             rejections[code] = rejections.get(code, 0) + count
     block = {
+        "selector_provenance": {
+            scope: {
+                "runs": sum(
+                    g.get("selector_provenance", {}).get("scope", "unknown") == scope
+                    for g in grades
+                ),
+                "gateway_local_calls": sum(
+                    g["local_calls"]
+                    for g in grades
+                    if g.get("selector_provenance", {}).get("scope", "unknown") == scope
+                ),
+                "gateway_external_calls": sum(
+                    g["external_calls"]
+                    for g in grades
+                    if g.get("selector_provenance", {}).get("scope", "unknown") == scope
+                ),
+            }
+            for scope in ("http_attempted", "gateway_observed", "unknown")
+        },
         "runs": len(grades),
         "success": rate(sum(g["success"] for g in grades), len(grades)),
         "tool_correct": rate(sum(g["tool_correct"] for g in grades), len(grades)),
@@ -220,6 +239,18 @@ _COLUMNS = (
 )
 
 
+def _provenance_rows(groups: Mapping[str, Any], count: str) -> list[str]:
+    return [
+        "HTTP selector-internal model cost is not verified; "
+        "model calls and tokens are gateway-observed only.",
+        "",
+        "| selector provenance | " + count + " |",
+        "|---|---|",
+        *[f"| {scope} | {block[count]} |" for scope, block in groups.items()],
+        "",
+    ]
+
+
 def render_corpus_markdown(summary: Mapping[str, Any], *, title: str) -> str:
     """A Markdown report of a corpus summary: exact numerators and denominators."""
     lines = [f"# {title}", ""]
@@ -232,6 +263,7 @@ def render_corpus_markdown(summary: Mapping[str, Any], *, title: str) -> str:
                 cells = [cell(block) for _, cell in _COLUMNS]
                 lines.append(f"| {name} | " + " | ".join(cells) + " |")
             lines.append("")
+            lines += _provenance_rows(data["all"].get("selector_provenance", {}), "runs")
     lines += ["## Section 12.3 targets (English simple subset)", ""]
     for mode, entry in summary["targets"].items():
         parts = []
@@ -299,7 +331,22 @@ def summarize_latency(samples: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         "timeouts": overall["timeouts"],
         "met": met,
     }
-    return {"overall": overall, "by_label": by_label, "hypothesis": hypothesis}
+    scopes = {
+        scope: _latency_block(
+            [
+                s
+                for s in samples
+                if s.get("selector_provenance", {}).get("scope", "unknown") == scope
+            ]
+        )
+        for scope in ("http_attempted", "gateway_observed", "unknown")
+    }
+    return {
+        "overall": overall,
+        "by_label": by_label,
+        "hypothesis": hypothesis,
+        "by_selector_provenance": scopes,
+    }
 
 
 def _ms(value: float | None) -> str:
@@ -339,6 +386,7 @@ def render_latency_markdown(
                 f"| {metric_label} | {stats['n']} | {_ms(stats['p50'])} | {_ms(stats['p95'])} |"
             )
         lines.append("")
+    lines += _provenance_rows(summary.get("by_selector_provenance", {}), "samples")
     h = summary["hypothesis"]
     verdict = {True: "met", False: "not met", None: "not determined"}[h["met"]]
     lines.append(

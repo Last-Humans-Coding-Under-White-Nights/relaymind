@@ -109,7 +109,14 @@ def test_a_simple_request_is_selected_without_a_model_and_answered_externally(tm
     assert route.payload["local_model_status"] == status.status.value
     # The chain ran without model_router: no routing generation.
     assert route.payload["selector"]["attempts"] == [
-        {"name": "example_match", "outcome": "selected"}
+        {
+            "name": "example_match",
+            "outcome": "selected",
+            "version": "1",
+            "transport": "in_process",
+            "elapsed_ms": 0,
+            "model_calls_claim": None,
+        }
     ]
     (loaded,) = of_type(events, "skill.loaded")
     assert loaded.payload["name"] == "check-service-health"

@@ -24,6 +24,7 @@ import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Any
 
 from relaymind.orchestrator.placement import PlacementDeclined
@@ -80,6 +81,7 @@ class Outcome(StrEnum):
     INADMISSIBLE = "inadmissible"
     # Spec 0.31 RM27: the placement policy did not run a model-based selector (#130).
     NOT_PLACED = "not_placed"
+    CANCELLED = "cancelled"
 
 
 class InadmissibleError(Exception):
@@ -96,8 +98,29 @@ class Attempt:
     model_based: bool = False
     detail: str | None = None
 
-    def to_json_object(self) -> dict[str, str]:
-        return {"name": self.name, "outcome": self.outcome.value}
+    version: str = "1"
+    transport: str = "in_process"
+    model_calls_claim: tuple[Mapping[str, str], ...] | None = None
+
+    def __post_init__(self) -> None:
+        if self.model_calls_claim is not None:
+            object.__setattr__(
+                self,
+                "model_calls_claim",
+                tuple(MappingProxyType(dict(c)) for c in self.model_calls_claim),
+            )
+
+    def to_json_object(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "version": self.version,
+            "transport": self.transport,
+            "outcome": self.outcome.value,
+            "elapsed_ms": self.elapsed_ms,
+            "model_calls_claim": None
+            if self.model_calls_claim is None
+            else [dict(c) for c in self.model_calls_claim],
+        }
 
 
 @dataclass(frozen=True)
@@ -109,6 +132,8 @@ class ChainResult[T]:
     selector: Selector | None = None
     result: SelectionResult | None = None
     admitted: T | None = None
+    # A valid final none is useful to evaluation, but is never an admitted choice.
+    none_result: SelectionResult | None = None
 
     def rejected_model_output(self) -> Attempt | None:
         """The first model-based attempt whose output was rejected (RM28: invalid_output)."""
@@ -197,15 +222,48 @@ class SelectorChain:
         request: SelectionRequest,
         context: SelectionContext,
         admit: Callable[[SelectionResult], T],
+        *,
+        on_progress: Callable[[ChainResult], None] | None = None,
+        remaining_seconds: Callable[[], float] | None = None,
     ) -> ChainResult[T]:
         """Try each selector until one result is admitted; admit raises InadmissibleError."""
         attempts: list[Attempt] = []
         started = self._clock()
         for selector in self.selectors:
             began = self._clock()
-            outcome, detail, parsed, admitted = await self._attempt(
-                selector, request, context, admit
-            )
+            if remaining_seconds is not None and not selector.model_based:
+                request = request.with_deadline(
+                    max(1, round(min(self.timeout_seconds, remaining_seconds()) * 1000))
+                )
+            transport = getattr(selector, "transport", "in_process")
+            try:
+                outcome, detail, parsed, admitted = await self._attempt(
+                    selector, request, context, admit
+                )
+            except (Exception, asyncio.CancelledError) as exc:
+                outcome = (
+                    Outcome.CANCELLED if isinstance(exc, asyncio.CancelledError) else Outcome.ERROR
+                )
+                attempts.append(
+                    Attempt(
+                        selector.name,
+                        outcome,
+                        self._elapsed_ms(began),
+                        selector.model_based,
+                        version=selector.version,
+                        transport=transport,
+                    )
+                )
+                if on_progress:
+                    on_progress(ChainResult(tuple(attempts), self._elapsed_ms(started)))
+                raise
+            if not selector.model_based and self._clock() - began >= self.timeout_seconds:
+                outcome, detail, parsed, admitted = (
+                    Outcome.TIMEOUT,
+                    "selector deadline spent",
+                    None,
+                    None,
+                )
             attempts.append(
                 Attempt(
                     selector.name,
@@ -213,13 +271,22 @@ class SelectorChain:
                     self._elapsed_ms(began),
                     selector.model_based,
                     detail,
+                    selector.version,
+                    transport,
+                    parsed.model_calls if parsed is not None and transport == "http" else None,
                 )
             )
+            if on_progress:
+                on_progress(ChainResult(tuple(attempts), self._elapsed_ms(started)))
             if outcome == Outcome.SELECTED:
                 return ChainResult(
                     tuple(attempts), self._elapsed_ms(started), selector, parsed, admitted
                 )
-        return ChainResult(tuple(attempts), self._elapsed_ms(started))
+        return ChainResult(
+            tuple(attempts),
+            self._elapsed_ms(started),
+            none_result=parsed if outcome == Outcome.NONE else None,
+        )
 
     async def _attempt[T](
         self,
@@ -240,7 +307,7 @@ class SelectorChain:
                 if isinstance(stops[0], PlacementDeclined):
                     return Outcome.NOT_PLACED, str(stops[0]), None, None
                 raise stops[0] from None
-            return Outcome.ERROR, f"{type(exc).__name__}: {exc}", None, None
+            return Outcome.ERROR, "selector failure", getattr(exc, "result", None), None
         if stops:
             # A selector cannot swallow a callback stop.
             if isinstance(stops[0], PlacementDeclined):
@@ -250,9 +317,12 @@ class SelectorChain:
             return Outcome.TIMEOUT, f"no result within {self.timeout_seconds} seconds", None, None
         try:
             result = parse_selection_result(raw)
+        except SelectionError:
+            return Outcome.ERROR, "invalid selector result", None, None
+        try:
             _check_identity(selector, result)
-        except SelectionError as exc:
-            return Outcome.ERROR, str(exc), None, None
+        except SelectionError:
+            return Outcome.ERROR, "selector identity or mechanism rejected", result, None
         if result.candidate.kind == CandidateKind.NONE:
             return Outcome.NONE, None, result, None
         try:
@@ -271,7 +341,9 @@ class SelectorChain:
         if selector.model_based:
             guarded = SelectionContext(context.messages, _guard(context, stops))
             return await selector.select(request.with_deadline(None), guarded)
-        deadline_ms = max(1, round(self.timeout_seconds * 1000))
+        deadline_ms = min(
+            request.deadline_ms or math.inf, max(1, round(self.timeout_seconds * 1000))
+        )
         work = asyncio.ensure_future(
             selector.select(request.with_deadline(deadline_ms), context.without_generation())
         )

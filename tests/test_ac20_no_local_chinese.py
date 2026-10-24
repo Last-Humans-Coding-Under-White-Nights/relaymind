@@ -42,7 +42,14 @@ def test_chinese_examples_select_the_skill_without_local_inference(
     assert route.actor == "gateway"
     assert route.payload["mechanism"] == "example_match"
     assert route.payload["selector"]["attempts"] == [
-        {"name": "example_match", "outcome": "selected"}
+        {
+            "name": "example_match",
+            "outcome": "selected",
+            "version": "1",
+            "transport": "in_process",
+            "elapsed_ms": 0,
+            "model_calls_claim": None,
+        }
     ]
     decision = route.payload["decision"]
     assert decision["language"] == "zh"

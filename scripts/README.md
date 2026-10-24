@@ -361,7 +361,9 @@
   checked in. ToolRet source rows stay in an operator cache because the dataset
   states no licence; install `pip install -e '.[bench]'` for parquet derivation.
   Every selector receives the published RM28 request and returns a validated
-  result. HTTP selector addresses must be loopback. The model router uses the
+  result. HTTP selector addresses must be loopback and supply explicit expected
+  `--selector-name` and `--selector-version`; both tracks use the production HTTP
+  transport and report nullable unverified claims per attempt. The model router uses the
   production routing prompt, tokenizer and eight-skill cap. The tool proposal
   track sends the production first skill-stage prompt, validates complete calls,
   and never executes a tool handler.
@@ -376,7 +378,8 @@
   python scripts/selection_benchmark.py --track tools --selector model_router \
       --toolret-cache /tmp/toolret --proposal local --output /tmp/tools-local.json
   python scripts/selection_benchmark.py --track tools \
-      --selector http://127.0.0.1:9000/select --toolret-cache /tmp/toolret \
+      --selector http://127.0.0.1:9000/select --selector-name my_selector --selector-version 1 \
+      --toolret-cache /tmp/toolret \
       --proposal external --context-limit 32768 --output /tmp/tools-external.json
   ```
 
@@ -397,3 +400,16 @@
   it outside the repository and publish aggregate metrics with row IDs. Source
   derivation commands live in `scripts/benchmarks/` and require pinned revisions;
   a changed row or file fails verification before measurement.
+
+- `example_selector.py` — standard-library loopback HTTP keyword example (RM28).
+  Run `python scripts/example_selector.py --port 8051`. It offers only POST
+  `/select`, selects an ID present in the request catalog using shared words,
+  and reports `example_keyword/1`, `keyword_rule`, null confidence and no model
+  calls. It executes no tools. Its keyword method has no accuracy guarantee.
+
+  ```bash
+  python scripts/selection_benchmark.py --track skills \
+      --selector http://127.0.0.1:8051/select \
+      --selector-name example_keyword --selector-version 1 --seed 42 \
+      --source-training neither --output /tmp/skills-example-keyword-http.json
+  ```

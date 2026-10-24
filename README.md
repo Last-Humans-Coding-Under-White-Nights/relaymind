@@ -83,6 +83,38 @@ line says so and `auto` uses the external model the same way. Set
 `detect = false` in a `[placement]` table to skip that check. Every setting is described in
 [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md), section 14.1.
 
+### Loopback HTTP selector
+
+RM28 permits a selector running in another local process. Start the deterministic
+standard-library example in another terminal:
+
+```bash
+python scripts/example_selector.py --port 8051
+```
+
+Configure its exact identity in the launch file:
+
+```toml
+[selection]
+chain = [{ transport = "http", name = "example_keyword", version = "1", url = "http://127.0.0.1:8051/select" }, "example_match"]
+timeout_seconds = 2
+```
+
+The gateway sends one redacted [SelectionRequest](src/relaymind/selection/schemas/selection_request.v1.json)
+and validates the [SelectionResult](src/relaymind/selection/schemas/selection_result.v1.json).
+Only loopback HTTP(S) endpoints are accepted; credentials, query strings, redirects
+and environment proxies are excluded. Configuration needs no selector connection.
+Bump the configured version when selector behavior changes. The gateway admits
+proposals and retains its permission, identifier, tool and confirmation checks;
+a selector never executes a tool or grants permission (RM28).
+
+The keyword example has no model and makes no API calls. It demonstrates the
+transport without claiming useful selection accuracy. HTTP attempts and their
+nullable model-call self-reports are labeled separately in traces and evaluation;
+those reports never verify total external inference cost. The same production
+transport can be benchmarked with explicit `--selector-name example_keyword
+--selector-version 1`; see [scripts/README.md](scripts/README.md).
+
 ## Start
 
 Start the local runtime as

@@ -279,6 +279,7 @@ from relaymind.selection import (
     catalog_entries,
     parse_selection_request,
 )
+from relaymind.selection.http import HttpSelector
 from relaymind.skills import Skill, SkillRegistry
 from relaymind.skills.predicates import (
     COMPLETION_CRITERIA,
@@ -898,7 +899,14 @@ class LocalOrchestrator:
             ),
         }
         chain = (
-            selectors if selectors is not None else [built_in[n]() for n in self.selection.chain]
+            selectors
+            if selectors is not None
+            else [
+                built_in[n]()
+                if isinstance(n, str)
+                else HttpSelector(name=n.name, version=n.version, url=n.url)
+                for n in self.selection.chain
+            ]
         )
         self.selection_chain = SelectorChain(
             chain, timeout_seconds=self.selection.timeout_seconds, clock=self.clock.monotonic
@@ -1502,6 +1510,7 @@ class _Run:
         self.secrets: set[str] = set()
         self._calls = 0
         self.routing_placement = marker()
+        self.pending_selector = None
         self.pending_placement = None
         self._routing_count = None
         # RM14: who may dispatch and who owns the final answer.
@@ -1544,11 +1553,17 @@ class _Run:
         return self.active_model.actor
 
     def emit(self, event_type: EventType | str, actor: str, payload: Mapping[str, Any]) -> None:
+        if "selector" in payload:
+            payload = {
+                **payload,
+                "selector": self.o.redactor.redact_with_repeats(payload["selector"], self.secrets),
+            }
         if event_type == EventType.ROUTE_SELECTED:
             payload = {"placement": self.routing_placement.to_json_object(), **payload}
         elif event_type in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED):
             if self.pending_placement is not None:
                 payload = {"placement": self.pending_placement.to_json_object(), **payload}
+        payload = self._selector_fallback(event_type, payload)
         self.o.store.append_event(self.run_id, EventType(event_type), actor, payload)
 
     def move(self, state: RunState, **kwargs: Any) -> None:
@@ -1561,7 +1576,23 @@ class _Run:
                     actor,
                     {"placement": self.pending_placement.to_json_object(), **payload},
                 )
+        if event is not None:
+            kind, actor, payload = kwargs["event"]
+            kwargs["event"] = (kind, actor, self._selector_fallback(kind, payload))
         self.record = self.o.machine.transition(self.run_id, self.record.version, state, **kwargs)
+
+    def _selector_fallback(
+        self, kind: EventType | str, payload: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
+        if kind == EventType.ROUTE_SELECTED:
+            self.pending_selector = None
+        elif (
+            kind in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED, EventType.RUN_CANCELLED)
+            and self.pending_selector is not None
+        ):
+            payload = {"selector": self.pending_selector, **payload}
+            self.pending_selector = None
+        return payload
 
     def scrub(self, text: str) -> str:
         return redact_text(text, self.secrets)
@@ -2026,7 +2057,9 @@ class _Run:
                 # A cancel that reaches the task, from the native cancel,
                 # a chat disconnect, or the event loop, is a cancel
                 # request (spec 0.17 sections 7.4 and 8).
-                payload = {"reason": CANCEL_REQUESTED, **self._summary()}
+                payload = self._selector_fallback(
+                    EventType.RUN_CANCELLED, {"reason": CANCEL_REQUESTED, **self._summary()}
+                )
                 self.record = self.o.machine.cancel(
                     self.run_id,
                     self.record.version,
@@ -2756,9 +2789,37 @@ class _Run:
             )
 
         selection_chain = self.o.no_local_chain if self.no_local else self.o.selection_chain
-        chain = await selection_chain.run(
-            self._selection_request(), SelectionContext(self.messages, generate), admit_result
-        )
+
+        def progress(result: Any) -> None:
+            self.pending_selector = self.o.redactor.redact_with_repeats(
+                result.selector_record(), self.secrets
+            )
+
+        limit = self.meter.remaining_seconds()
+        if limit <= 0:
+            raise self.meter.time_exhausted()
+        timeout = asyncio.timeout(limit)
+        try:
+            async with timeout:
+                chain = await selection_chain.run(
+                    self._selection_request(),
+                    SelectionContext(self.messages, generate),
+                    admit_result,
+                    on_progress=progress,
+                    remaining_seconds=self.meter.remaining_seconds,
+                )
+        except TimeoutError:
+            if timeout.expired():
+                # This is a gateway time budget, not an ordinary selector timeout.
+                if self.pending_selector:
+                    self.pending_selector["attempts"][-1]["outcome"] = "error"
+                raise self.meter.time_exhausted() from None
+            raise
+
+        if self.meter.remaining_seconds() <= 0:
+            if self.pending_selector:
+                self.pending_selector["attempts"][-1]["outcome"] = "error"
+            raise self.meter.time_exhausted()
         if chain.admitted is None or chain.selector is None:
             rejected = chain.rejected_model_output()
             if rejected is not None:
