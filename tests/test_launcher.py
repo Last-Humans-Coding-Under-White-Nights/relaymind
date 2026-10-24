@@ -32,6 +32,7 @@ from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import LocalOrchestrator
 from relaymind.orchestrator.performance import PerformanceSettings
 from relaymind.orchestrator.run_state import RunState
+from relaymind.selection import SelectionSettings
 from relaymind.store import RunStore, RunStoreError
 from relaymind.store.trace_event import EventType
 
@@ -589,10 +590,11 @@ def test_the_configured_budgets_are_recorded_in_run_accepted(tmp_path):
     assert recorded["active_seconds"] == 20.0
     assert recorded["local_generations"] == 4
     assert recorded["run_generations"] == 9
-    assert (
-        recorded
-        == LocalBudgets(active_seconds=20, local_generations=4, run_generations=9).to_json_object()
-    )
+    assert recorded == {
+        **LocalBudgets(active_seconds=20, local_generations=4, run_generations=9).to_json_object(),
+        # Spec 0.31 section 8: the selection time limit is recorded with the limits (RM28).
+        "selection.timeout_seconds": 2.0,
+    }
     # The default file records the section 11 defaults.
     plain = tmp_path / "plain"
     plain.mkdir()
@@ -601,7 +603,10 @@ def test_the_configured_budgets_are_recorded_in_run_accepted(tmp_path):
     )
     outcome = asyncio.run(built.orchestrator.run_text("Which service is it?"))
     accepted = built.orchestrator.store.events(outcome.run_id)[0]
-    assert accepted.payload["budgets"] == LocalBudgets().to_json_object()
+    assert accepted.payload["budgets"] == {
+        **LocalBudgets().to_json_object(),
+        "selection.timeout_seconds": 2.0,
+    }
 
 
 def _read_timeouts(built):
@@ -936,3 +941,102 @@ def test_example_config_documents_the_performance_table(tmp_path):
     assert len(block) == 1 + len(PERFORMANCE_KEYS)
     config = load_config(write_config(tmp_path, "\n" + "\n".join(block) + "\n"))
     assert config.performance == PerformanceSettings()
+
+
+# -- the [selection] table (#131, #132; RM28, spec 0.32 section 14.1) -------------------------
+
+SELECTION_KEYS = {"chain", "timeout_seconds", "example_match_score", "example_match_margin"}
+
+
+def test_selection_keys_are_the_settings_fields():
+    """Section 14.1: the table's keys are the SelectionSettings fields, from one list."""
+    fields = {f.name for f in dataclasses.fields(SelectionSettings)}
+    assert set(launcher._TABLES["selection"]) == fields == SELECTION_KEYS
+
+
+def test_without_the_table_the_baseline_chain_applies(tmp_path):
+    """RM28, section 14.1: a file without [selection] runs model_router alone."""
+    config = load_config(write_config(tmp_path))
+    assert config.selection == SelectionSettings()
+    built = build_app(config, **doubles())
+    assert built.orchestrator.selection_chain.names == ("model_router",)
+
+
+def test_every_selection_key_reaches_the_settings(tmp_path):
+    extra = (
+        "\n[selection]\nchain = ['example_match', 'model_router']\ntimeout_seconds = 0.5\n"
+        "example_match_score = 0.7\nexample_match_margin = 0\n"
+    )
+    config = load_config(write_config(tmp_path, extra))
+    assert config.selection == SelectionSettings(
+        chain=("example_match", "model_router"),
+        timeout_seconds=0.5,
+        example_match_score=0.7,
+        example_match_margin=0.0,
+    )
+    built = build_app(config, **doubles())
+    assert built.orchestrator.selection_chain.names == ("example_match", "model_router")
+    assert built.orchestrator.selection_chain.timeout_seconds == 0.5
+
+
+@pytest.mark.parametrize(
+    "line, word",
+    [
+        ("chain = []", "chain"),
+        ("chain = 'model_router'", "chain"),
+        ("chain = ['model_router', 'model_router']", "chain"),
+        ("chain = ['oracle']", "oracle"),
+        ("chain = [1]", "chain"),
+        ("chain = [{ transport = 'http', url = 'http://127.0.0.1:9000/select' }]", "#133"),
+        ("timeout_seconds = 0", "timeout_seconds"),
+        ("timeout_seconds = -1", "timeout_seconds"),
+        ("timeout_seconds = inf", "timeout_seconds"),
+        ("timeout_seconds = true", "timeout_seconds"),
+        ("timeout_seconds = '2'", "timeout_seconds"),
+        ("example_match_score = 1.5", "example_match_score"),
+        ("example_match_score = -0.1", "example_match_score"),
+        ("example_match_score = nan", "example_match_score"),
+        ("example_match_score = true", "example_match_score"),
+        ("example_match_margin = '0.1'", "example_match_margin"),
+        ("example_match_margin = 2", "example_match_margin"),
+        ("surprise = 1", "surprise"),
+    ],
+)
+def test_a_bad_selection_value_is_one_startup_message(tmp_path, line, word):
+    """RM28, section 14.1: a wrong type or range, or an http selector before #133, is exit 2."""
+    config = write_config(tmp_path, f"\n[selection]\n{line}\n")
+    with pytest.raises(LaunchError, match=r"\[selection\].*" + word) as raised:
+        load_config(config)
+    assert "\n" not in str(raised.value)
+    out, err = [], []
+    assert main(["serve", "--config", str(config)], stdout=out.append, stderr=err.append) == 2
+    assert out == [] and len(err) == 1 and "[selection]" in err[0]
+
+
+def test_the_configured_selection_is_recorded_in_run_accepted(tmp_path):
+    """RM22, RM28, section 8: the chain, the thresholds, and the time limit in budgets."""
+    extra = "\n[selection]\ntimeout_seconds = 1.5\nexample_match_score = 0.25\n"
+    built = build_app(
+        load_config(write_config(tmp_path, extra)),
+        local_adapter=ScriptedAdapter(turns=[clarify_turn()]),
+    )
+    outcome = asyncio.run(built.orchestrator.run_text("Which service is it?"))
+    accepted = built.orchestrator.store.events(outcome.run_id)[0]
+    assert accepted.payload["selection"] == ["model_router"]
+    assert accepted.payload["example_match_score"] == 0.25
+    assert accepted.payload["example_match_margin"] == 0.1
+    assert accepted.payload["budgets"]["selection.timeout_seconds"] == 1.5
+
+
+def test_example_config_documents_the_selection_table(tmp_path):
+    """Section 14.1: the commented [selection] block loads when uncommented, with the defaults."""
+    lines = (REPO_ROOT / "relaymind.example.toml").read_text(encoding="utf-8").splitlines()
+    start = lines.index("# [selection]")
+    block = []
+    for line in lines[start:]:
+        if not line.startswith("# "):
+            break
+        block.append(line[2:])
+    assert len(block) == 1 + len(SELECTION_KEYS)
+    config = load_config(write_config(tmp_path, "\n" + "\n".join(block) + "\n"))
+    assert config.selection == SelectionSettings()

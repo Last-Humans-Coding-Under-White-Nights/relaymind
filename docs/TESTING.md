@@ -723,6 +723,65 @@ feature has a test of the default as well. Later pull requests append here.
   conversation in two variants; one lowered the corpus subset and the other
   lowered AC01, so neither was kept. The runs are in
   [`EVIDENCE.md`](EVIDENCE.md).
+- `pytest tests/test_selection_interface.py` (#131; RM02, RM05, RM08,
+  RM22, RM28, AC22 in process, sections 8, 11, and 14.1): the two
+  published schemas are closed with `schema_version` 1, and a request and
+  a result are checked at the boundary (an unknown field, a candidate
+  without its skill or text, a confidence that is out of range, infinite,
+  NaN, or a boolean). The chain runs scripted selectors and records each
+  attempt: none, a raised error, an invalid result, an unknown skill
+  (inadmissible), a result that names another selector or a reserved
+  mechanism (error), and a selector past the time limit (timeout, and
+  cancelled), driven by an injected sleep, never the wall clock. A
+  model-based selector has no time limit and no deadline, and a failure of
+  the gateway's routing generation ends the chain even when the selector
+  swallows it. `model_router` sends exactly the router's request through
+  the injected generation callback and reports rejected routing output as a
+  selector error. In the gateway: the default chain records `selector` and
+  every attempt on `route.selected` with the local model's actor and the
+  routing fields of before; another selector's choice has actor `gateway`
+  and its own mechanism and no routing generation runs; the request carries
+  the redacted conversation and the catalog with the `examples.json`
+  requests in both languages; narrowing only removes tools (a tool outside
+  the allowlist is dropped, and narrowing to none ends as
+  `capability_missing`); a selected mutating skill still waits for
+  confirmation; a selector clarification and a missing identifier are the
+  gateway's clarify decisions; an exhausted chain records `selector_chain`
+  with `selection_failed` and hands off with the catalog, or ends as
+  `needs_external`; alternatives are ignored; a rejected `model_router`
+  output alone still escalates with `invalid_output` and no
+  `route.selected`; only a routing generation's choice enters the routing
+  cache; `external_only` and the oversized-input bypass run no selector;
+  and `SelectionSettings` refuses a wrong chain, time limit, or threshold.
+  The routing tests (`tests/test_router.py`, `tests/test_ac01_local_health.py`,
+  `tests/test_ac03_clarification.py`, `tests/test_ac04_invalid_proposals.py`,
+  and `tests/test_routing_cache*.py`) run through `model_router` with the
+  same decisions; the only edits there are the spec 0.31 additions: three
+  reason codes, `selection.timeout_seconds` inside `budgets`, and the
+  routing cache policy version 2 with the selector chain in the key.
+  `tests/test_route_decision.py` checks that the reason code follows the
+  route, and `tests/test_trace_event.py -k selection_fields` checks the new
+  optional fields in the validator and the published schema alike.
+- `pytest tests/test_example_match.py` (#132; RM01, RM05, RM28, section
+  14.1): the catalog carries the `examples.json` requests of both
+  languages; an unrelated request (English, Chinese, or empty) returns
+  none; changing only the service name keeps the pick and the score; scores
+  are in [0, 1] and ranked; both thresholds come from the configuration;
+  a one-skill catalog compares with 0; a tie is none; the index is rebuilt
+  only when a content hash changes; the ranking is the same under three hash
+  seeds; and in the gateway the chain `["example_match"]` makes no routing
+  generation and records actor `gateway`. The leave-one-out test records
+  the measured result on the twenty demo example requests at the default
+  thresholds, not a target: English 4 right, 1 wrong, 5 none; Chinese 1
+  right, 1 wrong, 8 none; the held-out request's own skill ranks first for
+  13 of 20.
+- `pytest tests/test_launcher.py -k selection` (#131, #132; section 14.1):
+  the `[selection]` keys are the `SelectionSettings` fields, every key
+  reaches the chain, a file without the table runs `model_router` alone, a
+  wrong type or range, an unknown selector, a repeated one, an empty chain,
+  and an `http` selector (not available until #133) are exit status 2 with
+  one `[selection]` message, `run.accepted` records the values, and the
+  commented block of `relaymind.example.toml` loads with the defaults.
 
 ### What is not covered yet
 
@@ -761,11 +820,12 @@ feature has a test of the default as well. Later pull requests append here.
   starts, `/readyz` 200 on all).
 - Phase 2 (spec 0.31, RM26 to RM32, AC17 to AC23) is mostly specified and
   not implemented: there is no test for gated streaming, operation without
-  a local model, the placement policy, the selection interface, or workflow
-  packages. The budgets table (#142), the call timing and count recording
-  (#120), the draft answer pass (#121, AC17), early response headers
-  (#140), admitted calls per generation (#122), and prefetch (#123), both
-  AC18, are implemented; their tests are in
+  a local model, the placement policy, the out-of-process selector (#133),
+  or workflow packages. The budgets table (#142), the call timing and count
+  recording (#120), the draft answer pass (#121, AC17), early response
+  headers (#140), admitted calls per generation (#122), prefetch (#123),
+  both AC18, and the selection interface with its two built-in selectors
+  (#131, #132, AC22 in process) are implemented; their tests are in
   [Phase 2 (spec 0.31)](#phase-2-spec-031). The cached-token figures in the existing exports
   are adapter defaults (finding F9 in [`EVIDENCE.md`](EVIDENCE.md)); the
   prefix-cache probe (#114) read the runtime's own counts once, and the

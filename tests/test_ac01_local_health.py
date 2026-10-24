@@ -173,28 +173,29 @@ def test_the_budgets_and_their_use_are_recorded(tmp_path, case):
     gateway, outcome, events = run_case(tmp_path, case)
 
     (accepted,) = of_type(events, "run.accepted")
-    assert (
-        accepted.payload["budgets"]
-        == LocalBudgets().to_json_object()
-        == {
-            "routing_generations": 1,
-            "local_generations": 3,
-            "tool_calls": 2,
-            "repair_generations": 1,
-            "active_seconds": 4.0,
-            "routing_input_tokens": 2048,
-            "routing_output_tokens": 128,
-            # Spec 0.6 section 11: entire-run limits, waiting, and rounds.
-            "run_active_seconds": 60.0,
-            "run_generations": 8,
-            "run_tool_executions": 6,
-            "waiting_seconds": 300.0,
-            "clarification_rounds": 2,
-            # Spec 0.9 section 11: the external stage limits.
-            "external_generations": 6,
-            "external_seconds": 30.0,
-        }
-    )
+    # Spec 0.31 section 8: the selection time limit is recorded with the limits (RM28).
+    assert accepted.payload["budgets"] == {
+        **LocalBudgets().to_json_object(),
+        "selection.timeout_seconds": 2.0,
+    }
+    assert LocalBudgets().to_json_object() == {
+        "routing_generations": 1,
+        "local_generations": 3,
+        "tool_calls": 2,
+        "repair_generations": 1,
+        "active_seconds": 4.0,
+        "routing_input_tokens": 2048,
+        "routing_output_tokens": 128,
+        # Spec 0.6 section 11: entire-run limits, waiting, and rounds.
+        "run_active_seconds": 60.0,
+        "run_generations": 8,
+        "run_tool_executions": 6,
+        "waiting_seconds": 300.0,
+        "clarification_rounds": 2,
+        # Spec 0.9 section 11: the external stage limits.
+        "external_generations": 6,
+        "external_seconds": 30.0,
+    }
     offered = accepted.payload["skills_offered"]
     assert [s["name"] for s in offered] == list(gateway.skills.names())
     (completed,) = of_type(events, "run.completed")

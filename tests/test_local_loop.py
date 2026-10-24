@@ -53,6 +53,7 @@ from relaymind.orchestrator.local_loop import ConfiguredModel, skill_stage_messa
 from relaymind.orchestrator.performance import PerformanceSettings
 from relaymind.orchestrator.run_state import RunState, SlotUnavailableError
 from relaymind.redaction import Redactor
+from relaymind.selection import SelectionSettings
 from relaymind.skills import SkillVersionMissingError
 from relaymind.store import TraceClock
 from relaymind.store.trace_event import TraceEventError, validate_trace_event
@@ -677,7 +678,8 @@ def test_run_accepted_carries_the_section_8_payload(tmp_path):
         "requested_execution_mode": "local_only",
         "effective_execution_mode": "local_only",
         "model_alias": "relaymind",
-        "budgets": LocalBudgets().to_json_object(),
+        # Spec 0.31 section 8: the selection time limit is recorded with the limits (RM28).
+        "budgets": {**LocalBudgets().to_json_object(), "selection.timeout_seconds": 2.0},
         "skill_roots": snapshot["skill_roots"],
         "skills_offered": snapshot["skills_offered"],
         "original_messages": [{"role": "user", "content": "Is staging-api healthy right now?"}],
@@ -686,6 +688,8 @@ def test_run_accepted_carries_the_section_8_payload(tmp_path):
         **PerformanceSettings().to_json_object(),
         # RM29: the offered skills' prefetch declarations are recorded whatever the option says.
         "prefetch_declarations": gateway.skills.prefetch_declarations(gateway.skills.names()),
+        # RM28: the selector chain in force and the example_match thresholds, the baseline.
+        **SelectionSettings().to_json_object(),
     }
     assert outcome.state is RunState.COMPLETED
 
@@ -1071,7 +1075,9 @@ def test_an_invalid_run_accepted_leaves_no_stuck_run(tmp_path, monkeypatch):
     that fails validation creates no run, never one stuck in accepted
     without its first event, and the next run can start."""
     gateway = build_gateway(tmp_path, HEALTH_RUN)
-    monkeypatch.setattr(LocalBudgets, "to_json_object", lambda self: "not an object")
+    from relaymind.orchestrator import local_loop
+
+    monkeypatch.setattr(local_loop._Run, "_budget_record", lambda self: "not an object")
     with pytest.raises(TraceEventError, match="budgets"):
         run(gateway)
     assert gateway.store._conn.execute("SELECT run_id FROM runs").fetchall() == []

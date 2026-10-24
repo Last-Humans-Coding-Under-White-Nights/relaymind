@@ -122,6 +122,28 @@ enabled_workflows = []
 # warmup = true
 # warmup_seconds = 30
 
+# Skill selection (RM28, spec 0.31 and 0.32 section 14.1). Every key is optional
+# and the values below are the defaults; each run records them in run.accepted.
+#   chain: the selectors, tried in order. model_router is the local model's
+#     routing generation, the baseline. example_match matches the request against
+#     the offered skills' example requests and descriptions, with no model call.
+#     A selector that chooses nothing, errs, times out, or proposes what the
+#     gateway does not admit passes to the next one; when none chooses, the run
+#     hands off to the external model with the skill catalog (selection_failed).
+#     An http selector (a table with transport and url) is not available yet and
+#     stops startup.
+#   timeout_seconds: the time limit of a selector that is not a model; the model
+#     router is bounded by its generation's limits instead.
+#   example_match_score, example_match_margin: numbers in [0, 1]. example_match
+#     picks a skill only when its score is at least the score threshold and its
+#     lead over the second-best skill is at least the margin. These defaults are
+#     provisional choices, not measured accuracy.
+# [selection]
+# chain = ["model_router"]
+# timeout_seconds = 2
+# example_match_score = 0.5
+# example_match_margin = 0.1
+
 # The routing-result cache (spec 0.26 section 10). Off by default and in the
 # benchmark configuration: leave it false for any measurement you report as the
 # baseline. When true, a repeated local read-only request skips only the routing

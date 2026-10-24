@@ -68,6 +68,28 @@ REASON_CODES: frozenset[str] = frozenset(
     ROUTE_DECISION_SCHEMA["properties"]["reason_code"]["enum"]  # type: ignore[index]
 )
 
+# Spec 0.31 section 8: the reason code follows the route. An external route carries the
+# reason for leaving the local path; local_budget, invalid_output, and tool_failure are
+# escalation reasons recorded in the trace (RM04), never a routing decision's.
+EXTERNAL_REASONS: tuple[str, ...] = (
+    "complex_skill",
+    "parallel_workflow",
+    "context_limit",
+    "execution_mode",
+    "capability_missing",
+    "no_local_model",
+    "local_slow",
+    "selection_failed",
+)
+_ROUTE_REASONS: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {
+        "local": ("simple_skill",),
+        "clarify": ("missing_input",),
+        "parallel": ("parallel_workflow",),
+        "external": EXTERNAL_REASONS,
+    }
+)
+
 _FIELDS = ("schema_version", "route", "skill_id", "language", "reason_code", "clarification")
 
 
@@ -161,20 +183,28 @@ def _enum_value(allowed: Iterable[str], data: Mapping[str, object], name: str) -
 
 def _check_cross_field_rules(
     route: Route,
+    reason_code: str,
     skill_id: str | None,
     clarification: str | None,
     context: RoutingContext | None,
 ) -> None:
     """The spec section 8 rules that span fields.
 
-    The clarification rule needs only the decision. The skill_id and
-    parallel rules need the run, so they apply only with a context.
+    The clarification and reason code rules need only the decision. The
+    skill_id and parallel rules need the run, so they apply only with a
+    context.
     """
     if route is Route.CLARIFY:
         if clarification is None:
             raise RouteDecisionError("'clarification' is required when route is clarify")
     elif clarification is not None:
         raise RouteDecisionError(f"'clarification' must be null when route is {route.value}")
+    allowed = _ROUTE_REASONS[route.value]
+    if reason_code not in allowed:
+        raise RouteDecisionError(
+            f"'reason_code' {reason_code} does not follow route {route.value};"
+            f" it must be one of {', '.join(allowed)}"
+        )
     if context is None:
         return
     if not context.managed:
@@ -226,7 +256,7 @@ def parse_route_decision(
     if skill_id is not None and skill_id not in skill_ids:
         raise RouteDecisionError(f"'skill_id' {skill_id!r} is not in the advertised catalog")
     clarification = _optional_text(data, "clarification")
-    _check_cross_field_rules(route, skill_id, clarification, context)
+    _check_cross_field_rules(route, reason_code, skill_id, clarification, context)
     return RouteDecision(
         route=route,
         skill_id=skill_id,

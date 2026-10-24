@@ -59,7 +59,8 @@ def test_the_policy_version_is_pinned():
     The routing prompt version is derived from the prompt and the
     functions (see test_the_routing_prompt_version_follows_the_prompt_and_the_functions).
     """
-    assert POLICY_VERSION == "1"
+    # Spec 0.31 changes section 10 (the selector chain joins the key, RM28).
+    assert POLICY_VERSION == "2"
 
 
 def test_key_is_exact_over_every_part():
@@ -89,7 +90,7 @@ def test_key_holds_the_policy_version(monkeypatch):
     from relaymind.orchestrator import routing_cache
 
     base = routing_cache_key(parts())
-    monkeypatch.setattr(routing_cache, "POLICY_VERSION", "2")
+    monkeypatch.setattr(routing_cache, "POLICY_VERSION", POLICY_VERSION + "-next")
     assert routing_cache_key(parts()) != base
 
 
@@ -338,3 +339,19 @@ def test_equal_contexts_are_hashable_regardless_of_mapping_order():
     contexts = {first: "original"}
     assert contexts[equal] == "original"
     assert different not in contexts
+
+
+def test_the_key_holds_the_selector_chain():
+    """RM24, RM28, spec 0.31 section 10: each selector's name and version, in order."""
+    from relaymind.adapters import Message, Role
+    from relaymind.selection import EXAMPLE_MATCH, MODEL_ROUTER
+
+    messages = [Message(role=Role.USER, content="check it")]
+    baseline = key_of(messages)
+    assert baseline == key_of(messages, selector_chain=((MODEL_ROUTER, "1"),))
+    others = {
+        key_of(messages, selector_chain=((EXAMPLE_MATCH, "1"), (MODEL_ROUTER, "1"))),
+        key_of(messages, selector_chain=((MODEL_ROUTER, "1"), (EXAMPLE_MATCH, "1"))),
+        key_of(messages, selector_chain=((MODEL_ROUTER, "2"),)),
+    }
+    assert baseline not in others and len(others) == 3

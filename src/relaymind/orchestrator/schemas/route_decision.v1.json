@@ -20,7 +20,10 @@
         "context_limit",
         "capability_missing",
         "parallel_workflow",
-        "execution_mode"
+        "execution_mode",
+        "local_slow",
+        "no_local_model",
+        "selection_failed"
       ]
     },
     "clarification": {"type": ["string", "null"], "minLength": 1, "pattern": "\\S"}
@@ -39,6 +42,38 @@
       "if": {"properties": {"route": {"const": "clarify"}}},
       "then": {"properties": {"clarification": {"type": "string"}}},
       "else": {"properties": {"clarification": {"type": "null"}}}
+    },
+    {
+      "description": "The reason code follows the route (spec 0.31 section 8). local_budget, invalid_output, and tool_failure are escalation reasons, never a route's.",
+      "if": {"properties": {"route": {"const": "local"}}},
+      "then": {"properties": {"reason_code": {"const": "simple_skill"}}}
+    },
+    {
+      "if": {"properties": {"route": {"const": "clarify"}}},
+      "then": {"properties": {"reason_code": {"const": "missing_input"}}}
+    },
+    {
+      "if": {"properties": {"route": {"const": "parallel"}}},
+      "then": {"properties": {"reason_code": {"const": "parallel_workflow"}}}
+    },
+    {
+      "if": {"properties": {"route": {"const": "external"}}},
+      "then": {
+        "properties": {
+          "reason_code": {
+            "enum": [
+              "complex_skill",
+              "parallel_workflow",
+              "context_limit",
+              "execution_mode",
+              "capability_missing",
+              "no_local_model",
+              "local_slow",
+              "selection_failed"
+            ]
+          }
+        }
+      }
     }
   ]
 }

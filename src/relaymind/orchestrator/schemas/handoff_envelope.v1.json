@@ -112,7 +112,10 @@
         "context_limit",
         "capability_missing",
         "parallel_workflow",
-        "execution_mode"
+        "execution_mode",
+        "local_slow",
+        "no_local_model",
+        "selection_failed"
       ]
     },
     "remaining_budgets": {

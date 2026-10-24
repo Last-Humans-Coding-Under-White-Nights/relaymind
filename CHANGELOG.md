@@ -8,6 +8,51 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- The selection interface (#131; RM02, RM05, RM08, RM22, RM24, RM28, AC22
+  in process, spec 0.36 sections 8, 10, 11, and 14.1). The new
+  `relaymind.selection` package publishes `selection_request.v1.json` and
+  `selection_result.v1.json` (closed, `schema_version` 1, optional
+  `tools` and `alternatives`) and checks a request and a result at the
+  boundary. The chain tries the configured selectors in order; none, a
+  timeout (`selection.timeout_seconds` for a selector that is not a model),
+  an error, an invalid result, and an inadmissible result fall through and
+  are recorded. The gateway admits a result as the router admits its own
+  choice: catalog membership, the route from the registry and the mode, the
+  RM05 identifier check with its clarification, and the narrowing
+  intersected with the allowlist, so it only removes tools; alternatives are
+  ignored. `model_router` wraps the router and runs its generation through
+  an injected callback, the run's own `_generate` in a gateway run, so the
+  baseline chain keeps its decisions, routing request, events, budgets, and
+  cache behaviour. `route.selected` gains `selector` (name, version,
+  mechanism, elapsed_ms, attempts) and `tools_narrowed`; another
+  selector's choice is recorded with actor `gateway`. A chain that chooses
+  nothing routes external with reason `selection_failed` (mechanism
+  `selector_chain`) and hands off with the catalog, or ends as
+  `needs_external`; a rejected routing output still escalates with
+  `invalid_output`. `run.accepted` records `selection`,
+  `example_match_score`, `example_match_margin`, and
+  `selection.timeout_seconds` inside `budgets`.
+- The `example_match` selector (#132; RM01, RM05, RM28, spec 0.32 section
+  14.1): the method of the #118 spike, standard library only, no model
+  call. It indexes each offered skill's description and its
+  `examples.json` requests in both languages, rebuilt when a content hash
+  changes, masks identifiers, uses word tokens and Chinese bigrams, and
+  scores with BM25 divided by the query's summed idf and capped at 1. It
+  picks only a unique best skill at or above `example_match_score` with a
+  lead of at least `example_match_margin` (defaults 0.5 and 0.1,
+  provisional choices, not accuracy claims; #118 measured raw-scale
+  candidates of 2.8164 and 0.1268 as evidence only), reports the score as a
+  selector-reported confidence and the other skills that reach the score
+  threshold as alternatives. Held out one at a time, the twenty demo
+  example requests give 5 right, 2 wrong, and 13 none at the defaults, so
+  the default chain stays `model_router`; making it the chain without a
+  usable local model is #126.
+- The `[selection]` launch table (#131, #132; section 14.1): `chain`
+  (default `["model_router"]`; items `model_router` or `example_match`),
+  `timeout_seconds` (default 2), `example_match_score` (default 0.5), and
+  `example_match_margin` (default 0.1). A wrong type or range is exit
+  status 2, and an `http` selector stops startup as not available until
+  #133. `relaymind.example.toml` documents the table.
 - Completion criteria in the external request, and corrections per completed
   run (#141; RM06, RM12, RM13, RM16, RM25, spec 0.35 section 4.4,
   finding F6). Beside each completion predicate, `skills/predicates.py` now
@@ -149,6 +194,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- RouteDecision and HandoffEnvelope accept the reason codes
+  `selection_failed`, `no_local_model`, and `local_slow` under schema version
+  1, and the RouteDecision validator and schema now check that the reason
+  code follows the route (spec 0.31 section 8): local carries
+  `simple_skill`, clarify `missing_input`, parallel `parallel_workflow`, and
+  external one of the reasons for leaving the local path, so `local_budget`,
+  `invalid_output`, and `tool_failure` are never a route's (#131).
+- The routing cache key holds the selector chain (each selector's name and
+  version) and the cache policy version is 2 (spec 0.31 section 10, #131).
+  An entry is stored only when `model_router`'s routing generation chose the
+  skill. `run.accepted` `budgets` holds `selection.timeout_seconds` next to
+  the section 11 limits.
 - The skill-stage layout is unchanged (#124, spec 0.35 section 10). Two
   layouts of the first system message were measured on 2026-10-23 on the
   pinned model. The description and tool instruction first, then the skill
@@ -195,6 +252,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   before its first answer text, reasoning text, or tool-call fragment. The
   timing statistics ignore it, so their definitions are unchanged; a
   consumer that lists every event of a stream sees one more (#120).
+
+- Specification 0.35 → 0.36 (#131, #132; RM22, RM24, RM28; sections 8 and
+  10): it states what the selection interface records. A selector chain that
+  chooses nothing makes the gateway record its own decision (route external,
+  skill_id null, reason `selection_failed`) in `route.selected` with the new
+  mechanism `selector_chain`, a `selector` with a null name, version, and
+  mechanism, the whole chain's `elapsed_ms`, and every attempt; a rejected
+  model router output still records no `route.selected` and escalates with
+  `invalid_output`. `tools_narrowed` is the narrowing intersected with the
+  skill's allowlist, in allowlist order. A `route.selected` of `model_router`
+  keeps the local model's actor, and any other selector's choice has actor
+  `gateway`. A result that names another selector, or claims a mechanism of
+  the gateway or of another built-in selector, is an error. The selection
+  time limit is recorded inside `budgets` as `selection.timeout_seconds`.
+  Section 10 names `selector_chain` among the gateway-made routes that are
+  a cache miss and never stored, and a skill another selector chose is not
+  stored either.
 
 - Specification 0.34 → 0.35 (#141, #124; RM06, RM12, RM13, RM16, RM24,
   RM25; AC14): section 4.4 gives the order of the parts of the external

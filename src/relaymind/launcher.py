@@ -53,6 +53,7 @@ from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.routing_cache import RoutingCache
 from relaymind.orchestrator.warmup import WarmupResult, warm_up
 from relaymind.orchestrator.workflows import PARALLEL_WORKFLOWS
+from relaymind.selection import SelectionSettings
 from relaymind.skills import SkillConfigError, SkillRegistry, default_skill_roots
 from relaymind.skills.predicates import COMPLETION_PREDICATES
 from relaymind.store import RunStore
@@ -110,6 +111,8 @@ _TABLES: dict[str, frozenset[str]] = {
     # Spec 0.31 section 14.1: only the warm-up keys exist so far. The placement policy, its
     # margin, the idle probe, and the local model check stay unknown keys until they are built.
     "placement": frozenset({"warmup", "warmup_seconds"}),
+    # Spec 0.32 section 14.1: the keys are the SelectionSettings fields (RM28).
+    "selection": frozenset(f.name for f in fields(SelectionSettings)),
 }
 
 
@@ -146,6 +149,8 @@ class LauncherConfig:
     # Spec 0.31 section 14.1: the startup warm-up of the local model (section 6).
     warmup: bool = True
     warmup_seconds: float = DEFAULT_WARMUP_SECONDS
+    # Spec 0.31 section 14.1: the selector chain; the default is model_router alone (RM28).
+    selection: SelectionSettings = field(default_factory=SelectionSettings)
 
 
 @dataclass(frozen=True)
@@ -278,6 +283,7 @@ def load_config(path: Path | str) -> LauncherConfig:
     )
     if not math.isfinite(warmup_seconds) or not warmup_seconds > 0:
         raise LaunchError("[placement] warmup_seconds must be a positive number")
+    selection = _selection(tables["selection"])
 
     return LauncherConfig(
         manifest=Path(_required(local, "local_model", "manifest", str)),
@@ -305,7 +311,25 @@ def load_config(path: Path | str) -> LauncherConfig:
         performance=performance,
         warmup=warmup,
         warmup_seconds=float(warmup_seconds),
+        selection=selection,
     )
+
+
+def _selection(table: Mapping[str, Any]) -> SelectionSettings:
+    """The [selection] table (RM28). An http selector is refused until it exists (#133)."""
+    args = dict(table)
+    if "chain" in table:
+        chain = _value(table, "selection", "chain", list)
+        for item in chain:
+            if isinstance(item, dict):
+                if item.get("transport") == "http":
+                    raise LaunchError(
+                        "[selection] chain: an http selector is not available yet (#133);"
+                        " use model_router or example_match"
+                    )
+                raise LaunchError("[selection] chain: an item is a selector name")
+        args["chain"] = chain
+    return _settings("selection", lambda: SelectionSettings(**args))
 
 
 def _local_url(table: Mapping[str, Any]) -> str:
@@ -449,6 +473,7 @@ def build_app(
             budgets=config.budgets,
             performance=config.performance,
             routing_cache=RoutingCache() if config.routing_cache else None,
+            selection=config.selection,
         )
         report = orchestrator.recover_after_restart()
         ui = None if config.ui is None else replace(config.ui, fixtures=sandbox)

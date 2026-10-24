@@ -186,6 +186,13 @@
                 }
               },
               "early_headers": {"type": "boolean"},
+              "selection": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "pattern": "\\S"}
+              },
+              "example_match_score": {"type": "number", "minimum": 0, "maximum": 1},
+              "example_match_margin": {"type": "number", "minimum": 0, "maximum": 1},
               "answer_options": {
                 "type": "object",
                 "properties": {
@@ -205,6 +212,44 @@
               "skills_offered",
               "original_messages"
             ]
+          }
+        }
+      }
+    },
+    {
+      "description": "Spec 0.31 section 8 (RM28): the selector that chose, or nulls when the chain chose nothing, every selector tried, and the admitted narrowing.",
+      "if": {"properties": {"event_type": {"const": "route.selected"}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "selector": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": ["string", "null"], "pattern": "\\S"},
+                  "version": {"type": ["string", "null"], "pattern": "\\S"},
+                  "mechanism": {"type": ["string", "null"], "pattern": "\\S"},
+                  "elapsed_ms": {"type": "integer", "minimum": 0},
+                  "attempts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {"type": "string", "pattern": "\\S"},
+                        "outcome": {
+                          "enum": ["selected", "none", "timeout", "error", "inadmissible", "not_placed"]
+                        }
+                      },
+                      "required": ["name", "outcome"],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": ["name", "version", "mechanism", "elapsed_ms", "attempts"],
+                "additionalProperties": false
+              },
+              "tools_narrowed": {"type": "array", "items": {"type": "string", "pattern": "\\S"}}
+            }
           }
         }
       }

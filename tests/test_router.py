@@ -397,6 +397,13 @@ def test_invalid_routing_output_is_rejected(router, calls):
         router.decide(calls, user("Is staging-api healthy?"))
 
 
+@pytest.mark.parametrize("question", ["", "   ", "\t\n"])
+def test_read_call_rejects_blank_clarification_before_admission(router, question):
+    """RM02: a blank routing question is rejected before any selection is built."""
+    with pytest.raises(RouteDecisionError):
+        router.read_call([skill_call(CLARIFY_FUNCTION, language="en", question=question)])
+
+
 def test_a_skill_outside_the_offered_catalog_is_rejected(skills, tools):
     router = Router(skills, tools, budgets=LocalBudgets(), offered=["lookup-latest-deployment"])
     with pytest.raises(RouteDecisionError):

@@ -465,3 +465,10 @@ def test_an_actor_without_authority_cannot_claim_the_final_answer():
     authority.hand_off_to_external()
     with pytest.raises(DispatchRevokedError):
         authority.claim_final_answer("local")
+
+
+@pytest.mark.parametrize("reason", ["selection_failed", "no_local_model", "local_slow"])
+def test_the_phase_2_reason_codes_are_valid_in_an_envelope(reason):
+    """Spec 0.31 section 8: the HandoffEnvelope reason enum gains the three codes (RM26-RM28)."""
+    envelope = build(reason_code=reason)
+    assert envelope.reason_code == reason

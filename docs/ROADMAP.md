@@ -653,9 +653,15 @@ a day or less on existing exports or the existing benchmark.
   option yet.
 - Selection interface: the request and result schemas, the chain, and
   `model_router` behind it with its decisions unchanged (#131; RM28,
-  AC22).
+  AC22). Done (2026-10-23, deterministic tests with scripted selectors and
+  model doubles): `relaymind.selection`, the `[selection]` table, and the
+  in-process part of AC22; the HTTP transport is #133.
 - Example-match selector (#132; RM28): no model call; the no-local
-  default chain.
+  default chain. Done in part (2026-10-23): the selector, its thresholds in
+  `[selection]`, and its tests; on the twenty demo example requests held out
+  one at a time it picks 5 right, 2 wrong, and 13 none at the default
+  thresholds, so the default chain stays `model_router`. Being the default
+  chain without a usable local model is #126.
 - Operation without a usable local model (#126; RM26, AC20):
   `[local_model]` optional; the gateway detects a local model that
   cannot run or cannot help on this machine; auto is managed external
