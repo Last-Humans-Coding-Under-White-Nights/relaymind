@@ -213,6 +213,9 @@ class _ClientRun(_Run):
             self._decide()
             if self.mode is ExecutionMode.EXTERNAL_ONLY:
                 raise Escalation("execution_mode", "the execution mode sends the request external")
+            if self.no_local:
+                # RM26, section 7.4: the alias runs on the external model, as in external_only.
+                raise Escalation("no_local_model", f"the local model is {self.local.status.value}")
             self.move(RunState.LOCAL_RUNNING)
             reply = await self._local_stage()
         except Escalation as stop:
@@ -225,7 +228,7 @@ class _ClientRun(_Run):
 
     def _decide(self) -> None:
         """Record the gateway's own decision; skill_id is null for this alias (section 8)."""
-        decision = self.o.router.client_decision(self.messages, self.mode)
+        decision = self.o.router.client_decision(self.messages, self.mode, no_local=self.no_local)
         self.decision = decision
         self.language = decision.language
         mechanism = (
@@ -238,6 +241,7 @@ class _ClientRun(_Run):
                 "decision": decision.to_json_object(),
                 "mechanism": mechanism,
                 **self._cache_label("miss"),
+                **self._local_label(),
             },
         )
 
@@ -266,7 +270,7 @@ class _ClientRun(_Run):
     async def _check_local_size(self, conversation: Sequence[Message]) -> None:
         """Escalate when the local model cannot take the conversation (RM04, RM13)."""
         try:
-            size = await self._measure(self.o.model.adapter, conversation)
+            size = await self._measure(self.active_model.adapter, conversation)
         except (UnsupportedCapabilityError, TokenCountError) as exc:
             raise self._local_unavailable(
                 f"the local model cannot take the request: {exc}"

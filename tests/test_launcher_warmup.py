@@ -20,6 +20,7 @@ from helpers import REPO_ROOT, FakeClock, ScriptedAdapter
 from launcher_helpers import write_config
 from relaymind import launcher
 from relaymind.adapters import (
+    AdapterHealth,
     Completed,
     FirstToken,
     GenerationFailed,
@@ -32,7 +33,14 @@ from relaymind.adapters import (
 from relaymind.adapters.llamacpp import LlamaCppAdapter
 from relaymind.launcher import LaunchError, build_app, load_config, main
 from relaymind.orchestrator.local_loop import LOCAL_OPTIONS, LocalOrchestrator, skill_stage_messages
-from relaymind.orchestrator.warmup import WARMUP_TEXT, WarmupResult, WarmupSample, warm_up
+from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
+from relaymind.orchestrator.warmup import (
+    WARMUP_TEXT,
+    WarmupResult,
+    WarmupSample,
+    detect_local_model,
+    warm_up,
+)
 from relaymind.store import RunStore
 
 
@@ -119,9 +127,10 @@ def test_a_bad_value_stops_startup(tmp_path, body):
         load_config(write_config(tmp_path, f"\n[placement]\n{body}\n"))
 
 
-@pytest.mark.parametrize("key", ["policy", "margin", "probe_after_seconds", "detect", "other"])
+@pytest.mark.parametrize("key", ["policy", "margin", "probe_after_seconds", "other"])
 def test_the_placement_policy_keys_stay_unknown_until_they_exist(tmp_path, key):
-    """Section 14.1: only warmup and warmup_seconds are implemented; the rest is refused."""
+    """Section 14.1: only warmup, warmup_seconds, and detect are implemented; the rest is
+    refused."""
     with pytest.raises(LaunchError, match=rf"unknown key in \[placement\]: {key}"):
         load_config(write_config(tmp_path, f"\n[placement]\n{key} = 1\n"))
 
@@ -142,9 +151,9 @@ def test_the_example_file_documents_the_placement_table(tmp_path):
         if not line.startswith("# "):
             break
         block.append(line[2:])
-    assert len(block) == 3
+    assert len(block) == 4
     config = load_config(write_config(tmp_path, "\n" + "\n".join(block) + "\n"))
-    assert (config.warmup, config.warmup_seconds) == (True, 30.0)
+    assert (config.warmup, config.warmup_seconds, config.detect) == (True, 30.0, True)
 
 
 # -- build_app sends nothing; the warm-up is its own step ----------------------------------
@@ -396,5 +405,272 @@ def test_a_real_adapter_for_the_warm_up_is_closed_and_not_the_serving_one(tmp_pa
         warmed = launcher.warm_up_gateway(config, built)
         assert warmed.warmup.ready
         assert closed == made and len(made) == 1
+    finally:
+        built.orchestrator.store.close()
+
+
+# -- detection of the local model (spec 0.31 RM26, section 14.1; #126) -------------------------
+
+
+class FakeSleep:
+    """An injected sleep that advances the fake clock instead of waiting."""
+
+    def __init__(self, clock: FakeClock) -> None:
+        self.clock = clock
+        self.calls: list[float] = []
+
+    async def __call__(self, seconds: float) -> None:
+        self.calls.append(seconds)
+        self.clock.advance(seconds)
+
+
+def health_sequence(adapter, *states):
+    """Make adapter.health return the given (available, warm) pairs, the last one repeated."""
+    replies = list(states)
+
+    async def health():
+        available, warm = replies.pop(0) if len(replies) > 1 else replies[0]
+        return AdapterHealth(available=available, warm=warm, detail="probe")
+
+    adapter.health = health
+
+
+def slow(clock: FakeClock, seconds: float):
+    """An on_generate hook: each generation takes seconds on the fake clock."""
+
+    def tick(_request):
+        clock.advance(seconds)
+
+    return tick
+
+
+def detect_with(tmp_path, adapter, *, warmup=True, seconds=30.0, clock=None, extra=""):
+    """Run detect_local_model over a launched gateway with a fake clock and sleep."""
+    clock = clock or FakeClock()
+    _, built = launch(tmp_path, extra, adapter=adapter)
+    try:
+        built.orchestrator.clock = clock
+        sleep = FakeSleep(clock)
+        status, result = asyncio.run(
+            detect_local_model(
+                built.orchestrator, adapter, warmup=warmup, seconds=seconds, sleep=sleep
+            )
+        )
+    finally:
+        built.orchestrator.store.close()
+    return status, result, sleep
+
+
+def test_detect_is_a_placement_key_that_defaults_to_true(tmp_path):
+    """Section 14.1: placement.detect, default true."""
+    assert load_config(write_config(tmp_path)).detect is True
+    config = load_config(write_config(tmp_path, "\n[placement]\ndetect = false\n"))
+    assert config.detect is False
+
+
+@pytest.mark.parametrize("value", ["1", "'yes'"])
+def test_a_detect_value_that_is_not_a_boolean_stops_startup(tmp_path, value):
+    with pytest.raises(LaunchError, match=r"\[placement\] detect"):
+        load_config(write_config(tmp_path, f"\n[placement]\ndetect = {value}\n"))
+
+
+def test_a_model_that_answers_and_fits_the_stage_budget_is_ready(tmp_path):
+    """RM26: available, and the routing-shaped warm-up within active_seconds."""
+    clock = FakeClock()
+    adapter = ScriptedAdapter(turns=[answer(), answer()], on_generate=slow(clock, 1.0))
+    status, result, _ = detect_with(tmp_path, adapter, clock=clock)
+
+    assert status == LocalStatus.ready()
+    assert result.ready and [s.purpose for s in result.samples] == ["routing", "skill"]
+
+
+def test_a_routing_warm_up_over_the_stage_budget_is_unsuitable(tmp_path):
+    """RM26: the routing-shaped warm-up took longer than active_seconds (4 s by default)."""
+    clock = FakeClock()
+    adapter = ScriptedAdapter(turns=[answer(), answer()], on_generate=slow(clock, 4.5))
+    status, result, _ = detect_with(tmp_path, adapter, clock=clock)
+
+    assert status.status == LocalModelClass.UNSUITABLE
+    assert status.reason == (
+        "the routing warm-up took 4500 ms; the local stage limit (active_seconds) is 4 s"
+    )
+    # The timings are kept, as for any warm-up (#124).
+    assert result.samples[0].duration_ms == 4500
+
+
+def test_a_warm_up_exactly_at_the_budget_is_ready(tmp_path):
+    """RM26: within the budget means not longer than it."""
+    clock = FakeClock()
+    adapter = ScriptedAdapter(turns=[answer(), answer()], on_generate=slow(clock, 4.0))
+    status, _, _ = detect_with(tmp_path, adapter, clock=clock)
+    assert status == LocalStatus.ready()
+
+
+def test_the_stage_budget_is_the_configured_one(tmp_path):
+    """RM03: a raised active_seconds is the limit the warm-up is held to."""
+    clock = FakeClock()
+    adapter = ScriptedAdapter(turns=[answer(), answer()], on_generate=slow(clock, 4.5))
+    status, _, _ = detect_with(
+        tmp_path, adapter, clock=clock, extra="\n[budgets]\nactive_seconds = 8\n"
+    )
+    assert status == LocalStatus.ready()
+
+
+def test_a_runtime_that_does_not_answer_is_unavailable_after_warmup_seconds(tmp_path):
+    """RM26: the availability check polls until placement.warmup_seconds, then gives up."""
+    adapter = scripted()
+    health_sequence(adapter, (False, False))
+    status, result, sleep = detect_with(tmp_path, adapter, seconds=3)
+
+    assert status.status == LocalModelClass.UNAVAILABLE
+    assert status.reason == (
+        "the runtime did not answer with the model loaded within 3 s; last check: probe"
+    )
+    assert result is None and adapter.requests == []
+    assert sum(sleep.calls) == pytest.approx(3)
+
+
+def test_a_model_that_finishes_loading_in_time_is_checked_further(tmp_path):
+    """RM26: warm false while loading; the check waits for the model, not only the runtime."""
+    clock = FakeClock()
+    adapter = ScriptedAdapter(turns=[answer(), answer()], on_generate=slow(clock, 0.5))
+    health_sequence(adapter, (True, False), (True, False), (True, True))
+    status, _, sleep = detect_with(tmp_path, adapter, clock=clock)
+
+    assert status == LocalStatus.ready()
+    assert len(sleep.calls) == 2
+    assert len(adapter.requests) == 2
+
+
+def test_a_health_check_that_raises_is_unavailable_without_its_text(tmp_path):
+    """RM12, RM26: the exception text may carry a URL or a key; its type is the cause."""
+    adapter = scripted()
+
+    async def broken():
+        raise ConnectionError("http://user:secret@127.0.0.1:8033 refused")
+
+    adapter.health = broken
+    status, _, _ = detect_with(tmp_path, adapter, seconds=1)
+
+    assert status.status == LocalModelClass.UNAVAILABLE
+    assert "ConnectionError" in status.reason and "secret" not in status.reason
+
+
+def test_with_warmup_false_only_availability_is_checked(tmp_path):
+    """Section 14.1: the unsuitable check needs the warm-up."""
+    adapter = scripted()
+    status, result, _ = detect_with(tmp_path, adapter, warmup=False)
+    assert status == LocalStatus.ready() and result is None and adapter.requests == []
+
+
+def test_a_failed_routing_warm_up_is_unavailable(tmp_path):
+    """RM26: the runtime answers, but the model cannot generate on this machine."""
+    adapter = scripted([GenerationFailed(code="unreachable", message="refused")])
+    status, result, _ = detect_with(tmp_path, adapter)
+
+    assert status.status == LocalModelClass.UNAVAILABLE
+    assert "routing warm-up did not finish" in status.reason and "unreachable" in status.reason
+    assert result is not None and not result.ready
+
+
+def test_a_failed_skill_warm_up_after_a_fitting_routing_one_is_ready(tmp_path):
+    """RM26: the class is measured on the routing-shaped warm-up only.
+
+    The skill-shaped warm-up of section 6 is a timing sample; its failure is
+    the printed warm-up line, not a class.
+    """
+    clock = FakeClock()
+    adapter = ScriptedAdapter(
+        turns=[answer(), GenerationFailed(code="unreachable", message="refused")],
+        on_generate=slow(clock, 1.0),
+    )
+    status, result, _ = detect_with(tmp_path, adapter, clock=clock)
+
+    assert status == LocalStatus.ready()
+    assert not result.ready and [s.purpose for s in result.samples] == ["routing"]
+
+
+def silent_adapter():
+    class Silent(ScriptedAdapter):
+        async def generate(self, request):
+            self.requests.append(request)
+            await asyncio.Event().wait()
+            yield FirstToken()
+
+    return Silent(turns=[])
+
+
+def test_a_warm_up_cut_off_before_the_stage_budget_is_unavailable(tmp_path):
+    """Spec 0.37: shorter than the stage budget, a cut-off warm-up says nothing about speed."""
+    status, _, _ = detect_with(tmp_path, silent_adapter(), seconds=0.05)
+    assert status.status == LocalModelClass.UNAVAILABLE
+    assert "within 0.05 s" in status.reason
+
+
+def test_a_warm_up_cut_off_at_or_after_the_stage_budget_is_unsuitable(tmp_path):
+    """Spec 0.37: it did not finish within the stage budget, so it does not fit it."""
+    status, _, _ = detect_with(
+        tmp_path, silent_adapter(), seconds=0.05, extra="\n[budgets]\nactive_seconds = 0.05\n"
+    )
+    assert status.status == LocalModelClass.UNSUITABLE
+    assert "did not finish within 0.05 s" in status.reason
+
+
+# -- main prints the class (RM26) --------------------------------------------------------------
+
+
+def test_main_prints_unavailable_and_serves(tmp_path):
+    """#126: a local double that does not answer is printed as unavailable; startup goes on."""
+    adapter = scripted()
+    health_sequence(adapter, (False, False))
+    status, out, err, seen = run_main(tmp_path, adapter, "\n[placement]\nwarmup_seconds = 0.05\n")
+
+    assert status == 0 and err == [] and "requests" in seen
+    (line,) = [line for line in out if line.startswith("Local model:")]
+    assert line.startswith("Local model: unavailable (")
+    assert line.endswith("auto runs as managed external execution.")
+    assert adapter.requests == []
+
+
+def test_main_prints_unsuitable_with_a_fake_clock(tmp_path, monkeypatch):
+    """#126: a warm-up over active_seconds is printed as unsuitable; the timings line stays."""
+    clock = FakeClock()
+    monkeypatch.setattr(launcher, "RunStore", lambda path: RunStore(path, clock=clock))
+    adapter = ScriptedAdapter(turns=[answer(), answer()], on_generate=slow(clock, 6.0))
+    status, out, err, _ = run_main(tmp_path, adapter)
+
+    assert status == 0 and err == []
+    assert any(line.startswith("Local warm-up finished: routing 6000 ms") for line in out)
+    (line,) = [line for line in out if line.startswith("Local model:")]
+    assert line.startswith("Local model: unsuitable (the routing warm-up took 6000 ms;")
+
+
+def test_main_prints_no_class_line_for_a_ready_model(tmp_path):
+    adapter = scripted(answer(), answer())
+    status, out, err, _ = run_main(tmp_path, adapter)
+    assert status == 0 and err == []
+    assert not any(line.startswith("Local model:") for line in out)
+
+
+def test_detect_false_keeps_the_earlier_behavior(tmp_path):
+    """Section 14.1: with detect false nothing is classified, as before spec 0.31."""
+    adapter = scripted(answer(), answer())
+    health_sequence(adapter, (False, False))
+    status, out, err, _ = run_main(tmp_path, adapter, "\n[placement]\ndetect = false\n")
+
+    assert status == 0 and err == []
+    assert not any(line.startswith("Local model:") for line in out)
+    # The warm-up still runs, without the availability check.
+    assert len(adapter.requests) == 2
+
+
+def test_the_launcher_sets_the_detected_class_on_the_orchestrator(tmp_path):
+    adapter = scripted()
+    health_sequence(adapter, (False, False))
+    config, built = launch(tmp_path, "\n[placement]\nwarmup_seconds = 0.05\n", adapter=adapter)
+    try:
+        warmed = launcher.warm_up_gateway(config, built)
+        assert warmed.orchestrator.local_status.status == LocalModelClass.UNAVAILABLE
+        assert warmed.orchestrator.detect is True
     finally:
         built.orchestrator.store.close()

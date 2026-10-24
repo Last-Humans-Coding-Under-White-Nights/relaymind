@@ -82,7 +82,8 @@ One run, start to end, with the local model only:
    An admitted set runs in proposal order, each call as its own operation.
    The parallel workflow's local branch keeps the one-call rule (RM15).
 4b. Prefetch (RM29, spec 0.34, AC18). Under prefetch true, the calls a skill declares
-   run before its first generation in a local stage: the gateway resolves
+   run before its first generation in a local stage, or in an external stage
+   that loaded the skill without a local stage before it: the gateway resolves
    each from the request by the RM05 rule, runs them together through the
    same checks as a proposal (actor gateway, mechanism prefetch, model
    null), charges them to the budgets, and adds the exchange to the
@@ -132,6 +133,19 @@ active budget, whichever is shorter.
    the external model. A failed branch cancels the other; a cancel stops
    both. Every branch call is in the model_calls inventory, abandoned
    ones included, and the terminal event carries the workflow summary.
+
+Without a usable local model (RM26, spec 0.31 sections 7.4 and 11). The
+orchestrator may have no local model (absent), and holds the class of
+the one it has (``LocalStatus``: ready, unavailable, unsuitable), which
+startup detection sets and readiness updates. Each run records the class
+it was accepted under in run.accepted and keeps it. In auto, a class
+other than ready is managed external execution: the selector chain runs
+without model_router, the gateway admits the choice with its own rules
+(the RM05 clarification, otherwise route external with the skill and
+reason no_local_model), route.selected records local_model_status, and
+the run continues through step 5 with the skill loaded. This is never
+degraded mode. local_only and parallel_demo are refused while the class
+does not permit them (``ExecutionModeForbiddenError``, 403).
 
 Native runs (RM21, spec 0.17 section 7.4). ``start``, ``start_resume``,
 and ``start_confirmation`` do the synchronous part of ``run``,
@@ -206,6 +220,7 @@ from relaymind.orchestrator.handoff import (
     measure_request,
     unsettled_operations,
 )
+from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
 from relaymind.orchestrator.performance import (
     PerformanceSettings,
     draft_in_language,
@@ -557,6 +572,17 @@ class ResumeInputError(ValueError):
     code = INVALID_RESUME_INPUT
 
 
+class ExecutionModeForbiddenError(Exception):
+    """The class of the local model does not permit the mode (403, RM26, section 7.4).
+
+    local_only and parallel_demo while the model is absent or unavailable,
+    parallel_demo while it is unsuitable. No run is created.
+    """
+
+    http_status = 403
+    code = "execution_mode_forbidden"
+
+
 class ApprovalRejectedError(Exception):
     """The approval ID or token does not match the pending approval (403, section 5).
 
@@ -784,7 +810,7 @@ class LocalOrchestrator:
 
     def __init__(
         self,
-        model: ConfiguredModel,
+        model: ConfiguredModel | None,
         *,
         skills: SkillRegistry,
         tools: ToolRegistry,
@@ -802,12 +828,27 @@ class LocalOrchestrator:
         performance: PerformanceSettings | None = None,
         selection: SelectionSettings | None = None,
         selectors: Sequence[Selector] | None = None,
+        local_status: LocalStatus | None = None,
+        detect: bool = False,
     ) -> None:
         """selection is the [selection] table (spec 0.31 section 14.1); its default is the
         baseline chain, model_router alone. selectors replaces the configured chain with
         selector objects, for tests; the launcher never passes it.
+
+        model is None when no local model is configured (RM26: absent). local_status
+        is the class of a configured one, ready by default; startup detection sets it
+        later with ``set_local_status``. detect lets readiness repeat the availability
+        check and change the class (placement.detect, section 14.1); off by default, so
+        an unavailable model is only reported not ready, as before spec 0.31.
         """
         self.model = model
+        self._local_status = self._checked_status(local_status)
+        # The last measured unsuitable class: a model that comes back from unavailable
+        # is unsuitable again until a measurement says otherwise (RM26).
+        self._unsuitable: LocalStatus | None = (
+            self._local_status if self._local_status.status == LocalModelClass.UNSUITABLE else None
+        )
+        self.detect = detect
         # Spec 0.32 section 14.1: every default is the baseline behavior.
         self.performance = performance or PerformanceSettings()
         if self.performance.prefetch:
@@ -846,10 +887,18 @@ class LocalOrchestrator:
                 margin=self.selection.example_match_margin,
             ),
         }
+        chain = (
+            selectors if selectors is not None else [built_in[n]() for n in self.selection.chain]
+        )
         self.selection_chain = SelectorChain(
-            selectors if selectors is not None else [built_in[n]() for n in self.selection.chain],
-            timeout_seconds=self.selection.timeout_seconds,
-            clock=self.clock.monotonic,
+            chain, timeout_seconds=self.selection.timeout_seconds, clock=self.clock.monotonic
+        )
+        # RM26: without a usable local model the chain runs without a model call, so
+        # without model_router. A chain left empty uses the default chain of a gateway
+        # without a local model, example_match alone (section 14.1).
+        no_model = [s for s in chain if not s.model_based] or [built_in[EXAMPLE_MATCH]()]
+        self.no_local_chain = SelectorChain(
+            no_model, timeout_seconds=self.selection.timeout_seconds, clock=self.clock.monotonic
         )
         self.executor = ToolExecutor(tools, store, clock=self.clock, redactor=self.redactor)
         self.machine = RunStateMachine(store)
@@ -871,6 +920,56 @@ class LocalOrchestrator:
         # Set once this orchestrator accepts a run; restart recovery is
         # refused from then on (section 5).
         self._accepted_a_run = False
+
+    # -- the class of the local model (RM26) ----------------------------------------
+
+    def _checked_status(self, status: LocalStatus | None) -> LocalStatus:
+        """A class that agrees with the configuration: absent exactly without a model."""
+        if self.model is None:
+            if status is not None and status.status != LocalModelClass.ABSENT:
+                raise ValueError(f"no local model is configured, so it cannot be {status.status}")
+            return status or LocalStatus.absent()
+        if status is not None and status.status == LocalModelClass.ABSENT:
+            raise ValueError("a configured local model cannot be absent")
+        return status or LocalStatus.ready()
+
+    @property
+    def local_status(self) -> LocalStatus:
+        """The class of the local model now; each run keeps the one it was accepted under."""
+        return self._local_status
+
+    def set_local_status(self, status: LocalStatus) -> None:
+        """Set the class startup detection measured (RM26)."""
+        self._local_status = self._checked_status(status)
+        if status.status == LocalModelClass.UNSUITABLE:
+            self._unsuitable = status
+        elif status.status == LocalModelClass.READY:
+            self._unsuitable = None
+
+    def observe_local_health(self, available: bool, warm: bool, detail: str | None) -> None:
+        """Readiness repeated the availability check (RM26, section 7.4).
+
+        Only with detection on. A model that stops answering or is no longer
+        loaded is unavailable; one that answers again with the model loaded
+        is used again, and a model last measured unsuitable is unsuitable again.
+        """
+        if not self.detect or self.model is None:
+            return
+        current = self._local_status.status
+        if current == LocalModelClass.UNAVAILABLE and available and warm:
+            self._local_status = self._unsuitable or LocalStatus.ready()
+        elif current != LocalModelClass.UNAVAILABLE and not (available and warm):
+            cause = detail.strip() if detail and detail.strip() else None
+            reason = (
+                f"the model is not loaded: {cause or 'the model is loading'}"
+                if available
+                else f"the runtime stopped answering: {cause or 'no answer'}"
+            )
+            self._local_status = LocalStatus(LocalModelClass.UNAVAILABLE, reason)
+
+    def mode_refusal(self, mode: ExecutionMode) -> str | None:
+        """Why the class of the local model does not permit mode, or None (section 7.4)."""
+        return self._local_status.refusal(mode)
 
     async def run_text(self, text: str, **options: Any) -> RunOutcome:
         """Run one user request given as plain text."""
@@ -1357,6 +1456,8 @@ class _Run:
         self.requested_mode = requested_mode
         self.mode = ExecutionMode(requested_mode or ExecutionMode.AUTO)
         self.model_alias = model_alias
+        # RM26: the class of the local model this run was accepted under; it keeps it.
+        self.local = owner.local_status
         self.meter = BudgetMeter(owner.budgets, clock=owner.clock)
         self.model_calls: list[dict[str, str]] = []
         # Set when a cancel request stops the run (run.cancelled reason).
@@ -1411,7 +1512,18 @@ class _Run:
         if self.authority.holder == EXTERNAL_ACTOR:
             assert self.o.external is not None
             return self.o.external
+        # A run without a usable local model never generates before its handoff (RM26).
+        assert self.o.model is not None
         return self.o.model
+
+    @property
+    def no_local(self) -> bool:
+        """Whether this run is managed external execution (RM26): auto without a usable model."""
+        return self.mode is ExecutionMode.AUTO and not self.local.usable
+
+    def _local_label(self) -> dict[str, str]:
+        """route.selected of a managed external route records the class as its cause (RM26)."""
+        return {"local_model_status": self.local.status.value} if self.no_local else {}
 
     @property
     def actor(self) -> str:
@@ -1477,7 +1589,14 @@ class _Run:
         return await self._guarded(self._route)
 
     def open(self) -> None:
-        """Take the execution slot, record run.accepted, and enter routing."""
+        """Take the execution slot, record run.accepted, and enter routing.
+
+        A mode the class of the local model does not permit is refused
+        first, and no run is created (RM26, section 7.4).
+        """
+        refusal = self.local.refusal(self.mode)
+        if refusal is not None:
+            raise ExecutionModeForbiddenError(refusal)
         if self.o.machine.active_run_id() is not None:
             raise SlotUnavailableError("another run holds the execution slot (section 11)")
         # Section 5: from here on restart recovery must not run.
@@ -1530,6 +1649,8 @@ class _Run:
         changes are added here.
         """
         return {
+            # RM26: the configured local model (null only when absent) and its class.
+            **self.local.to_json_object(None if self.o.model is None else self.o.model.model_id),
             **self.o.performance.to_json_object(),
             "prefetch_declarations": self.o.skills.prefetch_declarations(self.o.router.offered),
             # RM28: the selector chain in force, and the matcher thresholds (section 14.1).
@@ -1643,7 +1764,7 @@ class _Run:
                 EventType.RUN_COMPLETED,
                 GATEWAY_ACTOR,
                 {
-                    "final_answer_model": self.o.model.model_id,
+                    "final_answer_model": self.active_model.model_id,
                     "answer": answer,
                     # The pass that produced the answer (RM31, spec 0.32 section 8).
                     "answer_pass_applied": answer_pass,
@@ -1776,7 +1897,11 @@ class _Run:
         assert self.language is not None
         try:
             routing = self.o.router.resume_decision(
-                skill_id, self.messages, mode=self.mode, language=self.language
+                skill_id,
+                self.messages,
+                mode=self.mode,
+                language=self.language,
+                no_local=self.no_local,
             )
         except RouteDecisionError as exc:
             raise Escalation("invalid_output", f"resume decision rejected: {exc}") from exc
@@ -1787,6 +1912,7 @@ class _Run:
                 "decision": routing.decision.to_json_object(),
                 "mechanism": RESUME_MECHANISM,
                 **self._cache_label("miss"),
+                **self._local_label(),
             },
         )
         return routing
@@ -1936,8 +2062,12 @@ class _Run:
         self.results[:] = [ToolResult.from_json_object(op["result"]) for op in operations]
 
         skill = self.skill
+        # RM29: an external stage that loads the skill itself is its first skill stage,
+        # so the skill's declared calls run before its first generation.
+        first_stage = False
         if skill is None and self.decision is not None and self.decision.skill_id is not None:
-            skill = self._load_skill(self.decision.skill_id)
+            skill = self.skill = self._load_skill(self.decision.skill_id)
+            first_stage = True
         if skill is not None:
             allowlist: tuple[str, ...] = self._skill_allowlist(skill)
             catalog: tuple[tuple[str, str], ...] = ()
@@ -2002,7 +2132,7 @@ class _Run:
             if stop.degraded
             else {}
         )
-        return await self._hand_off(external, envelope, loop, stop, degraded)
+        return await self._hand_off(external, envelope, loop, stop, degraded, prefetch=first_stage)
 
     def _handoff_blocked(
         self, stop: Escalation, operations: Sequence[Mapping[str, Any]]
@@ -2040,11 +2170,14 @@ class _Run:
         stop: Escalation,
         extra: Mapping[str, Any],
         capabilities: AdapterCapabilities | None = None,
+        *,
+        prefetch: bool = False,
     ) -> RunOutcome:
         """Measure the request, record handoff.started, and run the external stage (RM13, RM14).
 
         The request is measured against the external context limit before
         anything is sent. extra adds payload fields to handoff.started.
+        prefetch runs the skill's declared calls first (RM29).
         """
         try:
             if capabilities is None:
@@ -2083,7 +2216,7 @@ class _Run:
         self.meter.start_external()
         self.tool_branch = None
         loop.capabilities = capabilities
-        return await self._run_external(loop, stop)
+        return await self._run_external(loop, stop, prefetch=prefetch)
 
     def _record_degraded_route(self) -> None:
         """Before any routing decision exists, the gateway records its own (section 11).
@@ -2108,14 +2241,21 @@ class _Run:
         )
 
     async def _run_external(
-        self, loop: _Loop, stop: Escalation, confirmed: _Confirmation | None = None
+        self,
+        loop: _Loop,
+        stop: Escalation,
+        confirmed: _Confirmation | None = None,
+        *,
+        prefetch: bool = False,
     ) -> RunOutcome:
         """Run the external loop to an answer, a confirmation wait, or a failure (RM13, RM14).
 
         confirmed is the held call of an approved confirmation: it runs
         first, once, and the loop continues from its result (RM11). stop
         is the escalation that started this stage; its reason code stays
-        on every external failure.
+        on every external failure. prefetch runs the skill's declared
+        calls before the first generation (RM29); the grown request is
+        measured again.
         """
         external = self.o.external
         assert external is not None
@@ -2125,6 +2265,11 @@ class _Run:
                     loop, confirmed.tool_call, confirmed.admitted, confirmed.proposal_id
                 )
                 await self._check_external_size(loop)
+            elif prefetch:
+                before = len(loop.conversation)
+                await self._prefetch(loop)
+                if len(loop.conversation) != before:
+                    await self._check_external_size(loop)
             answer = await self._external_loop(loop)
         except _ConfirmationNeeded as needed:
             return self._await_confirmation(needed, stop)
@@ -2505,7 +2650,11 @@ class _Run:
                 },
             )
             return Routing(decision)
+        if self.no_local:
+            # RM26: managed external execution; no local generation, cache, or bypass.
+            return await self._select(None, None)
 
+        assert self.o.model is not None
         adapter = self.o.model.adapter
         try:
             capabilities = await adapter.capabilities()
@@ -2546,7 +2695,7 @@ class _Run:
     # -- selection (RM28) ------------------------------------------------------------
 
     async def _select(
-        self, input_tokens: int, cache_key: tuple[str, CacheContext] | None
+        self, input_tokens: int | None, cache_key: tuple[str, CacheContext] | None
     ) -> Routing:
         """Run the selector chain and record the admitted choice, or the chain's failure.
 
@@ -2555,7 +2704,9 @@ class _Run:
         route.selected keeps the model's actor and fields. A choice of any
         other selector is the gateway's (actor gateway, the selector's
         mechanism). Only a routing generation's choice is stored in the
-        routing cache (section 10).
+        routing cache (section 10). Without a usable local model (RM26) the
+        chain has no model-based selector, a chosen skill routes external
+        with reason no_local_model, and every route.selected records the class.
         """
         generations: list[tuple[str, _Generation]] = []
 
@@ -2565,7 +2716,7 @@ class _Run:
             call_id, generation = await self._generate("routing", messages, functions, options)
             generations.append((call_id, generation))
             return RoutingGeneration(
-                calls=tuple(generation.calls), model=self.o.model.model_id, call_id=call_id
+                calls=tuple(generation.calls), model=self.active_model.model_id, call_id=call_id
             )
 
         def admit_result(result: SelectionResult) -> Admission:
@@ -2575,9 +2726,11 @@ class _Run:
                 messages=self.messages,
                 mode=self.mode,
                 language=self.language,
+                no_local=self.no_local,
             )
 
-        chain = await self.o.selection_chain.run(
+        selection_chain = self.o.no_local_chain if self.no_local else self.o.selection_chain
+        chain = await selection_chain.run(
             self._selection_request(), SelectionContext(self.messages, generate), admit_result
         )
         if chain.admitted is None or chain.selector is None:
@@ -2596,6 +2749,7 @@ class _Run:
                     "mechanism": EXHAUSTED_MECHANISM,
                     **self._cache_label("miss"),
                     "selector": chain.selector_record(),
+                    **self._local_label(),
                 },
             )
             self.narrowed = None
@@ -2612,7 +2766,7 @@ class _Run:
                 {
                     "decision": routing.decision.to_json_object(),
                     "mechanism": ROUTING_MECHANISM,
-                    "model": self.o.model.model_id,
+                    "model": self.active_model.model_id,
                     "call_id": call_id,
                     "input_tokens": input_tokens,
                     "model_language": generation.calls[0].arguments.get("language"),
@@ -2633,6 +2787,7 @@ class _Run:
                 **self._cache_label("miss"),
                 "selector": chain.selector_record(),
                 **narrowed,
+                **self._local_label(),
             },
         )
         return routing
@@ -2678,7 +2833,7 @@ class _Run:
             tools=o.tools,
             policy=o.policy,
             caller=o.caller,
-            model_id=o.model.model_id,
+            model_id=self.active_model.model_id,
             enabled_workflows=o.enabled_workflows,
             routing_prompt_version=routing_prompt_version(o.router.functions()),
             selector_chain=o.selection_chain.identity,

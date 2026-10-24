@@ -33,6 +33,7 @@ from helpers import (
 from relaymind.adapters import Completed, ModelAdapter, TextDelta, ToolCall, Usage
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
+from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
 from relaymind.orchestrator.run_state import RunState
 from relaymind.orchestrator.workflows import PARALLEL_WORKFLOWS
 from relaymind.skills import SkillRegistry
@@ -87,6 +88,7 @@ def build_gateway(
     skill_roots=None,
     local_model: ConfiguredModel | None = None,
     external_model: ConfiguredModel | None = None,
+    local_status: LocalStatus | None = None,
     **options,
 ) -> Gateway:
     """A gateway over a fresh sandbox; options go to LocalOrchestrator.
@@ -97,7 +99,16 @@ def build_gateway(
     configured models over real adapters (AC08); gateway.adapter and
     gateway.external are then those adapters. Scripting a double that a
     configured model replaces is an error, never silently ignored.
+    local_status sets the class of the local model (RM26): absent builds
+    the gateway without a local model, and gateway.adapter is then a
+    double no run can reach, so a test can show it was never called;
+    unavailable and unsuitable keep the configured double.
     """
+    absent = local_status is not None and local_status.status == LocalModelClass.ABSENT
+    if absent:
+        _reject_double_options(
+            "an absent local model", local_model=local_model, turns=turns or None
+        )
     if local_model is not None:
         _reject_double_options(
             "local_model",
@@ -148,8 +159,10 @@ def build_gateway(
             if external_turns is None
             else ConfiguredModel(adapter=external, model_id=EXTERNAL_MODEL_ID)
         )
+    if local_status is not None:
+        options["local_status"] = local_status
     orchestrator = LocalOrchestrator(
-        local,
+        None if absent else local,
         skills=skills,
         tools=tools,
         store=store,

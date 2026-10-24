@@ -30,7 +30,9 @@ from relaymind.adapters.llamacpp import REQUEST_TIMEOUT_SECONDS, LlamaCppAdapter
 from relaymind.launcher import LaunchError, build_app, load_config, main
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import LocalOrchestrator
+from relaymind.orchestrator.local_status import LocalStatus
 from relaymind.orchestrator.performance import PerformanceSettings
+from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
 from relaymind.selection import SelectionSettings
 from relaymind.store import RunStore, RunStoreError
@@ -1040,3 +1042,102 @@ def test_example_config_documents_the_selection_table(tmp_path):
     assert len(block) == 1 + len(SELECTION_KEYS)
     config = load_config(write_config(tmp_path, "\n" + "\n".join(block) + "\n"))
     assert config.selection == SelectionSettings()
+
+
+# -- without a local model (spec 0.31 RM26, sections 7.4 and 14.1; #126) -------------------
+
+
+def external_double():
+    return ScriptedAdapter(turns=[], locality="external")
+
+
+def no_local_config(tmp_path, extra=""):
+    return write_config(tmp_path, EXTERNAL + extra, local=False)
+
+
+def test_a_file_without_a_local_model_table_starts(tmp_path):
+    """RM26, section 14.1: the table is optional; the gateway runs without a local model."""
+    config = load_config(no_local_config(tmp_path))
+    assert config.manifest is None and config.artifact is None
+    # Section 14.1: the no-local defaults of allowed_modes and of the chain.
+    assert config.chat.allowed_modes == frozenset({ExecutionMode.AUTO, ExecutionMode.EXTERNAL_ONLY})
+    assert config.selection.chain == ("example_match",)
+
+    built = build_app(config, external_adapter=external_double())
+    try:
+        assert built.orchestrator.model is None
+        assert built.orchestrator.local_status == LocalStatus.absent()
+        assert built.new_local_adapter is None
+        assert call(built.app, "GET", "/readyz").json()["local_model"]["status"] == "absent"
+    finally:
+        built.orchestrator.store.close()
+
+
+def test_a_file_with_neither_model_table_stops_startup(tmp_path):
+    """Section 14.1: one model table at least."""
+    with pytest.raises(LaunchError, match="neither"):
+        load_config(write_config(tmp_path, local=False))
+
+
+@pytest.mark.parametrize("modes", [["auto", "local_only"], ["parallel_demo"]])
+def test_local_modes_without_a_local_model_stop_startup(tmp_path, modes):
+    """Section 14.1: local_only and parallel_demo need a local_model table."""
+    with pytest.raises(LaunchError, match=r"\[policy\] allowed_modes names .*local_model"):
+        load_config(no_local_config(tmp_path, f"\n[policy]\nallowed_modes = {json.dumps(modes)}\n"))
+
+
+def test_model_router_without_a_local_model_stops_startup(tmp_path):
+    """Section 14.1: without a local model model_router is a startup error."""
+    extra = "\n[selection]\nchain = ['example_match', 'model_router']\n"
+    with pytest.raises(LaunchError, match=r"\[selection\] chain names model_router"):
+        load_config(no_local_config(tmp_path, extra))
+
+
+def test_without_a_local_model_the_declared_chain_and_modes_are_kept(tmp_path):
+    extra = (
+        "\n[policy]\nallowed_modes = ['external_only']\n[selection]\nchain = ['example_match']\n"
+    )
+    config = load_config(no_local_config(tmp_path, extra))
+    assert config.chat.allowed_modes == frozenset({ExecutionMode.EXTERNAL_ONLY})
+    assert config.selection.chain == ("example_match",)
+
+
+def test_main_without_a_local_model_prints_the_class_and_sends_no_warm_up(tmp_path):
+    """RM26: one line names the class and the cause; nothing is warmed up."""
+    out, err = [], []
+    status = main(
+        ["serve", "--config", str(no_local_config(tmp_path))],
+        serve_fn=lambda app, *, host, port: None,
+        stdout=out.append,
+        stderr=err.append,
+        external_adapter=external_double(),
+    )
+    assert status == 0 and err == []
+    assert "Local model: absent (no local model is configured);" in "\n".join(out)
+    assert not any(line.startswith("Local warm-up") for line in out)
+    assert any(line.startswith("Application token: ") for line in out)
+
+
+def test_the_example_without_its_local_model_table_starts_without_a_local_model(tmp_path):
+    """#126: the documented no-local variant of the example file loads and builds."""
+    lines = (REPO_ROOT / "relaymind.example.toml").read_text(encoding="utf-8").splitlines()
+    start = lines.index("[local_model]")
+    kept = lines[:start] + lines[start + 4 :]
+    external = kept.index("# [external_model]")
+    for index in range(external, external + 5):
+        assert kept[index].startswith("# ")
+        kept[index] = kept[index][2:]
+    path = tmp_path / "no-local.toml"
+    path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+
+    config = load_config(path)
+    assert config.manifest is None and config.external is not None
+    assert config.selection.chain == ("example_match",)
+
+
+def test_with_a_local_model_the_baseline_defaults_stay(tmp_path):
+    """Spec 0.31: every default keeps the pre-0.31 behavior when a local model is configured."""
+    config = load_config(write_config(tmp_path))
+    assert config.chat.allowed_modes == frozenset(ExecutionMode)
+    assert config.selection.chain == ("model_router",)
+    assert config.detect is True

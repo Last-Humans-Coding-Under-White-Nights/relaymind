@@ -352,24 +352,37 @@ async def readiness(
     """Whether each permitted mode can run now, with explicit model warm state (RM21).
 
     A model is ready when it is available and warm. The overall answer
-    is true only when every permitted mode is ready.
+    is true only when every permitted mode is ready. The local model is
+    reported with its class and cause (RM26, section 7.4); with detection
+    on, this availability check updates the class. Without a usable local
+    model auto needs the external model, and a mode the class forbids is
+    not ready.
     """
-    local = await _health(orchestrator.model.adapter)
+    local = None if orchestrator.model is None else await _health(orchestrator.model.adapter)
+    if local is not None:
+        orchestrator.observe_local_health(local.available, local.warm, local.detail)
+    status = orchestrator.local_status
     external = (
         None if orchestrator.external is None else await _health(orchestrator.external.adapter)
     )
-    local_ready = local.available and local.warm
+    local_ready = local is not None and local.available and local.warm
     external_ready = external is not None and external.available and external.warm
 
     def reason_not_ready(mode: ExecutionMode) -> str | None:
+        if status.forbids(mode):
+            return f"the local model is {status.status.value}"
         if mode is ExecutionMode.PARALLEL_DEMO and not orchestrator.enabled_workflows:
             return "no workflow is enabled"
-        if (
-            mode in (ExecutionMode.EXTERNAL_ONLY, ExecutionMode.PARALLEL_DEMO)
-            and not external_ready
-        ):
+        # RM26: auto without a usable local model is managed external execution.
+        needs_external = mode in (ExecutionMode.EXTERNAL_ONLY, ExecutionMode.PARALLEL_DEMO) or (
+            mode is ExecutionMode.AUTO and not status.usable
+        )
+        if needs_external and not external_ready:
             return "the external model is not ready"
-        if mode is not ExecutionMode.EXTERNAL_ONLY and not local_ready:
+        needs_local = mode is not ExecutionMode.EXTERNAL_ONLY and (
+            mode is not ExecutionMode.AUTO or status.usable
+        )
+        if needs_local and not local_ready:
             return "the local model is not ready"
         return None
 
@@ -380,4 +393,9 @@ async def readiness(
         "ready": ready,
         "modes": modes,
         "models": {"local": _model(local), "external": _model(external)},
+        "local_model": {
+            "model_id": None if orchestrator.model is None else orchestrator.model.model_id,
+            "status": status.status.value,
+            "reason": status.reason,
+        },
     }

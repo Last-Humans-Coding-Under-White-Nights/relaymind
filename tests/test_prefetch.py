@@ -566,18 +566,10 @@ def test_the_rendered_trace_says_the_gateway_made_a_prefetch_call(tmp_path):
     assert "proposed by None" not in page and "proposed by  " not in page
 
 
-def test_prefetch_can_run_before_an_external_loop(tmp_path, monkeypatch):
-    """RM14, RM29: the same call serves an external stage (wired for a run with no local model
-    later): the calls run for the external actor, and are charged to the run only."""
-    from relaymind.orchestrator.local_loop import _Run
-
-    original = _Run._run_external
-
-    async def prefetching(self, loop, stop, confirmed=None):
-        await self._prefetch(loop)
-        return await original(self, loop, stop, confirmed)
-
-    monkeypatch.setattr(_Run, "_run_external", prefetching)
+def test_prefetch_runs_before_the_first_generation_of_an_external_skill_stage(tmp_path):
+    """RM14, RM29 (#126): a skill routed external loads in the external stage, which is then
+    its first skill stage: the calls run for the external actor, and are charged to the run
+    only."""
     gateway = build_gateway(
         tmp_path,
         [route_turn("investigate-performance")],

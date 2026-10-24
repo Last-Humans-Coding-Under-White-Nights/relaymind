@@ -33,8 +33,14 @@ def make_artifact(directory: Path) -> tuple[Path, Path]:
     return path, artifact
 
 
-def write_config(tmp_path: Path, extra: str = "", *, base: str | None = None) -> Path:
-    """A valid config file; extra is appended TOML (a table that must come last)."""
+def write_config(
+    tmp_path: Path, extra: str = "", *, base: str | None = None, local: bool = True
+) -> Path:
+    """A valid config file; extra is appended TOML (a table that must come last).
+
+    local False leaves out the [local_model] table (RM26: absent); such a file
+    needs an [external_model] table in extra to start.
+    """
     manifest, artifact = make_artifact(tmp_path)
     if base is None:
         base = (
@@ -42,9 +48,12 @@ def write_config(tmp_path: Path, extra: str = "", *, base: str | None = None) ->
             f"[skills]\nroots = [{toml_path(DEMO_SKILLS_ROOT)}]\n"
             f"[sandbox]\nseed = {toml_path(BASELINE)}\n"
             f"work_dir = {toml_path(tmp_path / 'sandbox')}\n"
-            f"[local_model]\nmanifest = {toml_path(manifest)}\n"
-            f"artifact = {toml_path(artifact)}\n"
         )
+        if local:
+            base += (
+                f"[local_model]\nmanifest = {toml_path(manifest)}\n"
+                f"artifact = {toml_path(artifact)}\n"
+            )
     path = tmp_path / "relaymind.toml"
     path.write_text(base + extra)
     return path

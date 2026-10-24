@@ -666,6 +666,10 @@ a day or less on existing exports or the existing benchmark.
   `[local_model]` optional; the gateway detects a local model that
   cannot run or cannot help on this machine; auto is managed external
   execution through the example matcher; external_only is unchanged.
+  Done (2026-10-23, deterministic tests with model doubles and a fake
+  clock): the optional table, `[placement] detect`, the class in
+  `run.accepted`, `route.selected`, and `/readyz`, and AC20 except its UI
+  clause, which is #127. Spec 0.37 records the choices.
 - Demo UI labels and progress (#127; section 9).
 - Selection benchmarks (section 12.4), our own, built from the
   SkillsBench dataset for skills (#143, P0) and the

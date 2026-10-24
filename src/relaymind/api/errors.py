@@ -21,6 +21,7 @@ from relaymind.orchestrator.local_loop import (
     MISSING_INPUT,
     NEEDS_EXTERNAL,
     ApprovalRejectedError,
+    ExecutionModeForbiddenError,
     ResumeInputError,
     RunOutcome,
     aborted_run_id,
@@ -112,6 +113,7 @@ class ApiError(Exception):
 _KNOWN: tuple[tuple[type[Exception], str], ...] = (
     (ResumeInputError, "invalid_resume_input"),
     (ApprovalRejectedError, "approval_invalid"),
+    (ExecutionModeForbiddenError, "execution_mode_forbidden"),
     (RunNotFoundError, "run_not_found"),
     (StaleVersionError, "stale_version"),
     (TerminalStateError, "run_terminal"),

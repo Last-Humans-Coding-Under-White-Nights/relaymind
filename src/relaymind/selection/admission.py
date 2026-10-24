@@ -42,11 +42,14 @@ def admit(
     messages: Sequence[Message],
     mode: ExecutionMode,
     language: Language | None,
+    no_local: bool = False,
 ) -> Admission:
     """The gateway's decision for a selector's skill or clarification, or InadmissibleError.
 
     language is the run's language once it has one (section 5); the first
-    decision takes it from the conversation, as the router does.
+    decision takes it from the conversation, as the router does. no_local is
+    a run without a usable local model: a skill then routes external with
+    reason no_local_model (RM26).
     """
     run_language = language or request_language(messages)
     candidate = result.candidate
@@ -61,7 +64,9 @@ def admit(
         skill_id = candidate.skill_id
         if skill_id not in router.offered:
             raise InadmissibleError(f"skill {skill_id!r} is not in the advertised catalog")
-        routing = router.skill_routing(skill_id, messages, mode=mode, language=run_language)
+        routing = router.skill_routing(
+            skill_id, messages, mode=mode, language=run_language, no_local=no_local
+        )
     except RouteDecisionError as exc:
         raise InadmissibleError(str(exc)) from exc
     if result.tools is None:
