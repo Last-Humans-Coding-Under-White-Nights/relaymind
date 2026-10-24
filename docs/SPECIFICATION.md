@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.38 | 24 October 2026 | Proposed implementation baseline
+Version 0.39 | 24 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that makes the best use of external language models from a PC with limited resources: it keeps simple, bounded work on a small local model when the machine can run it fast enough, sends everything else to an external model with as few round trips and tokens as the task allows, preserves completed work across that switch, and shows every decision in a trace. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -686,6 +686,112 @@ The credential of the external model is never in the file or on the command line
 Startup is all-or-nothing and runs in this order: read the file, which checks every key, type, and the data mode; check the bind address; when a local model is configured, verify its artifact against its manifest (the file hash, and for a GGUF file the tokenizer and chat-template hashes, section 6); open the sandbox and register the demo tools; load and validate every skill package against them; discover workflow packages from the configured roots, safely parse each workflow.yaml, and validate its schema, unique ID, bindings, tool references, and configured budgets (RM30); cross-check each skill's workflow reference and tool allowlist against the loaded package; check policy.enabled_workflows against the loaded package IDs and registered fixed workflow IDs; open the run store; build the orchestrator. It then runs restart recovery (section 5) exactly once, before the server socket exists, so no run is accepted first, and then, with a local model and placement.warmup true, the warm-up generations of section 6, bounded by warmup_seconds; a runtime that is not ready in time is not a startup error. Any failure before that point, including a public bind address, a manifest hash mismatch, an invalid skill package, an invalid workflow package, an unknown workflow ID, a selector endpoint outside loopback, a file with neither model table, local_only or parallel_demo in allowed_modes without a local_model table, a budget of the wrong type or range, an undeclared or unknown data mode, an unreadable file, an unknown key, a sandbox seed that cannot be read, and a run store that cannot be opened, stops the command with exit status 2 and one explicit message on standard error that names the cause, and no socket is opened. The message never contains a credential or a token, and a refused command-line argument is not echoed, because it may be one.
 
 After recovery the launcher creates the application token (section 7.1) by building the app, prints it once to standard output as one line, `Application token: <token>`, together with the bind address as a URL (an IPv6 literal in brackets), and then serves until stopped. It writes the token nowhere else: not to a log, a file, or standard error. When recovery ended unfinished runs, the launcher also prints how many, so the operator can see them in the store.
+
+## 14.2 Placement execution contract (spec 0.39)
+
+These details govern RM27 and the referenced sections, preserving historical trace compatibility.
+
+### 14.2.1 Prediction details (RM27)
+
+For a local generation, an available prediction MUST use the token count of the actual messages and offered tool schemas, measured with that local model's tokenizer before dispatch. An already measured count MAY be reused only for the identical request. It MUST NOT be a byte count, character count, or the count of a representative prompt. Prediction/tokenization time is ordinary active execution time; no generation is charged merely for counting. Failure of a tokenizer request made solely for placement makes the prediction unavailable; it MUST NOT introduce a new capability failure or change local_first/local_only execution. Existing mandatory routing tokenization/capability checks retain their existing failure behavior.
+
+The estimator MUST use retained successful local timing samples for the same model and purpose. Its selected cache class is that of the latest successful sample for that model and purpose: warm when cached_tokens is positive, cold when it is zero, and unknown when it was not measured. Unknown MUST NOT be treated as cold or replaced by an older known class. Prefill and decode throughput come from the selected class's positive measured rates of section 8. Startup warm-up and probe samples MAY supply throughput and cache-class evidence, but MUST NOT supply the expected production output length.
+
+Expected output is the median known output_tokens of successful `kind=run` samples of that model, purpose and actor local, including a truthful measured zero. When none exists, it is the explicit output cap of the actual generation request: routing_output_tokens for routing, or the request's effective max_output_tokens for another purpose. When there is neither a production measurement nor an explicit cap, expected output is unavailable. The gateway MUST NOT invent a skill/repair/final cap or change an adapter request to create a prediction. A measured expected output is limited to an explicit request cap when one applies; otherwise it is used unchanged. The trace identifies run_samples, purpose_cap or unavailable as its source.
+
+With input count I, expected output O, positive measured prefill rate P and decode rate D (tokens/ms), predicted_ms is `ceil(I/P + O/D)`. It is at least one millisecond. A prediction is unavailable when I, O, the selected known cache class, P or D is unavailable, or the calculation is not finite. Unavailable predictions are null, never zero or a default number of milliseconds. Both rates are required even when I or O is zero. Rates are empirical estimates, not promises; the effective-prefill statistic already uses total input tokens, so the predictor MUST NOT subtract cached_tokens from I again.
+
+The estimator MUST preserve the section 8 generic timing statistics of specification 0.38. In particular, `TimingEstimate.median_output_tokens` includes warm-up/probe samples and MUST NOT silently become a production-output statistic. A distinct production-output estimate or filtering validated raw timing samples implements the rule above.
+
+`local_first` records predictions but applies no placement rule or probe. `local_only`, and any run with no configured external path, likewise record predictions but skip nothing and apply no placement deadline, irrespective of the configured policy. Existing stage/run limits still apply. An external endpoint being temporarily unready does not erase a configured external path; existing dispatch/readiness and disclosure checks still govern a subsequent handoff. External_only never performs local placement work. Client-owned execution retains its current ownership/tool contract; a local generation made by it uses the same applicable per-generation placement admission, but no managed skill or success rate is invented for it.
+
+Under device_aware and expected_wait, an unavailable prediction starts the generation under its existing budget and no placement deadline. A stale available estimate remains usable; staleness schedules an idle refresh, never a probe on the user's request. A prediction strictly greater than the remaining local-stage time prevents the generation from starting. This hard cap is checked before expected_wait. An allowed local generation has a placement deadline of `min(predicted_ms * margin, remaining stage milliseconds, remaining run milliseconds)`; comparisons use unrounded monotonic durations, while recorded duration limits round up to integer milliseconds. Budget checks run before placement admission and again before actual dispatch. No rule moves a budget.
+
+Under expected_wait, after the hard cap, a selected skill with both observed local outcomes on this local model and external cost observations for this configured external model runs locally only when `predicted_ms < local_success_rate * expected_external_ms`. expected_external_ms is the median retained successful `kind=run` external-call duration for that external model and actor external, across purposes, multiplied by `max(1, median_external_generations)` from that skill's completed external runs. A known zero local success rate therefore declines local work. Without every required observation, this rule is unavailable and the policy uses device_aware alone. Routing before a skill is selected, client-owned calls and calls without a selected managed skill do not apply this rule. Predictions are unchanged by the rule and the experiment stays labeled placement_policy expected_wait.
+
+### 14.2.2 Trace fields (section 8)
+
+For events written under 0.39, the placement value is a closed object with **all** these keys; nested inputs is also closed. No prompt, endpoint credential or tool-result text is included. Counts reject booleans. Numeric rates/ratios reject NaN/infinity. Older events without the new optional field remain valid.
+
+```text
+placement = {
+  role: "local" | "external" | "none",
+  reason: "local_first" | "local_only" | "no_external_path" |
+          "prediction_unavailable" | "within_budget" | "local_slow" |
+          "expected_wait" | "external_path" | "no_generation",
+  predicted_ms: integer >= 1 | null,
+  deadline_ms: integer >= 1 | null,
+  inputs: {
+    model: nonblank string | null,
+    purpose: nonblank string | null,
+    input_tokens: integer >= 0 | null,
+    input_source: "tokenizer" | "routing_sample" | "none",
+    expected_output_tokens: finite number >= 0 | null,
+    output_source: "run_samples" | "purpose_cap" | "unavailable",
+    cache_class: "warm" | "cold" | "unknown",
+    sample_count: integer >= 0,
+    sample_recorded_at: UTC timestamp | null,
+    prefill_tokens_per_ms: finite number > 0 | null,
+    decode_tokens_per_ms: finite number > 0 | null,
+    local_success_rate: finite number in [0,1] | null,
+    expected_external_ms: finite number >= 0 | null
+  }
+}
+```
+
+The inputs describe the local generation being considered; model/purpose identify that local target even when role none means it was declined. sample_count is the successful sample count in the selected known cache class, and sample_recorded_at is the latest successful same-model/purpose sample that selected the class. An unknown latest cache class uses sample_count 0, null rates, and its recorded timestamp. local_success_rate/expected_external_ms are null unless the expected_wait rule had both observations. `input_source=routing_sample` is allowed only in readiness, never in a run trace's actual placement calculation.
+
+role local means a local generation started or was admitted to start; role none means no routing generation or a declined local generation. local_slow identifies a hard-cap decline; expected_wait identifies a decline by that rule; both have null deadline_ms because nothing started. A started generation has reason local_first/local_only/no_external_path when exempt from rules, prediction_unavailable when the estimator was unavailable, or within_budget when rules admitted it. The exemption reason takes precedence over availability of the estimate; prediction remains truthful/null independently. Deadline is null for all exemptions and unavailable predictions. A native external model.started uses role external, reason external_path and null local prediction/deadline, with every input null except input_source none, output_source unavailable, cache_class unknown and sample_count 0. A route that ran no routing generation and had no declined routing candidate uses role none, reason no_generation and the same empty inputs. An external route selected by a completed local router retains that router's local placement; the object describes the routing call, not the skill's later dispatch.
+
+Every actual local model.started MUST carry its placement; external model.started MUST carry the external marker. model.finished MUST carry predicted_ms and deadline_ms copied from model.started plus boolean deadline_missed. They are null/null/false for a normal external generation. A local timed-out generation retains the original values with deadline_missed true; no model.started or model.finished event or timing sample is fabricated for a generation declined before starting.
+
+route.selected MUST carry the placement of the accepted selector's routing generation, or the most recent declined model-router generation when that explains falling through, or the no_generation marker. A cached route or a deterministic selection made without a preceding model-router decline uses no_generation. If a local skill/final/repair generation is declined after the route already exists, its full placement MUST be carried by handoff.started; if external dispatch is blocked and there is no handoff.started, run.failed MUST carry it. These are additive optional placement fields in the two event schemas, necessary to retain a prediction for a call that never started. A handoff caused by a deadline miss MAY carry that same call's placement; actual duration remains on model.finished.
+
+run.accepted MUST record placement_policy, and these exact dotted numeric keys in budgets: `placement.margin`, `placement.probe_after_seconds`, and the existing `selection.timeout_seconds`. It MUST NOT create a nested placement table inside budgets. margin/probe_after_seconds are finite numbers strictly greater than zero, booleans rejected; defaults remain 2 and 600. The configured policy is recorded even when a particular mode/path is exempt from its rules.
+
+### 14.2.3 Selector propagation (RM28)
+
+A pre-dispatch placement decline of a model-based selector is a gateway-defined `not_placed` outcome, not an invalid selector response. The chain MUST continue in configured order and preserve the attempt. It MUST NOT automatically insert a different selector or make an external routing generation. Successful later admission is handled normally, with the declining routing placement preserved on route.selected. When the chain ends, a rejected model-router output retains existing invalid_output precedence; otherwise a not_placed attempt makes the gateway's exhausted-chain decision route external, skill_id null, reason local_slow (and its route.selected carries mechanism selector_chain); otherwise the existing selection_failed decision applies. A selected skill whose later local generation is declined is handed off with that skill and reason local_slow, including when expected_wait caused the decline.
+
+Only the gateway's explicit pre-dispatch placement-decline signal can become not_placed. BudgetExceededError, unavailable capability, provider failure, external cancellation and other callback stops MUST keep propagating as before. A selector cannot forge or swallow a gateway stop; the chain's existing stop guard continues to enforce it. A deadline miss after an actual routing generation started is an escalation with local_slow, not not_placed, and no cancelled output is admitted.
+
+### 14.2.4 Timeout and error precedence (sections 7.3 and 11)
+
+1. A native/user/chat-disconnect/server-shutdown cancellation remains run.cancelled/cancel_requested; it MUST NOT become a placement escalation even when deadlines coincide. Stop dispatch and request provider cancellation through the existing best-effort path.
+2. Already-exhausted generation/time/tool budgets retain their existing checks before admission. If the entire-run time is the limiting deadline, its existing entire-run budget/error mapping wins a tie; do not start an external generation with no remaining run budget.
+3. Otherwise an applied placement deadline, including a tie with the local-stage limit, expires as local_slow, deadline_missed true. Ask the adapter to cancel once, retain model.finished plus an unsuccessful timing sample and all completed tool evidence, and discard the generation's partial proposals/text from admission/publication. It escalates before answer commitment under the existing policy/disclosure/context/remaining-budget checks. If that handoff cannot occur, needs_external retains reason local_slow. A local placement miss alone does not mark the local runtime unavailable.
+4. A stage/external timeout when no placement deadline applied retains the existing local_budget/external_failed mappings. local_first and local_only remain observational with respect to placement and retain their pre-0.39 timeout behavior.
+5. Once an answer.delta has committed answer ownership under RM20/RM32, no placement stop may hand off or replace the answer. Reserve this integration contract for live streaming: a post-commit placement miss ends the run with error_code external_failed, reason_code local_slow, budget `placement.deadline`; the SSE error code is deadline_exceeded with fixed text and reason_code local_slow, no finish chunk and no [DONE]. This follows the existing distinction between a failed run's code and its deadline response code. Its model.finished still says deadline_missed true. No new public error code is introduced. Task #125 must enforce it when live output becomes possible; #130's buffered paths have no committed output before generation completion.
+
+When a cancellation-resistant adapter ignores its timeout, late output MUST NOT be admitted as success: the generation's elapsed applied deadline and task cancellation state are checked after iterator termination. There is no second local/external dispatch while that gateway generation task is still alive. Provider-side cancellation itself remains best effort, as already specified.
+
+### 14.2.5 Readiness (section 7.4)
+
+GET /readyz retains the existing top-level ready, modes, models and local_model. Add this closed top-level field:
+
+```text
+placement = {
+  policy: "local_first" | "device_aware" | "expected_wait",
+  representative: true,
+  routing: <the closed placement object above>,
+  routing_fits: boolean | null,
+  auto_model: nonblank model_id | null
+}
+```
+
+Readiness has no user prompt. Its routing input is the known input_tokens of the latest successful routing timing sample for the configured local model and actor local, irrespective of kind; it MUST label input_source routing_sample, never tokenizer. Output length/rates use the same production-output and throughput rules above, with routing_output_tokens as the fallback output cap, and a fresh full stage budget as the comparison limit. If that latest routing sample has unknown input count, there is no representative input; it MUST NOT silently substitute an older known count. Unknown input/rates/cache class produce predicted_ms null and routing_fits null. A known prediction uses routing_fits `(predicted_ms <= active_seconds*1000)`. This is a representative planning estimate, not a promise that a future request fits, and MUST be labeled that way in consumers.
+
+No generation or tokenizer request is made for readiness. Existing adapter health requests remain allowed. Under a ready/usable local class, auto_model is the local model under local_first or when there is no configured external path; under the other policies it is external when the representative estimate exists and does not fit, and local when it fits or is unavailable. An absent/unavailable/unsuitable local class keeps the existing RM26 external choice. With no such chosen configured model, auto_model is null. The auto mode's readiness is the health of this chosen model, subject to existing operator mode restrictions; overall HTTP 200 still requires every permitted mode ready, otherwise 503. local_only and parallel_demo retain their existing RM26 health requirements, and expected_wait cannot choose on a skill success rate in readiness because no skill is selected. Readiness's routing.role is the predicted auto routing placement (local or none if routing is skipped), with reason local_slow for a representative hard-cap skip; it does not claim an actual generation ran.
+
+### 14.2.6 Idle probe (sections 5, 6, 11 and 14.1)
+
+Only device_aware and expected_wait with a configured local model and configured external path schedule idle probes. An estimate older than probe_after_seconds, or no successful estimate, may trigger one routing-shaped generation when there is no active run. Probe freshness uses the latest successful routing sample; it is not refreshed by repeatedly reading readiness. The probe runs outside any user run, with no user run_id, no trace, and no charged run/stage generations or active time. Record the actual attempt as a ModelTiming kind probe, actor local, with truthful nullable measurements and success independent of any user task.
+
+The probe timeout is `min(placement.warmup_seconds, budgets.active_seconds)` with the existing routing token cap. The reservation and last attempt timestamp are persisted separately from the timing samples. No new sample is fabricated merely because a reservation was taken. A completion, failure or cancellation imposes a cooldown of probe_after_seconds before another attempt, so a cancelled stale probe does not immediately defeat a foreground retry.
+
+A SQLite-wide exclusive probe reservation MUST be acquired in the same transaction that checks no active run and no other probe. All transitions that acquire a foreground run slot, including client-owned acceptance and both resume kinds, MUST atomically refuse while a probe owns that reservation. A valid foreground acquisition attempt blocked by a probe requests its cancellation and returns the existing 429 overloaded, creating no run/key and consuming no approval. The 429 cause is another active run or an idle maintenance probe holding the execution slot; requests are not queued behind maintenance. Existing authentication, body, mode, idempotency, version/state/token/expiry precedence remains unchanged.
+
+The reservation is released only by the matching owner/token after its generation task/iterator has ended, including cancellation cleanup. A bounded cancellation wait does not authorize early release. Provider cancel uses the existing best-effort bounded request. A task that ignores cancellation may keep admission at 429 until it ends or the process genuinely restarts. No TTL automatically expires a live reservation. On shutdown stop scheduling, request cancellation, perform the bounded cleanup and keep the reservation if the task cannot stop. Genuine startup recovery, before the socket and only after the previous server process has ended, removes an orphan reservation; ordinary RunStore open does not. The current single-server lifecycle is retained; this change makes no claim of safely running restart recovery while another server is live on the same store. No inference overlap is promised beyond the existing best-effort provider cancellation contract.
 
 ## 15 Sources
 
