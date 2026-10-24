@@ -128,9 +128,14 @@ enabled_workflows = []
 # [budgets] active_seconds (otherwise it is unsuitable); it prints one line with
 # the class and the cause, and auto then runs on the external model. With
 # warmup = false only the first check runs. detect = false keeps the behavior
-# before spec 0.31. The placement policy keys (policy, margin,
-# probe_after_seconds) are not implemented yet and stop startup as unknown keys.
+# before spec 0.31. local_first records predictions without applying limits.
+# device_aware adds hard caps, deadlines and idle probes; expected_wait adds
+# the experimental skill-success rule. A probe holds the execution slot: a valid
+# foreground attempt requests cancellation and returns 429 until cleanup ends.
 # [placement]
+# policy = "local_first"
+# margin = 2
+# probe_after_seconds = 600
 # warmup = true
 # warmup_seconds = 30
 # detect = true

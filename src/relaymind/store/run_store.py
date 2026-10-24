@@ -210,6 +210,17 @@ MIGRATIONS: tuple[str, ...] = (
     CREATE INDEX skill_outcomes_local ON skill_outcomes(local_model, skill_id);
     CREATE INDEX skill_outcomes_external ON skill_outcomes(external_model, skill_id);
     """,
+    """
+    CREATE TABLE idle_probe (
+        singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+        token TEXT UNIQUE,
+        owner_instance TEXT,
+        started_at TEXT,
+        cancel_requested INTEGER NOT NULL DEFAULT 0,
+        last_attempt_at TEXT
+    );
+    INSERT INTO idle_probe(singleton) VALUES (1);
+    """,
 )
 
 
@@ -561,8 +572,20 @@ class RunStore:
             try:
                 yield
                 self._conn.execute("COMMIT")
-            except BaseException:
+            except BaseException as exc:
                 self._rollback()
+                if isinstance(exc, SlotUnavailableError) and getattr(exc, "probe", False):
+                    # The admission transaction (including an approval) rolled back.
+                    # Persist cancellation separately, while holding the connection lock.
+                    self._conn.execute("BEGIN IMMEDIATE")
+                    try:
+                        self._conn.execute(
+                            "UPDATE idle_probe SET cancel_requested=1 WHERE token IS NOT NULL"
+                        )
+                        self._conn.execute("COMMIT")
+                    except BaseException:
+                        self._rollback()
+                        raise
                 raise
             finally:
                 self._depth = 0
@@ -578,6 +601,66 @@ class RunStore:
         """
         with self._write():
             yield
+
+    # -- idle maintenance slot (RM17, RM27) ---------------------------------
+
+    def probe_reservation(self) -> dict[str, Any] | None:
+        """Read the current owner; opening a store never reclaims its reservation."""
+        with self._lock:
+            self._check_open()
+            row = self._conn.execute("SELECT * FROM idle_probe WHERE token IS NOT NULL").fetchone()
+            return None if row is None else dict(row)
+
+    def try_reserve_probe(
+        self, token: str, owner_instance: str, *, model: str, after_seconds: float
+    ) -> bool:
+        """Atomically reserve only stale, idle work, with persisted attempt cooldown."""
+        with self._write():
+            row = self._conn.execute("SELECT * FROM idle_probe").fetchone()
+            if row["token"] is not None or self.active_run_id() is not None:
+                return False
+            now = self.clock.utc_now()
+            if row["last_attempt_at"] is not None:
+                last = datetime.fromisoformat(row["last_attempt_at"].replace("Z", "+00:00"))
+                if (now - last).total_seconds() < after_seconds:
+                    return False
+            samples = [
+                s
+                for s in self.model_timings(model=model, purpose="routing", actor="local")
+                if s.succeeded
+            ]
+            if samples and (now - samples[-1].recorded_at).total_seconds() <= after_seconds:
+                return False
+            self._conn.execute(
+                "UPDATE idle_probe SET token=?, owner_instance=?, started_at=?,"
+                " cancel_requested=0 WHERE singleton=1",
+                (token, owner_instance, _iso(now)),
+            )
+            return True
+
+    def request_probe_cancel(self) -> None:
+        with self._write():
+            self._conn.execute("UPDATE idle_probe SET cancel_requested=1 WHERE token IS NOT NULL")
+
+    def finish_probe(self, token: str, owner_instance: str) -> bool:
+        """Release only after the matching owner's generation task has actually ended."""
+        with self._write():
+            changed = self._conn.execute(
+                "UPDATE idle_probe SET token=NULL, owner_instance=NULL, started_at=NULL,"
+                " cancel_requested=0, last_attempt_at=? WHERE token=? AND owner_instance=?",
+                (_iso(self.clock.utc_now()), token, owner_instance),
+            )
+            return changed.rowcount == 1
+
+    def recover_probe_after_restart(self) -> None:
+        """Startup only: the previous process must have ended (section 14.2.6)."""
+        with self._write():
+            self._conn.execute(
+                "UPDATE idle_probe SET token=NULL, owner_instance=NULL,"
+                " started_at=NULL, cancel_requested=0, last_attempt_at=?"
+                " WHERE token IS NOT NULL",
+                (_iso(self.clock.utc_now()),),
+            )
 
     # -- runs ------------------------------------------------------------
 
@@ -808,6 +891,7 @@ class RunStore:
                 " WHERE run_id = ? AND version = ? AND state = ?"
                 " AND NOT (? AND EXISTS ("
                 "  SELECT 1 FROM runs AS other WHERE other.holds_slot = 1 AND other.run_id <> ?))"
+                " AND NOT (? AND EXISTS (SELECT 1 FROM idle_probe WHERE token IS NOT NULL))"
                 " RETURNING *",
                 (
                     to_state,
@@ -820,6 +904,7 @@ class RunStore:
                     from_state,
                     int(holds_slot),
                     run_id,
+                    int(holds_slot),
                 ),
             ).fetchall()
             if not rows:
@@ -829,9 +914,12 @@ class RunStore:
                 current = self._require_run(run_id)
                 if current["version"] != expected_version or current["state"] != from_state:
                     raise StaleVersionError(run_id, expected_version, current["version"])
-                raise SlotUnavailableError(
-                    f"another run holds the execution slot; {run_id} is unchanged"
+                error = SlotUnavailableError(
+                    "another active run or idle maintenance probe holds the execution slot; "
+                    f"{run_id} is unchanged"
                 )
+                error.probe = self.probe_reservation() is not None
+                raise error
             self.start_run_clock(run_id)
             self._conn.execute(
                 "INSERT INTO state_intervals (run_id, version, state, elapsed_ms)"

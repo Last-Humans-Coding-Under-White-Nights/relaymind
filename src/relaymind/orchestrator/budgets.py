@@ -291,7 +291,14 @@ class BudgetMeter:
 
     # -- counts ------------------------------------------------------------
 
-    def _charge(self, names: tuple[str, ...], run_counter: str, external: bool = False) -> None:
+    def _charge(
+        self,
+        names: tuple[str, ...],
+        run_counter: str,
+        external: bool = False,
+        *,
+        commit: bool = True,
+    ) -> None:
         self.check_time(external)
         # The per-stage limits do not apply to the external stage, but
         # what it uses still counts in the run's usage (RM03, RM16).
@@ -304,10 +311,21 @@ class BudgetMeter:
         run_limit = getattr(self.budgets, run_limit_name)
         if self._run[run_counter] + 1 > run_limit:
             raise BudgetExceededError(run_limit_name, run_limit)
+        if not commit:
+            return
         for name in names:
             self._stage[name] += 1
             self._total[name] += 1
         self._run[run_counter] += 1
+
+    def check_generation(self, purpose: str) -> None:
+        """Check without charging, before placement/tokenization admission (RM03)."""
+        external = purpose in EXTERNAL_PURPOSES
+        if external and self._external_generations >= self.budgets.external_generations:
+            raise BudgetExceededError("external_generations", self.budgets.external_generations)
+        self._charge(GENERATION_CHARGES[purpose], "generations", external, commit=False)
+        if self.remaining_seconds(external) <= 0:
+            raise self.time_exhausted(external)
 
     def charge_generation(self, purpose: str) -> None:
         """Charge one generation by its purpose (GENERATION_CHARGES)."""

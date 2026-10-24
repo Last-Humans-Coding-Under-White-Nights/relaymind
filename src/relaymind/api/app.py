@@ -32,6 +32,7 @@ import secrets
 import time
 import traceback
 from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -150,8 +151,21 @@ def create_app(
     if client_tools is not None:
         backends[CLIENT_TOOLS] = client_tools
     started = int(time.time())
+
     # No interactive docs: they would be an unauthenticated surface.
-    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        from relaymind.orchestrator.warmup import IdleProbe
+
+        probe = IdleProbe(orchestrator, cancel_wait_seconds=native.cancel_wait_seconds)
+        app.state.idle_probe = probe
+        probe.start()
+        try:
+            yield
+        finally:
+            await probe.stop()
+
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.application_token = token
 
     @app.get("/v1/models")

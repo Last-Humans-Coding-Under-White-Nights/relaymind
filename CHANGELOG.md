@@ -11,7 +11,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Specification 0.39 freezes device placement prediction, trace and readiness
   fields, selector declines, deadline precedence and exclusive idle-probe
   admission/cancellation (#130; RM03, RM04, RM17, RM21, RM22, RM27, RM28; AC21).
-
+- Device placement (#130): actual-request token predictions, production-output
+  medians, device-aware deadlines and experimental expected-wait admission.
+  Runs record policy and prediction evidence; readiness labels its representative
+  estimate. Idle routing probes share the SQLite execution slot with every run
+  acquisition, retain failed attempts and cooldowns, and keep the reservation
+  until cancellation cleanup ends. The default remains local_first.
 - Persisted timing samples and skill outcome estimates (#129; RM17, RM25,
   RM27, spec 0.38): a versioned sample schema, an additive SQLite migration,
   seven-day retention and a 1,000-sample bound per model/purpose. Every
