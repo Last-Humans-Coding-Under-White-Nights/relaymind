@@ -79,13 +79,10 @@ def test_a_bad_value_names_the_option(field, value):
         PerformanceSettings(**{field: value})
 
 
-def test_live_answer_streaming_is_refused_until_it_exists():
-    """RM32: answer_stream live is a spec value, but no code forwards a gated stream yet.
-
-    Accepting it would be an option that silently does nothing.
-    """
-    with pytest.raises(ValueError, match="answer_stream.*live.*not implemented"):
-        PerformanceSettings(answer_stream="live")
+def test_live_answer_streaming_is_available_by_explicit_choice():
+    """RM32: the implemented live gate is opt-in; the default remains buffered."""
+    assert PerformanceSettings(answer_stream="live").answer_stream == "live"
+    assert PerformanceSettings().answer_stream == "buffered"
 
 
 @pytest.mark.parametrize(

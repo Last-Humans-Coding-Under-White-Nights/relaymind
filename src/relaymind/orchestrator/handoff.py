@@ -344,9 +344,12 @@ class DispatchAuthority:
     def __init__(self) -> None:
         self.holder = LOCAL_ACTOR
         self.answer_owner: str | None = None
+        self.answer_generation: tuple[str, str, str] | None = None
 
     def hand_off_to_external(self) -> None:
         """Revoke the local actor's authority; the external actor holds it (RM14)."""
+        if self.answer_owner is not None:
+            raise FinalAnswerOwnedError("the final answer is already owned")
         self.holder = EXTERNAL_ACTOR
 
     def require(self, actor: str) -> None:
@@ -356,14 +359,19 @@ class DispatchAuthority:
                 f"the {actor} actor holds no dispatch authority; the {self.holder} actor does"
             )
 
-    def claim_final_answer(self, actor: str) -> None:
+    def claim_final_answer(
+        self, actor: str, *, generation: tuple[str, str, str] | None = None
+    ) -> None:
         """Fix the final-answer owner, or raise if another actor owns it."""
         if self.answer_owner is not None and self.answer_owner != actor:
             raise FinalAnswerOwnedError(
                 f"the final answer is owned by the {self.answer_owner} actor"
             )
         self.require(actor)
+        if self.answer_generation is not None and generation != self.answer_generation:
+            raise FinalAnswerOwnedError("the final answer belongs to another generation")
         self.answer_owner = actor
+        self.answer_generation = generation
 
 
 __all__ = [

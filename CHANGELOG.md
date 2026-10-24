@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Opt-in verified managed answer streaming (#125; RM12, RM16, RM17, RM20,
+  RM32; AC09, AC19): cumulative predicate gates, exact generation ownership,
+  persisted live deltas, safe terminal SSE errors, and configured/effective
+  corpus labels. Buffered stays the default; provider corpus parity is pending.
+
 - Specification 0.41 defines verified live answer publication, cumulative predicate
   safety/completeness, exact generation commitment, full-answer redaction, effective
   stream policy, terminal SSE behavior and labeled corpus comparison (#125;

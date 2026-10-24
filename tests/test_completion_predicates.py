@@ -826,3 +826,67 @@ def test_deletion_answer_reports_the_returned_outcome(answer, expected):
     """RM16: the answer states the deletion that happened, for the
     returned database only, without negating it."""
     check("deletion_outcome_reported", answer, [DELETED], expected)
+
+
+def test_statement_factorization_matches_all_existing_parameter_cases():
+    """RM32/AC19: differential oracle is the original predicate, both languages.
+
+    Replay every parametrized fixture above, including review regressions, against
+    explicit safety/completeness and the chunked stateful gate.
+    """
+    from relaymind.skills.predicates import StatementGate, StatementRejected, completion_parts
+
+    defaults = {
+        "test_incident_counts_reported": ("incident_counts_reported", [COUNTS]),
+        "test_health_checklist_separated": ("health_checklist_separated", [UNAVAILABLE]),
+        "test_health_checklist_structure": ("health_checklist_separated", [UNAVAILABLE]),
+        "test_incident_counts_without_causes_or_conflicts": ("incident_counts_reported", [COUNTS]),
+        "test_deletion_answer_reports_the_returned_outcome": (
+            "deletion_outcome_reported",
+            [DELETED],
+        ),
+        "test_performance_sections_are_real_and_non_empty": (
+            "performance_evidence_separated",
+            [METRICS],
+        ),
+    }
+    checked = 0
+    for name, fn in list(globals().items()):
+        if not callable(fn) or not name.startswith("test_"):
+            continue
+        for mark in getattr(fn, "pytestmark", []):
+            if mark.name != "parametrize":
+                continue
+            fields = (
+                [n.strip() for n in mark.args[0].split(",")]
+                if isinstance(mark.args[0], str)
+                else mark.args[0]
+            )
+            for row in mark.args[1]:
+                row = getattr(row, "values", row)
+                values = dict(zip(fields, row if len(fields) > 1 else (row,), strict=True))
+                if "answer" not in values or not isinstance(values["answer"], str):
+                    continue
+                predicate, results = defaults.get(name, (name.removeprefix("test_"), None))
+                predicate = values.get("predicate", predicate)
+                results = values.get("results", results)
+                if predicate not in COMPLETION_PREDICATES or results is None:
+                    continue
+                answer = values["answer"]
+                expected = COMPLETION_PREDICATES[predicate](answer, results)
+                safety, complete = completion_parts(predicate, answer, results)
+                assert (safety and complete) == expected
+                for width in (1, 5, len(answer) or 1):
+                    gate = StatementGate(predicate, results)
+                    try:
+                        pieces = [
+                            gate.feed(answer[i : i + width]) for i in range(0, len(answer), width)
+                        ]
+                        pieces.append(gate.finish())
+                    except StatementRejected:
+                        assert not expected, (name, answer, width)
+                    else:
+                        assert expected, (name, answer, width)
+                        assert "".join(pieces) == answer
+                checked += 1
+    assert checked > 75

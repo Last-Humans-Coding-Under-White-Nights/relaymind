@@ -692,6 +692,7 @@ def test_run_accepted_carries_the_section_8_payload(tmp_path):
         "answer_options": {},
         # Spec 0.32 section 8: the performance options in force, here the baseline.
         **PerformanceSettings().to_json_object(),
+        "answer_stream_effective": "buffered",
         # RM29: the offered skills' prefetch declarations are recorded whatever the option says.
         "prefetch_declarations": gateway.skills.prefetch_declarations(gateway.skills.names()),
         # RM28: the selector chain in force and the example_match thresholds, the baseline.

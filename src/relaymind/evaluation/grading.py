@@ -65,6 +65,8 @@ class RunGrade:
     corrections: int = 0
     correction_ms: int | None = 0
     selector_provenance: dict[str, Any] = field(default_factory=dict)
+    answer_stream: str | None = None
+    answer_stream_effective: str | None = None
 
     def to_json_object(self) -> dict[str, Any]:
         return asdict(self)
@@ -320,6 +322,12 @@ def grade_run(
         corrections=corrections,
         correction_ms=correction_ms,
         selector_provenance=selector_provenance(events),
+        answer_stream=next(iter(of_type(events, "run.accepted")), {})
+        .get("payload", {})
+        .get("answer_stream"),
+        answer_stream_effective=next(iter(of_type(events, "run.accepted")), {})
+        .get("payload", {})
+        .get("answer_stream_effective"),
     )
     checks = [
         (
