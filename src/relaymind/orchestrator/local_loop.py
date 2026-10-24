@@ -3152,6 +3152,7 @@ class _Run:
         if self.authority.answer_owner is not None:
             raise RuntimeError("an answer generation already owns this run")
         model = model or self.active_model
+        dispatch_role = self.authority.holder
         on_external = purpose in EXTERNAL_PURPOSES
         label = {} if branch is None else {"branch": branch}
         self.meter.check_generation(purpose)
@@ -3276,7 +3277,9 @@ class _Run:
                     )
                 stream = adapter.generate(request)
                 async with (
-                    contextlib.aclosing(stream) if gate is not None else contextlib.nullcontext()
+                    contextlib.aclosing(stream)
+                    if gate is not None and callable(getattr(stream, "aclose", None))
+                    else contextlib.nullcontext()
                 ):
                     async for event in stream:
                         if gate is not None:
@@ -3302,7 +3305,13 @@ class _Run:
                             if gate is not None:
                                 try:
                                     for piece in gate.push(event.text):
-                                        self._publish_live(generation, piece, model, check_live)
+                                        self._publish_live(
+                                            generation,
+                                            piece,
+                                            model,
+                                            check_live,
+                                            dispatch_role=dispatch_role,
+                                        )
                                 except StatementRejected:
                                     generation.rejected = True
                                     failure = GenerationFailed(
@@ -3347,7 +3356,11 @@ class _Run:
                     else:
                         check_live()
                         self._publish_live(
-                            generation, self.scrub(tail) if gate.hold else tail, model, check_live
+                            generation,
+                            self.scrub(tail) if gate.hold else tail,
+                            model,
+                            check_live,
+                            dispatch_role=dispatch_role,
                         )
         except TimeoutError:
             # The trace names the limit that bounded this generation, local
@@ -4301,10 +4314,12 @@ class _Run:
         piece: str,
         model: ConfiguredModel,
         check_deadline: Callable[[], None],
+        *,
+        dispatch_role: str,
     ) -> None:
         if not piece:
             return
-        identity = (generation.call_id, model.model_id, model.actor)
+        identity = (generation.call_id, model.model_id, dispatch_role)
         if self.authority.answer_generation not in (None, identity):
             raise _PublicationFailure("answer generation changed")
         try:
@@ -4312,7 +4327,7 @@ class _Run:
             # The transaction must commit before in-memory ownership is claimed.
             with self.o.store.transaction():
                 check_deadline()
-                self.authority.require(model.actor)
+                self.authority.require(dispatch_role)
                 self.o.store.append_event(
                     self.run_id,
                     EventType.ANSWER_DELTA,
@@ -4324,7 +4339,7 @@ class _Run:
         except Exception as exc:
             raise _PublicationFailure from exc
         # No await separates persistence, ownership and transport visibility.
-        self.authority.claim_final_answer(model.actor, generation=identity)
+        self.authority.claim_final_answer(dispatch_role, generation=identity)
         generation.published = True
 
     def _publish(self, generation: _Generation, role: str) -> str:

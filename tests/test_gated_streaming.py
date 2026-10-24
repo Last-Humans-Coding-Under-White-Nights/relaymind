@@ -775,3 +775,144 @@ def test_verification_time_cannot_publish_past_generation_deadline(tmp_path, mon
     final = [e for e in of_type(events, "model.finished") if e.payload["purpose"] == "final"][0]
     assert final.payload["deadline_missed"] is True
     assert final.payload["error"]["code"] == "deadline_exceeded"
+
+
+def test_live_external_role_can_publish_with_local_adapter_locality(tmp_path):
+    """RM14/RM16/RM32: authority is the external role; trace locality stays local."""
+    from relaymind.adapters import Message, Role
+
+    async def scenario():
+        gateway = build_gateway(
+            tmp_path,
+            [
+                route_turn("check-service-health"),
+                *health_tail()[:-1],
+                text_turn("staging-api is unavailable. "),
+            ],
+            external_turns=[text_turn(STAGING_OK + " ")],
+            performance=PerformanceSettings(answer_stream="live"),
+        )
+        gateway.external.locality = "local"
+        accepted = gateway.orchestrator.accept(
+            (Message(role=Role.USER, content="Is staging-api healthy?"),)
+        )
+        outcome = await accepted.start(lambda result: result)
+        assert outcome.state is RunState.COMPLETED
+        assert outcome.answer == STAGING_OK + " "
+        events = gateway.store.events(outcome.run_id)
+        generated = of_type(events, "model.started")[-1]
+        assert generated.payload["purpose"] == "external"
+        assert generated.actor == "local"
+        deltas = of_type(events, "answer.delta")
+        assert {delta.actor for delta in deltas} == {"local"}
+        assert {delta.payload["call_id"] for delta in deltas} == {generated.payload["call_id"]}
+        assert accepted._run.authority.answer_generation == (
+            generated.payload["call_id"],
+            generated.payload["model"],
+            "external",
+        )
+        assert accepted._run.authority.answer_owner == "external"
+        assert of_type(events, "run.completed")[0].payload["external_calls"] == 0
+
+    asyncio.run(scenario())
+
+
+class IteratorOnly:
+    """The published adapter contract promises AsyncIterator, without aclose (RM18)."""
+
+    def __init__(self, source):
+        self.source = source
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        return await anext(self.source)
+
+
+@pytest.mark.parametrize("answer_stream", ["buffered", "live"])
+def test_adapter_iterator_without_close_completes_normally(tmp_path, answer_stream):
+    """RM18/RM32: lawful iterator-only EOF is not an interrupted model call."""
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn("check-service-health"), *health_tail()],
+        performance=PerformanceSettings(answer_stream=answer_stream),
+    )
+    generate = gateway.adapter.generate
+    gateway.adapter.generate = lambda request: IteratorOnly(generate(request))
+    outcome, events = run(gateway)
+    assert outcome.state is RunState.COMPLETED
+    assert outcome.answer == STAGING_OK
+    final = of_type(events, "model.finished")[-1]
+    assert final.payload["finish_reason"] == "stop"
+    assert final.payload["error"] is None
+    assert gateway.store.model_timings()[-1].succeeded
+
+
+def test_early_rejection_awaits_optional_iterator_cleanup_before_next_dispatch(tmp_path):
+    """RM14/RM18/RM32: cancellation/close completes before correction or handoff."""
+
+    async def scenario():
+        gateway = build_gateway(
+            tmp_path,
+            [
+                route_turn("check-service-health"),
+                *health_tail()[:-1],
+                text_turn("staging-api is unavailable. "),
+            ],
+            external_turns=[text_turn(STAGING_OK)],
+            performance=PerformanceSettings(answer_stream="live"),
+        )
+        closing, release = asyncio.Event(), asyncio.Event()
+        sequence = []
+        generate = gateway.adapter.generate
+
+        async def final_source(request):
+            try:
+                async for event in generate(request):
+                    yield event
+            finally:
+                sequence.append("source closed")
+
+        class CloseableIterator(IteratorOnly):
+            async def aclose(self):
+                sequence.append("close requested")
+                closing.set()
+                await release.wait()
+                await self.source.aclose()
+                sequence.append("close complete")
+
+        def streamed(request):
+            if request.generation_id.endswith("_final"):
+                return CloseableIterator(final_source(request))
+            return generate(request)
+
+        gateway.adapter.generate = streamed
+        gateway.external.on_generate = lambda request: sequence.append("external dispatched")
+        task = asyncio.create_task(gateway.orchestrator.run_text("Is staging-api healthy?"))
+        try:
+            await asyncio.wait_for(closing.wait(), 5)
+            run_id = gateway.store.active_run_id()
+            assert run_id is not None
+            assert not task.done()
+            assert gateway.external.requests == []
+            assert len(gateway.adapter.cancelled) == 1
+            events = gateway.store.events(run_id)
+            assert not of_type(events, "handoff.started")
+            assert not of_type(events, "answer.delta")
+            assert all(
+                event.payload["purpose"] != "final" for event in of_type(events, "model.finished")
+            )
+        finally:
+            release.set()
+            outcome = await asyncio.wait_for(task, 5)
+        assert outcome.state is RunState.COMPLETED
+        assert sequence == [
+            "close requested",
+            "source closed",
+            "close complete",
+            "external dispatched",
+        ]
+        assert len(gateway.adapter.cancelled) == 1
+
+    asyncio.run(scenario())

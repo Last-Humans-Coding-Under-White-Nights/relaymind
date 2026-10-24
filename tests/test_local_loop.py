@@ -1040,9 +1040,12 @@ def test_an_adapter_without_a_locality_is_refused():
         ConfiguredModel(adapter=adapter, model_id="m")
 
 
-def test_external_calls_are_counted_from_the_adapter_locality(tmp_path):
-    """RM16: every actual model call is labelled; external calls are counted."""
-    gateway = build_gateway(tmp_path, HEALTH_RUN)
+@pytest.mark.parametrize("answer_stream", ["buffered", "live"])
+def test_external_calls_are_counted_from_the_adapter_locality(tmp_path, answer_stream):
+    """RM16/RM32: dispatch role does not overwrite actual adapter locality."""
+    gateway = build_gateway(
+        tmp_path, HEALTH_RUN, performance=PerformanceSettings(answer_stream=answer_stream)
+    )
     gateway.adapter.locality = "external"
     outcome, events = run(gateway)
     assert {e.actor for e in of_type(events, "model.started")} == {"external"}
