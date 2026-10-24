@@ -48,6 +48,7 @@ from relaymind.adapters import (
 from relaymind.orchestrator.local_loop import LOCAL_OPTIONS, LocalOrchestrator, skill_stage_messages
 from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
 from relaymind.store import ModelTiming
+from relaymind.store.model_timings import observed_cached_tokens
 
 # Not a corpus or latency prompt (a repeated text would be served whole from the
 # cache and inflate the cached count), and not a request any run sends.
@@ -143,6 +144,9 @@ async def _send(
     adapter: ModelAdapter, purpose: str, request: GenerationRequest, orchestrator: LocalOrchestrator
 ) -> WarmupSample:
     """Send one request, drop the output, and time it with the monotonic clock (RM25)."""
+    model = orchestrator.model
+    if model is None:
+        raise _NotReady("no local model is configured")
     clock = orchestrator.clock
     started = clock.monotonic()
     first_token: float | None = None
@@ -163,11 +167,14 @@ async def _send(
         succeeded = True
     finally:
         finished = clock.monotonic()
-        assert orchestrator.model is not None
+        if usage is not None:
+            usage = replace(
+                usage, cached_tokens=observed_cached_tokens(usage.input_tokens, usage.cached_tokens)
+            )
         orchestrator.store.add_model_timing(
             ModelTiming(
-                model=orchestrator.model.model_id,
-                actor=orchestrator.model.actor,
+                model=model.model_id,
+                actor=model.actor,
                 purpose=purpose,
                 kind="warm_up",
                 run_id=None,

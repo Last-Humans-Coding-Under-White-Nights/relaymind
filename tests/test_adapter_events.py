@@ -109,6 +109,24 @@ def test_usage_rejects_negative_token_counts():
         Usage(input_tokens=-1, output_tokens=0)
 
 
+@pytest.mark.parametrize(
+    "field", ["input_tokens", "output_tokens", "cached_tokens", "reasoning_tokens"]
+)
+@pytest.mark.parametrize("value", [True, False, 1.0, 1.5, float("nan"), float("inf"), -1, "1"])
+def test_usage_requires_exact_nonnegative_integer_counts(field, value):
+    """RM16/RM18/RM25: a boolean, float or string is not a token measurement."""
+    values = {"input_tokens": 1, "output_tokens": 1, field: value}
+    with pytest.raises(ValueError, match="token counts"):
+        Usage(**values)
+
+
+@pytest.mark.parametrize("value", [None, 0, 1])
+def test_usage_preserves_unknown_and_exact_integer_counts(value):
+    """RM16/RM25: unreported counts and measured zero remain distinct."""
+    usage = Usage(value, value, value, value)
+    assert dataclasses.astuple(usage) == (value,) * 4
+
+
 def test_generation_failed_carries_stable_code_and_message():
     err = GenerationFailed(code="provider_timeout", message="upstream timed out")
     assert err.code == "provider_timeout"
