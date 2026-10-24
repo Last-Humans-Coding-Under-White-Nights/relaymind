@@ -12,7 +12,7 @@ from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.client_loop import ToolOffer, run_client_request
 from relaymind.orchestrator.local_loop import ConfiguredModel
 from relaymind.orchestrator.local_status import LocalStatus
-from relaymind.orchestrator.warmup import warm_up
+from relaymind.orchestrator.warmup import detect_local_model, warm_up
 from relaymind.store.trace_event import EventType
 
 
@@ -200,3 +200,35 @@ def test_valid_and_unknown_observations_are_preserved(tmp_path, caplog, path, co
     sample = gateway.store.model_timings()[0]
     assert (sample.input_tokens, sample.output_tokens, sample.cached_tokens) == counts
     assert not any("invalid_cached_tokens" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.parametrize("path", ["warmup", "detect"])
+@pytest.mark.parametrize("failed_write", [1, 2])
+@pytest.mark.parametrize("error_type", [sqlite3.OperationalError, ValueError, TimeoutError])
+def test_warmup_evidence_errors_escape_without_readiness(
+    tmp_path, monkeypatch, path, failed_write, error_type
+):
+    """RM17/RM27/spec 0.38.1: evidence errors cannot become a runtime health result."""
+    gateway = build_gateway(tmp_path, [text_turn("Hello"), text_turn("Hello")])
+    original = error_type("timing write unavailable")
+    write_sample = gateway.store.add_model_timing
+    writes = 0
+
+    def persist_or_fail(sample):
+        nonlocal writes
+        writes += 1
+        if writes == failed_write:
+            raise original
+        write_sample(sample)
+
+    monkeypatch.setattr(gateway.store, "add_model_timing", persist_or_fail)
+    action = (
+        warm_up(gateway.orchestrator, gateway.adapter, seconds=30)
+        if path == "warmup"
+        else detect_local_model(gateway.orchestrator, gateway.adapter, warmup=True, seconds=30)
+    )
+    with pytest.raises(error_type) as caught:
+        asyncio.run(action)
+    assert caught.value is original
+    assert writes == len(gateway.adapter.requests) == failed_write
+    assert len(gateway.store.model_timings()) == failed_write - 1
