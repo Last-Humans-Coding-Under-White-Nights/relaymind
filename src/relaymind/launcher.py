@@ -51,6 +51,7 @@ from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
 from relaymind.orchestrator.local_status import LocalStatus
 from relaymind.orchestrator.performance import PerformanceSettings
+from relaymind.orchestrator.placement import PlacementSettings
 from relaymind.orchestrator.prefetch import PrefetchBudgetError, check_prefetch_budgets
 from relaymind.orchestrator.recovery import RecoveryError
 from relaymind.orchestrator.route_decision import ExecutionMode
@@ -115,8 +116,10 @@ _TABLES: dict[str, frozenset[str]] = {
     # Spec 0.32 section 14.1: the keys are the PerformanceSettings fields (RM31, RM32).
     "performance": frozenset(f.name for f in fields(PerformanceSettings)),
     # Spec 0.31 section 14.1: the warm-up keys and the local model check (RM26). The
-    # placement policy, its margin, and the idle probe stay unknown keys until they are built.
-    "placement": frozenset({"warmup", "warmup_seconds", "detect"}),
+    # RM27: complete placement table; defaults retain baseline behavior.
+    "placement": frozenset(
+        {"warmup", "warmup_seconds", "detect", "policy", "margin", "probe_after_seconds"}
+    ),
     # Spec 0.32 section 14.1: the keys are the SelectionSettings fields (RM28).
     "selection": frozenset(f.name for f in fields(SelectionSettings)),
 }
@@ -155,6 +158,8 @@ class LauncherConfig:
     budgets: LocalBudgets = field(default_factory=LocalBudgets)
     # Spec 0.32 section 14.1: the performance options; every default is the baseline.
     performance: PerformanceSettings = field(default_factory=PerformanceSettings)
+    # Spec 0.39 section 14.1: the placement policy, margin and probe age (RM27, section 14.2).
+    placement: PlacementSettings = field(default_factory=PlacementSettings)
     # Spec 0.31 section 14.1: the startup warm-up of the local model (section 6).
     warmup: bool = True
     warmup_seconds: float = DEFAULT_WARMUP_SECONDS
@@ -307,6 +312,12 @@ def load_config(path: Path | str) -> LauncherConfig:
     if not math.isfinite(warmup_seconds) or not warmup_seconds > 0:
         raise LaunchError("[placement] warmup_seconds must be a positive number")
     detect = _value(placement, "placement", "detect", bool, True)
+    placement_settings = _settings(
+        "placement",
+        lambda: PlacementSettings(
+            **{k: v for k, v in placement.items() if k not in ("warmup", "detect")}
+        ),
+    )
     selection = _selection(tables["selection"], has_local=has_local)
 
     return LauncherConfig(
@@ -333,6 +344,7 @@ def load_config(path: Path | str) -> LauncherConfig:
         ui=ui,
         budgets=budgets,
         performance=performance,
+        placement=placement_settings,
         warmup=warmup,
         warmup_seconds=float(warmup_seconds),
         detect=detect,
@@ -517,6 +529,7 @@ def build_app(
             selection=config.selection,
             # RM26: readiness repeats the availability check when detection is on.
             detect=config.detect,
+            placement=config.placement,
         )
         report = orchestrator.recover_after_restart()
         ui = None if config.ui is None else replace(config.ui, fixtures=sandbox)

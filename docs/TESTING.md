@@ -878,6 +878,22 @@ feature has a test of the default as well. Later pull requests append here.
   isolate external models, and verify transaction rollback and estimate reads
   without event-history scans. These are deterministic checks, not live
   performance evidence.
+- `pytest tests/test_placement.py tests/test_idle_probe.py` (#130; AC21,
+  RM03, RM04, RM17, RM21, RM22, RM27, RM28, spec 0.39): device placement and
+  idle maintenance. Measured fixtures and fake clocks check production-only
+  output estimates, latest prefix classes, exact tokenization requests,
+  policy exemptions, hard caps, expected-wait observations, stage/run
+  deadline precedence and rejected late output. The same generation boundary
+  covers client-owned calls and fixed parallel branches. Readiness uses
+  representative samples without tokenization and reports no routing fit
+  without a usable local model. A routing decline stays on route.selected
+  and is not carried by a later transition. Probe tests cover SQLite slot
+  races across connections, failed/cancelled cooldowns, the scheduler's wait
+  and recovery after a failed check, confirmation rollback, input resume,
+  cancellation-resistant shutdown and genuine restart cleanup. New trace
+  writes validate the closed placement object; historical UI readers still
+  accept missing or previously unconstrained fields. No test claims live
+  performance.
 
 ### What is not covered yet
 

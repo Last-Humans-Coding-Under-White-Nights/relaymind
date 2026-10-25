@@ -210,6 +210,17 @@ MIGRATIONS: tuple[str, ...] = (
     CREATE INDEX skill_outcomes_local ON skill_outcomes(local_model, skill_id);
     CREATE INDEX skill_outcomes_external ON skill_outcomes(external_model, skill_id);
     """,
+    """
+    CREATE TABLE idle_probe (
+        singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+        token TEXT UNIQUE,
+        owner_instance TEXT,
+        started_at TEXT,
+        cancel_requested INTEGER NOT NULL DEFAULT 0,
+        last_attempt_at TEXT
+    );
+    INSERT INTO idle_probe(singleton) VALUES (1);
+    """,
 )
 
 
@@ -227,6 +238,10 @@ class SlotUnavailableError(RunStoreError):
     """Another run holds the active execution slot (section 11: 429)."""
 
     http_status = 429
+
+    def __init__(self, message: str, *, probe: bool = False) -> None:
+        super().__init__(message)
+        self.probe: bool = probe
 
 
 class IdempotencyKeyTakenError(RunStoreError):
@@ -364,6 +379,24 @@ def _run_record(row: sqlite3.Row) -> RunRecord:
     )
 
 
+_TIMING_SELECT = (
+    "SELECT model, actor, purpose, kind, input_tokens, cached_tokens, first_token_ms,"
+    " duration_ms, output_tokens, succeeded, run_id, recorded_at FROM model_timings"
+)
+
+
+def _model_timing(row: sqlite3.Row) -> ModelTiming:
+    return ModelTiming(
+        **{
+            key: value
+            for key, value in dict(row).items()
+            if key not in ("succeeded", "recorded_at")
+        },
+        succeeded=bool(row["succeeded"]),
+        recorded_at=_parse(row["recorded_at"]),
+    )
+
+
 def _tool_operation_record(row: sqlite3.Row) -> dict[str, Any]:
     record = dict(row)
     record["arguments"] = json.loads(row["arguments"])
@@ -442,6 +475,9 @@ class RunStore:
         self._lock = threading.RLock()
         # Nesting depth of the open write transaction; see transaction().
         self._depth = 0
+        # Runs whose baseline the open write transaction started. A rollback
+        # drops them, so a refused run leaves nothing behind in this process.
+        self._transaction_clocks: set[str] = set()
         self._path = str(path)
         self._in_memory = self._path in (":memory:", "")
         self._closed = False
@@ -561,11 +597,26 @@ class RunStore:
             try:
                 yield
                 self._conn.execute("COMMIT")
-            except BaseException:
+            except BaseException as exc:
                 self._rollback()
+                for run_id in self._transaction_clocks:
+                    self._run_started.pop(run_id, None)
+                if isinstance(exc, SlotUnavailableError) and exc.probe:
+                    # The admission transaction (including an approval) rolled back.
+                    # Persist cancellation separately, while holding the connection lock.
+                    self._conn.execute("BEGIN IMMEDIATE")
+                    try:
+                        self._conn.execute(
+                            "UPDATE idle_probe SET cancel_requested=1 WHERE token IS NOT NULL"
+                        )
+                        self._conn.execute("COMMIT")
+                    except BaseException:
+                        self._rollback()
+                        raise
                 raise
             finally:
                 self._depth = 0
+                self._transaction_clocks.clear()
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
@@ -578,6 +629,87 @@ class RunStore:
         """
         with self._write():
             yield
+
+    # -- idle maintenance slot (RM17, RM27) ---------------------------------
+
+    def probe_reservation(self) -> dict[str, Any] | None:
+        """Read the current owner; opening a store never reclaims its reservation."""
+        with self._lock:
+            self._check_open()
+            row = self._conn.execute("SELECT * FROM idle_probe WHERE token IS NOT NULL").fetchone()
+            return None if row is None else dict(row)
+
+    def try_reserve_probe(
+        self, token: str, owner_instance: str, *, model: str, after_seconds: float
+    ) -> bool:
+        """Atomically reserve only stale, idle work, with persisted attempt cooldown."""
+        # This optimistic read only rejects work; it never grants a reservation.
+        if not self._probe_eligible(model=model, after_seconds=after_seconds):
+            return False
+        with self._write():
+            # Another connection may have admitted a run, reserved a probe, or
+            # refreshed timings/cooldown since the read. Recheck all conditions.
+            if not self._probe_eligible(model=model, after_seconds=after_seconds):
+                return False
+            self._conn.execute(
+                "UPDATE idle_probe SET token=?, owner_instance=?, started_at=?,"
+                " cancel_requested=0 WHERE singleton=1",
+                (token, owner_instance, _iso(self.clock.utc_now())),
+            )
+            return True
+
+    def _probe_eligible(self, *, model: str, after_seconds: float) -> bool:
+        with self._lock:
+            self._check_open()
+            row = self._conn.execute("SELECT * FROM idle_probe").fetchone()
+            if row["token"] is not None or self.active_run_id() is not None:
+                return False
+            now = self.clock.utc_now()
+            if row["last_attempt_at"] is not None:
+                last = datetime.fromisoformat(row["last_attempt_at"].replace("Z", "+00:00"))
+                if (now - last).total_seconds() < after_seconds:
+                    return False
+            latest = self.latest_model_timing(model=model, purpose="routing", actor="local")
+            return latest is None or (now - latest.recorded_at).total_seconds() > after_seconds
+
+    def probe_wait_seconds(self, *, model: str, after_seconds: float) -> float:
+        """Seconds until cooldown and estimate age allow an idle probe; 0 when they do.
+
+        Only the timed conditions are counted. An active run or another
+        probe's reservation has no known end, so a scheduler polls for it.
+        """
+        with self._lock:
+            self._check_open()
+            row = self._conn.execute("SELECT last_attempt_at FROM idle_probe").fetchone()
+            now = self.clock.utc_now()
+            wait = 0.0
+            if row["last_attempt_at"] is not None:
+                last = datetime.fromisoformat(row["last_attempt_at"].replace("Z", "+00:00"))
+                wait = max(wait, after_seconds - (now - last).total_seconds())
+            latest = self.latest_model_timing(model=model, purpose="routing", actor="local")
+            if latest is not None:
+                wait = max(wait, after_seconds - (now - latest.recorded_at).total_seconds())
+            return wait
+
+    def finish_probe(self, token: str, owner_instance: str) -> bool:
+        """Release only after the matching owner's generation task has actually ended."""
+        with self._write():
+            changed = self._conn.execute(
+                "UPDATE idle_probe SET token=NULL, owner_instance=NULL, started_at=NULL,"
+                " cancel_requested=0, last_attempt_at=? WHERE token=? AND owner_instance=?",
+                (_iso(self.clock.utc_now()), token, owner_instance),
+            )
+            return changed.rowcount == 1
+
+    def recover_probe_after_restart(self) -> None:
+        """Startup only: the previous process must have ended (section 14.2.6)."""
+        with self._write():
+            self._conn.execute(
+                "UPDATE idle_probe SET token=NULL, owner_instance=NULL,"
+                " started_at=NULL, cancel_requested=0, last_attempt_at=?"
+                " WHERE token IS NOT NULL",
+                (_iso(self.clock.utc_now()),),
+            )
 
     # -- runs ------------------------------------------------------------
 
@@ -637,11 +769,7 @@ class RunStore:
             if accepted is not None:
                 # RM25: the run clock starts with the run, before seq 1.
                 self.start_run_clock(run_id)
-                try:
-                    self._insert_events(run_id, [accepted])
-                except BaseException:
-                    self._run_started.pop(run_id, None)
-                    raise
+                self._insert_events(run_id, [accepted])
         self.start_run_clock(run_id)
         return RunRecord(
             run_id=run_id,
@@ -694,6 +822,8 @@ class RunStore:
                 (run_id, run_id),
             ).fetchone()
             self._run_started[run_id] = (self.clock.monotonic(), offset)
+            if self._depth:
+                self._transaction_clocks.add(run_id)
 
     def elapsed_ms(self, run_id: str) -> int:
         """Measured elapsed time, never inferred from wall time (RM25)."""
@@ -808,6 +938,7 @@ class RunStore:
                 " WHERE run_id = ? AND version = ? AND state = ?"
                 " AND NOT (? AND EXISTS ("
                 "  SELECT 1 FROM runs AS other WHERE other.holds_slot = 1 AND other.run_id <> ?))"
+                " AND NOT (? AND EXISTS (SELECT 1 FROM idle_probe WHERE token IS NOT NULL))"
                 " RETURNING *",
                 (
                     to_state,
@@ -820,6 +951,7 @@ class RunStore:
                     from_state,
                     int(holds_slot),
                     run_id,
+                    int(holds_slot),
                 ),
             ).fetchall()
             if not rows:
@@ -830,7 +962,9 @@ class RunStore:
                 if current["version"] != expected_version or current["state"] != from_state:
                     raise StaleVersionError(run_id, expected_version, current["version"])
                 raise SlotUnavailableError(
-                    f"another run holds the execution slot; {run_id} is unchanged"
+                    "another active run or idle maintenance probe holds the execution slot; "
+                    f"{run_id} is unchanged",
+                    probe=self.probe_reservation() is not None,
                 )
             self.start_run_clock(run_id)
             self._conn.execute(
@@ -906,11 +1040,7 @@ class RunStore:
         self, *, model: str | None = None, purpose: str | None = None, actor: str | None = None
     ) -> list[ModelTiming]:
         """Unexpired observations, oldest first, then insertion order for timestamp ties."""
-        query = (
-            "SELECT model, actor, purpose, kind, input_tokens, cached_tokens, first_token_ms,"
-            " duration_ms, output_tokens, succeeded, run_id, recorded_at"
-            " FROM model_timings WHERE recorded_at > ?"
-        )
+        query = _TIMING_SELECT + " WHERE recorded_at > ?"
         params: list[Any] = [self._retention_cutoff()]
         for name, value in (("model", model), ("purpose", purpose), ("actor", actor)):
             if value is not None:
@@ -919,18 +1049,19 @@ class RunStore:
         with self._lock:
             self._check_open()
             rows = self._conn.execute(query + " ORDER BY recorded_at, sample_id", params).fetchall()
-        return [
-            ModelTiming(
-                **{
-                    key: value
-                    for key, value in dict(row).items()
-                    if key not in ("succeeded", "recorded_at")
-                },
-                succeeded=bool(row["succeeded"]),
-                recorded_at=_parse(row["recorded_at"]),
-            )
-            for row in rows
-        ]
+        return [_model_timing(row) for row in rows]
+
+    def latest_model_timing(self, *, model: str, purpose: str, actor: str) -> ModelTiming | None:
+        """The newest unexpired successful observation, read by one indexed lookup."""
+        with self._lock:
+            self._check_open()
+            row = self._conn.execute(
+                _TIMING_SELECT + " WHERE recorded_at > ? AND model = ? AND purpose = ?"
+                " AND actor = ? AND succeeded = 1"
+                " ORDER BY recorded_at DESC, sample_id DESC LIMIT 1",
+                (self._retention_cutoff(), model, purpose, actor),
+            ).fetchone()
+        return None if row is None else _model_timing(row)
 
     def timing_estimate(self, model: str, purpose: str, *, actor: str = "local") -> TimingEstimate:
         """Read measured prediction inputs without inference or run/event-history scans."""

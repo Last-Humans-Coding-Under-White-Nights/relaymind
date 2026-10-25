@@ -596,6 +596,8 @@ def test_the_configured_budgets_are_recorded_in_run_accepted(tmp_path):
         **LocalBudgets(active_seconds=20, local_generations=4, run_generations=9).to_json_object(),
         # Spec 0.31 section 8: the selection time limit is recorded with the limits (RM28).
         "selection.timeout_seconds": 2.0,
+        "placement.margin": 2,
+        "placement.probe_after_seconds": 600,
     }
     # The default file records the section 11 defaults.
     plain = tmp_path / "plain"
@@ -608,6 +610,8 @@ def test_the_configured_budgets_are_recorded_in_run_accepted(tmp_path):
     assert accepted.payload["budgets"] == {
         **LocalBudgets().to_json_object(),
         "selection.timeout_seconds": 2.0,
+        "placement.margin": 2,
+        "placement.probe_after_seconds": 600,
     }
 
 

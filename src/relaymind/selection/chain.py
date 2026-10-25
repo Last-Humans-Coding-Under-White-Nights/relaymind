@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from relaymind.orchestrator.placement import PlacementDeclined
 from relaymind.selection.contract import (
     CandidateKind,
     SelectionContext,
@@ -231,13 +232,19 @@ class SelectorChain:
         try:
             raw = await self._call(selector, request, context, stops)
         except _GatewayStop as stop:
+            if isinstance(stop.cause, PlacementDeclined):
+                return Outcome.NOT_PLACED, str(stop.cause), None, None
             raise stop.cause from None
         except Exception as exc:  # a selector's own failure falls through (RM28)
             if stops:
+                if isinstance(stops[0], PlacementDeclined):
+                    return Outcome.NOT_PLACED, str(stops[0]), None, None
                 raise stops[0] from None
             return Outcome.ERROR, f"{type(exc).__name__}: {exc}", None, None
         if stops:
-            # The selector swallowed the gateway's stop; the stop still ends the chain.
+            # A selector cannot swallow a callback stop.
+            if isinstance(stops[0], PlacementDeclined):
+                return Outcome.NOT_PLACED, str(stops[0]), None, None
             raise stops[0]
         if raw is _TIMED_OUT:
             return Outcome.TIMEOUT, f"no result within {self.timeout_seconds} seconds", None, None

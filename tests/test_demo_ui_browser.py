@@ -141,7 +141,7 @@ def test_shell_and_trace_show_the_runs_phase_two_configuration(tmp_path, browser
             "Local model: none configured",
             "Local model status: absent",
             "Local model reason: not configured",
-            "Placement policy: not recorded",
+            "Placement policy: local_first",
             "Answer pass: draft",
             "Answer stream: buffered",
         ):

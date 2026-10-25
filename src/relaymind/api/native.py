@@ -368,6 +368,15 @@ async def readiness(
     local_ready = local is not None and local.available and local.warm
     external_ready = external is not None and external.available and external.warm
 
+    placement = orchestrator.placement.readiness(
+        local_model=None if orchestrator.model is None else orchestrator.model.model_id,
+        external_model=None if orchestrator.external is None else orchestrator.external.model_id,
+        usable=status.usable,
+        stage_seconds=orchestrator.budgets.active_seconds,
+        output_cap=orchestrator.budgets.routing_output_tokens,
+    )
+    auto_local = status.usable and placement["routing"]["role"] == "local"
+
     def reason_not_ready(mode: ExecutionMode) -> str | None:
         if status.forbids(mode):
             return f"the local model is {status.status.value}"
@@ -375,12 +384,12 @@ async def readiness(
             return "no workflow is enabled"
         # RM26: auto without a usable local model is managed external execution.
         needs_external = mode in (ExecutionMode.EXTERNAL_ONLY, ExecutionMode.PARALLEL_DEMO) or (
-            mode is ExecutionMode.AUTO and not status.usable
+            mode is ExecutionMode.AUTO and not auto_local
         )
         if needs_external and not external_ready:
             return "the external model is not ready"
         needs_local = mode is not ExecutionMode.EXTERNAL_ONLY and (
-            mode is not ExecutionMode.AUTO or status.usable
+            mode is not ExecutionMode.AUTO or auto_local
         )
         if needs_local and not local_ready:
             return "the local model is not ready"
@@ -393,6 +402,7 @@ async def readiness(
         "ready": ready,
         "modes": modes,
         "models": {"local": _model(local), "external": _model(external)},
+        "placement": placement,
         "local_model": {
             "model_id": None if orchestrator.model is None else orchestrator.model.model_id,
             "status": status.status.value,

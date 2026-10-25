@@ -679,7 +679,13 @@ def test_run_accepted_carries_the_section_8_payload(tmp_path):
         "effective_execution_mode": "local_only",
         "model_alias": "relaymind",
         # Spec 0.31 section 8: the selection time limit is recorded with the limits (RM28).
-        "budgets": {**LocalBudgets().to_json_object(), "selection.timeout_seconds": 2.0},
+        "budgets": {
+            **LocalBudgets().to_json_object(),
+            "selection.timeout_seconds": 2.0,
+            "placement.margin": 2,
+            "placement.probe_after_seconds": 600,
+        },
+        "placement_policy": "local_first",
         "skill_roots": snapshot["skill_roots"],
         "skills_offered": snapshot["skills_offered"],
         "original_messages": [{"role": "user", "content": "Is staging-api healthy right now?"}],

@@ -50,6 +50,306 @@
   ],
   "additionalProperties": false,
   "$defs": {
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "reason",
+        "predicted_ms",
+        "deadline_ms",
+        "inputs"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "local",
+            "external",
+            "none"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "local_first",
+            "local_only",
+            "no_external_path",
+            "prediction_unavailable",
+            "within_budget",
+            "local_slow",
+            "expected_wait",
+            "external_path",
+            "no_generation"
+          ]
+        },
+        "predicted_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "deadline_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "purpose",
+            "input_tokens",
+            "input_source",
+            "expected_output_tokens",
+            "output_source",
+            "cache_class",
+            "sample_count",
+            "sample_recorded_at",
+            "prefill_tokens_per_ms",
+            "decode_tokens_per_ms",
+            "local_success_rate",
+            "expected_external_ms"
+          ],
+          "properties": {
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "\\S"
+            },
+            "purpose": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "\\S"
+            },
+            "input_tokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "input_source": {
+              "enum": [
+                "tokenizer",
+                "none"
+              ]
+            },
+            "expected_output_tokens": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "output_source": {
+              "enum": [
+                "run_samples",
+                "purpose_cap",
+                "unavailable"
+              ]
+            },
+            "cache_class": {
+              "enum": [
+                "warm",
+                "cold",
+                "unknown"
+              ]
+            },
+            "sample_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sample_recorded_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,6})?Z$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "prefill_tokens_per_ms": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0
+            },
+            "decode_tokens_per_ms": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0
+            },
+            "local_success_rate": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "expected_external_ms": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "role": {
+              "const": "external"
+            },
+            "reason": {
+              "const": "external_path"
+            },
+            "predicted_ms": {
+              "type": "null"
+            },
+            "deadline_ms": {
+              "type": "null"
+            },
+            "inputs": {
+              "const": {
+                "model": null,
+                "purpose": null,
+                "input_tokens": null,
+                "input_source": "none",
+                "expected_output_tokens": null,
+                "output_source": "unavailable",
+                "cache_class": "unknown",
+                "sample_count": 0,
+                "sample_recorded_at": null,
+                "prefill_tokens_per_ms": null,
+                "decode_tokens_per_ms": null,
+                "local_success_rate": null,
+                "expected_external_ms": null
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "none"
+            },
+            "reason": {
+              "const": "no_generation"
+            },
+            "predicted_ms": {
+              "type": "null"
+            },
+            "deadline_ms": {
+              "type": "null"
+            },
+            "inputs": {
+              "const": {
+                "model": null,
+                "purpose": null,
+                "input_tokens": null,
+                "input_source": "none",
+                "expected_output_tokens": null,
+                "output_source": "unavailable",
+                "cache_class": "unknown",
+                "sample_count": 0,
+                "sample_recorded_at": null,
+                "prefill_tokens_per_ms": null,
+                "decode_tokens_per_ms": null,
+                "local_success_rate": null,
+                "expected_external_ms": null
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "none"
+            },
+            "reason": {
+              "enum": [
+                "local_slow",
+                "expected_wait"
+              ]
+            },
+            "predicted_ms": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "deadline_ms": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "local"
+            },
+            "reason": {
+              "enum": [
+                "local_first",
+                "local_only",
+                "no_external_path"
+              ]
+            },
+            "deadline_ms": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "local"
+            },
+            "reason": {
+              "const": "prediction_unavailable"
+            },
+            "predicted_ms": {
+              "type": "null"
+            },
+            "deadline_ms": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "local"
+            },
+            "reason": {
+              "const": "within_budget"
+            },
+            "predicted_ms": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "deadline_ms": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      ]
+    },
     "model_call": {
       "type": "object",
       "properties": {
@@ -102,6 +402,16 @@
     }
   },
   "allOf": [
+    {"if": {"properties": {"event_type": {"const": "model.started"}, "actor": {"const": "external"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"properties": {"role": {"const": "external"}}}}}}}},
+    {"if": {"properties": {"event_type": {"const": "model.started"}, "actor": {"const": "local"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"properties": {"role": {"const": "local"}}}}}}}},
+    {"if": {"properties": {"event_type": {"not": {"enum": ["model.started", "route.selected", "handoff.started", "run.failed"]}}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": false}}}}},
+    {"if": {"properties": {"event_type": {"const": "run.accepted"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"budgets": {"properties": {"placement": false}}}}}}},
+    {"if": {"properties": {"event_type": {"const": "run.accepted"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement_policy": {"enum": ["local_first", "device_aware", "expected_wait"]}, "budgets": {"type": "object", "properties": {"placement.margin": {"type": "number", "exclusiveMinimum": 0}, "placement.probe_after_seconds": {"type": "number", "exclusiveMinimum": 0}}}}}}}},
+    {"if": {"properties": {"event_type": {"const": "model.started"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"$ref": "#/$defs/placement"}}}}}},
+    {"if": {"properties": {"event_type": {"const": "model.finished"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"predicted_ms": {"type": ["integer", "null"], "minimum": 1}, "deadline_ms": {"type": ["integer", "null"], "minimum": 1}, "deadline_missed": {"type": "boolean"}}}}}},
+    {"if": {"properties": {"event_type": {"const": "route.selected"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"$ref": "#/$defs/placement"}}}}}},
+    {"if": {"properties": {"event_type": {"const": "handoff.started"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"$ref": "#/$defs/placement"}}}}}},
+    {"if": {"properties": {"event_type": {"const": "run.failed"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"$ref": "#/$defs/placement"}}}}}},
     {
       "if": {"properties": {"event_type": {"enum": ["run.cancelled"]}}, "required": ["event_type"]},
       "then": {

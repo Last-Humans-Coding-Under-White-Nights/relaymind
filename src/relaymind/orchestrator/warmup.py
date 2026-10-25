@@ -29,6 +29,8 @@ generate, so it is unavailable.
 
 import asyncio
 import contextlib
+import logging
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, replace
 from typing import Any
@@ -146,6 +148,8 @@ async def _send(
     request: GenerationRequest,
     orchestrator: LocalOrchestrator,
     *,
+    kind: str = "warm_up",
+    success_allowed: Callable[[], bool] = lambda: True,
     deadline: float | None = None,
 ) -> WarmupSample:
     """Send one request, drop the output, and time it with the monotonic clock (RM25)."""
@@ -158,28 +162,30 @@ async def _send(
     usage: Usage | None = None
     succeeded = False
     try:
-        # Only runtime execution belongs to the tolerant warm-up boundary.
-        # Persistence below must escape unchanged, even for TimeoutError.
-        async with asyncio.timeout_at(deadline):
-            async with contextlib.aclosing(adapter.generate(request)) as stream:
-                async for event in stream:
-                    if first_token is None and (
-                        isinstance(event, FirstToken | ToolCall)
-                        or (isinstance(event, TextDelta) and event.text)
-                    ):
-                        first_token = clock.monotonic()
-                    if isinstance(event, Usage):
-                        usage = event
-                    elif isinstance(event, GenerationFailed):
-                        raise _NotReady(f"the local runtime reported {event.code}")
-        succeeded = True
-    except TimeoutError as exc:
-        raise _WarmupTimeout from exc
-    except _NotReady:
-        raise
-    except Exception as exc:
-        # Adapter exceptions are a not-ready result; cancellation is not.
-        raise _NotReady(_one_line(f"{type(exc).__name__}: {exc}".rstrip(": "))) from exc
+        try:
+            # Only runtime execution belongs to the tolerant warm-up boundary.
+            # Persistence below must escape unchanged, even for TimeoutError.
+            async with asyncio.timeout_at(deadline):
+                async with contextlib.aclosing(adapter.generate(request)) as stream:
+                    async for event in stream:
+                        if first_token is None and (
+                            isinstance(event, FirstToken | ToolCall)
+                            or (isinstance(event, TextDelta) and event.text)
+                        ):
+                            first_token = clock.monotonic()
+                        if isinstance(event, Usage):
+                            usage = event
+                        elif isinstance(event, GenerationFailed):
+                            raise _NotReady(f"the local runtime reported {event.code}")
+        except TimeoutError as exc:
+            raise _WarmupTimeout from exc
+        except _NotReady:
+            raise
+        except Exception as exc:
+            # Adapter exceptions are a not-ready result; cancellation is not.
+            raise _NotReady(_one_line(f"{type(exc).__name__}: {exc}".rstrip(": "))) from exc
+        task = asyncio.current_task()
+        succeeded = success_allowed() and (task is None or not task.cancelling())
     finally:
         finished = clock.monotonic()
         if usage is not None:
@@ -191,7 +197,7 @@ async def _send(
                 model=model.model_id,
                 actor=model.actor,
                 purpose=purpose,
-                kind="warm_up",
+                kind=kind,
                 run_id=None,
                 duration_ms=round((finished - started) * 1000),
                 first_token_ms=None
@@ -366,3 +372,192 @@ __all__ = [
     "warm_up",
     "warmup_requests",
 ]
+
+
+_LOGGER = logging.getLogger(__name__)
+
+# While this owner's probe runs, cancellation requests are checked this often.
+_ACTIVE_POLL_SECONDS = 0.05
+# An idle scheduler sleeps until a probe can start, within these bounds: a run
+# or another probe has no known end, and settings or clocks may change.
+_IDLE_MIN_SECONDS = 1.0
+_IDLE_MAX_SECONDS = 60.0
+# A failed check is retried after a growing delay, never more than this.
+_ERROR_BACKOFF_MAX_SECONDS = 30.0
+
+
+class IdleProbe:
+    """One bounded idle routing generation under the SQLite execution slot (AC21).
+
+    Cancellation marks the attempt unsuccessful before cancelling its task. Only
+    that task's final cleanup releases the reservation; a bounded stop never does.
+    """
+
+    def __init__(self, orchestrator: LocalOrchestrator, *, cancel_wait_seconds: float = 5) -> None:
+        self.o = orchestrator
+        self.cancel_wait_seconds = cancel_wait_seconds
+        self.owner = uuid.uuid4().hex
+        self._task: asyncio.Task[None] | None = None
+        self._scheduler: asyncio.Task[None] | None = None
+        self._closing = False
+        self._cancelled = False
+        self._token: str | None = None
+        # The first scheduler check that failed; logged then, raised by stop().
+        self._error: Exception | None = None
+        self._started = 0.0
+        self._wall_started = 0.0
+
+    @property
+    def enabled(self) -> bool:
+        return (
+            self.o.model is not None
+            and self.o.external is not None
+            and self.o.placement.settings.policy != "local_first"
+        )
+
+    def start(self) -> None:
+        if self.enabled and self._scheduler is None:
+            self._scheduler = asyncio.create_task(self._schedule())
+
+    async def _schedule(self) -> None:
+        failures = 0
+        while not self._closing:
+            try:
+                await self.tick()
+                delay = self._next_delay()
+                failures = 0
+            except Exception as exc:
+                # One failed check must not end maintenance: a running probe still
+                # needs its cancellation checks. The error is logged and kept for stop().
+                failures += 1
+                if self._error is None:
+                    self._error = exc
+                _LOGGER.exception("idle probe check failed; retrying")
+                delay = min(_ERROR_BACKOFF_MAX_SECONDS, _ACTIVE_POLL_SECONDS * 2**failures)
+            await asyncio.sleep(delay)
+
+    def _next_delay(self) -> float:
+        if self._task is not None:
+            # Running, or finished and not yet reported by tick().
+            return _ACTIVE_POLL_SECONDS
+        assert self.o.model is not None
+        wait = self.o.store.probe_wait_seconds(
+            model=self.o.model.model_id,
+            after_seconds=self.o.placement.settings.probe_after_seconds,
+        )
+        return min(max(wait, _IDLE_MIN_SECONDS), _IDLE_MAX_SECONDS)
+
+    async def tick(self) -> None:
+        if self._closing or not self.enabled:
+            return
+        settings = self.o.placement.settings
+        if self._task is not None and self._task.done():
+            task, self._task = self._task, None
+            if not task.cancelled():
+                # Report a task whose timing persistence failed, once, before replacing it.
+                task.result()
+        if self._task is not None:
+            reservation = self.o.store.probe_reservation()
+            limit = min(settings.warmup_seconds, self.o.budgets.active_seconds)
+            elapsed = max(
+                self.o.clock.monotonic() - self._started,
+                asyncio.get_running_loop().time() - self._wall_started,
+            )
+            if (reservation and reservation["cancel_requested"]) or elapsed >= limit:
+                self._cancel()
+            return
+        assert self.o.model is not None
+        token = "probe_" + uuid.uuid4().hex
+        if not self.o.store.try_reserve_probe(
+            token,
+            self.owner,
+            model=self.o.model.model_id,
+            after_seconds=settings.probe_after_seconds,
+        ):
+            return
+        self._token = token
+        self._cancelled = False
+        self._started = self.o.clock.monotonic()
+        self._wall_started = asyncio.get_running_loop().time()
+        self._task = asyncio.create_task(self._execute(token))
+        # Enter the task before allowing stop/cancellation; even a first-instruction
+        # failure then passes through its finally and releases its own reservation.
+        await asyncio.sleep(0)
+
+    def _cancel(self) -> None:
+        if self._cancelled or self._task is None or self._task.done():
+            return
+        self._cancelled = True
+        assert self.o.model is not None and self._token is not None
+        self.o.ask_provider_to_cancel(self.o.model.adapter, self._token)
+        self._task.cancel()
+
+    def _success_allowed(self) -> bool:
+        limit = min(self.o.placement.settings.warmup_seconds, self.o.budgets.active_seconds)
+        reservation = self.o.store.probe_reservation()
+        return (
+            not self._cancelled
+            and not self._closing
+            and reservation is not None
+            and not reservation["cancel_requested"]
+            and self.o.clock.monotonic() - self._started < limit
+            and asyncio.get_running_loop().time() - self._wall_started < limit
+        )
+
+    async def _execute(self, token: str) -> None:
+        assert self.o.model is not None
+        limit = min(self.o.placement.settings.warmup_seconds, self.o.budgets.active_seconds)
+        timer = asyncio.get_running_loop().call_later(limit, self._cancel)
+        try:
+            # Build only routing; no skill request or user run is manufactured.
+            request = self.o.router.build_request(
+                [Message(role=Role.USER, content=WARMUP_TEXT)], token
+            )
+            await _send(
+                self.o.model.adapter,
+                "routing",
+                request,
+                self.o,
+                kind="probe",
+                success_allowed=self._success_allowed,
+            )
+            if self._success_allowed() and self.o.local_status.status == LocalModelClass.UNSUITABLE:
+                latest = self.o.store.latest_model_timing(
+                    model=self.o.model.model_id, purpose="routing", actor="local"
+                )
+                if latest is None:
+                    return
+                prediction = self.o.placement.predict(
+                    self.o.model.model_id,
+                    "routing",
+                    latest.input_tokens,
+                    output_cap=self.o.budgets.routing_output_tokens,
+                    input_source="routing_sample",
+                )
+                if (
+                    prediction.predicted_ms is not None
+                    and prediction.predicted_ms <= self.o.budgets.active_seconds * 1000
+                ):
+                    self.o.set_local_status(LocalStatus.ready())
+        except (_NotReady, _WarmupTimeout, asyncio.CancelledError):
+            # Runtime failures are recorded attempts. Evidence/storage failures
+            # must remain visible, just as they do for startup warm-up.
+            pass
+        finally:
+            timer.cancel()
+            self.o.store.finish_probe(token, self.owner)
+
+    async def stop(self) -> None:
+        self._closing = True
+        if self._scheduler is not None:
+            self._scheduler.cancel()
+            await asyncio.gather(self._scheduler, return_exceptions=True)
+        self._cancel()
+        if self._task is not None and not self._task.done():
+            await asyncio.wait((self._task,), timeout=self.cancel_wait_seconds)
+        if self._scheduler is not None and not self._scheduler.cancelled():
+            self._scheduler.result()
+        if self._error is not None:
+            raise self._error
+        if self._task is not None and self._task.done() and not self._task.cancelled():
+            self._task.result()
