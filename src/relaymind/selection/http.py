@@ -31,7 +31,8 @@ def validate_url(url: object) -> str:
             raise ValueError
         parsed = urlsplit(url)
         if (
-            parsed.scheme not in ("http", "https")
+            # Plain http only: TLS adds nothing on loopback, and no certificate setting exists.
+            parsed.scheme != "http"
             or not parsed.hostname
             or not is_loopback_host(parsed.hostname)
             or parsed.username is not None
@@ -45,7 +46,7 @@ def validate_url(url: object) -> str:
         httpx.URL(url)
     except (ValueError, httpx.InvalidURL):
         raise ValueError(
-            "selection HTTP url must be absolute loopback HTTP(S), with a valid port"
+            "selection HTTP url must be absolute loopback http, with a valid port"
             " and no credentials, query or fragment"
         ) from None
     return url

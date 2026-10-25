@@ -102,7 +102,7 @@ timeout_seconds = 2
 
 The gateway sends one redacted [SelectionRequest](src/relaymind/selection/schemas/selection_request.v1.json)
 and validates the [SelectionResult](src/relaymind/selection/schemas/selection_result.v1.json).
-Only loopback HTTP(S) endpoints are accepted; credentials, query strings, redirects
+Only plain `http` loopback endpoints are accepted; credentials, query strings, redirects
 and environment proxies are excluded. Configuration needs no selector connection.
 Bump the configured version when selector behavior changes. The gateway admits
 proposals and retains its permission, identifier, tool and confirmation checks;

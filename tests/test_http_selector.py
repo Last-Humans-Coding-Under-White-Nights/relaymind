@@ -118,6 +118,10 @@ def test_configured_http_identity_and_names():
     "url",
     [
         "https://example.com/select",
+        # No certificate setting exists for this local transport: https is refused.
+        "https://localhost:8051/select",
+        "https://127.0.0.1:8051/select",
+        "https://[::1]:8051/select",
         "file://localhost/a",
         "http://127.0.0.1:99999/a",
         "http://u:p@localhost/a",

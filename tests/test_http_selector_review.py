@@ -315,9 +315,8 @@ def test_short_request_drains_cancellation_resistant_late_work():
     assert answer.attempts[0].outcome == "timeout"
 
 
-@pytest.mark.parametrize("scheme", ["http", "https"])
 @pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "[::1]"])
-def test_literal_loopback_config_does_no_dns(monkeypatch, scheme, host):
+def test_literal_loopback_config_does_no_dns(monkeypatch, host):
     """RM01/RM12/RM28: IPv6 loopback startup needs neither DNS nor a working listener."""
 
     def forbidden(*args, **kwargs):
@@ -331,7 +330,7 @@ def test_literal_loopback_config_does_no_dns(monkeypatch, scheme, host):
                 "transport": "http",
                 "name": "remote",
                 "version": "1",
-                "url": f"{scheme}://{host}:8051/select",
+                "url": f"http://{host}:8051/select",
             },
         )
     )

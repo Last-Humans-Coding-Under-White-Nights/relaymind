@@ -899,12 +899,12 @@ feature has a test of the default as well. Later pull requests append here.
   (#133, spec 0.40) covers RM03, RM08, RM11, RM12, RM14,
   RM16, RM22, RM25, RM26, RM28 and AC22. Ephemeral literal-loopback servers
   exercise actual POST requests: configured identity, closed startup settings,
-  URL policy without credential echoes, proxy and redirect isolation, exactly one
-  request, schema/identity/mechanism errors, the response size cap, unknown versus
-  empty claims, admission, redaction, timeout, gateway budget precedence and
-  cancellation. The actual stdlib
-  example script is started on an ephemeral port. Clients close per attempt and
-  remain usable across separate event loops.
+  URL policy (plain http only) without credential echoes, proxy and redirect
+  isolation, exactly one request, schema/identity/mechanism errors, the response
+  size cap, unknown versus empty claims, admission, redaction, timeout, gateway
+  budget precedence and cancellation. The actual stdlib example script is started
+  on an ephemeral port. Clients close per attempt and remain usable across
+  separate event loops.
 
   Corpus and latency exports classify HTTP-attempted, gateway-observed and historical
   unknown provenance, including their Markdown reports; a run that reached no selector
