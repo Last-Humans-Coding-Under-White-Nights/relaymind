@@ -515,13 +515,14 @@ def recorded_roots(index: dict) -> dict:
             argv = attempt.get("argv")
             if not argv:
                 continue
-            out = PurePath(argv[argv.index("--out") + 1])
+            recorded = argv[argv.index("--out") + 1]
+            out = PurePath(recorded)
             _check(
                 (out.name, out.parent.name, out.parent.parent.name)
                 == ("export.json", attempt["name"], cell_id),
                 f"{cell_id}/{attempt['name']}: recorded export path differs from the layout",
             )
-            roots.add(str(out.parent.parent.parent))
+            roots.add(_recorded_parent(recorded, 3))
     _check(len(roots) <= 1, "attempts record more than one matrix root")
     package = index.get("identity", {}).get("source", {}).get("package_path")
     return dict(
