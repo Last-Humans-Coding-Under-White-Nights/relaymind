@@ -62,6 +62,7 @@ def test_example_bind_reuses_address_without_reverse_dns(monkeypatch):
         b"G" * 65537 + b"\r\n",
         b"HEAD / HTTP/1.0\r\n\r\n",
     ],
+    ids=["empty", "malformed-line", "invalid-version", "overlong-line", "head"],
 )
 def test_example_real_handler_error_lifecycle(raw):
     """RM28/AC22: real stdlib error paths initialize command before JSON replies."""
@@ -368,8 +369,13 @@ def test_ipv6_production_client_sends_one_post(monkeypatch):
         lambda **kwargs: client_type(transport=httpx.MockTransport(response), **kwargs),
     )
     selector = HttpSelector(name="remote", version="1", url="http://[::1]:8051/select")
+
+    async def pending_timer(seconds):
+        await asyncio.Event().wait()
+
+    # This checks IPv6 transport semantics; real deadlines have separate coverage.
     answer = asyncio.run(
-        SelectorChain([selector], timeout_seconds=2).run(
+        SelectorChain([selector], timeout_seconds=2, clock=lambda: 0.0, sleep=pending_timer).run(
             parse_selection_request(request_data()), SelectionContext(), lambda r: r
         )
     )
