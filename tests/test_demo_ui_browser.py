@@ -134,12 +134,25 @@ def test_shell_and_trace_show_the_runs_phase_two_configuration(tmp_path, browser
         open_ui(page, base, token)
         expect(page.locator("#run-configurations")).to_contain_text("No run selected")
         open_run(page, run_id)
-        for selector in ("#run-configurations", ".trace .configuration"):
-            expect(page.locator(selector)).to_contain_text("Local model: none configured")
-            expect(page.locator(selector)).to_contain_text("Local model status: absent")
-            expect(page.locator(selector)).to_contain_text("Answer pass: draft")
-            expect(page.locator(selector)).to_contain_text("Prefetch: on")
-        expect(page.locator("#run-configurations")).to_contain_text(run_id)
+        # Spec 0.31 section 9: the shell shows these next to the data mode, on screen
+        # while the panel is closed, not only in text a closed panel hides.
+        shell = page.locator("#run-configurations")
+        for label in (
+            "Local model: none configured",
+            "Local model status: absent",
+            "Local model reason: not configured",
+            "Placement policy: not recorded",
+            "Answer pass: draft",
+            "Answer stream: buffered",
+        ):
+            expect(shell.get_by_text(label, exact=True)).to_be_visible()
+            expect(page.locator(".trace .configuration")).to_contain_text(label)
+        expect(shell.get_by_text(run_id)).to_be_visible()
+        # The other recorded options are one click away.
+        expect(shell.get_by_text("Prefetch: on", exact=True)).not_to_be_visible()
+        shell.locator("summary").click()
+        expect(shell.get_by_text("Prefetch: on", exact=True)).to_be_visible()
+        expect(page.locator(".trace .configuration")).to_contain_text("Prefetch: on")
         expect(page.locator(".trace .skill")).to_contain_text("Selector: example_match")
         expect(page.locator(".trace .proposals")).to_contain_text("gateway (prefetch)")
         expect(page.locator(".trace .models")).to_contain_text("First token")

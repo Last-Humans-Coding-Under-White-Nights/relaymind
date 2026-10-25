@@ -40,6 +40,25 @@ def _error(value: object) -> str:
     return _t(value)
 
 
+def _recorded(item: Mapping[str, Any], key: str, null: str = "none") -> object:
+    """A recorded value, its meaning when it was recorded as null, or not recorded (RM23).
+
+    An absent key is evidence the event never held (an older run); a null
+    is evidence the event did hold, such as no reason or no selection.
+    """
+    if key not in item:
+        return "not recorded"
+    value = item[key]
+    return null if value is None else value
+
+
+def _recorded_ms(item: Mapping[str, Any], key: str, null: str = "none") -> str:
+    """A recorded time in ms, with the same three cases as _recorded."""
+    if key not in item:
+        return "not recorded"
+    return _ms(item[key], null)
+
+
 def _attrs(**values: object) -> str:
     return " ".join(f'{name.replace("_", "-")}="{_t(value)}"' for name, value in values.items())
 
@@ -147,6 +166,19 @@ def _answer_options(view: Mapping[str, Any]) -> str:
     )
 
 
+# The labels the shell keeps on screen next to the data mode (spec 0.31 section 9).
+_SHELL_LABELS = frozenset(
+    {
+        "local_model",
+        "local_model_status",
+        "local_model_reason",
+        "placement_policy",
+        "answer_pass",
+        "answer_stream",
+    }
+)
+
+
 def _configuration(view: Mapping[str, Any]) -> str:
     """Only this run's recorded settings, including explicit absence (RM23, RM26)."""
     config = view.get("configuration")
@@ -166,14 +198,14 @@ def _configuration(view: Mapping[str, Any]) -> str:
     )
     parts = []
     for key, label in labels:
-        value = config.get(key)
-        if key == "local_model" and value is None and config.get("local_model_status") == "absent":
-            value = "none configured"
-        elif isinstance(value, bool):
+        # A null local model means none was configured (RM26).
+        value = _recorded(config, key, "none configured" if key == "local_model" else "none")
+        if isinstance(value, bool):
             value = "on" if value else "off"
         elif isinstance(value, list):
             value = ", ".join(str(item) for item in value) or "none"
-        parts.append(f"<p>{label}: {_t(value) if value is not None else 'not recorded'}</p>")
+        shell = " data-shell-label" if key in _SHELL_LABELS else ""
+        parts.append(f"<p{shell}>{label}: {_t(value)}</p>")
     return "<div data-run-configuration>" + "".join(parts) + "</div>"
 
 
@@ -188,9 +220,8 @@ def _models(view: Mapping[str, Any]) -> str:
         f"<td>{_t(c['purpose'])}</td>"
         + (f"<td>{_t(c['branch'])}</td>" if branched else "")
         + f"<td>{_t(c['actor'])}</td><td>{_t(c['model'])}</td>"
-        f"<td>{_call_status(c)}</td><td>{_ms(c['first_token_ms'], 'not recorded')}</td>"
-        f"<td>Predicted: {_ms(c['predicted_ms'], 'not recorded')}; "
-        f"actual: {_ms(c['duration_ms'], 'not recorded')}</td></tr>"
+        f"<td>{_call_status(c)}</td><td>{_first_token(c)}</td>"
+        f"<td>Predicted: {_recorded_ms(c, 'predicted_ms')}; actual: {_call_duration(c)}</td></tr>"
         for c in view["model_calls"]
     )
     branch_head = "<th>Branch</th>" if branched else ""
@@ -237,6 +268,19 @@ def _workflow(view: Mapping[str, Any]) -> str:
     )
 
 
+def _first_token(call: Mapping[str, Any]) -> str:
+    """first_token_ms of model.finished; null means no token arrived (spec 0.31)."""
+    if not call["finished"]:
+        return "known when the call ends"
+    return _recorded_ms(call, "first_token_ms", "no token")
+
+
+def _call_duration(call: Mapping[str, Any]) -> str:
+    if not call["finished"]:
+        return "known when the call ends"
+    return _ms(call["duration_ms"], "not recorded")
+
+
 def _call_status(call: Mapping[str, Any]) -> str:
     if not call["finished"]:
         return "running"
@@ -245,10 +289,9 @@ def _call_status(call: Mapping[str, Any]) -> str:
 
 
 def _selector(selector: object) -> str:
-    """Incomplete evidence stays readable; only an explicit null means no selection (RM23)."""
+    """Incomplete evidence stays readable; a null means the chain chose nothing (RM23, RM28)."""
     if not isinstance(selector, Mapping):
         return "<p>Selector: not recorded</p>"
-    name = selector.get("name", "not recorded")
     attempts = selector.get("attempts")
     if isinstance(attempts, list):
         attempts_text = (
@@ -263,10 +306,10 @@ def _selector(selector: object) -> str:
     else:
         attempts_text = "not recorded"
     return (
-        f"<p>Selector: {_t('none selected' if name is None else name)}; "
-        f"version: {_t(selector.get('version') or 'not recorded')}; "
-        f"mechanism: {_t(selector.get('mechanism') or 'not recorded')}; "
-        f"elapsed: {_ms(selector.get('elapsed_ms'), 'not recorded')}. "
+        f"<p>Selector: {_t(_recorded(selector, 'name', 'none selected'))}; "
+        f"version: {_t(_recorded(selector, 'version'))}; "
+        f"mechanism: {_t(_recorded(selector, 'mechanism'))}; "
+        f"elapsed: {_recorded_ms(selector, 'elapsed_ms')}. "
         f"Attempts: {_t(attempts_text)}</p>"
     )
 
@@ -288,18 +331,38 @@ def _skill_and_route(view: Mapping[str, Any]) -> str:
             f"reason {_t(route['reason_code'])}, mechanism {_t(route['mechanism'])}.</p>"
         )
         parts.append(_selector(route.get("selector")))
-        placement = route["placement"]
-        parts.append(
-            "<p>Placement: not recorded</p>"
-            if placement is None
-            else f"<p>Placement: <code>{_json(placement)}</code></p>"
-        )
-        prediction = None if placement is None else placement.get("predicted_ms")
-        parts.append(
-            f"<p>Predicted: {_ms(prediction, 'not recorded')}; "
-            f"actual: {_ms(route['duration_ms'], 'not recorded')}</p>"
-        )
+        parts.append(f"<p>Placement: {_placement(route)}</p>")
+        actual = _route_actual(route)
+        parts.append(f"<p>Predicted: {_route_prediction(route)}; actual: {actual}</p>")
     return "".join(parts)
+
+
+def _placement(route: Mapping[str, Any]) -> str:
+    """Absent: not recorded. Null: the route recorded no placement (RM27)."""
+    if "placement" not in route:
+        return "not recorded"
+    placement = route["placement"]
+    return "none" if placement is None else f"<code>{_json(placement)}</code>"
+
+
+def _route_prediction(route: Mapping[str, Any]) -> str:
+    if "placement" not in route:
+        return "not recorded"
+    placement = route["placement"]
+    return "none" if placement is None else _recorded_ms(placement, "predicted_ms")
+
+
+def _route_actual(route: Mapping[str, Any]) -> str:
+    """The measured time of the route's own routing call, joined by call ID (RM27)."""
+    if route.get("call_id") is None:
+        # A gateway decision names no model; a routing call without its ID is older evidence.
+        return "no routing call" if route.get("model") is None else "not recorded"
+    finished = route.get("call_finished")
+    if finished is None:
+        return "not recorded"
+    if not finished:
+        return "known when the call ends"
+    return _ms(route.get("duration_ms"), "not recorded")
 
 
 def _branch(item: Mapping[str, Any]) -> str:
@@ -465,10 +528,17 @@ def _controls(view: Mapping[str, Any], settings: UiSettings) -> str:
 
 def render_trace(view: Mapping[str, Any], settings: UiSettings) -> str:
     """One run's trace as an HTML fragment; every value is escaped."""
-    terminal = RunState(view["state"]) in TERMINAL_STATES
-    answer_pass = view["answer_pass_applied"] or (
-        "not recorded" if terminal else "known when the run ends"
-    )
+    state = RunState(view["state"])
+    terminal = state in TERMINAL_STATES
+    if view["answer_pass_applied"]:
+        answer_pass = view["answer_pass_applied"]
+    elif not terminal:
+        answer_pass = "known when the run ends"
+    elif state is RunState.COMPLETED:
+        answer_pass = "not recorded"
+    else:
+        # Only run.completed carries answer_pass_applied (spec 0.32).
+        answer_pass = "none, the run did not complete"
     codes = ""
     if view["error_code"]:
         codes += f" Error code: {_t(view['error_code'])}."

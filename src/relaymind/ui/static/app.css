@@ -40,7 +40,9 @@ main, .top { max-width: 72rem; margin: 0 auto; padding: 0 16px; }
   background: var(--card);
   overflow-wrap: anywhere;
 }
-#run-configurations summary { cursor: pointer; font-weight: 600; }
+#run-configurations summary { cursor: pointer; }
+#run-configurations summary strong { margin-right: 12px; }
+#run-configurations summary span { display: inline-block; margin-right: 12px; }
 #run-configurations [data-run-configuration] {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
