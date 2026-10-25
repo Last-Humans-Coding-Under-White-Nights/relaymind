@@ -264,10 +264,11 @@ def reuse_attempt(cell: dict, foreign_index: Path, expected: dict) -> dict:
         "model_sha256": doc.get("model_sha256"),
         "manifest_sha256": (doc["prior_configuration"].get("local") or {}).get("manifest_sha256"),
     }
+    # Fingerprint keys keep the recording host's separator; the digest keeps them as recorded.
     original_fixtures = {
         k: v
         for k, v in actual["source"].get("files", {}).items()
-        if k.startswith("tests/fixtures/sandbox/")
+        if k.replace("\\", "/").startswith("tests/fixtures/sandbox/")
     }
     if not original_fixtures:
         raise ValueError("reuse fixture identity unavailable")

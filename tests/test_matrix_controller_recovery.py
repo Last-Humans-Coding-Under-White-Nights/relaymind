@@ -8,7 +8,12 @@ import pytest
 from helpers import load_script_module
 
 
-def real_corpus(tmp_path, monkeypatch, *, full=False, local=False):
+def fixture_key(path, separator=None):
+    """A source fingerprint key: native, or as recorded on a host with this separator."""
+    return str(path) if separator is None else path.as_posix().replace("/", separator)
+
+
+def real_corpus(tmp_path, monkeypatch, *, full=False, local=False, separator=None):
     """Real corpus checkpoint, grading and export writer; only inference is replaced."""
     driver = load_script_module("run_m8_matrix")
     runner = load_script_module("run_corpus")
@@ -18,7 +23,7 @@ def real_corpus(tmp_path, monkeypatch, *, full=False, local=False):
         "package_path": str(driver.ROOT / "src/relaymind/__init__.py"),
         "source_sha256": "fixture-source",
         "files": {
-            str(p.relative_to(driver.ROOT)): driver.byte_digest(p)
+            fixture_key(p.relative_to(driver.ROOT), separator): driver.byte_digest(p)
             for p in (driver.ROOT / "tests/fixtures/sandbox").rglob("*")
             if p.is_file()
         },
@@ -195,6 +200,55 @@ def test_m7_reuses_real_sanitized_unseeded_corpus_export(tmp_path, monkeypatch, 
     driver.atomic_json(directory / "checkpoint.json", checkpoint)
     with pytest.raises(ValueError, match="identity"):
         m7.reuse_attempt(m7_cell, index_path, expected)
+
+
+@pytest.mark.parametrize("separator", ["/", "\\"], ids=["posix", "windows"])
+@pytest.mark.parametrize("local", [True, False], ids=["C0", "C5"])
+def test_m7_reuse_recognizes_fixture_keys_of_either_separator(
+    tmp_path, monkeypatch, local, separator
+):
+    """RM16, RM17, RM25: a native fingerprint keeps its own key spelling on every host."""
+    from relaymind.canonical import canonical_digest
+
+    driver, runner, cell, directory, source, attempt = real_corpus(
+        tmp_path, monkeypatch, full=True, local=local, separator=separator
+    )
+    m7 = load_script_module("run_m7_matrix")
+    m7_cell = m7.matrix_cells("a" * 40, omit_criteria=True)[0 if local else 5]
+    export = json.loads((directory / "export.json").read_text(encoding="utf-8"))
+    provider = {
+        "RELAYMIND_EXTERNAL_BASE_URL": "https://example.invalid/v1",
+        "RELAYMIND_EXTERNAL_MODEL": "fixture",
+    }
+    index_path = tmp_path / "index.json"
+    driver.atomic_json(
+        index_path,
+        {
+            "identity": {"source": source, "runtime_sha256": "runtime", "provider": provider},
+            "attempts": {cell["id"]: [attempt]},
+        },
+    )
+    fixtures = source["files"]
+    assert fixtures and all(separator in k for k in fixtures)
+    expected = m7.reuse_identity(
+        m7_cell, m7.ROOT, source, export["configuration"], "runtime", provider
+    )
+    # The fixture digest a host with this separator computes from its own checkout.
+    expected["fixtures_sha256"] = canonical_digest(fixtures)
+    before = {
+        p: p.read_bytes()
+        for p in (index_path, directory / "checkpoint.json", directory / "export.json")
+    }
+    reused = m7.reuse_attempt(m7_cell, index_path, expected)
+    assert reused["status"] == "complete"
+    assert reused["reuse_identity"]["fixtures_sha256"] == canonical_digest(fixtures)
+    assert before == {p: p.read_bytes() for p in before}
+    # A changed fixture is still refused, in either spelling.
+    first = sorted(fixtures)[0]
+    expected["fixtures_sha256"] = canonical_digest({**fixtures, first: "0" * 64})
+    with pytest.raises(ValueError, match="identity"):
+        m7.reuse_attempt(m7_cell, index_path, expected)
+    assert before == {p: p.read_bytes() for p in before}
 
 
 def test_recovery_never_replaces_retained_cost_with_missing_databases(tmp_path, monkeypatch):
