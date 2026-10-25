@@ -1286,10 +1286,12 @@ def expected_wait(views: dict) -> dict:
 def analyze(matrix: Path) -> tuple[dict, str]:
     public, views = _inventory(matrix)
     if not public["accepted"]:
+        invalid = [f"{c}: {public['cells'][c]['reason']}" for c in public["invalid"][:3]]
         raise ValueError(
             "matrix inventory is not accepted "
             f"({public['counts']['complete']} of {len(driver.matrix_cells())} cells complete; "
-            f"problems: {public['problems'] or 'none'}); use --inventory to list cells"
+            f"problems: {public['problems'] or 'none'}; invalid: {invalid or 'none'}); "
+            "use --inventory to list cells"
         )
     cells = {c["id"]: c for c in driver.matrix_cells()}
     for cell_id, view in views.items():
