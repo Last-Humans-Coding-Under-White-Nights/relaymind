@@ -113,8 +113,9 @@ def _block(grades: Sequence[Mapping[str, Any]], routes: Mapping[str, str]) -> di
     if corrections is not None:
         block["corrections"] = corrections
     if simple:
+        applicable = [g for g in simple if g["local_completion"] is not None]
         block["local_completion"] = rate(
-            sum(bool(g["local_completion"]) for g in simple), len(simple)
+            sum(bool(g["local_completion"]) for g in applicable), len(applicable)
         )
     if decided:
         block["confirmations_reached"] = rate(
@@ -173,7 +174,7 @@ def _targets(modes: Mapping[str, Any]) -> dict[str, Any]:
         if simple is not None:
             for name, key, target in _TARGETS:
                 value = simple[key]
-                met = value["rate"] is not None and value["rate"] >= target
+                met = None if value["rate"] is None else value["rate"] >= target
                 entry[name] = {**value, "target": target, "met": met}
         # Section 12.3: no missed mandatory confirmation, in any language.
         missed = sum(data["all"]["missed_confirmations"] for data in languages.values())
@@ -237,7 +238,7 @@ def render_corpus_markdown(summary: Mapping[str, Any], *, title: str) -> str:
         for name, _, _ in _TARGETS:
             if name in entry:
                 t = entry[name]
-                verdict = "met" if t["met"] else "not met"
+                verdict = {True: "met", False: "not met", None: "not applicable"}[t["met"]]
                 parts.append(f"{name} {_fraction(t)} (target {t['target']:.0%}, {verdict})")
         missed = entry["no_missed_confirmation"]
         parts.append(

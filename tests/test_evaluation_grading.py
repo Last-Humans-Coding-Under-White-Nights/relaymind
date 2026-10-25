@@ -578,3 +578,17 @@ def test_a_correction_with_no_recorded_duration_leaves_the_sum_unmeasured():
     generations = [(None, 0, "external", None), (9000, 0, "external", None)]
     g = grade(make_case(), external_run(*generations), mode="auto")
     assert g.corrections == 1 and g.correction_ms is None
+
+
+def test_no_local_model_has_no_local_completion_grade():
+    """RM26, section 12.1: local completion is not applicable in the none class."""
+    events = local_health_trace()
+    events[0]["payload"].update(local_model=None, local_model_status="absent")
+    assert grade(make_case(), events).local_completion is None
+
+
+def test_gateway_answer_is_not_a_local_completion():
+    """RM25, RM30: a gateway-rendered answer is counted apart from local completion."""
+    events = local_health_trace()
+    events[-1]["payload"]["final_answer_model"] = "gateway"
+    assert grade(make_case(), events).local_completion is False

@@ -44,6 +44,7 @@ import tempfile
 import time
 from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,13 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import live_acceptance as harness  # noqa: E402
+from evaluation_config import (  # noqa: E402
+    ConfigurationError,
+    RunnerConfiguration,
+    add_configuration_arguments,
+    configuration_from_args,
+    label_report,
+)
 
 from relaymind.evaluation.corpus import (  # noqa: E402
     CLASSES,
@@ -110,18 +118,22 @@ def select_cases(
 
 
 def select_modes(
-    modes: Sequence[str], *, external: harness.ExternalEndpoint | None
+    modes: Sequence[str], *, external: harness.ExternalEndpoint | None, local_model: bool = True
 ) -> tuple[tuple[str, ...], dict[str, str]]:
     """The modes that can run, and the reason each other mode was not run."""
-    if external is not None and os.environ.get(harness.EXTERNAL_KEY_ENV):
-        return tuple(modes), {}
-    reason = (
-        "no external endpoint was configured"
-        if external is None
-        else f"{harness.EXTERNAL_KEY_ENV} is not set, so the external endpoint cannot be called"
-    )
-    runnable = tuple(mode for mode in modes if mode == "local_only")
-    return runnable, {mode: reason for mode in modes if mode != "local_only"}
+    not_run = {}
+    if not local_model:
+        not_run.update(
+            {mode: "no local model is configured" for mode in modes if mode == "local_only"}
+        )
+    if external is None or not os.environ.get(harness.EXTERNAL_KEY_ENV):
+        reason = (
+            "no external endpoint was configured"
+            if external is None
+            else f"{harness.EXTERNAL_KEY_ENV} is not set, so the external endpoint cannot be called"
+        )
+        not_run.update({mode: reason for mode in modes if mode != "local_only"})
+    return tuple(mode for mode in modes if mode not in not_run), not_run
 
 
 def case_config(case: Case, *, external: harness.ExternalEndpoint | None = None, **options) -> str:
@@ -129,7 +141,13 @@ def case_config(case: Case, *, external: harness.ExternalEndpoint | None = None,
     return harness.gateway_config(
         **options,
         external=external,
-        modes=MODES if external is not None else ("auto", "local_only"),
+        modes=(
+            ("auto", "external_only")
+            if not options.get("local_model", True)
+            else MODES
+            if external is not None
+            else ("auto", "local_only")
+        ),
         seed=SEED_DIR / f"{case.fixture}.json",
         permissions=case.permissions,
     )
@@ -214,6 +232,8 @@ def grade_record(
     record: Mapping[str, Any],
     events: Sequence[Mapping[str, Any]],
     databases: Sequence[str] | None,
+    *,
+    local_model_configured: bool | None = None,
 ) -> RunGrade:
     return grade_run(
         case,
@@ -225,6 +245,7 @@ def grade_record(
         error_code=record["error_code"],
         reason_code=record["reason_code"],
         timed_out=record["timed_out"],
+        local_model_configured=local_model_configured,
     )
 
 
@@ -232,8 +253,9 @@ def _run_one(
     case: Case,
     mode: str,
     *,
-    runtime: harness.Runtime,
-    local_url: str,
+    runtime: harness.Runtime | None,
+    local_url: str | None,
+    configuration: RunnerConfiguration,
     external: harness.ExternalEndpoint | None,
     work: Path,
 ) -> tuple[RunGrade, dict[str, Any], list[dict[str, Any]]]:
@@ -245,8 +267,9 @@ def _run_one(
         case_config(
             case,
             work=plan_dir,
-            manifest=runtime.manifest_path.resolve(),
-            artifact=runtime.artifact,
+            manifest=runtime.manifest_path.resolve() if runtime else None,
+            artifact=runtime.artifact if runtime else None,
+            **configuration.gateway_options(),
             local_url=local_url,
             port=harness._free_port(),
             external=external,
@@ -269,29 +292,55 @@ def _run_one(
     finally:
         gateway.stop()
     events = harness._traces(plan_dir / "runs.sqlite3", [record["run_id"]])[record["run_id"]]
-    return grade_record(case, mode, record, events, databases), record, events
+    return (
+        grade_record(
+            case,
+            mode,
+            record,
+            events,
+            databases,
+            local_model_configured=configuration.local_model_configured,
+        ),
+        record,
+        events,
+    )
 
 
 def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
+    configuration = configuration_from_args(args)
     corpus = load_frozen_corpus()
     cases = select_cases(corpus, ids=args.cases, languages=args.languages)
     external = None
-    if args.external_base_url:
+    if configuration.external is not None:
         external = harness.ExternalEndpoint(
             args.external_base_url, args.external_model, args.external_context_limit
         )
-    modes, not_run = select_modes(args.modes, external=external)
-    if not_run:
-        # Without a usable endpoint the gateways are started without one.
+    if not configuration.local_model_configured and (
+        external is None or not os.environ.get(harness.EXTERNAL_KEY_ENV)
+    ):
+        raise ConfigurationError("--no-local-model requires an external endpoint and its API key")
+    modes, not_run = select_modes(
+        args.modes, external=external, local_model=configuration.local_model_configured
+    )
+    if external is not None and not os.environ.get(harness.EXTERNAL_KEY_ENV):
+        # Without a usable endpoint the gateways are started without one, and the
+        # configuration label names none.
         external = None
-    runtime = harness.check_runtime(Path(args.manifest), extra_args=args.runtime_extra_args)
+        configuration = replace(configuration, external=None)
+    runtime = (
+        harness.check_runtime(Path(args.manifest), extra_args=args.runtime_extra_args)
+        if configuration.local_model_configured
+        else None
+    )
     application = harness.application_revision()
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
     work = Path(tempfile.mkdtemp(prefix="relaymind-corpus-"))
     # The work dir goes on any exit, an interrupt included.
     with ExitStack() as cleanup:
         cleanup.callback(shutil.rmtree, work, ignore_errors=True)
-        llama, local_url, cold_start = runtime.launch(work / "llama-server.log")
+        llama, local_url, cold_start = (
+            runtime.launch(work / "llama-server.log") if runtime else (None, None, None)
+        )
         grades, records, traces = [], {}, {}
         try:
             for case in cases:
@@ -303,6 +352,7 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
                             mode,
                             runtime=runtime,
                             local_url=local_url,
+                            configuration=configuration,
                             external=external,
                             work=work,
                         )
@@ -316,17 +366,26 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
                             "runner_error": f"{type(exc).__name__}: {exc}",
                         }
                         events = []
-                        grade = grade_record(case, mode, record, events, None)
+                        grade = grade_record(
+                            case,
+                            mode,
+                            record,
+                            events,
+                            None,
+                            local_model_configured=configuration.local_model_configured,
+                        )
                     grades.append(grade.to_json_object())
                     records[f"{case.case_id}/{mode}"] = record
                     if record["run_id"] is not None:
                         traces[record["run_id"]] = events
                     print(f"  {'pass' if grade.success else 'fail'} {grade.failures}", flush=True)
         finally:
-            harness._stop(llama)
+            if llama is not None:
+                harness._stop(llama)
         summary = _summary(grades, corpus)
         document = {
             "kind": "relaymind.correctness_corpus",
+            "configuration": configuration.to_json_object(),
             "note": "Live runs of the frozen corpus (spec 0.28 section 12.2). Each case and mode "
             "ran in a new gateway from the case's seed. A failed grade is a finding, never "
             "dropped.",
@@ -347,17 +406,27 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
             "finished_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
             "machine": machine_manifest(),
             "application": application,
-            "runtime_banner": runtime.banner,
-            "runtime_devices": runtime_devices(),
-            "llama_server": runtime.server_record(cold_start),
-            **runtime.model_record(),
+            "runtime_banner": runtime.banner if runtime else None,
+            "runtime_devices": runtime_devices() if runtime else None,
+            "llama_server": runtime.server_record(cold_start) if runtime else None,
+            **(
+                runtime.model_record()
+                if runtime
+                else {
+                    "model_id": None,
+                    "manifest": None,
+                    "model_file": None,
+                    "model_sha256": None,
+                    "quantization": None,
+                }
+            ),
             "external_endpoint": None
             if external is None
             else {
                 "base_url": external.base_url,
                 "model": external.model,
                 "context_limit": external.context_limit,
-                "region": args.external_region,
+                "region": configuration.external.region,
             },
             "summary": summary,
             "grades": grades,
@@ -367,6 +436,7 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
         out = Path(args.out)
         harness.write_json(out, document, work=work)
         report = render_corpus_markdown(summary, title=f"Correctness corpus: {out.stem}")
+        report = label_report(report, document.get("configuration"))
         out.with_suffix(".md").write_text(report, encoding="utf-8")
         return document
 
@@ -389,7 +459,15 @@ def regrade(document: dict[str, Any], corpus: Corpus) -> dict[str, Any]:
         case, mode = corpus.case(old["case_id"]), old["mode"]
         record = document["records"][f"{case.case_id}/{mode}"]
         events = document["traces"].get(record["run_id"], [])
-        grades.append(grade_record(case, mode, record, events, old["databases"]).to_json_object())
+        grade = grade_record(
+            case,
+            mode,
+            record,
+            events,
+            old["databases"],
+            local_model_configured=document.get("configuration", {}).get("local_model_configured"),
+        )
+        grades.append(grade.to_json_object())
     return {
         **document,
         "grades": grades,
@@ -674,6 +752,7 @@ def regrade_draft_pass(document: dict[str, Any], corpus: Corpus) -> dict[str, An
                 "model_id",
                 "quantization",
                 "external_endpoint",
+                "configuration",
             )
             if key in document
         },
@@ -804,7 +883,7 @@ def render_draft_pass_markdown(result: Mapping[str, Any]) -> str:
                     f"| {calls[0]['external']} to {calls[1]['external']} |"
                 )
     lines.append("")
-    return "\n".join(lines)
+    return label_report("\n".join(lines), source.get("configuration"))
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -814,13 +893,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--manifest", default=os.fspath(harness.DEFAULT_MANIFEST.relative_to(REPO_ROOT))
     )
     harness.add_runtime_extra_args(parser)
+    add_configuration_arguments(parser)
     parser.add_argument("--modes", nargs="+", choices=MODES, default=list(MODES))
     parser.add_argument("--cases", nargs="+", help="run only these case IDs (a subset)")
     parser.add_argument("--languages", nargs="+", choices=("en", "zh"))
-    parser.add_argument("--external-base-url")
-    parser.add_argument("--external-model")
-    parser.add_argument("--external-context-limit", type=int)
-    parser.add_argument("--external-region", help="the endpoint region, if known")
     parser.add_argument(
         "--regrade",
         action="store_true",
@@ -833,6 +909,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         "(RM31): an offline counterfactual, written to --out and its .md, never to EXPORT",
     )
     args = parser.parse_args(argv)
+    if (args.regrade or args.regrade_draft_pass) and (
+        args.performance or args.budgets or args.selection_chain or args.no_local_model
+    ):
+        parser.error("offline regrading keeps the source configuration; omit configuration flags")
     if args.regrade_draft_pass:
         if args.regrade:
             parser.error("--regrade and --regrade-draft-pass do not go together")
@@ -850,15 +930,21 @@ def main(argv: Sequence[str] | None = None) -> None:
         report = render_corpus_markdown(
             document["summary"], title=f"Correctness corpus: {out.stem}"
         )
+        report = label_report(report, document.get("configuration"))
         out.with_suffix(".md").write_text(report, encoding="utf-8")
         return
-    external_args = (args.external_base_url, args.external_model, args.external_context_limit)
-    if any(external_args) and not all(external_args):
-        parser.error(
-            "--external-base-url, --external-model, and --external-context-limit go together"
+    # Only option checks raise ConfigurationError, before anything starts; any other
+    # failure keeps its traceback and is never reported as a usage error.
+    try:
+        document = run_corpus(args)
+    except ConfigurationError as exc:
+        parser.error(str(exc))
+    print(
+        label_report(
+            render_corpus_markdown(document["summary"], title="Correctness corpus"),
+            document.get("configuration"),
         )
-    document = run_corpus(args)
-    print(render_corpus_markdown(document["summary"], title="Correctness corpus"))
+    )
 
 
 if __name__ == "__main__":

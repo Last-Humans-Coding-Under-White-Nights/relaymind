@@ -104,8 +104,9 @@
   records the selection and whether it is the full corpus.
 - `latency_benchmark.py` — the latency experiment (#33, spec 0.28
   section 12.2) on the local path: one gateway started with
-  `relaymind serve --config`, routing cache off, no external model,
-  concurrency one. It sends the twelve prompts of
+  `relaymind serve --config`, routing cache off, concurrency one, and no
+  external model unless the external endpoint arguments below name one.
+  It sends the twelve prompts of
   `evaluation/latency_prompts.v1.json` over the compatible chat stream:
   a cold request, three warm-ups, then ten runs per prompt in a seeded
   random order. First transport event and first answer token come from
@@ -175,6 +176,53 @@
   stays the one source of the qualified launch settings. A constrained
   configuration is reported as that configuration of that machine, never
   as another machine.
+
+- `evaluation_config.py` — the runner configuration shared by
+  `run_corpus.py` and `latency_benchmark.py` (#128). It defines the
+  configuration options below, validates them before anything starts
+  (an invalid option is a usage error; a failure while running keeps its
+  traceback), and writes the configuration block of each export and
+  report header. It is a module, not a command.
+
+- Phase 2 runner configurations (#128; RM03, RM25, RM26, RM29, RM31,
+  RM32): both `run_corpus.py` and `latency_benchmark.py` accept
+  `--performance KEY=VALUE ...`, `--budgets KEY=VALUE ...`,
+  `--selection-chain SELECTOR ...`, and `--no-local-model`.
+  Repeat `--performance` or `--budgets` to add more distinct keys. Boolean
+  values are `true` or `false`; keys, types, ranges, and implemented options
+  are validated before runtime startup. Unsupported `answer_stream=live`
+  remains rejected. Baseline defaults remain unchanged and every export
+  and report header records the effective settings.
+
+  ```bash
+  python scripts/run_corpus.py --out docs/evidence/<date>-draft-many.json \
+      --modes auto local_only --performance answer_pass=draft calls_per_generation=many \
+      --budgets active_seconds=12 --selection-chain example_match model_router
+  python scripts/latency_benchmark.py --out docs/evidence/<date>-early-headers.json \
+      --performance early_headers=true
+  ```
+
+  The latency runner also accepts the corpus runner's external endpoint
+  arguments: `--external-base-url`, `--external-model`,
+  `--external-context-limit`, and optional `--external-region`; the three
+  endpoint arguments go together, and `--external-region` alone is refused.
+  The configuration block names the external model, the base URL's host
+  (never its user info, path, or query), and the region, or `null` when no
+  gateway was given an endpoint, so a local-only run and a local-plus-external
+  run have different labels. The credential stays in
+  `RELAYMIND_EXTERNAL_API_KEY`. With an external endpoint, a routing prompt
+  is expected to complete, while clarification prompts still wait for input. `--no-local-model` requires that external endpoint and credential,
+  defaults the selector chain to `example_match`, and starts no local runtime.
+  Local runtime measurements are null; the corpus records `local_only` as
+  not run and local completion as not applicable. It refuses `model_router`
+  in this configuration. The existing `--early-headers` alias remains available
+  and cannot conflict with `--performance early_headers=false`.
+
+  Offline regrading preserves the source configuration and rejects new
+  configuration flags. Older exports without a configuration remain labeled
+  as not recorded. This runner change supplies no new live measurements or
+  default decisions. Timing-sample import, placement and workflow options,
+  the full metrics expansion, and the measured comparison matrix remain in #128.
 
 - `run_corpus.py --regrade-draft-pass` — the offline draft-pass
   counterfactual (#115; RM31, spec 0.31). It grades the stored traces of

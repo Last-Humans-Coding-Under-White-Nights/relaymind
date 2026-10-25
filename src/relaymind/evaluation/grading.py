@@ -202,6 +202,7 @@ def grade_run(
     error_code: str | None = None,
     reason_code: str | None = None,
     timed_out: bool = False,
+    local_model_configured: bool | None = None,
 ) -> RunGrade:
     """Grade one run of a case in one mode (spec 0.28 section 12.2)."""
     answer = answer_text(events)
@@ -315,5 +316,27 @@ def grade_run(
     grade.failures = [reason for ok, reason in checks if not ok]
     grade.success = not grade.failures
     if case.case_class == "simple":
-        grade.local_completion = grade.success and external_calls == 0
+        acceptance = of_type(events, "run.accepted")
+        accepted = next(iter(acceptance), {}).get("payload", {})
+        absent = accepted.get("local_model_status") == "absent" or (
+            "local_model" in accepted and accepted["local_model"] is None
+        )
+        # A startup failure may have no acceptance event. Use its launch configuration
+        # only then, and never hide recorded local execution with a conflicting label.
+        if not acceptance and local_calls == 0 and local_model_configured is False:
+            absent = True
+        terminal = (terminal_event(events) or {}).get("payload", {})
+        # Only run.completed names the answer owner. A run that failed, was cancelled,
+        # or has no terminal event (it waits for input or timed out) names none, so the
+        # earlier rule applies: success with no external call. A named owner must be a
+        # model that made a local call in the run, never the gateway.
+        local_owner = "final_answer_model" not in terminal or (
+            terminal["final_answer_model"] != "gateway"
+            and any(
+                call.get("actor") == "local" and call.get("model") == terminal["final_answer_model"]
+                for call in terminal.get("model_calls", [])
+            )
+        )
+        if not absent:
+            grade.local_completion = grade.success and external_calls == 0 and local_owner
     return grade

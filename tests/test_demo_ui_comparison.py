@@ -7,6 +7,7 @@ disposable copy.
 """
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
@@ -19,12 +20,14 @@ from gateway_helpers import (
     route_turn,
     tool_turn,
 )
+from helpers import FakeClock
 from native_helpers import GatedAdapter, session
 from relaymind.api.app import ChatSettings
 from relaymind.api.native import NativeSettings
 from relaymind.orchestrator.local_loop import ConfiguredModel
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.ui import UiSettings
+from relaymind.ui import comparison as comparison_module
 from relaymind.ui.trace_view import build_trace_view
 from ui_helpers import (
     DELETE_ARGS,
@@ -60,6 +63,37 @@ async def compare(client, prompt=HEALTH_PROMPT, **fields):
         "/ui/comparisons",
         json={"messages": [{"role": "user", "content": prompt}], **fields},
     )
+
+
+@pytest.fixture
+def comparison_clock(monkeypatch):
+    """Control only the comparison deadline; keep the scheduler and cancellation real."""
+    clock = FakeClock()
+    reads = asyncio.Queue()
+
+    def time():
+        value = clock.monotonic()
+        reads.put_nowait(value)
+        return value
+
+    monkeypatch.setattr(
+        comparison_module,
+        "asyncio",
+        SimpleNamespace(get_running_loop=lambda: SimpleNamespace(time=time), sleep=asyncio.sleep),
+    )
+    return clock, reads
+
+
+async def reach_comparison_deadline(adapter, comparison_clock):
+    """The provider stays live before the one-second deadline, then the deadline expires."""
+    clock, reads = comparison_clock
+    await asyncio.wait_for(adapter.started.wait(), timeout=5)
+    clock.advance(0.5)
+    while await asyncio.wait_for(reads.get(), timeout=5) < clock.monotonic():
+        pass
+    assert adapter.live
+    assert adapter.cancelled == []
+    clock.advance(0.5)
 
 
 def test_both_modes_run_the_same_input_and_each_has_its_own_trace(tmp_path):
@@ -162,7 +196,10 @@ def test_a_run_that_waits_is_cancelled_and_nothing_is_mutated(tmp_path):
     assert gateway.store.active_run_id() is None
 
 
-def test_a_run_that_does_not_come_to_rest_is_asked_to_cancel(tmp_path):
+@pytest.mark.parametrize("external_delay", [0.0, 0.1])
+def test_a_run_that_does_not_come_to_rest_is_asked_to_cancel(
+    tmp_path, external_delay, comparison_clock
+):
     """RM03, RM14: the arm limit is bounded; the run is reported in the state it has."""
     adapter = GatedAdapter(turns=[route_turn("check-service-health"), *health_tail()])
     gateway = build_gateway(
@@ -171,20 +208,38 @@ def test_a_run_that_does_not_come_to_rest_is_asked_to_cancel(tmp_path):
         local_model=ConfiguredModel(adapter=adapter, model_id="gated"),
         external_turns=external_health_turns(),
     )
-    app = compare_app(gateway, arm_wait_seconds=0.05)
+    real_generate = gateway.external.generate
+
+    async def delayed_external(request):
+        # A normal generation may take longer than the old 50 ms test budget.
+        await asyncio.sleep(external_delay)
+        async for event in real_generate(request):
+            yield event
+
+    gateway.external.generate = delayed_external
+    log: list[str] = []
+    spy_on_starts(gateway, log)
+    app = compare_app(gateway, arm_wait_seconds=1.0)
 
     async def go():
         async with session(app) as client:
-            return await compare(client)
+            pending = asyncio.create_task(compare(client))
+            await reach_comparison_deadline(adapter, comparison_clock)
+            return await asyncio.wait_for(pending, timeout=5)
 
     response = asyncio.run(go())
     assert response.status_code == 200, response.text
     arms = response.json()["arms"]
     assert [arm["state"] for arm in arms] == ["cancelled", "completed"]
     assert adapter.cancelled  # the provider was asked to stop the generation
+    assert adapter.interrupted
+    assert log == ["start:auto:after=None", "start:external_only:after=cancelled"]
+    assert gateway.store.active_run_id() is None
 
 
-def test_a_run_still_active_after_its_cancel_keeps_the_fixtures_and_its_arm(tmp_path):
+def test_a_run_still_active_after_its_cancel_keeps_the_fixtures_and_its_arm(
+    tmp_path, comparison_clock
+):
     """RM03, RM17, section 9: the next run never starts, or resets, under a run that is active.
 
     A cancel is best effort (section 7.4): when the first run has not
@@ -200,7 +255,7 @@ def test_a_run_still_active_after_its_cancel_keeps_the_fixtures_and_its_arm(tmp_
     )
     log: list[str] = []
     spy_on_starts(gateway, log)
-    app = compare_app(gateway, fixtures=SpyFixtures(gateway.sandbox, log), arm_wait_seconds=0.05)
+    app = compare_app(gateway, fixtures=SpyFixtures(gateway.sandbox, log), arm_wait_seconds=1.0)
     orchestrator = gateway.orchestrator
     real_cancel = orchestrator.cancel
 
@@ -211,7 +266,9 @@ def test_a_run_still_active_after_its_cancel_keeps_the_fixtures_and_its_arm(tmp_
     async def go():
         orchestrator.cancel = ignored_cancel
         async with session(app) as client:
-            response = await compare(client)
+            pending = asyncio.create_task(compare(client))
+            await reach_comparison_deadline(adapter, comparison_clock)
+            response = await asyncio.wait_for(pending, timeout=5)
         orchestrator.cancel = real_cancel
         (arm,) = response.json()["arms"]
         record = gateway.store.get_run(arm["run_id"])
