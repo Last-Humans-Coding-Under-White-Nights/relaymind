@@ -210,6 +210,10 @@ def test_corrections_per_completed_run_count_corrections_and_their_duration():
         "corrections": 3,
         "per_completed_run": 1.0,
         "duration_ms": 22000,
+        "known_duration_ms": 22000,
+        "measured_completed_runs": 3,
+        "missing_completed_runs": 0,
+        "missing_duration_runs": 0,
     }
 
 

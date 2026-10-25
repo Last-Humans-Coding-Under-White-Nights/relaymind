@@ -170,7 +170,7 @@ def source_fingerprint(repo_root: Path) -> dict[str, Any]:
     from relaymind.canonical import canonical_digest
 
     files = {}
-    for directory in ("src", "scripts", "skills", "evaluation"):
+    for directory in ("src", "scripts", "skills", "evaluation", "tests/fixtures/sandbox"):
         for path in sorted((repo_root / directory).rglob("*")):
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc":
                 files[str(path.relative_to(repo_root))] = hashlib.sha256(
