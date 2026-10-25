@@ -13,6 +13,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   than known input tokens records only that cached count as unavailable,
   with a fixed credential-free warning. Execution outcomes and other
   measurements are preserved; imported timing samples remain strictly validated.
+  It also keeps the parallel workflow out of local skill outcomes (RM15,
+  RM27): the planned synthesis join and a failed local branch are not local
+  escalations, so they no longer lower the skill's local success rate.
 - Persisted timing samples and skill outcome estimates (#129; RM17, RM25,
   RM27, spec 0.38): a versioned sample schema, an additive SQLite migration,
   seven-day retention and a 1,000-sample bound per model/purpose. Every

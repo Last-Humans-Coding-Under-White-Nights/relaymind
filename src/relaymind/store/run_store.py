@@ -1014,14 +1014,15 @@ class RunStore:
             )
         elif kind is EventType.MODEL_STARTED:
             if event.actor == "local":
+                # Spec 0.38.1: a parallel workflow branch call is not a local
+                # placement attempt, so its join or failure is no escalation.
+                attempt = (
+                    payload.get("purpose") not in (None, "routing") and "branch" not in payload
+                )
                 self._conn.execute(
                     "UPDATE model_run_progress SET local_model = COALESCE(local_model, ?),"
                     " local_attempt = MAX(local_attempt, ?) WHERE run_id = ?",
-                    (
-                        payload["model"],
-                        int(payload.get("purpose") not in (None, "routing")),
-                        run_id,
-                    ),
+                    (payload["model"], int(attempt), run_id),
                 )
             elif event.actor == "external":
                 # A configured gateway has one external model for a run;

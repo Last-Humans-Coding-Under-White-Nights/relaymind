@@ -8,6 +8,7 @@ from datetime import timedelta
 import pytest
 
 from gateway_helpers import (
+    EXTERNAL_MODEL_ID,
     LOCAL_MODEL_ID,
     STAGING_OK,
     build_gateway,
@@ -530,6 +531,7 @@ def terminal_skill_run(
     purpose="skill",
     mode="auto",
     error=None,
+    branch=None,
 ):
     run_id = store.create_run("accepted").run_id
     drafts = [
@@ -552,7 +554,12 @@ def terminal_skill_run(
             (
                 EventType.MODEL_STARTED,
                 "local",
-                {"model": local_model, "purpose": purpose, "call_id": "l1"},
+                {
+                    "model": local_model,
+                    "purpose": purpose,
+                    "call_id": "l1",
+                    **({} if branch is None else {"branch": branch}),
+                },
             )
         )
     if external_model is not None:
@@ -637,6 +644,43 @@ def test_routing_only_and_local_only_failure_do_not_lower_skill_success():
         assert stats.local_completed == stats.local_escalated == 0
         assert stats.local_success_rate is None
         assert stats.external_completed == 1
+
+
+def test_parallel_workflow_join_is_not_a_local_escalation(tmp_path):
+    """RM15/RM27, spec 0.38.1: the planned synthesis join is no local loss for the skill."""
+    workflow = "health-and-diagnostic-checklist"
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn(workflow), tool_turn("get_service_health", service="staging-api")],
+        external_turns=[
+            text_turn("Check dependencies."),
+            text_turn(
+                "Observation: "
+                + STAGING_OK
+                + "\nDiagnostic checklist (draft, not log-backed):\n- Check dependencies."
+            ),
+        ],
+        enabled_workflows={workflow},
+    )
+    outcome, events = run(gateway, execution_mode="parallel_demo")
+    assert outcome.state.value == "completed"
+    assert any(e.event_type is EventType.HANDOFF_STARTED for e in events)
+    stats = gateway.store.outcome_estimate(
+        LOCAL_MODEL_ID, workflow, external_model=EXTERNAL_MODEL_ID
+    )
+    assert (stats.local_completed, stats.local_escalated) == (0, 0)
+    assert stats.local_success_rate is None
+    # The draft and the synthesis remain the skill's actual external generations.
+    assert (stats.external_completed, stats.median_external_generations) == (1, 2)
+
+
+def test_failed_parallel_branch_is_not_a_local_escalation():
+    """RM15/RM27, spec 0.38.1: a workflow branch call is not a local placement attempt."""
+    with RunStore(clock=FakeClock()) as store:
+        terminal_skill_run(store, branch="local_health", error="needs_external")
+        stats = store.outcome_estimate("local", "health")
+        assert stats.local_completed == stats.local_escalated == 0
+        assert stats.local_success_rate is None
 
 
 def test_warmup_timeout_records_failed_sample_without_a_run(tmp_path):
