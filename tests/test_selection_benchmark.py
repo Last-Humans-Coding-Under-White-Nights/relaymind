@@ -371,8 +371,13 @@ def test_http_selector_refuses_nonloopback_addresses():
     from helpers import load_script_module
 
     script = load_script_module("selection_benchmark")
+
+    async def refuse():
+        async with httpx.AsyncClient() as client:
+            script.HttpSelector("https://example.org/select", client)
+
     with pytest.raises(ValueError, match="loopback"):
-        script.HttpSelector("https://example.org/select", httpx.AsyncClient())
+        asyncio.run(refuse())
 
 
 def test_router_catalog_overflow_is_counted_as_bypass():
@@ -666,10 +671,11 @@ def test_toolret_schema_property_text_shorthand_is_validated():
     bench.benchmark_registry(case["tools"])
 
 
-def test_checked_in_tool_lock_contains_only_frozen_source_identities():
+@pytest.mark.parametrize("name", ["tools.v1.lock.json", "tools.v2.lock.json"])
+def test_checked_in_tool_lock_contains_only_frozen_source_identities(name):
     """RM25 §12.4: no ToolRet source row is redistributed with the lock."""
     root = Path(__file__).resolve().parents[1] / "evaluation"
-    lock = json.loads((root / "tools.v1.lock.json").read_text())
+    lock = json.loads((root / name).read_text())
     assert lock["revision"] == bench.TOOLRET_REVISION
     assert lock["size"] == len(lock["cases"]) == 500
     assert sum(lock["quotas"]) == 500

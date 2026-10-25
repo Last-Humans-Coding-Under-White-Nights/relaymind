@@ -247,7 +247,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   while preserving raw proposals, usage and independent schema validity. A failed
   narrowing arm records its failure without model work and stays in the denominator;
   valid abstentions retain the empty-set experiment. Ordinary schema-invalid names
-  retain their existing independent name metrics.
+  retain their existing independent name metrics. Colliding ToolRet tool names
+  get suffixes in declaration-digest order, so a plain name no longer marks the
+  positive: `evaluation/tools.v2.lock.json` (the same 500 rows; 5 case digests
+  differ) is the default, and `tools.v1.lock.json` stays only to reproduce the
+  recorded runs.
 
 - RouteDecision and HandoffEnvelope accept the reason codes
   `selection_failed`, `no_local_model`, and `local_slow` under schema version
@@ -438,7 +442,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   exceeding their call budget while retaining proposal evidence. Export distinct
   HTTP response identity claims, reject skills proposal options before work,
   share the persistent ToolRet cache, and enforce source/case locks without
-  changing the frozen files or historical measurement exports.
+  changing the frozen files or historical measurement exports. Count only
+  `unknown_tool` and `invalid_arguments` against proposal schema validity,
+  check SkillsBench archives against the lock digests in a per-user cache, and
+  pin `docs/evidence/*.json` to LF line endings.
 
 - Correct the skill guide's workflow-key description, repair the testing
   guide's README link, and install the client SDK before the Python
