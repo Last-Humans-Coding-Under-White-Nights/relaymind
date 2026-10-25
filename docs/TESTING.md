@@ -956,13 +956,16 @@ feature has a test of the default as well. Later pull requests append here.
   regressions with model doubles before executing the matrix:
 
   ```sh
-  .venv/bin/python -m pytest -o pythonpath=src tests/test_placement_prior.py tests/test_local_active_measurement.py tests/test_m8_metrics.py tests/test_evaluation_checkpoints.py tests/test_m8_matrix_driver.py tests/test_matrix_controller_recovery.py tests/test_runner_configurations.py tests/test_run_corpus_script.py tests/test_latency_benchmark_script.py
+  .venv/bin/python -m pytest -o pythonpath=src tests/test_placement_prior.py tests/test_local_active_measurement.py tests/test_m8_metrics.py tests/test_evaluation_checkpoints.py tests/test_m8_matrix_driver.py tests/test_matrix_controller_recovery.py tests/test_m8_analysis.py tests/test_runner_configurations.py tests/test_run_corpus_script.py tests/test_latency_benchmark_script.py
   ```
 
   The prior tests use declared synthetic test fixtures to validate projection and
   retention, including an expected-wait decision from imported terminal history.
   They establish no performance, provider parity, or model capability. The
   checkpoint tests verify preservation/refusal behavior without inference.
+  `tests/test_m8_analysis.py` checks the offline M8 report on a relocated
+  fixture matrix: full 31-cell acceptance, inventory mode, paired comparisons,
+  cost ledgers and hypothesis verdicts. It reads no real measurement.
   Repository completion checks remain the entire pytest suite and Ruff lint/format.
 
 ### What is not covered yet

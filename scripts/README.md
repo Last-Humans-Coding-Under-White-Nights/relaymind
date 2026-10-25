@@ -573,6 +573,49 @@ are skipped. Keep the same M7 revision, criteria checkout/revision and reuse-ind
 arguments when reconciling or resuming M7. The fixed plans, counts and budgets do
 not change; do not rename a completed calibration as a new attempt.
 
+### M8 offline comparison report
+
+`analyze_m8.py` reads a finalized M8 matrix (plan, index, attempt checkpoints and
+exports, frozen priors) and writes a JSON analysis with a Markdown report next to
+it (spec 12.1–12.3 and 14.4; RM16, RM25–RM28, RM32; AC19, AC21). It starts no
+model, reads no credentials, opens no run store and never writes inside the
+matrix; an output inside the matrix or over checkout sources is refused before
+anything is read.
+
+```sh
+.venv/bin/python scripts/analyze_m8.py --matrix /path/to/m8 --out /tmp/m8-analysis.json
+.venv/bin/python scripts/analyze_m8.py --inventory --matrix /path/to/m8 --out /tmp/m8-inventory.json
+```
+
+Acceptance comes before any comparison. All 31 cells must be complete: exact
+driver argv, source/configuration/prior identity, frozen prior linkage to its own
+calibration export, export/checkpoint byte digests, unique finalized request
+steps, the exact frozen `(case_id, mode)` set with locked language and class, the
+seeded 120-request latency schedule with its cold request and three warm-ups,
+required metrics, and frozen corpus/prompt/fixture bytes equal to the measured
+revision. Incomplete or changed evidence fails acceptance and is never turned into
+zero success, cost or timing; the full report then refuses to write. A timeout
+without a run stays in every denominator as an unobserved finding.
+
+The matrix may sit under another root than the one its index recorded. Files are
+found by the driver's `CELL/ATTEMPT/` layout; the recorded root is inferred from
+the recorded argv, and recorded argv, paths and identities stay in the report as
+provenance, unchanged. `--inventory` lists complete, incomplete, missing and
+invalid cells with their attempts and physical cost, and produces no comparison
+or verdict.
+
+An accepted report pairs the 39 comparisons over the existing cells (placement
+policies, example-first chain, local live corpus against its seeded buffered
+control, none-class corpus and latency). Corpus pairs use `(case_id, mode)` with
+gain, loss, both unchanged counts and measured class transitions; latency pairs
+use the recorded seeded order, with each arm's full observed distribution and
+finite-pair deltas. The streamed-failure headline counts `predicate_unmet` among
+effective live rows only. Physical cost keeps calibration, candidate corpus and
+candidate latency ledgers apart, includes interrupted attempts, and leaves unknown
+usage unknown. Each section 12.3 hypothesis is met, not met or not measured, with
+evidence cells and digests; hypotheses this matrix cannot measure name the
+external evidence they need. Defaults are not changed by this report.
+
 ### M7 metric completion and fixed experiment matrix
 
 `run_m7_matrix.py` plans the #128 experiments without reading credentials or
