@@ -115,6 +115,13 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--api-key-env", default="RELAYMIND_EXTERNAL_API_KEY")
     result.add_argument("--external-request-options", type=json.loads, default={})
     result.add_argument("--toolret-cache", type=Path, default=DEFAULT_TOOLRET_CACHE)
+    result.add_argument(
+        "--tools-lock-version",
+        type=int,
+        choices=(1, 2),
+        default=2,
+        help="ToolRet lock; 1 reproduces runs recorded with source-order name suffixes",
+    )
     result.add_argument("--example-score", type=float, default=0.5)
     result.add_argument("--example-margin", type=float, default=0.1)
     result.add_argument(
@@ -175,7 +182,7 @@ async def run(args: argparse.Namespace) -> dict:
         cases = data["cases"]
         files[path.name], files[lock.name] = file_digest(path), file_digest(lock)
     else:
-        lock = args.evaluation_dir / "tools.v1.lock.json"
+        lock = args.evaluation_dir / f"tools.v{args.tools_lock_version}.lock.json"
         cases = _toolret_cases(lock, args.toolret_cache)
         data = {"source": json.loads(lock.read_text(encoding="utf-8"))}
         files[lock.name] = file_digest(lock)

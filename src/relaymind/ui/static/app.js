@@ -46,6 +46,23 @@
     return slot;
   }
 
+  // The summary keeps the shell labels on screen next to the data mode
+  // (spec 0.31 section 9); the other recorded options open below it.
+  function fillPanel(item, runId, config) {
+    const title = document.createElement("summary");
+    const name = document.createElement("strong");
+    name.textContent = "Run " + runId + " configuration";
+    title.append(name);
+    for (const label of config.querySelectorAll("[data-shell-label]")) {
+      const shown = document.createElement("span");
+      shown.textContent = label.textContent;
+      title.append(shown);
+    }
+    const more = config.cloneNode(true);
+    for (const label of more.querySelectorAll("[data-shell-label]")) label.remove();
+    item.replaceChildren(title, more);
+  }
+
   function showConfigurations() {
     const banner = byId("run-configurations");
     const visible = new Set();
@@ -59,14 +76,12 @@
       if (!panel) {
         if (!configurations.size) banner.replaceChildren();
         const item = document.createElement("details");
-        const title = document.createElement("summary");
-        title.textContent = "Run " + runId + " configuration";
-        item.append(title, config.cloneNode(true));
+        fillPanel(item, runId, config);
         panel = { item, html: config.innerHTML };
         configurations.set(runId, panel);
         banner.append(item);
       } else if (panel.html !== config.innerHTML) {
-        panel.item.lastElementChild.replaceWith(config.cloneNode(true));
+        fillPanel(panel.item, runId, config);
         panel.html = config.innerHTML;
       }
     }

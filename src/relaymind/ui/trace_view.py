@@ -48,6 +48,11 @@ def _pick(payload: Mapping[str, Any], keys: Sequence[str]) -> dict[str, Any]:
     return {key: payload.get(key) for key in keys}
 
 
+def _recorded(payload: Mapping[str, Any], keys: Sequence[str]) -> dict[str, Any]:
+    """Only the keys the event holds: an absent key was not recorded, a null was (RM23)."""
+    return {key: payload[key] for key in keys if key in payload}
+
+
 def trace_view_from(
     record: RunRecord,
     events: Sequence[TraceEvent],
@@ -80,7 +85,8 @@ def trace_view_from(
         "prompt": _prompt(accepted_payload),
         # None: a run stored before spec 0.22. {}: a run without options.
         "answer_options": accepted_payload.get("answer_options"),
-        "configuration": _pick(
+        # Spec 0.31: absent keys (an older run) stay absent; a null is recorded.
+        "configuration": _recorded(
             accepted_payload,
             (
                 "local_model",
@@ -137,6 +143,17 @@ def _model_calls(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
         placement = event.payload.get("placement")
         if not isinstance(placement, Mapping):
             placement = None
+        # A timing key is set only when an event recorded it, so a null
+        # (no token, no prediction) stays apart from an older event without it.
+        timing: dict[str, Any] = {}
+        if done is not None and "first_token_ms" in done:
+            timing["first_token_ms"] = done["first_token_ms"]
+        if done is not None and "predicted_ms" in done:
+            timing["predicted_ms"] = done["predicted_ms"]
+        elif placement is not None and "predicted_ms" in placement:
+            timing["predicted_ms"] = placement["predicted_ms"]
+        elif "placement" in event.payload and event.payload["placement"] is None:
+            timing["predicted_ms"] = None
         calls.append(
             {
                 "call_id": event.payload["call_id"],
@@ -148,13 +165,8 @@ def _model_calls(events: Sequence[TraceEvent]) -> list[dict[str, Any]]:
                 "duration_ms": None if done is None else done.get("duration_ms"),
                 "finish_reason": None if done is None else done.get("finish_reason"),
                 "error": None if done is None else done.get("error"),
-                "first_token_ms": None if done is None else done.get("first_token_ms"),
                 "placement": placement,
-                "predicted_ms": (
-                    done.get("predicted_ms")
-                    if done is not None and "predicted_ms" in done
-                    else (placement or {}).get("predicted_ms")
-                ),
+                **timing,
             }
         )
     return calls
@@ -244,15 +256,18 @@ def _routes(
         call = by_id.get(payload.get("call_id"), {})
         placement = payload.get("placement")
         selector = payload.get("selector")
-        routes.append(
-            {
-                **_pick(payload["decision"], ("route", "skill_id", "reason_code", "language")),
-                **_pick(payload, ("mechanism", "model")),
-                "selector": selector if isinstance(selector, Mapping) else None,
-                "placement": placement if isinstance(placement, Mapping) else None,
-                "duration_ms": call.get("duration_ms"),
-            }
-        )
+        route = {
+            **_pick(payload["decision"], ("route", "skill_id", "reason_code", "language")),
+            **_pick(payload, ("mechanism", "model", "call_id")),
+            "selector": selector if isinstance(selector, Mapping) else None,
+            # None when no model.started has this call ID.
+            "call_finished": call.get("finished"),
+            "duration_ms": call.get("duration_ms"),
+        }
+        # Absent or of an unknown shape: not recorded. Null: no placement.
+        if "placement" in payload and (placement is None or isinstance(placement, Mapping)):
+            route["placement"] = placement
+        routes.append(route)
     return routes
 
 

@@ -86,8 +86,10 @@ def verify_cases(
         if actual != lock["shards"]:
             raise ValueError("ToolRet source shard digest differs from lock")
     wanted = {case["row_index"] for case in lock["cases"]}
+    # The v1 lock predates the field and was derived with source-order suffixes.
+    suffix_order = lock.get("name_suffix_order", "source-order")
     cases = [
-        normalize_toolret(row, index)
+        normalize_toolret(row, index, suffix_order=suffix_order)
         for index, row in enumerate(iter_rows(paths))
         if index in wanted
     ]
@@ -104,7 +106,12 @@ def main() -> None:
         help="the six already-downloaded pinned shards, in source order",
     )
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
-    parser.add_argument("--lock", type=Path, default=Path("evaluation/tools.v1.lock.json"))
+    parser.add_argument(
+        "--lock",
+        type=Path,
+        default=Path("evaluation/tools.v2.lock.json"),
+        help="tools.v2.lock.json for new runs; tools.v1.lock.json reproduces recorded runs",
+    )
     parser.add_argument(
         "--verify", action="store_true", help="verify an existing lock; never replace it"
     )

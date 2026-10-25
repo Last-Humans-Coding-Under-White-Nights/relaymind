@@ -25,6 +25,8 @@ REPOSITORY = "https://github.com/benchflow-ai/skillsbench"
 REGISTRY_COMMIT = "f860ecf02ef53412a030f8661c83d644b739ff01"
 TASK_COMMIT = "b63b7b2850226b6aa4fb5929a8c1ac7bc4d9a6af"
 REGISTRY_VERSION = "1.1"
+# Per user, so another account cannot plant an archive in a shared directory.
+DEFAULT_CACHE = Path.home() / ".cache/relaymind/skillsbench"
 
 
 def _front_matter(path: Path) -> tuple[dict[str, Any], str]:
@@ -228,15 +230,40 @@ def extract_inputs(
     return {name: canonical_digest(sorted(entries)) for name, entries in packages.items()}
 
 
-def _archive(commit: str, provided: Path | None, cache: Path) -> Path:
+def _sha256(path: Path) -> str:
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def locked_archive_digests(lock_path: Path) -> dict[str, str]:
+    """Archive digests by commit from an existing lock of the pinned commits."""
+    if not lock_path.exists():
+        return {}
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    if (lock.get("source_commit"), lock.get("task_commit")) != (REGISTRY_COMMIT, TASK_COMMIT):
+        return {}
+    return {
+        REGISTRY_COMMIT: lock["registry_archive_sha256"],
+        TASK_COMMIT: lock["task_archive_sha256"],
+    }
+
+
+def _archive(commit: str, provided: Path | None, cache: Path, expected: str | None) -> Path:
+    """A supplied, cached, or fetched archive; refused when it differs from the lock."""
     if provided is not None:
-        return provided
-    path = cache / f"skillsbench-{commit}.tar.gz"
-    if not path.exists():
-        cache.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_suffix(".part")
-        urllib.request.urlretrieve(f"{REPOSITORY}/archive/{commit}.tar.gz", temporary)
-        temporary.replace(path)
+        path = provided
+    else:
+        path = cache / f"skillsbench-{commit}.tar.gz"
+        if not path.exists():
+            cache.mkdir(parents=True, exist_ok=True)
+            temporary = path.with_suffix(".part")
+            urllib.request.urlretrieve(f"{REPOSITORY}/archive/{commit}.tar.gz", temporary)
+            if expected is not None and _sha256(temporary) != expected:
+                temporary.unlink()
+                raise ValueError(f"downloaded archive digest differs from lock: {commit}")
+            temporary.replace(path)
+    if expected is not None and _sha256(path) != expected:
+        raise ValueError(f"archive digest differs from lock: {path}")
     return path
 
 
@@ -246,12 +273,18 @@ def main() -> None:
     parser.add_argument(
         "--task-archive", type=Path, help="cached archive of the pinned task commit"
     )
-    parser.add_argument("--cache-dir", type=Path, default=Path("/tmp/relaymind-benchmarks"))
+    parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--out", type=Path, default=Path("evaluation/skills.v1.json"))
     parser.add_argument("--lock", type=Path, default=Path("evaluation/skills.v1.lock.json"))
     args = parser.parse_args()
-    registry_archive = _archive(REGISTRY_COMMIT, args.archive, args.cache_dir)
-    task_archive = _archive(TASK_COMMIT, args.task_archive, args.cache_dir)
+    # Re-deriving the pinned commits checks every archive against the existing lock.
+    digests = locked_archive_digests(args.lock)
+    registry_archive = _archive(
+        REGISTRY_COMMIT, args.archive, args.cache_dir, digests.get(REGISTRY_COMMIT)
+    )
+    task_archive = _archive(
+        TASK_COMMIT, args.task_archive, args.cache_dir, digests.get(TASK_COMMIT)
+    )
     with tempfile.TemporaryDirectory(prefix="relaymind-skillsbench-") as temporary:
         root = Path(temporary)
         extract_inputs(registry_archive, root / "registry")
@@ -284,8 +317,8 @@ def main() -> None:
             "sha256": hashlib.sha256(args.out.read_bytes()).hexdigest(),
             "source_commit": REGISTRY_COMMIT,
             "task_commit": TASK_COMMIT,
-            "registry_archive_sha256": hashlib.sha256(registry_archive.read_bytes()).hexdigest(),
-            "task_archive_sha256": hashlib.sha256(task_archive.read_bytes()).hexdigest(),
+            "registry_archive_sha256": _sha256(registry_archive),
+            "task_archive_sha256": _sha256(task_archive),
             "cases": [{"id": case["id"], "sha256": case["sha256"]} for case in document["cases"]],
         }
         args.lock.parent.mkdir(parents=True, exist_ok=True)

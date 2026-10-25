@@ -22,6 +22,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   than known input tokens records only that cached count as unavailable,
   with a fixed credential-free warning. Execution outcomes and other
   measurements are preserved; imported timing samples remain strictly validated.
+  It also keeps the parallel workflow out of local skill outcomes (RM15,
+  RM27): the planned synthesis join and a failed local branch are not local
+  escalations, so they no longer lower the skill's local success rate.
 - Persisted timing samples and skill outcome estimates (#129; RM17, RM25,
   RM27, spec 0.38): a versioned sample schema, an additive SQLite migration,
   seven-day retention and a 1,000-sample bound per model/purpose. Every
@@ -35,7 +38,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   status and performance options. Every route shows its selector attempts,
   recorded placement and routing-call duration. Model calls show first-token
   timing and distinguish predicted from actual duration; the answer names the
-  applied pass. Missing historical fields say “not recorded”, and workflow
+  applied pass. Missing historical fields say “not recorded”, while a value
+  recorded as null shows its meaning (none, no token, none selected, no
+  routing call). The shell keeps the local model, its status and reason, the
+  placement policy, the answer pass, and the answer stream on screen. Workflow
   steps have a labeled placeholder pending #138.
 - Reproducible selection benchmarks (#143, #144; RM02, RM08, RM09, RM25,
   RM28, section 12.4): pinned SkillsBench derivation and attribution, a
@@ -60,7 +66,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   export all selector limits and consistent null model metadata, and reject
   incomplete local launch inputs before producing TOML. Local-completion
   grading uses the no-local configuration for failures before acceptance;
-  recorded trace evidence takes precedence over a conflicting label.
+  recorded trace evidence takes precedence over a conflicting label. The
+  configuration label names the external endpoint (model, host, region; no
+  credential), a region without an endpoint is refused, and only option
+  errors are reported as usage errors.
 - Operation without a usable local model (#126; AC20, RM01, RM05, RM11,
   RM21, RM26, RM28, RM29, spec 0.37 sections 7.4, 8, 11, and 14.1). The
   `[local_model]` table is optional: without it `allowed_modes` defaults to
@@ -282,7 +291,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   while preserving raw proposals, usage and independent schema validity. A failed
   narrowing arm records its failure without model work and stays in the denominator;
   valid abstentions retain the empty-set experiment. Ordinary schema-invalid names
-  retain their existing independent name metrics.
+  retain their existing independent name metrics. Colliding ToolRet tool names
+  get suffixes in declaration-digest order, so a plain name no longer marks the
+  positive: `evaluation/tools.v2.lock.json` (the same 500 rows; 5 case digests
+  differ) is the default, and `tools.v1.lock.json` stays only to reproduce the
+  recorded runs.
 
 - RouteDecision and HandoffEnvelope accept the reason codes
   `selection_failed`, `no_local_model`, and `local_slow` under schema version
@@ -473,7 +486,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   exceeding their call budget while retaining proposal evidence. Export distinct
   HTTP response identity claims, reject skills proposal options before work,
   share the persistent ToolRet cache, and enforce source/case locks without
-  changing the frozen files or historical measurement exports.
+  changing the frozen files or historical measurement exports. Count only
+  `unknown_tool` and `invalid_arguments` against proposal schema validity,
+  check SkillsBench archives against the lock digests in a per-user cache, and
+  pin `docs/evidence/*.json` to LF line endings.
 
 - Correct the skill guide's workflow-key description, repair the testing
   guide's README link, and install the client SDK before the Python

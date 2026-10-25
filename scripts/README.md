@@ -104,8 +104,9 @@
   records the selection and whether it is the full corpus.
 - `latency_benchmark.py` — the latency experiment (#33, spec 0.28
   section 12.2) on the local path: one gateway started with
-  `relaymind serve --config`, routing cache off, no external model,
-  concurrency one. It sends the twelve prompts of
+  `relaymind serve --config`, routing cache off, concurrency one, and no
+  external model unless the external endpoint arguments below name one.
+  It sends the twelve prompts of
   `evaluation/latency_prompts.v1.json` over the compatible chat stream:
   a cold request, three warm-ups, then ten runs per prompt in a seeded
   random order. First transport event and first answer token come from
@@ -176,6 +177,13 @@
   configuration is reported as that configuration of that machine, never
   as another machine.
 
+- `evaluation_config.py` — the runner configuration shared by
+  `run_corpus.py` and `latency_benchmark.py` (#128). It defines the
+  configuration options below, validates them before anything starts
+  (an invalid option is a usage error; a failure while running keeps its
+  traceback), and writes the configuration block of each export and
+  report header. It is a module, not a command.
+
 - Phase 2 runner configurations (#128; RM03, RM25, RM26, RM29, RM31,
   RM32): both `run_corpus.py` and `latency_benchmark.py` accept
   `--performance KEY=VALUE ...`, `--budgets KEY=VALUE ...`,
@@ -196,10 +204,14 @@
 
   The latency runner also accepts the corpus runner's external endpoint
   arguments: `--external-base-url`, `--external-model`,
-  `--external-context-limit`, and optional `--external-region`. The credential
-  stays in `RELAYMIND_EXTERNAL_API_KEY`. With an external endpoint, a routing
-  prompt is expected to complete, while clarification prompts still wait
-  for input. `--no-local-model` requires that external endpoint and credential,
+  `--external-context-limit`, and optional `--external-region`; the three
+  endpoint arguments go together, and `--external-region` alone is refused.
+  The configuration block names the external model, the base URL's host
+  (never its user info, path, or query), and the region, or `null` when no
+  gateway was given an endpoint, so a local-only run and a local-plus-external
+  run have different labels. The credential stays in
+  `RELAYMIND_EXTERNAL_API_KEY`. With an external endpoint, a routing prompt
+  is expected to complete, while clarification prompts still wait for input. `--no-local-model` requires that external endpoint and credential,
   defaults the selector chain to `example_match`, and starts no local runtime.
   Local runtime measurements are null; the corpus records `local_only` as
   not run and local completion as not applicable. It refuses `model_router`
@@ -373,6 +385,14 @@
   explicit cache flags override it. `derive_toolret.py --verify --parquet`
   checks the six supplied shards in declared source order without fetching or
   rewriting the lock. The skills track requires `--proposal none`.
+
+  The tools track measures `evaluation/tools.v2.lock.json` by default. Its
+  derivation suffixes colliding tool names in the order of each declaration's
+  digest, so a plain name never marks a positive. `--tools-lock-version 1`
+  measures `tools.v1.lock.json`, the same rows with source-order suffixes, which
+  is kept only to reproduce the runs recorded with it. `derive_skillsbench.py`
+  caches its archives in `~/.cache/relaymind/skillsbench` by default and refuses
+  a cached, supplied, or downloaded archive whose SHA-256 differs from the lock.
 
   HTTP reports distinguish the endpoint/transport from response-reported
   selector identities. A single observed identity is labeled as a response
