@@ -31,6 +31,25 @@ body {
 }
 main, .top { max-width: 72rem; margin: 0 auto; padding: 0 16px; }
 .top { padding-top: 8px; }
+#run-configurations { max-width: 72rem; margin: 12px auto; padding: 0 16px; }
+#run-configurations details {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  overflow-wrap: anywhere;
+}
+#run-configurations summary { cursor: pointer; }
+#run-configurations summary strong { margin-right: 12px; }
+#run-configurations summary span { display: inline-block; margin-right: 12px; }
+#run-configurations [data-run-configuration] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 4px 12px;
+  margin-top: 8px;
+}
+#run-configurations p { margin: 0; }
 h1 { font-size: 1.4rem; margin: 0.5rem 0; }
 h2 { font-size: 1.1rem; margin: 0.5rem 0; }
 h3 { font-size: 0.95rem; margin: 0 0 0.25rem; color: var(--muted); }

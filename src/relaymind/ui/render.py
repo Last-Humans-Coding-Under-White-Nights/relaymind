@@ -40,6 +40,25 @@ def _error(value: object) -> str:
     return _t(value)
 
 
+def _recorded(item: Mapping[str, Any], key: str, null: str = "none") -> object:
+    """A recorded value, its meaning when it was recorded as null, or not recorded (RM23).
+
+    An absent key is evidence the event never held (an older run); a null
+    is evidence the event did hold, such as no reason or no selection.
+    """
+    if key not in item:
+        return "not recorded"
+    value = item[key]
+    return null if value is None else value
+
+
+def _recorded_ms(item: Mapping[str, Any], key: str, null: str = "none") -> str:
+    """A recorded time in ms, with the same three cases as _recorded."""
+    if key not in item:
+        return "not recorded"
+    return _ms(item[key], null)
+
+
 def _attrs(**values: object) -> str:
     return " ".join(f'{name.replace("_", "-")}="{_t(value)}"' for name, value in values.items())
 
@@ -91,6 +110,8 @@ def render_shell(settings: UiSettings) -> str:
         f"{sandbox_line(settings)}"
         '<label class="token">Application token<input id="token" type="password" '
         'autocomplete="off" spellcheck="false"></label></header>'
+        '<aside id="run-configurations" aria-label="Run configurations" '
+        'aria-live="polite">No run selected.</aside>'
         f"<main>{forms}"
         '<form id="open-form"><label>Open a run by ID<input id="open-id" type="text" '
         'autocomplete="off" spellcheck="false"></label><button type="submit">Open</button></form>'
@@ -145,6 +166,49 @@ def _answer_options(view: Mapping[str, Any]) -> str:
     )
 
 
+# The labels the shell keeps on screen next to the data mode (spec 0.31 section 9).
+_SHELL_LABELS = frozenset(
+    {
+        "local_model",
+        "local_model_status",
+        "local_model_reason",
+        "placement_policy",
+        "answer_pass",
+        "answer_stream",
+    }
+)
+
+
+def _configuration(view: Mapping[str, Any]) -> str:
+    """Only this run's recorded settings, including explicit absence (RM23, RM26)."""
+    config = view.get("configuration")
+    if not isinstance(config, Mapping):
+        config = {}
+    labels = (
+        ("local_model", "Local model"),
+        ("local_model_status", "Local model status"),
+        ("local_model_reason", "Local model reason"),
+        ("placement_policy", "Placement policy"),
+        ("answer_pass", "Answer pass"),
+        ("answer_stream", "Answer stream"),
+        ("calls_per_generation", "Calls per generation"),
+        ("prefetch", "Prefetch"),
+        ("early_headers", "Early headers"),
+        ("selection", "Selector chain"),
+    )
+    parts = []
+    for key, label in labels:
+        # A null local model means none was configured (RM26).
+        value = _recorded(config, key, "none configured" if key == "local_model" else "none")
+        if isinstance(value, bool):
+            value = "on" if value else "off"
+        elif isinstance(value, list):
+            value = ", ".join(str(item) for item in value) or "none"
+        shell = " data-shell-label" if key in _SHELL_LABELS else ""
+        parts.append(f"<p{shell}>{label}: {_t(value)}</p>")
+    return "<div data-run-configuration>" + "".join(parts) + "</div>"
+
+
 def _models(view: Mapping[str, Any]) -> str:
     active = view["active_model"]
     head = f"<p>Active model: <strong>{_t(active) if active else 'none yet'}</strong></p>"
@@ -156,13 +220,15 @@ def _models(view: Mapping[str, Any]) -> str:
         f"<td>{_t(c['purpose'])}</td>"
         + (f"<td>{_t(c['branch'])}</td>" if branched else "")
         + f"<td>{_t(c['actor'])}</td><td>{_t(c['model'])}</td>"
-        f"<td>{_call_status(c)}</td></tr>"
+        f"<td>{_call_status(c)}</td><td>{_first_token(c)}</td>"
+        f"<td>Predicted: {_recorded_ms(c, 'predicted_ms')}; actual: {_call_duration(c)}</td></tr>"
         for c in view["model_calls"]
     )
     branch_head = "<th>Branch</th>" if branched else ""
     return (
         f"{head}<table><thead><tr><th>Purpose</th>{branch_head}<th>Actor</th><th>Model</th>"
-        f"<th>Result</th></tr></thead><tbody>{rows}</tbody></table>"
+        f"<th>Result</th><th>First token</th><th>Placement timing</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table>"
     )
 
 
@@ -202,27 +268,101 @@ def _workflow(view: Mapping[str, Any]) -> str:
     )
 
 
+def _first_token(call: Mapping[str, Any]) -> str:
+    """first_token_ms of model.finished; null means no token arrived (spec 0.31)."""
+    if not call["finished"]:
+        return "known when the call ends"
+    return _recorded_ms(call, "first_token_ms", "no token")
+
+
+def _call_duration(call: Mapping[str, Any]) -> str:
+    if not call["finished"]:
+        return "known when the call ends"
+    return _ms(call["duration_ms"], "not recorded")
+
+
 def _call_status(call: Mapping[str, Any]) -> str:
     if not call["finished"]:
         return "running"
     error = f", error: {_error(call['error'])}" if call["error"] else ""
-    return f"{_t(call['finish_reason'])}, {_t(call['duration_ms'])} ms{error}"
+    return f"{_t(call['finish_reason'])}{error}"
+
+
+def _selector(selector: object) -> str:
+    """Incomplete evidence stays readable; a null means the chain chose nothing (RM23, RM28)."""
+    if not isinstance(selector, Mapping):
+        return "<p>Selector: not recorded</p>"
+    attempts = selector.get("attempts")
+    if isinstance(attempts, list):
+        attempts_text = (
+            "; ".join(
+                f"{attempt.get('name', 'not recorded')}: {attempt.get('outcome', 'not recorded')}"
+                if isinstance(attempt, Mapping)
+                else "not recorded"
+                for attempt in attempts
+            )
+            or "none"
+        )
+    else:
+        attempts_text = "not recorded"
+    return (
+        f"<p>Selector: {_t(_recorded(selector, 'name', 'none selected'))}; "
+        f"version: {_t(_recorded(selector, 'version'))}; "
+        f"mechanism: {_t(_recorded(selector, 'mechanism'))}; "
+        f"elapsed: {_recorded_ms(selector, 'elapsed_ms')}. "
+        f"Attempts: {_t(attempts_text)}</p>"
+    )
 
 
 def _skill_and_route(view: Mapping[str, Any]) -> str:
-    skill, route = view["skill"], view["route"]
+    skill = view["skill"]
     skill_text = (
         _NONE.format("No skill loaded.")
         if skill is None
         else f"<p>Skill: <strong>{_t(skill['name'])}</strong> version {_t(skill['version'])} "
         f"<code>{_t(skill['content_hash'])}</code></p>"
     )
-    if route is None:
+    if view["route"] is None:
         return skill_text + _NONE.format("No route decision yet.")
-    return skill_text + (
-        f"<p>Route: <strong>{_t(route['route'])}</strong>, skill {_t(route['skill_id'])}, "
-        f"reason {_t(route['reason_code'])}, mechanism {_t(route['mechanism'])}.</p>"
-    )
+    parts = [skill_text]
+    for route in view["routes"]:
+        parts.append(
+            f"<p>Route: <strong>{_t(route['route'])}</strong>, skill {_t(route['skill_id'])}, "
+            f"reason {_t(route['reason_code'])}, mechanism {_t(route['mechanism'])}.</p>"
+        )
+        parts.append(_selector(route.get("selector")))
+        parts.append(f"<p>Placement: {_placement(route)}</p>")
+        actual = _route_actual(route)
+        parts.append(f"<p>Predicted: {_route_prediction(route)}; actual: {actual}</p>")
+    return "".join(parts)
+
+
+def _placement(route: Mapping[str, Any]) -> str:
+    """Absent: not recorded. Null: the route recorded no placement (RM27)."""
+    if "placement" not in route:
+        return "not recorded"
+    placement = route["placement"]
+    return "none" if placement is None else f"<code>{_json(placement)}</code>"
+
+
+def _route_prediction(route: Mapping[str, Any]) -> str:
+    if "placement" not in route:
+        return "not recorded"
+    placement = route["placement"]
+    return "none" if placement is None else _recorded_ms(placement, "predicted_ms")
+
+
+def _route_actual(route: Mapping[str, Any]) -> str:
+    """The measured time of the route's own routing call, joined by call ID (RM27)."""
+    if route.get("call_id") is None:
+        # A gateway decision names no model; a routing call without its ID is older evidence.
+        return "no routing call" if route.get("model") is None else "not recorded"
+    finished = route.get("call_finished")
+    if finished is None:
+        return "not recorded"
+    if not finished:
+        return "known when the call ends"
+    return _ms(route.get("duration_ms"), "not recorded")
 
 
 def _branch(item: Mapping[str, Any]) -> str:
@@ -342,7 +482,7 @@ def _answer(view: Mapping[str, Any]) -> str:
 
 
 def _ms(value: int | None, missing: str) -> str:
-    return missing if value is None else f"{value} ms"
+    return _t(missing) if value is None else f"{_t(value)} ms"
 
 
 def _timing(view: Mapping[str, Any]) -> str:
@@ -388,7 +528,17 @@ def _controls(view: Mapping[str, Any], settings: UiSettings) -> str:
 
 def render_trace(view: Mapping[str, Any], settings: UiSettings) -> str:
     """One run's trace as an HTML fragment; every value is escaped."""
-    terminal = RunState(view["state"]) in TERMINAL_STATES
+    state = RunState(view["state"])
+    terminal = state in TERMINAL_STATES
+    if view["answer_pass_applied"]:
+        answer_pass = view["answer_pass_applied"]
+    elif not terminal:
+        answer_pass = "known when the run ends"
+    elif state is RunState.COMPLETED:
+        answer_pass = "not recorded"
+    else:
+        # Only run.completed carries answer_pass_applied (spec 0.32).
+        answer_pass = "none, the run did not complete"
     codes = ""
     if view["error_code"]:
         codes += f" Error code: {_t(view['error_code'])}."
@@ -407,6 +557,7 @@ def render_trace(view: Mapping[str, Any], settings: UiSettings) -> str:
         _section("Original prompt", _prompt(view), "prompt"),
         _section("Execution mode", _mode(view), "mode"),
         _section("Answer options", _answer_options(view), "options"),
+        _section("Run configuration", _configuration(view), "configuration"),
         _section("Models", _models(view), "models"),
         *(
             [_section("Parallel workflow", _workflow(view), "workflow")]
@@ -414,13 +565,18 @@ def render_trace(view: Mapping[str, Any], settings: UiSettings) -> str:
             else []
         ),
         _section("Skill and route", _skill_and_route(view), "skill"),
+        _section("Workflow steps", "<p>Workflow steps: not recorded</p>", "workflow-steps"),
         _section("Tool proposals", _proposals(view), "proposals"),
         _section("Tool operations", _operations(view), "operations"),
         _section("Failed operations", _failed(view), "failed"),
         _section("Escalation", _escalation(view), "escalation"),
         _section("Clarification", _clarifications(view), "clarification"),
         _section("Confirmation", _confirmation(view), "confirmation"),
-        _section("Final answer", _answer(view), "answer"),
+        _section(
+            "Final answer",
+            _answer(view) + f"<p>Answer pass applied: {_t(answer_pass)}</p>",
+            "answer",
+        ),
         _section("Timing", _timing(view), "timing"),
     )
     return (

@@ -34,6 +34,8 @@ from gateway_helpers import (
     tool_turn,
 )
 from helpers import FakeClock
+from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
+from relaymind.orchestrator.performance import PerformanceSettings
 from relaymind.orchestrator.routing_cache import RoutingCache
 from ui_helpers import (
     DELETE_ANSWER,
@@ -116,6 +118,92 @@ def test_the_recorded_answer_options_are_shown(tmp_path, browser):
         open_run(page, run_id)
         expect(page.locator(".trace .options")).to_contain_text("Token budget: 60.")
         assert_mode_label_on_every_view(page)
+
+
+def test_shell_and_trace_show_the_runs_phase_two_configuration(tmp_path, browser):
+    """RM23, RM25, RM26, AC20: shell labels follow the displayed run's evidence."""
+    gateway = build_gateway(
+        tmp_path,
+        [],
+        local_status=LocalStatus(LocalModelClass.ABSENT, "not configured"),
+        external_turns=external_health_turns(),
+        performance=PerformanceSettings(answer_pass="draft", prefetch=True),
+    )
+    with served(gateway) as (base, token), browser_page(browser) as (page, _):
+        run_id = chat_run_id(base, token, HEALTH_PROMPT)
+        open_ui(page, base, token)
+        expect(page.locator("#run-configurations")).to_contain_text("No run selected")
+        open_run(page, run_id)
+        # Spec 0.31 section 9: the shell shows these next to the data mode, on screen
+        # while the panel is closed, not only in text a closed panel hides.
+        shell = page.locator("#run-configurations")
+        for label in (
+            "Local model: none configured",
+            "Local model status: absent",
+            "Local model reason: not configured",
+            "Placement policy: not recorded",
+            "Answer pass: draft",
+            "Answer stream: buffered",
+        ):
+            expect(shell.get_by_text(label, exact=True)).to_be_visible()
+            expect(page.locator(".trace .configuration")).to_contain_text(label)
+        expect(shell.get_by_text(run_id)).to_be_visible()
+        # The other recorded options are one click away.
+        expect(shell.get_by_text("Prefetch: on", exact=True)).not_to_be_visible()
+        shell.locator("summary").click()
+        expect(shell.get_by_text("Prefetch: on", exact=True)).to_be_visible()
+        expect(page.locator(".trace .configuration")).to_contain_text("Prefetch: on")
+        expect(page.locator(".trace .skill")).to_contain_text("Selector: example_match")
+        expect(page.locator(".trace .proposals")).to_contain_text("gateway (prefetch)")
+        expect(page.locator(".trace .models")).to_contain_text("First token")
+
+
+def test_configuration_panels_stay_compact_below_the_page_controls(tmp_path, browser):
+    """RM23: configuration stays accessible without displacing heading and token controls."""
+    gateway = waiting_input_gateway(tmp_path)
+    with served(gateway) as (base, token), browser_page(browser) as (page, _):
+        open_ui(page, base, token)
+        start_from_page(page, "Is the service healthy?")
+        expect(trace(page, "waiting_input")).to_be_visible()
+        panel = page.locator("#run-configurations details")
+        expect(panel).to_have_count(1)
+        assert page.locator("header.top #run-configurations").count() == 0
+        assert not panel.evaluate("element => element.open")
+        assert panel.evaluate("element => getComputedStyle(element).borderTopStyle") == "solid"
+        assert page.locator("#token").bounding_box()["y"] < panel.bounding_box()["y"]
+
+
+@pytest.mark.parametrize("expanded", [False, True])
+def test_configuration_panel_retains_its_node_and_toggle_state_on_poll(tmp_path, browser, expanded):
+    """RM23: completed polling retains the reader's panel state and the unchanged DOM."""
+    gateway = waiting_input_gateway(tmp_path)
+    with served(gateway) as (base, token), browser_page(browser) as (page, _):
+        # Observe the next poll's scheduling: refresh has finished by then, so the
+        # assertion cannot race the response handler that replaces the panel.
+        page.add_init_script("""(() => {
+          window.configurationPollsScheduled = 0;
+          const schedule = window.setTimeout;
+          window.setTimeout = (callback, delay, ...args) => {
+            if (delay === 1000) window.configurationPollsScheduled += 1;
+            return schedule(callback, delay, ...args);
+          };
+        })();""")
+        open_ui(page, base, token)
+        start_from_page(page, "Is the service healthy?")
+        expect(trace(page, "waiting_input")).to_be_visible()
+        panel = page.locator("#run-configurations details")
+        expect(panel).to_have_count(1)
+        panel.evaluate(
+            "(element, expanded) => { element.open = expanded; "
+            "window.savedConfigurationPanel = element; }",
+            expanded,
+        )
+        scheduled = page.evaluate("window.configurationPollsScheduled")
+        page.wait_for_function(
+            "previous => window.configurationPollsScheduled > previous", arg=scheduled
+        )
+        assert panel.evaluate("element => element === window.savedConfigurationPanel")
+        assert panel.evaluate("element => element.open") is expanded
 
 
 def test_a_clarification_is_answered_through_the_native_resume_endpoint(tmp_path, browser):

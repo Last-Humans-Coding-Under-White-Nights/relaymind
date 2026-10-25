@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Demo UI phase 2 evidence (#127; RM12, RM23, RM25–RM29, RM31, AC20):
+  each trace and the shell show the displayed run's recorded local model
+  status and performance options. Every route shows its selector attempts,
+  recorded placement and routing-call duration. Model calls show first-token
+  timing and distinguish predicted from actual duration; the answer names the
+  applied pass. Missing historical fields say “not recorded”, while a value
+  recorded as null shows its meaning (none, no token, none selected, no
+  routing call). The shell keeps the local model, its status and reason, the
+  placement policy, the answer pass, and the answer stream on screen. Workflow
+  steps have a labeled placeholder pending #138.
 - Operation without a usable local model (#126; AC20, RM01, RM05, RM11,
   RM21, RM26, RM28, RM29, spec 0.37 sections 7.4, 8, 11, and 14.1). The
   `[local_model]` table is optional: without it `allowed_modes` defaults to

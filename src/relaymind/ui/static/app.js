@@ -11,6 +11,7 @@
   const lostTokens = new Set(); // approval_id whose token the native view no longer returns
   const tokenReads = new Map(); // approval_id -> the one native read in flight for it
   const submittedAt = new Map(); // run_id -> browser clock time of the submission
+  const configurations = new Map(); // run_id -> its persistent configuration panel
 
   const byId = (id) => document.getElementById(id);
   const say = (text) => { byId("status").textContent = text; };
@@ -45,6 +46,56 @@
     return slot;
   }
 
+  // The summary keeps the shell labels on screen next to the data mode
+  // (spec 0.31 section 9); the other recorded options open below it.
+  function fillPanel(item, runId, config) {
+    const title = document.createElement("summary");
+    const name = document.createElement("strong");
+    name.textContent = "Run " + runId + " configuration";
+    title.append(name);
+    for (const label of config.querySelectorAll("[data-shell-label]")) {
+      const shown = document.createElement("span");
+      shown.textContent = label.textContent;
+      title.append(shown);
+    }
+    const more = config.cloneNode(true);
+    for (const label of more.querySelectorAll("[data-shell-label]")) label.remove();
+    item.replaceChildren(title, more);
+  }
+
+  function showConfigurations() {
+    const banner = byId("run-configurations");
+    const visible = new Set();
+    // One label per visible run also keeps comparison arms distinct (RM23).
+    for (const trace of document.querySelectorAll("main .trace")) {
+      const config = trace.querySelector("[data-run-configuration]");
+      if (!config) continue;
+      const runId = trace.dataset.runId;
+      visible.add(runId);
+      let panel = configurations.get(runId);
+      if (!panel) {
+        if (!configurations.size) banner.replaceChildren();
+        const item = document.createElement("details");
+        fillPanel(item, runId, config);
+        panel = { item, html: config.innerHTML };
+        configurations.set(runId, panel);
+        banner.append(item);
+      } else if (panel.html !== config.innerHTML) {
+        fillPanel(panel.item, runId, config);
+        panel.html = config.innerHTML;
+      }
+    }
+    for (const [runId, panel] of configurations) {
+      if (!visible.has(runId)) {
+        panel.item.remove();
+        configurations.delete(runId);
+      }
+    }
+    if (!configurations.size && banner.textContent !== "No run selected.") {
+      banner.textContent = "No run selected.";
+    }
+  }
+
   async function refresh(runId, container) {
     const response = await api("GET", "/ui/runs/" + encodeURIComponent(runId));
     if (!response.ok) {
@@ -65,6 +116,7 @@
       }
     }
     const trace = slot.querySelector(".trace");
+    showConfigurations();
     if (trace && trace.dataset.terminal === "true") open.delete(runId);
     if (trace) await prepareApproval(trace, slot);
   }
@@ -190,6 +242,7 @@
     const result = await response.json();
     const area = byId("comparison");
     area.replaceChildren();
+    showConfigurations();
     const grid = document.createElement("div");
     grid.className = "compare";
     area.append(grid);
