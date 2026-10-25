@@ -1,7 +1,8 @@
 """Offline M8 reporting contract (RM16, RM25–RM28, RM32; AC19, AC21; spec 12.1–12.3, 14.4).
 
 Every row below is disposable fixture evidence. No test reads the real matrix,
-launches a model, opens a run store, or changes measured exports.
+launches a model, or changes measured exports. Only the real-loader prior test
+builds a disposable gateway store, through the existing prior test fixture.
 """
 
 import copy
@@ -9,10 +10,16 @@ import hashlib
 import json
 import shutil
 from pathlib import Path, PurePath
+from types import SimpleNamespace
 
 import pytest
 
+from gateway_helpers import close_gateway_stores  # noqa: F401 - autouse store cleanup
 from helpers import load_script_module
+from relaymind.tools.sandbox import MUTATING_DEMO_TOOLS
+from test_placement_prior import fixture_source
+
+MUTATING = sorted(MUTATING_DEMO_TOOLS)[0]
 
 
 def analysis():
@@ -110,6 +117,14 @@ def test_effective_live_predicate_failures_include_no_published_statement():
     assert result["partial_stream_unobserved"] == 3
     assert result["terminal_errors"] == {"predicate_unmet": 2, "external_failed": 1}
     assert analysis().stream_failures(rows[3:])["fraction"] is None
+    rows[0]["metrics"]["local_class"] = "unsuitable"
+    by_class = analysis().stream_failures(rows)["by_measured_class"]
+    assert by_class["unsuitable"]["predicate_unmet"] == 1
+    assert by_class["unsuitable"]["effective_live"] == 1
+    assert by_class["ready"]["predicate_unmet"] == 0
+    assert by_class["ready"]["effective_live"] == 2
+    groups = analysis().stream_failures(rows)["by_group"]
+    assert groups["auto/en/simple"]["effective_live"] == 3
 
 
 def test_latency_pairing_uses_occurrences_and_each_arms_full_observed_distribution():
@@ -231,19 +246,55 @@ def test_latency_coverage_checks_seed_schedule_and_cold_warmup_populations():
         module.validate_latency_coverage(document)
 
 
-def test_latency_metric_coverage_keeps_unobservable_timeouts_as_findings():
-    """RM16/RM25: a timeout without a run has no trace; an observed run must carry metrics."""
+def test_latency_metric_coverage_keeps_recorded_failures_as_unobserved_findings():
+    """RM16/RM25, spec 12.2/14.4.4: recorded failures stay; silent metric gaps fail."""
     module = analysis()
-    timeout = sample("p", 1, None, state=None, error="timeout", timed_out=True, run_id=None)
-    del timeout["metrics"]
-    document = {"first_token_ms": {}, "samples": [sample("p", 0, 5, run_id="run-a"), timeout]}
+
+    def unobserved(order, **fields):
+        row = sample("p", order, None, state=None, **fields)
+        del row["metrics"]
+        return row
+
+    document = {
+        "first_token_ms": {},
+        "samples": [
+            sample("p", 0, 5, run_id="run-a"),
+            unobserved(1, error="timeout", timed_out=True, run_id=None),
+            unobserved(2, error="HTTP 503", run_id=None),
+            unobserved(3, error="trace: ReadTimeout: read", run_id="run-b"),
+            unobserved(4, error="ended failed (x), expected completed", run_id="run-c"),
+        ],
+    }
     assert module.latency_metric_coverage(document) == dict(
-        accepted=True, missing=[], unobserved=[1]
+        accepted=True,
+        missing=[],
+        unobserved=[1, 2, 3, 4],
+        unobserved_reasons={
+            "error_with_run": 1,
+            "error_without_run": 1,
+            "timeout": 1,
+            "trace_read_error": 1,
+        },
     )
     del document["samples"][0]["metrics"]
     assert module.latency_metric_coverage(document)["accepted"] is False
     assert module.latency_metric_coverage(document)["missing"] == [0]
     assert module.latency_metric_coverage({"samples": []})["accepted"] is False
+
+
+def test_latency_arm_counts_split_unobserved_requests_by_reason():
+    """Spec 12.2: requests without a trace stay counted per arm, split by reason."""
+    module = analysis()
+    left = [sample("p", 0, 5), sample("p", 1, 6)]
+    right = [sample("p", 0, 4), sample("p", 1, None, state=None, error="timeout", timed_out=True)]
+    del right[1]["metrics"]
+    paired = module.pair_latency(left, right)
+    assert paired["B"]["unobserved"] == {"timeout": 1}
+    assert paired["B"]["unobserved_total"] == 1
+    assert paired["A"]["unobserved_total"] == 0
+    guard = module.latency_guard(paired)
+    assert guard["candidate_worse"] == ["timeouts", "unobserved_total"]
+    assert module.latency_guard(module.pair_latency(left, left))["candidate_worse"] == []
 
 
 def test_physical_cost_separates_calibration_and_deduplicates_shared_controls():
@@ -299,6 +350,60 @@ def test_cli_refuses_to_overwrite_frozen_evaluation_inputs(tmp_path):
     assert corpus.read_bytes() == before
 
 
+def test_cli_refuses_existing_outputs_and_any_path_in_the_checkout(tmp_path):
+    """RM16: no existing report, Markdown sibling or checkout file is ever replaced."""
+    module = analysis()
+    matrix = tmp_path / "m8"
+    matrix.mkdir()
+    existing = tmp_path / "old.json"
+    existing.write_text("{}", encoding="utf-8")
+    sibling = tmp_path / "notes.md"
+    sibling.write_text("keep", encoding="utf-8")
+    evidence = module.ROOT / "docs" / "EVIDENCE.md"
+    before = evidence.read_bytes()
+    targets = (
+        existing,
+        tmp_path / "notes.json",
+        module.ROOT / "docs" / "EVIDENCE.json",
+        module.ROOT / "m8-analysis.json",
+    )
+    for target in targets:
+        for mode in ([], ["--inventory"]):
+            with pytest.raises(ValueError, match="output"):
+                module.main([*mode, "--matrix", str(matrix), "--out", str(target)])
+    assert existing.read_text(encoding="utf-8") == "{}"
+    assert sibling.read_text(encoding="utf-8") == "keep"
+    assert evidence.read_bytes() == before
+    assert not (module.ROOT / "m8-analysis.json").exists()
+    assert not (module.ROOT / "m8-analysis.md").exists()
+
+
+@pytest.mark.parametrize("recorded", ["/recorded/m8", "/recorded/checkout"])
+def test_cli_refuses_outputs_under_the_recorded_roots(fixture_matrix, recorded):
+    """RM16/RM17, spec 14.4.5: writing there would change measured source or evidence."""
+    module = analysis()
+    with pytest.raises(ValueError, match="recorded root"):
+        module.main(["--matrix", str(fixture_matrix), "--out", recorded + "/analysis/m8.json"])
+    with pytest.raises(ValueError, match="recorded root"):
+        module.main(["--inventory", "--matrix", str(fixture_matrix), "--out", recorded + "/i.json"])
+
+
+def test_exact_prior_identity_survives_relocation_with_the_real_loader(tmp_path):
+    """Spec 14.4.5/RM17: load_prior provenance has no absolute path, so it survives a move."""
+    module = analysis()
+    recorded = tmp_path / "recorded"
+    recorded.mkdir()
+    _, prior, configuration, _, _ = fixture_source(recorded)
+    provenance = module.load_prior(prior, configuration).provenance
+    moved = tmp_path / "moved"
+    moved.mkdir()
+    for name in ("prior.json", "source.json"):
+        shutil.copy2(recorded / name, moved / name)
+    (recorded / "source.json").rename(recorded / "source.moved-away")
+    assert module.load_prior(moved / "prior.json", configuration).provenance == provenance
+    assert "application" in provenance["sources"][0]
+
+
 def test_incomplete_inventory_cannot_produce_an_accepted_report(tmp_path):
     """RM16/RM25: a partial matrix fails acceptance before interpretation or store access."""
     module = analysis()
@@ -330,6 +435,40 @@ COST = dict(
     output_tokens_missing_calls=0,
 )
 INTERRUPTED = "placement-constrained-device_aware-router-buffered-latency"
+# What load_prior names as each source export's application in this fixture.
+CALIBRATION_APPLICATION = {"head": "fixture calibration export"}
+
+
+def fixture_analysis(monkeypatch):
+    """The analyzer with a checked stand-in for load_prior.
+
+    Fixture calibration exports carry no traces, so the real loader would refuse them
+    (its relocation behavior is tested with real traces above). The stand-in still
+    reads each source relative to the actual prior file and checks its digest.
+    """
+    module = analysis()
+
+    def load_prior(path, configuration):
+        raw = Path(path).read_bytes()
+        for partition in json.loads(raw)["partitions"]:
+            if partition["configuration"] != configuration:
+                continue
+            for source in partition["sources"]:
+                data = (Path(path).parent / source["file"]).read_bytes()
+                if hashlib.sha256(data).hexdigest() != source["sha256"]:
+                    raise ValueError("source byte digest mismatch")
+            provenance = dict(
+                bundle_sha256=hashlib.sha256(raw).hexdigest(),
+                sources=[
+                    dict(s, application=CALIBRATION_APPLICATION) for s in partition["sources"]
+                ],
+                timings=1,
+            )
+            return SimpleNamespace(provenance=provenance)
+        raise ValueError("no exact prior configuration partition")
+
+    monkeypatch.setattr(module, "load_prior", load_prior)
+    return module
 
 
 def full_grade(case, mode, index, cell):
@@ -498,6 +637,12 @@ def write_attempt(out, cell, name, *, source, prior_conf, prior, prior_digest, m
                 f"{g['case_id']}/{g['mode']}": dict(run_id=g["run_id"], timing_prior=record_prior)
                 for g in grades
             },
+            traces={
+                g["run_id"]: [dict(event_type="tool.started", payload=dict(tool_name=MUTATING))]
+                if g["case_class"] == "mutation" and g["success"]
+                else []
+                for g in grades
+            },
             **exported,
         )
     else:
@@ -601,10 +746,13 @@ def build_matrix(out):
         if seeded:
             path = out / f"prior-{cell['configuration']}.json"
             prior_digest = driver.byte_digest(path)
-            # Loaded prior provenance also names each source export's application.
+            # Exactly what the loader stand-in reports for this frozen prior.
             prior = dict(
                 bundle_sha256=prior_digest,
-                sources=[dict(s, application=source) for s in priors[cell["configuration"]]],
+                sources=[
+                    dict(s, application=CALIBRATION_APPLICATION)
+                    for s in priors[cell["configuration"]]
+                ],
                 timings=1,
             )
         attempts = []
@@ -704,11 +852,42 @@ def rewrite_index(matrix, change):
     path.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def rewrite_attempt(matrix, cell_id, *, export=None, checkpoint=None):
+    """Change a copied attempt and re-digest it, so only the analyzer's rules can object."""
+
+    def change(index):
+        attempt = index["attempts"][cell_id][-1]
+        directory = matrix / cell_id / attempt["name"]
+        export_path, checkpoint_path = directory / "export.json", directory / "checkpoint.json"
+        if export:
+            document = json.loads(export_path.read_text(encoding="utf-8"))
+            export(document)
+            export_path.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+        state = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+        if checkpoint:
+            checkpoint(state)
+        state["result"]["export_sha256"] = hashlib.sha256(export_path.read_bytes()).hexdigest()
+        checkpoint_path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+        attempt["export_sha256"] = state["result"]["export_sha256"]
+        attempt["checkpoint_sha256"] = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
+
+    rewrite_index(matrix, change)
+
+
+def time_out_first_samples(document, count=10):
+    """Turn measured requests into client timeouts without a run, as the runner records them."""
+    for row in document["samples"][:count]:
+        for key in [k for k in row if k.endswith("_ms")]:
+            row[key] = None
+        row.update(state=None, error="timeout", timed_out=True, run_id=None)
+        row.pop("metrics")
+
+
 def test_relocated_complete_matrix_produces_accepted_comparisons_and_retains_provenance(
-    fixture_matrix, tmp_path
+    fixture_matrix, tmp_path, monkeypatch
 ):
     """RM16/RM25–RM28/RM32, AC19/AC21: relocation keeps recorded paths as provenance."""
-    module = analysis()
+    module = fixture_analysis(monkeypatch)
     before = digests(fixture_matrix)
     out = tmp_path / "analysis" / "m8.json"
     module.main(["--matrix", str(fixture_matrix), "--out", str(out)])
@@ -759,7 +938,26 @@ def test_relocated_complete_matrix_produces_accepted_comparisons_and_retains_pro
     efficiency = cell["cohort_external_cost"]
     assert efficiency["output_tokens_missing_calls"] == 156
     assert efficiency["output_tokens_per_completed_task"] is None
+    # Latency rows count successful final answers, never a made-up zero.
+    latency_cell = report["cells"]["placement-normal-local_first-router-buffered-latency"]
+    assert latency_cell["cohort_external_cost"]["completed_tasks"] == 60
+    assert latency_cell["placement"]["external_cost"]["completed_tasks"] == 60
+    assert latency_cell["cohort_success_scope"].startswith("latency successful final answers")
+    by_class = local["stream_failures"]["B"]["by_measured_class"]
+    assert by_class["ready"]["effective_live"] == 156
     hypotheses = report["hypotheses"]
+    confirmations = hypotheses["no_missed_confirmation"]["by_cell"][
+        "placement-normal-local_first-router-buffered-corpus"
+    ]
+    assert confirmations["mutating_tool_starts"] > 0
+    assert confirmations["mutation_case_runs_with_start"] == confirmations["mutating_tool_starts"]
+    assert confirmations["runs_without_trace"] == 0
+    costs = hypotheses["external_cost_next_to_success"]["by_cell"]
+    assert len(costs) == 29
+    assert costs["placement-normal-local_first-router-buffered-latency"]["completed_tasks"] == 60
+    none_reliability = hypotheses["none_live_streaming"]["latency_reliability"]
+    assert none_reliability["B"]["unobserved_total"] == 0
+    assert none_reliability["candidate_worse"] == []
     assert hypotheses["none_live_streaming"]["status"] == "met"
     assert hypotheses["none_live_streaming"]["first_useful_content_ms"]["p50_agrees"] is True
     assert hypotheses["local_live_streaming_parity"]["status"] == "met"
@@ -780,16 +978,18 @@ def test_relocated_complete_matrix_produces_accepted_comparisons_and_retains_pro
     expected_wait = report["expected_wait"]["placement-normal-expected_wait-router-buffered-corpus"]
     assert expected_wait["placement_observations"]["evaluated"] == 0
     assert expected_wait["initial_prerequisites"][0]["p_local"] == 0.75
+    assert expected_wait["prerequisite_variant_count"] == 1
+    assert expected_wait["prerequisite_variants"] == [expected_wait["initial_prerequisites"]]
     assert report["defaults"]["changed"] is False
     assert "Reporting acceptance: passed" in markdown
     assert "not measured" in markdown
 
 
 def test_inventory_mode_reports_complete_and_missing_cells_without_comparisons(
-    fixture_matrix, tmp_path
+    fixture_matrix, tmp_path, monkeypatch
 ):
     """RM16/RM25: partial evidence is listed honestly and never becomes an accepted report."""
-    module = analysis()
+    module = fixture_analysis(monkeypatch)
     matrix = copy_matrix(fixture_matrix, tmp_path)
     order = [c["id"] for c in module.driver.matrix_cells()]
     keep = set(order[:13])
@@ -821,15 +1021,24 @@ def test_inventory_mode_reports_complete_and_missing_cells_without_comparisons(
     assert not full.exists() and not full.with_suffix(".md").exists()
 
 
-@pytest.mark.parametrize("change", ["export_bytes", "prior_bytes", "argv", "plan_cells"])
+@pytest.mark.parametrize(
+    "change", ["export_bytes", "prior_bytes", "prior_identity", "argv", "plan_cells"]
+)
 def test_changed_evidence_fails_acceptance_instead_of_becoming_a_finding(
-    fixture_matrix, tmp_path, change
+    fixture_matrix, tmp_path, monkeypatch, change
 ):
     """RM16/RM17/RM25: identity, digest or linkage drift is invalid evidence, not zeros."""
-    module = analysis()
+    module = fixture_analysis(monkeypatch)
     matrix = copy_matrix(fixture_matrix, tmp_path)
     target = "placement-normal-device_aware-router-buffered-corpus"
-    if change == "export_bytes":
+    if change == "prior_identity":
+        # Spec 14.4.5: exact retained prior identity, not only the bundle-bound fields.
+        rewrite_attempt(
+            matrix,
+            target,
+            checkpoint=lambda state: state["identity"]["prior"].__setitem__("timings", 2),
+        )
+    elif change == "export_bytes":
         with (matrix / target / "initial" / "export.json").open("a", encoding="utf-8") as f:
             f.write(" ")
     elif change == "prior_bytes":
@@ -864,9 +1073,47 @@ def test_changed_evidence_fails_acceptance_instead_of_becoming_a_finding(
         module.analyze(matrix)
 
 
+def test_latency_verdicts_fail_when_the_candidate_loses_requests_to_timeouts(
+    fixture_matrix, tmp_path, monkeypatch
+):
+    """RM25, spec 12.2/12.3: dropped timeouts cannot make an observed-value p95 'met'."""
+    module = fixture_analysis(monkeypatch)
+    matrix = copy_matrix(fixture_matrix, tmp_path)
+    for cell_id in (
+        "streaming-none-local_first-example-live-latency",
+        "placement-constrained-device_aware-example-router-buffered-latency",
+    ):
+        rewrite_attempt(matrix, cell_id, export=time_out_first_samples)
+    report, markdown = module.analyze(matrix)
+    hypotheses = report["hypotheses"]
+    none = hypotheses["none_live_streaming"]
+    # Observed values alone would still say the live arm is faster.
+    assert none["first_useful_content_ms"]["lower_p95"] is True
+    assert none["first_useful_content_ms"]["n_A_B"] == [120, 110]
+    reliability = none["latency_reliability"]
+    assert reliability["B"]["timeouts"] == 10
+    assert reliability["B"]["unobserved"] == {"timeout": 10}
+    assert reliability["A"]["timeouts"] == reliability["A"]["unobserved_total"] == 0
+    assert reliability["candidate_worse"] == ["timeouts", "unobserved_total"]
+    assert none["status"] == "not met"
+    scope = hypotheses["unsuitable_device_aware"]["by_scope"]["constrained/example-router"]
+    assert scope["latency_reliability"]["B"]["timeouts"] == 10
+    assert scope["status"] == "not met"
+    unsuitable = hypotheses["unsuitable_device_aware"]
+    assert unsuitable["status"] == "not met"
+    assert unsuitable["by_scope"]["constrained/router"]["status"] == "met"
+    comparison = next(
+        c
+        for c in report["comparisons"]
+        if c["candidate"] == "streaming-none-local_first-example-live-latency"
+    )
+    assert comparison["paired"]["B"]["unobserved_total"] == 10
+    assert "0/10/10" in markdown
+
+
 def test_cli_writes_utf8_reports_under_cp1252_default(fixture_matrix, tmp_path, monkeypatch):
     """RM16/RM25: a non-ASCII evidence root survives a Windows-style text default."""
-    module = analysis()
+    module = fixture_analysis(monkeypatch)
     matrix = tmp_path / "证据" / "m8"
     shutil.copytree(fixture_matrix, matrix)
     original_read, original_write = Path.read_text, Path.write_text

@@ -3,7 +3,9 @@
 The script reads a finalized M8 matrix directory (plan.json, index.json, attempt
 checkpoints and exports, frozen priors) and writes a JSON analysis with a Markdown
 report next to it, outside the input. It never starts a model, reads credentials,
-opens a run store, or writes inside the matrix.
+opens or seeds a run store, or writes inside the matrix. Outputs must be new files
+outside this checkout, the matrix, and the matrix root and measurement checkout
+that the index recorded.
 
 The matrix may now live under another root than the one its index recorded. Attempt
 files are found by the driver's relative layout (CELL/ATTEMPT/), and every recorded
@@ -13,6 +15,16 @@ Acceptance comes first: all 31 cells must be complete, with exact identities, pr
 linkage, (case_id, mode) coverage, latency schedule and byte digests. Incomplete or
 changed evidence fails acceptance; it is never turned into zero success, cost or
 timing. ``--inventory`` lists complete and missing cells without any comparison.
+
+A latency request without trace metrics stays in every denominator (spec 12.2) as an
+unobserved finding when the runner recorded why: a timeout, an error without a run
+(connection refused, transport or HTTP error status), or an error after the run
+started (including a failed trace read). Each verdict shows these counts per arm. A
+request with no metrics and no recorded timeout or error is missing evidence and
+fails acceptance (spec 14.4.4).
+
+Initial expected-wait prerequisites are checked for presence only: recomputing them
+needs a seeded run store, which this offline reader never writes.
 
 Usage:
     python scripts/analyze_m8.py --matrix DIR --out FILE.json [--inventory]
@@ -46,7 +58,8 @@ from relaymind.evaluation.metrics import (  # noqa: E402
     summarize_latency,
 )
 from relaymind.evaluation.placement_metrics import distribution, summarize_placement  # noqa: E402
-from relaymind.evaluation.prior import byte_digest  # noqa: E402
+from relaymind.evaluation.prior import byte_digest, load_prior  # noqa: E402
+from relaymind.tools.sandbox import MUTATING_DEMO_TOOLS  # noqa: E402
 
 LATENCY_SEED = 1342026
 LATENCY_RUNS = 10
@@ -66,8 +79,6 @@ VALIDATORS = (
     "scripts/matrix_controller.py",
     "scripts/run_m8_matrix.py",
 )
-# Analysis output never replaces checkout sources that analysis reads.
-PROTECTED = ("evaluation", "tests/fixtures", "src", "scripts")
 CONFIGURATIONS = ("normal", "constrained")
 POLICIES = ("local_first", "device_aware", "expected_wait")
 CHAINS = ("router", "example-router")
@@ -127,6 +138,50 @@ def _successful(sample) -> bool:
         and sample.get("error") is None
         and not sample.get("timed_out")
     )
+
+
+def unobserved_reason(sample) -> str | None:
+    """Why a recorded latency request has no trace metrics; None when it has them."""
+    if "metrics" in sample:
+        return None
+    if sample.get("timed_out"):
+        return "timeout"
+    if sample.get("error") and sample.get("run_id") is None:
+        return "error_without_run"
+    if str(sample.get("error") or "").startswith("trace:"):
+        return "trace_read_error"
+    if sample.get("error"):
+        return "error_with_run"
+    return "missing_metrics"
+
+
+def _outcome_rows(cell: dict, rows) -> list:
+    """Latency samples carry no grader success; add the successful-final-answer outcome."""
+    if cell["runner"] == "corpus":
+        return list(rows)
+    return [{**s, "success": _successful(s)} for s in rows]
+
+
+def _arm_counts(rows) -> dict:
+    """Per-arm request outcomes that every latency verdict reports next to its p95."""
+    overall = summarize_latency(rows)["overall"]
+    reasons = Counter(r for s in rows if (r := unobserved_reason(s)) is not None)
+    return dict(
+        {k: overall[k] for k in ("samples", "timeouts", "errors", "timeout_fraction")},
+        unobserved=dict(sorted(reasons.items())),
+        unobserved_total=sum(reasons.values()),
+    )
+
+
+def latency_guard(paired: dict) -> dict:
+    """A candidate that loses more requests than its control cannot meet a latency target.
+
+    Observed-value p95s drop timeouts and unobserved requests, so this mirrors the
+    no-timeout condition of the 500 ms hypothesis.
+    """
+    a, b = paired["A"], paired["B"]
+    worse = [k for k in ("timeouts", "errors", "unobserved_total") if b[k] > a[k]]
+    return dict(A=a, B=b, candidate_worse=worse)
 
 
 # -- pairing ----------------------------------------------------------------------------
@@ -202,7 +257,22 @@ def pair_corpus(control, candidate) -> dict:
 
 
 def stream_failures(rows) -> dict:
-    """RM32/AC21: the predicate_unmet headline counts effective live rows only."""
+    """RM32/AC21: the predicate_unmet headline counts effective live rows only.
+
+    The same block is reported per measured class and per mode/language/class.
+    """
+    classes, groups = defaultdict(list), defaultdict(list)
+    for r in rows:
+        classes[_class(r)].append(r)
+        groups[f"{r.get('mode')}/{r.get('language')}/{r.get('case_class')}"].append(r)
+    return dict(
+        _stream_block(rows),
+        by_measured_class={k: _stream_block(v) for k, v in sorted(classes.items())},
+        by_group={k: _stream_block(v) for k, v in sorted(groups.items())},
+    )
+
+
+def _stream_block(rows) -> dict:
     live = [r for r in rows if r.get("answer_stream_effective") == "live"]
     failed = sum(r.get("error_code") == "predicate_unmet" for r in live)
     effective = defaultdict(list)
@@ -254,13 +324,12 @@ def _latency_pairs(pairs) -> dict:
             B=_arm([y for _, y in pairs], metric),
             delta=distribution(deltas, eligible=len(pairs)),
         )
-    counts = {}
-    for side, rows in (("A", [x for x, _ in pairs]), ("B", [y for _, y in pairs])):
-        overall = summarize_latency(rows)["overall"]
-        counts[side] = {
-            k: overall[k] for k in ("samples", "timeouts", "errors", "timeout_fraction")
-        }
-    return dict(N=len(pairs), metrics=metrics, **counts)
+    return dict(
+        N=len(pairs),
+        metrics=metrics,
+        A=_arm_counts([x for x, _ in pairs]),
+        B=_arm_counts([y for _, y in pairs]),
+    )
 
 
 def pair_latency(control, candidate) -> dict:
@@ -415,20 +484,27 @@ def validate_latency_coverage(document: dict) -> None:
 
 
 def latency_metric_coverage(document: dict) -> dict:
-    """Every observed run carries trace metrics; a timeout or error without a run has none.
+    """Trace metrics on every request, unless the runner recorded why there are none.
 
-    Such a request stays in every denominator as an unobserved finding (class unknown).
+    A recorded timeout or error without metrics stays in every denominator as an
+    unobserved finding (class unknown, spec 12.2). No metrics and no recorded reason
+    is missing evidence and fails acceptance (spec 14.4.4).
     """
-    missing, unobserved = [], []
+    missing, unobserved, reasons = [], [], Counter()
     for i, s in enumerate(document.get("samples", [])):
-        if "metrics" in s:
-            continue
-        if s.get("run_id") is None and (s.get("timed_out") or s.get("error")):
-            unobserved.append(i)
-        else:
+        reason = unobserved_reason(s)
+        if reason == "missing_metrics":
             missing.append(i)
+        elif reason is not None:
+            unobserved.append(i)
+            reasons[reason] += 1
     accepted = bool(document.get("samples")) and "first_token_ms" in document and not missing
-    return dict(accepted=accepted, missing=missing, unobserved=unobserved)
+    return dict(
+        accepted=accepted,
+        missing=missing,
+        unobserved=unobserved,
+        unobserved_reasons=dict(sorted(reasons.items())),
+    )
 
 
 def recorded_roots(index: dict) -> dict:
@@ -587,14 +663,14 @@ def validate_cell(cell: dict, attempts: list, context: dict) -> dict:
             context["priors"][cell["configuration"]] = validate_prior(
                 cell["configuration"], context
             )
-        partition = context["priors"][cell["configuration"]]["partitions"][0]
+        # Spec 14.4.5: the exact retained prior identity. load_prior reads the bundle and
+        # its relative sources under the actual matrix root and writes no store.
+        partition = identity.get("prior_configuration")
+        key = (cell["configuration"], canonical_digest(partition))
+        if key not in context["loaded"]:
+            context["loaded"][key] = load_prior(prior_path, partition).provenance
         _check(
-            isinstance(prior, dict)
-            and prior.get("bundle_sha256") == prior_digest
-            # Loaded provenance adds each source's application; the bundle binds the rest.
-            and [{k: x.get(k) for k in ("file", "sha256", "run_ids")} for x in prior["sources"]]
-            == partition["sources"]
-            and identity.get("prior_configuration") == partition["configuration"],
+            prior == context["loaded"][key] and prior.get("bundle_sha256") == prior_digest,
             "checkpoint prior identity differs from the frozen prior",
         )
     else:
@@ -640,11 +716,13 @@ def validate_cell(cell: dict, attempts: list, context: dict) -> dict:
         coverage = metric_coverage(document)
         _check(coverage["accepted"], f"{len(coverage['missing'])} grades lack required metrics")
         rows = document["grades"]
+        mutations = mutation_starts(rows, document.get("traces") or {})
     else:
         validate_latency_coverage(document)
         coverage = latency_metric_coverage(document)
         _check(coverage["accepted"], f"latency samples {coverage['missing']} lack required metrics")
         rows = document["samples"]
+        mutations = None
     return dict(
         rows=rows,
         attempt=final["name"],
@@ -656,6 +734,34 @@ def validate_cell(cell: dict, attempts: list, context: dict) -> dict:
         prerequisites=_prerequisites(document, cell["runner"]),
         learning=document.get("learning"),
         first_token_ms=document.get("first_token_ms"),
+        mutations=mutations,
+    )
+
+
+def mutation_starts(grades, traces: dict) -> dict:
+    """Started mutating demo tools from the exported traces, next to missed confirmations.
+
+    It shows whether a zero missed-confirmation count is vacuous (no mutation started).
+    """
+    starts, runs, mutation_runs, untraced = 0, 0, 0, 0
+    for g in grades:
+        events = traces.get(g.get("run_id"))
+        if events is None:
+            untraced += 1
+            continue
+        count = sum(
+            e.get("event_type") == "tool.started"
+            and (e.get("payload") or {}).get("tool_name") in MUTATING_DEMO_TOOLS
+            for e in events
+        )
+        starts += count
+        runs += count > 0
+        mutation_runs += count > 0 and g.get("case_class") == "mutation"
+    return dict(
+        mutating_tool_starts=starts,
+        runs_with_mutating_start=runs,
+        mutation_case_runs_with_start=mutation_runs,
+        runs_without_trace=untraced,
     )
 
 
@@ -806,6 +912,7 @@ def _inventory(matrix: Path) -> tuple[dict, dict]:
         provider=checked["provider"],
         corpus=run_corpus.load_frozen_corpus(),
         priors={},
+        loaded={},
         views={},
     )
     cells, lists = {}, {k: [] for k in ("complete", "incomplete", "missing", "invalid")}
@@ -831,7 +938,14 @@ def _inventory(matrix: Path) -> tuple[dict, dict]:
             else:
                 try:
                     view = validate_cell(cell, attempts, context)
-                except (ValueError, KeyError, TypeError, AttributeError, IndexError) as error:
+                except (
+                    ValueError,
+                    KeyError,
+                    TypeError,
+                    AttributeError,
+                    IndexError,
+                    OSError,
+                ) as error:
                     record.update(status="invalid", reason=str(error))
                 else:
                     context["views"][cell["id"]] = view
@@ -839,7 +953,12 @@ def _inventory(matrix: Path) -> tuple[dict, dict]:
                     record.update(
                         measured_classes=dict(Counter(_class(r) for r in view["rows"])),
                         requests_validated=len(view["rows"]),
-                        cohort_external_cost=summarize_placement(view["rows"])["external_cost"],
+                        cohort_external_cost=summarize_placement(
+                            _outcome_rows(cell, view["rows"])
+                        )["external_cost"],
+                        cohort_success_scope="corpus task success"
+                        if cell["runner"] == "corpus"
+                        else "latency successful final answers (not task success)",
                     )
         rows = context["views"].get(cell["id"], {}).get("rows")
         record["physical_cost"] = ledger(
@@ -945,11 +1064,13 @@ def hypotheses(views: dict) -> dict:
             confirmations_reached=rate(
                 sum(bool(g.get("confirmation_requested")) for g in decided), len(decided)
             ),
+            **(views[c]["mutations"] or {}),
         )
     result["no_missed_confirmation"] = dict(
         status=verdict(sum(v["missed"] for v in missed.values()) == 0),
         evidence=_evidence(views, *corpus),
-        scope="every corpus cell, mode and language; reached confirmations expose a vacuous zero",
+        scope="every corpus cell, mode and language; reached confirmations and started "
+        "mutating tools (from the exported traces) expose a vacuous zero",
         by_cell=missed,
     )
     latency = [
@@ -974,7 +1095,9 @@ def hypotheses(views: dict) -> dict:
             matched = pair_corpus(*auto)
             unsuitable = matched["by_matched_class"].get("unsuitable")
             la, lb = base.format("local_first", "latency"), base.format("device_aware", "latency")
-            timing = pair_latency(views[la]["rows"], views[lb]["rows"])["by_measured_class"]
+            full = pair_latency(views[la]["rows"], views[lb]["rows"])
+            guard = latency_guard(full)
+            timing = full["by_measured_class"]
             directions = {
                 m: latency_direction(
                     {side: (timing[side].get("unsuitable") or {}).get(m) for side in "AB"}
@@ -985,7 +1108,9 @@ def hypotheses(views: dict) -> dict:
             }
             lower = [d and d["lower_p95"] for d in directions.values()]
             value = (
-                None
+                False
+                if guard["candidate_worse"]
+                else None
                 if unsuitable is None or None in lower
                 else unsuitable["gain"] == unsuitable["loss"] and all(lower)
             )
@@ -994,6 +1119,7 @@ def hypotheses(views: dict) -> dict:
                 status=verdict(value),
                 matched_unsuitable_auto=unsuitable,
                 unsuitable_latency=directions,
+                latency_reliability=guard,
                 class_transitions=matched["class_transitions"],
                 full_configuration_auto=dict(
                     {k: matched[k] for k in ("N", "success_A", "success_B", "gain", "loss")}
@@ -1005,6 +1131,7 @@ def hypotheses(views: dict) -> dict:
         evidence=_evidence(views, *{c for v in scopes.values() for c in v["evidence"]}),
         scope="matched-unsuitable auto corpus pairs at equal observed success, and each arm's "
         "unsuitable latency population with lower p95 first useful content and completion; "
+        "not met when the candidate arm has more timeouts, errors or unobserved requests; "
         "scopes without an unsuitable cohort are not measured",
         by_scope=scopes,
     )
@@ -1039,13 +1166,20 @@ def hypotheses(views: dict) -> dict:
         views["streaming-none-local_first-example-buffered-corpus"]["rows"],
         views["streaming-none-local_first-example-live-corpus"]["rows"],
     )
-    none_latency = pair_latency(
+    none_full = pair_latency(
         views["streaming-none-local_first-example-buffered-latency"]["rows"],
         views["streaming-none-local_first-example-live-latency"]["rows"],
-    )["metrics"]["first_useful_content_ms"]
-    direction = latency_direction(none_latency)
+    )
+    none_guard = latency_guard(none_full)
+    direction = latency_direction(none_full["metrics"]["first_useful_content_ms"])
     lower = direction["lower_p95"]
-    value = None if lower is None else none_corpus["loss"] <= none_corpus["gain"] and lower
+    value = (
+        False
+        if none_guard["candidate_worse"]
+        else None
+        if lower is None
+        else none_corpus["loss"] <= none_corpus["gain"] and lower
+    )
     result["none_live_streaming"] = dict(
         status=verdict(value),
         evidence=_evidence(
@@ -1056,11 +1190,13 @@ def hypotheses(views: dict) -> dict:
                 for k in ("corpus", "latency")
             ),
         ),
-        scope="none-class corpus no-lower task success and lower p95 first useful content",
+        scope="none-class corpus no-lower task success and lower p95 first useful content; "
+        "not met when the live arm has more timeouts, errors or unobserved requests",
         corpus={
             k: none_corpus[k] for k in ("N", "success_A", "success_B", "gain", "loss", "parity")
         },
         first_useful_content_ms=direction,
+        latency_reliability=none_guard,
         live_stream_failures=stream_failures(
             views["streaming-none-local_first-example-live-corpus"]["rows"]
         ),
@@ -1085,14 +1221,26 @@ def hypotheses(views: dict) -> dict:
             views["streaming-normal-local_first-router-live-corpus"]["rows"]
         ),
     )
-    candidates = [c for c in corpus if not c.startswith("calibration")]
+    candidates = [c for c in views if not c.startswith("calibration")]
+    covered, costs = [], {}
+    for c in candidates:
+        rows = views[c]["rows"]
+        if c.endswith("-corpus"):
+            covered.append(metric_coverage({"grades": rows})["accepted"])
+            scope, outcome = "corpus task success", rows
+        else:
+            document = {"samples": rows, "first_token_ms": views[c]["first_token_ms"]}
+            covered.append(latency_metric_coverage(document)["accepted"])
+            scope = "latency successful final answers (not task success)"
+            outcome = [{**s, "success": _successful(s)} for s in rows]
+        costs[c] = dict(summarize_placement(outcome)["external_cost"], success_scope=scope)
     result["external_cost_next_to_success"] = dict(
-        status=verdict(
-            all(metric_coverage({"grades": views[c]["rows"]})["accepted"] for c in candidates)
-        ),
+        status=verdict(all(covered)),
         evidence=_evidence(views, *candidates),
-        scope="observed external calls and per-model usage next to task success; unknown usage "
-        "stays explicit; no monetary claim without a dated rate source",
+        scope="observed external calls and per-model usage next to task success in every "
+        "candidate corpus and latency cell; unknown usage stays explicit; no monetary claim "
+        "without a dated rate source",
+        by_cell=costs,
     )
     for name, (reason, evidence) in NOT_MEASURED.items():
         result[name] = dict(
@@ -1118,12 +1266,15 @@ def expected_wait(views: dict) -> dict:
             variants.append(rows)
         result[cell_id] = dict(
             placement_observations=summarize_placement(view["rows"])["expected_wait"],
-            initial_prerequisites=variants[0] if variants else None,
-            prerequisite_variants=len(variants),
+            # One shared report is the expected case; every distinct variant is kept.
+            initial_prerequisites=variants[0] if len(variants) == 1 else None,
+            prerequisite_variants=variants,
+            prerequisite_variant_count=len(variants),
             learning=view["learning"],
             note="Initial prerequisites do not prove the inequality was evaluated after startup "
             "or online learning; zero evaluations is not evidence for the hypothesis. The "
-            "specification sets no expected_wait promotion threshold.",
+            "specification sets no expected_wait promotion threshold. Prerequisites are "
+            "checked for presence only; recomputing them needs a seeded run store.",
         )
     return result
 
@@ -1150,8 +1301,9 @@ def analyze(matrix: Path) -> tuple[dict, str]:
         # Detached reaggregation of the exported rows; the export bytes stay untouched.
         public["cells"][cell_id].update(
             summary=view["summary"],
-            placement=summarize_placement(rows),
+            placement=summarize_placement(_outcome_rows(cells[cell_id], rows)),
             first_token_ms=view["first_token_ms"],
+            mutations=view["mutations"],
         )
     comparisons = []
     for pair in comparison_pairs():
@@ -1171,7 +1323,8 @@ def analyze(matrix: Path) -> tuple[dict, str]:
         else:
             entry["paired"] = pair_latency(a, b)
         entry["expected_wait"] = {
-            side: summarize_placement(rows)["expected_wait"] for side, rows in (("A", a), ("B", b))
+            side: public["cells"][pair[role]]["placement"]["expected_wait"]
+            for side, role in (("A", "control"), ("B", "candidate"))
         }
         entry["physical_cost"] = {
             side: public["cells"][pair[role]]["physical_cost"]
@@ -1308,7 +1461,7 @@ def render(report: dict) -> str:
         "Each arm's full observed population; completion counts successful final answers only.",
         "",
         "| question | configuration | control | candidate | first useful p50/p95 A (n) | "
-        "B (n) | completion p95 A (n) | B (n) | errors/timeouts A | B |",
+        "B (n) | completion p95 A (n) | B (n) | errors/timeouts/unobserved A | B |",
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for c in report["comparisons"]:
@@ -1322,7 +1475,8 @@ def render(report: dict) -> str:
             f"{_ms(u['A']['p50'])}/{_ms(u['A']['p95'])} ({u['A']['n']}) | "
             f"{_ms(u['B']['p50'])}/{_ms(u['B']['p95'])} ({u['B']['n']}) | "
             f"{_ms(d['A']['p95'])} ({d['A']['n']}) | {_ms(d['B']['p95'])} ({d['B']['n']}) | "
-            f"{a['errors']}/{a['timeouts']} | {b['errors']}/{b['timeouts']} |"
+            f"{a['errors']}/{a['timeouts']}/{a['unobserved_total']} | "
+            f"{b['errors']}/{b['timeouts']}/{b['unobserved_total']} |"
         )
     lines += [
         "",
@@ -1360,14 +1514,15 @@ def render(report: dict) -> str:
         "",
         "## Expected wait applicability",
         "",
-        "| cell | evaluated | declined | not evaluated | prerequisite rows |",
+        "| cell | evaluated | declined | not evaluated | prerequisite variants (rows) |",
         "|---|---|---|---|---|",
     ]
     for cell_id, v in report["expected_wait"].items():
         o = v["placement_observations"]
+        rows = ", ".join(str(len(variant)) for variant in v["prerequisite_variants"]) or "-"
         lines.append(
             f"| {cell_id} | {o['evaluated']} | {o['declined']} | {o['not_evaluated']} | "
-            f"{len(v['initial_prerequisites'] or [])} |"
+            f"{v['prerequisite_variant_count']} ({rows}) |"
         )
     lines += [
         "",
@@ -1417,19 +1572,53 @@ def render_inventory(report: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _inside(path: Path, root: Path) -> bool:
+    return path == root or root in path.parents
+
+
 def check_outputs(matrix: Path, out: Path) -> Path:
-    """Refuse outputs inside the evidence or over the checkout inputs, before any read."""
+    """Refuse unsafe outputs before anything is read: new files, outside matrix and checkout."""
     markdown = out.with_suffix(".md")
     if out == markdown:
         raise ValueError("analysis output must be a JSON path; the Markdown report goes next to it")
     if out.is_dir():
         raise ValueError("analysis output must be a file path")
     for path in (out, markdown):
-        if path == matrix or matrix in path.parents:
+        if _inside(path, matrix):
             raise ValueError("analysis output must stay separate from the matrix evidence")
-        if any(path == ROOT / p or (ROOT / p) in path.parents for p in PROTECTED):
-            raise ValueError("analysis output must not replace checkout sources")
+        if _inside(path, ROOT):
+            raise ValueError("analysis output must be outside the analyst checkout")
+        if path.exists():
+            raise ValueError(f"analysis output already exists and is never replaced: {path}")
     return markdown
+
+
+def check_recorded_outputs(matrix: Path, out: Path, markdown: Path) -> None:
+    """Refuse outputs under the matrix root or measurement checkout that the index recorded.
+
+    A file there would change the measured source fingerprint or matrix evidence and
+    break a later driver resume.
+    """
+    index_path = matrix / "index.json"
+    if not index_path.is_file():
+        return
+    index = _read_json(index_path)
+    # Every recorded root, even when the layout check would later refuse the index.
+    recorded = [((index.get("identity") or {}).get("source") or {}).get("package_path")]
+    recorded += [
+        argv[argv.index("--out") + 1]
+        for attempts in (index.get("attempts") or {}).values()
+        for attempt in attempts
+        if "--out" in (argv := attempt.get("argv") or [])[:-1]
+    ]
+    for path in filter(None, recorded):
+        parents = PurePath(path).parents
+        if len(parents) < 3:
+            continue
+        root = parents[2]  # CHECKOUT/src/relaymind/__init__.py or MATRIX/CELL/ATTEMPT/export.json
+        for candidate in {Path(root), Path(root).resolve()}:
+            if _inside(out, candidate) or _inside(markdown, candidate):
+                raise ValueError(f"analysis output must be outside the recorded root {root}")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -1444,6 +1633,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     matrix, out = args.matrix.resolve(), args.out.resolve()
     markdown = check_outputs(matrix, out)
+    check_recorded_outputs(matrix, out, markdown)
     if args.inventory:
         public = inventory(matrix)
         report = dict(

@@ -965,7 +965,9 @@ feature has a test of the default as well. Later pull requests append here.
   checkpoint tests verify preservation/refusal behavior without inference.
   `tests/test_m8_analysis.py` checks the offline M8 report on a relocated
   fixture matrix: full 31-cell acceptance, inventory mode, paired comparisons,
-  cost ledgers and hypothesis verdicts. It reads no real measurement.
+  cost ledgers, hypothesis verdicts (including candidate timeouts that would hide
+  behind an observed-value p95), and refusal of existing, checkout and recorded-root
+  outputs. It reads no real measurement.
   Repository completion checks remain the entire pytest suite and Ruff lint/format.
 
 ### What is not covered yet
