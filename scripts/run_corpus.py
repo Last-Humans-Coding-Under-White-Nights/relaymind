@@ -44,6 +44,7 @@ import tempfile
 import time
 from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -52,6 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import live_acceptance as harness  # noqa: E402
 from evaluation_config import (  # noqa: E402
+    ConfigurationError,
     RunnerConfiguration,
     add_configuration_arguments,
     configuration_from_args,
@@ -309,20 +311,22 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
     corpus = load_frozen_corpus()
     cases = select_cases(corpus, ids=args.cases, languages=args.languages)
     external = None
-    if args.external_base_url:
+    if configuration.external is not None:
         external = harness.ExternalEndpoint(
             args.external_base_url, args.external_model, args.external_context_limit
         )
     if not configuration.local_model_configured and (
         external is None or not os.environ.get(harness.EXTERNAL_KEY_ENV)
     ):
-        raise ValueError("--no-local-model requires an external endpoint and its API key")
+        raise ConfigurationError("--no-local-model requires an external endpoint and its API key")
     modes, not_run = select_modes(
         args.modes, external=external, local_model=configuration.local_model_configured
     )
     if external is not None and not os.environ.get(harness.EXTERNAL_KEY_ENV):
-        # Without a usable endpoint the gateways are started without one.
+        # Without a usable endpoint the gateways are started without one, and the
+        # configuration label names none.
         external = None
+        configuration = replace(configuration, external=None)
     runtime = (
         harness.check_runtime(Path(args.manifest), extra_args=args.runtime_extra_args)
         if configuration.local_model_configured
@@ -422,7 +426,7 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
                 "base_url": external.base_url,
                 "model": external.model,
                 "context_limit": external.context_limit,
-                "region": args.external_region,
+                "region": configuration.external.region,
             },
             "summary": summary,
             "grades": grades,
@@ -893,10 +897,6 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--modes", nargs="+", choices=MODES, default=list(MODES))
     parser.add_argument("--cases", nargs="+", help="run only these case IDs (a subset)")
     parser.add_argument("--languages", nargs="+", choices=("en", "zh"))
-    parser.add_argument("--external-base-url")
-    parser.add_argument("--external-model")
-    parser.add_argument("--external-context-limit", type=int)
-    parser.add_argument("--external-region", help="the endpoint region, if known")
     parser.add_argument(
         "--regrade",
         action="store_true",
@@ -933,14 +933,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         report = label_report(report, document.get("configuration"))
         out.with_suffix(".md").write_text(report, encoding="utf-8")
         return
-    external_args = (args.external_base_url, args.external_model, args.external_context_limit)
-    if any(external_args) and not all(external_args):
-        parser.error(
-            "--external-base-url, --external-model, and --external-context-limit go together"
-        )
+    # Only option checks raise ConfigurationError, before anything starts; any other
+    # failure keeps its traceback and is never reported as a usage error.
     try:
         document = run_corpus(args)
-    except ValueError as exc:
+    except ConfigurationError as exc:
         parser.error(str(exc))
     print(
         label_report(
