@@ -386,6 +386,14 @@
   checks the six supplied shards in declared source order without fetching or
   rewriting the lock. The skills track requires `--proposal none`.
 
+  The tools track measures `evaluation/tools.v2.lock.json` by default. Its
+  derivation suffixes colliding tool names in the order of each declaration's
+  digest, so a plain name never marks a positive. `--tools-lock-version 1`
+  measures `tools.v1.lock.json`, the same rows with source-order suffixes, which
+  is kept only to reproduce the runs recorded with it. `derive_skillsbench.py`
+  caches its archives in `~/.cache/relaymind/skillsbench` by default and refuses
+  a cached, supplied, or downloaded archive whose SHA-256 differs from the lock.
+
   HTTP reports distinguish the endpoint/transport from response-reported
   selector identities. A single observed identity is labeled as a response
   claim; mixed or absent observations leave the report's name/version unknown.

@@ -1,23 +1,5 @@
 # Testing RelayMind (Milestones 1 to 5)
 
-Selection benchmark tests (#143, #144; RM02, RM08, RM09, RM25, RM28) run
-with `pytest tests/test_selection_benchmark.py`. They cover frozen digests,
-set scoring and macro/micro summaries, leave-one-task-out examples, router
-catalog caps and context bypasses, both source tool schema styles, seeded
-candidate presentation, inert handlers, loopback HTTP selectors, proposal
-validation and source derivation. ToolRet fixture rows are synthetic; no
-download or model call is needed in the default test suite. Real benchmark
-commands and the optional `bench` extra are described in `scripts/README.md`.
-
-Phase 2 runner configurations (#128; RM03, RM25, RM26, RM29, RM31, RM32)
-are covered by `tests/test_runner_configurations.py`, alongside the corpus
-and latency script tests. The tests check launch-file round trips, validation,
-no-local runtime bypass, external prerequisites, export/report labels and
-offline regrading. Grading and metric regressions distinguish gateway-owned
-answers from local-model completion and report no-local completion as not
-applicable. These deterministic checks do not constitute the live evaluation
-matrix or evidence for changing defaults.
-
 How to verify the M1 to M5 deliverables, by hand on macOS and Windows
 and with the automated suites. M1 qualifies the local model runtime and
 the adapters; M2 adds the bounded local loop; M3 adds handoff,
@@ -178,7 +160,8 @@ starts its own llama-server.
   Phase 2 trace tests (#127; RM12, RM23, RM25–RM29, RM31) also check
   recorded configuration, selector attempts for every route, routing-call
   timing joined by call ID, first-token timing including zero, applied answer
-  pass, escaped labels and missing historical fields. Placement projections
+  pass, escaped labels, missing historical fields (not recorded), and
+  values recorded as null (shown with their meaning). Placement projections
   use illustrative optional event fields; they are not measured predictions.
   Workflow steps remain a labeled placeholder pending #138.
 
@@ -192,7 +175,9 @@ starts its own llama-server.
   options, the parallel workflow actors, a routing cache route, that approve
   and deny stay disabled until the page holds the token, and a replay-mode
   view with no controls. The phase 2 test checks the no-local status and
-  recorded options in both the shell and trace, plus gateway prefetch labels.
+  recorded options in both the shell and trace, that the shell labels are
+  visible while the configuration panel is closed, plus gateway prefetch
+  labels.
   Install
   the browser once with `playwright install chromium`; a machine without
   it fails the test. CI installs it on ubuntu, macOS, and Windows. One
@@ -860,6 +845,27 @@ feature has a test of the default as well. Later pull requests append here.
   class forbids, and `tests/test_trace_event.py -k local_model_fields`
   checks the new optional fields in the validator and the published schema
   alike.
+- `pytest tests/test_selection_benchmark.py tests/test_selection_benchmark_review.py`
+  (#143, #144; RM02, RM08, RM09, RM25, RM28, section 12.4): the selection
+  benchmarks. They cover frozen digests, set scoring and macro/micro
+  summaries, leave-one-task-out examples, router catalog caps and context
+  bypasses, both source tool schema styles, collision suffixes that do not
+  depend on which candidate is positive, seeded candidate presentation, inert
+  handlers, loopback HTTP selectors, proposal validation and schema validity
+  (only `unknown_tool` and `invalid_arguments` count against it), failed and
+  abstaining narrowing arms, call-budget scoring, and source derivation with
+  lock and archive digest checks. ToolRet fixture rows are synthetic; no
+  download or model call is needed in the default test suite. Real benchmark
+  commands and the optional `bench` extra are described in
+  [`scripts/README.md`](../scripts/README.md).
+- `pytest tests/test_runner_configurations.py` (#128; RM03, RM25, RM26,
+  RM29, RM31, RM32): the phase 2 runner configurations, alongside the corpus
+  and latency script tests. They check launch-file round trips, validation,
+  no-local runtime bypass, external prerequisites, export/report labels and
+  offline regrading. Grading and metric regressions distinguish gateway-owned
+  answers from local-model completion and report no-local completion as not
+  applicable. These deterministic checks do not constitute the live
+  evaluation matrix or evidence for changing defaults.
 
 ### What is not covered yet
 

@@ -1,2 +1,4 @@
 # Frozen evaluation files are hashed as exact bytes on every supported platform.
 /evaluation/*.json text eol=lf
+# Evidence exports are cited by SHA-256, so their bytes must not change either.
+/docs/evidence/*.json text eol=lf
