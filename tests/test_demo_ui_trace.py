@@ -408,6 +408,14 @@ def test_active_run_does_not_claim_answer_pass_evidence_is_missing(state):
     assert "Answer pass applied: known when the run ends" in shown
 
 
+@pytest.mark.parametrize("state", ["failed", "cancelled"])
+def test_a_run_that_did_not_complete_has_no_answer_pass(state):
+    """RM23, RM31: only run.completed carries answer_pass_applied (spec 0.32)."""
+    view = trace_view_from(replace(FRESH_RECORD, state=state), [])
+    shown = render_trace(view, UiSettings(mode="double"))
+    assert "Answer pass applied: none, the run did not complete" in shown
+
+
 def test_model_call_duration_is_shown_once(tmp_path):
     """RM23, RM27: the result column does not repeat measured placement duration."""
     gateway = health_gateway(tmp_path)

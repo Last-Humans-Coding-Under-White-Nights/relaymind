@@ -514,10 +514,17 @@ def _controls(view: Mapping[str, Any], settings: UiSettings) -> str:
 
 def render_trace(view: Mapping[str, Any], settings: UiSettings) -> str:
     """One run's trace as an HTML fragment; every value is escaped."""
-    terminal = RunState(view["state"]) in TERMINAL_STATES
-    answer_pass = view["answer_pass_applied"] or (
-        "not recorded" if terminal else "known when the run ends"
-    )
+    state = RunState(view["state"])
+    terminal = state in TERMINAL_STATES
+    if view["answer_pass_applied"]:
+        answer_pass = view["answer_pass_applied"]
+    elif not terminal:
+        answer_pass = "known when the run ends"
+    elif state is RunState.COMPLETED:
+        answer_pass = "not recorded"
+    else:
+        # Only run.completed carries answer_pass_applied (spec 0.32).
+        answer_pass = "none, the run did not complete"
     codes = ""
     if view["error_code"]:
         codes += f" Error code: {_t(view['error_code'])}."
