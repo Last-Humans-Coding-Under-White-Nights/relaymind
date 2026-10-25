@@ -953,9 +953,9 @@ def _inventory(matrix: Path) -> tuple[dict, dict]:
                     record.update(
                         measured_classes=dict(Counter(_class(r) for r in view["rows"])),
                         requests_validated=len(view["rows"]),
-                        cohort_external_cost=summarize_placement(
-                            _outcome_rows(cell, view["rows"])
-                        )["external_cost"],
+                        cohort_external_cost=summarize_placement(_outcome_rows(cell, view["rows"]))[
+                            "external_cost"
+                        ],
                         cohort_success_scope="corpus task success"
                         if cell["runner"] == "corpus"
                         else "latency successful final answers (not task success)",
