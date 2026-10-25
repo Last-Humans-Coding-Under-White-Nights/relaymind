@@ -450,3 +450,30 @@ def test_probe_with_no_retained_sample_does_not_reclassify_model(tmp_path, monke
     asyncio.run(go())
     assert gateway.orchestrator.local_status.status == LocalModelClass.UNSUITABLE
     assert gateway.store.probe_reservation() is None
+
+
+def test_refused_admission_leaves_no_run_clock_behind(tmp_path):
+    """RM17/RM25/AC21: a create rolled back by a 429 keeps no in-process run state."""
+    gateway = build_gateway(tmp_path, [], placement=PlacementSettings(policy="device_aware"))
+    with RunStore(tmp_path / "runs.sqlite3", clock=gateway.store.clock) as other:
+        assert other.try_reserve_probe("probe1", "owner", model="local", after_seconds=600)
+        for _ in range(3):
+            with pytest.raises(SlotUnavailableError):
+                asyncio.run(gateway.orchestrator.run_text("hello"))
+    assert gateway.store.unfinished_runs(()) == []
+    assert gateway.store._run_started == {}
+
+
+def test_rolled_back_transaction_drops_clocks_it_started(tmp_path):
+    """RM17/RM25: only committed runs keep a monotonic baseline."""
+    from helpers import ACCEPTED_PAYLOAD
+
+    with RunStore(tmp_path / "store", clock=FakeClock()) as store:
+        kept = store.create_run("accepted", accepted=("run.accepted", "gateway", ACCEPTED_PAYLOAD))
+        with pytest.raises(RuntimeError):
+            with store.transaction():
+                store.start_run_clock(kept.run_id)
+                store.create_run("accepted", accepted=("run.accepted", "gateway", ACCEPTED_PAYLOAD))
+                raise RuntimeError("roll back")
+        assert list(store._run_started) == [kept.run_id]
+        assert [r.run_id for r in store.unfinished_runs(())] == [kept.run_id]

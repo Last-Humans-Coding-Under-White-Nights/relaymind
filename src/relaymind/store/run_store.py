@@ -457,6 +457,9 @@ class RunStore:
         self._lock = threading.RLock()
         # Nesting depth of the open write transaction; see transaction().
         self._depth = 0
+        # Runs whose baseline the open write transaction started. A rollback
+        # drops them, so a refused run leaves nothing behind in this process.
+        self._transaction_clocks: set[str] = set()
         self._path = str(path)
         self._in_memory = self._path in (":memory:", "")
         self._closed = False
@@ -578,6 +581,8 @@ class RunStore:
                 self._conn.execute("COMMIT")
             except BaseException as exc:
                 self._rollback()
+                for run_id in self._transaction_clocks:
+                    self._run_started.pop(run_id, None)
                 if isinstance(exc, SlotUnavailableError) and exc.probe:
                     # The admission transaction (including an approval) rolled back.
                     # Persist cancellation separately, while holding the connection lock.
@@ -593,6 +598,7 @@ class RunStore:
                 raise
             finally:
                 self._depth = 0
+                self._transaction_clocks.clear()
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
@@ -730,11 +736,7 @@ class RunStore:
             if accepted is not None:
                 # RM25: the run clock starts with the run, before seq 1.
                 self.start_run_clock(run_id)
-                try:
-                    self._insert_events(run_id, [accepted])
-                except BaseException:
-                    self._run_started.pop(run_id, None)
-                    raise
+                self._insert_events(run_id, [accepted])
         self.start_run_clock(run_id)
         return RunRecord(
             run_id=run_id,
@@ -787,6 +789,8 @@ class RunStore:
                 (run_id, run_id),
             ).fetchone()
             self._run_started[run_id] = (self.clock.monotonic(), offset)
+            if self._depth:
+                self._transaction_clocks.add(run_id)
 
     def elapsed_ms(self, run_id: str) -> int:
         """Measured elapsed time, never inferred from wall time (RM25)."""
