@@ -54,7 +54,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   export all selector limits and consistent null model metadata, and reject
   incomplete local launch inputs before producing TOML. Local-completion
   grading uses the no-local configuration for failures before acceptance;
-  recorded trace evidence takes precedence over a conflicting label.
+  recorded trace evidence takes precedence over a conflicting label. The
+  configuration label names the external endpoint (model, host, region; no
+  credential), a region without an endpoint is refused, and only option
+  errors are reported as usage errors.
 - Operation without a usable local model (#126; AC20, RM01, RM05, RM11,
   RM21, RM26, RM28, RM29, spec 0.37 sections 7.4, 8, 11, and 14.1). The
   `[local_model]` table is optional: without it `allowed_modes` defaults to

@@ -149,6 +149,16 @@ def test_phase_two_launch_file_round_trip(settings, runner_name, tmp_path):
         ["--budgets", "unknown=1"],
         ["--selection-chain", "unknown"],
         ["--no-local-model", "--selection-chain", "model_router"],
+        ["--external-region", "eu-west"],
+        ["--external-model", "model"],
+        [
+            "--external-base-url",
+            "not-a-url",
+            "--external-model",
+            "model",
+            "--external-context-limit",
+            "8192",
+        ],
     ],
 )
 def test_invalid_options_fail_before_launch(settings, arguments):
@@ -349,7 +359,14 @@ def test_absent_local_run_does_not_touch_runtime(
         assert document["design"]["startup_warmup"] is False
         assert document["prefix_cache"] is None
     assert document["configuration"]["local_model_configured"] is False
+    assert document["configuration"]["external"] == {
+        "model": "model",
+        "host": "example.invalid",
+        "region": "test-region",
+    }
     environment = document if runner_name == "run_corpus" else document["environment"]
+    assert environment["external_endpoint"]["region"] == "test-region"
+    assert "external_endpoint_region" not in environment
     for key in ("model_id", "manifest", "model_file", "model_sha256", "quantization"):
         assert key in environment and environment[key] is None
     assert document["configuration"]["performance"]["answer_pass"] == "draft"
@@ -472,8 +489,8 @@ def test_regrade_empty_trace_uses_stored_configuration(monkeypatch):
     assert runner.regrade(document, corpus)["grades"][0]["local_completion"] is None
 
 
-def test_local_latency_export_has_no_dangling_external_region(monkeypatch, tmp_path):
-    """RM25: an unused external region must not imply a configured endpoint."""
+def test_local_latency_export_has_no_external_endpoint(monkeypatch, tmp_path):
+    """RM25: a local-only latency export records no external endpoint or region."""
     from types import SimpleNamespace
 
     runner = load_script_module("latency_benchmark")
@@ -511,12 +528,128 @@ def test_local_latency_export_has_no_dangling_external_region(monkeypatch, tmp_p
         manifest=str(manifest),
         runtime_extra_args=(),
         external_base_url=None,
-        external_region="unused-region",
         seed=1,
         runs=1,
         timeout=1,
         out=str(tmp_path / "local-latency.json"),
     )
-    environment = runner.run_benchmark(args)["environment"]
-    assert environment["external_endpoint"] is None
-    assert environment["external_endpoint_region"] is None
+    document = runner.run_benchmark(args)
+    assert document["configuration"]["external"] is None
+    assert document["environment"]["external_endpoint"] is None
+    assert "external_endpoint_region" not in document["environment"]
+    assert "external_endpoint_region" not in document["design"]
+
+
+EXTERNAL_FLAGS = (
+    "--external-base-url",
+    "https://user:hidden-secret@api.example.invalid:8443/v1?key=hidden-secret",
+    "--external-model",
+    "remote-model",
+    "--external-context-limit",
+    "8192",
+    "--external-region",
+    "eu-west",
+)
+
+
+def test_configuration_label_names_the_external_endpoint(settings):
+    """RM25, RM26: local-only and local-plus-external runs carry different labels.
+
+    The label names the external model, the host, and the region, never a credential,
+    a path, or a query string from the base URL.
+    """
+    local = parse(settings).to_json_object()
+    mixed = parse(settings, *EXTERNAL_FLAGS).to_json_object()
+    assert local["external"] is None
+    assert mixed["external"] == {
+        "model": "remote-model",
+        "host": "api.example.invalid:8443",
+        "region": "eu-west",
+    }
+    assert "hidden-secret" not in json.dumps(mixed)
+    assert settings.label_report("# Test\n", local) != settings.label_report("# Test\n", mixed)
+    unlabeled = parse(settings, *EXTERNAL_FLAGS[:6]).to_json_object()
+    assert unlabeled["external"]["region"] is None
+
+
+def test_corpus_label_drops_an_endpoint_it_cannot_call(monkeypatch, tmp_path):
+    """RM25: without the credential no gateway gets the endpoint, so the label has none."""
+    runner = load_script_module("run_corpus")
+    monkeypatch.delenv(runner.harness.EXTERNAL_KEY_ENV, raising=False)
+
+    class FakeRuntime:
+        def launch(self, log):
+            return object(), "http://127.0.0.1:1", 0.0
+
+        def server_record(self, cold_start):
+            return {}
+
+        def model_record(self):
+            return {}
+
+        banner = "test runtime"
+
+    def run_one(case, mode, **options):
+        assert options["external"] is None
+        assert options["configuration"].external is None
+        record = dict(
+            run_id=None, state="error", error_code=None, reason_code=None, timed_out=False
+        )
+        return runner.grade_record(case, mode, record, [], None), record, []
+
+    monkeypatch.setattr(runner.harness, "check_runtime", lambda *args, **kwargs: FakeRuntime())
+    monkeypatch.setattr(runner.harness, "application_revision", lambda: {})
+    monkeypatch.setattr(runner.harness, "_stop", lambda process: None)
+    monkeypatch.setattr(runner, "machine_manifest", lambda: {})
+    monkeypatch.setattr(runner, "runtime_devices", lambda: None)
+    monkeypatch.setattr(runner, "_run_one", run_one)
+    args = argparse.Namespace(
+        performance=[],
+        budgets=[],
+        selection_chain=None,
+        no_local_model=False,
+        external_base_url="https://example.invalid/v1",
+        external_model="model",
+        external_context_limit=8192,
+        external_region="eu-west",
+        cases=["simple-01"],
+        languages=None,
+        modes=["auto", "local_only"],
+        manifest="m.json",
+        runtime_extra_args=(),
+        out=str(tmp_path / "out.json"),
+    )
+    document = runner.run_corpus(args)
+    assert document["configuration"]["external"] is None
+    assert document["external_endpoint"] is None
+    assert "auto" in document["selection"]["not_run"]
+
+
+@pytest.mark.parametrize("runner_name", ["run_corpus", "latency_benchmark"])
+def test_runtime_value_error_is_not_reported_as_usage(runner_name, monkeypatch, tmp_path):
+    """RM25: a failure while running keeps its traceback; it is not a usage error."""
+    runner = load_script_module(runner_name)
+
+    def fail(args):
+        raise ValueError("gateway did not start")
+
+    monkeypatch.setattr(
+        runner, "run_corpus" if runner_name == "run_corpus" else "run_benchmark", fail
+    )
+    with pytest.raises(ValueError, match="gateway did not start"):
+        runner.main(["--out", str(tmp_path / "out.json")])
+
+
+@pytest.mark.parametrize("runner_name", ["run_corpus", "latency_benchmark"])
+@pytest.mark.parametrize(
+    "arguments", [["--performance", "prefetch=1"], ["--external-region", "eu-west"]]
+)
+def test_configuration_errors_are_usage_errors_before_launch(
+    runner_name, arguments, monkeypatch, tmp_path
+):
+    """RM25: an invalid configuration exits with a usage error before anything starts."""
+    runner = load_script_module(runner_name)
+    monkeypatch.setattr(runner.harness, "check_runtime", lambda *args, **kwargs: pytest.fail())
+    with pytest.raises(SystemExit) as exc:
+        runner.main(["--out", str(tmp_path / "out.json"), *arguments])
+    assert exc.value.code == 2
