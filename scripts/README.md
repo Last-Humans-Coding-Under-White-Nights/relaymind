@@ -535,6 +535,44 @@ against its configuration. Legacy missing accepted local-model identity may use
 actual local calls; an explicit conflicting identity cannot use that fallback.
 
 
+### Recovering a finalized cell with a separate controller
+
+Both matrix scripts accept `--measurement-root PATH` (spec 14.4.5, RM16/RM17/RM25).
+Run the reviewed controller script from its own clean checkout and select the
+original clean measurement checkout explicitly. Runner/configuration/package
+imports and inference subprocesses use the measurement checkout; M7's shared
+reconciliation helper stays in the controller checkout. Its separately declared
+criteria checkout and revision still identify C6. Use the original interpreter
+path so recorded runner argv remains exact.
+
+`--reconcile-only` validates existing checkpoints, exports, source/configuration,
+cost and priors without reading provider credentials or starting a model. It is
+mutually exclusive with `--execute` and refuses `--restart`/`--provider-env`.
+Only retained finalized cells are recovered; unstarted cells stay unstarted and
+partial or stale evidence is refused. For example:
+
+```bash
+/path/to/original/python /path/to/controller/scripts/run_m8_matrix.py \
+  --measurement-root /path/to/frozen-measurement \
+  --out /path/to/existing-matrix --runtime /path/to/pinned/llama-server \
+  --reconcile-only
+```
+
+The controller compares expected exported identity using the runners' existing
+`<repo>`/`<work>` JSON serialization; raw checkpoint/source identity and artifact
+bytes remain unchanged. The index retains a separate `controller_history` with
+controller commit/script hashes, measured import paths, measurement identity,
+original artifact digests and recovery time. Before recovery updates the index,
+`controller-before-<sha256>.json` preserves its exact previous bytes, including
+interrupted status and coordinator-failure timestamps. Later resumes verify this
+snapshot and controller identity. Missing retained cost evidence is refused.
+
+After reviewing reconciliation, resume with the same controller, measurement root,
+output/runtime and original provider settings using `--execute`. Completed cells
+are skipped. Keep the same M7 revision, criteria checkout/revision and reuse-index
+arguments when reconciling or resuming M7. The fixed plans, counts and budgets do
+not change; do not rename a completed calibration as a new attempt.
+
 ### M7 metric completion and fixed experiment matrix
 
 `run_m7_matrix.py` plans the #128 experiments without reading credentials or

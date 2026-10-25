@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Matrix controller recovery (#128, #134; RM16, RM17, RM25): explicit immutable
+  measurement roots, exact corpus/latency export normalization, credential-free
+  finalized-cell reconciliation, original-index snapshots and separate controller
+  provenance. M7 exact unseeded C0/C5 reuse retains the same validation and costs.
+
 - Specification 0.44 defines separate reviewed matrix controllers and immutable
   measurement checkouts, exact serialized export identity, durable recovery
   provenance and credential-free finalized-cell reconciliation for M7/M8

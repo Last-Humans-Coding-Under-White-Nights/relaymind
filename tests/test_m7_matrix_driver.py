@@ -151,6 +151,9 @@ def lifecycle(tmp_path, monkeypatch):
     cell = {**cell, "requests": 2}
     plan = {**d.make_plan("a" * 40, omit_criteria=True), "cells": [cell], "run_order": [cell["id"]]}
     monkeypatch.setattr(d, "make_plan", lambda *a, **kw: plan)
+    monkeypatch.setattr(
+        d, "controller_record", lambda *a: {"head": "offline-controller", "dirty": False}
+    )
     source = {"head": "a" * 40, "dirty": False}
     monkeypatch.setattr(d, "measured_source", lambda _: source)
     env = {

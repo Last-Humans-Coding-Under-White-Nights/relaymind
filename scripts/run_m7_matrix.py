@@ -8,17 +8,27 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "scripts"))
-from evaluation_config import configuration_from_args  # noqa: E402
-from run_m8_matrix import (  # noqa: E402
-    PINNED_RUNTIME,
-    attempt_cost,
-    declare_restart,
-    provider_environment,
-    reconcile_attempt,
+CONTROLLER_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(CONTROLLER_ROOT / "scripts"))
+from matrix_controller import (  # noqa: E402
+    controller_module,
+    controller_record,
+    measurement_root,
+    offline_provider,
+    publish_index,
+    record_controller,
+    retained_artifacts,
 )
+
+ROOT = measurement_root(CONTROLLER_ROOT)
+from evaluation_config import configuration_from_args  # noqa: E402
+
+_shared = controller_module("run_m8_matrix")
+PINNED_RUNTIME = _shared.PINNED_RUNTIME
+attempt_cost = _shared.attempt_cost
+declare_restart = _shared.declare_restart
+provider_environment = _shared.provider_environment
+reconcile_attempt = _shared.reconcile_attempt
 
 from relaymind.canonical import canonical_digest  # noqa: E402
 from relaymind.evaluation.checkpoint import atomic_json, utc_now  # noqa: E402
@@ -235,6 +245,8 @@ def reuse_attempt(cell: dict, foreign_index: Path, expected: dict) -> dict:
     attempts = foreign["attempts"].get(name, [])
     if not attempts:
         raise ValueError("reuse has no completed source attempt")
+    if foreign["identity"]["source"] != expected["source"]:
+        raise ValueError("reuse measurement source identity differs")
     original = attempts[-1]
     directory = foreign_index.parent / name / original["name"]
     checkpoint = json.loads((directory / "checkpoint.json").read_text(encoding="utf-8"))
@@ -242,7 +254,7 @@ def reuse_attempt(cell: dict, foreign_index: Path, expected: dict) -> dict:
     actual = {
         **expected,
         "source": checkpoint["identity"]["application"],
-        "configuration": doc["configuration"],
+        "configuration": checkpoint["identity"]["configuration"],
         "timing_prior": doc.get("timing_prior"),
         "runtime_sha256": foreign["identity"]["runtime_sha256"],
         "provider": foreign["identity"]["provider"],
@@ -280,6 +292,8 @@ def reuse_attempt(cell: dict, foreign_index: Path, expected: dict) -> dict:
     for old in attempts:
         old_dir = foreign_index.parent / name / old["name"]
         reconcile_attempt(old, cell, old_dir, old["argv"], expected["source"])
+    if any(a["status"] == "complete" for a in attempts[:-1]):
+        raise ValueError("reuse source has more than one finalized attempt")
     if original["status"] != "complete":
         raise ValueError("reuse requires a finalized source checkpoint")
     return dict(
@@ -310,9 +324,16 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--runtime", type=Path, default=Path(PINNED_RUNTIME))
     parser.add_argument("--provider-env", type=Path)
     parser.add_argument("--reuse-m8-index", type=Path)
-    parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--measurement-root", type=Path, default=ROOT)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--execute", action="store_true")
+    mode.add_argument("--reconcile-only", action="store_true")
     parser.add_argument("--restart", metavar="CELL=ATTEMPT")
     args = parser.parse_args(argv)
+    if args.measurement_root.resolve() != ROOT:
+        raise ValueError("measurement root must be selected before importing the controller")
+    if args.reconcile_only and (args.restart or args.provider_env):
+        raise ValueError("reconcile-only forbids restart and provider environment")
     plan = make_plan(args.revision, args.criteria_revision, omit_criteria=args.omit_criteria)
     out = args.out.resolve()
     if out == ROOT or ROOT in out.parents:
@@ -321,8 +342,11 @@ def main(argv: list[str] | None = None) -> None:
     plan_path = out / "plan.json"
     if plan_path.exists() and json.loads(plan_path.read_text(encoding="utf-8")) != plan:
         raise ValueError("matrix plan differs")
-    atomic_json(plan_path, plan)
-    if not args.execute:
+    if args.reconcile_only and not plan_path.exists():
+        raise ValueError("reconciliation requires an existing plan")
+    if not plan_path.exists():
+        atomic_json(plan_path, plan)
+    if not (args.execute or args.reconcile_only):
         print(
             f"Offline M7 plan: {len(plan['cells'])} cells, {plan['corpus_runs']} corpus runs, "
             "248 latency requests; no inference."
@@ -344,7 +368,15 @@ def main(argv: list[str] | None = None) -> None:
             raise ValueError("execution requires each reviewed clean committed revision")
     if args.runtime.name not in ("llama-server", "llama-server.exe") or not args.runtime.is_file():
         raise ValueError("pinned runtime executable missing")
-    env = provider_environment(args.provider_env)
+    index_path = out / "index.json"
+    retained = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else None
+    if args.reconcile_only and retained is None:
+        raise ValueError("reconciliation requires an existing index")
+    env = (
+        offline_provider(retained)
+        if args.reconcile_only
+        else provider_environment(args.provider_env)
+    )
     env["PATH"] = str(args.runtime.resolve().parent) + os.pathsep + env.get("PATH", "")
     provider = {k: env[k] for k in ("RELAYMIND_EXTERNAL_BASE_URL", "RELAYMIND_EXTERNAL_MODEL")}
     identity = dict(
@@ -357,14 +389,12 @@ def main(argv: list[str] | None = None) -> None:
         fixtures_sha256=fixture_digest(ROOT),
         reuse_m8_index=str(args.reuse_m8_index.resolve()) if args.reuse_m8_index else None,
     )
-    index_path = out / "index.json"
-    index = (
-        json.loads(index_path.read_text(encoding="utf-8"))
-        if index_path.exists()
-        else dict(identity=identity, attempts={})
-    )
+    index = retained if retained is not None else dict(identity=identity, attempts={})
     if index["identity"] != identity:
         raise ValueError("matrix source/runtime/provider/settings identity differs")
+    record_controller(
+        index, controller_record(CONTROLLER_ROOT, ROOT), index_path, retained_artifacts(index, out)
+    )
     restart = args.restart.split("=", 1) if args.restart else None
     if restart and (
         len(restart) != 2
@@ -375,6 +405,8 @@ def main(argv: list[str] | None = None) -> None:
     for cell in plan["cells"]:
         root = roots[cell["id"]]
         source = sources[str(root)]
+        if args.reconcile_only and not index["attempts"].get(cell["id"]):
+            continue
         attempts = index["attempts"].setdefault(cell["id"], [])
         if args.reuse_m8_index and cell["id"] in ("M7-C0", "M7-C5"):
             import run_corpus
@@ -392,7 +424,8 @@ def main(argv: list[str] | None = None) -> None:
             if attempts and attempts != [reused]:
                 raise ValueError("reuse identity differs from retained attempt")
             index["attempts"][cell["id"]] = [reused]
-            atomic_json(index_path, index)
+            if not args.reconcile_only:
+                publish_index(index_path, index, atomic_json)
             continue
         for old in attempts:
             directory = out / cell["id"] / old["name"]
@@ -401,11 +434,14 @@ def main(argv: list[str] | None = None) -> None:
                     old, cell, directory, command(cell, directory, env, root=root), source
                 )
             finally:
-                atomic_json(index_path, index)
+                if not args.reconcile_only:
+                    publish_index(index_path, index, atomic_json)
         if any(a["status"] == "complete" for a in attempts[:-1]):
             raise ValueError("prior attempt already finalized cell")
         if attempts and attempts[-1]["status"] == "complete":
             continue
+        if args.reconcile_only:
+            raise ValueError("unfinished cell requires explicit restart, not reconciliation")
         if attempts and not (restart and restart[0] == cell["id"]):
             raise ValueError("interrupted cell requires explicit --restart CELL=NEW_ATTEMPT")
         name = restart[1] if restart and restart[0] == cell["id"] else "initial"
@@ -416,7 +452,7 @@ def main(argv: list[str] | None = None) -> None:
         attempt.update(
             argv=child_argv, prior_sha256=None, status="started", started_at_utc=utc_now()
         )
-        atomic_json(index_path, index)
+        publish_index(index_path, index, atomic_json)
         try:
             with (directory / "runner.log").open("wb") as log:
                 result = subprocess.run(
@@ -438,7 +474,10 @@ def main(argv: list[str] | None = None) -> None:
                 attempt.update(status="interrupted", finished_at_utc=utc_now())
             raise
         finally:
-            atomic_json(index_path, index)
+            publish_index(index_path, index, atomic_json)
+    if args.reconcile_only:
+        publish_index(index_path, index, atomic_json)
+        print("Reconciled retained finalized cells; no credentials read or inference started.")
 
 
 if __name__ == "__main__":

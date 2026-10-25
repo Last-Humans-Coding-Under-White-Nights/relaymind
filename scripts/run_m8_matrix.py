@@ -8,12 +8,23 @@ import shlex
 import sqlite3
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "scripts"))
+CONTROLLER_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(CONTROLLER_ROOT / "scripts"))
+from matrix_controller import (  # noqa: E402
+    controller_record,
+    exported_identity,
+    measurement_root,
+    offline_provider,
+    publish_index,
+    record_controller,
+    retained_artifacts,
+)
+
+ROOT = measurement_root(CONTROLLER_ROOT)
 from evaluation_config import configuration_from_args  # noqa: E402
 from evaluation_session import prerequisites  # noqa: E402
 
@@ -112,7 +123,7 @@ def provider_environment(path: Path | None) -> dict[str, str]:
     return env
 
 
-def freeze_prior(export: Path, out: Path) -> None:
+def calibration_prior(export: Path, out: Path) -> dict:
     document = json.loads(export.read_text("utf-8"))
     run_ids = [r["run_id"] for r in document["records"].values() if r.get("run_id") is not None]
     bundle = {
@@ -133,13 +144,24 @@ def freeze_prior(export: Path, out: Path) -> None:
         ],
     }
     if out.exists():
-        if json.loads(out.read_text()) != bundle:
+        if json.loads(out.read_text(encoding="utf-8")) != bundle:
             raise ValueError("frozen prior source changed")
-    else:
+    # Validate before publishing; use absolute sources in a disposable validation bundle.
+    validation = json.loads(json.dumps(bundle))
+    validation["partitions"][0]["sources"][0]["file"] = str(export.resolve())
+    with tempfile.TemporaryDirectory(prefix="relaymind-prior-validation-") as temporary:
+        path = Path(temporary) / "prior.json"
+        atomic_json(path, validation)
+        prior = load_prior(path, document["prior_configuration"])
+        with RunStore(":memory:") as store:
+            prior.seed(store)
+    return bundle
+
+
+def freeze_prior(export: Path, out: Path) -> None:
+    bundle = calibration_prior(export, out)
+    if not out.exists():
         atomic_json(out, bundle)
-    prior = load_prior(out, document["prior_configuration"])
-    with RunStore(":memory:") as store:
-        prior.seed(store)
 
 
 def command(cell: dict, attempt_dir: Path, out: Path, env: dict, runtime: Path) -> list[str]:
@@ -231,7 +253,19 @@ def reconcile_attempt(
 ) -> None:
     """Reconcile durable runner completion before considering another measured attempt."""
     # Read cost even if the prior process died before running an exception handler.
-    attempt["cost"] = attempt_cost(directory)
+    recovered = attempt_cost(directory)
+    previous = attempt.get("cost")
+    if previous is not None:
+        if recovered["unreadable_databases"] or recovered["calls"] < previous["calls"]:
+            raise ValueError("retained attempt cost evidence is missing or unreadable")
+        for token in ("input_tokens", "output_tokens"):
+            if (
+                recovered[token + "_known_total"] < previous[token + "_known_total"]
+                or recovered["calls"] - recovered[token + "_missing_calls"]
+                < previous["calls"] - previous[token + "_missing_calls"]
+            ):
+                raise ValueError("retained attempt cost evidence decreased")
+    attempt["cost"] = recovered
     if attempt.get("argv") != expected_argv:
         raise ValueError("attempt command identity differs")
     checkpoint_path = directory / "checkpoint.json"
@@ -240,6 +274,18 @@ def reconcile_attempt(
             raise ValueError("completed cell checkpoint missing")
         attempt["status"] = "interrupted"
         return
+    runner_name = "run_corpus" if cell["runner"] == "corpus" else "latency_benchmark"
+    script = Path(expected_argv[1]).resolve()
+    if (
+        expected_argv[0] != sys.executable
+        or script.name != runner_name + ".py"
+        or (
+            source.get("package_path") is not None
+            and Path(source["package_path"]).resolve()
+            != script.parent.parent / "src/relaymind/__init__.py"
+        )
+    ):
+        raise ValueError("runner command source identity differs")
     checkpoint = json.loads(checkpoint_path.read_text("utf-8"))
     runner = importlib.import_module(
         "run_corpus" if cell["runner"] == "corpus" else "latency_benchmark"
@@ -302,11 +348,21 @@ def reconcile_attempt(
         if cell["runner"] == "corpus"
         else document.get("environment", {}).get("application")
     )
+    expected = exported_identity(
+        dict(
+            application=source,
+            configuration=exported_configuration,
+            prior_configuration=identity["prior_configuration"],
+            timing_prior=exported_prior,
+        ),
+        root=Path(expected_argv[1]).resolve().parent.parent,
+        work=checkpoint_path.with_suffix(".work"),
+    )
     if (
-        application != source
-        or document.get("configuration") != exported_configuration
-        or document.get("prior_configuration") != identity["prior_configuration"]
-        or document.get("timing_prior") != exported_prior
+        application != expected["application"]
+        or document.get("configuration") != expected["configuration"]
+        or document.get("prior_configuration") != expected["prior_configuration"]
+        or document.get("timing_prior") != expected["timing_prior"]
     ):
         raise ValueError("finalized runner export identity differs")
     count = (
@@ -330,9 +386,16 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--runtime", type=Path, default=Path(PINNED_RUNTIME))
     parser.add_argument("--provider-env", type=Path)
-    parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--measurement-root", type=Path, default=ROOT)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--execute", action="store_true")
+    mode.add_argument("--reconcile-only", action="store_true")
     parser.add_argument("--restart", metavar="CELL=ATTEMPT")
     args = parser.parse_args(argv)
+    if args.measurement_root.resolve() != ROOT:
+        raise ValueError("measurement root must be selected before importing the controller")
+    if args.reconcile_only and (args.restart or args.provider_env):
+        raise ValueError("reconcile-only forbids restart and provider environment")
     cells = matrix_cells()
     out = args.out.resolve()
     if out == ROOT or ROOT in out.parents:
@@ -349,10 +412,13 @@ def main(argv: list[str] | None = None) -> None:
         defaults_changed=False,
     )
     plan_path = out / "plan.json"
-    if plan_path.exists() and json.loads(plan_path.read_text()) != plan:
+    if plan_path.exists() and json.loads(plan_path.read_text(encoding="utf-8")) != plan:
         raise ValueError("matrix plan differs")
-    atomic_json(plan_path, plan)
-    if not args.execute:
+    if args.reconcile_only and not plan_path.exists():
+        raise ValueError("reconciliation requires an existing plan")
+    if not plan_path.exists():
+        atomic_json(plan_path, plan)
+    if not (args.execute or args.reconcile_only):
         print(
             f"Offline plan: {len(cells)} cells; 2548 corpus runs; "
             "1736 latency requests. No inference started."
@@ -365,7 +431,15 @@ def main(argv: list[str] | None = None) -> None:
         raise ValueError("runtime must name the llama-server executable selected through PATH")
     if not args.runtime.is_file():
         raise ValueError("pinned runtime binary missing")
-    env = provider_environment(args.provider_env)
+    index_path = out / "index.json"
+    retained = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else None
+    if args.reconcile_only and retained is None:
+        raise ValueError("reconciliation requires an existing index")
+    env = (
+        offline_provider(retained)
+        if args.reconcile_only
+        else provider_environment(args.provider_env)
+    )
     env["PATH"] = str(args.runtime.parent) + os.pathsep + env.get("PATH", "")
     identity = dict(
         source=source,
@@ -375,14 +449,48 @@ def main(argv: list[str] | None = None) -> None:
         context_limit=128000,
         plan_sha256=canonical_digest(plan),
     )
-    index_path = out / "index.json"
-    index = (
-        json.loads(index_path.read_text())
-        if index_path.exists()
-        else dict(identity=identity, attempts={})
-    )
+    index = retained if retained is not None else dict(identity=identity, attempts={})
     if index["identity"] != identity:
         raise ValueError("matrix source/runtime/provider/settings identity differs")
+    record_controller(
+        index, controller_record(CONTROLLER_ROOT, ROOT), index_path, retained_artifacts(index, out)
+    )
+    if args.reconcile_only:
+        priors = []
+        for cell in cells:
+            attempts = index["attempts"].get(cell["id"], [])
+            if not attempts:
+                continue
+            prior_path = out / ("prior-" + cell["configuration"] + ".json")
+            prior_digest = (
+                byte_digest(prior_path)
+                if cell["phase"] != "calibration" and cell["configuration"] != "none"
+                else None
+            )
+            if any(a.get("prior_sha256") != prior_digest for a in attempts):
+                raise ValueError("cell prior digest differs")
+            for attempt in attempts:
+                directory = out / cell["id"] / attempt["name"]
+                reconcile_attempt(
+                    attempt,
+                    cell,
+                    directory,
+                    command(cell, directory, out, env, args.runtime),
+                    source,
+                )
+            if attempts[-1]["status"] != "complete":
+                raise ValueError("unfinished cell requires explicit restart, not reconciliation")
+            if any(a["status"] == "complete" for a in attempts[:-1]):
+                raise ValueError("a prior attempt already finalized this cell")
+            if cell["phase"] == "calibration":
+                export = out / cell["id"] / attempts[-1]["name"] / "export.json"
+                priors.append((prior_path, calibration_prior(export, prior_path)))
+        for path, bundle in priors:
+            if not path.exists():
+                atomic_json(path, bundle)
+        publish_index(index_path, index, atomic_json)
+        print("Reconciled retained finalized cells; no credentials read or inference started.")
+        return
     restart = None
     if args.restart:
         restart = args.restart.split("=", 1)
@@ -410,7 +518,7 @@ def main(argv: list[str] | None = None) -> None:
                 )
             finally:
                 # Recovery costs survive even a later refusal to resume or an identity error.
-                atomic_json(index_path, index)
+                publish_index(index_path, index, atomic_json)
         if any(a["status"] == "complete" for a in attempts[:-1]):
             raise ValueError("a prior attempt already finalized this cell")
         if attempts and attempts[-1]["status"] == "complete":
@@ -433,7 +541,7 @@ def main(argv: list[str] | None = None) -> None:
         attempt.update(
             argv=argv, prior_sha256=prior_digest, status="started", started_at_utc=utc_now()
         )
-        atomic_json(index_path, index)
+        publish_index(index_path, index, atomic_json)
         print(cell["id"] + " " + name, flush=True)
         try:
             with (attempt_dir / "runner.log").open("wb") as log:
@@ -446,14 +554,14 @@ def main(argv: list[str] | None = None) -> None:
             reconcile_attempt(attempt, cell, attempt_dir, argv, source)
             if attempt["status"] != "complete":
                 raise ValueError("runner returned without a finalized checkpoint")
-            atomic_json(index_path, index)
+            publish_index(index_path, index, atomic_json)
             if cell["phase"] == "calibration":
                 freeze_prior(export, out / ("prior-" + cell["configuration"] + ".json"))
         except BaseException:
             attempt["cost"] = attempt_cost(attempt_dir)
             if attempt["status"] != "complete":
                 attempt.update(status="interrupted", finished_at_utc=utc_now())
-            atomic_json(index_path, index)
+            publish_index(index_path, index, atomic_json)
             raise
     print("Matrix exports complete; analysis/default decisions still require review.")
 
