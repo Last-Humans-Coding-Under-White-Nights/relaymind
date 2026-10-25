@@ -904,7 +904,9 @@ feature has a test of the default as well. Later pull requests append here.
   size cap, unknown versus empty claims, admission, redaction, timeout, gateway
   budget precedence and cancellation. The actual stdlib example script is started
   on an ephemeral port. Clients close per attempt and remain usable across
-  separate event loops.
+  separate event loops. `tests/test_launcher.py` checks that a non-loopback or
+  https selector URL stops `relaymind serve` with one message, before a socket and
+  without echoing the URL.
 
   Corpus and latency exports classify HTTP-attempted, gateway-observed and historical
   unknown provenance, including their Markdown reports; a run that reached no selector
