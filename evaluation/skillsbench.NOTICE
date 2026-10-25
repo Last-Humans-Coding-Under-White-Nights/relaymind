@@ -1,0 +1,6 @@
+SkillsBench selection benchmark
+Derived from https://github.com/benchflow-ai/skillsbench
+Registry commit: f860ecf02ef53412a030f8661c83d644b739ff01
+Task commit: b63b7b2850226b6aa4fb5929a8c1ac7bc4d9a6af
+Copyright: SkillsBench contributors. Licensed under Apache-2.0.
+RelayMind modifications: task bodies and skill metadata extracted; skill names deduplicated in registry order; leave-one-task-out examples and hashes added.

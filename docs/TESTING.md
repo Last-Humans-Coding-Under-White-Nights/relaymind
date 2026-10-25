@@ -845,6 +845,19 @@ feature has a test of the default as well. Later pull requests append here.
   class forbids, and `tests/test_trace_event.py -k local_model_fields`
   checks the new optional fields in the validator and the published schema
   alike.
+- `pytest tests/test_selection_benchmark.py tests/test_selection_benchmark_review.py`
+  (#143, #144; RM02, RM08, RM09, RM25, RM28, section 12.4): the selection
+  benchmarks. They cover frozen digests, set scoring and macro/micro
+  summaries, leave-one-task-out examples, router catalog caps and context
+  bypasses, both source tool schema styles, collision suffixes that do not
+  depend on which candidate is positive, seeded candidate presentation, inert
+  handlers, loopback HTTP selectors, proposal validation and schema validity
+  (only `unknown_tool` and `invalid_arguments` count against it), failed and
+  abstaining narrowing arms, call-budget scoring, and source derivation with
+  lock and archive digest checks. ToolRet fixture rows are synthetic; no
+  download or model call is needed in the default test suite. Real benchmark
+  commands and the optional `bench` extra are described in
+  [`scripts/README.md`](../scripts/README.md).
 
 ### What is not covered yet
 
@@ -897,10 +910,13 @@ feature has a test of the default as well. Later pull requests append here.
   issues in [`ROADMAP.md`](ROADMAP.md) carry the tests. The offline
   spikes (#115, #118, #119) and the timing probes (#114, #116, #117) test
   their own scripts, not the gateway.
-- The selection benchmarks of spec section 12.4 (skills from
-  SkillsBench, tools from ToolRet-Training-20w, workflow plans) do not
-  exist yet (#143 to #145). Until they run, no claim is made about
-  which selector is better outside the six-skill ops corpus.
+- The skill and tool selection benchmarks of spec section 12.4 are
+  implemented (#143, #144), with frozen SkillsBench/ToolRet inputs and
+  [recorded Apple M1 comparisons](EVIDENCE.md#2026-10-23--m7-skill-and-tool-selection-benchmarks-apple-m1).
+  These source-domain measurements use the documented catalog caps and
+  do not replace the ops correctness corpus. The built-in selectors do
+  not produce strict nonempty tool subsets, so these runs do not establish
+  a narrowing benefit. Workflow-plan evaluation remains pending (#145).
 
 ### Required trace events (RM16, RM22, RM25)
 

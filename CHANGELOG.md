@@ -18,6 +18,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   routing call). The shell keeps the local model, its status and reason, the
   placement policy, the answer pass, and the answer stream on screen. Workflow
   steps have a labeled placeholder pending #138.
+- Reproducible selection benchmarks (#143, #144; RM02, RM08, RM09, RM25,
+  RM28, section 12.4): pinned SkillsBench derivation and attribution, a
+  digest-locked skill catalog with leave-one-task-out examples, and a pinned
+  ToolRet sample lock with no dataset rows checked in. The runner compares
+  built-in and loopback HTTP selectors, exports per-case diagnostics and
+  macro/micro precision, recall and Jaccard, and evaluates full versus
+  narrowed tool proposals without executing any tool. Tool candidates are
+  shuffled reproducibly so their presentation does not reveal positives.
+  Parquet derivation uses the optional `bench` dependency extra.
+  Recorded Apple M1 runs cover 87 skill cases, 500 local tool cases in both
+  arms, and 100 external tool cases in both arms. The evidence keeps errors
+  and timeouts, distinguishes abstention from narrowing, and changes no defaults.
 - Operation without a usable local model (#126; AC20, RM01, RM05, RM11,
   RM21, RM26, RM28, RM29, spec 0.37 sections 7.4, 8, 11, and 14.1). The
   `[local_model]` table is optional: without it `allowed_modes` defaults to
@@ -230,6 +242,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.37 → 0.37.1 (RM03, RM09, RM25, RM28; section 12.4):
+  a first generation exceeding its call budget receives no set-score credit
+  while preserving raw proposals, usage and independent schema validity. A failed
+  narrowing arm records its failure without model work and stays in the denominator;
+  valid abstentions retain the empty-set experiment. Ordinary schema-invalid names
+  retain their existing independent name metrics. Colliding ToolRet tool names
+  get suffixes in declaration-digest order, so a plain name no longer marks the
+  positive: `evaluation/tools.v2.lock.json` (the same 500 rows; 5 case digests
+  differ) is the default, and `tools.v1.lock.json` stays only to reproduce the
+  recorded runs.
+
 - RouteDecision and HandoffEnvelope accept the reason codes
   `selection_failed`, `no_local_model`, and `local_slow` under schema version
   1, and the RouteDecision validator and schema now check that the reason
@@ -412,6 +435,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and `docs/RELEASE.md`.
 
 ### Fixed
+
+- Selection benchmark review (RM03, RM09, RM16, RM25, RM28): clear stale
+  diagnostics before early bypasses, classify HTTP timeouts, preserve failed
+  narrowed arms without inference, and remove score credit for generations
+  exceeding their call budget while retaining proposal evidence. Export distinct
+  HTTP response identity claims, reject skills proposal options before work,
+  share the persistent ToolRet cache, and enforce source/case locks without
+  changing the frozen files or historical measurement exports. Count only
+  `unknown_tool` and `invalid_arguments` against proposal schema validity,
+  check SkillsBench archives against the lock digests in a per-user cache, and
+  pin `docs/evidence/*.json` to LF line endings.
 
 - Correct the skill guide's workflow-key description, repair the testing
   guide's README link, and install the client SDK before the Python

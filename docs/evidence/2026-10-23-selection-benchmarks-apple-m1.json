@@ -1,0 +1,1525 @@
+{
+  "schema_version": 1,
+  "kind": "relaymind.selection_benchmark_aggregate",
+  "created_at": "2026-10-23T16:12:28.276254+00:00",
+  "source_domain": "SkillsBench office/coding tasks; ToolRet web APIs. Separate from the ops correctness corpus.",
+  "measurement_revision": "749e40f797da047d3180baf587748e9920800d16",
+  "runtime": {
+    "version": "0.7.0-dev (build 11785, commit 8baabd53b)",
+    "local_model": "qwen3-0.6b",
+    "quantization": "Q8_0",
+    "artifact_sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+    "launch_arguments": [
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "8033",
+      "--ctx-size",
+      "8192",
+      "--jinja",
+      "--reasoning",
+      "off",
+      "--reasoning-format",
+      "deepseek"
+    ],
+    "logged_threads": 4,
+    "logged_slots": 4,
+    "logged_context_per_slot": 8192,
+    "cache_condition": "Reused warmed runtime with earlier exploratory activity; no cold-start claim.",
+    "device_note": "Machine reports Apple M1 GPU; benchmark report does not separately export actual device placement."
+  },
+  "source": {
+    "skills_registry_commit": "f860ecf02ef53412a030f8661c83d644b739ff01",
+    "skills_task_commit": "b63b7b2850226b6aa4fb5929a8c1ac7bc4d9a6af",
+    "skills_cases": 87,
+    "skills_catalog": 195,
+    "toolret_revision": "fdf5a317455b1e60785de7ba587496aa6cc878e4",
+    "toolret_sampling_seed": 20261023,
+    "toolret_population": 208826,
+    "toolret_stratum_quotas": [
+      167,
+      167,
+      166
+    ]
+  },
+  "overlap": {
+    "tools_local_started_at_utc": "2026-10-23T15:16:45Z",
+    "tools_external_started_at_utc": "2026-10-23T15:18:22Z",
+    "tools_local_finished_at_utc": "2026-10-23T15:59:54.383305+00:00",
+    "tools_external_finished_at_utc": "2026-10-23T16:05:44.556198+00:00",
+    "timestamp_note": "Start times were observed immediately after launching each command; finish times are report creation timestamps, not per-request latency measurements.",
+    "description": "ToolRet local and external passes overlapped. Local GPU inference had one benchmark client; external requests and development activity could contend for CPU, memory or network. Timings are observations under that workload."
+  },
+  "caveats": [
+    "No ToolRet source rows, instructions, requests, tool names, or candidate metadata are redistributed in this aggregate.",
+    "All macro scores retain errors, timeouts and bypasses in the case denominator.",
+    "Generic none_rate is not populated by tool rows and is omitted here; selector outcomes and empty kept sets are recomputed from the recorded selections. Schema validity is omitted for selection-only arms.",
+    "The skill router saw at most eight expected-preserving skills; example_match saw the full 195-skill catalog.",
+    "Tool arguments were checked for schema validity, not semantic correctness; tool handlers never ran.",
+    "Built-in selectors do not produce strict nonempty tool subsets. These runs cannot establish a narrowing benefit.",
+    "Generation attempts count entries that reached the generation stage; this is not an independently instrumented provider request count.",
+    "Token totals include only provider/runtime-reported usage. Failed or cancelled calls can have unreported usage.",
+    "Source training status is unknown, not evidence that the datasets were held out.",
+    "Each blocking proposal operation has its configured timeout; token counting and generation are separately bounded.",
+    "Each case runs the full arm before the selector-returned arm. Order and prefix-cache effects are not separated.",
+    "External model defaults and provider load were uncontrolled; no monetary savings or general performance claim is made."
+  ],
+  "reports": [
+    {
+      "name": "skills-example",
+      "raw_report_sha256": "34aefd5ea23c0406dc945a7a041108ce00d59e1074282f8a99522f2827e75a3b",
+      "metadata": {
+        "track": "skills",
+        "created_at": "2026-10-23T15:11:34.390914+00:00",
+        "selector": {
+          "name": "example_match",
+          "version": "1",
+          "endpoint": null
+        },
+        "source_training": "unknown",
+        "seed": 42,
+        "machine": {
+          "os": "Darwin",
+          "os_version": "macOS 27.0.1",
+          "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+          "machine": "arm64",
+          "cpu": "Apple M1",
+          "cpu_count": 8,
+          "ram_bytes": 8589934592,
+          "gpu": [
+            {
+              "model": "Apple M1",
+              "cores": "7"
+            }
+          ],
+          "python": "3.14.7"
+        },
+        "application": {
+          "head": "749e40f797da047d3180baf587748e9920800d16",
+          "dirty": false
+        },
+        "implementation_files": {
+          "scripts/selection_benchmark.py": "1653ef4cfd72819f2b781c929e3780cd084e109cd92c78377c59edece2683acd",
+          "src/relaymind/evaluation/selection_benchmark.py": "c8fc7b192faafb89daf04a0bbdeaf933be9a11e9ddb0eed639e1ac75d6a433e5"
+        },
+        "configuration": {
+          "timeout_seconds": 2.0,
+          "context_limit": 4096,
+          "routing_input_tokens": 2048,
+          "routing_output_tokens": 128,
+          "calls_per_generation": "many",
+          "example_score": 0.5,
+          "example_margin": 0.1,
+          "proposal": "none"
+        },
+        "files": {
+          "skills.v1.json": "1e89686583aa2334c266bd0b6c26d22129d43a218885b7617e65f2b0bc8670c8",
+          "skills.v1.lock.json": "93b19cd289525d297a6ec0d6e4b19b2250cb17ce5f407a22526dc1347a7aa5ac"
+        },
+        "model": null
+      },
+      "sample_count": 87,
+      "sample_ids_sha256": "b1282639ac4036e4d7ac11191d1fe0fb547b136623e0aab86ce2ec89b0ac5dc3",
+      "results": {
+        "summary": {
+          "count": 87,
+          "macro": {
+            "precision": 0.04597701149425287,
+            "recall": 0.036398467432950186,
+            "jaccard": 0.036398467432950186
+          },
+          "micro": {
+            "precision": 0.8333333333333334,
+            "recall": 0.021551724137931036,
+            "jaccard": 0.02145922746781116
+          },
+          "none_rate": 0.9425287356321839,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.022988505747126436
+        },
+        "status_counts": {
+          "ok": 87
+        },
+        "micro_counts": {
+          "intersection": 5,
+          "predicted": 6,
+          "expected": 232,
+          "union": 233
+        },
+        "empty_predicted_cases": 82,
+        "latency_ms_all_outcomes": {
+          "n": 87,
+          "p50": 37.3146670171991,
+          "p95": 39.87591702025384,
+          "total": 3272.217619116418
+        },
+        "recorded_input_tokens": {
+          "n": 0,
+          "p50": null,
+          "p95": null,
+          "total": null
+        },
+        "usage": {
+          "input_tokens": {
+            "cases_with_reported_count": 0,
+            "total_reported": null,
+            "cases_without_reported_count": 87
+          },
+          "output_tokens": {
+            "cases_with_reported_count": 0,
+            "total_reported": null,
+            "cases_without_reported_count": 87
+          }
+        }
+      },
+      "by_category": {
+        "cybersecurity": {
+          "count": 7,
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "micro": {
+            "precision": 0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "none_rate": 1.0,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.0
+        },
+        "finance-economics": {
+          "count": 9,
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "micro": {
+            "precision": 0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "none_rate": 1.0,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.0
+        },
+        "industrial-physical-systems": {
+          "count": 14,
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "micro": {
+            "precision": 0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "none_rate": 1.0,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.0
+        },
+        "mathematics-or-formal-reasoning": {
+          "count": 8,
+          "macro": {
+            "precision": 0.25,
+            "recall": 0.25,
+            "jaccard": 0.25
+          },
+          "micro": {
+            "precision": 1.0,
+            "recall": 0.09090909090909091,
+            "jaccard": 0.09090909090909091
+          },
+          "none_rate": 0.75,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.25
+        },
+        "media-content-production": {
+          "count": 5,
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "micro": {
+            "precision": 0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "none_rate": 1.0,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.0
+        },
+        "natural-science": {
+          "count": 14,
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "micro": {
+            "precision": 0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "none_rate": 1.0,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.0
+        },
+        "office-white-collar": {
+          "count": 14,
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "micro": {
+            "precision": 0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "none_rate": 1.0,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.0
+        },
+        "software-engineering": {
+          "count": 16,
+          "macro": {
+            "precision": 0.125,
+            "recall": 0.07291666666666666,
+            "jaccard": 0.07291666666666666
+          },
+          "micro": {
+            "precision": 0.75,
+            "recall": 0.07142857142857142,
+            "jaccard": 0.06976744186046512
+          },
+          "none_rate": 0.8125,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.0
+        }
+      },
+      "by_difficulty": {
+        "easy": {
+          "count": 6,
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "micro": {
+            "precision": 0,
+            "recall": 0.0,
+            "jaccard": 0.0
+          },
+          "none_rate": 1.0,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.0
+        },
+        "hard": {
+          "count": 28,
+          "macro": {
+            "precision": 0.03571428571428571,
+            "recall": 0.023809523809523808,
+            "jaccard": 0.023809523809523808
+          },
+          "micro": {
+            "precision": 1.0,
+            "recall": 0.023809523809523808,
+            "jaccard": 0.023809523809523808
+          },
+          "none_rate": 0.9642857142857143,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.0
+        },
+        "medium": {
+          "count": 53,
+          "macro": {
+            "precision": 0.05660377358490566,
+            "recall": 0.04716981132075472,
+            "jaccard": 0.04716981132075472
+          },
+          "micro": {
+            "precision": 0.75,
+            "recall": 0.022222222222222223,
+            "jaccard": 0.022058823529411766
+          },
+          "none_rate": 0.9245283018867925,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.03773584905660377
+        }
+      }
+    },
+    {
+      "name": "skills-router",
+      "raw_report_sha256": "3f099edadf59a79a5a51c7d18e29ac8b900fd3d5a3ac13433dee32e71eb5d22a",
+      "metadata": {
+        "track": "skills",
+        "created_at": "2026-10-23T15:15:42.806613+00:00",
+        "selector": {
+          "name": "model_router",
+          "version": "1",
+          "endpoint": null
+        },
+        "source_training": "unknown",
+        "seed": 42,
+        "machine": {
+          "os": "Darwin",
+          "os_version": "macOS 27.0.1",
+          "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+          "machine": "arm64",
+          "cpu": "Apple M1",
+          "cpu_count": 8,
+          "ram_bytes": 8589934592,
+          "gpu": [
+            {
+              "model": "Apple M1",
+              "cores": "7"
+            }
+          ],
+          "python": "3.14.7"
+        },
+        "application": {
+          "head": "749e40f797da047d3180baf587748e9920800d16",
+          "dirty": false
+        },
+        "implementation_files": {
+          "scripts/selection_benchmark.py": "1653ef4cfd72819f2b781c929e3780cd084e109cd92c78377c59edece2683acd",
+          "src/relaymind/evaluation/selection_benchmark.py": "c8fc7b192faafb89daf04a0bbdeaf933be9a11e9ddb0eed639e1ac75d6a433e5"
+        },
+        "configuration": {
+          "timeout_seconds": 4.0,
+          "context_limit": 4096,
+          "routing_input_tokens": 2048,
+          "routing_output_tokens": 128,
+          "calls_per_generation": "many",
+          "example_score": 0.5,
+          "example_margin": 0.1,
+          "proposal": "none"
+        },
+        "files": {
+          "skills.v1.json": "1e89686583aa2334c266bd0b6c26d22129d43a218885b7617e65f2b0bc8670c8",
+          "skills.v1.lock.json": "93b19cd289525d297a6ec0d6e4b19b2250cb17ce5f407a22526dc1347a7aa5ac"
+        },
+        "model": {
+          "name": "qwen3-0.6b",
+          "endpoint": "http://127.0.0.1:8033",
+          "request_options": null,
+          "manifest": {
+            "schema_version": 1,
+            "model_id": "qwen3-0.6b",
+            "source_url": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF",
+            "source_revision": "23749fefcc72300e3a2ad315e1317431b06b590a",
+            "file_name": "Qwen3-0.6B-Q8_0.gguf",
+            "file_sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+            "quantization": "Q8_0",
+            "tokenizer_hash": "27b1fe636a04016514d2aa83b89792da06437beef1fcb9cfda669ddfd94b784d",
+            "chat_template_hash": "57f1fd00f0013a2be96aa79b857391f27e23df5b5f847072b524c897e24d0361",
+            "runtime": "llama.cpp",
+            "runtime_version": "0.7.0-dev (build 11785, commit 8baabd53b)",
+            "launch_settings": {
+              "ctx_size": 8192,
+              "jinja": true,
+              "reasoning": "off",
+              "reasoning_format": "deepseek"
+            },
+            "license": "Apache-2.0"
+          }
+        }
+      },
+      "sample_count": 87,
+      "sample_ids_sha256": "b1282639ac4036e4d7ac11191d1fe0fb547b136623e0aab86ce2ec89b0ac5dc3",
+      "results": {
+        "summary": {
+          "count": 87,
+          "macro": {
+            "precision": 0.6896551724137931,
+            "recall": 0.38689107827038854,
+            "jaccard": 0.38689107827038854
+          },
+          "micro": {
+            "precision": 0.967741935483871,
+            "recall": 0.25862068965517243,
+            "jaccard": 0.2564102564102564
+          },
+          "none_rate": 0.0,
+          "invalid_output_rate": 0.06896551724137931,
+          "bypasses": 2,
+          "bypass_rate": 0.022988505747126436,
+          "errors": 11,
+          "completeness": 0.20689655172413793
+        },
+        "status_counts": {
+          "bypass": 2,
+          "invalid_output": 6,
+          "ok": 68,
+          "timeout": 11
+        },
+        "micro_counts": {
+          "intersection": 60,
+          "predicted": 62,
+          "expected": 232,
+          "union": 234
+        },
+        "empty_predicted_cases": 25,
+        "latency_ms_all_outcomes": {
+          "n": 87,
+          "p50": 2679.64858293999,
+          "p95": 4004.086708999239,
+          "total": 234874.1095883306
+        },
+        "recorded_input_tokens": {
+          "n": 87,
+          "p50": 1508,
+          "p95": 2011,
+          "total": 135609
+        },
+        "usage": {
+          "input_tokens": {
+            "cases_with_reported_count": 73,
+            "total_reported": 109797,
+            "cases_without_reported_count": 14
+          },
+          "output_tokens": {
+            "cases_with_reported_count": 73,
+            "total_reported": 1930,
+            "cases_without_reported_count": 14
+          }
+        }
+      },
+      "by_category": {
+        "cybersecurity": {
+          "count": 7,
+          "macro": {
+            "precision": 0.7142857142857143,
+            "recall": 0.23809523809523808,
+            "jaccard": 0.23809523809523808
+          },
+          "micro": {
+            "precision": 1.0,
+            "recall": 0.22727272727272727,
+            "jaccard": 0.22727272727272727
+          },
+          "none_rate": 0.0,
+          "invalid_output_rate": 0.14285714285714285,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.0
+        },
+        "finance-economics": {
+          "count": 9,
+          "macro": {
+            "precision": 0.7777777777777778,
+            "recall": 0.5925925925925926,
+            "jaccard": 0.5925925925925926
+          },
+          "micro": {
+            "precision": 0.875,
+            "recall": 0.5,
+            "jaccard": 0.4666666666666667
+          },
+          "none_rate": 0.0,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 1,
+          "completeness": 0.4444444444444444
+        },
+        "industrial-physical-systems": {
+          "count": 14,
+          "macro": {
+            "precision": 0.35714285714285715,
+            "recall": 0.21428571428571427,
+            "jaccard": 0.21428571428571427
+          },
+          "micro": {
+            "precision": 1.0,
+            "recall": 0.1111111111111111,
+            "jaccard": 0.1111111111111111
+          },
+          "none_rate": 0.0,
+          "invalid_output_rate": 0.07142857142857142,
+          "bypasses": 1,
+          "bypass_rate": 0.07142857142857142,
+          "errors": 5,
+          "completeness": 0.14285714285714285
+        },
+        "mathematics-or-formal-reasoning": {
+          "count": 8,
+          "macro": {
+            "precision": 0.75,
+            "recall": 0.46875,
+            "jaccard": 0.46875
+          },
+          "micro": {
+            "precision": 1.0,
+            "recall": 0.2727272727272727,
+            "jaccard": 0.2727272727272727
+          },
+          "none_rate": 0.0,
+          "invalid_output_rate": 0.125,
+          "bypasses": 1,
+          "bypass_rate": 0.125,
+          "errors": 0,
+          "completeness": 0.25
+        },
+        "media-content-production": {
+          "count": 5,
+          "macro": {
+            "precision": 0.6,
+            "recall": 0.22857142857142856,
+            "jaccard": 0.22857142857142856
+          },
+          "micro": {
+            "precision": 1.0,
+            "recall": 0.15,
+            "jaccard": 0.15
+          },
+          "none_rate": 0.0,
+          "invalid_output_rate": 0.0,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 1,
+          "completeness": 0.0
+        },
+        "natural-science": {
+          "count": 14,
+          "macro": {
+            "precision": 0.8571428571428571,
+            "recall": 0.4309523809523809,
+            "jaccard": 0.4309523809523809
+          },
+          "micro": {
+            "precision": 0.9230769230769231,
+            "recall": 0.32432432432432434,
+            "jaccard": 0.3157894736842105
+          },
+          "none_rate": 0.0,
+          "invalid_output_rate": 0.07142857142857142,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.21428571428571427
+        },
+        "office-white-collar": {
+          "count": 14,
+          "macro": {
+            "precision": 0.8571428571428571,
+            "recall": 0.5166666666666667,
+            "jaccard": 0.5166666666666667
+          },
+          "micro": {
+            "precision": 1.0,
+            "recall": 0.4,
+            "jaccard": 0.4
+          },
+          "none_rate": 0.0,
+          "invalid_output_rate": 0.07142857142857142,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 1,
+          "completeness": 0.2857142857142857
+        },
+        "software-engineering": {
+          "count": 16,
+          "macro": {
+            "precision": 0.625,
+            "recall": 0.34375,
+            "jaccard": 0.34375
+          },
+          "micro": {
+            "precision": 1.0,
+            "recall": 0.23809523809523808,
+            "jaccard": 0.23809523809523808
+          },
+          "none_rate": 0.0,
+          "invalid_output_rate": 0.0625,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 3,
+          "completeness": 0.1875
+        }
+      },
+      "by_difficulty": {
+        "easy": {
+          "count": 6,
+          "macro": {
+            "precision": 0.6666666666666666,
+            "recall": 0.5555555555555556,
+            "jaccard": 0.5555555555555556
+          },
+          "micro": {
+            "precision": 1.0,
+            "recall": 0.3076923076923077,
+            "jaccard": 0.3076923076923077
+          },
+          "none_rate": 0.0,
+          "invalid_output_rate": 0.16666666666666666,
+          "bypasses": 0,
+          "bypass_rate": 0.0,
+          "errors": 0,
+          "completeness": 0.5
+        },
+        "hard": {
+          "count": 28,
+          "macro": {
+            "precision": 0.75,
+            "recall": 0.30688775510204086,
+            "jaccard": 0.30688775510204086
+          },
+          "micro": {
+            "precision": 1.0,
+            "recall": 0.25,
+            "jaccard": 0.25
+          },
+          "none_rate": 0.0,
+          "invalid_output_rate": 0.03571428571428571,
+          "bypasses": 1,
+          "bypass_rate": 0.03571428571428571,
+          "errors": 3,
+          "completeness": 0.07142857142857142
+        },
+        "medium": {
+          "count": 53,
+          "macro": {
+            "precision": 0.660377358490566,
+            "recall": 0.41006289308176097,
+            "jaccard": 0.41006289308176097
+          },
+          "micro": {
+            "precision": 0.9459459459459459,
+            "recall": 0.25925925925925924,
+            "jaccard": 0.25547445255474455
+          },
+          "none_rate": 0.0,
+          "invalid_output_rate": 0.07547169811320754,
+          "bypasses": 1,
+          "bypass_rate": 0.018867924528301886,
+          "errors": 8,
+          "completeness": 0.24528301886792453
+        }
+      }
+    },
+    {
+      "name": "tools-baseline",
+      "raw_report_sha256": "ee75da16bf3dd53e5948481e37bdcc39ab1dd8e1bf092ae9a7b73dd40833cf9f",
+      "metadata": {
+        "track": "tools",
+        "created_at": "2026-10-23T15:15:55.034958+00:00",
+        "selector": {
+          "name": "model_router",
+          "version": "1",
+          "endpoint": null
+        },
+        "source_training": "unknown",
+        "seed": 42,
+        "machine": {
+          "os": "Darwin",
+          "os_version": "macOS 27.0.1",
+          "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+          "machine": "arm64",
+          "cpu": "Apple M1",
+          "cpu_count": 8,
+          "ram_bytes": 8589934592,
+          "gpu": [
+            {
+              "model": "Apple M1",
+              "cores": "7"
+            }
+          ],
+          "python": "3.14.7"
+        },
+        "application": {
+          "head": "749e40f797da047d3180baf587748e9920800d16",
+          "dirty": false
+        },
+        "implementation_files": {
+          "scripts/selection_benchmark.py": "1653ef4cfd72819f2b781c929e3780cd084e109cd92c78377c59edece2683acd",
+          "src/relaymind/evaluation/selection_benchmark.py": "c8fc7b192faafb89daf04a0bbdeaf933be9a11e9ddb0eed639e1ac75d6a433e5"
+        },
+        "configuration": {
+          "timeout_seconds": 4.0,
+          "context_limit": 4096,
+          "routing_input_tokens": 2048,
+          "routing_output_tokens": 128,
+          "calls_per_generation": "many",
+          "example_score": 0.5,
+          "example_margin": 0.1,
+          "proposal": "none"
+        },
+        "files": {
+          "tools.v1.lock.json": "075b751bdf5dd456127ef02f5f182f1f4e211a286864b0298d69d9a48f312b12"
+        },
+        "model": null
+      },
+      "sample_count": 500,
+      "sample_ids_sha256": "6836b45d0d6d150d1dfc215f2f76b191e4b9fc03ccacee6169606328ad581c23",
+      "results": {
+        "narrowing": {
+          "summary": {
+            "count": 500,
+            "macro": {
+              "precision": 0.13753808802697265,
+              "recall": 1.0,
+              "jaccard": 0.13753808802697265
+            },
+            "micro": {
+              "precision": 0.14315091968467955,
+              "recall": 1.0,
+              "jaccard": 0.14315091968467955
+            },
+            "invalid_output_rate": 0.0,
+            "bypasses": 0,
+            "bypass_rate": 0.0,
+            "errors": 0,
+            "completeness": 1.0
+          },
+          "status_counts": {
+            "ok": 500
+          },
+          "micro_counts": {
+            "intersection": 1253,
+            "predicted": 8753,
+            "expected": 1253,
+            "union": 8753
+          },
+          "empty_predicted_cases": 0,
+          "latency_ms_all_outcomes": {
+            "n": 500,
+            "p50": 0.00016705598682165146,
+            "p95": 0.00020908191800117493,
+            "total": 0.09471073281019926
+          },
+          "recorded_input_tokens": {
+            "n": 0,
+            "p50": null,
+            "p95": null,
+            "total": null
+          },
+          "usage": {
+            "input_tokens": {
+              "cases_with_reported_count": 0,
+              "total_reported": null,
+              "cases_without_reported_count": 500
+            },
+            "output_tokens": {
+              "cases_with_reported_count": 0,
+              "total_reported": null,
+              "cases_without_reported_count": 500
+            }
+          },
+          "proposal_count": 0,
+          "rejection_counts": {},
+          "generation_attempts": 0,
+          "generation_options": [],
+          "selector_outcomes": {
+            "baseline_keep_all": 500
+          },
+          "kept_sets": {
+            "all_candidates": 500,
+            "empty": 0,
+            "strict_nonempty_subset": 0
+          }
+        },
+        "proposal_full": {
+          "summary": {
+            "count": 0,
+            "macro": {
+              "precision": 0,
+              "recall": 0,
+              "jaccard": 0
+            },
+            "micro": {
+              "precision": 0,
+              "recall": 0,
+              "jaccard": 0
+            },
+            "invalid_output_rate": 0,
+            "bypasses": 0,
+            "bypass_rate": 0,
+            "schema_validity": 0,
+            "errors": 0,
+            "completeness": 0
+          },
+          "status_counts": {},
+          "micro_counts": {
+            "intersection": 0,
+            "predicted": 0,
+            "expected": 0,
+            "union": 0
+          },
+          "empty_predicted_cases": 0,
+          "latency_ms_all_outcomes": {
+            "n": 0,
+            "p50": null,
+            "p95": null,
+            "total": null
+          },
+          "recorded_input_tokens": {
+            "n": 0,
+            "p50": null,
+            "p95": null,
+            "total": null
+          },
+          "usage": {
+            "input_tokens": {
+              "cases_with_reported_count": 0,
+              "total_reported": null,
+              "cases_without_reported_count": 0
+            },
+            "output_tokens": {
+              "cases_with_reported_count": 0,
+              "total_reported": null,
+              "cases_without_reported_count": 0
+            }
+          },
+          "proposal_count": 0,
+          "rejection_counts": {},
+          "generation_attempts": 0,
+          "generation_options": []
+        },
+        "proposal_narrowed": {
+          "summary": {
+            "count": 0,
+            "macro": {
+              "precision": 0,
+              "recall": 0,
+              "jaccard": 0
+            },
+            "micro": {
+              "precision": 0,
+              "recall": 0,
+              "jaccard": 0
+            },
+            "invalid_output_rate": 0,
+            "bypasses": 0,
+            "bypass_rate": 0,
+            "schema_validity": 0,
+            "errors": 0,
+            "completeness": 0
+          },
+          "status_counts": {},
+          "micro_counts": {
+            "intersection": 0,
+            "predicted": 0,
+            "expected": 0,
+            "union": 0
+          },
+          "empty_predicted_cases": 0,
+          "latency_ms_all_outcomes": {
+            "n": 0,
+            "p50": null,
+            "p95": null,
+            "total": null
+          },
+          "recorded_input_tokens": {
+            "n": 0,
+            "p50": null,
+            "p95": null,
+            "total": null
+          },
+          "usage": {
+            "input_tokens": {
+              "cases_with_reported_count": 0,
+              "total_reported": null,
+              "cases_without_reported_count": 0
+            },
+            "output_tokens": {
+              "cases_with_reported_count": 0,
+              "total_reported": null,
+              "cases_without_reported_count": 0
+            }
+          },
+          "proposal_count": 0,
+          "rejection_counts": {},
+          "generation_attempts": 0,
+          "generation_options": []
+        }
+      }
+    },
+    {
+      "name": "tools-local",
+      "raw_report_sha256": "7a38b1133c71563faf9d131ed5066c745fde033f6492538c65dc07bf57b80279",
+      "metadata": {
+        "track": "tools",
+        "created_at": "2026-10-23T15:59:54.383305+00:00",
+        "selector": {
+          "name": "example_match",
+          "version": "1",
+          "endpoint": null
+        },
+        "source_training": "unknown",
+        "seed": 42,
+        "machine": {
+          "os": "Darwin",
+          "os_version": "macOS 27.0.1",
+          "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+          "machine": "arm64",
+          "cpu": "Apple M1",
+          "cpu_count": 8,
+          "ram_bytes": 8589934592,
+          "gpu": [
+            {
+              "model": "Apple M1",
+              "cores": "7"
+            }
+          ],
+          "python": "3.14.7"
+        },
+        "application": {
+          "head": "749e40f797da047d3180baf587748e9920800d16",
+          "dirty": false
+        },
+        "implementation_files": {
+          "scripts/selection_benchmark.py": "1653ef4cfd72819f2b781c929e3780cd084e109cd92c78377c59edece2683acd",
+          "src/relaymind/evaluation/selection_benchmark.py": "c8fc7b192faafb89daf04a0bbdeaf933be9a11e9ddb0eed639e1ac75d6a433e5"
+        },
+        "configuration": {
+          "timeout_seconds": 4.0,
+          "context_limit": 4096,
+          "routing_input_tokens": 2048,
+          "routing_output_tokens": 128,
+          "calls_per_generation": "many",
+          "example_score": 0.5,
+          "example_margin": 0.1,
+          "proposal": "local"
+        },
+        "files": {
+          "tools.v1.lock.json": "075b751bdf5dd456127ef02f5f182f1f4e211a286864b0298d69d9a48f312b12"
+        },
+        "model": {
+          "name": "qwen3-0.6b",
+          "endpoint": "http://127.0.0.1:8033",
+          "request_options": null,
+          "manifest": {
+            "schema_version": 1,
+            "model_id": "qwen3-0.6b",
+            "source_url": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF",
+            "source_revision": "23749fefcc72300e3a2ad315e1317431b06b590a",
+            "file_name": "Qwen3-0.6B-Q8_0.gguf",
+            "file_sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+            "quantization": "Q8_0",
+            "tokenizer_hash": "27b1fe636a04016514d2aa83b89792da06437beef1fcb9cfda669ddfd94b784d",
+            "chat_template_hash": "57f1fd00f0013a2be96aa79b857391f27e23df5b5f847072b524c897e24d0361",
+            "runtime": "llama.cpp",
+            "runtime_version": "0.7.0-dev (build 11785, commit 8baabd53b)",
+            "launch_settings": {
+              "ctx_size": 8192,
+              "jinja": true,
+              "reasoning": "off",
+              "reasoning_format": "deepseek"
+            },
+            "license": "Apache-2.0"
+          }
+        }
+      },
+      "sample_count": 500,
+      "sample_ids_sha256": "6836b45d0d6d150d1dfc215f2f76b191e4b9fc03ccacee6169606328ad581c23",
+      "results": {
+        "narrowing": {
+          "summary": {
+            "count": 500,
+            "macro": {
+              "precision": 0.04280065733387174,
+              "recall": 0.386,
+              "jaccard": 0.04280065733387174
+            },
+            "micro": {
+              "precision": 0.11576053756872327,
+              "recall": 0.3024740622505986,
+              "jaccard": 0.09136933461909354
+            },
+            "invalid_output_rate": 0.0,
+            "bypasses": 0,
+            "bypass_rate": 0.0,
+            "errors": 0,
+            "completeness": 0.386
+          },
+          "status_counts": {
+            "ok": 500
+          },
+          "micro_counts": {
+            "intersection": 379,
+            "predicted": 3274,
+            "expected": 1253,
+            "union": 4148
+          },
+          "empty_predicted_cases": 307,
+          "latency_ms_all_outcomes": {
+            "n": 500,
+            "p50": 2.285791910253465,
+            "p95": 5.961667047813535,
+            "total": 1469.0333844628185
+          },
+          "recorded_input_tokens": {
+            "n": 0,
+            "p50": null,
+            "p95": null,
+            "total": null
+          },
+          "usage": {
+            "input_tokens": {
+              "cases_with_reported_count": 0,
+              "total_reported": null,
+              "cases_without_reported_count": 500
+            },
+            "output_tokens": {
+              "cases_with_reported_count": 0,
+              "total_reported": null,
+              "cases_without_reported_count": 500
+            }
+          },
+          "proposal_count": 0,
+          "rejection_counts": {},
+          "generation_attempts": 0,
+          "generation_options": [],
+          "selector_outcomes": {
+            "none": 307,
+            "skill": 193
+          },
+          "kept_sets": {
+            "all_candidates": 193,
+            "empty": 307,
+            "strict_nonempty_subset": 0
+          }
+        },
+        "proposal_full": {
+          "summary": {
+            "count": 500,
+            "macro": {
+              "precision": 0.23745714285714287,
+              "recall": 0.218,
+              "jaccard": 0.20532619047619052
+            },
+            "micro": {
+              "precision": 0.6094276094276094,
+              "recall": 0.14445331205107742,
+              "jaccard": 0.13221329437545654
+            },
+            "invalid_output_rate": 0.0,
+            "bypasses": 54,
+            "bypass_rate": 0.108,
+            "schema_validity": 1.0,
+            "errors": 233,
+            "completeness": 0.164
+          },
+          "status_counts": {
+            "bypass": 54,
+            "ok": 213,
+            "timeout": 233
+          },
+          "micro_counts": {
+            "intersection": 181,
+            "predicted": 297,
+            "expected": 1253,
+            "union": 1369
+          },
+          "empty_predicted_cases": 308,
+          "latency_ms_all_outcomes": {
+            "n": 500,
+            "p50": 3886.729666031897,
+            "p95": 4061.13499996718,
+            "total": 1602715.4920885805
+          },
+          "recorded_input_tokens": {
+            "n": 500,
+            "p50": 2516,
+            "p95": 5135,
+            "total": 1436786
+          },
+          "usage": {
+            "input_tokens": {
+              "cases_with_reported_count": 213,
+              "total_reported": 468820,
+              "cases_without_reported_count": 287
+            },
+            "output_tokens": {
+              "cases_with_reported_count": 213,
+              "total_reported": 10069,
+              "cases_without_reported_count": 287
+            }
+          },
+          "proposal_count": 320,
+          "rejection_counts": {},
+          "generation_attempts": 446,
+          "generation_options": [
+            {
+              "max_output_tokens": null,
+              "temperature": 0,
+              "top_p": null
+            }
+          ]
+        },
+        "proposal_narrowed": {
+          "summary": {
+            "count": 500,
+            "macro": {
+              "precision": 0.1905,
+              "recall": 0.1788,
+              "jaccard": 0.1705619047619048
+            },
+            "micro": {
+              "precision": 0.6451612903225806,
+              "recall": 0.11173184357541899,
+              "jaccard": 0.10526315789473684
+            },
+            "invalid_output_rate": 0.0,
+            "bypasses": 23,
+            "bypass_rate": 0.046,
+            "schema_validity": 1.0,
+            "errors": 35,
+            "completeness": 0.142
+          },
+          "status_counts": {
+            "bypass": 23,
+            "ok": 442,
+            "timeout": 35
+          },
+          "micro_counts": {
+            "intersection": 140,
+            "predicted": 217,
+            "expected": 1253,
+            "union": 1330
+          },
+          "empty_predicted_cases": 356,
+          "latency_ms_all_outcomes": {
+            "n": 500,
+            "p50": 1802.3693329887465,
+            "p95": 4034.7132500028238,
+            "total": 980110.3262963006
+          },
+          "recorded_input_tokens": {
+            "n": 500,
+            "p50": 122,
+            "p95": 3881,
+            "total": 618877
+          },
+          "usage": {
+            "input_tokens": {
+              "cases_with_reported_count": 442,
+              "total_reported": 418314,
+              "cases_without_reported_count": 58
+            },
+            "output_tokens": {
+              "cases_with_reported_count": 442,
+              "total_reported": 29798,
+              "cases_without_reported_count": 58
+            }
+          },
+          "proposal_count": 248,
+          "rejection_counts": {},
+          "generation_attempts": 477,
+          "generation_options": [
+            {
+              "max_output_tokens": null,
+              "temperature": 0,
+              "top_p": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "tools-external",
+      "raw_report_sha256": "e42b1e14a67faf113b93f7ce408ce4b102de9a0266a5dd48e5b8e6d3c106592e",
+      "metadata": {
+        "track": "tools",
+        "created_at": "2026-10-23T16:05:44.556198+00:00",
+        "selector": {
+          "name": "example_match",
+          "version": "1",
+          "endpoint": null
+        },
+        "source_training": "unknown",
+        "seed": 42,
+        "machine": {
+          "os": "Darwin",
+          "os_version": "macOS 27.0.1",
+          "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+          "machine": "arm64",
+          "cpu": "Apple M1",
+          "cpu_count": 8,
+          "ram_bytes": 8589934592,
+          "gpu": [
+            {
+              "model": "Apple M1",
+              "cores": "7"
+            }
+          ],
+          "python": "3.14.7"
+        },
+        "application": {
+          "head": "749e40f797da047d3180baf587748e9920800d16",
+          "dirty": false
+        },
+        "implementation_files": {
+          "scripts/selection_benchmark.py": "1653ef4cfd72819f2b781c929e3780cd084e109cd92c78377c59edece2683acd",
+          "src/relaymind/evaluation/selection_benchmark.py": "c8fc7b192faafb89daf04a0bbdeaf933be9a11e9ddb0eed639e1ac75d6a433e5"
+        },
+        "configuration": {
+          "timeout_seconds": 30.0,
+          "context_limit": 128000,
+          "routing_input_tokens": 2048,
+          "routing_output_tokens": 128,
+          "calls_per_generation": "many",
+          "example_score": 0.5,
+          "example_margin": 0.1,
+          "proposal": "external"
+        },
+        "files": {
+          "tools.v1.lock.json": "075b751bdf5dd456127ef02f5f182f1f4e211a286864b0298d69d9a48f312b12"
+        },
+        "model": {
+          "name": "glm-4.6",
+          "endpoint": "https://api.z.ai/api/paas/v4",
+          "request_options": {}
+        }
+      },
+      "sample_count": 100,
+      "sample_ids_sha256": "60bab605b202a1d9f6ddf94a9260c012dfd3ab4e51a3f95a0311d87fa814aa2c",
+      "results": {
+        "narrowing": {
+          "summary": {
+            "count": 100,
+            "macro": {
+              "precision": 0.03408733230134159,
+              "recall": 0.31,
+              "jaccard": 0.03408733230134159
+            },
+            "micro": {
+              "precision": 0.11428571428571428,
+              "recall": 0.22556390977443608,
+              "jaccard": 0.08207934336525308
+            },
+            "invalid_output_rate": 0.0,
+            "bypasses": 0,
+            "bypass_rate": 0.0,
+            "errors": 0,
+            "completeness": 0.31
+          },
+          "status_counts": {
+            "ok": 100
+          },
+          "micro_counts": {
+            "intersection": 60,
+            "predicted": 525,
+            "expected": 266,
+            "union": 731
+          },
+          "empty_predicted_cases": 69,
+          "latency_ms_all_outcomes": {
+            "n": 100,
+            "p50": 5.7678340235725045,
+            "p95": 20.606333971954882,
+            "total": 1010.3626273339614
+          },
+          "recorded_input_tokens": {
+            "n": 0,
+            "p50": null,
+            "p95": null,
+            "total": null
+          },
+          "usage": {
+            "input_tokens": {
+              "cases_with_reported_count": 0,
+              "total_reported": null,
+              "cases_without_reported_count": 100
+            },
+            "output_tokens": {
+              "cases_with_reported_count": 0,
+              "total_reported": null,
+              "cases_without_reported_count": 100
+            }
+          },
+          "proposal_count": 0,
+          "rejection_counts": {},
+          "generation_attempts": 0,
+          "generation_options": [],
+          "selector_outcomes": {
+            "none": 69,
+            "skill": 31
+          },
+          "kept_sets": {
+            "all_candidates": 31,
+            "empty": 69,
+            "strict_nonempty_subset": 0
+          }
+        },
+        "proposal_full": {
+          "summary": {
+            "count": 100,
+            "macro": {
+              "precision": 0.6751666666666667,
+              "recall": 0.6573333333333333,
+              "jaccard": 0.59925
+            },
+            "micro": {
+              "precision": 0.672566371681416,
+              "recall": 0.5714285714285714,
+              "jaccard": 0.4470588235294118
+            },
+            "invalid_output_rate": 0.0,
+            "bypasses": 0,
+            "bypass_rate": 0.0,
+            "schema_validity": 0.9924812030075187,
+            "errors": 2,
+            "completeness": 0.5
+          },
+          "status_counts": {
+            "ok": 98,
+            "timeout": 2
+          },
+          "micro_counts": {
+            "intersection": 152,
+            "predicted": 226,
+            "expected": 266,
+            "union": 340
+          },
+          "empty_predicted_cases": 9,
+          "latency_ms_all_outcomes": {
+            "n": 100,
+            "p50": 10468.786457902752,
+            "p95": 20617.926125065424,
+            "total": 1195747.6322943112
+          },
+          "recorded_input_tokens": {
+            "n": 0,
+            "p50": null,
+            "p95": null,
+            "total": null
+          },
+          "usage": {
+            "input_tokens": {
+              "cases_with_reported_count": 98,
+              "total_reported": 248116,
+              "cases_without_reported_count": 2
+            },
+            "output_tokens": {
+              "cases_with_reported_count": 98,
+              "total_reported": 23907,
+              "cases_without_reported_count": 2
+            }
+          },
+          "proposal_count": 266,
+          "rejection_counts": {
+            "invalid_arguments": 2
+          },
+          "generation_attempts": 100,
+          "generation_options": [
+            {
+              "max_output_tokens": null,
+              "temperature": null,
+              "top_p": null
+            }
+          ]
+        },
+        "proposal_narrowed": {
+          "summary": {
+            "count": 100,
+            "macro": {
+              "precision": 0.2345833333333333,
+              "recall": 0.255,
+              "jaccard": 0.22491666666666663
+            },
+            "micro": {
+              "precision": 0.6935483870967742,
+              "recall": 0.16165413533834586,
+              "jaccard": 0.15087719298245614
+            },
+            "invalid_output_rate": 0.0,
+            "bypasses": 0,
+            "bypass_rate": 0.0,
+            "schema_validity": 1.0,
+            "errors": 13,
+            "completeness": 0.22
+          },
+          "status_counts": {
+            "ok": 87,
+            "timeout": 13
+          },
+          "micro_counts": {
+            "intersection": 43,
+            "predicted": 62,
+            "expected": 266,
+            "union": 285
+          },
+          "empty_predicted_cases": 71,
+          "latency_ms_all_outcomes": {
+            "n": 100,
+            "p50": 14437.496833037585,
+            "p95": 30038.05066703353,
+            "total": 1638744.1905855667
+          },
+          "recorded_input_tokens": {
+            "n": 0,
+            "p50": null,
+            "p95": null,
+            "total": null
+          },
+          "usage": {
+            "input_tokens": {
+              "cases_with_reported_count": 87,
+              "total_reported": 88014,
+              "cases_without_reported_count": 13
+            },
+            "output_tokens": {
+              "cases_with_reported_count": 87,
+              "total_reported": 29632,
+              "cases_without_reported_count": 13
+            }
+          },
+          "proposal_count": 64,
+          "rejection_counts": {},
+          "generation_attempts": 100,
+          "generation_options": [
+            {
+              "max_output_tokens": null,
+              "temperature": null,
+              "top_p": null
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
