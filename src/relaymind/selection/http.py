@@ -1,5 +1,6 @@
 """Unauthenticated loopback selector transport (RM12, RM28, spec 0.40)."""
 
+import json
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
@@ -19,6 +20,9 @@ from relaymind.selection.contract import (
     parse_selection_result,
 )
 
+# The largest response body read from a selector; a longer one is an invalid response.
+MAX_RESPONSE_BYTES = 1024 * 1024
+
 
 def validate_url(url: object) -> str:
     """Reject credentials and non-loopback URLs without exposing their text."""
@@ -27,7 +31,8 @@ def validate_url(url: object) -> str:
             raise ValueError
         parsed = urlsplit(url)
         if (
-            parsed.scheme not in ("http", "https")
+            # Plain http only: TLS adds nothing on loopback, and no certificate setting exists.
+            parsed.scheme != "http"
             or not parsed.hostname
             or not is_loopback_host(parsed.hostname)
             or parsed.username is not None
@@ -41,7 +46,7 @@ def validate_url(url: object) -> str:
         httpx.URL(url)
     except (ValueError, httpx.InvalidURL):
         raise ValueError(
-            "selection HTTP url must be absolute loopback HTTP(S), with a valid port"
+            "selection HTTP url must be absolute loopback http, with a valid port"
             " and no credentials, query or fragment"
         ) from None
     return url
@@ -94,13 +99,18 @@ class HttpSelector:
             async with httpx.AsyncClient(
                 trust_env=False, follow_redirects=False, timeout=None
             ) as client:
-                response = await client.post(self.config.url, json=payload)
-                if response.status_code != 200:
-                    raise SelectorError("HTTP selector non-200 response")
-                try:
-                    result = parse_selection_result(response.json())
-                except (ValueError, SelectionError):
-                    raise SelectorError("HTTP selector invalid response") from None
+                async with client.stream("POST", self.config.url, json=payload) as response:
+                    if response.status_code != 200:
+                        raise SelectorError("HTTP selector non-200 response")
+                    body = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        body += chunk
+                        if len(body) > MAX_RESPONSE_BYTES:
+                            raise SelectorError("HTTP selector invalid response")
+            try:
+                result = parse_selection_result(json.loads(body))
+            except (ValueError, SelectionError):
+                raise SelectorError("HTTP selector invalid response") from None
         except httpx.TimeoutException:
             raise SelectorTimeout("HTTP selector transport timeout") from None
         except httpx.HTTPError:

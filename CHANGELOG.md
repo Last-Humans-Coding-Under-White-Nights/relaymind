@@ -19,15 +19,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   RM12, RM16, RM17, RM20, RM32; AC09, AC19). Buffered remains the default.
 
 - Loopback HTTP selectors (#133; RM12, RM22, RM25, RM28; AC22): fixed
-  configured identity, proxy/redirect isolation, bounded cancellable requests,
-  immutable unverified claims and trace fallback on gateway stops. Evaluation
-  separates HTTP attempts from gateway-observed calls. Both selection benchmark
-  tracks reuse the production transport; a standard-library keyword example
-  demonstrates catalog-only proposals without a model or tool execution.
+  configured identity, proxy/redirect isolation, bounded cancellable requests
+  with a 1 MiB response cap, immutable unverified claims and trace fallback on
+  gateway stops. Evaluation separates HTTP attempts from gateway-observed calls.
+  Both selection benchmark tracks reuse the production transport; a
+  standard-library keyword example demonstrates catalog-only proposals without
+  a model or tool execution.
 
 - Specification 0.40 defines configured HTTP selector identity, loopback transport
-  policy, immutable unverified per-attempt claims, fallback trace provenance and
-  production transport reuse in selection benchmarks (#133; RM28, AC22).
+  policy (plain http only) and response size cap, immutable unverified per-attempt
+  claims, fallback trace provenance, gateway-observed grading of runs that reached
+  no selector, and production transport reuse in selection benchmarks (#133; RM28,
+  AC22).
 
 - Specification 0.39 freezes device placement prediction, trace and readiness
   fields, selector declines, deadline precedence and exclusive idle-probe

@@ -85,8 +85,10 @@ line says so and `auto` uses the external model the same way. Set
 
 ### Loopback HTTP selector
 
-RM28 permits a selector running in another local process. Start the deterministic
-standard-library example in another terminal:
+[RM28](docs/SPECIFICATION.md#41-routing-and-local-autonomy) permits a selector running
+in another local process; [section 14.3](docs/SPECIFICATION.md#143-loopback-http-selector-contract-spec-040)
+of the specification holds the contract. Start the deterministic standard-library
+example in another terminal:
 
 ```bash
 python scripts/example_selector.py --port 8051
@@ -102,7 +104,7 @@ timeout_seconds = 2
 
 The gateway sends one redacted [SelectionRequest](src/relaymind/selection/schemas/selection_request.v1.json)
 and validates the [SelectionResult](src/relaymind/selection/schemas/selection_result.v1.json).
-Only loopback HTTP(S) endpoints are accepted; credentials, query strings, redirects
+Only plain `http` loopback endpoints are accepted; credentials, query strings, redirects
 and environment proxies are excluded. Configuration needs no selector connection.
 Bump the configured version when selector behavior changes. The gateway admits
 proposals and retains its permission, identifier, tool and confirmation checks;

@@ -266,8 +266,8 @@ class SelectorChain:
                     # meter: the owner preserves its run/stage reason and priority.
                     if spent and remaining <= allowance:
                         raise budget_stop()
-                    if remaining_seconds is not None and remaining_seconds() <= 0:
-                        raise budget_stop()
+                    # An attempt that finished within its allowance is complete and
+                    # keeps its outcome (spec 14.3); the next selector's check stops.
                     if spent:
                         outcome, detail, parsed, admitted = (
                             Outcome.TIMEOUT,

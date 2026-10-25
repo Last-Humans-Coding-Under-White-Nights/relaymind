@@ -1018,6 +1018,44 @@ def test_a_bad_selection_value_is_one_startup_message(tmp_path, line, word):
     assert out == [] and len(err) == 1 and "[selection]" in err[0]
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://192.0.2.10:8051/select",
+        "http://selector.example:8051/select",
+        "https://127.0.0.1:8051/select",
+        "http://127.0.0.1:8051/select?token=secret-value",
+    ],
+)
+def test_a_non_loopback_http_selector_is_a_startup_error(tmp_path, monkeypatch, url):
+    """RM12, RM28, spec 0.40 section 14.3: an endpoint outside plain loopback http stops
+    startup with one message, before a socket, without echoing the URL."""
+    import socket
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("startup must not resolve or contact the selector")
+
+    monkeypatch.setattr(socket, "getaddrinfo", forbidden)
+    monkeypatch.setattr(socket, "create_connection", forbidden)
+    item = f"{{ transport = 'http', name = 'remote', version = '1', url = '{url}' }}"
+    config = write_config(tmp_path, f"\n[selection]\nchain = [{item}, 'model_router']\n")
+    with pytest.raises(LaunchError, match=r"\[selection\].*loopback") as raised:
+        load_config(config)
+    assert url not in str(raised.value) and "secret-value" not in str(raised.value)
+    out, err, served = [], [], []
+    code = main(
+        ["serve", "--config", str(config)],
+        serve_fn=lambda *a, **k: served.append(1),
+        stdout=out.append,
+        stderr=err.append,
+        **doubles(),
+    )
+    assert code == 2
+    assert served == [] and out == []
+    (message,) = err
+    assert "[selection]" in message and url not in message and "secret-value" not in message
+
+
 def test_the_configured_selection_is_recorded_in_run_accepted(tmp_path):
     """RM22, RM28, section 8: the chain, the thresholds, and the time limit in budgets."""
     extra = "\n[selection]\ntimeout_seconds = 1.5\nexample_match_score = 0.25\n"

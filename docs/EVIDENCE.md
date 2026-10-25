@@ -2657,9 +2657,10 @@ uses no model, but HTTP transports generally cannot prove a remote process's
 internal calls or stop that work by cancelling a POST.
 
 An earlier attempt inside the sandbox could not reach the loopback server and
-recorded 87 boundary rejections. That environment-denied diagnostic is retained
-separately at `/tmp/relaymind-m8-example-keyword-http-sandbox-attempt.json`; it is
-not combined with this successful capture or the earlier built-in aggregate.
+recorded 87 boundary rejections. That environment-denied diagnostic was written
+only to a temporary local file outside the repository; it is not checked in, is not
+available for review, and is not combined with this successful capture or the
+earlier built-in aggregate.
 The keyword method has no semantic understanding, no Chinese word handling, no
 argument generation and only one pick for tasks that often require several
 skills. This run demonstrates production transport and honest evaluation, not

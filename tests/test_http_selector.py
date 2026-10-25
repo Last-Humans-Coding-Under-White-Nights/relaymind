@@ -118,6 +118,10 @@ def test_configured_http_identity_and_names():
     "url",
     [
         "https://example.com/select",
+        # No certificate setting exists for this local transport: https is refused.
+        "https://localhost:8051/select",
+        "https://127.0.0.1:8051/select",
+        "https://[::1]:8051/select",
         "file://localhost/a",
         "http://127.0.0.1:99999/a",
         "http://u:p@localhost/a",
@@ -391,6 +395,7 @@ def test_example_script_serves_via_production_transport():
     finally:
         process.terminate()
         process.wait(timeout=5)
+        process.stdout.close()
 
 
 def test_attempt_trace_schemas_keep_historical_and_reject_partial_evidence():
@@ -597,23 +602,61 @@ def test_short_run_budget_is_gateway_error_and_caps_post_deadline(tmp_path, monk
     assert not gateway.adapter.requests
 
 
-@pytest.mark.parametrize(
-    "choice,expected",
-    [
-        (dict(skill_id="unknown"), "inadmissible"),
-        (dict(skill_id="check-service-health", tools=["delete_demo_database"]), "selected"),
-    ],
-)
-def test_http_inadmissible_choices_never_execute(tmp_path, choice, expected):
-    """AC22/RM08/RM28: neither unknown IDs nor foreign tools grant execution."""
+def test_http_unknown_skill_is_inadmissible_and_never_executes(tmp_path):
+    """AC22/RM02/RM28: an unknown skill ID falls through as inadmissible; nothing runs."""
     from gateway_helpers import build_gateway, executed_tools, run
 
-    with endpoint(result("remote", **choice)) as (url, _):
+    with endpoint(result("remote", skill_id="unknown")) as (url, _):
         gateway = build_gateway(tmp_path, [], selectors=[http(url)])
         _, events = run(gateway)
     assert executed_tools(events) == []
     route = next(e for e in events if e.event_type.value == "route.selected")
-    assert route.payload["selector"]["attempts"][0]["outcome"] == expected
+    assert route.payload["selector"]["attempts"][0]["outcome"] == "inadmissible"
+    assert "tools_narrowed" not in route.payload
+
+
+def test_http_foreign_tool_narrowing_never_grants_execution(tmp_path):
+    """AC22/RM08/RM28: a narrowing that names a foreign tool is admitted without it;
+    the model's later proposal of that tool is refused and never runs."""
+    from gateway_helpers import build_gateway, executed_tools, health_tail, run, tool_turn
+    from relaymind.tools import CallerContext
+    from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
+
+    body = result(
+        "remote",
+        skill_id="check-service-health",
+        tools=["get_service_health", "delete_demo_database"],
+    )
+    with endpoint(body) as (url, _):
+        gateway = build_gateway(
+            tmp_path,
+            [
+                tool_turn(
+                    "delete_demo_database",
+                    call_id="call_foreign",
+                    database_id="demo-orders-db",
+                    expected_revision=3,
+                ),
+                *health_tail(),
+            ],
+            selectors=[http(url)],
+            # The caller could mutate: only the narrowing and the allowlist refuse it.
+            caller=CallerContext(permissions=frozenset({MUTATE_PERMISSION, READ_PERMISSION})),
+        )
+        _, events = run(gateway)
+    route = next(e for e in events if e.event_type.value == "route.selected")
+    assert route.payload["selector"]["attempts"][0]["outcome"] == "selected"
+    assert route.payload["tools_narrowed"] == ["get_service_health"]
+    offered = [e.payload["tools_offered"] for e in events if e.event_type.value == "model.started"]
+    assert offered and all("delete_demo_database" not in tools for tools in offered)
+    foreign = [
+        e.payload
+        for e in events
+        if e.event_type.value == "tool.proposed"
+        and e.payload["tool_name"] == "delete_demo_database"
+    ]
+    assert len(foreign) == 1 and foreign[0]["rejection"] is not None
+    assert "delete_demo_database" not in executed_tools(events)
 
 
 def test_http_mutation_still_needs_confirmation(tmp_path):
@@ -976,3 +1019,39 @@ def test_http_budget_guard_resumes_after_real_placement_decline(tmp_path, monkey
     assert len(requests) == 1
     assert requests[0]["deadline_ms"] <= 150
     assert not gateway.adapter.requests
+
+
+@async_test
+async def test_oversized_response_is_an_invalid_response_error():
+    """RM12/RM28: a body over the response cap is an error with unknown claims."""
+    from relaymind.selection.http import MAX_RESPONSE_BYTES
+
+    body = json.dumps(result("remote")).encode()
+    padded = body[:-1] + b"," + b'"pad":"' + b"x" * MAX_RESPONSE_BYTES + b'"}'
+    with endpoint(padded) as (url, requests):
+        chosen = await attempt(http(url))
+    assert len(requests) == 1
+    entry = chosen.attempts[0].to_json_object()
+    assert entry["outcome"] == "error"
+    assert entry["model_calls_claim"] is None
+
+
+@async_test
+async def test_response_cap_stops_reading_an_endless_body(monkeypatch):
+    """RM28: the transport stops reading at the cap instead of buffering the whole body."""
+    from relaymind.selection.http import MAX_RESPONSE_BYTES
+
+    sent = []
+
+    async def endless():
+        while True:
+            sent.append(64 * 1024)
+            yield b" " * (64 * 1024)
+
+    def handler(request):
+        return httpx.Response(200, content=endless())
+
+    chosen = await attempt(injected_http(monkeypatch, handler))
+    assert chosen.attempts[0].outcome == "error"
+    assert chosen.attempts[0].to_json_object()["model_calls_claim"] is None
+    assert sum(sent) <= MAX_RESPONSE_BYTES + 2 * 64 * 1024
