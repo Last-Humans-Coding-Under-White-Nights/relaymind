@@ -1,16 +1,19 @@
 """Measured timing storage and placement inputs (RM17, RM25, RM27; #129)."""
 
 import asyncio
+import contextlib
 import dataclasses
 import sqlite3
 from datetime import timedelta
 
 import pytest
 
-from gateway_helpers import (
+from gateway_helpers import (  # noqa: F401 - close_gateway_stores is an autouse fixture
+    EXTERNAL_MODEL_ID,
     LOCAL_MODEL_ID,
     STAGING_OK,
     build_gateway,
+    close_gateway_stores,
     route_turn,
     run,
     text_turn,
@@ -50,7 +53,8 @@ def sample(clock, **changes):
 def test_upgrade_previous_schema_preserves_runs_and_adds_timings(tmp_path):
     """RM17: append a migration; never change a previously applied script."""
     path = tmp_path / "old.sqlite"
-    with sqlite3.connect(path) as connection:
+    # sqlite3's own context manager commits but never closes the connection.
+    with contextlib.closing(sqlite3.connect(path)) as connection, connection:
         for migration in MIGRATIONS[:-1]:
             for statement in split_sql_statements(migration):
                 connection.execute(statement)
@@ -309,8 +313,10 @@ def test_warmup_records_success_and_failure_without_creating_runs(tmp_path):
     assert gateway.store._conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0
 
 
-def test_terminal_outcomes_are_recorded_once_and_external_only_is_not_a_local_loss(tmp_path):
-    """RM17/RM27: expected-wait inputs are materialized, terminal and attempt based."""
+def test_local_completion_is_materialized_read_without_event_scans_and_deleted_with_run(
+    tmp_path,
+):
+    """RM17/RM27: a completed local run counts once; deleting the run removes it."""
     gateway = build_gateway(
         tmp_path,
         [
@@ -530,6 +536,7 @@ def terminal_skill_run(
     purpose="skill",
     mode="auto",
     error=None,
+    branch=None,
 ):
     run_id = store.create_run("accepted").run_id
     drafts = [
@@ -552,7 +559,12 @@ def terminal_skill_run(
             (
                 EventType.MODEL_STARTED,
                 "local",
-                {"model": local_model, "purpose": purpose, "call_id": "l1"},
+                {
+                    "model": local_model,
+                    "purpose": purpose,
+                    "call_id": "l1",
+                    **({} if branch is None else {"branch": branch}),
+                },
             )
         )
     if external_model is not None:
@@ -637,6 +649,43 @@ def test_routing_only_and_local_only_failure_do_not_lower_skill_success():
         assert stats.local_completed == stats.local_escalated == 0
         assert stats.local_success_rate is None
         assert stats.external_completed == 1
+
+
+def test_parallel_workflow_join_is_not_a_local_escalation(tmp_path):
+    """RM15/RM27, spec 0.38.1: the planned synthesis join is no local loss for the skill."""
+    workflow = "health-and-diagnostic-checklist"
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn(workflow), tool_turn("get_service_health", service="staging-api")],
+        external_turns=[
+            text_turn("Check dependencies."),
+            text_turn(
+                "Observation: "
+                + STAGING_OK
+                + "\nDiagnostic checklist (draft, not log-backed):\n- Check dependencies."
+            ),
+        ],
+        enabled_workflows={workflow},
+    )
+    outcome, events = run(gateway, execution_mode="parallel_demo")
+    assert outcome.state.value == "completed"
+    assert any(e.event_type is EventType.HANDOFF_STARTED for e in events)
+    stats = gateway.store.outcome_estimate(
+        LOCAL_MODEL_ID, workflow, external_model=EXTERNAL_MODEL_ID
+    )
+    assert (stats.local_completed, stats.local_escalated) == (0, 0)
+    assert stats.local_success_rate is None
+    # The draft and the synthesis remain the skill's actual external generations.
+    assert (stats.external_completed, stats.median_external_generations) == (1, 2)
+
+
+def test_failed_parallel_branch_is_not_a_local_escalation():
+    """RM15/RM27, spec 0.38.1: a workflow branch call is not a local placement attempt."""
+    with RunStore(clock=FakeClock()) as store:
+        terminal_skill_run(store, branch="local_health", error="needs_external")
+        stats = store.outcome_estimate("local", "health")
+        assert stats.local_completed == stats.local_escalated == 0
+        assert stats.local_success_rate is None
 
 
 def test_warmup_timeout_records_failed_sample_without_a_run(tmp_path):

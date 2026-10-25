@@ -4,6 +4,11 @@ from collections.abc import Mapping
 from typing import Any
 
 
+def is_local_attempt(payload: Mapping[str, Any]) -> bool:
+    """RM15/RM27: a parallel branch is not a sequential local placement attempt."""
+    return payload.get("purpose") not in (None, "routing") and "branch" not in payload
+
+
 def project_outcome(
     progress: Mapping[str, Any], kind: str, payload: Mapping[str, Any]
 ) -> dict[str, Any] | None:

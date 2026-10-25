@@ -16,7 +16,7 @@ from relaymind.adapters import GenerationOptions
 from relaymind.canonical import canonical_digest
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.store import ModelTiming, RunStore
-from relaymind.store.outcomes import project_outcome
+from relaymind.store.outcomes import is_local_attempt, project_outcome
 from relaymind.store.trace_event import TRACE_EVENT_SCHEMA, validate_trace_event
 
 TERMINAL = {"run.completed": "completed", "run.failed": "failed", "run.cancelled": "cancelled"}
@@ -218,7 +218,7 @@ def _observations(events: list[dict]) -> tuple[list[ModelTiming], dict | None]:
         elif kind == "model.started":
             if actor == "local":
                 progress["local_model"] = progress["local_model"] or p["model"]
-                progress["local_attempt"] |= p.get("purpose") not in (None, "routing")
+                progress["local_attempt"] |= is_local_attempt(p)
             elif actor == "external":
                 if progress["external_model"] not in (None, p["model"]):
                     raise ValueError("mixed external models within one source run are unsupported")

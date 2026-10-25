@@ -1,47 +1,5 @@
 # Testing RelayMind (Milestones 1 to 5)
 
-Device placement and idle maintenance (#130; AC21, RM03, RM04, RM17, RM21,
-RM22, RM27, RM28, spec 0.39): `pytest tests/test_placement.py tests/test_idle_probe.py`
-uses measured fixtures and fake clocks to check production-only output estimates,
-latest prefix classes, exact tokenization requests, policy exemptions, hard caps,
-expected-wait observations, stage/run deadline precedence and rejected late output.
-The same generation boundary covers client-owned calls and fixed parallel branches.
-Readiness uses representative samples without tokenization. Probe tests cover
-SQLite slot races across connections, failed/cancelled cooldowns, confirmation
-rollback, input resume, cancellation-resistant shutdown and genuine restart cleanup.
-New trace writes validate the closed placement object; historical UI readers still
-accept missing or previously unconstrained fields. No test claims live performance.
-
-Timing storage and placement inputs (#129; RM17, RM25, RM27, spec 0.38):
-`pytest tests/test_model_timings.py tests/test_run_store.py tests/test_launcher_warmup.py`
-checks the previous-schema upgrade, validated sample imports, seven-day
-retention, explicit deletion and deterministic 1,000-sample bounds. Synthetic
-measurements check medians, separate warm/cold rates, unknown usage and
-zero-duration intervals. Model doubles cover managed local/external,
-client-owned, fixed-workflow, failed, cancelled and warm-up calls. Terminal
-outcome tests distinguish local completion from escalation, omit routing-only
-and local-only failures, isolate external models, and verify transaction
-rollback and estimate reads without event-history scans. These are
-deterministic checks, not live performance evidence.
-
-Selection benchmark tests (#143, #144; RM02, RM08, RM09, RM25, RM28) run
-with `pytest tests/test_selection_benchmark.py`. They cover frozen digests,
-set scoring and macro/micro summaries, leave-one-task-out examples, router
-catalog caps and context bypasses, both source tool schema styles, seeded
-candidate presentation, inert handlers, loopback HTTP selectors, proposal
-validation and source derivation. ToolRet fixture rows are synthetic; no
-download or model call is needed in the default test suite. Real benchmark
-commands and the optional `bench` extra are described in `scripts/README.md`.
-
-Phase 2 runner configurations (#128; RM03, RM25, RM26, RM29, RM31, RM32)
-are covered by `tests/test_runner_configurations.py`, alongside the corpus
-and latency script tests. The tests check launch-file round trips, validation,
-no-local runtime bypass, external prerequisites, export/report labels and
-offline regrading. Grading and metric regressions distinguish gateway-owned
-answers from local-model completion and report no-local completion as not
-applicable. These deterministic checks do not constitute the live evaluation
-matrix or evidence for changing defaults.
-
 How to verify the M1 to M5 deliverables, by hand on macOS and Windows
 and with the automated suites. M1 qualifies the local model runtime and
 the adapters; M2 adds the bounded local loop; M3 adds handoff,
@@ -202,7 +160,8 @@ starts its own llama-server.
   Phase 2 trace tests (#127; RM12, RM23, RM25–RM29, RM31) also check
   recorded configuration, selector attempts for every route, routing-call
   timing joined by call ID, first-token timing including zero, applied answer
-  pass, escaped labels and missing historical fields. Placement projections
+  pass, escaped labels, missing historical fields (not recorded), and
+  values recorded as null (shown with their meaning). Placement projections
   use illustrative optional event fields; they are not measured predictions.
   Workflow steps remain a labeled placeholder pending #138.
 
@@ -216,7 +175,9 @@ starts its own llama-server.
   options, the parallel workflow actors, a routing cache route, that approve
   and deny stay disabled until the page holds the token, and a replay-mode
   view with no controls. The phase 2 test checks the no-local status and
-  recorded options in both the shell and trace, plus gateway prefetch labels.
+  recorded options in both the shell and trace, that the shell labels are
+  visible while the configuration panel is closed, plus gateway prefetch
+  labels.
   Install
   the browser once with `playwright install chromium`; a machine without
   it fails the test. CI installs it on ubuntu, macOS, and Windows. One
@@ -884,6 +845,125 @@ feature has a test of the default as well. Later pull requests append here.
   class forbids, and `tests/test_trace_event.py -k local_model_fields`
   checks the new optional fields in the validator and the published schema
   alike.
+- `pytest tests/test_selection_benchmark.py tests/test_selection_benchmark_review.py`
+  (#143, #144; RM02, RM08, RM09, RM25, RM28, section 12.4): the selection
+  benchmarks. They cover frozen digests, set scoring and macro/micro
+  summaries, leave-one-task-out examples, router catalog caps and context
+  bypasses, both source tool schema styles, collision suffixes that do not
+  depend on which candidate is positive, seeded candidate presentation, inert
+  handlers, loopback HTTP selectors, proposal validation and schema validity
+  (only `unknown_tool` and `invalid_arguments` count against it), failed and
+  abstaining narrowing arms, call-budget scoring, and source derivation with
+  lock and archive digest checks. ToolRet fixture rows are synthetic; no
+  download or model call is needed in the default test suite. Real benchmark
+  commands and the optional `bench` extra are described in
+  [`scripts/README.md`](../scripts/README.md).
+- `pytest tests/test_runner_configurations.py` (#128; RM03, RM25, RM26,
+  RM29, RM31, RM32): the phase 2 runner configurations, alongside the corpus
+  and latency script tests. They check launch-file round trips, validation,
+  no-local runtime bypass, external prerequisites, export/report labels and
+  offline regrading. Grading and metric regressions distinguish gateway-owned
+  answers from local-model completion and report no-local completion as not
+  applicable. These deterministic checks do not constitute the live
+  evaluation matrix or evidence for changing defaults.
+- `pytest tests/test_model_timings.py tests/test_run_store.py tests/test_launcher_warmup.py`
+  (#129; RM17, RM25, RM27, spec 0.38): timing storage and placement inputs.
+  They check the previous-schema upgrade, validated sample imports, seven-day
+  retention, explicit deletion and deterministic 1,000-sample bounds.
+  Synthetic measurements check medians, separate warm/cold rates, unknown
+  usage and zero-duration intervals. Model doubles cover managed
+  local/external, client-owned, fixed-workflow, failed, cancelled and warm-up
+  calls. Terminal outcome tests distinguish local completion from escalation,
+  omit routing-only and local-only failures and parallel workflow runs,
+  isolate external models, and verify transaction rollback and estimate reads
+  without event-history scans. These are deterministic checks, not live
+  performance evidence.
+- `pytest tests/test_placement.py tests/test_idle_probe.py` (#130; AC21,
+  RM03, RM04, RM17, RM21, RM22, RM27, RM28, spec 0.39): device placement and
+  idle maintenance. Measured fixtures and fake clocks check production-only
+  output estimates, latest prefix classes, exact tokenization requests,
+  policy exemptions, hard caps, expected-wait observations, stage/run
+  deadline precedence and rejected late output. The same generation boundary
+  covers client-owned calls and fixed parallel branches. Readiness uses
+  representative samples without tokenization and reports no routing fit
+  without a usable local model. A routing decline stays on route.selected
+  and is not carried by a later transition. Probe tests cover SQLite slot
+  races across connections, failed/cancelled cooldowns, the scheduler's wait
+  and recovery after a failed check, confirmation rollback, input resume,
+  cancellation-resistant shutdown and genuine restart cleanup. New trace
+  writes validate the closed placement object; historical UI readers still
+  accept missing or previously unconstrained fields. No test claims live
+  performance.
+
+- `pytest tests/test_http_selector.py tests/test_http_selector_review.py`
+  (#133, spec 0.40) covers RM03, RM08, RM11, RM12, RM14,
+  RM16, RM22, RM25, RM26, RM28 and AC22. Ephemeral literal-loopback servers
+  exercise actual POST requests: configured identity, closed startup settings,
+  URL policy (plain http only) without credential echoes, proxy and redirect
+  isolation, exactly one request, schema/identity/mechanism errors, the response
+  size cap, unknown versus empty claims, admission, redaction, timeout, gateway
+  budget precedence and cancellation. The actual stdlib example script is started
+  on an ephemeral port. Clients close per attempt and remain usable across
+  separate event loops. `tests/test_launcher.py` checks that a non-loopback or
+  https selector URL stops `relaymind serve` with one message, before a socket and
+  without echoing the URL.
+
+  Corpus and latency exports classify HTTP-attempted, gateway-observed and historical
+  unknown provenance, including their Markdown reports; a run that reached no selector
+  (routing cache hit, input-cap bypass, execution mode, client owned) is gateway observed.
+  HTTP internal model cost remains unverified and does not enter measured call/token totals.
+
+  Trace tests check Python and published JSON Schema compatibility with historical
+  attempts and rejection of partial or malformed new evidence. Gateway tests retain
+  HTTP attempts on successful fallback, failed routing and run cancellation without
+  inventing routes or adding claims to measured model calls. Unknown skills and
+  foreign tools execute nothing; mutations still wait for confirmation. Both frozen
+  benchmark tracks use the production HTTP boundary, preserve failed-case claims,
+  and retain every failed case in the denominator. This deterministic coverage and
+  the keyword SkillsBench export are transport evidence; no live model capability
+  or useful keyword accuracy is implied.
+
+- `pytest tests/test_gated_streaming.py tests/test_completion_predicates.py`
+  (#125; RM12, RM17, RM20, RM32, AC19): verified live answer publication
+  uses deterministic model doubles. It exercises cumulative safety and final
+  completeness against the existing bilingual predicate cases, exact delimiter
+  preservation, multiline checklist scope, full-answer redaction, early and late
+  rejection, absent completion markers, provider failures, cancellation, deadline
+  ties, persisted call identity, synthesis after joining, and failed persistence.
+  The managed SSE tests include real socket/standard SDK error parsing, with
+  early headers on and off, plus idempotent replay; raw ASGI tests synchronize
+  on generated/published content before disconnecting. They make no inference
+  calls and do not measure task-success parity or a latency improvement.
+
+  The gate retains raw context privately. For checklist answers it waits until
+  the first complete draft label, then verifies complete lines. With known secret
+  values it conservatively withholds the whole answer so published text exactly
+  matches the existing full-answer scrub, including overlapping secrets. These
+  choices can delay first content. The predicates retain their documented
+  syntactic limitations; the performance predicate is a section/evidence check,
+  not a general factual verifier.
+
+  The opt-in `performance.answer_stream = "live"` applies to native managed runs
+  and streamed managed chat. Non-streamed chat and client-owned calls remain
+  effectively buffered. Corpus grades retain configured/effective policy and
+  terminal failure code, and report task success and `predicate_unmet` separately
+  for each effective policy. The actual paired provider corpus run on one final
+  revision and frozen timing prior is still required before changing defaults.
+
+- M8 evaluation infrastructure (RM17, RM25–RM28, RM32; specification 14.4).
+
+  Run the importer, local-phase clock, metric, checkpoint, matrix and runner
+  regressions with model doubles before executing the matrix:
+
+  ```sh
+  .venv/bin/python -m pytest -o pythonpath=src tests/test_placement_prior.py tests/test_local_active_measurement.py tests/test_m8_metrics.py tests/test_evaluation_checkpoints.py tests/test_m8_matrix_driver.py tests/test_runner_configurations.py tests/test_run_corpus_script.py tests/test_latency_benchmark_script.py
+  ```
+
+  The prior tests use declared synthetic test fixtures to validate projection and
+  retention, including an expected-wait decision from imported terminal history.
+  They establish no performance, provider parity, or model capability. The
+  checkpoint tests verify preservation/refusal behavior without inference.
+  Repository completion checks remain the entire pytest suite and Ruff lint/format.
 
 ### What is not covered yet
 
@@ -1256,72 +1336,3 @@ qualifies that Windows Server/CPU environment, not every Windows desktop
 or GPU configuration. Repeat the same smoke file on Apple Silicon and
 record both results in `EVIDENCE.md` before claiming runtime qualification.
 The smoke suite is separate from the AC15/M6 benchmark.
-
-### Loopback HTTP selector (#133, spec 0.40)
-
-`pytest tests/test_http_selector.py` covers RM03, RM08, RM11, RM12, RM14,
-RM16, RM22, RM25, RM26, RM28 and AC22. Ephemeral literal-loopback servers
-exercise actual POST requests: configured identity, closed startup settings,
-URL policy without credential echoes, proxy and redirect isolation, exactly one
-request, schema/identity/mechanism errors, unknown versus empty claims, admission,
-redaction, timeout, gateway budget precedence and cancellation. The actual stdlib
-example script is started on an ephemeral port. Clients close per attempt and
-remain usable across separate event loops.
-
-Corpus and latency exports classify HTTP-attempted, gateway-observed and historical
-unknown provenance, including their Markdown reports; HTTP internal model cost remains
-unverified and does not enter measured call/token totals.
-
-Trace tests check Python and published JSON Schema compatibility with historical
-attempts and rejection of partial or malformed new evidence. Gateway tests retain
-HTTP attempts on successful fallback, failed routing and run cancellation without
-inventing routes or adding claims to measured model calls. Unknown skills and
-foreign tools execute nothing; mutations still wait for confirmation. Both frozen
-benchmark tracks use the production HTTP boundary, preserve failed-case claims,
-and retain every failed case in the denominator. This deterministic coverage and
-the keyword SkillsBench export are transport evidence; no live model capability
-or useful keyword accuracy is implied.
-
-
-### Verified live answer publication (#125; RM12, RM17, RM20, RM32, AC19)
-
-`pytest tests/test_gated_streaming.py tests/test_completion_predicates.py`
-uses deterministic model doubles. It exercises cumulative safety and final
-completeness against the existing bilingual predicate cases, exact delimiter
-preservation, multiline checklist scope, full-answer redaction, early and late
-rejection, absent completion markers, provider failures, cancellation, deadline
-ties, persisted call identity, synthesis after joining, and failed persistence.
-The managed SSE tests include real socket/standard SDK error parsing, with
-early headers on and off, plus idempotent replay; raw ASGI tests synchronize
-on generated/published content before disconnecting. They make no inference
-calls and do not measure task-success parity or a latency improvement.
-
-The gate retains raw context privately. For checklist answers it waits until
-the first complete draft label, then verifies complete lines. With known secret
-values it conservatively withholds the whole answer so published text exactly
-matches the existing full-answer scrub, including overlapping secrets. These
-choices can delay first content. The predicates retain their documented
-syntactic limitations; the performance predicate is a section/evidence check,
-not a general factual verifier.
-
-The opt-in `performance.answer_stream = "live"` applies to native managed runs
-and streamed managed chat. Non-streamed chat and client-owned calls remain
-effectively buffered. Corpus grades retain configured/effective policy and
-terminal failure code, and report task success and `predicate_unmet` separately
-for each effective policy. The actual paired provider corpus run on one final
-revision and frozen timing prior is still required before changing defaults.
-
-### M8 evaluation infrastructure (RM17, RM25–RM28, RM32)
-
-Run the importer, local-phase clock, metric, checkpoint, matrix and runner
-regressions with model doubles before executing the matrix:
-
-```sh
-.venv/bin/python -m pytest -o pythonpath=src tests/test_placement_prior.py tests/test_local_active_measurement.py tests/test_m8_metrics.py tests/test_evaluation_checkpoints.py tests/test_m8_matrix_driver.py tests/test_runner_configurations.py tests/test_run_corpus_script.py tests/test_latency_benchmark_script.py
-```
-
-The prior tests use declared synthetic test fixtures to validate projection and
-retention, including an expected-wait decision from imported terminal history.
-They establish no performance, provider parity, or model capability. The
-checkpoint tests verify preservation/refusal behavior without inference.
-Repository completion checks remain the entire pytest suite and Ruff lint/format.

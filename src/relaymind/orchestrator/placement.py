@@ -215,30 +215,25 @@ class Placement:
         p = marker()
         fits = None
         chosen = external_model
-        if local_model is not None:
-            samples = [
-                s
-                for s in self.store.model_timings(
-                    model=local_model, purpose="routing", actor="local"
-                )
-                if s.succeeded
-            ]
-            tokens = samples[-1].input_tokens if samples else None
+        # An absent, unavailable or unsuitable class keeps the RM26 external choice:
+        # no local routing is predicted, so neither a placement nor a fit is reported.
+        if local_model is not None and usable:
+            latest = self.store.latest_model_timing(
+                model=local_model, purpose="routing", actor="local"
+            )
+            tokens = None if latest is None else latest.input_tokens
             p = self.predict(
                 local_model, "routing", tokens, output_cap=output_cap, input_source="routing_sample"
             )
             fits = None if p.predicted_ms is None else p.predicted_ms <= stage_seconds * 1000
-            if usable:
-                p = self.admit(
-                    p,
-                    mode="auto",
-                    external_model=external_model,
-                    stage_seconds=stage_seconds,
-                    run_seconds=stage_seconds,
-                )
-                chosen = local_model if p.role == "local" else external_model
-            else:
-                p = marker()
+            p = self.admit(
+                p,
+                mode="auto",
+                external_model=external_model,
+                stage_seconds=stage_seconds,
+                run_seconds=stage_seconds,
+            )
+            chosen = local_model if p.role == "local" else external_model
         return {
             "policy": self.settings.policy,
             "representative": True,

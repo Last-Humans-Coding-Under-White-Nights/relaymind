@@ -6,7 +6,15 @@ from datetime import timedelta
 
 import pytest
 
-from gateway_helpers import STAGING_OK, build_gateway, route_turn, run, text_turn, tool_turn
+from gateway_helpers import (  # noqa: F401 - close_gateway_stores is an autouse fixture
+    STAGING_OK,
+    build_gateway,
+    close_gateway_stores,
+    route_turn,
+    run,
+    text_turn,
+    tool_turn,
+)
 from relaymind.store import RunStore
 
 
@@ -428,3 +436,80 @@ def test_prior_accepts_matching_recorded_provider_options(tmp_path):
     bundle["partitions"][0]["sources"][0]["run_ids"] = [outcome.run_id]
     rewrite_source(path, source, bundle)
     assert load_prior(path, config).timings
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_parallel_prior_matches_live_without_local_escalation(tmp_path, failed):
+    """RM15/RM27, AC14: parallel branches are not sequential placement attempts."""
+    from dataclasses import asdict
+
+    from native_helpers import GatedAdapter
+    from relaymind.evaluation.placement_metrics import trace_metrics
+    from relaymind.evaluation.prior import load_prior
+    from relaymind.orchestrator.local_loop import EXTERNAL_OPTIONS, ConfiguredModel
+
+    _, path, config, source, bundle = fixture_source(tmp_path)
+    workflow = "health-and-diagnostic-checklist"
+    if failed:
+        external = GatedAdapter(turns=[text_turn("Check dependencies.")], locality="external")
+        gateway = build_gateway(
+            tmp_path / "parallel",
+            [route_turn(workflow), text_turn("It is fine."), text_turn("Still fine.")],
+            external_model=ConfiguredModel(adapter=external, model_id="gated-external"),
+            enabled_workflows={workflow},
+            parallel_in_auto=True,
+        )
+    else:
+        gateway = build_gateway(
+            tmp_path / "parallel",
+            [route_turn(workflow), tool_turn("get_service_health", service="staging-api")],
+            external_turns=[
+                text_turn("Check dependencies."),
+                text_turn(
+                    "Observation: "
+                    + STAGING_OK
+                    + "\nDiagnostic checklist (draft, not log-backed):\n- Check dependencies."
+                ),
+            ],
+            enabled_workflows={workflow},
+            parallel_in_auto=True,
+        )
+    outcome, traced = run(
+        gateway, "Run the health checklist for staging-api.", execution_mode="auto"
+    )
+    assert outcome.state.value == ("failed" if failed else "completed")
+    events = [e.to_json_object() for e in traced]
+    assert any(e["event_type"] == "model.started" and "branch" in e["payload"] for e in events)
+    model = gateway.orchestrator.external.model_id
+    config["external"] = {
+        "base_url": "https://example.invalid/v1",
+        "model": model,
+        "context_limit": 128000,
+        "request_options": {},
+        "generation_options": asdict(EXTERNAL_OPTIONS),
+    }
+    source["records"] = {"workflow/auto": {"run_id": outcome.run_id, "state": outcome.state.value}}
+    source["traces"] = {outcome.run_id: events}
+    bundle["partitions"][0]["sources"][0]["run_ids"] = [outcome.run_id]
+    rewrite_source(path, source, bundle)
+    prior = load_prior(path, config)
+    live = gateway.store.outcome_estimate(
+        config["local"]["model_id"], workflow, external_model=model
+    )
+    assert live.local_completed == live.local_escalated == 0
+    assert live.external_completed == (0 if failed else 1)
+    assert live.median_external_generations == (None if failed else 2)
+    with RunStore(tmp_path / "parallel-prior.sqlite", clock=gateway.clock) as store:
+        prior.seed(store)
+        assert (
+            store.outcome_estimate(config["local"]["model_id"], workflow, external_model=model)
+            == live
+        )
+    # Failed/cancelled external work stays in measured timing/call cost, not successful history.
+    external_calls = [
+        e for e in events if e["event_type"] == "model.started" and e["actor"] == "external"
+    ]
+    assert len(external_calls) == (1 if failed else 2)
+    assert len([t for t in prior.timings if t.actor == "external"]) == len(external_calls)
+    assert len(trace_metrics(events)["external_usage"]) == len(external_calls)
+    assert events[-1]["payload"]["local_active_ms"] is None

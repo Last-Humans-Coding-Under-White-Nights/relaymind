@@ -19,8 +19,11 @@ import asyncio
 import dataclasses
 import json
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+import pytest
 
 from helpers import (
     BASELINE,
@@ -69,6 +72,26 @@ class Gateway:
     tools: ToolRegistry
     skills: SkillRegistry
     clock: FakeClock
+
+
+@pytest.fixture(autouse=True)
+def close_gateway_stores(monkeypatch):
+    """Close every store build_gateway opens in a test, so no SQLite handle leaks.
+
+    Autouse in a test module that imports it.
+    """
+    opened: list[RunStore] = []
+    store_class = RunStore
+
+    def open_store(*args, **kwargs) -> RunStore:
+        store = store_class(*args, **kwargs)
+        opened.append(store)
+        return store
+
+    monkeypatch.setattr(sys.modules[__name__], "RunStore", open_store)
+    yield
+    for store in opened:
+        store.close()
 
 
 def build_gateway(

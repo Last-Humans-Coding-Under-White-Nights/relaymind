@@ -54,7 +54,7 @@ from relaymind.store.model_timings import (
     TimingEstimate,
     timing_estimate,
 )
-from relaymind.store.outcomes import project_outcome
+from relaymind.store.outcomes import is_local_attempt, project_outcome
 from relaymind.store.trace_event import (
     SCHEMA_VERSION,
     EventType,
@@ -401,6 +401,24 @@ def _run_record(row: sqlite3.Row) -> RunRecord:
     )
 
 
+_TIMING_SELECT = (
+    "SELECT model, actor, purpose, kind, input_tokens, cached_tokens, first_token_ms,"
+    " duration_ms, output_tokens, succeeded, run_id, recorded_at FROM model_timings"
+)
+
+
+def _model_timing(row: sqlite3.Row) -> ModelTiming:
+    return ModelTiming(
+        **{
+            key: value
+            for key, value in dict(row).items()
+            if key not in ("succeeded", "recorded_at")
+        },
+        succeeded=bool(row["succeeded"]),
+        recorded_at=_parse(row["recorded_at"]),
+    )
+
+
 def _tool_operation_record(row: sqlite3.Row) -> dict[str, Any]:
     record = dict(row)
     record["arguments"] = json.loads(row["arguments"])
@@ -479,6 +497,9 @@ class RunStore:
         self._lock = threading.RLock()
         # Nesting depth of the open write transaction; see transaction().
         self._depth = 0
+        # Runs whose baseline the open write transaction started. A rollback
+        # drops them, so a refused run leaves nothing behind in this process.
+        self._transaction_clocks: set[str] = set()
         self._path = str(path)
         self._in_memory = self._path in (":memory:", "")
         self._closed = False
@@ -600,6 +621,8 @@ class RunStore:
                 self._conn.execute("COMMIT")
             except BaseException as exc:
                 self._rollback()
+                for run_id in self._transaction_clocks:
+                    self._run_started.pop(run_id, None)
                 if isinstance(exc, SlotUnavailableError) and exc.probe:
                     # The admission transaction (including an approval) rolled back.
                     # Persist cancellation separately, while holding the connection lock.
@@ -615,6 +638,7 @@ class RunStore:
                 raise
             finally:
                 self._depth = 0
+                self._transaction_clocks.clear()
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
@@ -667,12 +691,27 @@ class RunStore:
                 last = datetime.fromisoformat(row["last_attempt_at"].replace("Z", "+00:00"))
                 if (now - last).total_seconds() < after_seconds:
                     return False
-            samples = [
-                s
-                for s in self.model_timings(model=model, purpose="routing", actor="local")
-                if s.succeeded
-            ]
-            return not samples or (now - samples[-1].recorded_at).total_seconds() > after_seconds
+            latest = self.latest_model_timing(model=model, purpose="routing", actor="local")
+            return latest is None or (now - latest.recorded_at).total_seconds() > after_seconds
+
+    def probe_wait_seconds(self, *, model: str, after_seconds: float) -> float:
+        """Seconds until cooldown and estimate age allow an idle probe; 0 when they do.
+
+        Only the timed conditions are counted. An active run or another
+        probe's reservation has no known end, so a scheduler polls for it.
+        """
+        with self._lock:
+            self._check_open()
+            row = self._conn.execute("SELECT last_attempt_at FROM idle_probe").fetchone()
+            now = self.clock.utc_now()
+            wait = 0.0
+            if row["last_attempt_at"] is not None:
+                last = datetime.fromisoformat(row["last_attempt_at"].replace("Z", "+00:00"))
+                wait = max(wait, after_seconds - (now - last).total_seconds())
+            latest = self.latest_model_timing(model=model, purpose="routing", actor="local")
+            if latest is not None:
+                wait = max(wait, after_seconds - (now - latest.recorded_at).total_seconds())
+            return wait
 
     def finish_probe(self, token: str, owner_instance: str) -> bool:
         """Release only after the matching owner's generation task has actually ended."""
@@ -752,11 +791,7 @@ class RunStore:
             if accepted is not None:
                 # RM25: the run clock starts with the run, before seq 1.
                 self.start_run_clock(run_id)
-                try:
-                    self._insert_events(run_id, [accepted])
-                except BaseException:
-                    self._run_started.pop(run_id, None)
-                    raise
+                self._insert_events(run_id, [accepted])
         self.start_run_clock(run_id)
         return RunRecord(
             run_id=run_id,
@@ -809,6 +844,8 @@ class RunStore:
                 (run_id, run_id),
             ).fetchone()
             self._run_started[run_id] = (self.clock.monotonic(), offset)
+            if self._depth:
+                self._transaction_clocks.add(run_id)
 
     def elapsed_ms(self, run_id: str) -> int:
         """Measured elapsed time, never inferred from wall time (RM25)."""
@@ -1028,11 +1065,7 @@ class RunStore:
         self, *, model: str | None = None, purpose: str | None = None, actor: str | None = None
     ) -> list[ModelTiming]:
         """Unexpired observations, oldest first, then insertion order for timestamp ties."""
-        query = (
-            "SELECT model, actor, purpose, kind, input_tokens, cached_tokens, first_token_ms,"
-            " duration_ms, output_tokens, succeeded, run_id, recorded_at"
-            " FROM model_timings WHERE recorded_at > ?"
-        )
+        query = _TIMING_SELECT + " WHERE recorded_at > ?"
         params: list[Any] = [self._retention_cutoff()]
         for name, value in (("model", model), ("purpose", purpose), ("actor", actor)):
             if value is not None:
@@ -1041,18 +1074,19 @@ class RunStore:
         with self._lock:
             self._check_open()
             rows = self._conn.execute(query + " ORDER BY recorded_at, sample_id", params).fetchall()
-        return [
-            ModelTiming(
-                **{
-                    key: value
-                    for key, value in dict(row).items()
-                    if key not in ("succeeded", "recorded_at")
-                },
-                succeeded=bool(row["succeeded"]),
-                recorded_at=_parse(row["recorded_at"]),
-            )
-            for row in rows
-        ]
+        return [_model_timing(row) for row in rows]
+
+    def latest_model_timing(self, *, model: str, purpose: str, actor: str) -> ModelTiming | None:
+        """The newest unexpired successful observation, read by one indexed lookup."""
+        with self._lock:
+            self._check_open()
+            row = self._conn.execute(
+                _TIMING_SELECT + " WHERE recorded_at > ? AND model = ? AND purpose = ?"
+                " AND actor = ? AND succeeded = 1"
+                " ORDER BY recorded_at DESC, sample_id DESC LIMIT 1",
+                (self._retention_cutoff(), model, purpose, actor),
+            ).fetchone()
+        return None if row is None else _model_timing(row)
 
     def timing_estimate(self, model: str, purpose: str, *, actor: str = "local") -> TimingEstimate:
         """Read measured prediction inputs without inference or run/event-history scans."""
@@ -1269,14 +1303,13 @@ class RunStore:
             )
         elif kind is EventType.MODEL_STARTED:
             if event.actor == "local":
+                # Spec 0.38.1: a parallel workflow branch call is not a local
+                # placement attempt, so its join or failure is no escalation.
+                attempt = is_local_attempt(payload)
                 self._conn.execute(
                     "UPDATE model_run_progress SET local_model = COALESCE(local_model, ?),"
                     " local_attempt = MAX(local_attempt, ?) WHERE run_id = ?",
-                    (
-                        payload["model"],
-                        int(payload.get("purpose") not in (None, "routing")),
-                        run_id,
-                    ),
+                    (payload["model"], int(attempt), run_id),
                 )
             elif event.actor == "external":
                 # A configured gateway has one external model for a run;
