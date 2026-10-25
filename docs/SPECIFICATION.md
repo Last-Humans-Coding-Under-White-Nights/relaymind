@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.42 | 24 October 2026 | Proposed implementation baseline
+Version 0.43 | 25 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that makes the best use of external language models from a PC with limited resources: it keeps simple, bounded work on a small local model when the machine can run it fast enough, sends everything else to an external model with as few round trips and tokens as the task allows, preserves completed work across that switch, and shows every decision in a trace. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -1079,6 +1079,64 @@ comparison; a none-class streaming claim additionally needs its own buffered/liv
 failures. Report every section 12.3 hypothesis met/not met/not measured with its
 provenance. A subsequent evidence-backed spec revision decides defaults;
 local_first, model_router and buffered remain unchanged in this revision.
+
+### 14.4.4 M7 measurement and comparison coverage (specification 0.43)
+
+M7 reports (RM16, RM25, RM26, RM28, RM29, RM31, RM32) retain the
+run-level tool rubric and additionally count correct model tool-and-argument
+proposals over observed model proposals. A prefetch-only run has model proposal
+n=0. Prefetch correctness counts resolved tool.proposed events whose mechanism
+is prefetch against acceptable_calls, whether admitted or rejected. Workflow
+proposals, unresolved bindings and budget-skipped declarations are excluded;
+admission, rejection and execution counts remain separate diagnostics.
+Completed answer owners are local, external, gateway or unknown, with completed
+eligibility and missing evidence counts. Legacy owner inference stays labeled;
+new measurements require a proven local owner to claim local completion.
+
+Corrections retain every terminal completed run in the denominator. A missing
+trace or metric is unknown, never zero; report known count, measured completed
+runs, missing completed runs and missing rejected durations. A population with
+missing coverage has no complete-population correction rate or duration total.
+First-token observations join model.started to model.finished by call_id and
+retain started-but-unfinished calls with null timings. Report model, actor,
+purpose, call_id, n/eligible/missing and distributions; never derive first token
+from total duration. Cold requests, launcher warmup, runner warmups and measured
+requests are separate populations. Legacy token totals are known subtotals.
+
+Corpus selector scores refer to the initial request, before clarification resume.
+Repeated progress histories of the same round do not duplicate attempts. Report
+per name/version/transport attempted, failed, skipped, scored and unobserved
+counts. Earlier failed selectors receive empty predictions, never the fallback
+winner; never-reached selectors are skipped. Singleton scores from built-in
+selectors do not claim unrecorded third-party candidate-set accuracy. Missing
+selection observations are explicit and prevent a complete-population score.
+Regrading shares live metric enrichment, preserves measured application and
+configuration plus previous analysis provenance, and records the source-byte
+digest and analyst revision in a distinct output artifact.
+
+The M7 matrix is an offline plan unless execution is explicit, and uses the
+same checkpoint, immutable identity, reconciliation and cost rules as M8.
+At reviewed revision R it includes baseline (156 corpus runs), draft (104),
+many calls (104), prefetch (104), draft+many+prefetch (156), and no-local with
+example_match (104); two local-only latency cells each have 120 measured,
+one cold and three runner-warmup requests, with early_headers changed only in
+the second. Neither latency cell configures an external provider or a prior.
+An optional controlled criteria-and-named-correction ablation uses a separately
+reviewed explicit revision R-minus-criteria (104 auto/local_only runs), never a
+product flag. Without it the isolated criteria hypothesis is not measured.
+Baseline settings and budgets stay unchanged in every other dimension.
+Reuse is limited to baseline and no-local corpus exports with exact source,
+effective configuration, runtime/model/provider, corpus/sidecar and fixture
+identity, including an explicitly null prior. Seeded M8 controls cannot be M7
+baselines. Shared physical attempt cost is counted once by immutable identity,
+and all failed/interrupted predecessor attempts retain cost.
+
+Analysis validates immutable exports, renders missing coverage and comparisons,
+and enumerates section 12.3 hypotheses as met, not met or not measured. Missing
+required metrics fail reporting acceptance; a measured missed hypothesis is a
+valid finding. Historical before/current after comparisons retain actual hashes
+and language groups and are explicitly confounded, not isolated causal evidence.
+No default changes or live capability claims follow from deterministic tests.
 
 ## 15 Sources
 

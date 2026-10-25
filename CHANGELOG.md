@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.43 defines M7 metric coverage, initial-selection attribution,
+  provenance-preserving reanalysis and the offline/explicit-execute comparison
+  matrix (#128; RM16, RM17, RM25–RM29, RM31, RM32). Defaults remain unchanged.
+
 - M8 evaluation infrastructure (#134; RM17, RM25–RM28, RM32): validated
   configuration-specific measured priors, serial local active time, honest
   cost/selection/placement metrics and durable matrix checkpoints. Provider
