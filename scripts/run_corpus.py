@@ -407,7 +407,9 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
                         corpus.expected_skills.get(case.case_id)
                         if hasattr(corpus, "expected_skills")
                         else json.loads(
-                            (REPO_ROOT / "evaluation/corpus.v1.skills.json").read_text()
+                            (REPO_ROOT / "evaluation/corpus.v1.skills.json").read_text(
+                                encoding="utf-8"
+                            )
                         )["skills"][case.case_id]
                     )
                     grade_json = enrich_grade(
@@ -548,9 +550,9 @@ def regrade(
                 grade.to_json_object(),
                 case,
                 events,
-                json.loads((REPO_ROOT / "evaluation/corpus.v1.skills.json").read_text())["skills"][
-                    case.case_id
-                ],
+                json.loads(
+                    (REPO_ROOT / "evaluation/corpus.v1.skills.json").read_text(encoding="utf-8")
+                )["skills"][case.case_id],
                 document.get("configuration", {}),
                 modern="selection_sidecar_sha256" in document,
             )

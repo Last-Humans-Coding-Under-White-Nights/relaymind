@@ -23,7 +23,7 @@ def test_offline_plan_counts_and_no_provider_access(tmp_path, monkeypatch):
     )
     out = tmp_path / "plan"
     d.main(["--out", str(out), "--revision", "a" * 40, "--criteria-revision", "b" * 40])
-    plan = json.loads((out / "plan.json").read_text())
+    plan = json.loads((out / "plan.json").read_text(encoding="utf-8"))
     assert len(plan["cells"]) == 9
     assert plan["corpus_runs"] == 832
     assert plan["latency_requests"] == 248
@@ -32,7 +32,7 @@ def test_offline_plan_counts_and_no_provider_access(tmp_path, monkeypatch):
     assert plan["conditional_reuse"]["external_inference_ceiling"] == 1872
     assert plan["cells"][6]["revision"] == "b" * 40
     d.main(["--out", str(tmp_path / "narrow"), "--revision", "a" * 40, "--omit-criteria"])
-    narrow = json.loads((tmp_path / "narrow/plan.json").read_text())
+    narrow = json.loads((tmp_path / "narrow/plan.json").read_text(encoding="utf-8"))
     assert narrow["corpus_runs"] == 728
     assert narrow["external_inference_ceiling"] == 2808
     assert narrow["criteria_hypothesis"] == "not measured"
@@ -234,7 +234,7 @@ def test_m7_restart_retains_failed_usage_and_requires_new_attempt(tmp_path, monk
         d.main(args)
     state["finish"] = True
     d.main(args + ["--restart", "M7-C5=recovery"])
-    attempts = json.loads((out / "index.json").read_text())["attempts"]["M7-C5"]
+    attempts = json.loads((out / "index.json").read_text(encoding="utf-8"))["attempts"]["M7-C5"]
     assert state["calls"] == 2
     assert [a["cost"]["calls"] for a in attempts] == [1, 1]
     assert attempts[0]["cost"]["input_tokens_missing_calls"] == 1
@@ -252,5 +252,8 @@ def test_m7_finalized_checkpoint_reconciles_without_repeat(tmp_path, monkeypatch
     d.main(args)
     assert state["calls"] == 1
     assert (
-        json.loads((out / "index.json").read_text())["attempts"]["M7-C5"][0]["status"] == "complete"
+        json.loads((out / "index.json").read_text(encoding="utf-8"))["attempts"]["M7-C5"][0][
+            "status"
+        ]
+        == "complete"
     )

@@ -206,7 +206,7 @@ def test_regrade_preserves_source_and_prior_analysis_with_metric_enrichment(tmp_
     """RM16/RM25: analysis is separate from measurement provenance and immutable bytes."""
     runner = load_script_module("run_corpus")
     source = runner.REPO_ROOT / "docs/evidence/2026-10-22-corpus-apple-m1.json"
-    document = json.loads(source.read_text())
+    document = json.loads(source.read_text(encoding="utf-8"))
     original = deepcopy(document)
     result = runner.regrade(
         document, runner.load_frozen_corpus(), source_sha256=runner.byte_digest(source)
@@ -243,9 +243,9 @@ def test_regrade_cli_writes_distinct_output_and_records_byte_digest(tmp_path):
     out = tmp_path / "analysis.json"
     runner.main(["--regrade", str(source), "--out", str(out)])
     assert source.read_bytes() == before
-    assert json.loads(out.read_text())["regraded_with"]["source_sha256"] == runner.byte_digest(
-        source
-    )
+    assert json.loads(out.read_text(encoding="utf-8"))["regraded_with"][
+        "source_sha256"
+    ] == runner.byte_digest(source)
     with pytest.raises(SystemExit):
         runner.main(["--regrade", str(source), "--out", str(source)])
 
@@ -282,8 +282,8 @@ def test_source_fingerprint_includes_fixture_identity(tmp_path):
 
     fixture = tmp_path / "tests/fixtures/sandbox/seed.json"
     fixture.parent.mkdir(parents=True)
-    fixture.write_text("{}")
+    fixture.write_text("{}", encoding="utf-8")
     before = source_fingerprint(tmp_path)
-    fixture.write_text('{"changed":true}')
+    fixture.write_text('{"changed":true}', encoding="utf-8")
     after = source_fingerprint(tmp_path)
     assert before["source_sha256"] != after["source_sha256"]

@@ -200,7 +200,7 @@ def reuse_identity(
     cell: dict, root: Path, source: dict, configuration: dict, runtime_sha256: str, provider: dict
 ) -> dict:
     manifest = (
-        json.loads((root / "models/qwen3-0.6b-q8_0.manifest.json").read_text())
+        json.loads((root / "models/qwen3-0.6b-q8_0.manifest.json").read_text(encoding="utf-8"))
         if not cell["no_local_model"]
         else None
     )
@@ -226,7 +226,7 @@ def reuse_identity(
 
 def reuse_attempt(cell: dict, foreign_index: Path, expected: dict) -> dict:
     """Reuse a finalized M8 physical attempt, preserving original paths and costs."""
-    foreign = json.loads(foreign_index.read_text())
+    foreign = json.loads(foreign_index.read_text(encoding="utf-8"))
     name = (
         "calibration-normal-local_first-router-buffered-corpus"
         if cell["id"] == "M7-C0"
@@ -237,8 +237,8 @@ def reuse_attempt(cell: dict, foreign_index: Path, expected: dict) -> dict:
         raise ValueError("reuse has no completed source attempt")
     original = attempts[-1]
     directory = foreign_index.parent / name / original["name"]
-    checkpoint = json.loads((directory / "checkpoint.json").read_text())
-    doc = json.loads((directory / "export.json").read_text())
+    checkpoint = json.loads((directory / "checkpoint.json").read_text(encoding="utf-8"))
+    doc = json.loads((directory / "export.json").read_text(encoding="utf-8"))
     actual = {
         **expected,
         "source": checkpoint["identity"]["application"],
@@ -319,7 +319,7 @@ def main(argv: list[str] | None = None) -> None:
         raise ValueError("outputs must remain outside checkout")
     out.mkdir(parents=True, exist_ok=True)
     plan_path = out / "plan.json"
-    if plan_path.exists() and json.loads(plan_path.read_text()) != plan:
+    if plan_path.exists() and json.loads(plan_path.read_text(encoding="utf-8")) != plan:
         raise ValueError("matrix plan differs")
     atomic_json(plan_path, plan)
     if not args.execute:
@@ -359,7 +359,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     index_path = out / "index.json"
     index = (
-        json.loads(index_path.read_text())
+        json.loads(index_path.read_text(encoding="utf-8"))
         if index_path.exists()
         else dict(identity=identity, attempts={})
     )

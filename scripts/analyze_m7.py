@@ -254,8 +254,8 @@ def validate_cell_configuration(cell: dict, document: dict, provider: dict) -> N
 
 
 def analyze(matrix: Path) -> tuple[dict, str]:
-    plan = json.loads((matrix / "plan.json").read_text())
-    index = json.loads((matrix / "index.json").read_text())
+    plan = json.loads((matrix / "plan.json").read_text(encoding="utf-8"))
+    index = json.loads((matrix / "index.json").read_text(encoding="utf-8"))
     if index["identity"]["plan_sha256"] != canonical_digest(plan):
         raise ValueError("matrix plan identity differs")
     corpus = load_frozen_corpus()
@@ -291,7 +291,7 @@ def analyze(matrix: Path) -> tuple[dict, str]:
             for attempt in attempts:
                 directory = matrix / cell["id"] / attempt["name"]
                 checkpoint = (
-                    json.loads((directory / "checkpoint.json").read_text())
+                    json.loads((directory / "checkpoint.json").read_text(encoding="utf-8"))
                     if (directory / "checkpoint.json").exists()
                     else None
                 )
@@ -319,7 +319,7 @@ def analyze(matrix: Path) -> tuple[dict, str]:
             continue
         if byte_digest(export) != latest["export_sha256"]:
             raise ValueError("immutable export digest differs")
-        doc = json.loads(export.read_text())
+        doc = json.loads(export.read_text(encoding="utf-8"))
         validate_case_coverage(cell, doc, corpus)
         validate_cell_configuration(cell, doc, index["identity"]["provider"])
         if cell["runner"] == "corpus":
@@ -358,7 +358,9 @@ def analyze(matrix: Path) -> tuple[dict, str]:
     if byte_digest(historical) != HISTORICAL["corpus_sha256"]:
         raise ValueError("historical source bytes differ")
     before = regrade(
-        json.loads(historical.read_text()), corpus, source_sha256=byte_digest(historical)
+        json.loads(historical.read_text(encoding="utf-8")),
+        corpus,
+        source_sha256=byte_digest(historical),
     )
     lines += [
         "## Historical corrections versus current",
@@ -384,7 +386,7 @@ def analyze(matrix: Path) -> tuple[dict, str]:
     history = []
     for name in HISTORICAL["latency"]:
         path = ROOT / name
-        doc = json.loads(path.read_text())
+        doc = json.loads(path.read_text(encoding="utf-8"))
         history.append(
             dict(
                 file=name,
@@ -457,7 +459,7 @@ def main(argv: list[str] | None = None) -> None:
         raise ValueError("analysis output must be separate from immutable matrix evidence")
     result, markdown = analyze(args.matrix.resolve())
     atomic_json(args.out, result)
-    args.out.with_suffix(".md").write_text(markdown)
+    args.out.with_suffix(".md").write_text(markdown, encoding="utf-8")
     if not result["reporting_accepted"]:
         raise SystemExit("reporting acceptance failed; inspect missing coverage in report")
 
