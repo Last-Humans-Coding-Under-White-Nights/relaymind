@@ -21,6 +21,7 @@ from helpers import ACCEPTED_PAYLOAD, T0, TERMINAL_EVIDENCE, FakeClock
 from relaymind.store import (
     DEFAULT_APPROVAL_TTL,
     MIGRATIONS,
+    ModelTiming,
     RunNotFoundError,
     RunStore,
     RunStoreError,
@@ -61,12 +62,65 @@ def test_opening_creates_the_five_tables(tmp_path):
     )
 
 
+def test_timing_and_outcome_writes_join_the_event_transaction(store, clock):
+    """RM17/RM27: a rolled-back terminal event contributes no timing or outcome."""
+    run_id = store.create_run("accepted").run_id
+    accept(store, run_id)
+    with pytest.raises(RuntimeError, match="abort"):
+        with store.transaction():
+            store.add_model_timing(
+                ModelTiming(
+                    model="local",
+                    actor="local",
+                    purpose="skill",
+                    kind="run",
+                    input_tokens=None,
+                    cached_tokens=None,
+                    first_token_ms=None,
+                    duration_ms=0,
+                    output_tokens=None,
+                    succeeded=False,
+                    run_id=run_id,
+                    recorded_at=clock.utc_now(),
+                )
+            )
+            store.append_event(
+                run_id,
+                EventType.SKILL_LOADED,
+                "gateway",
+                {"name": "health", "version": "1", "content_hash": "hash"},
+            )
+            store.append_event(
+                run_id,
+                EventType.MODEL_STARTED,
+                "local",
+                {"model": "local", "purpose": "skill", "call_id": "l1"},
+            )
+            store.append_event(
+                run_id,
+                EventType.RUN_COMPLETED,
+                "gateway",
+                {**TERMINAL_EVIDENCE, "final_answer_model": "local"},
+            )
+            raise RuntimeError("abort")
+    assert store.model_timings() == []
+    assert len(store.events(run_id)) == 1
+    assert store.outcome_estimate("local", "health").local_completed == 0
+
+
 def test_tables_owned_by_a_run_are_indexed_by_run_id(tmp_path):
     # Purge, deletion, and per-run reads look rows up by run_id.
     with RunStore(tmp_path / "runs.sqlite"):
         pass
     with sqlite3.connect(tmp_path / "runs.sqlite") as conn:
-        for table in ("tool_operations", "approvals", "artifact_refs"):
+        for table in (
+            "tool_operations",
+            "approvals",
+            "artifact_refs",
+            "model_timings",
+            "model_run_progress",
+            "skill_outcomes",
+        ):
             indexed = {
                 column
                 for (_seq, index, *_rest) in conn.execute(f"PRAGMA index_list({table})")

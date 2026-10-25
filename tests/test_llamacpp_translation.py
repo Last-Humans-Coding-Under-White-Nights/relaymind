@@ -267,11 +267,11 @@ def test_stream_options_request_usage_chunks():
     assert body["stream_options"] == {"include_usage": True}
 
 
-def test_none_usage_counts_default_to_zero():
-    # Finding: "prompt_tokens": None made int(None) raise TypeError.
+def test_none_usage_counts_remain_unknown():
+    """RM16/RM27, spec 0.38: null counts are tolerated and never fabricated as zero."""
     acc = StreamAccumulator()
     events = acc.feed({"choices": [], "usage": {"prompt_tokens": None, "completion_tokens": None}})
-    assert events == [Usage(input_tokens=0, output_tokens=0)]
+    assert events == [Usage(input_tokens=None, output_tokens=None)]
 
 
 def test_none_chunk_fields_are_tolerated():

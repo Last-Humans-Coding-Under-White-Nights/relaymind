@@ -372,8 +372,8 @@
               "usage": {
                 "type": ["object", "null"],
                 "properties": {
-                  "input_tokens": {"type": "integer", "minimum": 0},
-                  "output_tokens": {"type": "integer", "minimum": 0},
+                  "input_tokens": {"type": ["integer", "null"], "minimum": 0},
+                  "output_tokens": {"type": ["integer", "null"], "minimum": 0},
                   "cached_tokens": {"type": ["integer", "null"], "minimum": 0},
                   "reasoning_tokens": {"type": ["integer", "null"], "minimum": 0}
                 },

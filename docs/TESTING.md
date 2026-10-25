@@ -866,6 +866,18 @@ feature has a test of the default as well. Later pull requests append here.
   answers from local-model completion and report no-local completion as not
   applicable. These deterministic checks do not constitute the live
   evaluation matrix or evidence for changing defaults.
+- `pytest tests/test_model_timings.py tests/test_run_store.py tests/test_launcher_warmup.py`
+  (#129; RM17, RM25, RM27, spec 0.38): timing storage and placement inputs.
+  They check the previous-schema upgrade, validated sample imports, seven-day
+  retention, explicit deletion and deterministic 1,000-sample bounds.
+  Synthetic measurements check medians, separate warm/cold rates, unknown
+  usage and zero-duration intervals. Model doubles cover managed
+  local/external, client-owned, fixed-workflow, failed, cancelled and warm-up
+  calls. Terminal outcome tests distinguish local completion from escalation,
+  omit routing-only and local-only failures and parallel workflow runs,
+  isolate external models, and verify transaction rollback and estimate reads
+  without event-history scans. These are deterministic checks, not live
+  performance evidence.
 
 ### What is not covered yet
 

@@ -671,9 +671,10 @@ def _check_request_options(value: Any) -> None:
 def _check_usage(value: Any) -> None:
     """The usage of a finished call: null, or the token counts the source reported.
 
-    cached_tokens and reasoning_tokens are a count or null (absent: the
-    source reported none, never a defaulted 0) and may be left out of an
-    event stored before 0.31.
+    Every count may be null when the source reported none (RM27, spec
+    0.38), never a defaulted 0. input_tokens and output_tokens remain
+    required fields. cached_tokens and reasoning_tokens may be left out
+    of an event stored before 0.31.
     """
     if value is None:
         return
@@ -685,8 +686,8 @@ def _check_usage(value: Any) -> None:
     for name in _USAGE_COUNTS:
         if name not in value:
             raise TraceEventError(f"usage needs '{name}'")
-        if not _is_count(value[name], 0):
-            raise TraceEventError(f"usage '{name}' must be a non-negative integer")
+        if not _is_count_or_null(value[name]):
+            raise TraceEventError(f"usage '{name}' must be a non-negative integer or null")
     for name in _USAGE_OPTIONAL_COUNTS:
         if not _is_count_or_null(value.get(name)):
             raise TraceEventError(f"usage '{name}' must be a non-negative integer or null")
