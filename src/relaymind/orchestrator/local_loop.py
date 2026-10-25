@@ -285,7 +285,6 @@ from relaymind.selection import (
 from relaymind.selection.http import HttpSelector
 from relaymind.skills import Skill, SkillRegistry
 from relaymind.skills.predicates import (
-    COMPLETION_CRITERIA,
     COMPLETION_PREDICATES,
     CompletionCriteria,
     Predicate,
@@ -2263,7 +2262,8 @@ class _Run:
             remaining_budgets=self.meter.remaining_budgets(),
             language=language.value,
         )
-        criteria = None if skill is None else COMPLETION_CRITERIA[skill.completion_predicate]
+        # C6 experimental revision: omit criteria prompts; retain the registered predicate.
+        criteria: CompletionCriteria | None = None
         conversation = list(
             external_messages(
                 envelope,
