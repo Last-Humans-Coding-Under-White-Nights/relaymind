@@ -1123,7 +1123,12 @@ one cold and three runner-warmup requests, with early_headers changed only in
 the second. Neither latency cell configures an external provider or a prior.
 An optional controlled criteria-and-named-correction ablation uses a separately
 reviewed explicit revision R-minus-criteria (104 auto/local_only runs), never a
-product flag. Without it the isolated criteria hypothesis is not measured.
+product flag. For this experiment only, the section 4.4 requirement to send
+fixed/value completion criteria and name failed checks in corrections is waived:
+R-minus-criteria omits those messages and uses the existing generic correction.
+Its completion predicates, evidence, permissions, budgets, layout and local path
+remain those of R. This exception is not a shipping configuration or default.
+Without it the isolated criteria hypothesis is not measured.
 Baseline settings and budgets stay unchanged in every other dimension.
 Reuse is limited to baseline and no-local corpus exports with exact source,
 effective configuration, runtime/model/provider, corpus/sidecar and fixture
