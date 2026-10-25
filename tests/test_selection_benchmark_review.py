@@ -3,6 +3,7 @@
 import asyncio
 import json
 import sys
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -100,6 +101,25 @@ def production_http_selector(monkeypatch, handler):
     return HttpSelector(url="http://127.0.0.1:9000/select", name="test", version="1")
 
 
+@pytest.fixture
+def controlled_selector_time(monkeypatch):
+    """Keep HTTP identity/error assertions independent of host speed (RM16/RM28).
+
+    Deadline tests below retain real timers. These synchronous MockTransport
+    responses exercise the production chain with a clock that does not advance.
+    """
+    from relaymind.selection import chain
+
+    async def pending_timer(seconds):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(
+        chain,
+        "SelectorChain",
+        partial(chain.SelectorChain, clock=lambda: 0.0, sleep=pending_timer),
+    )
+
+
 @pytest.mark.parametrize("track", ["skills", "tools"])
 @pytest.mark.parametrize(
     "exception,status",
@@ -109,7 +129,9 @@ def production_http_selector(monkeypatch, handler):
         (httpx.ConnectError, "error"),
     ],
 )
-def test_actual_http_exceptions_are_classified(monkeypatch, track, exception, status):
+def test_actual_http_exceptions_are_classified(
+    monkeypatch, controlled_selector_time, track, exception, status
+):
     """RM25/RM28: production HTTP preserves timeout provenance and failure denominators."""
 
     def handler(request):
@@ -314,7 +336,7 @@ def test_skills_rejects_proposal_before_sources_or_adapters(tmp_path, monkeypatc
     "identities", [[("actual", "2"), ("actual", "2")], [("a", "1"), ("b", "2")], []]
 )
 def test_http_report_keeps_configured_identity_and_per_case_claims(
-    tmp_path, monkeypatch, identities
+    tmp_path, monkeypatch, controlled_selector_time, identities
 ):
     """RM16/RM25/RM28: response claims cannot change configured identity or leak cases."""
     script = load_script_module("selection_benchmark")
