@@ -1613,7 +1613,13 @@ class _Run:
         payload = self._selector_payload(event_type, payload)
         self.o.store.append_event(self.run_id, EventType(event_type), actor, payload)
         self._selector_persisted(event_type)
-        if event_type in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED):
+        if event_type in (
+            EventType.ROUTE_SELECTED,
+            EventType.HANDOFF_STARTED,
+            EventType.RUN_FAILED,
+        ):
+            # A decline is evidence for the next of these events only. Once the
+            # route is recorded, a decline before it never explains a later stop.
             self.pending_placement = None
 
     def move(self, state: RunState, **kwargs: Any) -> None:
@@ -3214,9 +3220,11 @@ class _Run:
             if purpose == "routing":
                 self.routing_placement = placement
             if placement.role == "none":
-                self.pending_placement = placement
                 if purpose == "routing":
+                    # route.selected carries a routing decline (section 14.2.2);
+                    # a later handoff or failure never does.
                     raise PlacementDeclined(placement)
+                self.pending_placement = placement
                 raise Escalation("local_slow", "local generation declined by placement")
         self.meter.charge_generation(purpose)
         self._calls += 1

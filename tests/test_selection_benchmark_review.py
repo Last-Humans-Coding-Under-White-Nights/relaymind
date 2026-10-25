@@ -546,3 +546,138 @@ def test_explicit_parquet_verify_checks_bytes_before_rows_without_fetch_or_write
         derive.main()
     assert lock_path.read_bytes() == before
     assert iterated == ([] if change in ("shard", "revision") else [paths])
+
+
+def collision_row(first_positive, row_id="collide"):
+    """Two source tools whose normalized names collide (section 12.4)."""
+    web = {"name": "Search", "description": "search the web", "parameters": {}}
+    files = {
+        "name": "search",
+        "description": "search files",
+        "parameters": {"q": {"type": "string"}},
+    }
+    positive, negative = (web, files) if first_positive else (files, web)
+    return {"id": row_id, "query": "find", "positive": [positive], "negative": [negative]}
+
+
+def test_collision_suffixes_follow_declarations_not_positivity():
+    """RM25 §12.4: a collision suffix never tells which candidate is positive."""
+    names = []
+    for first_positive in (True, False):
+        case = bench.normalize_toolret(collision_row(first_positive), 0)
+        by_description = {tool["description"]: tool["name"] for tool in case["tools"]}
+        assert sorted(by_description.values()) == ["search", "search_1"]
+        names.append(by_description)
+    assert names[0] == names[1]
+
+
+def test_identical_colliding_declarations_do_not_favor_the_positive():
+    """RM25 §12.4: equal declarations are suffixed in a seeded, not source, order."""
+    plain = set()
+    for index in range(16):
+        tool = {"name": "dup", "description": "same", "parameters": {}}
+        row = {"id": f"dup-{index}", "query": "q", "positive": [tool], "negative": [dict(tool)]}
+        case = bench.normalize_toolret(row, index)
+        assert sorted(t["name"] for t in case["tools"]) == ["dup", "dup_1"]
+        plain.add(case["expected"] == ["dup"])
+    assert plain == {True, False}
+
+
+def test_source_order_suffixes_remain_reproducible_for_the_v1_lock():
+    """RM25 §12.4: the recorded v1 lock keeps its source-order suffixes."""
+    case = bench.normalize_toolret(collision_row(False), 0, suffix_order="source-order")
+    assert case["expected"] == ["search"]
+    with pytest.raises(ValueError, match="suffix order"):
+        bench.normalize_toolret(collision_row(False), 0, suffix_order="unknown")
+
+
+def test_lock_records_suffix_order_and_verification_follows_it(tmp_path, monkeypatch):
+    """RM25 §12.4: each lock is verified with the suffix order it was derived with."""
+    derive = load_script_module("benchmarks/derive_toolret")
+    rows = [collision_row(n % 2 == 0, f"row-{n}") for n in range(3)]
+    for row, extra in zip(rows, (0, 1, 3), strict=True):
+        row["positive"] += [{"name": f"extra{j}", "parameters": {}} for j in range(extra)]
+    cases, lock = bench.derive_toolret(rows, revision=bench.TOOLRET_REVISION, seed=7, size=3)
+    assert lock["name_suffix_order"] == "declaration-digest"
+    monkeypatch.setattr(derive, "iter_rows", lambda paths: iter(rows))
+    assert derive.verify_cases([], lock) == cases
+    v1 = [
+        bench.normalize_toolret(row, i, suffix_order="source-order") for i, row in enumerate(rows)
+    ]
+    v1_lock = {key: value for key, value in lock.items() if key != "name_suffix_order"}
+    v1_lock["cases"] = [
+        {"id": c["id"], "row_index": c["row_index"], "sha256": canonical_digest(c)} for c in v1
+    ]
+    assert v1_lock["cases"] != lock["cases"]
+    assert derive.verify_cases([], v1_lock) == v1
+    with pytest.raises(ValueError, match="digest"):
+        derive.verify_cases([], {**v1_lock, "name_suffix_order": "declaration-digest"})
+
+
+def test_checked_in_v2_tool_lock_keeps_the_v1_sample_with_new_suffixes():
+    """RM25 §12.4: v2 changes only the suffix order; the sampled rows are the same."""
+    root = Path(__file__).resolve().parents[1] / "evaluation"
+    v1 = json.loads((root / "tools.v1.lock.json").read_text(encoding="utf-8"))
+    v2 = json.loads((root / "tools.v2.lock.json").read_text(encoding="utf-8"))
+    assert "name_suffix_order" not in v1
+    assert v2["name_suffix_order"] == "declaration-digest"
+    for key in ("dataset", "revision", "seed", "size", "sampling", "population", "shards"):
+        assert v1[key] == v2[key]
+    assert [(c["id"], c["row_index"]) for c in v1["cases"]] == [
+        (c["id"], c["row_index"]) for c in v2["cases"]
+    ]
+
+
+def test_runner_measures_v2_tool_lock_unless_v1_is_asked_for():
+    """RM25 §12.4: new runs use the v2 lock; the v1 lock reproduces recorded runs."""
+    runner = load_script_module("selection_benchmark")
+    base = ["--track", "tools", "--selector", "model_router", "--output", "/tmp/out.json"]
+    assert runner.parser().parse_args(base).tools_lock_version == 2
+    assert runner.parser().parse_args([*base, "--tools-lock-version", "1"]).tools_lock_version == 1
+
+
+def test_only_unknown_tool_and_invalid_arguments_are_schema_invalid():
+    """RM09 §12.4: a not-permitted proposal is recorded but stays schema-valid."""
+    case = tool_case()
+    registry = bench.benchmark_registry(case["tools"])
+    calls = [ToolCall("1", "keep", {}), ToolCall("2", "drop", {}), ToolCall("3", "gone", {})]
+    score = bench.score_proposals(case, calls, registry, ["keep"])
+    assert score["rejections"] == ["tool_not_permitted", "unknown_tool"]
+    assert score["schema_validity"] == 2 / 3
+    row = {**score, "status": "ok"}
+    assert bench.summarize([row])["schema_validity"] == 2 / 3
+
+
+def test_skillsbench_archive_is_checked_against_lock_digests(tmp_path, monkeypatch):
+    """RM25 §12.4: a cached or supplied archive must match the locked digest."""
+    derive = load_script_module("benchmarks/derive_skillsbench")
+    assert derive.DEFAULT_CACHE == Path.home() / ".cache/relaymind/skillsbench"
+    root = Path(__file__).resolve().parents[1] / "evaluation"
+    lock = json.loads((root / "skills.v1.lock.json").read_text(encoding="utf-8"))
+    assert derive.locked_archive_digests(root / "skills.v1.lock.json") == {
+        derive.REGISTRY_COMMIT: lock["registry_archive_sha256"],
+        derive.TASK_COMMIT: lock["task_archive_sha256"],
+    }
+    assert derive.locked_archive_digests(tmp_path / "missing.json") == {}
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("a cached archive must not be fetched again")
+
+    monkeypatch.setattr(derive.urllib.request, "urlretrieve", forbidden)
+    cached = tmp_path / f"skillsbench-{derive.TASK_COMMIT}.tar.gz"
+    cached.write_bytes(b"archive")
+    digest = bench.file_digest(cached)
+    assert derive._archive(derive.TASK_COMMIT, None, tmp_path, digest) == cached
+    with pytest.raises(ValueError, match="digest"):
+        derive._archive(derive.TASK_COMMIT, None, tmp_path, "0" * 64)
+    with pytest.raises(ValueError, match="digest"):
+        derive._archive(derive.TASK_COMMIT, cached, tmp_path, "0" * 64)
+
+    def download(url, target):
+        Path(target).write_bytes(b"other bytes")
+
+    monkeypatch.setattr(derive.urllib.request, "urlretrieve", download)
+    fresh = tmp_path / "fresh"
+    with pytest.raises(ValueError, match="digest"):
+        derive._archive(derive.TASK_COMMIT, None, fresh, digest)
+    assert list(fresh.iterdir()) == []

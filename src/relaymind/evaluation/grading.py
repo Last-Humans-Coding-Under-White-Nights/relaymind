@@ -360,8 +360,10 @@ def grade_run(
         if not acceptance and local_calls == 0 and local_model_configured is False:
             absent = True
         terminal = (terminal_event(events) or {}).get("payload", {})
-        # Legacy traces omitted the owner; preserve their historical grading. New
-        # traces must name a model that actually made a local call, never gateway.
+        # Only run.completed names the answer owner. A run that failed, was cancelled,
+        # or has no terminal event (it waits for input or timed out) names none, so the
+        # earlier rule applies: success with no external call. A named owner must be a
+        # model that made a local call in the run, never the gateway.
         local_owner = "final_answer_model" not in terminal or (
             terminal["final_answer_model"] != "gateway"
             and any(
