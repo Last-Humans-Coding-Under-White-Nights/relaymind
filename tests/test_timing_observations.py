@@ -5,7 +5,14 @@ import sqlite3
 
 import pytest
 
-from gateway_helpers import STAGING_OK, build_gateway, route_turn, text_turn, tool_turn
+from gateway_helpers import (  # noqa: F401 - close_gateway_stores is an autouse fixture
+    STAGING_OK,
+    build_gateway,
+    close_gateway_stores,
+    route_turn,
+    text_turn,
+    tool_turn,
+)
 from helpers import FakeClock, ScriptedAdapter
 from relaymind.adapters import Completed, FirstToken, GenerationFailed, Message, Role, Usage
 from relaymind.orchestrator.budgets import LocalBudgets

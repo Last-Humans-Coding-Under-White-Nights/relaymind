@@ -2456,7 +2456,8 @@ The [sanitized aggregate](evidence/2026-10-23-selection-benchmarks-apple-m1.json
 | Item | Recorded configuration |
 |---|---|
 | Measured application | `749e40f797da047d3180baf587748e9920800d16`, clean tree at the start of every pass; the aggregate records the two benchmark implementation file hashes |
-| Later portability/reporting fixes | `11d265d` adds Windows checkout/UTF-8 portability; the later published head `1cad5d6` also corrects inapplicable generic summary diagnostics. Both were separate from the live checkout at `749e40f`. The aggregate independently derives selector abstentions and omits inapplicable schema validity; predictions and P/R/J are unchanged |
+| Published equivalent of the measured revision | `749e40f` predates a rebase and is on no published branch. Its on-branch counterpart is `eaebb30`: `git diff 749e40f eaebb30` shows the two benchmark implementation files, `evaluation/`, and `scripts/benchmarks/` byte-identical, so the recorded implementation hashes match `eaebb30`. The production code differs only by the merged #126 review fixes: the router rejects a blank clarification question, the selector chain checks its timeout and treats cancellation as a gateway stop, readiness treats a runtime without the model loaded as unavailable, the first skill stage keeps its loaded skill, and the launcher's class line refuses a ready model. None of the six recorded `model_router` clarifications was blank, and the benchmark runner calls neither the selector chain nor readiness. Figures are unchanged |
+| Later portability/reporting fixes | `11d265d` adds Windows checkout/UTF-8 portability; the later published head `1cad5d6` also corrects inapplicable generic summary diagnostics. Both are on no published branch either; their on-branch counterparts are `b36f084` and `d86bdf1`, with byte-identical benchmark files and the same production differences as above. Both were separate from the live checkout at `749e40f`. The aggregate independently derives selector abstentions and omits inapplicable schema validity; predictions and P/R/J are unchanged |
 | Machine | Apple M1, 8 CPU cores, 7-core GPU reported by the machine manifest, 8 GiB RAM; macOS 27.0.1, arm64; Python 3.14.7 |
 | Local runtime | Qualified llama.cpp `0.7.0-dev (build 11785, commit 8baabd53b)`; Qwen3-0.6B Q8_0, artifact SHA-256 `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031`, checked against the pinned manifest |
 | Runtime settings | `--ctx-size 8192 --jinja --reasoning off --reasoning-format deepseek`; runtime log reports four threads, four slots and 8192 tokens per slot. Actual device placement was not separately exported by this runner |
@@ -2489,6 +2490,31 @@ No report used an HTTP selector, and both skills runs used `proposal=none`.
 All 87 self-excluding case digests and the published skills file digest still
 match. No historical scores, token totals, statuses, raw bytes, or report hashes
 are changed. Future runs record the repaired protocol and their own revision.
+
+### Second protocol review, 2026-10-25 (spec 0.37.1)
+
+ToolRet name collisions. When two candidate names collide after lower-casing
+and truncation to 64 characters, the derivation adds a numeric suffix. The
+recorded tool runs used `evaluation/tools.v1.lock.json`, whose derivation
+named tools in source order, positives first, so in a collision between a
+positive and a negative the positive kept the plain name and the negative got
+`_1`. The candidate shuffle did not hide that. Re-deriving the v1 sample
+offline from the pinned shards (shard and case digests verified) found 9 of
+the 500 cases with a collision; in 3 of them (`train_3771`, `train_92065`,
+`train_106824`) a positive and a negative collided. None of the three is in
+the seeded 100-case external subset, so the leak could touch at most 3 of the
+500 local tool cases, through the tool names only. The figures above were not
+re-scored and are unchanged. New derivations suffix colliding names in the
+order of each declaration's digest, with a seeded hash between equal
+declarations: `evaluation/tools.v2.lock.json` has the same 500 rows, and 5
+case digests differ from v1. New runs use v2 by default;
+`--tools-lock-version 1` measures the recorded v1 sample.
+
+Schema validity. The runner counted every tool rejection against schema
+validity, including `tool_not_permitted`; section 12.4 counts only
+`unknown_tool` and `invalid_arguments`, and the runner now does too. The
+recorded rejection counts hold only `invalid_arguments` (2, in one external
+arm), so no recorded figure changes.
 
 ### Skill selection
 
@@ -2531,7 +2557,7 @@ Generation attempts are entries that reached the generation stage, not an indepe
 
 ### Reproduction and remaining scope
 
-Check out the measurement revision and use the qualified runtime and pinned artifacts described above. The equivalent direct runner commands below reproduce the effective settings; output paths stay outside the repository. The actual executions used the approved local wrapper around these commands. Credential values are never placed on the command line.
+Check out the measurement revision (or its published equivalent `eaebb30`) and use the qualified runtime and pinned artifacts described above. The actual executions went through a local wrapper script that is not checked in and is not available in this repository, and the runner does not record its own command line. The direct runner commands below are therefore reconstructed, not copied: each report's recorded track, selector, seed, proposal setting, time bound, context limit, model, endpoint, and file digests match them, while the ToolRet cache and output paths are not recorded. The aggregate was built by a separate aggregation script that is also not checked in. The two SkillsBench raw reports are checked in; their SHA-256 values match the aggregate's `raw_report_sha256` values, and their summaries and category and difficulty breakdowns equal the aggregate's, apart from the inapplicable schema validity that the aggregate omits. The ToolRet raw reports stay outside the repository, so their aggregate figures can be checked only against the retained hashes by whoever holds those reports. On a revision after this review, add `--tools-lock-version 1` to the tools commands to measure the recorded v1 sample. Output paths stay outside the repository. Credential values are never placed on the command line.
 
 ```bash
 python scripts/selection_benchmark.py --track skills --selector example_match --seed 42 --model qwen3-0.6b --model-manifest models/qwen3-0.6b-q8_0.manifest.json --output /tmp/skills-example.json

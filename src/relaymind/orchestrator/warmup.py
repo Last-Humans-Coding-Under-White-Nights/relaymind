@@ -29,6 +29,7 @@ generate, so it is unavailable.
 
 import asyncio
 import contextlib
+import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, replace
@@ -373,6 +374,18 @@ __all__ = [
 ]
 
 
+_LOGGER = logging.getLogger(__name__)
+
+# While this owner's probe runs, cancellation requests are checked this often.
+_ACTIVE_POLL_SECONDS = 0.05
+# An idle scheduler sleeps until a probe can start, within these bounds: a run
+# or another probe has no known end, and settings or clocks may change.
+_IDLE_MIN_SECONDS = 1.0
+_IDLE_MAX_SECONDS = 60.0
+# A failed check is retried after a growing delay, never more than this.
+_ERROR_BACKOFF_MAX_SECONDS = 30.0
+
+
 class IdleProbe:
     """One bounded idle routing generation under the SQLite execution slot (AC21).
 
@@ -389,6 +402,8 @@ class IdleProbe:
         self._closing = False
         self._cancelled = False
         self._token: str | None = None
+        # The first scheduler check that failed; logged then, raised by stop().
+        self._error: Exception | None = None
         self._started = 0.0
         self._wall_started = 0.0
 
@@ -405,16 +420,43 @@ class IdleProbe:
             self._scheduler = asyncio.create_task(self._schedule())
 
     async def _schedule(self) -> None:
+        failures = 0
         while not self._closing:
-            await self.tick()
-            active = self._task is not None and not self._task.done()
-            await asyncio.sleep(0.05 if active else 1.0)
+            try:
+                await self.tick()
+                delay = self._next_delay()
+                failures = 0
+            except Exception as exc:
+                # One failed check must not end maintenance: a running probe still
+                # needs its cancellation checks. The error is logged and kept for stop().
+                failures += 1
+                if self._error is None:
+                    self._error = exc
+                _LOGGER.exception("idle probe check failed; retrying")
+                delay = min(_ERROR_BACKOFF_MAX_SECONDS, _ACTIVE_POLL_SECONDS * 2**failures)
+            await asyncio.sleep(delay)
+
+    def _next_delay(self) -> float:
+        if self._task is not None:
+            # Running, or finished and not yet reported by tick().
+            return _ACTIVE_POLL_SECONDS
+        assert self.o.model is not None
+        wait = self.o.store.probe_wait_seconds(
+            model=self.o.model.model_id,
+            after_seconds=self.o.placement.settings.probe_after_seconds,
+        )
+        return min(max(wait, _IDLE_MIN_SECONDS), _IDLE_MAX_SECONDS)
 
     async def tick(self) -> None:
         if self._closing or not self.enabled:
             return
         settings = self.o.placement.settings
-        if self._task is not None and not self._task.done():
+        if self._task is not None and self._task.done():
+            task, self._task = self._task, None
+            if not task.cancelled():
+                # Report a task whose timing persistence failed, once, before replacing it.
+                task.result()
+        if self._task is not None:
             reservation = self.o.store.probe_reservation()
             limit = min(settings.warmup_seconds, self.o.budgets.active_seconds)
             elapsed = max(
@@ -424,9 +466,6 @@ class IdleProbe:
             if (reservation and reservation["cancel_requested"]) or elapsed >= limit:
                 self._cancel()
             return
-        if self._task is not None:
-            # Do not silently replace a task whose timing persistence failed.
-            self._task.result()
         assert self.o.model is not None
         token = "probe_" + uuid.uuid4().hex
         if not self.o.store.try_reserve_probe(
@@ -483,15 +522,15 @@ class IdleProbe:
                 success_allowed=self._success_allowed,
             )
             if self._success_allowed() and self.o.local_status.status == LocalModelClass.UNSUITABLE:
-                samples = self.o.store.model_timings(
+                latest = self.o.store.latest_model_timing(
                     model=self.o.model.model_id, purpose="routing", actor="local"
                 )
-                if not samples:
+                if latest is None:
                     return
                 prediction = self.o.placement.predict(
                     self.o.model.model_id,
                     "routing",
-                    samples[-1].input_tokens,
+                    latest.input_tokens,
                     output_cap=self.o.budgets.routing_output_tokens,
                     input_source="routing_sample",
                 )
@@ -518,5 +557,7 @@ class IdleProbe:
             await asyncio.wait((self._task,), timeout=self.cancel_wait_seconds)
         if self._scheduler is not None and not self._scheduler.cancelled():
             self._scheduler.result()
-        if self._task is not None and self._task.done():
+        if self._error is not None:
+            raise self._error
+        if self._task is not None and self._task.done() and not self._task.cancelled():
             self._task.result()

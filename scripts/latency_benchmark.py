@@ -1,15 +1,16 @@
 """Latency benchmark: the section 12.2 experiment on the local path (#33).
 
 Spec 0.28 section 12.2. The runner verifies the runtime and the pinned
-artifact, starts llama-server from the manifest, and starts one gateway
-with ``relaymind serve --config`` (routing cache off, no external model,
-concurrency one); it reuses the live acceptance harness
-(``scripts/live_acceptance.py``). It sends the twelve prompts of
-``evaluation/latency_prompts.v1.json`` as compatible chat requests with
-stream true: first the cold request (the first request after the
-gateway starts), then three warm-ups (one per prompt label), then ten
-runs per prompt in an order shuffled with a recorded seed. A run that
-waits for input is cancelled after its sample is taken.
+artifact, starts llama-server from the manifest (not with
+--no-local-model), and starts one gateway with ``relaymind serve
+--config`` (routing cache off, concurrency one, and an external model
+only when ``--external-base-url`` and friends name one); it reuses the
+live acceptance harness (``scripts/live_acceptance.py``). It sends the
+twelve prompts of ``evaluation/latency_prompts.v1.json`` as compatible
+chat requests with stream true: first the cold request (the first
+request after the gateway starts), then three warm-ups (one per prompt
+label), then ten runs per prompt in an order shuffled with a recorded
+seed. A run that waits for input is cancelled after its sample is taken.
 
 Section 12.1 metrics: first transport event (the response status) and
 first answer token (the first chunk with nonempty content) on the
@@ -25,7 +26,9 @@ sample, and the summary; a Markdown report is written next to it.
 
 Usage:
     python scripts/latency_benchmark.py --out docs/evidence/<date>-latency-<machine>.json \\
-        [--seed N] [--runs 10] [--early-headers] [--no-startup-warmup]
+        [--seed N] [--runs 10] [--early-headers] [--no-startup-warmup] \\
+        [--external-base-url URL --external-model M --external-context-limit N \\
+         [--external-region R]]
 """
 
 import argparse
@@ -50,6 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import live_acceptance as harness  # noqa: E402
 from evaluation_config import (  # noqa: E402
+    ConfigurationError,
     add_configuration_arguments,
     configuration_from_args,
     label_report,
@@ -115,7 +119,8 @@ def warmup_prompts(prompts: Sequence[Mapping[str, str]]) -> list[Mapping[str, st
 
 
 def benchmark_config(*, early_headers: bool = False, startup_warmup: bool = True, **options) -> str:
-    """The operator file: checked-in skills, baseline sandbox, no external model, cache off.
+    """The operator file: checked-in skills, baseline sandbox, cache off, and the external
+    model only when one is given.
 
     early_headers turns on performance.early_headers (RM32, spec 0.32 section 7.3) and
     nothing else; without it the file has no [performance] table, which is the baseline.
@@ -415,14 +420,16 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         args, "no_startup_warmup", False
     )
     external = None
-    if getattr(args, "external_base_url", None):
+    if configuration.external is not None:
         external = harness.ExternalEndpoint(
             args.external_base_url, args.external_model, args.external_context_limit
         )
     if (external is not None and not os.environ.get(harness.EXTERNAL_KEY_ENV)) or (
         not configuration.local_model_configured and external is None
     ):
-        raise ValueError("an external endpoint and its API key are required for this configuration")
+        raise ConfigurationError(
+            "an external endpoint and its API key are required for this configuration"
+        )
     prompts = load_prompts()
     runtime = (
         harness.check_runtime(Path(args.manifest), extra_args=args.runtime_extra_args)
@@ -547,13 +554,11 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                 "context": {"ctx_size": runtime.manifest.launch_settings.get("ctx_size")}
                 if runtime
                 else None,
-                "external_endpoint_region": getattr(args, "external_region", None)
-                if external
-                else None,
                 "external_endpoint": {
                     "base_url": external.base_url,
                     "model": external.model,
                     "context_limit": external.context_limit,
+                    "region": configuration.external.region,
                 }
                 if external
                 else None,
@@ -593,10 +598,6 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     harness.add_runtime_extra_args(parser)
     add_configuration_arguments(parser)
-    parser.add_argument("--external-base-url")
-    parser.add_argument("--external-model")
-    parser.add_argument("--external-context-limit", type=int)
-    parser.add_argument("--external-region")
     parser.add_argument("--seed", type=int, help="the order seed (random when not given)")
     parser.add_argument(
         "--early-headers",
@@ -613,14 +614,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--runs", type=int, default=RUNS_PER_PROMPT)
     parser.add_argument("--timeout", type=float, default=REQUEST_TIMEOUT_SECONDS)
     args = parser.parse_args(argv)
-    external_args = (args.external_base_url, args.external_model, args.external_context_limit)
-    if any(external_args) and not all(external_args):
-        parser.error(
-            "--external-base-url, --external-model, and --external-context-limit go together"
-        )
+    # Only option checks raise ConfigurationError, before anything starts; any other
+    # failure keeps its traceback and is never reported as a usage error.
     try:
         document = run_benchmark(args)
-    except ValueError as exc:
+    except ConfigurationError as exc:
         parser.error(str(exc))
     print(
         label_report(
