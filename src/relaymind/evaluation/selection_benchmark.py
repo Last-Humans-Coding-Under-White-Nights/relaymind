@@ -41,6 +41,14 @@ from relaymind.tools import SideEffect, ToolDeclaration, ToolRegistry, ToolRejec
 DEFAULT_TOOLRET_CACHE = Path.home() / ".cache/relaymind/toolret"
 TOOLRET_DATASET = "mangopy/ToolRet-Training-20w"
 TOOLRET_REVISION = "fdf5a317455b1e60785de7ba587496aa6cc878e4"
+# How colliding tool names are suffixed; a lock without the field is source-order.
+TOOLRET_SUFFIX_ORDERS = ("source-order", "declaration-digest")
+# Section 12.4 schema validity: only these rejection codes make a proposal invalid.
+SCHEMA_REJECTIONS = frozenset({"unknown_tool", "invalid_arguments"})
+
+
+def _schema_invalid(rejections: Iterable[str]) -> int:
+    return sum(code in SCHEMA_REJECTIONS for code in rejections)
 
 
 def file_digest(path: Path) -> str:
@@ -95,7 +103,9 @@ def summarize(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             counts[key] += value
     n = len(rows)
     proposals = sum(r.get("proposal_count", 0) for r in rows)
-    valid_proposals = sum(r.get("proposal_count", 0) - len(r.get("rejections", ())) for r in rows)
+    valid_proposals = sum(
+        r.get("proposal_count", 0) - _schema_invalid(r.get("rejections", ())) for r in rows
+    )
     bypasses = sum(r.get("status") == "bypass" for r in rows)
     return {
         "count": n,
@@ -419,9 +429,21 @@ def _parameters(raw: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def normalize_toolret(row: Mapping[str, Any], row_index: int) -> dict[str, Any]:
-    """Normalize both ToolRet tool styles, keeping a recorded collision mapping."""
-    tools, expected, mapping, used = [], [], [], set()
+def normalize_toolret(
+    row: Mapping[str, Any], row_index: int, *, suffix_order: str = "declaration-digest"
+) -> dict[str, Any]:
+    """Normalize both ToolRet tool styles, keeping a recorded collision mapping.
+
+    Names that collide get numeric suffixes. With declaration-digest (the
+    tools.v2 lock) the suffix order comes from each declaration's digest, and a
+    seeded hash breaks ties between equal declarations, so a plain name never
+    tells a positive from a negative. source-order (the tools.v1 lock) names
+    tools in source order, positives first, and is kept only to reproduce runs
+    recorded with that lock (section 12.4).
+    """
+    if suffix_order not in TOOLRET_SUFFIX_ORDERS:
+        raise ValueError(f"unknown ToolRet name suffix order: {suffix_order!r}")
+    entries = []
     for positive, source in [(True, row["positive"]), (False, row["negative"])]:
         for value in source:
             raw = json.loads(value) if isinstance(value, str) else dict(value)
@@ -431,25 +453,38 @@ def normalize_toolret(row: Mapping[str, Any], row_index: int) -> dict[str, Any]:
             base = re.sub("[^a-z0-9_]", "_", original.lower())
             if not base or not base[0].isalpha():
                 base = "tool_" + base
-            base = base[:64]
-            name, counter = base, 0
-            while name in used:
-                counter += 1
-                suffix = f"_{counter}"
-                name = base[: 64 - len(suffix)] + suffix
-            used.add(name)
-            tools.append(
-                {
-                    "name": name,
-                    "description": str(
-                        raw.get("description", raw.get("api_description", "")) or original
-                    ),
-                    "input_schema": _parameters(raw),
-                }
+            declaration = {
+                "description": str(
+                    raw.get("description", raw.get("api_description", "")) or original
+                ),
+                "input_schema": _parameters(raw),
+            }
+            entries.append((positive, original, base[:64], declaration))
+    order = list(range(len(entries)))
+    if suffix_order == "declaration-digest":
+        order.sort(
+            key=lambda i: (
+                canonical_digest({"original": entries[i][1], **entries[i][3]}),
+                hashlib.sha256(f"{row['id']}:{i}".encode()).hexdigest(),
             )
-            mapping.append({"original": original, "normalized": name, "positive": positive})
-            if positive:
-                expected.append(name)
+        )
+    names: dict[int, str] = {}
+    used: set[str] = set()
+    for i in order:
+        base = entries[i][2]
+        name, counter = base, 0
+        while name in used:
+            counter += 1
+            suffix = f"_{counter}"
+            name = base[: 64 - len(suffix)] + suffix
+        used.add(name)
+        names[i] = name
+    tools, expected, mapping = [], [], []
+    for i, (positive, original, _, declaration) in enumerate(entries):
+        tools.append({"name": names[i], **declaration})
+        mapping.append({"original": original, "normalized": names[i], "positive": positive})
+        if positive:
+            expected.append(names[i])
     return {
         "id": str(row["id"]),
         "row_index": row_index,
@@ -462,7 +497,12 @@ def normalize_toolret(row: Mapping[str, Any], row_index: int) -> dict[str, Any]:
 
 
 def derive_toolret(
-    rows: Iterable[Mapping[str, Any]], *, revision: str, seed: int, size: int = 500
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    revision: str,
+    seed: int,
+    size: int = 500,
+    suffix_order: str = "declaration-digest",
 ) -> tuple[list[dict], dict]:
     """Equal-stratum reservoir sample, deterministic in source shard/row order."""
     if size < 3:
@@ -485,7 +525,10 @@ def derive_toolret(
                 buckets[group][position] = (index, row)
     if any(len(b) != q for b, q in zip(buckets, quotas, strict=True)):
         raise ValueError("not enough rows in every stratum")
-    cases = [normalize_toolret(row, i) for i, row in sorted(sum(buckets, []), key=lambda p: p[0])]
+    cases = [
+        normalize_toolret(row, i, suffix_order=suffix_order)
+        for i, row in sorted(sum(buckets, []), key=lambda p: p[0])
+    ]
     lock = {
         "schema_version": 1,
         "dataset": TOOLRET_DATASET,
@@ -497,6 +540,7 @@ def derive_toolret(
         "population": seen,
         "quotas": quotas,
         "license": "not stated; no source rows redistributed",
+        "name_suffix_order": suffix_order,
         "cases": [
             {"id": c["id"], "row_index": c["row_index"], "sha256": canonical_digest(c)}
             for c in cases
@@ -546,7 +590,11 @@ def score_proposals(
     registry: ToolRegistry,
     offered: Sequence[str],
 ) -> dict[str, Any]:
-    """Score proposed names independently from argument schema validity (RM09)."""
+    """Score proposed names independently from argument schema validity (RM09).
+
+    Every rejection code is recorded; only unknown_tool and invalid_arguments
+    count against schema validity (section 12.4).
+    """
     rejections = []
     for call in calls:
         try:
@@ -559,7 +607,9 @@ def score_proposals(
         "expected": list(case["expected"]),
         "metrics": set_metrics(predicted, case["expected"]),
         "rejections": rejections,
-        "schema_validity": (len(calls) - len(rejections)) / len(calls) if calls else None,
+        "schema_validity": (len(calls) - _schema_invalid(rejections)) / len(calls)
+        if calls
+        else None,
         "proposal_count": len(calls),
     }
 

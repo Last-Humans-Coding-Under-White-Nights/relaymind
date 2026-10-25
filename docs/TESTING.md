@@ -1,14 +1,5 @@
 # Testing RelayMind (Milestones 1 to 5)
 
-Selection benchmark tests (#143, #144; RM02, RM08, RM09, RM25, RM28) run
-with `pytest tests/test_selection_benchmark.py`. They cover frozen digests,
-set scoring and macro/micro summaries, leave-one-task-out examples, router
-catalog caps and context bypasses, both source tool schema styles, seeded
-candidate presentation, inert handlers, loopback HTTP selectors, proposal
-validation and source derivation. ToolRet fixture rows are synthetic; no
-download or model call is needed in the default test suite. Real benchmark
-commands and the optional `bench` extra are described in `scripts/README.md`.
-
 How to verify the M1 to M5 deliverables, by hand on macOS and Windows
 and with the automated suites. M1 qualifies the local model runtime and
 the adapters; M2 adds the bounded local loop; M3 adds handoff,
@@ -851,6 +842,19 @@ feature has a test of the default as well. Later pull requests append here.
   class forbids, and `tests/test_trace_event.py -k local_model_fields`
   checks the new optional fields in the validator and the published schema
   alike.
+- `pytest tests/test_selection_benchmark.py tests/test_selection_benchmark_review.py`
+  (#143, #144; RM02, RM08, RM09, RM25, RM28, section 12.4): the selection
+  benchmarks. They cover frozen digests, set scoring and macro/micro
+  summaries, leave-one-task-out examples, router catalog caps and context
+  bypasses, both source tool schema styles, collision suffixes that do not
+  depend on which candidate is positive, seeded candidate presentation, inert
+  handlers, loopback HTTP selectors, proposal validation and schema validity
+  (only `unknown_tool` and `invalid_arguments` count against it), failed and
+  abstaining narrowing arms, call-budget scoring, and source derivation with
+  lock and archive digest checks. ToolRet fixture rows are synthetic; no
+  download or model call is needed in the default test suite. Real benchmark
+  commands and the optional `bench` extra are described in
+  [`scripts/README.md`](../scripts/README.md).
 
 ### What is not covered yet
 
