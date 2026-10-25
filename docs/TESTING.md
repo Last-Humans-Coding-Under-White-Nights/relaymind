@@ -160,7 +160,8 @@ starts its own llama-server.
   Phase 2 trace tests (#127; RM12, RM23, RM25–RM29, RM31) also check
   recorded configuration, selector attempts for every route, routing-call
   timing joined by call ID, first-token timing including zero, applied answer
-  pass, escaped labels and missing historical fields. Placement projections
+  pass, escaped labels, missing historical fields (not recorded), and
+  values recorded as null (shown with their meaning). Placement projections
   use illustrative optional event fields; they are not measured predictions.
   Workflow steps remain a labeled placeholder pending #138.
 
@@ -174,7 +175,9 @@ starts its own llama-server.
   options, the parallel workflow actors, a routing cache route, that approve
   and deny stay disabled until the page holds the token, and a replay-mode
   view with no controls. The phase 2 test checks the no-local status and
-  recorded options in both the shell and trace, plus gateway prefetch labels.
+  recorded options in both the shell and trace, that the shell labels are
+  visible while the configuration panel is closed, plus gateway prefetch
+  labels.
   Install
   the browser once with `playwright install chromium`; a machine without
   it fails the test. CI installs it on ubuntu, macOS, and Windows. One

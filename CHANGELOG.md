@@ -13,7 +13,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   status and performance options. Every route shows its selector attempts,
   recorded placement and routing-call duration. Model calls show first-token
   timing and distinguish predicted from actual duration; the answer names the
-  applied pass. Missing historical fields say “not recorded”, and workflow
+  applied pass. Missing historical fields say “not recorded”, while a value
+  recorded as null shows its meaning (none, no token, none selected, no
+  routing call). The shell keeps the local model, its status and reason, the
+  placement policy, the answer pass, and the answer stream on screen. Workflow
   steps have a labeled placeholder pending #138.
 - Reproducible selection benchmarks (#143, #144; RM02, RM08, RM09, RM25,
   RM28, section 12.4): pinned SkillsBench derivation and attribution, a
