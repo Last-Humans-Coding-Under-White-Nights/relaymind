@@ -9,6 +9,8 @@ import random
 from collections import Counter
 from dataclasses import replace
 
+import pytest
+
 import test_completion_predicates as f
 from relaymind.skills import predicates as p
 
@@ -248,6 +250,7 @@ def test_all_predicates_across_cut_random_and_adversarial_partitions(monkeypatch
                 }
             )
         rejection_offsets = set()
+        rejection_prefixes = set()
         for mode, chunks in partitions(answer, index):
             partition_counts[mode] += 1
             gate = p.StatementGate(predicate, results)
@@ -266,6 +269,31 @@ def test_all_predicates_across_cut_random_and_adversarial_partitions(monkeypatch
                 output.append(gate.finish())
             except p.StatementRejected:
                 rejected = True
+                emitted = "".join(output)
+                assert emitted == gate.raw[: gate.offset], (
+                    "rejected-output-prefix",
+                    name,
+                    mode,
+                    emitted,
+                    gate.raw[: gate.offset],
+                )
+                # No emitted text makes a claim when evidence is absent; any actual
+                # publication must satisfy safety (final completeness is not required).
+                assert not emitted or p.completion_parts(predicate, emitted, results)[0], (
+                    "unsafe-emitted-prefix",
+                    name,
+                    mode,
+                    emitted,
+                )
+                rejection_prefixes.add(emitted)
+                additional = []
+                try:
+                    additional.extend(gate.push(" continuation. "))
+                except p.StatementRejected:
+                    pass
+                else:
+                    findings.append({"kind": "rejection-not-sticky", "name": name})
+                assert additional == [], ("sticky-rejection-output", name, mode, additional)
                 if early_rejected:
                     early[predicate] += 1
                     rejection_offsets.add(gate.offset)
@@ -288,12 +316,6 @@ def test_all_predicates_across_cut_random_and_adversarial_partitions(monkeypatch
                                 "raw": gate.raw,
                             }
                         )
-                    try:
-                        list(gate.push(" continuation. "))
-                    except p.StatementRejected:
-                        pass
-                    else:
-                        findings.append({"kind": "rejection-not-sticky", "name": name})
             if rejected == expected:
                 findings.append(
                     {
@@ -317,6 +339,12 @@ def test_all_predicates_across_cut_random_and_adversarial_partitions(monkeypatch
                         "output": "".join(output),
                     }
                 )
+        assert len(rejection_prefixes) <= 1, (
+            "partition-dependent-emitted-prefix",
+            name,
+            predicate,
+            rejection_prefixes,
+        )
         if rejection_offsets:
             early_offsets[name] = sorted(rejection_offsets)
             if len(rejection_offsets) != 1:
@@ -331,5 +359,22 @@ def test_all_predicates_across_cut_random_and_adversarial_partitions(monkeypatch
                 )
     assert set(counts_by_predicate) == set(p.COMPLETION_PREDICATES)
     assert fixture_count > 100
-    assert sum(partition_counts.values()) > 30000
+    assert len(cases) == 450
+    assert sum(partition_counts.values()) == 38266
     assert not findings, findings[:12]
+
+
+def test_same_chunk_retains_verified_statement_before_rejection():
+    """RM32/AC19: a later invalid unit cannot leak or erase an already yielded unit."""
+    verified = f"payments-api is unavailable at {f.T}."
+    answer = verified + " payments-api is healthy. Another statement."
+    gate = p.StatementGate("health_status_preserved", [f.UNAVAILABLE])
+    emitted = []
+    with pytest.raises(p.StatementRejected):
+        emitted.extend(gate.push(answer))
+    assert "".join(emitted) == verified == gate.raw[: gate.offset]
+    assert p.completion_parts("health_status_preserved", "".join(emitted), [f.UNAVAILABLE])[0]
+    additional = []
+    with pytest.raises(p.StatementRejected):
+        additional.extend(gate.push(" More text."))
+    assert additional == []
