@@ -391,6 +391,7 @@ def test_example_script_serves_via_production_transport():
     finally:
         process.terminate()
         process.wait(timeout=5)
+        process.stdout.close()
 
 
 def test_attempt_trace_schemas_keep_historical_and_reject_partial_evidence():
