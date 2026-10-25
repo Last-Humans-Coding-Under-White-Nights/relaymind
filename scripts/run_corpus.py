@@ -928,7 +928,8 @@ def render_draft_pass_markdown(result: Mapping[str, Any]) -> str:
     return label_report("\n".join(lines), source.get("configuration"))
 
 
-def main(argv: Sequence[str] | None = None) -> None:
+def argument_parser() -> argparse.ArgumentParser:
+    """The same CLI schema is used for invocation and checkpoint reconciliation."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="the export file (JSON); the report is .md")
     parser.add_argument(
@@ -954,6 +955,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="grade the stored traces of EXPORT as if the skill-stage draft had been published "
         "(RM31): an offline counterfactual, written to --out and its .md, never to EXPORT",
     )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    parser = argument_parser()
     args = parser.parse_args(argv)
     if (args.regrade or args.regrade_draft_pass) and (
         args.performance

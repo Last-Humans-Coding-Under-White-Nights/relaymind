@@ -132,7 +132,10 @@ def summarize_placement(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     completed = [r.get("metrics", {}) for r in rows if r.get("state") == "completed"]
     success = sum(bool(r.get("success")) for r in rows)
     generations = Counter()
-    for v in completed:
+    measured_completed = [
+        v for v in completed if v.get("trace_observed") is True and "generations" in v
+    ]
+    for v in measured_completed:
         generations.update(v.get("generations", {}))
     usage = [u for v in values for u in v.get("external_usage", [])]
     unobserved = sum(
@@ -175,7 +178,16 @@ def summarize_placement(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         generations=dict(
             completed_runs=len(completed),
             by_actor_purpose=dict(generations),
-            per_completed_run=sum(generations.values()) / len(completed) if completed else None,
+            measured_completed_runs=len(measured_completed),
+            unobserved_completed_runs=len(completed) - len(measured_completed),
+            per_completed_run=(
+                sum(generations.values()) / len(completed)
+                if completed and len(measured_completed) == len(completed)
+                else None
+            ),
+            per_measured_completed_run=(
+                sum(generations.values()) / len(measured_completed) if measured_completed else None
+            ),
         ),
         external_cost=cost,
         measured_classes=dict(Counter(v.get("local_class", "unknown") for v in values)),

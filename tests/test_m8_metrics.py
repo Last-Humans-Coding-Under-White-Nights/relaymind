@@ -150,3 +150,31 @@ def test_latency_keeps_measured_classes_separate():
     result = summarize_latency(samples)
     assert result["by_measured_class"]["ready"]["metrics"]["completion_ms"]["p95"] == 10
     assert result["by_measured_class"]["unsuitable"]["metrics"]["completion_ms"]["p95"] == 100
+
+
+def test_missing_completed_traces_leave_generation_average_unknown():
+    """RM16/RM25: missing observations cannot count as zero generations."""
+    from relaymind.evaluation.placement_metrics import summarize_placement, trace_metrics
+
+    known = {
+        "state": "completed",
+        "success": True,
+        "metrics": trace_metrics(
+            [
+                event("model.started", "local", call_id="a", model="local", purpose="final"),
+                event("run.completed"),
+            ]
+        ),
+    }
+    missing = {"state": "completed", "success": False}
+    empty = {"state": "completed", "metrics": trace_metrics([])}
+    for rows, measured, absent in [([missing], 0, 1), ([known, missing, empty], 1, 2)]:
+        value = summarize_placement(rows)["generations"]
+        assert value["per_completed_run"] is None
+        assert value["completed_runs"] == measured + absent
+        assert value["measured_completed_runs"] == measured
+        assert value["unobserved_completed_runs"] == absent
+        assert value["per_measured_completed_run"] == (1 if measured else None)
+        assert value["by_actor_purpose"] == ({"local/final": 1} if measured else {})
+    zero = {"state": "completed", "metrics": trace_metrics([event("run.completed")])}
+    assert summarize_placement([zero])["generations"]["per_completed_run"] == 0

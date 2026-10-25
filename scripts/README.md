@@ -473,6 +473,12 @@ Every export and retained SQLite/log directory stays outside the checkout.
 The matrix index records source bytes, runtime binary digest, settings, argv,
 run order, UTC boundaries, attempts, and export digests. Each runner's optional
 `--checkpoint FILE` writes fsynced request-start and request-result checkpoints.
+Before resuming, the matrix driver reconciles each retained runner checkpoint
+against its original CLI arguments, source, configuration, prior, request count,
+and export digest. A finalized runner result is promoted into the matrix index
+even if the driver was interrupted before publishing it; it never starts another
+attempt for that completed cell. Recovery also reads retained SQLite usage for
+older interrupted attempts, including crashes that bypassed exception handling.
 The full traces preserve actual usage; an unfinished request's retained database
 is evidence even when no client result was returned. Complete same-identity
 cells can be skipped on resume. A partial cell cannot resume its lost runtime
@@ -499,3 +505,11 @@ successful task (including failed-attempt cost), and missing-count denominators.
 Successful completion latency excludes clarification waits and failed streams;
 `stream_duration_ms` retains their transport duration. None of these deterministic
 checks is live model evidence or permission to change defaults.
+
+Generation summaries report measured and unobserved completed-run counts. If any
+completed run lacks generation observations, the overall generations-per-completed-run
+ratio is null; the separately labeled measured-only ratio and observed actor/purpose
+counts remain available. The prior importer validates every partition's structure
+and checks accepted/call model identities and recorded provider/answer options
+against its configuration. Legacy missing accepted local-model identity may use
+actual local calls; an explicit conflicting identity cannot use that fallback.

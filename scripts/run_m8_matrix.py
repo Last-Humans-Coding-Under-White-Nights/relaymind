@@ -1,6 +1,7 @@
 """Fixed M8 calibration/matrix driver. Plans are offline; --execute starts inference."""
 
 import argparse
+import importlib
 import json
 import os
 import shlex
@@ -12,6 +13,10 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "scripts"))
+from evaluation_config import configuration_from_args  # noqa: E402
+from evaluation_session import prerequisites  # noqa: E402
+
 from relaymind.canonical import canonical_digest  # noqa: E402
 from relaymind.evaluation.checkpoint import atomic_json, utc_now  # noqa: E402
 from relaymind.evaluation.environment import checkout_environment, source_fingerprint  # noqa: E402
@@ -217,6 +222,103 @@ def attempt_cost(directory: Path) -> dict:
     return result
 
 
+def reconcile_attempt(
+    attempt: dict,
+    cell: dict,
+    directory: Path,
+    expected_argv: list[str],
+    source: dict,
+) -> None:
+    """Reconcile durable runner completion before considering another measured attempt."""
+    # Read cost even if the prior process died before running an exception handler.
+    attempt["cost"] = attempt_cost(directory)
+    if attempt.get("argv") != expected_argv:
+        raise ValueError("attempt command identity differs")
+    checkpoint_path = directory / "checkpoint.json"
+    if not checkpoint_path.exists():
+        if attempt["status"] == "complete":
+            raise ValueError("completed cell checkpoint missing")
+        attempt["status"] = "interrupted"
+        return
+    checkpoint = json.loads(checkpoint_path.read_text("utf-8"))
+    runner = importlib.import_module(
+        "run_corpus" if cell["runner"] == "corpus" else "latency_benchmark"
+    )
+    args = runner.argument_parser().parse_args(expected_argv[2:])
+    expected_arguments = json.loads(json.dumps(vars(args)))
+    identity = checkpoint["identity"]
+    configuration = configuration_from_args(args).to_json_object()
+    if (
+        checkpoint.get("schema_version") != 1
+        or identity.get("arguments") != expected_arguments
+        or identity.get("application") != source
+        or identity.get("configuration") != configuration
+    ):
+        raise ValueError("runner checkpoint identity differs")
+    prior = exported_prior = None
+    if args.timing_samples:
+        loaded = load_prior(Path(args.timing_samples), identity["prior_configuration"])
+        with RunStore(":memory:") as store:
+            loaded.seed(store)
+            exported_prior = loaded.provenance
+            if cell["runner"] == "latency":
+                exported_prior = {
+                    **exported_prior,
+                    "initial_expected_wait_prerequisites": prerequisites(loaded, store),
+                }
+        prior = loaded.provenance
+    if identity.get("prior") != prior:
+        raise ValueError("runner checkpoint prior identity differs")
+    if checkpoint.get("completed") is not True:
+        if attempt["status"] == "complete":
+            raise ValueError("completed cell has unfinished runner checkpoint")
+        attempt["status"] = "interrupted"
+        return
+    steps = checkpoint["steps"]
+    if (
+        len(steps) != cell["requests"]
+        or len({s["identity"] for s in steps}) != len(steps)
+        or any(s.get("result") is None for s in steps)
+    ):
+        raise ValueError("finalized runner checkpoint request count differs")
+    export = directory / "export.json"
+    digest = byte_digest(export)
+    if (
+        digest != checkpoint["result"]["export_sha256"]
+        or attempt.get("export_sha256", digest) != digest
+        or attempt.get("checkpoint_sha256", byte_digest(checkpoint_path))
+        != byte_digest(checkpoint_path)
+    ):
+        raise ValueError("finalized runner export/checkpoint digest differs")
+    document = json.loads(export.read_text("utf-8"))
+    application = (
+        document.get("application")
+        if cell["runner"] == "corpus"
+        else document.get("environment", {}).get("application")
+    )
+    if (
+        application != source
+        or document.get("configuration") != configuration
+        or document.get("prior_configuration") != identity["prior_configuration"]
+        or document.get("timing_prior") != exported_prior
+    ):
+        raise ValueError("finalized runner export identity differs")
+    count = (
+        len(document["grades"])
+        if cell["runner"] == "corpus"
+        else len(document["samples"]) + len(document["warmups"]) + 1
+    )
+    if count != cell["requests"]:
+        raise ValueError("cell did not execute its complete fixed request count")
+    attempt.update(
+        status="complete",
+        finished_at_utc=checkpoint["finished_at_utc"],
+        export_sha256=digest,
+        checkpoint_sha256=byte_digest(checkpoint_path),
+        requests=count,
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
@@ -290,6 +392,21 @@ def main(argv: list[str] | None = None) -> None:
         )
         if attempts and attempts[-1].get("prior_sha256") != prior_digest:
             raise ValueError("cell prior digest differs")
+        for previous_attempt in attempts:
+            previous_dir = out / cell["id"] / previous_attempt["name"]
+            try:
+                reconcile_attempt(
+                    previous_attempt,
+                    cell,
+                    previous_dir,
+                    command(cell, previous_dir, out, env, args.runtime),
+                    source,
+                )
+            finally:
+                # Recovery costs survive even a later refusal to resume or an identity error.
+                atomic_json(index_path, index)
+        if any(a["status"] == "complete" for a in attempts[:-1]):
+            raise ValueError("a prior attempt already finalized this cell")
         if attempts and attempts[-1]["status"] == "complete":
             previous = out / cell["id"] / attempts[-1]["name"] / "export.json"
             if byte_digest(previous) != attempts[-1]["export_sha256"]:
@@ -320,27 +437,16 @@ def main(argv: list[str] | None = None) -> None:
             if result.returncode:
                 raise RuntimeError("runner failed; inspect retained checkpoint and logs")
             export = attempt_dir / "export.json"
-            doc = json.loads(export.read_text())
-            count = (
-                len(doc["grades"])
-                if cell["runner"] == "corpus"
-                else len(doc["samples"]) + len(doc["warmups"]) + 1
-            )
-            if count != cell["requests"]:
-                raise ValueError("cell did not execute its complete fixed request count")
-            attempt["cost"] = attempt_cost(attempt_dir)
-            attempt.update(
-                status="complete",
-                finished_at_utc=utc_now(),
-                export_sha256=byte_digest(export),
-                requests=count,
-            )
+            reconcile_attempt(attempt, cell, attempt_dir, argv, source)
+            if attempt["status"] != "complete":
+                raise ValueError("runner returned without a finalized checkpoint")
             atomic_json(index_path, index)
             if cell["phase"] == "calibration":
                 freeze_prior(export, out / ("prior-" + cell["configuration"] + ".json"))
         except BaseException:
             attempt["cost"] = attempt_cost(attempt_dir)
-            attempt.update(status="interrupted", finished_at_utc=utc_now())
+            if attempt["status"] != "complete":
+                attempt.update(status="interrupted", finished_at_utc=utc_now())
             atomic_json(index_path, index)
             raise
     print("Matrix exports complete; analysis/default decisions still require review.")

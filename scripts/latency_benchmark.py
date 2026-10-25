@@ -629,7 +629,8 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         return document
 
 
-def main(argv: Sequence[str] | None = None) -> None:
+def argument_parser() -> argparse.ArgumentParser:
+    """The same CLI schema is used for invocation and checkpoint reconciliation."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="the export file (JSON); the report is .md")
     parser.add_argument(
@@ -656,6 +657,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     parser.add_argument("--runs", type=int, default=RUNS_PER_PROMPT)
     parser.add_argument("--timeout", type=float, default=REQUEST_TIMEOUT_SECONDS)
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    parser = argument_parser()
     args = parser.parse_args(argv)
     external_args = (args.external_base_url, args.external_model, args.external_context_limit)
     if any(external_args) and not all(external_args):

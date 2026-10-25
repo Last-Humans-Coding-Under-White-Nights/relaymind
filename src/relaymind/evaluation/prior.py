@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+import math
+import re
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,7 +12,9 @@ from typing import Any
 
 import jsonschema
 
+from relaymind.adapters import GenerationOptions
 from relaymind.canonical import canonical_digest
+from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.store import ModelTiming, RunStore
 from relaymind.store.outcomes import project_outcome
 from relaymind.store.trace_event import TRACE_EVENT_SCHEMA, validate_trace_event
@@ -26,6 +30,115 @@ def _closed(value: object, fields: set[str], label: str) -> dict:
     if not isinstance(value, dict) or set(value) != fields:
         raise ValueError(f"{label}: expected exactly {sorted(fields)}")
     return value
+
+
+def _generation_options(value: object) -> dict:
+    options = _closed(value, {"max_output_tokens", "temperature", "top_p"}, "generation options")
+    for name, number in options.items():
+        if number is not None and (
+            isinstance(number, bool)
+            or not isinstance(number, int | float)
+            or not math.isfinite(number)
+            or (name == "max_output_tokens" and type(number) is not int)
+        ):
+            raise ValueError("invalid generation option")
+    GenerationOptions(**options)
+    return options
+
+
+def validate_configuration(value: object) -> dict:
+    """Validate the closed runner partition, including unselected partitions."""
+    config = _closed(
+        value, {"local", "external", "local_generation_options", "budgets"}, "configuration"
+    )
+    local = config["local"]
+    if local is not None:
+        _closed(
+            local,
+            {"model_id", "artifact_sha256", "manifest_sha256", "runtime_banner", "runtime_argv"},
+            "local configuration",
+        )
+        if (
+            not all(
+                isinstance(local[k], str) and local[k].strip()
+                for k in ("model_id", "runtime_banner")
+            )
+            or not all(
+                isinstance(local[k], str) and re.fullmatch(r"[0-9a-f]{64}", local[k])
+                for k in ("artifact_sha256", "manifest_sha256")
+            )
+            or not isinstance(local["runtime_argv"], list)
+            or not local["runtime_argv"]
+            or not all(isinstance(x, str) for x in local["runtime_argv"])
+        ):
+            raise ValueError("invalid local configuration")
+    external = config["external"]
+    if external is not None:
+        _closed(
+            external,
+            {"base_url", "model", "context_limit", "request_options", "generation_options"},
+            "external configuration",
+        )
+        if (
+            not all(
+                isinstance(external[k], str) and external[k].strip() for k in ("base_url", "model")
+            )
+            or type(external["context_limit"]) is not int
+            or external["context_limit"] <= 0
+            or not isinstance(external["request_options"], dict)
+        ):
+            raise ValueError("invalid external configuration")
+        # Reject non-JSON and nonfinite provider option values before digesting them.
+        json.dumps(external["request_options"], allow_nan=False)
+        _generation_options(external["generation_options"])
+    _generation_options(config["local_generation_options"])
+    budgets = _closed(config["budgets"], set(LocalBudgets().to_json_object()), "budgets")
+    LocalBudgets(**budgets)
+    return config
+
+
+def bind_trace_configuration(events: list[dict], config: dict) -> None:
+    """Bind observable models and options; an absent legacy model uses actual local calls."""
+    accepted = events[0]["payload"]
+    local_model = (config["local"] or {}).get("model_id")
+    if "local_model" in accepted and accepted["local_model"] != local_model:
+        raise ValueError("source accepted local model differs from configuration")
+    requested = accepted.get("answer_options", {})
+    option_names = {
+        "max_completion_tokens": "max_output_tokens",
+        "temperature": "temperature",
+        "top_p": "top_p",
+    }
+    for event in events:
+        if event["event_type"] not in ("model.started", "model.finished"):
+            continue
+        payload, actor = event["payload"], event["actor"]
+        if actor == "local":
+            model = local_model
+            options = config["local_generation_options"]
+            request_options = {}
+        elif actor == "external":
+            external = config["external"] or {}
+            model = external.get("model")
+            options = external.get("generation_options", {})
+            request_options = external.get("request_options", {})
+        else:
+            raise ValueError("source model actor is not local or external")
+        if model is None or payload["model"] != model:
+            raise ValueError("source call model differs from configuration")
+        if event["event_type"] != "model.started":
+            continue
+        # Since 0.33 omitted request_options means no declared provider options.
+        if payload.get("request_options", {}) != request_options:
+            raise ValueError("source provider request options differ from configuration")
+        if "generation_options" in payload and payload["generation_options"] != options:
+            raise ValueError("source generation options differ from configuration")
+        if any(
+            requested[key] != options[name]
+            for key, name in option_names.items()
+            if key in requested
+        ):
+            raise ValueError("source answer generation options differ from configuration")
 
 
 def validated_trace(events: object, run_id: str, record: dict) -> list[dict]:
@@ -160,6 +273,7 @@ class PlacementPrior:
 
 def load_prior(path: Path, configuration: dict) -> PlacementPrior:
     """Validate every partition/source before selecting the exact configuration."""
+    validate_configuration(configuration)
     raw = path.read_bytes()
     bundle = _closed(json.loads(raw), {"schema_version", "kind", "partitions"}, "prior")
     if (
@@ -180,6 +294,7 @@ def load_prior(path: Path, configuration: dict) -> PlacementPrior:
             or not isinstance(part["sources"], list)
         ):
             raise ValueError("invalid prior partition")
+        validate_configuration(part["configuration"])
         key = canonical_digest(part["configuration"])
         if key in partitions:
             raise ValueError("duplicate configuration partition")
@@ -217,6 +332,7 @@ def load_prior(path: Path, configuration: dict) -> PlacementPrior:
                 if len(matching) != 1:
                     raise ValueError("source run must have one actual record")
                 events = validated_trace(source.get("traces", {}).get(run_id), run_id, matching[0])
+                bind_trace_configuration(events, part["configuration"])
                 observed, outcome = _observations(events)
                 timings.extend(observed)
                 timing_sources.extend(

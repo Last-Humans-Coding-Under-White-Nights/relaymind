@@ -22,7 +22,22 @@ def fixture_source(tmp_path):
     )
     outcome, _ = run(gateway)
     events = [e.to_json_object() for e in gateway.store.events(outcome.run_id)]
-    configuration = {"test_fixture": True}
+    from dataclasses import asdict
+
+    from relaymind.orchestrator.local_loop import LOCAL_OPTIONS
+
+    configuration = {
+        "local": {
+            "model_id": gateway.orchestrator.model.model_id,
+            "artifact_sha256": "a" * 64,
+            "manifest_sha256": "b" * 64,
+            "runtime_banner": "declared test fixture",
+            "runtime_argv": ["fixture"],
+        },
+        "external": None,
+        "local_generation_options": asdict(LOCAL_OPTIONS),
+        "budgets": gateway.orchestrator.budgets.to_json_object(),
+    }
     source = {
         "kind": "relaymind.correctness_corpus",
         "prior_configuration": configuration,
@@ -174,6 +189,17 @@ def test_imported_outcomes_enable_expected_wait_without_fake_runs(tmp_path):
         degraded_mode=True,
     )
     outcome, events = run(gateway)
+    from dataclasses import asdict
+
+    from relaymind.orchestrator.local_loop import EXTERNAL_OPTIONS
+
+    config["external"] = {
+        "base_url": "https://example.invalid/v1",
+        "model": gateway.orchestrator.external.model_id,
+        "context_limit": 128000,
+        "request_options": {},
+        "generation_options": asdict(EXTERNAL_OPTIONS),
+    }
     source["records"]["external/auto"] = {"run_id": outcome.run_id, "state": outcome.state.value}
     source["traces"][outcome.run_id] = [e.to_json_object() for e in events]
     source_path = local_dir / "source.json"
@@ -253,3 +279,152 @@ def test_seed_report_names_missing_expected_wait_prerequisites(tmp_path):
     assert all("local_outcomes" in row["missing"] for row in report)
     assert all("external_model" in row["missing"] for row in report)
     assert all(row["external_completed"] == 0 for row in report)
+
+
+def rewrite_source(path, source, bundle):
+    source_path = path.parent / "source.json"
+    source_path.write_text(json.dumps(source))
+    bundle["partitions"][0]["sources"][0]["sha256"] = hashlib.sha256(
+        source_path.read_bytes()
+    ).hexdigest()
+    path.write_text(json.dumps(bundle))
+
+
+@pytest.mark.parametrize(
+    "change", ["accepted_model", "call_model", "local_option", "request_option", "structure"]
+)
+@pytest.mark.parametrize("selected", [True, False])
+def test_prior_binds_observed_models_options_in_every_partition(tmp_path, change, selected):
+    """RM25/RM27: exact configuration labels must agree with their source traces."""
+    from copy import deepcopy
+
+    from relaymind.evaluation.prior import load_prior
+
+    _, path, config, source, bundle = fixture_source(tmp_path)
+    events = next(iter(source["traces"].values()))
+    if not selected:
+        # Keep a valid selected partition; the invalid second partition must still fail.
+        other = deepcopy(bundle["partitions"][0])
+        other["configuration"]["local"]["runtime_banner"] = "other test runtime"
+        other["sources"] = []
+        requested = other["configuration"]
+        bundle["partitions"].append(other)
+    else:
+        requested = config
+    if change == "accepted_model":
+        config["local"]["model_id"] = "wrong-local"
+    elif change == "call_model":
+        for e in events:
+            if e["event_type"] in ("model.started", "model.finished"):
+                e["payload"]["model"] = "wrong-local"
+        for call in events[-1]["payload"]["model_calls"]:
+            call["model"] = "wrong-local"
+    elif change == "local_option":
+        events[0]["payload"]["answer_options"] = {"temperature": 0.75}
+    elif change == "request_option":
+        next(e for e in events if e["event_type"] == "model.started")["payload"][
+            "request_options"
+        ] = {"reasoning_effort": "high"}
+    else:
+        config["local"]["artifact_sha256"] = "not a digest"
+    rewrite_source(path, source, bundle)
+    with pytest.raises(ValueError):
+        load_prior(path, requested)
+
+
+def test_prior_legacy_missing_accepted_model_uses_actual_calls(tmp_path):
+    """RM27: old traces can identify the local model from actual calls, never a guess."""
+    from relaymind.evaluation.prior import load_prior
+
+    gateway, path, config, source, bundle = fixture_source(tmp_path)
+    events = next(iter(source["traces"].values()))
+    events[0]["payload"].pop("local_model", None)
+    rewrite_source(path, source, bundle)
+    prior = load_prior(path, config)
+    assert prior.outcomes[0]["local_model"] == gateway.orchestrator.model.model_id
+    config["local"]["model_id"] = "wrong-fallback"
+    rewrite_source(path, source, bundle)
+    with pytest.raises(ValueError):
+        load_prior(path, config)
+
+
+@pytest.mark.parametrize("selected", [True, False])
+@pytest.mark.parametrize("change", ["model", "request_options", "generation_options"])
+def test_prior_binds_external_model_and_options(tmp_path, change, selected):
+    """RM25/RM27: provider observations cannot cross an exact configuration partition."""
+    from dataclasses import asdict
+
+    from relaymind.evaluation.prior import load_prior
+    from relaymind.orchestrator.local_loop import EXTERNAL_OPTIONS
+
+    _, path, config, source, bundle = fixture_source(tmp_path)
+    gateway = build_gateway(
+        tmp_path / "remote",
+        [],
+        external_turns=[
+            tool_turn("get_service_health", service="staging-api"),
+            text_turn(STAGING_OK),
+        ],
+        degraded_mode=True,
+    )
+    outcome, events = run(gateway, execution_mode="external_only")
+    source["records"] = {"external": {"run_id": outcome.run_id, "state": outcome.state.value}}
+    source["traces"] = {outcome.run_id: [e.to_json_object() for e in events]}
+    bundle["partitions"][0]["sources"][0]["run_ids"] = [outcome.run_id]
+    config["external"] = {
+        "base_url": "https://example.invalid/v1",
+        "model": gateway.orchestrator.external.model_id,
+        "context_limit": 128000,
+        "request_options": {},
+        "generation_options": asdict(EXTERNAL_OPTIONS),
+    }
+    rewrite_source(path, source, bundle)
+    assert load_prior(path, config).timings
+    requested = config
+    if not selected:
+        from copy import deepcopy
+
+        other = deepcopy(bundle["partitions"][0])
+        other["configuration"]["local"]["runtime_banner"] = "other runtime"
+        other["sources"] = []
+        requested = other["configuration"]
+        bundle["partitions"].append(other)
+    if change == "model":
+        config["external"]["model"] = "wrong-remote"
+    elif change == "request_options":
+        config["external"]["request_options"] = {"reasoning_effort": "high"}
+    else:
+        source["traces"][outcome.run_id][0]["payload"]["answer_options"] = {"temperature": 0.5}
+    rewrite_source(path, source, bundle)
+    with pytest.raises(ValueError):
+        load_prior(path, requested)
+
+
+def test_prior_accepts_matching_recorded_provider_options(tmp_path):
+    """RM25: an exact provider option match is valid, not a blanket rejection."""
+    from dataclasses import asdict
+
+    from relaymind.evaluation.prior import load_prior
+    from relaymind.orchestrator.local_loop import EXTERNAL_OPTIONS
+
+    _, path, config, source, bundle = fixture_source(tmp_path)
+    gateway = build_gateway(
+        tmp_path / "remote", [], external_turns=[text_turn("Fixture")], degraded_mode=True
+    )
+    outcome, events = run(gateway, execution_mode="external_only")
+    traced = [e.to_json_object() for e in events]
+    for e in traced:
+        if e["event_type"] == "model.started":
+            e["payload"]["request_options"] = {"reasoning_effort": "low"}
+    config["external"] = {
+        "base_url": "https://example.invalid/v1",
+        "model": gateway.orchestrator.external.model_id,
+        "context_limit": 128000,
+        "request_options": {"reasoning_effort": "low"},
+        "generation_options": asdict(EXTERNAL_OPTIONS),
+    }
+    source["records"] = {"remote": {"run_id": outcome.run_id, "state": outcome.state.value}}
+    source["traces"] = {outcome.run_id: traced}
+    bundle["partitions"][0]["sources"][0]["run_ids"] = [outcome.run_id]
+    rewrite_source(path, source, bundle)
+    assert load_prior(path, config).timings
