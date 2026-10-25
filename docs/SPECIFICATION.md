@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.43 | 25 October 2026 | Proposed implementation baseline
+Version 0.44 | 25 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that makes the best use of external language models from a PC with limited resources: it keeps simple, bounded work on a small local model when the machine can run it fast enough, sends everything else to an external model with as few round trips and tokens as the task allows, preserves completed work across that switch, and shows every decision in a trace. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -1142,6 +1142,39 @@ required metrics fail reporting acceptance; a measured missed hypothesis is a
 valid finding. Historical before/current after comparisons retain actual hashes
 and language groups and are explicitly confounded, not isolated causal evidence.
 No default changes or live capability claims follow from deterministic tests.
+
+### 14.4.5 Matrix controller recovery (specification 0.44; RM16, RM17, RM25)
+
+A matrix controller MAY run from a separately reviewed, clean committed checkout
+using explicit `--measurement-root PATH`. The recorded measurement checkout stays
+immutable: runner/configuration/package imports, subprocess working directory,
+child import path, manifest, source fingerprint and exact per-cell arguments MUST
+refer to it. A separately declared experimental checkout/revision remains the
+source for its own cells. Controller code and shared reconciliation helpers come
+from the controller revision, never silently from the measurement checkout.
+
+Controller replacement MUST preserve the index's measurement identity, plan,
+settings, original attempts, raw checkpoints, exports and costs. Record separate
+durable credential-free provenance binding the controller revision/file digests,
+measurement identity, recovery reason, time and pre-recovery index/artifact digests.
+Later resume MUST verify that provenance. No controller change relabels measured
+source or permits a different model, runtime, provider, prior or budget.
+
+Validate raw checkpoint identity exactly. Compare exported identity against the
+expected identity after the runner's defined export serialization (including
+repository/work path scrubbing); never rewrite evidence or accept arbitrary path
+or source differences. Validate export/checkpoint digests, finalized unique request
+counts, configuration and prior retention before marking a cell complete. Exact
+unseeded C0/C5 reuse obeys these same checks against its original physical attempt.
+
+Both matrix controllers provide `--reconcile-only`, mutually exclusive with
+execution/restart: it reads no provider credentials, starts no inference, creates
+no attempt, and validates retained completed artifacts before publishing recovered
+completion/provenance and any required frozen calibration prior. Missing, stale,
+partial or changed evidence refuses recovery without changing coordinator state.
+A finalized cell recovered this way is skipped on execution resume; an incomplete
+cell still requires the existing explicit new-attempt procedure. Plan counts,
+run order, scoring, denominators and runtime defaults remain unchanged.
 
 ## 15 Sources
 
