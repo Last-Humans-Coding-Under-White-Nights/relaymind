@@ -158,8 +158,9 @@ class LauncherConfig:
     budgets: LocalBudgets = field(default_factory=LocalBudgets)
     # Spec 0.32 section 14.1: the performance options; every default is the baseline.
     performance: PerformanceSettings = field(default_factory=PerformanceSettings)
-    # Spec 0.31 section 14.1: the startup warm-up of the local model (section 6).
+    # Spec 0.39 section 14.1: the placement policy, margin and probe age (RM27, section 14.2).
     placement: PlacementSettings = field(default_factory=PlacementSettings)
+    # Spec 0.31 section 14.1: the startup warm-up of the local model (section 6).
     warmup: bool = True
     warmup_seconds: float = DEFAULT_WARMUP_SECONDS
     # Spec 0.31 section 14.1: classify the local model at startup and in readiness (RM26).

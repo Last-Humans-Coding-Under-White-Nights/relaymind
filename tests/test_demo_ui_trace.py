@@ -149,6 +149,36 @@ def test_predictions_and_route_call_durations_stay_distinct(tmp_path):
     assert "0 ms" in shown
 
 
+def test_placement_labels_escape_recorded_strings(tmp_path):
+    """RM12, RM23, RM27: placement evidence is rendered as data, never markup.
+
+    A schema-valid string (the placement's model) and the values a
+    historical pre-0.39 trace may hold in its timing fields both escape.
+    """
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway)
+    events = gateway.store.events(outcome.run_id)
+    hostile = '<img src=x onerror="alert(1)">'
+    valid = []
+    historical = []
+    for event in events:
+        payload = copy.deepcopy(dict(event.payload))
+        old = copy.deepcopy(payload)
+        if event.event_type in (EventType.ROUTE_SELECTED, EventType.MODEL_STARTED):
+            payload["placement"]["inputs"]["model"] = hostile
+            old["placement"] = {"predicted_ms": hostile}
+        if event.event_type is EventType.MODEL_FINISHED:
+            old["predicted_ms"] = hostile
+        valid.append(replace(event, payload=payload))
+        validate_trace_event(valid[-1].to_json_object())
+        historical.append(replace(event, payload=old))
+    for changed in (valid, historical):
+        view = trace_view_from(gateway.store.get_run(outcome.run_id), changed)
+        shown = render_trace(view, UiSettings(mode="double"))
+        assert hostile not in shown
+        assert "&lt;img src=x onerror=" in shown
+
+
 def test_each_route_keeps_its_own_selector_and_call_timing(tmp_path):
     """RM23, RM28: a resumed gateway decision never borrows the prior call's timing."""
     gateway = health_gateway(tmp_path)
