@@ -267,6 +267,7 @@ from relaymind.selection import (
     EXHAUSTED_MECHANISM,
     MODEL_ROUTER,
     Admission,
+    ChainResult,
     ExampleMatchSelector,
     ModelRouterSelector,
     RoutingGeneration,
@@ -279,6 +280,7 @@ from relaymind.selection import (
     catalog_entries,
     parse_selection_request,
 )
+from relaymind.selection.http import HttpSelector
 from relaymind.skills import Skill, SkillRegistry
 from relaymind.skills.predicates import (
     COMPLETION_CRITERIA,
@@ -899,7 +901,14 @@ class LocalOrchestrator:
             ),
         }
         chain = (
-            selectors if selectors is not None else [built_in[n]() for n in self.selection.chain]
+            selectors
+            if selectors is not None
+            else [
+                built_in[n]()
+                if isinstance(n, str)
+                else HttpSelector(name=n.name, version=n.version, url=n.url)
+                for n in self.selection.chain
+            ]
         )
         self.selection_chain = SelectorChain(
             chain, timeout_seconds=self.selection.timeout_seconds, clock=self.clock.monotonic
@@ -1503,6 +1512,7 @@ class _Run:
         self.secrets: set[str] = set()
         self._calls = 0
         self.routing_placement = marker()
+        self.pending_selector = None
         self.pending_placement = None
         self._routing_count = None
         # RM14: who may dispatch and who owns the final answer.
@@ -1550,7 +1560,9 @@ class _Run:
         elif event_type in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED):
             if self.pending_placement is not None:
                 payload = {"placement": self.pending_placement.to_json_object(), **payload}
+        payload = self._selector_payload(event_type, payload)
         self.o.store.append_event(self.run_id, EventType(event_type), actor, payload)
+        self._selector_persisted(event_type)
         if event_type in (
             EventType.ROUTE_SELECTED,
             EventType.HANDOFF_STARTED,
@@ -1570,9 +1582,50 @@ class _Run:
                     actor,
                     {"placement": self.pending_placement.to_json_object(), **payload},
                 )
+        if event is not None:
+            kind, actor, payload = kwargs["event"]
+            kwargs["event"] = (kind, actor, self._selector_payload(kind, payload))
         self.record = self.o.machine.transition(self.run_id, self.record.version, state, **kwargs)
+        if event is not None:
+            self._selector_persisted(event[0])
         if event is not None and event[0] in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED):
             self.pending_placement = None
+
+    def _selector_payload(
+        self, kind: EventType | str, payload: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
+        """Inject pending evidence, then scrub with the secrets known at persistence (RM12).
+
+        A route.selected that names its own selector keeps it; one the gateway writes
+        after an interrupted chain, degraded_mode, carries the pending summary (14.3).
+        """
+        if (
+            kind
+            in (
+                EventType.ROUTE_SELECTED,
+                EventType.HANDOFF_STARTED,
+                EventType.RUN_FAILED,
+                EventType.RUN_CANCELLED,
+            )
+            and self.pending_selector is not None
+        ):
+            payload = {"selector": self.pending_selector, **payload}
+        if "selector" in payload:
+            payload = {
+                **payload,
+                "selector": self.o.redactor.redact_with_repeats(payload["selector"], self.secrets),
+            }
+        return payload
+
+    def _selector_persisted(self, kind: EventType | str) -> None:
+        """Only a successful write consumes a phase's pending selector evidence (RM17/RM28)."""
+        if kind in (
+            EventType.ROUTE_SELECTED,
+            EventType.HANDOFF_STARTED,
+            EventType.RUN_FAILED,
+            EventType.RUN_CANCELLED,
+        ):
+            self.pending_selector = None
 
     def scrub(self, text: str) -> str:
         return redact_text(text, self.secrets)
@@ -2037,13 +2090,16 @@ class _Run:
                 # A cancel that reaches the task, from the native cancel,
                 # a chat disconnect, or the event loop, is a cancel
                 # request (spec 0.17 sections 7.4 and 8).
-                payload = {"reason": CANCEL_REQUESTED, **self._summary()}
+                payload = self._selector_payload(
+                    EventType.RUN_CANCELLED, {"reason": CANCEL_REQUESTED, **self._summary()}
+                )
                 self.record = self.o.machine.cancel(
                     self.run_id,
                     self.record.version,
                     reason=CANCEL_REQUESTED,
                     event=(EventType.RUN_CANCELLED, GATEWAY_ACTOR, payload),
                 )
+                self._selector_persisted(EventType.RUN_CANCELLED)
                 return
             self.move(
                 RunState.FAILED,
@@ -2746,11 +2802,35 @@ class _Run:
         with reason no_local_model, and every route.selected records the class.
         """
         generations: list[tuple[str, _Generation]] = []
+        generation_stop: Exception | asyncio.CancelledError | None = None
 
         async def generate(
             messages: Sequence[Message], functions: Sequence[ToolSchema], options: GenerationOptions
         ) -> RoutingGeneration:
-            call_id, generation = await self._generate("routing", messages, functions, options)
+            nonlocal generation_stop
+            if generation_stop is not None:
+                raise generation_stop
+            # The generation owns tokenizer, stage/run and placement deadlines,
+            # including provider cancellation. An enclosing timer must not turn
+            # its expiry into apparent user cancellation. Keep the gateway's
+            # original deadline for subsequent non-model selector work.
+            gateway_deadline = timeout.when()
+            timeout.reschedule(None)
+            try:
+                call_id, generation = await self._generate("routing", messages, functions, options)
+            except PlacementDeclined:
+                # A genuine pre-dispatch decline continues the configured chain.
+                timeout.reschedule(gateway_deadline)
+                raise
+            except (Exception, asyncio.CancelledError) as stopped:
+                generation_stop = stopped
+                # A selector may catch the guarded callback stop. Interrupt any
+                # further await immediately, then preserve this original stop
+                # instead of replacing it with an enclosing timeout's budget.
+                timeout.reschedule(asyncio.get_running_loop().time())
+                raise
+            else:
+                timeout.reschedule(gateway_deadline)
             generations.append((call_id, generation))
             return RoutingGeneration(
                 calls=tuple(generation.calls), model=self.active_model.model_id, call_id=call_id
@@ -2767,9 +2847,62 @@ class _Run:
             )
 
         selection_chain = self.o.no_local_chain if self.no_local else self.o.selection_chain
-        chain = await selection_chain.run(
-            self._selection_request(), SelectionContext(self.messages, generate), admit_result
-        )
+
+        def progress(result: Any) -> None:
+            self.pending_selector = self.o.redactor.redact_with_repeats(
+                result.selector_record(), self.secrets
+            )
+
+        limit = self.meter.remaining_seconds()
+        if limit <= 0:
+            raise self.meter.time_exhausted()
+        timeout = asyncio.timeout(limit)
+        try:
+            async with timeout:
+                chain = await selection_chain.run(
+                    self._selection_request(),
+                    SelectionContext(self.messages, generate),
+                    admit_result,
+                    on_progress=progress,
+                    remaining_seconds=self.meter.remaining_seconds,
+                    time_exhausted=self.meter.time_exhausted,
+                )
+        except TimeoutError:
+            if timeout.expired():
+                # Preserve an authoritative callback stop when the guard had to
+                # interrupt a selector that caught it; otherwise this guard owns
+                # the gateway time budget, not an ordinary selector timeout.
+                if self.pending_selector:
+                    self.pending_selector["attempts"][-1]["outcome"] = (
+                        "cancelled"
+                        if isinstance(generation_stop, asyncio.CancelledError)
+                        else "error"
+                    )
+                if generation_stop is not None:
+                    raise generation_stop from None
+                raise self.meter.time_exhausted() from None
+            raise
+
+        # Every attempt of a chain that returned is complete and keeps its outcome
+        # (spec 14.3): a budget spent meanwhile stops the run after route.selected.
+        # A rejected routing output has no route.selected, so the budget stop keeps its
+        # priority over invalid_output and the pending summary goes on the terminal event.
+        spent = self.meter.remaining_seconds() <= 0
+        if spent and chain.admitted is None and chain.rejected_model_output() is not None:
+            raise self.meter.time_exhausted()
+        routing = self._record_selection(chain, generations, input_tokens, cache_key)
+        if spent:
+            raise self.meter.time_exhausted()
+        return routing
+
+    def _record_selection(
+        self,
+        chain: ChainResult[Admission],
+        generations: Sequence[tuple[str, _Generation]],
+        input_tokens: int | None,
+        cache_key: tuple[str, CacheContext] | None,
+    ) -> Routing:
+        """Write route.selected for a chain that returned (RM28, section 8)."""
         if chain.admitted is None or chain.selector is None:
             rejected = chain.rejected_model_output()
             if rejected is not None:

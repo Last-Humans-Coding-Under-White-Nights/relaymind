@@ -50,6 +50,160 @@
   ],
   "additionalProperties": false,
   "$defs": {
+    "selector_summary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "\\S"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "\\S"
+        },
+        "mechanism": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "\\S"
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "attempts": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "selected",
+                      "none",
+                      "timeout",
+                      "error",
+                      "inadmissible",
+                      "not_placed",
+                      "cancelled"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "outcome"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "selected",
+                      "none",
+                      "timeout",
+                      "error",
+                      "inadmissible",
+                      "not_placed",
+                      "cancelled"
+                    ]
+                  },
+                  "version": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "transport": {
+                    "enum": [
+                      "http",
+                      "in_process"
+                    ]
+                  },
+                  "elapsed_ms": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "model_calls_claim": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "model": {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        "call_id": {
+                          "type": "string",
+                          "pattern": "\\S"
+                        }
+                      },
+                      "required": [
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "name",
+                  "outcome",
+                  "version",
+                  "transport",
+                  "elapsed_ms",
+                  "model_calls_claim"
+                ],
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "transport": {
+                          "const": "in_process"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "model_calls_claim": {
+                          "type": "null"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "mechanism",
+        "elapsed_ms",
+        "attempts"
+      ],
+      "additionalProperties": false
+    },
     "placement": {
       "type": "object",
       "additionalProperties": false,
@@ -536,31 +690,7 @@
         "properties": {
           "payload": {
             "properties": {
-              "selector": {
-                "type": "object",
-                "properties": {
-                  "name": {"type": ["string", "null"], "pattern": "\\S"},
-                  "version": {"type": ["string", "null"], "pattern": "\\S"},
-                  "mechanism": {"type": ["string", "null"], "pattern": "\\S"},
-                  "elapsed_ms": {"type": "integer", "minimum": 0},
-                  "attempts": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "name": {"type": "string", "pattern": "\\S"},
-                        "outcome": {
-                          "enum": ["selected", "none", "timeout", "error", "inadmissible", "not_placed"]
-                        }
-                      },
-                      "required": ["name", "outcome"],
-                      "additionalProperties": false
-                    }
-                  }
-                },
-                "required": ["name", "version", "mechanism", "elapsed_ms", "attempts"],
-                "additionalProperties": false
-              },
+              "selector": {"$ref": "#/$defs/selector_summary"},
               "tools_narrowed": {"type": "array", "items": {"type": "string", "pattern": "\\S"}},
               "local_model_status": {"enum": ["unavailable", "unsuitable", "absent"]}
             }
@@ -935,6 +1065,33 @@
               "key": {"type": "string", "pattern": "\\S"}
             },
             "required": ["originating_version"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": [
+              "handoff.started",
+              "run.failed",
+              "run.cancelled"
+            ]
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "selector": {
+                "$ref": "#/$defs/selector_summary"
+              }
+            }
           }
         }
       }

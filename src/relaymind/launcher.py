@@ -353,7 +353,7 @@ def load_config(path: Path | str) -> LauncherConfig:
 
 
 def _selection(table: Mapping[str, Any], *, has_local: bool) -> SelectionSettings:
-    """The [selection] table (RM28). An http selector is refused until it exists (#133).
+    """The [selection] table (RM28), without contacting configured HTTP endpoints.
 
     Without a local model (RM26) the default chain is example_match, and
     model_router, which needs the local model, is a startup error.
@@ -363,14 +363,6 @@ def _selection(table: Mapping[str, Any], *, has_local: bool) -> SelectionSetting
         args.setdefault("chain", [EXAMPLE_MATCH])
     if "chain" in table:
         chain = _value(table, "selection", "chain", list)
-        for item in chain:
-            if isinstance(item, dict):
-                if item.get("transport") == "http":
-                    raise LaunchError(
-                        "[selection] chain: an http selector is not available yet (#133);"
-                        " use model_router or example_match"
-                    )
-                raise LaunchError("[selection] chain: an item is a selector name")
         if not has_local and MODEL_ROUTER in chain:
             raise LaunchError(
                 "[selection] chain names model_router, which needs a [local_model] table;"

@@ -49,6 +49,7 @@ __all__ = [
     "SelectionResult",
     "Selector",
     "SelectorError",
+    "SelectorTimeout",
     "parse_selection_request",
     "parse_selection_result",
 ]
@@ -71,6 +72,10 @@ class SelectionError(ValueError):
 
 class SelectorError(Exception):
     """A selector could not produce a result; the chain records an error and falls through."""
+
+
+class SelectorTimeout(SelectorError):
+    """A selector transport reported a timeout; no gateway deadline is changed (RM28)."""
 
 
 class CandidateKind(StrEnum):

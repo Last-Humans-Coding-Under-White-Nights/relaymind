@@ -20,8 +20,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
-import httpx
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
@@ -39,48 +37,10 @@ from relaymind.evaluation.selection_benchmark import (
     run_tools,
 )
 from relaymind.orchestrator.budgets import LocalBudgets
-from relaymind.selection.contract import SelectionContext, SelectionRequest, parse_selection_result
 from relaymind.selection.example_match import ExampleMatchSelector
+from relaymind.selection.http import HttpSelector, validate_url
 from relaymind.selection.settings import SelectionSettings
 from relaymind.tools import ToolRegistry
-
-
-class HttpSelector:
-    """RM28 JSON transport. The caller owns its client and timeout."""
-
-    name, version, model_based = "http", None, False
-
-    def __init__(self, url: str, client: httpx.AsyncClient):
-        if not is_loopback_url(url):
-            raise ValueError("HTTP selector endpoint must be loopback")
-        self.url, self.client = url, client
-        self.response_identities: set[tuple[str, str]] = set()
-
-    async def select(self, request: SelectionRequest, context: SelectionContext) -> dict:
-        response = await self.client.post(self.url, json=request.to_json_object())
-        response.raise_for_status()
-        result = parse_selection_result(response.json()).to_json_object()
-        identity = result["selector"]
-        self.response_identities.add((identity["name"], identity["version"]))
-        return result
-
-    def report_identity(self) -> dict:
-        """Export observed response claims without inventing a configured identity."""
-        identities = [
-            {"name": name, "version": version} for name, version in sorted(self.response_identities)
-        ]
-        single = identities[0] if len(identities) == 1 else {"name": None, "version": None}
-        return {
-            **single,
-            "transport": "http",
-            "endpoint": self.url,
-            "identity_provenance": "response_claim"
-            if len(identities) == 1
-            else "mixed_response_claims"
-            if identities
-            else "unknown",
-            "response_reported_identities": identities,
-        }
 
 
 def parser() -> argparse.ArgumentParser:
@@ -91,6 +51,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--selector", required=True, help="model_router, example_match, or HTTP URL"
     )
+    result.add_argument("--selector-name", help="Expected HTTP selector identity")
+    result.add_argument("--selector-version", help="Expected HTTP selector version")
     result.add_argument("--output", type=Path, required=True)
     result.add_argument("--evaluation-dir", type=Path, default=ROOT / "evaluation")
     result.add_argument("--seed", type=int, default=42)
@@ -158,6 +120,9 @@ async def run(args: argparse.Namespace) -> dict:
         for name in (
             "scripts/selection_benchmark.py",
             "src/relaymind/evaluation/selection_benchmark.py",
+            "src/relaymind/selection/http.py",
+            "src/relaymind/selection/chain.py",
+            "scripts/example_selector.py",
         )
     }
     if args.timeout is None:
@@ -188,6 +153,11 @@ async def run(args: argparse.Namespace) -> dict:
         files[lock.name] = file_digest(lock)
     limit = args.limit if args.limit is not None else (100 if args.proposal == "external" else None)
     selected = _subset(cases, limit, args.seed)
+    http = args.selector.startswith(("http://", "https://"))
+    if http:
+        validate_url(args.selector)
+        if not args.selector_name or not args.selector_version:
+            raise ValueError("HTTP selector requires --selector-name and --selector-version")
     local = external = None
     try:
         if (args.selector == "model_router" and args.track == "skills") or args.proposal == "local":
@@ -211,53 +181,54 @@ async def run(args: argparse.Namespace) -> dict:
                     request_options=args.external_request_options,
                 )
             )
-        async with httpx.AsyncClient(timeout=args.timeout, trust_env=False) as client:
-            if args.selector == "model_router":
-                selector = (
-                    RouterBenchmarkSelector(
-                        local,
-                        args.model,
-                        budgets=LocalBudgets(
-                            routing_input_tokens=args.routing_input_tokens,
-                            routing_output_tokens=args.routing_output_tokens,
-                        ),
-                    )
-                    if args.track == "skills"
-                    else SimpleNamespace(name="model_router", version="1")
+        if args.selector == "model_router":
+            selector = (
+                RouterBenchmarkSelector(
+                    local,
+                    args.model,
+                    budgets=LocalBudgets(
+                        routing_input_tokens=args.routing_input_tokens,
+                        routing_output_tokens=args.routing_output_tokens,
+                    ),
                 )
-            elif args.selector == "example_match":
-                selector = ExampleMatchSelector(
-                    ToolRegistry(), score=args.example_score, margin=args.example_margin
-                )
-            elif args.selector.startswith(("http://", "https://")):
-                selector = HttpSelector(args.selector, client)
-            else:
-                raise ValueError(
-                    "unknown selector; use model_router, example_match, or an HTTP URL"
-                )
-            if args.track == "skills":
-                results = await run_skills(
-                    data,
-                    selector,
-                    seed=args.seed,
-                    timeout=args.timeout,
-                    case_ids={c["id"] for c in selected},
-                )
-            else:
-                results = await run_tools(
-                    selected,
-                    selector,
-                    adapter=external or local,
-                    timeout=args.timeout,
-                    context_limit=args.context_limit,
-                    calls_per_generation=args.calls_per_generation,
-                    seed=args.seed,
-                )
-            selector_identity = (
-                selector.report_identity()
-                if isinstance(selector, HttpSelector)
-                else {"name": selector.name, "version": selector.version, "endpoint": None}
+                if args.track == "skills"
+                else SimpleNamespace(name="model_router", version="1")
             )
+        elif args.selector == "example_match":
+            selector = ExampleMatchSelector(
+                ToolRegistry(), score=args.example_score, margin=args.example_margin
+            )
+        elif args.selector.startswith(("http://", "https://")):
+            selector = HttpSelector(
+                url=args.selector, name=args.selector_name, version=args.selector_version
+            )
+        else:
+            raise ValueError("unknown selector; use model_router, example_match, or an HTTP URL")
+        if args.track == "skills":
+            results = await run_skills(
+                data,
+                selector,
+                seed=args.seed,
+                timeout=args.timeout,
+                case_ids={c["id"] for c in selected},
+            )
+        else:
+            results = await run_tools(
+                selected,
+                selector,
+                adapter=external or local,
+                timeout=args.timeout,
+                context_limit=args.context_limit,
+                calls_per_generation=args.calls_per_generation,
+                seed=args.seed,
+            )
+        selector_identity = {
+            "name": selector.name,
+            "version": selector.version,
+            "endpoint": args.selector if http else None,
+            "transport": "http" if http else "in_process",
+            "selector_internal_model_cost": "not_verified" if http else "gateway_observed",
+        }
     finally:
         if local is not None:
             await local.aclose()

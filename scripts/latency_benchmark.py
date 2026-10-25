@@ -68,6 +68,7 @@ from relaymind.evaluation.environment import (  # noqa: E402
     parse_runtime_log,
     runtime_devices,
 )
+from relaymind.evaluation.grading import selector_provenance  # noqa: E402
 from relaymind.evaluation.metrics import (  # noqa: E402
     LATENCY_METRICS,
     render_latency_markdown,
@@ -261,6 +262,7 @@ async def measure(
         "stream_error_code": None,
         "cancelled_after": False,
         "model_calls": [],
+        "selector_provenance": selector_provenance([]),
         **{metric: None for metric in LATENCY_METRICS},
     }
     try:
@@ -313,6 +315,7 @@ async def _read_trace(api: harness.Api, run_id: str, sample: dict[str, Any]) -> 
     sample["first_model_action_ms"] = None if action is None else float(action)
     sample["first_useful_content_ms"] = first_useful_content_ms(events)
     sample["model_calls"] = _model_calls(events)
+    sample["selector_provenance"] = selector_provenance(events)
 
 
 Measure = Callable[..., Awaitable[dict[str, Any]]]

@@ -791,7 +791,7 @@ feature has a test of the default as well. Later pull requests append here.
   the `[selection]` keys are the `SelectionSettings` fields, every key
   reaches the chain, a file without the table runs `model_router` alone, a
   wrong type or range, an unknown selector, a repeated one, an empty chain,
-  and an `http` selector (not available until #133) are exit status 2 with
+  and an incomplete `http` selector table are exit status 2 with
   one `[selection]` message, `run.accepted` records the values, and the
   commented block of `relaymind.example.toml` loads with the defaults.
 - `pytest tests/test_ac20_no_local.py` (#126; AC20, RM01, RM05, RM11,
@@ -894,6 +894,34 @@ feature has a test of the default as well. Later pull requests append here.
   writes validate the closed placement object; historical UI readers still
   accept missing or previously unconstrained fields. No test claims live
   performance.
+
+- `pytest tests/test_http_selector.py tests/test_http_selector_review.py`
+  (#133, spec 0.40) covers RM03, RM08, RM11, RM12, RM14,
+  RM16, RM22, RM25, RM26, RM28 and AC22. Ephemeral literal-loopback servers
+  exercise actual POST requests: configured identity, closed startup settings,
+  URL policy (plain http only) without credential echoes, proxy and redirect
+  isolation, exactly one request, schema/identity/mechanism errors, the response
+  size cap, unknown versus empty claims, admission, redaction, timeout, gateway
+  budget precedence and cancellation. The actual stdlib example script is started
+  on an ephemeral port. Clients close per attempt and remain usable across
+  separate event loops. `tests/test_launcher.py` checks that a non-loopback or
+  https selector URL stops `relaymind serve` with one message, before a socket and
+  without echoing the URL.
+
+  Corpus and latency exports classify HTTP-attempted, gateway-observed and historical
+  unknown provenance, including their Markdown reports; a run that reached no selector
+  (routing cache hit, input-cap bypass, execution mode, client owned) is gateway observed.
+  HTTP internal model cost remains unverified and does not enter measured call/token totals.
+
+  Trace tests check Python and published JSON Schema compatibility with historical
+  attempts and rejection of partial or malformed new evidence. Gateway tests retain
+  HTTP attempts on successful fallback, failed routing and run cancellation without
+  inventing routes or adding claims to measured model calls. Unknown skills and
+  foreign tools execute nothing; mutations still wait for confirmation. Both frozen
+  benchmark tracks use the production HTTP boundary, preserve failed-case claims,
+  and retain every failed case in the denominator. This deterministic coverage and
+  the keyword SkillsBench export are transport evidence; no live model capability
+  or useful keyword accuracy is implied.
 
 ### What is not covered yet
 

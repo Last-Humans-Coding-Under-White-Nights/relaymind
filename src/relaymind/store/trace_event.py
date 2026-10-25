@@ -723,7 +723,15 @@ _PERFORMANCE_ACCEPTED_FIELDS: dict[str, Callable[[Any], None]] = {
 }
 
 # RM28: the outcome of one selector tried (section 8, route.selected attempts).
-SELECTOR_OUTCOMES = ("selected", "none", "timeout", "error", "inadmissible", "not_placed")
+SELECTOR_OUTCOMES = (
+    "selected",
+    "none",
+    "timeout",
+    "error",
+    "inadmissible",
+    "not_placed",
+    "cancelled",
+)
 _SELECTOR_FIELDS = ("name", "version", "mechanism", "elapsed_ms", "attempts")
 
 
@@ -747,11 +755,33 @@ def _check_selector(value: Any) -> None:
     for attempt in value["attempts"]:
         if (
             not isinstance(attempt, Mapping)
-            or set(attempt) != {"name", "outcome"}
+            or set(attempt)
+            not in (
+                {"name", "outcome"},
+                {"name", "version", "transport", "outcome", "elapsed_ms", "model_calls_claim"},
+            )
             or not _is_text(attempt["name"])
             or attempt["outcome"] not in SELECTOR_OUTCOMES
         ):
             raise TraceEventError(message)
+        if "transport" in attempt:
+            if (
+                not _is_text(attempt["version"])
+                or attempt["transport"] not in ("http", "in_process")
+                or not _is_count(attempt["elapsed_ms"], 0)
+            ):
+                raise TraceEventError(message)
+            claims = attempt["model_calls_claim"]
+            if claims is not None:
+                if attempt["transport"] != "http" or not _is_array(claims):
+                    raise TraceEventError(message)
+                for claim in claims:
+                    if (
+                        not isinstance(claim, Mapping)
+                        or set(claim) not in ({"model"}, {"model", "call_id"})
+                        or not all(_is_text(v) for v in claim.values())
+                    ):
+                        raise TraceEventError(message)
 
 
 def _check_tools_narrowed(value: Any) -> None:
@@ -961,6 +991,9 @@ _OPTIONAL_FIELDS: dict[EventType, dict[str, Callable[[Any], None]]] = {
         "tools_narrowed": _check_tools_narrowed,
         "local_model_status": _one_of("local_model_status", NO_LOCAL_CLASSES),
     },
+    EventType.HANDOFF_STARTED: {"selector": _check_selector},
+    EventType.RUN_FAILED: {"selector": _check_selector},
+    EventType.RUN_CANCELLED: {"selector": _check_selector},
     EventType.MODEL_STARTED: {"request_options": _check_request_options},
     EventType.MODEL_FINISHED: {
         "first_token_ms": _check_first_token_ms,

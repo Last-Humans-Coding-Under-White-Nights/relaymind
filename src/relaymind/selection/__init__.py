@@ -31,6 +31,7 @@ from relaymind.selection.contract import (
     SelectionResult,
     Selector,
     SelectorError,
+    SelectorTimeout,
     parse_selection_request,
     parse_selection_result,
 )
@@ -73,6 +74,7 @@ __all__ = [
     "Selector",
     "SelectorChain",
     "SelectorError",
+    "SelectorTimeout",
     "admit",
     "catalog_entries",
     "parse_selection_request",

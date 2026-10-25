@@ -3,6 +3,7 @@
 import asyncio
 import json
 import sys
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -87,6 +88,38 @@ def test_early_skill_bypass_clears_previous_diagnostics(first_success):
         assert report["cases"][0]["input_tokens"] == 17
 
 
+def production_http_selector(monkeypatch, handler):
+    from relaymind.selection.http import HttpSelector
+
+    original_client = httpx.AsyncClient
+
+    def client(**kwargs):
+        assert kwargs == {"trust_env": False, "follow_redirects": False, "timeout": None}
+        return original_client(transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    return HttpSelector(url="http://127.0.0.1:9000/select", name="test", version="1")
+
+
+@pytest.fixture
+def controlled_selector_time(monkeypatch):
+    """Keep HTTP identity/error assertions independent of host speed (RM16/RM28).
+
+    Deadline tests below retain real timers. These synchronous MockTransport
+    responses exercise the production chain with a clock that does not advance.
+    """
+    from relaymind.selection import chain
+
+    async def pending_timer(seconds):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(
+        chain,
+        "SelectorChain",
+        partial(chain.SelectorChain, clock=lambda: 0.0, sleep=pending_timer),
+    )
+
+
 @pytest.mark.parametrize("track", ["skills", "tools"])
 @pytest.mark.parametrize(
     "exception,status",
@@ -96,35 +129,43 @@ def test_early_skill_bypass_clears_previous_diagnostics(first_success):
         (httpx.ConnectError, "error"),
     ],
 )
-def test_actual_http_exceptions_are_classified(track, exception, status):
-    """RM25/RM28: HTTP timeouts remain errors in denominators, with zero credit."""
-    script = load_script_module("selection_benchmark")
+def test_actual_http_exceptions_are_classified(
+    monkeypatch, controlled_selector_time, track, exception, status
+):
+    """RM25/RM28: production HTTP preserves timeout provenance and failure denominators."""
 
     def handler(request):
         raise exception("synthetic transport failure", request=request)
 
+    selector = production_http_selector(monkeypatch, handler)
+
     async def run():
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            selector = script.HttpSelector("http://127.0.0.1:9000/select", client)
-            if track == "skills":
-                return await bench.run_skills(
-                    {
-                        "catalog": [],
-                        "cases": [{"id": "test", "request": "test", "expected": ["keep"]}],
-                    },
-                    selector,
-                    seed=1,
-                )
-            return (await bench.run_tools([tool_case()], selector))["narrowing"]
+        if track == "skills":
+            return await bench.run_skills(
+                {
+                    "catalog": [],
+                    "cases": [{"id": "test", "request": "test", "expected": ["keep"]}],
+                },
+                selector,
+                seed=1,
+            )
+        return (await bench.run_tools([tool_case()], selector))["narrowing"]
 
     report = asyncio.run(run())
-    assert report["cases"][0]["status"] == status
-    assert report["cases"][0]["predicted"] == []
-    assert report["summary"]["count"] == report["summary"]["errors"] == 1
+    row = report["cases"][0]
+    assert row["status"] == ("timeout" if status == "timeout" else "invalid_output")
+    assert row["predicted"] == []
+    assert row["selector_attempt"]["outcome"] == status
+    assert row["selector_attempt"]["transport"] == "http"
+    assert row["selector_attempt"]["model_calls_claim"] is None
+    assert report["summary"]["count"] == 1
+    assert report["summary"]["errors"] == (1 if status == "timeout" else 0)
+    assert report["summary"]["macro"] == {"precision": 0, "recall": 0, "jaccard": 0}
 
 
 @pytest.mark.parametrize("track", ["skills", "tools"])
-def test_pending_selector_deadline_cancels_work(track):
+@pytest.mark.parametrize("http_transport", [False, True])
+def test_pending_selector_deadline_cancels_work(monkeypatch, track, http_transport):
     """RM25/RM28: the actual outer deadline cancels a pending selector."""
     cancelled = []
 
@@ -137,17 +178,21 @@ def test_pending_selector_deadline_cancels_work(track):
             finally:
                 cancelled.append(True)
 
+    async def pending_http(request):
+        return await Selector().select(None, None)
+
+    selector = production_http_selector(monkeypatch, pending_http) if http_transport else Selector()
     if track == "skills":
         report = asyncio.run(
             bench.run_skills(
                 {"catalog": [], "cases": [{"id": "test", "request": "test", "expected": ["keep"]}]},
-                Selector(),
+                selector,
                 seed=1,
                 timeout=0.01,
             )
         )
     else:
-        report = asyncio.run(bench.run_tools([tool_case()], Selector(), timeout=0.01))["narrowing"]
+        report = asyncio.run(bench.run_tools([tool_case()], selector, timeout=0.01))["narrowing"]
     assert cancelled == [True]
     assert report["cases"][0]["status"] == "timeout"
     assert report["summary"]["count"] == report["summary"]["errors"] == 1
@@ -269,7 +314,7 @@ def test_skills_rejects_proposal_before_sources_or_adapters(tmp_path, monkeypatc
         "ChatCompletionsAdapter",
     ):
         monkeypatch.setattr(script, name, forbidden)
-    monkeypatch.setattr(script.httpx, "AsyncClient", forbidden)
+    monkeypatch.setattr(httpx, "AsyncClient", forbidden)
     args = script.parser().parse_args(
         [
             "--track",
@@ -290,8 +335,10 @@ def test_skills_rejects_proposal_before_sources_or_adapters(tmp_path, monkeypatc
 @pytest.mark.parametrize(
     "identities", [[("actual", "2"), ("actual", "2")], [("a", "1"), ("b", "2")], []]
 )
-def test_http_report_exports_distinct_response_claims(tmp_path, monkeypatch, identities):
-    """RM16/RM25/RM28: transport is separate from observed selector claims."""
+def test_http_report_keeps_configured_identity_and_per_case_claims(
+    tmp_path, monkeypatch, controlled_selector_time, identities
+):
+    """RM16/RM25/RM28: response claims cannot change configured identity or leak cases."""
     script = load_script_module("selection_benchmark")
     original_client = httpx.AsyncClient
     pending = iter(identities)
@@ -301,10 +348,12 @@ def test_http_report_exports_distinct_response_claims(tmp_path, monkeypatch, ide
             name, version = next(pending)
         except StopIteration:
             raise httpx.ConnectError("no identity", request=request) from None
-        return httpx.Response(200, json=selection(identity={"name": name, "version": version}))
+        body = selection(identity={"name": name, "version": version})
+        body["model_calls"] = [{"model": name, "call_id": version}]
+        return httpx.Response(200, json=body)
 
     monkeypatch.setattr(
-        script.httpx,
+        httpx,
         "AsyncClient",
         lambda **kw: original_client(transport=httpx.MockTransport(handler), **kw),
     )
@@ -314,6 +363,10 @@ def test_http_report_exports_distinct_response_claims(tmp_path, monkeypatch, ide
             "skills",
             "--selector",
             "http://127.0.0.1:9000/select",
+            "--selector-name",
+            "actual",
+            "--selector-version",
+            "2",
             "--limit",
             "2",
             "--output",
@@ -324,17 +377,25 @@ def test_http_report_exports_distinct_response_claims(tmp_path, monkeypatch, ide
     identity = report["selector"]
     assert identity["transport"] == "http"
     assert identity["endpoint"] == args.selector
-    expected = [{"name": n, "version": v} for n, v in sorted(set(identities))]
-    assert identity["response_reported_identities"] == expected
-    assert identity["identity_provenance"] == (
-        "response_claim"
-        if len(expected) == 1
-        else "mixed_response_claims"
-        if expected
-        else "unknown"
-    )
-    assert identity["name"] == (expected[0]["name"] if len(expected) == 1 else None)
-    assert identity["version"] == (expected[0]["version"] if len(expected) == 1 else None)
+    assert identity["name"] == "actual"
+    assert identity["version"] == "2"
+    assert identity["selector_internal_model_cost"] == "not_verified"
+    rows = report["results"]["cases"]
+    assert len(rows) == report["results"]["summary"]["count"] == 2
+    for index, row in enumerate(rows):
+        attempt = row["selector_attempt"]
+        assert attempt["name"] == "actual"
+        assert attempt["version"] == "2"
+        assert attempt["transport"] == "http"
+        if identities:
+            name, version = identities[index]
+            assert attempt["model_calls_claim"] == [{"model": name, "call_id": version}]
+            assert row["status"] == (
+                "ok" if (name, version) == ("actual", "2") else "invalid_output"
+            )
+        else:
+            assert attempt["model_calls_claim"] is None
+            assert row["status"] == "invalid_output"
 
 
 def test_toolret_scripts_share_persistent_cache_default(tmp_path, monkeypatch):
