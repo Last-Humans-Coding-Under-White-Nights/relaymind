@@ -379,6 +379,24 @@ def _run_record(row: sqlite3.Row) -> RunRecord:
     )
 
 
+_TIMING_SELECT = (
+    "SELECT model, actor, purpose, kind, input_tokens, cached_tokens, first_token_ms,"
+    " duration_ms, output_tokens, succeeded, run_id, recorded_at FROM model_timings"
+)
+
+
+def _model_timing(row: sqlite3.Row) -> ModelTiming:
+    return ModelTiming(
+        **{
+            key: value
+            for key, value in dict(row).items()
+            if key not in ("succeeded", "recorded_at")
+        },
+        succeeded=bool(row["succeeded"]),
+        recorded_at=_parse(row["recorded_at"]),
+    )
+
+
 def _tool_operation_record(row: sqlite3.Row) -> dict[str, Any]:
     record = dict(row)
     record["arguments"] = json.loads(row["arguments"])
@@ -651,12 +669,27 @@ class RunStore:
                 last = datetime.fromisoformat(row["last_attempt_at"].replace("Z", "+00:00"))
                 if (now - last).total_seconds() < after_seconds:
                     return False
-            samples = [
-                s
-                for s in self.model_timings(model=model, purpose="routing", actor="local")
-                if s.succeeded
-            ]
-            return not samples or (now - samples[-1].recorded_at).total_seconds() > after_seconds
+            latest = self.latest_model_timing(model=model, purpose="routing", actor="local")
+            return latest is None or (now - latest.recorded_at).total_seconds() > after_seconds
+
+    def probe_wait_seconds(self, *, model: str, after_seconds: float) -> float:
+        """Seconds until cooldown and estimate age allow an idle probe; 0 when they do.
+
+        Only the timed conditions are counted. An active run or another
+        probe's reservation has no known end, so a scheduler polls for it.
+        """
+        with self._lock:
+            self._check_open()
+            row = self._conn.execute("SELECT last_attempt_at FROM idle_probe").fetchone()
+            now = self.clock.utc_now()
+            wait = 0.0
+            if row["last_attempt_at"] is not None:
+                last = datetime.fromisoformat(row["last_attempt_at"].replace("Z", "+00:00"))
+                wait = max(wait, after_seconds - (now - last).total_seconds())
+            latest = self.latest_model_timing(model=model, purpose="routing", actor="local")
+            if latest is not None:
+                wait = max(wait, after_seconds - (now - latest.recorded_at).total_seconds())
+            return wait
 
     def finish_probe(self, token: str, owner_instance: str) -> bool:
         """Release only after the matching owner's generation task has actually ended."""
@@ -1007,11 +1040,7 @@ class RunStore:
         self, *, model: str | None = None, purpose: str | None = None, actor: str | None = None
     ) -> list[ModelTiming]:
         """Unexpired observations, oldest first, then insertion order for timestamp ties."""
-        query = (
-            "SELECT model, actor, purpose, kind, input_tokens, cached_tokens, first_token_ms,"
-            " duration_ms, output_tokens, succeeded, run_id, recorded_at"
-            " FROM model_timings WHERE recorded_at > ?"
-        )
+        query = _TIMING_SELECT + " WHERE recorded_at > ?"
         params: list[Any] = [self._retention_cutoff()]
         for name, value in (("model", model), ("purpose", purpose), ("actor", actor)):
             if value is not None:
@@ -1020,18 +1049,19 @@ class RunStore:
         with self._lock:
             self._check_open()
             rows = self._conn.execute(query + " ORDER BY recorded_at, sample_id", params).fetchall()
-        return [
-            ModelTiming(
-                **{
-                    key: value
-                    for key, value in dict(row).items()
-                    if key not in ("succeeded", "recorded_at")
-                },
-                succeeded=bool(row["succeeded"]),
-                recorded_at=_parse(row["recorded_at"]),
-            )
-            for row in rows
-        ]
+        return [_model_timing(row) for row in rows]
+
+    def latest_model_timing(self, *, model: str, purpose: str, actor: str) -> ModelTiming | None:
+        """The newest unexpired successful observation, read by one indexed lookup."""
+        with self._lock:
+            self._check_open()
+            row = self._conn.execute(
+                _TIMING_SELECT + " WHERE recorded_at > ? AND model = ? AND purpose = ?"
+                " AND actor = ? AND succeeded = 1"
+                " ORDER BY recorded_at DESC, sample_id DESC LIMIT 1",
+                (self._retention_cutoff(), model, purpose, actor),
+            ).fetchone()
+        return None if row is None else _model_timing(row)
 
     def timing_estimate(self, model: str, purpose: str, *, actor: str = "local") -> TimingEstimate:
         """Read measured prediction inputs without inference or run/event-history scans."""

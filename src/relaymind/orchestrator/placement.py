@@ -218,14 +218,10 @@ class Placement:
         # An absent, unavailable or unsuitable class keeps the RM26 external choice:
         # no local routing is predicted, so neither a placement nor a fit is reported.
         if local_model is not None and usable:
-            samples = [
-                s
-                for s in self.store.model_timings(
-                    model=local_model, purpose="routing", actor="local"
-                )
-                if s.succeeded
-            ]
-            tokens = samples[-1].input_tokens if samples else None
+            latest = self.store.latest_model_timing(
+                model=local_model, purpose="routing", actor="local"
+            )
+            tokens = None if latest is None else latest.input_tokens
             p = self.predict(
                 local_model, "routing", tokens, output_cap=output_cap, input_source="routing_sample"
             )

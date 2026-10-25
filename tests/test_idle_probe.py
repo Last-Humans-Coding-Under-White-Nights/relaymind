@@ -380,7 +380,8 @@ def test_idle_scheduler_limits_wakeups_without_delaying_active_cancellation(tmp_
         probe = idle
         delays.clear()
         await idle._schedule()
-        assert delays and min(delays) >= 1
+        # A 600 s cooldown is slept in bounded steps, so settings and clocks are rechecked.
+        assert delays == [60]
         await idle.stop()
 
     asyncio.run(go())
@@ -418,9 +419,11 @@ def test_probe_timing_evidence_errors_remain_visible(tmp_path, monkeypatch, boun
             await (probe.tick() if boundary == "tick" else probe.stop())
         assert caught.value is error
         assert len(gateway.adapter.requests) == 1
-        # Retrieve any task error even when the scheduler was the reporting boundary.
-        if not probe._task.cancelled():
+        # A reported task error is not raised again by a later check.
+        if boundary == "stop":
             probe._task.exception()
+        else:
+            assert probe._task is None
 
     asyncio.run(go())
 
@@ -439,7 +442,7 @@ def test_probe_with_no_retained_sample_does_not_reclassify_model(tmp_path, monke
         placement=PlacementSettings(policy="device_aware"),
     )
     # Simulate evidence expiring between recording the attempt and reading it.
-    monkeypatch.setattr(gateway.store, "model_timings", lambda **kwargs: [])
+    monkeypatch.setattr(gateway.store, "latest_model_timing", lambda **kwargs: None)
 
     async def go():
         probe = IdleProbe(gateway.orchestrator)
@@ -477,3 +480,203 @@ def test_rolled_back_transaction_drops_clocks_it_started(tmp_path):
                 raise RuntimeError("roll back")
         assert list(store._run_started) == [kept.run_id]
         assert [r.run_id for r in store.unfinished_runs(())] == [kept.run_id]
+
+
+def test_probe_eligibility_reads_only_the_latest_successful_sample(tmp_path, monkeypatch):
+    """RM27/AC21: an idle check is one indexed read, never a scan of retained samples."""
+    from test_placement import seed
+
+    with RunStore(tmp_path / "store", clock=FakeClock()) as store:
+        seed(store, input_tokens=1)
+        store.clock.advance(700)
+        seed(store, input_tokens=2)
+        seed(store, input_tokens=3)  # same timestamp: insertion order decides
+        seed(store, input_tokens=4, succeeded=False)
+        seed(store, input_tokens=5, purpose="skill")
+        latest = store.latest_model_timing(model="local", purpose="routing", actor="local")
+        assert latest is not None and latest.input_tokens == 3
+        assert store.latest_model_timing(model="other", purpose="routing", actor="local") is None
+
+        def scan(**kwargs):
+            raise AssertionError("an idle check must not load every sample")
+
+        monkeypatch.setattr(store, "model_timings", scan)
+        statements = []
+        store._conn.set_trace_callback(statements.append)
+        assert not store.try_reserve_probe("p", "owner", model="local", after_seconds=600)
+        assert any("LIMIT 1" in sql for sql in statements if "model_timings" in sql)
+        store.clock.advance(601)
+        assert store.try_reserve_probe("p", "owner", model="local", after_seconds=600)
+
+
+def test_probe_wait_is_the_time_until_cooldown_and_freshness_allow_one(tmp_path):
+    """RM27/AC21: the scheduler can sleep until the next eligible moment."""
+    from test_placement import seed
+
+    with RunStore(tmp_path / "store", clock=FakeClock()) as store:
+        assert store.probe_wait_seconds(model="local", after_seconds=30) == 0
+        seed(store)
+        store.clock.advance(10)
+        assert store.probe_wait_seconds(model="local", after_seconds=30) == 20
+        seed(store, succeeded=False)  # a failed sample refreshes nothing
+        assert store.probe_wait_seconds(model="local", after_seconds=30) == 20
+        store.clock.advance(25)
+        assert store.try_reserve_probe("p", "owner", model="local", after_seconds=30)
+        store.finish_probe("p", "owner")
+        store.clock.advance(5)
+        assert store.probe_wait_seconds(model="local", after_seconds=30) == 25
+
+
+def test_idle_scheduler_sleeps_until_the_next_eligible_time(tmp_path, monkeypatch):
+    """RM27/AC21: an idle scheduler wakes when a probe can start, within bounds."""
+    from helpers import ACCEPTED_PAYLOAD
+    from relaymind.adapters import Completed
+    from relaymind.orchestrator.warmup import IdleProbe
+
+    gateway = build_gateway(
+        tmp_path,
+        [[Completed("stop")]],
+        external_turns=[],
+        placement=PlacementSettings(policy="device_aware", probe_after_seconds=30),
+    )
+    sleep = asyncio.sleep
+    delays = []
+
+    async def go():
+        probe = IdleProbe(gateway.orchestrator)
+        await probe.tick()
+        await probe._task
+
+        async def scheduled_sleep(delay):
+            delays.append(delay)
+            probe._closing = True
+            await sleep(0)
+
+        monkeypatch.setattr(asyncio, "sleep", scheduled_sleep)
+
+        async def once():
+            probe._closing = False
+            await probe._schedule()
+            return delays.pop()
+
+        assert await once() == 30  # the cooldown of the attempt just made
+        gateway.store.clock.advance(29.5)
+        assert await once() == 1  # never a busy loop
+        gateway.store.clock.advance(1)
+        run = gateway.store.create_run(
+            "accepted", accepted=("run.accepted", "gateway", ACCEPTED_PAYLOAD)
+        )
+        gateway.store.set_state(
+            run.run_id,
+            expected_version=1,
+            from_state="accepted",
+            to_state="routing",
+            holds_slot=True,
+        )
+        assert await once() == 1  # an active run is polled, not timed
+        await probe.stop()
+
+    asyncio.run(go())
+
+
+def test_failed_scheduler_check_is_logged_backed_off_and_retried(tmp_path, monkeypatch, caplog):
+    """RM17/AC21: one failed check never ends maintenance; the error stays visible."""
+    import logging
+
+    from relaymind.orchestrator.warmup import IdleProbe
+
+    gateway = build_gateway(
+        tmp_path, [], external_turns=[], placement=PlacementSettings(policy="device_aware")
+    )
+    sleep = asyncio.sleep
+    error = OSError("disk unavailable")
+    calls = []
+
+    # Another owner's reservation keeps the real checks from starting a probe.
+    assert gateway.store.try_reserve_probe("held", "other", model="local", after_seconds=600)
+
+    async def go():
+        probe = IdleProbe(gateway.orchestrator)
+        tick = probe.tick
+
+        async def failing_tick():
+            calls.append(len(calls))
+            if len(calls) <= 3:
+                raise error
+            if len(calls) == 5:
+                probe._closing = True
+            await tick()
+
+        delays = []
+
+        async def scheduled_sleep(delay):
+            delays.append(delay)
+            await sleep(0)
+
+        monkeypatch.setattr(probe, "tick", failing_tick)
+        monkeypatch.setattr(asyncio, "sleep", scheduled_sleep)
+        with caplog.at_level(logging.ERROR, logger="relaymind.orchestrator.warmup"):
+            await probe._schedule()
+        assert len(calls) == 5
+        # Backoff grows after each failed check and resets after a good one.
+        assert delays[0] < delays[1] < delays[2] <= 30
+        assert delays[3:] == [1, 1]
+        assert len([r for r in caplog.records if r.exc_info and r.exc_info[1] is error]) == 3
+        with pytest.raises(OSError) as caught:
+            await probe.stop()
+        assert caught.value is error
+
+    asyncio.run(go())
+
+
+def test_inflight_probe_is_still_cancelled_after_a_failed_check(tmp_path, monkeypatch):
+    """RM17/AC21: a foreground 429 still stops the probe after a transient store error."""
+    from relaymind.adapters import Completed
+    from relaymind.orchestrator.warmup import IdleProbe
+
+    gateway = build_gateway(
+        tmp_path, [], external_turns=[], placement=PlacementSettings(policy="device_aware")
+    )
+    sleep = asyncio.sleep
+
+    async def go():
+        gate = asyncio.Event()
+
+        async def generate(request):
+            gateway.adapter.requests.append(request)
+            await gate.wait()
+            yield Completed("stop")
+
+        gateway.adapter.generate = generate
+        probe = IdleProbe(gateway.orchestrator)
+        await probe.tick()
+        task = probe._task
+        reservation = gateway.store.probe_reservation
+        tick = probe.tick
+        failures = [OSError("busy")]
+
+        async def flaky_tick():
+            if failures:
+                raise failures.pop()
+            await tick()
+
+        monkeypatch.setattr(probe, "tick", flaky_tick)
+
+        async def fast_sleep(delay):
+            await sleep(0)
+
+        monkeypatch.setattr(asyncio, "sleep", fast_sleep)
+        probe._scheduler = asyncio.create_task(probe._schedule())
+        with pytest.raises(SlotUnavailableError):
+            await gateway.orchestrator.run_text("hello")
+        for _ in range(50):
+            if task.done():
+                break
+            await sleep(0)
+        assert task.done()
+        assert reservation() is None
+        assert not gateway.store.model_timings()[0].succeeded
+        with pytest.raises(OSError):
+            await probe.stop()
+
+    asyncio.run(go())
