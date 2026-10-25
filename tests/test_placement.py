@@ -1,5 +1,6 @@
 """AC21 / RM27: predictions are measured, purpose-specific and never budgets."""
 
+import asyncio
 import dataclasses
 
 import pytest
@@ -8,6 +9,28 @@ from helpers import FakeClock
 from relaymind.adapters import GenerationFailed
 from relaymind.orchestrator.placement import Placement, PlacementSettings
 from relaymind.store import ModelTiming, RunStore
+
+
+@pytest.fixture
+def open_store():
+    """RunStore connections that close when the test ends."""
+    stores = []
+
+    def make(path, clock=None):
+        store = RunStore(path, clock=clock or FakeClock())
+        stores.append(store)
+        return store
+
+    yield make
+    for store in stores:
+        store.close()
+
+
+def shift_loop_clock(seconds):
+    """Move the running loop's clock forward: timers now due fire without real waiting."""
+    loop = asyncio.get_running_loop()
+    now = loop.time
+    loop.time = lambda: now() + seconds
 
 
 def seed(store, **changes):
@@ -28,8 +51,8 @@ def seed(store, **changes):
     store.add_model_timing(dataclasses.replace(value, **changes))
 
 
-def test_prediction_uses_run_output_but_latest_prefix_throughput(tmp_path):
-    store = RunStore(tmp_path / "samples", clock=FakeClock())
+def test_prediction_uses_run_output_but_latest_prefix_throughput(tmp_path, open_store):
+    store = open_store(tmp_path / "samples")
     seed(store)
     seed(store, kind="probe", cached_tokens=50, output_tokens=10, first_token_ms=10, duration_ms=30)
     predicted = Placement(store).predict("local", "routing", 200, output_cap=128)
@@ -39,8 +62,8 @@ def test_prediction_uses_run_output_but_latest_prefix_throughput(tmp_path):
     assert store.timing_estimate("local", "routing").median_output_tokens == 25
 
 
-def test_unknown_latest_prefix_does_not_fall_back(tmp_path):
-    store = RunStore(tmp_path / "samples", clock=FakeClock())
+def test_unknown_latest_prefix_does_not_fall_back(tmp_path, open_store):
+    store = open_store(tmp_path / "samples")
     seed(store)
     seed(store, cached_tokens=None)
     p = Placement(store).predict("local", "routing", 100, output_cap=128)
@@ -49,8 +72,8 @@ def test_unknown_latest_prefix_does_not_fall_back(tmp_path):
     assert p.inputs["prefill_tokens_per_ms"] is None
 
 
-def test_no_production_output_uses_actual_cap_only(tmp_path):
-    store = RunStore(tmp_path / "samples", clock=FakeClock())
+def test_no_production_output_uses_actual_cap_only(tmp_path, open_store):
+    store = open_store(tmp_path / "samples")
     seed(store, kind="warm_up")
     estimator = Placement(store)
     assert estimator.predict("local", "routing", 100).predicted_ms is None
@@ -60,8 +83,8 @@ def test_no_production_output_uses_actual_cap_only(tmp_path):
     assert estimator.predict("local", "routing", None, output_cap=10).predicted_ms is None
 
 
-def test_measured_zero_output_and_explicit_cap(tmp_path):
-    store = RunStore(tmp_path / "samples", clock=FakeClock())
+def test_measured_zero_output_and_explicit_cap(tmp_path, open_store):
+    store = open_store(tmp_path / "samples")
     seed(store, kind="warm_up")
     seed(store, output_tokens=0)
     p = Placement(store).predict("local", "routing", 100)
@@ -298,11 +321,11 @@ def test_placement_launch_values_and_defaults(tmp_path):
     assert config.placement.probe_after_seconds == 80
 
 
-def test_expected_wait_uses_observed_skill_and_configured_external_run_cost(tmp_path):
+def test_expected_wait_uses_observed_skill_and_configured_external_run_cost(tmp_path, open_store):
     """AC21: hard cap precedes expected-wait; probes never become external cost."""
     from test_model_timings import terminal_skill_run
 
-    store = RunStore(tmp_path / "store", clock=FakeClock())
+    store = open_store(tmp_path / "store")
     seed(store)
     terminal_skill_run(store)  # one local success
     terminal_skill_run(store, external_model="external", calls=2)  # one local escalation
@@ -495,8 +518,6 @@ def test_only_placement_tokenizer_failure_does_not_fail_the_generation(
 
 def test_cancellation_resistant_local_timeout_is_not_admitted(tmp_path):
     """AC21/RM14: late completed output after a real timeout remains unsuccessful."""
-    import asyncio
-
     from gateway_helpers import LOCAL_MODEL_ID, build_gateway
     from relaymind.adapters import Completed, Message, Role, TextDelta
     from relaymind.orchestrator.client_loop import ToolOffer, run_client_request
@@ -505,24 +526,34 @@ def test_cancellation_resistant_local_timeout_is_not_admitted(tmp_path):
         tmp_path,
         [],
         external_turns=[[GenerationFailed(code="unavailable", message="test")]],
-        placement=PlacementSettings(policy="device_aware", margin=0.1),
+        placement=PlacementSettings(policy="device_aware", margin=10),
     )
     seed(gateway.store, model=LOCAL_MODEL_ID, purpose="skill")
 
-    async def resistant(request):
-        gateway.adapter.requests.append(request)
-        try:
-            await asyncio.Event().wait()
-        except asyncio.CancelledError:
-            yield TextDelta("late answer")
-            yield Completed("stop")
+    async def go():
+        entered = asyncio.Event()
 
-    gateway.adapter.generate = resistant
-    result = asyncio.run(
-        run_client_request(
-            gateway.orchestrator, [Message(role=Role.USER, content="hello")], ToolOffer(())
+        async def resistant(request):
+            gateway.adapter.requests.append(request)
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                yield TextDelta("late answer")
+                yield Completed("stop")
+
+        gateway.adapter.generate = resistant
+        task = asyncio.create_task(
+            run_client_request(
+                gateway.orchestrator, [Message(role=Role.USER, content="hello")], ToolOffer(())
+            )
         )
-    )
+        await entered.wait()
+        # The placement deadline (seconds away in real time) is now due.
+        shift_loop_clock(60)
+        return await task
+
+    result = asyncio.run(go())
     assert result.answer is None
     assert gateway.store.model_timings(model=LOCAL_MODEL_ID)[-1].succeeded is False
     assert len(gateway.adapter.cancelled) == 1
@@ -625,9 +656,9 @@ def test_native_cancel_beats_expired_placement_deadline(tmp_path):
     assert len(gateway.adapter.cancelled) == 1
 
 
-def test_prediction_is_immutable_and_overflow_is_unavailable(tmp_path):
+def test_prediction_is_immutable_and_overflow_is_unavailable(tmp_path, open_store):
     """RM27: prediction evidence is immutable and nonfinite arithmetic never invents time."""
-    store = RunStore(tmp_path / "store", clock=FakeClock())
+    store = open_store(tmp_path / "store")
     seed(store)
     placement = Placement(store)
     p = placement.predict("local", "routing", 100)
@@ -638,8 +669,6 @@ def test_prediction_is_immutable_and_overflow_is_unavailable(tmp_path):
 
 def test_placement_expiry_cancels_provider_before_resistant_iterator_finishes(tmp_path):
     """AC21/RM14: provider cancellation releases cleanup; the slot stays held until then."""
-    import asyncio
-
     from gateway_helpers import LOCAL_MODEL_ID, build_gateway, route_turn
     from helpers import of_type
     from relaymind.adapters import Message, Role
@@ -649,7 +678,7 @@ def test_placement_expiry_cancels_provider_before_resistant_iterator_finishes(tm
         [],
         input_tokens=100,
         external_turns=[[GenerationFailed(code="unavailable", message="test")]],
-        placement=PlacementSettings(policy="device_aware", margin=0.1),
+        placement=PlacementSettings(policy="device_aware", margin=10),
     )
     seed(gateway.store, model=LOCAL_MODEL_ID)
 
@@ -680,6 +709,8 @@ def test_placement_expiry_cancels_provider_before_resistant_iterator_finishes(tm
         gateway.adapter.cancel = cancel
         started = gateway.orchestrator.start([Message(role=Role.USER, content="hi")])
         await entered.wait()
+        # The placement deadline (one real second away) is now due.
+        shift_loop_clock(60)
         try:
             # Bounded assertion: teardown below releases even the buggy implementation.
             await asyncio.wait_for(provider_cancelled.wait(), timeout=0.5)
@@ -699,7 +730,7 @@ def test_placement_expiry_cancels_provider_before_resistant_iterator_finishes(tm
     finished = of_type(events, "model.finished")[0].payload
     assert finished["deadline_missed"] is True
     assert finished["predicted_ms"] == 100
-    assert finished["deadline_ms"] == 10
+    assert finished["deadline_ms"] == 1000
     assert not gateway.store.model_timings(model=LOCAL_MODEL_ID)[-1].succeeded
     assert of_type(events, "handoff.started")[0].payload["reason_code"] == "local_slow"
     assert len(gateway.adapter.cancelled) == 1

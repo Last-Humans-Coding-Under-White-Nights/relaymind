@@ -10,9 +10,24 @@ from relaymind.orchestrator.placement import PlacementSettings
 from relaymind.store import RunStore, SlotUnavailableError
 
 
-def test_probe_reservation_blocks_new_run_and_requests_cancel(tmp_path):
+@pytest.fixture
+def open_store():
+    """RunStore connections that close when the test ends."""
+    stores = []
+
+    def make(path, clock=None):
+        store = RunStore(path, clock=clock or FakeClock())
+        stores.append(store)
+        return store
+
+    yield make
+    for store in stores:
+        store.close()
+
+
+def test_probe_reservation_blocks_new_run_and_requests_cancel(tmp_path, open_store):
     gateway = build_gateway(tmp_path, [], placement=PlacementSettings(policy="device_aware"))
-    second = RunStore(tmp_path / "runs.sqlite3", clock=gateway.store.clock)
+    second = open_store(tmp_path / "runs.sqlite3", gateway.store.clock)
     assert second.try_reserve_probe("probe1", "owner", model="local", after_seconds=600)
     with pytest.raises(SlotUnavailableError):
         asyncio.run(gateway.orchestrator.run_text("hello"))
@@ -27,19 +42,19 @@ def test_probe_reservation_blocks_new_run_and_requests_cancel(tmp_path):
     assert second.try_reserve_probe("probe2", "owner", model="local", after_seconds=600)
 
 
-def test_store_open_never_reclaims_probe_but_genuine_recovery_does(tmp_path):
+def test_store_open_never_reclaims_probe_but_genuine_recovery_does(tmp_path, open_store):
     gateway = build_gateway(tmp_path, [])
     assert gateway.store.try_reserve_probe("probe1", "old", model="local", after_seconds=600)
-    second = RunStore(tmp_path / "runs.sqlite3", clock=gateway.store.clock)
+    second = open_store(tmp_path / "runs.sqlite3", gateway.store.clock)
     assert second.probe_reservation()["token"] == "probe1"
     gateway.orchestrator.recover_after_restart()
     assert second.probe_reservation() is None
 
 
-def test_active_run_excludes_probe_and_stale_version_does_not_cancel(tmp_path):
+def test_active_run_excludes_probe_and_stale_version_does_not_cancel(tmp_path, open_store):
     from helpers import ACCEPTED_PAYLOAD
 
-    store = RunStore(tmp_path / "store", clock=FakeClock())
+    store = open_store(tmp_path / "store")
     run = store.create_run("accepted", accepted=("run.accepted", "gateway", ACCEPTED_PAYLOAD))
     run = store.set_state(
         run.run_id, expected_version=1, from_state="accepted", to_state="routing", holds_slot=True
@@ -128,13 +143,13 @@ def test_resistant_probe_keeps_slot_until_iterator_ends(tmp_path):
     asyncio.run(go())
 
 
-def test_probe_blocks_valid_confirmation_without_consuming_approval(tmp_path):
+def test_probe_blocks_valid_confirmation_without_consuming_approval(tmp_path, open_store):
     """RM11/RM17: invalid token does not preempt; valid approval rolls back on 429."""
     from relaymind.orchestrator.local_loop import ApprovalRejectedError
     from test_ac05_confirmation import APPROVED_TAIL, decide, waiting_gateway
 
     gateway, waiting, _ = waiting_gateway(tmp_path, *APPROVED_TAIL)
-    other = RunStore(tmp_path / "runs.sqlite3", clock=gateway.store.clock)
+    other = open_store(tmp_path / "runs.sqlite3", gateway.store.clock)
     assert other.try_reserve_probe("p", "owner", model="different", after_seconds=600)
     with pytest.raises(ApprovalRejectedError):
         decide(gateway, waiting, token="wrong")
@@ -185,7 +200,7 @@ def test_exempt_configuration_never_probes(tmp_path, policy, external):
     assert gateway.store.probe_reservation() is None
 
 
-def test_failed_probe_enforces_persisted_cooldown(tmp_path):
+def test_failed_probe_enforces_persisted_cooldown(tmp_path, open_store):
     """AC21: failed refreshes must not repeatedly block foreground retries."""
     from relaymind.adapters import GenerationFailed
     from relaymind.orchestrator.warmup import IdleProbe
@@ -203,21 +218,21 @@ def test_failed_probe_enforces_persisted_cooldown(tmp_path):
         await probe.tick()
         assert len(gateway.adapter.requests) == 1
         assert not gateway.store.model_timings()[0].succeeded
-        other = RunStore(tmp_path / "runs.sqlite3", clock=gateway.store.clock)
+        other = open_store(tmp_path / "runs.sqlite3", gateway.store.clock)
         assert not other.try_reserve_probe("new", "owner", model="local", after_seconds=600)
         await probe.stop()
 
     asyncio.run(go())
 
 
-def test_probe_and_foreground_slot_race_has_exactly_one_winner(tmp_path):
+def test_probe_and_foreground_slot_race_has_exactly_one_winner(tmp_path, open_store):
     """RM17/AC21: two connections racing BEGIN IMMEDIATE cannot both dispatch."""
     import threading
 
     from helpers import ACCEPTED_PAYLOAD
 
-    first = RunStore(tmp_path / "race", clock=FakeClock())
-    second = RunStore(tmp_path / "race", clock=first.clock)
+    first = open_store(tmp_path / "race")
+    second = open_store(tmp_path / "race", first.clock)
     run = first.create_run("accepted", accepted=("run.accepted", "gateway", ACCEPTED_PAYLOAD))
     barrier = threading.Barrier(2)
     results = []
@@ -278,12 +293,12 @@ def test_successful_probe_can_reclassify_unsuitable_model(tmp_path):
 
 
 @pytest.mark.parametrize("reason", ["cooldown", "active_run", "reserved", "fresh_sample"])
-def test_ineligible_probe_does_not_open_write_transaction(tmp_path, reason):
+def test_ineligible_probe_does_not_open_write_transaction(tmp_path, reason, open_store):
     """RM17/AC21: idle checks must leave the writer available to foreground work."""
     from helpers import ACCEPTED_PAYLOAD
     from test_placement import seed
 
-    store = RunStore(tmp_path / "store", clock=FakeClock())
+    store = open_store(tmp_path / "store")
     if reason in ("cooldown", "reserved"):
         assert store.try_reserve_probe("first", "owner", model="local", after_seconds=600)
         if reason == "cooldown":
@@ -306,15 +321,15 @@ def test_ineligible_probe_does_not_open_write_transaction(tmp_path, reason):
 
 
 @pytest.mark.parametrize("reason", ["cooldown", "active_run", "reserved", "fresh_sample"])
-def test_probe_rechecks_eligibility_under_write_lock(tmp_path, monkeypatch, reason):
+def test_probe_rechecks_eligibility_under_write_lock(tmp_path, monkeypatch, reason, open_store):
     """RM17/AC21: another connection can invalidate an optimistic idle check."""
     from contextlib import contextmanager
 
     from helpers import ACCEPTED_PAYLOAD
     from test_placement import seed
 
-    store = RunStore(tmp_path / "store", clock=FakeClock())
-    other = RunStore(tmp_path / "store", clock=store.clock)
+    store = open_store(tmp_path / "store")
+    other = open_store(tmp_path / "store", store.clock)
     run = other.create_run("accepted", accepted=("run.accepted", "gateway", ACCEPTED_PAYLOAD))
     write = store._write
 
