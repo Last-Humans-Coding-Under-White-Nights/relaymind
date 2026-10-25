@@ -1015,3 +1015,39 @@ def test_http_budget_guard_resumes_after_real_placement_decline(tmp_path, monkey
     assert len(requests) == 1
     assert requests[0]["deadline_ms"] <= 150
     assert not gateway.adapter.requests
+
+
+@async_test
+async def test_oversized_response_is_an_invalid_response_error():
+    """RM12/RM28: a body over the response cap is an error with unknown claims."""
+    from relaymind.selection.http import MAX_RESPONSE_BYTES
+
+    body = json.dumps(result("remote")).encode()
+    padded = body[:-1] + b"," + b'"pad":"' + b"x" * MAX_RESPONSE_BYTES + b'"}'
+    with endpoint(padded) as (url, requests):
+        chosen = await attempt(http(url))
+    assert len(requests) == 1
+    entry = chosen.attempts[0].to_json_object()
+    assert entry["outcome"] == "error"
+    assert entry["model_calls_claim"] is None
+
+
+@async_test
+async def test_response_cap_stops_reading_an_endless_body(monkeypatch):
+    """RM28: the transport stops reading at the cap instead of buffering the whole body."""
+    from relaymind.selection.http import MAX_RESPONSE_BYTES
+
+    sent = []
+
+    async def endless():
+        while True:
+            sent.append(64 * 1024)
+            yield b" " * (64 * 1024)
+
+    def handler(request):
+        return httpx.Response(200, content=endless())
+
+    chosen = await attempt(injected_http(monkeypatch, handler))
+    assert chosen.attempts[0].outcome == "error"
+    assert chosen.attempts[0].to_json_object()["model_calls_claim"] is None
+    assert sum(sent) <= MAX_RESPONSE_BYTES + 2 * 64 * 1024
