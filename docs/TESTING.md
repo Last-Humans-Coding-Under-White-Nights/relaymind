@@ -906,8 +906,9 @@ feature has a test of the default as well. Later pull requests append here.
   remain usable across separate event loops.
 
   Corpus and latency exports classify HTTP-attempted, gateway-observed and historical
-  unknown provenance, including their Markdown reports; HTTP internal model cost remains
-  unverified and does not enter measured call/token totals.
+  unknown provenance, including their Markdown reports; a run that reached no selector
+  (routing cache hit, input-cap bypass, execution mode, client owned) is gateway observed.
+  HTTP internal model cost remains unverified and does not enter measured call/token totals.
 
   Trace tests check Python and published JSON Schema compatibility with historical
   attempts and rejection of partial or malformed new evidence. Gateway tests retain

@@ -20,6 +20,11 @@ from relaymind.tools.sandbox import MUTATING_DEMO_TOOLS as MUTATING_TOOLS
 # Rejections that mean the proposal failed the name or argument schema (section 12.1).
 SCHEMA_REJECTIONS = frozenset({"unknown_tool", "invalid_arguments"})
 TERMINAL_EVENTS = ("run.completed", "run.failed", "run.cancelled")
+# Routes the gateway decides without running the selector chain (spec 0.40 section 14.3).
+# degraded_mode is left out: a historical one may follow an interrupted chain.
+NO_SELECTOR_MECHANISMS = frozenset(
+    {"routing_cache", "bypass", "execution_mode", "client_owned", "clarification_resume"}
+)
 
 
 @dataclass
@@ -71,18 +76,28 @@ class RunGrade:
 
 
 def selector_provenance(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Unverified HTTP claims from route or fallback evidence, apart from calls (RM25/RM28)."""
+    """Unverified HTTP claims from route or fallback evidence, apart from calls (RM25/RM28).
+
+    A run with no selector attempt is gateway observed only when every route.selected
+    is a gateway decision made without the chain; otherwise its provenance is unknown.
+    """
     attempts = [
         dict(a)
         for event in events
         if (selector := event["payload"].get("selector")) is not None
         for a in selector.get("attempts", [])
     ]
+    routes = [e["payload"] for e in events if e.get("event_type") == "route.selected"]
+    no_selector = bool(routes) and all(
+        r.get("mechanism") in NO_SELECTOR_MECHANISMS and "selector" not in r for r in routes
+    )
     scope = (
         "http_attempted"
         if any(a.get("transport") == "http" for a in attempts)
         else "gateway_observed"
         if attempts and all(a.get("transport") == "in_process" for a in attempts)
+        else "gateway_observed"
+        if not attempts and no_selector
         else "unknown"
     )
     return {

@@ -713,3 +713,62 @@ def test_degraded_route_keeps_completed_http_attempt(tmp_path):
         ("model_router", "error"),
     ]
     assert report["scope"] == "http_attempted"
+
+
+def route_only(*mechanisms, selector=None):
+    events = [{"event_type": "run.accepted", "payload": {}}]
+    for mechanism in mechanisms:
+        payload = {"mechanism": mechanism}
+        if selector is not None:
+            payload["selector"] = selector
+        events.append({"event_type": "route.selected", "payload": payload})
+    return events
+
+
+@pytest.mark.parametrize(
+    "mechanisms",
+    [
+        ("routing_cache",),
+        ("bypass",),
+        ("execution_mode",),
+        ("client_owned",),
+        ("routing_cache", "clarification_resume"),
+    ],
+)
+def test_grading_run_without_selector_attempt_is_gateway_observed(mechanisms):
+    """Spec 12.2/14.3/RM25: a route the gateway decided without the chain (routing
+    cache hit, input-cap bypass, execution mode, client owned) attempted no selector."""
+    assert selector_provenance(route_only(*mechanisms)) == dict(
+        scope="gateway_observed", attempts=[], selector_internal_model_cost="gateway_observed"
+    )
+
+
+@pytest.mark.parametrize(
+    "mechanisms",
+    [
+        (),
+        ("native_function_calling",),
+        ("degraded_mode",),
+        ("routing_cache", "native_function_calling"),
+    ],
+)
+def test_grading_route_without_selector_evidence_stays_unknown(mechanisms):
+    """Spec 12.2/RM25: a historical chain route lacking its summary, or no route at all,
+    has unknown provenance; it is never asserted HTTP-free."""
+    report = selector_provenance(route_only(*mechanisms))
+    assert report["scope"] == "unknown"
+    assert report["selector_internal_model_cost"] == "not_verified"
+
+
+def test_real_bypass_run_is_gateway_observed(tmp_path):
+    """Spec 12.2/RM25: a real input-cap bypass run grades as gateway observed."""
+    from gateway_helpers import STAGING_OK, run, text_turn
+
+    gateway = build_gateway(
+        tmp_path, [], input_tokens=10**6, external_turns=[text_turn(STAGING_OK)]
+    )
+    _, raw = run(gateway)
+    events = [event.to_json_object() for event in raw]
+    (route,) = [e for e in events if e["event_type"] == "route.selected"]
+    assert route["payload"]["mechanism"] == "bypass"
+    assert selector_provenance(events)["scope"] == "gateway_observed"
