@@ -606,3 +606,110 @@ def test_wire_rounding_does_not_shorten_actual_allowance():
     assert selector.requests[0].deadline_ms == 100
     assert chosen.admitted is not None
     assert chosen.attempts[0].outcome == "selected"
+
+
+@pytest.mark.parametrize("http_first", [False, True])
+def test_budget_spent_by_finished_routing_keeps_completed_attempts(tmp_path, http_first):
+    """Spec 14.3/RM03/RM28: a chain that returns as the time budget ends keeps every
+    completed outcome on route.selected; the budget stop follows that event."""
+    from gateway_helpers import route_turn, run
+    from relaymind.orchestrator.budgets import LocalBudgets
+    from relaymind.selection import ModelRouterSelector
+
+    calls = []
+
+    def spend(_):
+        calls.append(True)
+        if len(calls) == 1:
+            # The routing generation finishes exactly when the stage time is spent.
+            gateway.clock.advance(5)
+
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn("check-service-health")],
+        budgets=LocalBudgets(active_seconds=5, run_active_seconds=10),
+        on_generate=spend,
+    )
+    if http_first:
+        first = Scripted("remote", result("remote", kind="none"))
+        first.transport = "http"
+        gateway.orchestrator.selection_chain = SelectorChain(
+            [first, ModelRouterSelector(gateway.orchestrator.router)],
+            timeout_seconds=2,
+            clock=gateway.clock.monotonic,
+        )
+    _, events = run(gateway)
+    kinds = [e.event_type.value for e in events]
+    routes = [e for e in events if e.event_type.value == "route.selected"]
+    assert len(routes) == 1, kinds
+    attempts = routes[0].payload["selector"]["attempts"]
+    expected = ["none", "selected"] if http_first else ["selected"]
+    assert [a["outcome"] for a in attempts] == expected
+    failed = events[-1].payload
+    assert events[-1].event_type.value == "run.failed"
+    assert failed["reason_code"] == "local_budget"
+    assert failed["budget"] == "active_seconds"
+    assert "selector" not in failed
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("kind", ["none", "skill"])
+def test_budget_spent_after_timely_attempt_keeps_its_outcome(kind):
+    """Spec 14.3/RM03/RM28: an attempt that finished within its allowance is complete;
+    a budget the owner reports spent afterwards stops the chain without rewriting it."""
+    clock = FakeClock()
+    first = Scripted("remote", result("remote", kind=kind))
+    fallback = Scripted("fallback", result("fallback"))
+    left = iter([1.0, 0.0, 0.0])
+    seen = []
+    chain = SelectorChain([first, fallback], timeout_seconds=2, clock=clock.monotonic)
+
+    async def go():
+        return await chain.run(
+            parse_selection_request(request_data()),
+            SelectionContext(),
+            lambda r: r,
+            on_progress=seen.append,
+            remaining_seconds=lambda: next(left),
+        )
+
+    if kind == "none":
+        with pytest.raises(TimeoutError):
+            asyncio.run(go())
+        assert [a.outcome for a in seen[-1].attempts] == ["none"]
+    else:
+        chosen = asyncio.run(go())
+        assert [a.outcome for a in chosen.attempts] == ["selected"]
+    assert fallback.requests == []
+
+
+def test_degraded_route_keeps_completed_http_attempt(tmp_path):
+    """Spec 14.3/RM16/RM28: a failed routing generation after a finished HTTP attempt
+    is a degraded handoff; the gateway's degraded route.selected keeps that attempt."""
+    from gateway_helpers import STAGING_OK, run, text_turn
+    from relaymind.adapters import GenerationFailed
+    from relaymind.selection import ModelRouterSelector
+
+    first = Scripted("remote", result("remote", kind="none"))
+    first.transport = "http"
+    gateway = build_gateway(
+        tmp_path,
+        [[GenerationFailed(code="unreachable", message="no route to host")]],
+        external_turns=[text_turn(STAGING_OK)],
+        degraded_mode=True,
+    )
+    gateway.orchestrator.selection_chain = SelectorChain(
+        [first, ModelRouterSelector(gateway.orchestrator.router)],
+        timeout_seconds=2,
+        clock=gateway.clock.monotonic,
+    )
+    _, raw = run(gateway)
+    events = [event.to_json_object() for event in raw]
+    (route,) = [e for e in events if e["event_type"] == "route.selected"]
+    assert route["payload"]["mechanism"] == "degraded_mode"
+    report = selector_provenance(events)
+    assert [(a["name"], a["outcome"]) for a in report["attempts"]] == [
+        ("remote", "none"),
+        ("model_router", "error"),
+    ]
+    assert report["scope"] == "http_attempted"

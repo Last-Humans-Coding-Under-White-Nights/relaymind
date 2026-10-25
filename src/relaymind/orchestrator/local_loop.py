@@ -267,6 +267,7 @@ from relaymind.selection import (
     EXHAUSTED_MECHANISM,
     MODEL_ROUTER,
     Admission,
+    ChainResult,
     ExampleMatchSelector,
     ModelRouterSelector,
     RoutingGeneration,
@@ -1593,9 +1594,19 @@ class _Run:
     def _selector_payload(
         self, kind: EventType | str, payload: Mapping[str, Any]
     ) -> Mapping[str, Any]:
-        """Inject pending evidence, then scrub with the secrets known at persistence (RM12)."""
+        """Inject pending evidence, then scrub with the secrets known at persistence (RM12).
+
+        A route.selected that names its own selector keeps it; one the gateway writes
+        after an interrupted chain, degraded_mode, carries the pending summary (14.3).
+        """
         if (
-            kind in (EventType.HANDOFF_STARTED, EventType.RUN_FAILED, EventType.RUN_CANCELLED)
+            kind
+            in (
+                EventType.ROUTE_SELECTED,
+                EventType.HANDOFF_STARTED,
+                EventType.RUN_FAILED,
+                EventType.RUN_CANCELLED,
+            )
             and self.pending_selector is not None
         ):
             payload = {"selector": self.pending_selector, **payload}
@@ -2872,10 +2883,26 @@ class _Run:
                 raise self.meter.time_exhausted() from None
             raise
 
-        if self.meter.remaining_seconds() <= 0:
-            if self.pending_selector:
-                self.pending_selector["attempts"][-1]["outcome"] = "error"
+        # Every attempt of a chain that returned is complete and keeps its outcome
+        # (spec 14.3): a budget spent meanwhile stops the run after route.selected.
+        # A rejected routing output has no route.selected, so the budget stop keeps its
+        # priority over invalid_output and the pending summary goes on the terminal event.
+        spent = self.meter.remaining_seconds() <= 0
+        if spent and chain.admitted is None and chain.rejected_model_output() is not None:
             raise self.meter.time_exhausted()
+        routing = self._record_selection(chain, generations, input_tokens, cache_key)
+        if spent:
+            raise self.meter.time_exhausted()
+        return routing
+
+    def _record_selection(
+        self,
+        chain: ChainResult[Admission],
+        generations: Sequence[tuple[str, _Generation]],
+        input_tokens: int | None,
+        cache_key: tuple[str, CacheContext] | None,
+    ) -> Routing:
+        """Write route.selected for a chain that returned (RM28, section 8)."""
         if chain.admitted is None or chain.selector is None:
             rejected = chain.rejected_model_output()
             if rejected is not None:
