@@ -561,3 +561,28 @@ def test_latency_trace_collection_retains_http_fallback_claims(bench):
     assert sample["selector_provenance"]["scope"] == "http_attempted"
     assert sample["selector_provenance"]["attempts"] == [attempt]
     assert sample["model_calls"] == []
+
+
+@pytest.mark.parametrize(
+    "local,warmup_disabled,expected",
+    [(True, False, True), (True, True, False), (False, False, False)],
+)
+def test_effective_configuration_keeps_checkpoint_settings_raw(
+    bench, local, warmup_disabled, expected
+):
+    """RM25: effective warm-up is shared without mutating raw checkpoint identity."""
+    argv = ["--out", "fixture.json", "--placement", "policy=expected_wait"]
+    if not local:
+        argv.append("--no-local-model")
+    if warmup_disabled:
+        argv.append("--no-startup-warmup")
+    args = bench.argument_parser().parse_args(argv)
+    configuration = bench.configuration_from_args(args)
+    raw = configuration.to_json_object()
+    effective = bench.effective_configuration(
+        configuration, no_startup_warmup=args.no_startup_warmup
+    )
+    assert effective["placement"]["warmup"] is expected
+    assert effective["placement"]["policy"] == "expected_wait"
+    assert configuration.to_json_object() == raw
+    assert "warmup" not in raw["placement"]

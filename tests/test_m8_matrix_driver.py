@@ -181,6 +181,10 @@ def lifecycle_fixture(tmp_path, monkeypatch, runner_kind="corpus"):
                 grades=[{}, {}],
             )
             if runner_kind == "latency":
+                # Match the real runner's effective export, not its raw checkpoint settings.
+                doc["configuration"]["placement"]["warmup"] = (
+                    config.local_model_configured and not args.no_startup_warmup
+                )
                 doc.pop("grades")
                 doc["environment"] = {"application": doc.pop("application")}
                 doc.update(kind="relaymind.latency_benchmark", samples=[{}], warmups=[])
@@ -357,3 +361,115 @@ def test_reconciliation_checks_latency_initial_prior_report(tmp_path, monkeypatc
         driver.reconcile_attempt(
             attempt, cell, directory, attempt["argv"], checkpoint["identity"]["application"]
         )
+
+
+@pytest.mark.parametrize(
+    "cell",
+    [c for c in load_script_module("run_m8_matrix").matrix_cells() if c["runner"] == "latency"],
+    ids=lambda c: c["id"],
+)
+def test_every_latency_command_reconciles_the_real_runner_export(tmp_path, monkeypatch, cell):
+    """RM25: all fourteen latency cells use the real export/launch normalization, offline."""
+    import json
+    import tomllib
+    from types import SimpleNamespace
+
+    from launcher_helpers import make_artifact
+
+    driver = load_script_module("run_m8_matrix")
+    runner = load_script_module("latency_benchmark")
+    source = {"head": "declared-offline-test-fixture", "dirty": False}
+    monkeypatch.setattr(runner.session, "source_fingerprint", lambda root: source)
+    env = {
+        "RELAYMIND_EXTERNAL_BASE_URL": "https://example.invalid/v1",
+        "RELAYMIND_EXTERNAL_MODEL": "fixture-remote",
+    }
+    monkeypatch.setenv(runner.harness.EXTERNAL_KEY_ENV, "fixture-secret")
+    attempt_dir = tmp_path / cell["id"] / "initial"
+    argv = driver.command(cell, attempt_dir, tmp_path, env, tmp_path / "llama-server")
+    args = runner.argument_parser().parse_args(argv[2:])
+    raw = runner.configuration_from_args(args)
+    runtime = None
+    if raw.local_model_configured:
+        manifest, artifact = make_artifact(tmp_path)
+        runtime = runner.harness.Runtime(
+            manifest,
+            runner.harness.load_manifest(manifest),
+            artifact,
+            "fixture runtime",
+            tuple(args.runtime_extra_args),
+        )
+
+    def checked_runtime(*unused, **options):
+        assert runtime is not None
+        assert tuple(options["extra_args"]) == runtime.extra_args
+        return runtime
+
+    def launch(self, log):
+        log.write_text("")
+        return None, "http://127.0.0.1:1", 0.0
+
+    monkeypatch.setattr(runner.harness, "check_runtime", checked_runtime)
+    monkeypatch.setattr(runner.harness.Runtime, "launch", launch)
+    monkeypatch.setattr(runner.harness, "_free_port", lambda: 8099)
+    monkeypatch.setattr(runner, "_props", lambda url: None)
+    monkeypatch.setattr(runner, "runtime_devices", lambda: None)
+    monkeypatch.setattr(runner, "machine_manifest", lambda: {})
+    launch_warmup = []
+
+    class Gateway:
+        def __init__(self, config, *unused):
+            launch_warmup.append(tomllib.loads(config.read_text())["placement"].get("warmup", True))
+
+        def start(self):
+            return SimpleNamespace(url="http://127.0.0.1:1", token="fixture", recorded_lines=[])
+
+        def stop(self):
+            pass
+
+    monkeypatch.setattr(runner.harness, "GatewayProcess", Gateway)
+
+    async def samples(api, prompts, *, checkpoint, **options):
+        assert options["seed"] == 1342026
+        rows = []
+        for index in range(cell["requests"]):
+            value = {
+                "label": "simple",
+                "state": "completed",
+                "model_calls": [],
+                "error": None,
+                "timed_out": False,
+            }
+            checkpoint.start(str(index))
+            checkpoint.finish(str(index), value)
+            rows.append(value)
+        return {"cold": rows[0], "warmups": rows[1:4], "measured": rows[4:]}
+
+    monkeypatch.setattr(runner, "run_samples", samples)
+    if args.timing_samples:
+        external = runner.harness.ExternalEndpoint(
+            args.external_base_url, args.external_model, args.external_context_limit
+        )
+        partition = runner.session.prior_configuration(runtime, external, raw)
+        # Empty, explicitly declared offline fixture; never a measured calibration source.
+        driver.atomic_json(
+            tmp_path / ("prior-" + cell["configuration"] + ".json"),
+            {
+                "schema_version": 1,
+                "kind": "relaymind.placement_prior",
+                "partitions": [
+                    {"configuration": partition, "include_outcomes": False, "sources": []}
+                ],
+            },
+        )
+    document = runner.run_benchmark(args)
+    checkpoint_path = attempt_dir / "checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text())
+    assert checkpoint["identity"]["configuration"] == raw.to_json_object()
+    assert "warmup" not in checkpoint["identity"]["configuration"]["placement"]
+    assert document["configuration"]["placement"]["warmup"] is raw.local_model_configured
+    assert launch_warmup == [raw.local_model_configured]
+    attempt = {"name": "initial", "status": "started", "argv": argv}
+    driver.reconcile_attempt(attempt, cell, attempt_dir, argv, source)
+    assert attempt["status"] == "complete"
+    assert attempt["requests"] == 124

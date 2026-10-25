@@ -247,7 +247,8 @@ def reconcile_attempt(
     args = runner.argument_parser().parse_args(expected_argv[2:])
     expected_arguments = json.loads(json.dumps(vars(args)))
     identity = checkpoint["identity"]
-    configuration = configuration_from_args(args).to_json_object()
+    settings = configuration_from_args(args)
+    configuration = settings.to_json_object()
     if (
         checkpoint.get("schema_version") != 1
         or identity.get("arguments") != expected_arguments
@@ -291,6 +292,11 @@ def reconcile_attempt(
     ):
         raise ValueError("finalized runner export/checkpoint digest differs")
     document = json.loads(export.read_text("utf-8"))
+    exported_configuration = (
+        runner.effective_configuration(settings, no_startup_warmup=args.no_startup_warmup)
+        if cell["runner"] == "latency"
+        else configuration
+    )
     application = (
         document.get("application")
         if cell["runner"] == "corpus"
@@ -298,7 +304,7 @@ def reconcile_attempt(
     )
     if (
         application != source
-        or document.get("configuration") != configuration
+        or document.get("configuration") != exported_configuration
         or document.get("prior_configuration") != identity["prior_configuration"]
         or document.get("timing_prior") != exported_prior
     ):

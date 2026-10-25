@@ -52,6 +52,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import evaluation_session as session  # noqa: E402
 import live_acceptance as harness  # noqa: E402
 from evaluation_config import (  # noqa: E402
+    RunnerConfiguration,
     add_configuration_arguments,
     configuration_from_args,
     label_report,
@@ -430,12 +431,22 @@ def _props(local_url: str) -> dict[str, Any] | None:
         return None
 
 
+def effective_configuration(
+    configuration: RunnerConfiguration, *, no_startup_warmup: bool = False
+) -> dict[str, Any]:
+    """The settings actually launched/exported, separate from raw checkpoint identity."""
+    document = configuration.to_json_object()
+    document["placement"]["warmup"] = configuration.local_model_configured and not no_startup_warmup
+    return document
+
+
 def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     configuration = configuration_from_args(args)
     early_headers = configuration.performance.early_headers
-    startup_warmup = configuration.local_model_configured and not getattr(
-        args, "no_startup_warmup", False
+    effective = effective_configuration(
+        configuration, no_startup_warmup=getattr(args, "no_startup_warmup", False)
     )
+    startup_warmup = effective["placement"]["warmup"]
     external = None
     if getattr(args, "external_base_url", None):
         external = harness.ExternalEndpoint(
@@ -528,13 +539,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
             "timing_prior": prior_report,
             "timing_snapshot": session.snapshot_store(work),
             "learning": "one gateway, online sequence after frozen initial prior",
-            "configuration": {
-                **configuration.to_json_object(),
-                "placement": {
-                    **configuration.to_json_object()["placement"],
-                    "warmup": startup_warmup,
-                },
-            },
+            "configuration": effective,
             "note": "Section 12.2 latency experiment in the recorded configuration, "
             "concurrency one, "
             "routing cache off. First transport event and first answer token are client times; "
