@@ -526,8 +526,15 @@ def recorded_roots(index: dict) -> dict:
     package = index.get("identity", {}).get("source", {}).get("package_path")
     return dict(
         matrix=next(iter(roots), None),
-        checkout=str(PurePath(package).parents[2]) if package else None,
+        checkout=_recorded_parent(package, 3) if package else None,
     )
+
+
+def _recorded_parent(path: str, levels: int) -> str:
+    """Drop trailing parts of a recorded path as text, keeping its own separators."""
+    for _ in range(levels):
+        path = path[: max(path.rfind("/"), path.rfind("\\"))]
+    return path
 
 
 def expected_argv(cell: dict, attempt: dict, roots: dict, provider: dict) -> list[str]:
