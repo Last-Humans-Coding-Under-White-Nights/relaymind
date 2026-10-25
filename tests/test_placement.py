@@ -732,3 +732,31 @@ def test_failed_handoff_emission_preserves_pending_placement(tmp_path, boundary)
             run.move(RunState.EXTERNAL_RUNNING, event=("handoff.started", "gateway", {}))
     assert run.pending_placement.to_json_object() == snapshot
     assert not any(e.event_type == "handoff.started" for e in gateway.store.events(run.run_id))
+
+
+@pytest.mark.parametrize("degraded,transition", [(False, "run.failed"), (True, "handoff.started")])
+def test_routing_decline_is_not_carried_by_a_later_transition(tmp_path, degraded, transition):
+    """RM27/RM28/AC21: route.selected owns a routing decline; later stops never reuse it."""
+    from gateway_helpers import LOCAL_MODEL_ID, build_gateway, run
+    from helpers import of_type
+    from relaymind.selection import EXAMPLE_MATCH, MODEL_ROUTER, SelectionSettings
+
+    gateway = build_gateway(
+        tmp_path,
+        [[GenerationFailed(code="unavailable", message="test")]],
+        external_turns=[[GenerationFailed(code="unavailable", message="test")]],
+        placement=PlacementSettings(policy="device_aware"),
+        selection=SelectionSettings(chain=(MODEL_ROUTER, EXAMPLE_MATCH)),
+        degraded_mode=degraded,
+    )
+    seed(gateway.store, model=LOCAL_MODEL_ID, duration_ms=10000)
+    _, events = run(gateway)
+    route = of_type(events, "route.selected")[0].payload
+    assert route["selector"]["attempts"][0]["outcome"] == "not_placed"
+    assert route["placement"]["reason"] == "local_slow"
+    assert route["decision"]["skill_id"] == "check-service-health"
+    # The skill's own local generation started, so no later decline exists.
+    assert [e for e in of_type(events, "model.started") if e.actor == "local"]
+    assert of_type(events, transition)
+    for event in of_type(events, "handoff.started") + of_type(events, "run.failed"):
+        assert "placement" not in event.payload
