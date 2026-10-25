@@ -166,6 +166,19 @@ def _answer_options(view: Mapping[str, Any]) -> str:
     )
 
 
+# The labels the shell keeps on screen next to the data mode (spec 0.31 section 9).
+_SHELL_LABELS = frozenset(
+    {
+        "local_model",
+        "local_model_status",
+        "local_model_reason",
+        "placement_policy",
+        "answer_pass",
+        "answer_stream",
+    }
+)
+
+
 def _configuration(view: Mapping[str, Any]) -> str:
     """Only this run's recorded settings, including explicit absence (RM23, RM26)."""
     config = view.get("configuration")
@@ -191,7 +204,8 @@ def _configuration(view: Mapping[str, Any]) -> str:
             value = "on" if value else "off"
         elif isinstance(value, list):
             value = ", ".join(str(item) for item in value) or "none"
-        parts.append(f"<p>{label}: {_t(value)}</p>")
+        shell = " data-shell-label" if key in _SHELL_LABELS else ""
+        parts.append(f"<p{shell}>{label}: {_t(value)}</p>")
     return "<div data-run-configuration>" + "".join(parts) + "</div>"
 
 
