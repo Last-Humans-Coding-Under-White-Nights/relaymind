@@ -828,7 +828,8 @@ def _matrix_checks(plan: dict, index: dict, matrix: Path, problems: list) -> dic
     )
     provider = check("provider", lambda: offline_provider(index))
     roots = check("roots", lambda: recorded_roots(index)) or dict(matrix=None, checkout=None)
-    measured = source.get("files") or {}
+    # Fingerprint keys keep the recording host's separator; compare by POSIX name.
+    measured = {k.replace("\\", "/"): v for k, v in (source.get("files") or {}).items()}
     inputs = sorted(
         {*FROZEN_INPUTS}
         | {
