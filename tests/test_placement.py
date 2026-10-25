@@ -164,6 +164,32 @@ def test_readiness_is_representative_and_never_tokenizes(tmp_path):
     assert gateway.adapter.counted == []
 
 
+@pytest.mark.parametrize("status", ["unavailable", "unsuitable"])
+def test_readiness_without_a_usable_class_claims_no_routing_fit(tmp_path, status):
+    """RM26/RM27: no local routing is predicted, so no fit is reported either."""
+    import asyncio
+
+    from gateway_helpers import LOCAL_MODEL_ID, build_gateway
+    from relaymind.api.native import readiness
+    from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
+    from relaymind.orchestrator.placement import marker
+    from relaymind.orchestrator.route_decision import ExecutionMode
+
+    gateway = build_gateway(
+        tmp_path,
+        [],
+        external_turns=[[GenerationFailed(code="unavailable", message="test")]],
+        local_status=LocalStatus(LocalModelClass(status), "measured"),
+        placement=PlacementSettings(policy="device_aware"),
+    )
+    for duration in (100, 10000):
+        seed(gateway.store, model=LOCAL_MODEL_ID, duration_ms=duration)
+        _, result = asyncio.run(readiness(gateway.orchestrator, [ExecutionMode.AUTO]))
+        assert result["placement"]["routing"] == marker().to_json_object()
+        assert result["placement"]["routing_fits"] is None
+        assert result["placement"]["auto_model"] == gateway.orchestrator.external.model_id
+
+
 @pytest.mark.parametrize(
     "change",
     [
