@@ -597,23 +597,61 @@ def test_short_run_budget_is_gateway_error_and_caps_post_deadline(tmp_path, monk
     assert not gateway.adapter.requests
 
 
-@pytest.mark.parametrize(
-    "choice,expected",
-    [
-        (dict(skill_id="unknown"), "inadmissible"),
-        (dict(skill_id="check-service-health", tools=["delete_demo_database"]), "selected"),
-    ],
-)
-def test_http_inadmissible_choices_never_execute(tmp_path, choice, expected):
-    """AC22/RM08/RM28: neither unknown IDs nor foreign tools grant execution."""
+def test_http_unknown_skill_is_inadmissible_and_never_executes(tmp_path):
+    """AC22/RM02/RM28: an unknown skill ID falls through as inadmissible; nothing runs."""
     from gateway_helpers import build_gateway, executed_tools, run
 
-    with endpoint(result("remote", **choice)) as (url, _):
+    with endpoint(result("remote", skill_id="unknown")) as (url, _):
         gateway = build_gateway(tmp_path, [], selectors=[http(url)])
         _, events = run(gateway)
     assert executed_tools(events) == []
     route = next(e for e in events if e.event_type.value == "route.selected")
-    assert route.payload["selector"]["attempts"][0]["outcome"] == expected
+    assert route.payload["selector"]["attempts"][0]["outcome"] == "inadmissible"
+    assert "tools_narrowed" not in route.payload
+
+
+def test_http_foreign_tool_narrowing_never_grants_execution(tmp_path):
+    """AC22/RM08/RM28: a narrowing that names a foreign tool is admitted without it;
+    the model's later proposal of that tool is refused and never runs."""
+    from gateway_helpers import build_gateway, executed_tools, health_tail, run, tool_turn
+    from relaymind.tools import CallerContext
+    from relaymind.tools.sandbox import MUTATE_PERMISSION, READ_PERMISSION
+
+    body = result(
+        "remote",
+        skill_id="check-service-health",
+        tools=["get_service_health", "delete_demo_database"],
+    )
+    with endpoint(body) as (url, _):
+        gateway = build_gateway(
+            tmp_path,
+            [
+                tool_turn(
+                    "delete_demo_database",
+                    call_id="call_foreign",
+                    database_id="demo-orders-db",
+                    expected_revision=3,
+                ),
+                *health_tail(),
+            ],
+            selectors=[http(url)],
+            # The caller could mutate: only the narrowing and the allowlist refuse it.
+            caller=CallerContext(permissions=frozenset({MUTATE_PERMISSION, READ_PERMISSION})),
+        )
+        _, events = run(gateway)
+    route = next(e for e in events if e.event_type.value == "route.selected")
+    assert route.payload["selector"]["attempts"][0]["outcome"] == "selected"
+    assert route.payload["tools_narrowed"] == ["get_service_health"]
+    offered = [e.payload["tools_offered"] for e in events if e.event_type.value == "model.started"]
+    assert offered and all("delete_demo_database" not in tools for tools in offered)
+    foreign = [
+        e.payload
+        for e in events
+        if e.event_type.value == "tool.proposed"
+        and e.payload["tool_name"] == "delete_demo_database"
+    ]
+    assert len(foreign) == 1 and foreign[0]["rejection"] is not None
+    assert "delete_demo_database" not in executed_tools(events)
 
 
 def test_http_mutation_still_needs_confirmation(tmp_path):
