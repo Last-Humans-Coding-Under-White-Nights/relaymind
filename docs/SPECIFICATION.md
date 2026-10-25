@@ -795,27 +795,11 @@ A SQLite-wide exclusive probe reservation MUST be acquired in the same transacti
 
 The reservation is released only by the matching owner/token after its generation task/iterator has ended, including cancellation cleanup. A bounded cancellation wait does not authorize early release. Provider cancel uses the existing best-effort bounded request. A task that ignores cancellation may keep admission at 429 until it ends or the process genuinely restarts. No TTL automatically expires a live reservation. On shutdown stop scheduling, request cancellation, perform the bounded cleanup and keep the reservation if the task cannot stop. Genuine startup recovery, before the socket and only after the previous server process has ended, removes an orphan reservation; ordinary RunStore open does not. The current single-server lifecycle is retained; this change makes no claim of safely running restart recovery while another server is live on the same store. No inference overlap is promised beyond the existing best-effort provider cancellation contract.
 
-## 15 Sources
-
-Primary sources checked on 20 October 2026. These references support platform and protocol facts; they do not validate RelayMind performance. Mutable upstream branches must be pinned in the implementation manifest.
-
-- S1 Qwen3-0.6B model card: https://huggingface.co/Qwen/Qwen3-0.6B
-- S2 Qwen function calling documentation: https://qwen.readthedocs.io/en/latest/framework/function_call.html
-- S3 llama.cpp function calling documentation: https://github.com/ggml-org/llama.cpp/blob/master/docs/function-calling.md
-- S4 llama.cpp build documentation: https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md
-- S5 OpenAI Chat Completions API reference: https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
-- S6 OpenAI function calling guide: https://developers.openai.com/api/docs/guides/function-calling
-- S7 Agent Skills specification: https://agentskills.io/specification
-- S8 OpenAI prompt caching guide: https://developers.openai.com/api/docs/guides/prompt-caching
-- S9 Leviathan et al, Fast Inference from Transformers via Speculative Decoding: https://arxiv.org/abs/2211.17192
-- S10 llama.cpp server documentation: https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
-- S11 llama.cpp b11785 controls (checked 21 October 2026): https://github.com/ggml-org/llama.cpp/blob/8baabd53b77d1c48c6ef8d3b620436292f3f6231/tools/server/README.md and request parser https://github.com/ggml-org/llama.cpp/blob/8baabd53b77d1c48c6ef8d3b620436292f3f6231/tools/server/server-common.cpp
-
-## 14.3 Loopback HTTP selector contract (0.40)
+## 14.3 Loopback HTTP selector contract (spec 0.40)
 
 This section extends sections 4.1, 8, 12.2, 12.4 and 14.1 for RM01, RM02, RM08, RM12, RM18, RM22, RM25, RM28 and AC22.
 
-### Configured identity — section 14.1: configured identity
+### 14.3.1 Configured identity (section 14.1)
 
 An HTTP selector item in selection.chain is a closed table with exactly four required keys: `transport="http"`, `name`, `version`, and `url`. name and version are nonblank strings; names MUST be unique across the chain and MUST NOT equal a built-in selector name. Existing built-in string entries and defaults remain unchanged. The configured identity is authoritative: a SelectionResult MUST name exactly that name and version. A response cannot establish or change its identity. Existing gateway/built-in mechanism reservations remain enforced.
 
@@ -831,7 +815,7 @@ timeout_seconds = 2
 
 run.accepted.selection remains the effective ordered array of selector names. Routing-cache identity uses each configured selector's name/version as before; changing the endpoint alone does not claim to be a selector implementation revision, so the operator MUST bump version when its behavior changes. An HTTP selector's own choices remain ineligible for the model-router routing cache under section 10.
 
-### RM28: HTTP behavior and cancellation
+### 14.3.2 HTTP behavior and cancellation (RM28)
 
 Each reached HTTP selector receives exactly one POST, with the already validated/redacted SelectionRequest as JSON and its deadline_ms set to that attempt's allowed duration. No prompt or permission is added outside the published request shape. The client MUST disable environment proxies and redirects. A redirect is an error even when its target appears loopback; no request is sent to its Location. There are no automatic connection/status retries. Authentication headers, gateway bearer token, provider API keys and ambient cookies MUST NOT be forwarded.
 
@@ -841,7 +825,7 @@ selection.timeout_seconds is the total per-attempt monotonic time limit, coverin
 
 Fixed outcome/error labels may be recorded; raw response bodies, exception messages with URLs, and selector error text MUST NOT be persisted or returned as gateway error messages. Redaction is applied before sending the request and before storing any allowed claim fields. A null/unknown claim is preserved as such rather than fabricated from a transport failure.
 
-### Section 8: exact per-attempt provenance
+### 14.3.3 Exact per-attempt provenance (section 8)
 
 Keep the existing closed route.selected.selector object: name, version, mechanism, elapsed_ms and attempts. The top-level identity/mechanism remain those of the admitted selector, or nulls for an exhausted/aborted chain; elapsed_ms remains the admitted attempt's time or the whole chain's otherwise. Add `cancelled` to the attempt outcome enum solely for a run-cancelled in-flight attempt. For newly recorded attempts the exact closed object is:
 
@@ -867,7 +851,7 @@ Every completed attempt, including one which returns none or is refused, MUST su
 
 HTTP claims MUST NOT enter run.completed.model_calls, external_calls, generation/token budgets, model timing samples, first-model-action latency, placement estimates or model/skill outcome counters. route.selected of a selected HTTP selector has actor gateway and a custom unreserved mechanism, never actor local/external. The gateway can prove only its own observed calls. A run with an HTTP attempt, including error/timeout/none followed by a successful built-in selector, cannot claim fully observed zero external inference calls from an empty self-report.
 
-### Sections 12.2 and 12.4: evaluation and transport reuse
+### 14.3.4 Evaluation and transport reuse (sections 12.2 and 12.4)
 
 Reports MUST separate runs that attempted any HTTP selector from fully gateway-observed runs. Read all preserved attempt summaries, including the handoff/terminal fallback; do not classify by only the final selected mechanism. Show transport and configured name/version and retain nullable model_calls_claim per attempt/case. Report claims separately from measured gateway call/token totals and mark total selector-internal model cost not verified. Historical traces lacking transport evidence have unknown provenance rather than a newly asserted HTTP-free status. A run with no attempt whose every route.selected is a gateway decision made without the chain (mechanism routing_cache, bypass, execution_mode, client_owned or clarification_resume) reached no selector and is gateway observed; a run with no route.selected, or with a route.selected that lacks the summary of a chain that could have run (such as a historical model routing or degraded_mode route), stays unknown. Configuring an HTTP item that was never reached is not an HTTP attempt.
 
@@ -875,6 +859,22 @@ Reports MUST separate runs that attempted any HTTP selector from fully gateway-o
 
 All attempted cases, including transport errors, timeout, invalid identity and invalid bodies, remain in the denominator. Record outcome, latency and claim provenance for each; a failed case does not inherit the previous case's claims. The same production boundary must validate both skills and tool-narrowing tracks. A deterministic example selector may be measured on the checked-in skills file without a local/external model; that result demonstrates transport/evaluation behavior, not useful selection accuracy or live model capability. Record its actual command/config, name/version, file digests, seed, environment and measured result in EVIDENCE; do not manufacture those numbers in the contract.
 
-### Standard-library example
+### 14.3.5 Standard-library example
 
 Ship `scripts/example_selector.py`: a loopback-bound standard-library HTTP server (http.server/json; no model/API call), configured fixed identity example_keyword/1, accepting POST /select and returning the published SelectionResult shape. A small deterministic keyword rule selects only an ID present in the request catalog, otherwise none; use a custom mechanism such as keyword_rule, confidence null and model_calls []. It never executes tools, requests permissions or returns gateway route/reason fields. Serve bounded JSON errors for unsupported method/path/body and no arbitrary filesystem content. The production transport's boundary tests provide full schema enforcement; the example need not claim to implement a JSON Schema engine using only the standard library. README links the two schema files and RM28, provides the launch item/server command, and states this example has no model and no measured accuracy claim.
+
+## 15 Sources
+
+Primary sources checked on 20 October 2026. These references support platform and protocol facts; they do not validate RelayMind performance. Mutable upstream branches must be pinned in the implementation manifest.
+
+- S1 Qwen3-0.6B model card: https://huggingface.co/Qwen/Qwen3-0.6B
+- S2 Qwen function calling documentation: https://qwen.readthedocs.io/en/latest/framework/function_call.html
+- S3 llama.cpp function calling documentation: https://github.com/ggml-org/llama.cpp/blob/master/docs/function-calling.md
+- S4 llama.cpp build documentation: https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md
+- S5 OpenAI Chat Completions API reference: https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
+- S6 OpenAI function calling guide: https://developers.openai.com/api/docs/guides/function-calling
+- S7 Agent Skills specification: https://agentskills.io/specification
+- S8 OpenAI prompt caching guide: https://developers.openai.com/api/docs/guides/prompt-caching
+- S9 Leviathan et al, Fast Inference from Transformers via Speculative Decoding: https://arxiv.org/abs/2211.17192
+- S10 llama.cpp server documentation: https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
+- S11 llama.cpp b11785 controls (checked 21 October 2026): https://github.com/ggml-org/llama.cpp/blob/8baabd53b77d1c48c6ef8d3b620436292f3f6231/tools/server/README.md and request parser https://github.com/ggml-org/llama.cpp/blob/8baabd53b77d1c48c6ef8d3b620436292f3f6231/tools/server/server-common.cpp
