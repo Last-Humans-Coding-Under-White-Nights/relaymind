@@ -135,3 +135,28 @@ def test_report_validates_configuration_against_cell_not_only_self_consistent_ex
     document["configuration"]["performance"]["prefetch"] = True
     with pytest.raises(ValueError, match="configuration"):
         report.validate_cell_configuration(cell, document, env)
+
+
+def test_complex_generation_hypothesis_uses_only_languages_with_complex_cases():
+    """RM25, section 12.2: the frozen corpus has no Chinese complex cases, so the
+    prefetch/many-generations comparison is English only and never asks for zh/complex."""
+    report = load_script_module("analyze_m7")
+
+    def document(rate):
+        complex_block = {"placement_metrics": {"generations": {"per_completed_run": rate}}}
+        return {
+            "summary": {
+                "modes": {
+                    "auto": {
+                        "en": {"all": {}, "classes": {"simple": {}, "complex": complex_block}},
+                        "zh": {"all": {}, "classes": {"simple": {}}},
+                    }
+                }
+            }
+        }
+
+    documents = {"M7-C0": document(4.0), "M7-C2": document(3.0), "M7-C3": document(2.5)}
+    result = report.hypotheses(documents)["prefetch_and_many_generations"]
+    assert result["status"] == "met"
+    assert result["values"] == {"en": [4.0, 3.0, 2.5]}
+    assert result["not_applicable"] == {"zh": "the frozen corpus has no zh complex cases"}

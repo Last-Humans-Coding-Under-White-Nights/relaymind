@@ -119,25 +119,40 @@ def hypotheses(documents: dict) -> dict:
             values=values,
         )
     if all(k in documents for k in ("M7-C0", "M7-C2", "M7-C3")):
+        # The frozen corpus has complex cases in English only (section 12.2).
+        cells = ("M7-C0", "M7-C2", "M7-C3")
+        languages = [
+            lang
+            for lang in ("en", "zh")
+            if all(
+                "complex" in documents[c]["summary"]["modes"]["auto"][lang]["classes"]
+                for c in cells
+            )
+        ]
         values = {
             lang: [
                 block(cell, lang, "complex")["placement_metrics"]["generations"][
                     "per_completed_run"
                 ]
-                for cell in ("M7-C0", "M7-C2", "M7-C3")
+                for cell in cells
             ]
-            for lang in ("en", "zh")
+            for lang in languages
         }
         value = (
             None
-            if any(None in v for v in values.values())
+            if not values or any(None in v for v in values.values())
             else all(v[1] < v[0] and v[2] < v[0] for v in values.values())
         )
         result["prefetch_and_many_generations"] = dict(
             status=verdict(value),
-            evidence=["M7-C0", "M7-C2", "M7-C3"],
+            evidence=list(cells),
             population="auto/complex, languages separate",
             values=values,
+            not_applicable={
+                lang: f"the frozen corpus has no {lang} complex cases"
+                for lang in ("en", "zh")
+                if lang not in languages
+            },
         )
     if all(k in documents for k in ("M7-C0", "M7-C6")):
         values = {
