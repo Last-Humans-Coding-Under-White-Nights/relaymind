@@ -2746,9 +2746,10 @@ for unsuitable machines is **not measured**, not refuted. This is itself a
 finding: the constrained configuration completed no English or Chinese simple
 case locally in any of its six corpus cells (0/12 each), yet detection kept
 it `ready`. In its local_first/router cell, 21 of the 22 failed simple runs
-(auto and local_only) used two or three local generations and spent the whole
-4-second local active budget (median 4002 ms; normal: 2435 ms), so local work
-was too slow to help while the unsuitable-class detection did not fire.
+(auto and local_only) used two or three local generations; 18 of those 21
+spent the whole 4-second local active budget and the other three 3411 to
+3746 ms (median of all failed runs 4002 ms; normal: 2435 ms). Local work was
+too slow to help, yet the unsuitable-class detection did not fire.
 
 | Question | Configuration, chain | Control | Candidate | Gains/losses |
 |---|---|---|---|---|
