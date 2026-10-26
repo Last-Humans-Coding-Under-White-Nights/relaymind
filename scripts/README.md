@@ -102,6 +102,9 @@
 
   `--cases`, `--modes`, and `--languages` run a subset; the export
   records the selection and whether it is the full corpus.
+  `--external-request-options '{"reasoning_effort": "low"}'` (both
+  runners) declares `external_model.request_options` for the gateways
+  they start; the export configuration records it only when given.
 - `latency_benchmark.py` — the latency experiment (#33, spec 0.28
   section 12.2) on the local path: one gateway started with
   `relaymind serve --config`, routing cache off, concurrency one, and no

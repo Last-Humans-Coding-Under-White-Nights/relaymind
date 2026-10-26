@@ -335,7 +335,10 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
     external = None
     if configuration.external is not None:
         external = harness.ExternalEndpoint(
-            args.external_base_url, args.external_model, args.external_context_limit
+            args.external_base_url,
+            args.external_model,
+            args.external_context_limit,
+            request_options=configuration.external_request_options,
         )
     if not configuration.local_model_configured and (
         external is None or not os.environ.get(harness.EXTERNAL_KEY_ENV)

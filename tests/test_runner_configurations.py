@@ -688,3 +688,60 @@ def test_benchmark_preserves_placement_with_warmup_setting(settings, tmp_path):
     raw = tomllib.loads(text)
     assert raw["placement"]["policy"] == "device_aware"
     assert raw["placement"]["warmup"] is False
+
+
+def test_external_request_options_are_checked_recorded_and_launched(settings, tmp_path):
+    """RM25, spec 12.2 and 14.1: declared provider request options use the gateway's own
+    checks, appear in the configuration only when declared (earlier exports keep their
+    identity), and reach the launch file's [external_model] table unchanged."""
+    options = '{"reasoning_effort": "low", "thinking": {"type": "enabled"}}'
+    declared = parse(settings, *EXTERNAL_FLAGS, "--external-request-options", options)
+    expected = {"reasoning_effort": "low", "thinking": {"type": "enabled"}}
+    assert declared.external_request_options == expected
+    assert declared.to_json_object()["external_request_options"] == expected
+    assert "external_request_options" not in parse(settings, *EXTERNAL_FLAGS).to_json_object()
+    for bad in ('{"api_key": "x"}', '{"max_tokens": 5}', "[1]", "not json", '{"model": "x"}'):
+        with pytest.raises(settings.ConfigurationError):
+            parse(settings, *EXTERNAL_FLAGS, "--external-request-options", bad)
+    with pytest.raises(settings.ConfigurationError, match="external endpoint"):
+        parse(settings, "--external-request-options", options)
+    runner = load_script_module("run_corpus")
+    manifest, artifact = make_artifact(tmp_path)
+    path = tmp_path / "request-options.toml"
+    endpoint = runner.harness.ExternalEndpoint(
+        "https://api.example.invalid/v1", "remote-model", 8192, request_options=expected
+    )
+    path.write_text(
+        runner.case_config(
+            runner.load_frozen_corpus().cases[0],
+            external=endpoint,
+            work=tmp_path,
+            manifest=manifest,
+            artifact=artifact,
+            local_url="http://127.0.0.1:8081",
+            port=8099,
+            **declared.gateway_options(),
+        )
+    )
+    assert load_config(path).external.request_options == expected
+
+
+def test_prior_partition_carries_declared_request_options():
+    """RM27, spec 14.4.1: a prior is exact to the provider options its samples used."""
+    session = load_script_module("evaluation_session")
+    settings = load_script_module("evaluation_config")
+    configuration = settings.RunnerConfiguration(
+        performance=settings.PerformanceSettings(),
+        budgets=settings.LocalBudgets(),
+        selection=SelectionSettings(),
+        local_model_configured=False,
+    )
+    harness = load_script_module("live_acceptance")
+    plain = harness.ExternalEndpoint("https://api.example.invalid/v1", "m", 8192)
+    low = replace(plain, request_options={"reasoning_effort": "low"})
+    assert (
+        session.prior_configuration(None, plain, configuration)["external"]["request_options"] == {}
+    )
+    assert session.prior_configuration(None, low, configuration)["external"]["request_options"] == {
+        "reasoning_effort": "low"
+    }
