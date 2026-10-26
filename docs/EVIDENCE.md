@@ -2775,6 +2775,35 @@ slowest requests are more than twice as slow. Expected_wait evaluated its rule
 45 to 140 times per cell and declined local work 13 to 51 times; its full
 counts and prerequisites are in the analysis.
 
+Per-cell placement metrics of the corpus cells (#134), from
+`analysis/m8-analysis.json` (`cells.<id>.placement`). Prediction error is the
+gateway's predicted_ms minus the matched actual local duration; wasted local
+time counts only runs that ended with an external answer or needs_external, and
+is a measured zero in external_only; generations count every model call of the
+terminal completed runs; selection scores the initial request of all 156 runs
+against the locked expected skills; external calls are gateway-observed. The
+two configurations are never pooled.
+
+| Configuration | Policy | Chain | Task success | Prediction error p50/p95 ms (n) | Wasted local p50/p95 ms (n) | Generations per completed run | Initial-selection Jaccard (n) | External calls per task success |
+|---|---|---|---|---|---|---|---|---|
+| normal | local_first | router | 88/156 | -31/219 (300) | 430/2884 (123) | 3.38 | 0.538 (156) | 2.55 |
+| normal | device_aware | router | 83/156 | -11/254 (299) | 419/2737 (119) | 3.35 | 0.538 (156) | 2.64 |
+| normal | expected_wait | router | 84/156 | -24/177 (262) | 406/2713 (119) | 3.17 | 0.538 (156) | 2.87 |
+| normal | local_first | example-router | 88/156 | -2/276 (262) | 383/2452 (113) | 3.21 | 0.590 (156) | 2.58 |
+| normal | device_aware | example-router | 87/156 | -2/243 (255) | 384/2462 (115) | 3.09 | 0.590 (156) | 2.53 |
+| normal | expected_wait | example-router | 89/156 | -12/233 (212) | 18/2390 (120) | 2.96 | 0.590 (156) | 2.79 |
+| constrained | local_first | router | 83/156 | 7/904 (270) | 958/4005 (140) | 3.23 | 0.538 (156) | 2.84 |
+| constrained | device_aware | router | 80/156 | -38/588 (246) | 911/4004 (142) | 3.08 | 0.538 (156) | 3.02 |
+| constrained | expected_wait | router | 82/156 | 0/702 (211) | 850/4003 (143) | 2.92 | 0.538 (156) | 3.18 |
+| constrained | local_first | example-router | 89/156 | 16/973 (257) | 873/4007 (137) | 3.21 | 0.590 (156) | 2.70 |
+| constrained | device_aware | example-router | 87/156 | -38/821 (232) | 862/4004 (140) | 3.04 | 0.590 (156) | 2.75 |
+| constrained | expected_wait | example-router | 79/156 | -29/1082 (177) | 742/4003 (133) | 2.56 | 0.590 (156) | 3.34 |
+
+Constrained predictions miss by far more at p95 (588 to 1082 ms against 177 to
+276 ms) and its wasted local time reaches the 4-second active budget, which is
+the slowness #170 is about. The example-router chain has the higher initial
+selection Jaccard on this corpus (0.590 against 0.538) in every policy.
+
 ### Gated streaming (#125)
 
 | Pair | Buffered | Live | Gains/losses | Live `predicate_unmet` |
@@ -2796,6 +2825,7 @@ none-class streaming hypothesis is **not met**.
 | C2 | many calls per generation | 38/52 | 3/4 | 3.17 generations |
 | C3 | prefetch | 38/52 | 1/2 | 3.0 generations |
 | C4 | draft + many + prefetch | 38/52 | 2/3 | 2.6 generations; external_only 32/52 vs 37/52 (0/5) |
+| C5 | no local model, example_match | 43/52 | 8/4 | external_only 34/52 vs 37/52 (1/4); reused M8 none-class export |
 | C6 | R-minus-criteria ablation | 36/52 | 1/4 | corrections per completed run 0.43 vs 0.094 (English), 0.33 vs 0 (Chinese) |
 
 The two local-only latency cells differ only in `early_headers`: response
