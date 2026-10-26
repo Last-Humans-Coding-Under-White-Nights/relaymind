@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.44 | 25 October 2026 | Proposed implementation baseline
+Version 0.45 | 26 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that makes the best use of external language models from a PC with limited resources: it keeps simple, bounded work on a small local model when the machine can run it fast enough, sends everything else to an external model with as few round trips and tokens as the task allows, preserves completed work across that switch, and shows every decision in a trace. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -711,7 +711,7 @@ Proposed model-quality targets are at least 80 percent successful local completi
 
 The 500 ms target and quality percentages are experimental outcomes, not pre-existing facts. If a target fails, retain the evidence, qualify the candidate as unsuitable for that claim, and compare another model or narrower skill scope. Do not silently substitute a larger model while continuing to label results Qwen3-0.6B.
 
-Phase 2 hypotheses (spec 0.31), stated as experimental targets, not facts: the draft answer pass raises local completion on the English simple subset without lowering task success; prefetch and several calls per generation lower the generations per completed complex run; completion criteria in the external request lower corrections per completed run; early headers give a chat client its run reference before the first answer generation; live streaming lowers first useful content in the none class at task-success parity with buffered; on an unsuitable machine, device-aware auto has lower p95 first useful content and completion than local-first auto at equal task success; the example matcher's English selection Jaccard is at least the local router's, on the corpus and, under the router's eight-skill cap, on the skill benchmark of section 12.4; a selector's narrowing raises the precision of the local model's tool proposals on the tool benchmark without lowering their recall; and, in every configuration, external calls and tokens per completed task are reported next to task success, because the objective is the best use of the external model, not more of it. A missed target is a finding. Every default of this revision is the pre-revision behavior; a hypothesis that holds in its run changes the default in the next revision, with the numbers.
+Phase 2 hypotheses (spec 0.31), stated as experimental targets, not facts: the draft answer pass raises local completion on the English simple subset without lowering task success; prefetch and several calls per generation lower the generations per completed complex run; completion criteria in the external request lower corrections per completed run; early headers give a chat client its run reference before the first answer generation; live streaming lowers first useful content in the none class at task-success parity with buffered; on an unsuitable machine, device-aware auto has lower p95 first useful content and completion than local-first auto at equal task success; the example matcher's English selection Jaccard is at least the local router's, on the corpus and, under the router's eight-skill cap, on the skill benchmark of section 12.4; a selector's narrowing raises the precision of the local model's tool proposals on the tool benchmark without lowering their recall; and, in every configuration, external calls and tokens per completed task are reported next to task success, because the objective is the best use of the external model, not more of it. A missed target is a finding. Every default of this revision is the pre-revision behavior. A hypothesis that holds in its run makes its option a candidate default (spec 0.45): the next revision changes the default only when, in the same run, the option's paired full auto corpus cohort has at least as many task successes as the baseline's (gains at least losses, every planned case in the denominator), and records the numbers either way. Task success in these hypotheses means that full cohort, never a subset chosen after the run. Section 14.4.6 records the decisions of the first measured run.
 
 ### 12.4 Selection benchmarks (spec 0.31)
 
@@ -1175,6 +1175,35 @@ partial or changed evidence refuses recovery without changing coordinator state.
 A finalized cell recovered this way is skipped on execution resume; an incomplete
 cell still requires the existing explicit new-attempt procedure. Plan counts,
 run order, scoring, denominators and runtime defaults remain unchanged.
+
+### 14.4.6 Phase 2 default decisions (specification 0.45; #134, #128, #125)
+
+The M8 matrix (31 cells) and the M7 matrix (9 cells) ran on measured revision
+R = 741a19175430e83702a360c454a581b2829e3cb0, one Apple M1 machine, Qwen3-0.6B
+Q8_0 on llama.cpp b11785 and Z.ai glm-4.6, one pass per cell, 25 to 26 October
+2026. Every cell is complete and both analyses pass reporting acceptance. The
+evidence, digests and environment notes are in `docs/EVIDENCE.md` under
+"2026-10-26 — Phase 2 M7 and M8 measurements and default decisions". This
+revision keeps every default. No code default changes.
+
+| Default | Decision | Paired evidence (full cohort, gains/losses) |
+| --- | --- | --- |
+| placement.policy local_first | keep | device_aware 83/156 vs 88/156 (1/6) normal, 80/156 vs 83/156 (1/4) constrained; expected_wait 84/156 (3/7) and 82/156 (5/6). Every case of both configurations measured `ready`, so the unsuitable-machine hypothesis is not measured |
+| selection chain model_router | keep | example-router corpus success equal or higher in five of six pairs (local_first: 88/156 = 88/156 normal, 89/156 vs 83/156 constrained), lower first-useful p50 (1869 vs 8947 ms) but higher p95 (51338 vs 22241 ms); the Jaccard hypothesis needs the section 12.4 capped benchmark and is not measured |
+| answer_stream buffered | keep | live 74/156 vs 88/156 (2/16) with 14/156 `predicate_unmet`; none class 73/104 vs 77/104 (2/6), first-useful p95 49521 vs 54260 ms but p50 16980 vs 15827 ms and 8 vs 6 timeouts: not met |
+| answer_pass final | keep | draft raises English simple local completion 4/12 to 6/12, but auto 36/52 vs 39/52 (0/3): not held under section 12.3 |
+| calls_per_generation one, prefetch false | keep | complex generations per completed run 5.125 to 3.17 (many) and 3.0 (prefetch): held; auto 38/52 vs 39/52 for both (3/4, 1/2) and the combined cell lost 0/5 in external_only, so no candidate meets the section 12.3 condition |
+| completion criteria in the external request | keep (not an option) | the R-minus-criteria ablation had 0.43 vs 0.094 English and 0.33 vs 0 Chinese corrections per completed run |
+| early_headers false | keep | headers arrived before the first answer token in all 39 eligible requests; the before-first-generation clock is not measured |
+
+Single passes carry provider drift and sampling uncertainty; the decisions are
+evidence on this machine and configuration, not reliability guarantees, and no
+Windows performance is claimed. A later revision may change a default only with
+a new run that meets section 12.3, preferably repeated passes of the candidate
+and its baseline. The model-quality targets stay separately reported: English
+simple local completion 4/12 (not met), model tool proposals 12/12 (met), no
+missed confirmation in any cell (met), and p95 first model action 500 ms (not
+met in any router latency cell).
 
 ## 15 Sources
 
