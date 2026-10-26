@@ -124,8 +124,10 @@ Measured on Apple M1 at revision `741a191`, 25 to 26 October 2026, with Z.ai
 cell; package in `docs/evidence/2026-10-26-phase2/`, details in
 [`EVIDENCE.md`](EVIDENCE.md). Specification 0.45 keeps every default:
 
-- `local_first`: device_aware and expected_wait lost paired corpus success in
-  both configurations (for example 83/156 and 84/156 against 88/156).
+- `local_first`: with the router chain, device_aware and expected_wait lost
+  paired corpus success in both configurations (normal: 83/156 and 84/156
+  against 88/156); with the example-router chain no policy gained more than one
+  case, and constrained expected_wait lost ten.
 - `model_router`: the example-router chain matched or beat it in five of six
   corpus pairs and answered sooner at p50, but its p95 was more than twice as
   slow, and its Jaccard benchmark gate is not measured.
@@ -135,7 +137,8 @@ cell; package in `docs/evidence/2026-10-26-phase2/`, details in
   hypotheses for draft, many calls and prefetch were measured, but each lost
   auto task success against the baseline (36, 38 and 38 of 52 against 39).
 
-Unmet or not measured: English simple local completion 4/12 (target 80%);
+Unmet or not measured: English simple local completion 4/12 normal and 0/12
+constrained (target 80%);
 p95 first model action 500 ms; the unsuitable-machine device-aware hypothesis
 (no case was measured unsuitable, even on the CPU-only two-thread
 configuration); none-class streaming; early headers before the first

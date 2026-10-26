@@ -2742,7 +2742,11 @@ Conditions that a reader should know:
 
 Every case of both configurations was measured `ready`; the constrained
 runtime did not produce an unsuitable cohort, so the device-aware hypothesis
-for unsuitable machines is **not measured**, not refuted.
+for unsuitable machines is **not measured**, not refuted. This is itself a
+finding: the constrained configuration completed no English or Chinese simple
+case locally in any of its six corpus cells (0/12 each), yet detection kept
+it `ready`, so the unsuitable-class detection did not fire where local work
+never finished.
 
 | Question | Configuration, chain | Control | Candidate | Gains/losses |
 |---|---|---|---|---|
@@ -2799,7 +2803,7 @@ start of the first answer generation is not measured.
 
 | Hypothesis or target | Status | Evidence |
 |---|---|---|
-| English simple local completion at least 80% | not met | 4/12 in the local_first/router cells of both configurations |
+| English simple local completion at least 80% | not met | 4/12 normal and 0/12 constrained (local_first/router cells) |
 | English simple tool proposals at least 95% | met | 12/12 model proposals |
 | No missed mandatory confirmation | met | zero in every corpus cell, mode and language |
 | p95 first model action at most 500 ms | not met | normal router p95 17465 ms (110 of 120 requests had an action) |

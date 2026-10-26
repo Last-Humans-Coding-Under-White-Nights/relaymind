@@ -1188,7 +1188,7 @@ revision keeps every default. No code default changes.
 
 | Default | Decision | Paired evidence (full cohort, gains/losses) |
 | --- | --- | --- |
-| placement.policy local_first | keep | device_aware 83/156 vs 88/156 (1/6) normal, 80/156 vs 83/156 (1/4) constrained; expected_wait 84/156 (3/7) and 82/156 (5/6). Every case of both configurations measured `ready`, so the unsuitable-machine hypothesis is not measured |
+| placement.policy local_first | keep | router chain: device_aware 83/156 vs 88/156 (1/6) normal, 80/156 vs 83/156 (1/4) constrained; expected_wait 84/156 (3/7) and 82/156 (5/6). With the example-router chain the policies were within two cases of local_first except constrained expected_wait, 79/156 vs 89/156 (1/11). Every case of both configurations measured `ready`, so the unsuitable-machine hypothesis is not measured |
 | selection chain model_router | keep | example-router corpus success equal or higher in five of six pairs (local_first: 88/156 = 88/156 normal, 89/156 vs 83/156 constrained), lower first-useful p50 (1869 vs 8947 ms) but higher p95 (51338 vs 22241 ms); the Jaccard hypothesis needs the section 12.4 capped benchmark and is not measured |
 | answer_stream buffered | keep | live 74/156 vs 88/156 (2/16) with 14/156 `predicate_unmet`; none class 73/104 vs 77/104 (2/6), first-useful p95 49521 vs 54260 ms but p50 16980 vs 15827 ms and 8 vs 6 timeouts: not met |
 | answer_pass final | keep | draft raises English simple local completion 4/12 to 6/12, but auto 36/52 vs 39/52 (0/3): not held under section 12.3 |
@@ -1201,7 +1201,9 @@ evidence on this machine and configuration, not reliability guarantees, and no
 Windows performance is claimed. A later revision may change a default only with
 a new run that meets section 12.3, preferably repeated passes of the candidate
 and its baseline. The model-quality targets stay separately reported: English
-simple local completion 4/12 (not met), model tool proposals 12/12 (met), no
+simple local completion 4/12 normal and 0/12 constrained (not met; the
+constrained configuration stayed `ready` although it completed nothing
+locally), model tool proposals 12/12 (met), no
 missed confirmation in any cell (met), and p95 first model action 500 ms (not
 met in any router latency cell).
 
