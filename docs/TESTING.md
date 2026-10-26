@@ -1074,13 +1074,14 @@ run. Build 11669 accepted `--chat-template-kwargs` with a deprecation
 warning on all platforms. The #58 update selects b11785 and the reasoning
 controls below; the old run does not qualify the new runtime.
 
-With the #57 fix (RM01, RM18; spec section 6), `LlamaCppAdapter` and
-both automated startup health-poll paths bypass environment and system
-proxies for `localhost` and IPv4/IPv6 loopback literals. These paths no
-longer require the session overrides above. Non-loopback endpoints and
-the external Chat Completions adapter retain normal proxy handling;
-process-wide proxy settings are unchanged. This policy applies to the
-Python clients, not the manual terminal commands below.
+With the #57 and #167 fixes (RM01, RM18, RM19; spec section 6), `LlamaCppAdapter`,
+both automated startup health-poll paths, and the live acceptance and evaluation
+harness (`live_acceptance.py`, `run_corpus.py`, `latency_benchmark.py`) bypass
+environment and system proxies for `localhost` and IPv4/IPv6 loopback literals. These
+paths no longer require the session overrides above. Non-loopback endpoints and the
+external Chat Completions adapter retain normal proxy handling; process-wide proxy
+settings are unchanged. This policy applies to the Python clients, not the manual
+terminal commands below.
 
 `pytest tests/test_loopback_proxy.py` checks routing with controlled proxy
 discovery and transport doubles, without a real proxy or model. The #56

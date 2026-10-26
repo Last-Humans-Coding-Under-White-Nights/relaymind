@@ -86,6 +86,7 @@ from probe_timing import (  # noqa: E402
     parse_runtime_extra_args,
 )
 
+from relaymind.adapters.local_http import is_loopback_url  # noqa: E402
 from relaymind.adapters.manifest import (  # noqa: E402
     launch_settings_argv,
     load_manifest,
@@ -315,6 +316,7 @@ class Api:
             headers={"Authorization": f"Bearer {token}"},
             transport=transport,
             timeout=REQUEST_TIMEOUT_SECONDS,
+            trust_env=not is_loopback_url(base_url),
         )
 
     async def aclose(self) -> None:
@@ -327,7 +329,11 @@ class Api:
         """
         import openai
 
-        http = httpx.AsyncClient(transport=self.transport, timeout=REQUEST_TIMEOUT_SECONDS)
+        http = httpx.AsyncClient(
+            transport=self.transport,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+            trust_env=not is_loopback_url(self.base_url),
+        )
         return openai.AsyncOpenAI(
             api_key=self.token,
             base_url=f"{self.base_url}/v1",
@@ -1937,19 +1943,31 @@ class GatewayProcess:
     def _wait_healthy(self) -> None:
         deadline = time.monotonic() + LAUNCH_TIMEOUT_SECONDS
         headers = {"Authorization": f"Bearer {self.output.token}"}
-        while time.monotonic() < deadline:
-            try:
-                if httpx.get(self.output.url + "/healthz", headers=headers).status_code == 200:
-                    return
-            except httpx.HTTPError:
-                pass
-            time.sleep(0.1)
+        with httpx.Client(
+            base_url=self.output.url,
+            headers=headers,
+            timeout=2,
+            trust_env=not is_loopback_url(self.output.url),
+        ) as client:
+            while time.monotonic() < deadline:
+                try:
+                    if client.get("/healthz").status_code == 200:
+                        return
+                except httpx.HTTPError:
+                    pass
+                time.sleep(0.1)
         raise RuntimeError(f"the gateway did not answer /healthz; see {self.log}")
 
     def readiness(self) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {self.output.token}"}
-        response = httpx.get(self.output.url + "/readyz", headers=headers, timeout=30)
-        return {"status": response.status_code, "body": response.json()}
+        with httpx.Client(
+            base_url=self.output.url,
+            headers=headers,
+            timeout=30,
+            trust_env=not is_loopback_url(self.output.url),
+        ) as client:
+            response = client.get("/readyz")
+            return {"status": response.status_code, "body": response.json()}
 
     def kill(self) -> None:
         """Stop without a shutdown: the restart case of section 5."""
