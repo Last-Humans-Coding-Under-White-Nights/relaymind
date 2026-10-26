@@ -15,6 +15,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Phase 2 live evidence (#134, #128, #125; RM16, RM25–RM29, RM31, RM32; AC19):
+  the complete M8 matrix (31 cells) and M7 matrix (9 cells) on Apple M1
+  with Z.ai glm-4.6 at revision 741a191, one pass per cell, with both offline
+  analyses, per-attempt archives and a digest manifest in
+  `docs/evidence/2026-10-26-phase2/`. EVIDENCE and RELEASE record the results,
+  the unmet and unmeasured targets, and the conditions of the run.
+
+- Specification 0.45 keeps every phase 2 default with the measured numbers
+  (section 14.4.6): local_first, model_router, buffered answers, final answer
+  pass, one call per generation and no prefetch. Section 12.3 now changes a
+  default only when the option's paired full auto corpus cohort has at least
+  as many task successes as the baseline in the same run.
+
 - Matrix controller recovery (#128, #134; RM16, RM17, RM25): explicit immutable
   measurement roots, exact corpus/latency export normalization, credential-free
   finalized-cell reconciliation, original-index snapshots and separate controller

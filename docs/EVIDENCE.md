@@ -2678,7 +2678,11 @@ revision and frozen timing prior remains pending under the M8 comparison work.
 Failures must remain in both arms; neither a parity claim nor a default change
 follows from these deterministic tests. Buffered remains the default.
 
-### M8 matrix preparation — measurements pending
+### M8 matrix preparation (superseded)
+
+The measurements and the paired streaming comparison are recorded below under
+"2026-10-26 — Phase 2 M7 and M8 measurements and default decisions". The
+preparation note is kept as it was written:
 
 Specification 0.42 defines reproducible placement priors, serial local active
 time, evaluation denominators and durable matrix attempts (#134). The fixed
@@ -2687,3 +2691,149 @@ No new provider/model runs or live/buffered parity measurements are claimed.
 Normal and constrained calibration priors must be collected on the reviewed
 committed implementation before the candidate matrix. Existing historical
 exports are unchanged and do not substitute for the new controls.
+
+
+## 2026-10-26 — Phase 2 M7 and M8 measurements and default decisions (#134, #128, #125), Apple M1
+
+The fixed M8 matrix (31 cells) and the M7 matrix (9 cells) of specification
+sections 14.4.3 and 14.4.4 ran to completion. The offline analyses of #166 pass
+reporting acceptance for both. Specification 0.45 (section 14.4.6) records the
+default decisions; every default is kept. One pass per cell on one machine:
+provider drift and sampling uncertainty remain, and nothing here is a
+reliability guarantee or a Windows result.
+
+### Identity and environment
+
+| Item | Recorded value |
+|---|---|
+| Machine | Apple M1, 8 CPU cores, 8 GiB RAM, 7 GPU cores; macOS 27.0.1 arm64 |
+| Measured revision R | `741a19175430e83702a360c454a581b2829e3cb0`, source SHA-256 `86f04cea8ee68a7d48242b42a9ef0c8a6f637120ad72c3a23c4715a00a69a7a4` |
+| Matrix controller | `8b7d42227a726ec322822b12c74c0e3466be36a3` (section 14.4.5); M7 C6 ablation revision `7fbf4660e2cf4bf57142e4ac54bda35d91c54c3e` |
+| Local model | Qwen3-0.6B Q8_0, artifact SHA-256 `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031` |
+| Runtime | llama.cpp b11785 (commit 8baabd53b), binary SHA-256 `981b460a278e9a0c880cef32d6fab42785a119084456b16845304cf38c32cf69`; constrained configuration adds `--n-gpu-layers 0 --threads 2` |
+| External model | Z.ai `glm-4.6`, `https://api.z.ai/api/paas/v4`, context limit 128000 |
+| M8 interval | 2026-10-25T06:02:23Z to 2026-10-26T07:21:57Z; plan SHA-256 `cf5c5bd202272c39afdf0bb8e835df1a01e18a9787b9547a3229a15d435814ee`, index `a24dd1def6d46f7fbccb28eaa52b8ae7284bf25b05ee4264ec0da042c75dc224` |
+| M7 interval | 2026-10-26T07:24:53Z to 09:43:32Z; plan `cf6e1c35a02e922b9bcd95a5fdfcc21fffc953cff8eac87d105fd2677d2f5d5e`, index `c6f32a88b19f8022e102772b8b744ac05085141bfc515a10bcf442d4afeace8f` |
+| Analyst revision | `074c0ddb5b02a1ad36d5387be2893beccae60e11` (clean) |
+
+Every M8 cell finished on its first attempt except
+`placement-constrained-expected_wait-example-router-buffered-corpus`: its
+`initial` attempt was interrupted on purpose to pause the run, is retained with
+its cost, and `resume-1` is the complete attempt. M7 reuses the unseeded M8
+calibration export as C0 and its none-class C5 export under the exact reuse
+checks; no M7 cell needed a second attempt.
+
+Conditions that a reader should know:
+
+- A Homebrew upgrade outside the matrix ran on the host from about 03:40 to
+  04:10 UTC on 26 October, during M8 cell
+  `streaming-normal-local_first-router-live-corpus`. That cell's timings were
+  recorded with the upgrade competing for the CPU; grading is unaffected. The
+  upgrade moved Python 3.14.7 to 3.14.9: M8 cells 1 to 27 (including the M7
+  baseline C0, a reused M8 export) recorded 3.14.7; the four none-class M8
+  cells (including the reused C5) and every cell M7 measured itself recorded
+  3.14.9. So the M7 comparisons against C0 also span this patch release. The
+  pinned llama-server links no Homebrew library and its digest is checked, so
+  the local runtime did not change.
+- The run paused from about 00:40 to 01:45 UTC on 26 October and resumed on
+  mains power with a settled load, as every other cell ran.
+
+### M8 placement and chain (paired corpus success, 156 grades per cell)
+
+Every case of both configurations was measured `ready`; the constrained
+runtime did not produce an unsuitable cohort, so the device-aware hypothesis
+for unsuitable machines is **not measured**, not refuted.
+
+| Question | Configuration, chain | Control | Candidate | Gains/losses |
+|---|---|---|---|---|
+| device_aware vs local_first | normal, router | 88/156 | 83/156 | 1/6 |
+| expected_wait vs local_first | normal, router | 88/156 | 84/156 | 3/7 |
+| device_aware vs local_first | constrained, router | 83/156 | 80/156 | 1/4 |
+| expected_wait vs local_first | constrained, router | 83/156 | 82/156 | 5/6 |
+| expected_wait vs local_first | constrained, example-router | 89/156 | 79/156 | 1/11 |
+| example-router vs router | normal, local_first | 88/156 | 88/156 | 6/6 |
+| example-router vs router | constrained, local_first | 83/156 | 89/156 | 8/2 |
+
+Latency (120 measured requests per cell, each arm's full population; completion
+counts successful final answers only). Normal configuration, local_first:
+
+| Chain | First useful content p50/p95 (n) | Completion p95 (n) | Errors/timeouts |
+|---|---|---|---|
+| router | 8947/22241 ms (91) | 23583 ms (71) | 29/0 |
+| example-router | 1869/51338 ms (109) | 51873 ms (79) | 10/1 |
+
+The example-router chain answers most requests sooner and fails fewer, but its
+slowest requests are more than twice as slow. Expected_wait evaluated its rule
+45 to 140 times per cell and declined local work 13 to 51 times; its full
+counts and prerequisites are in the analysis.
+
+### Gated streaming (#125)
+
+| Pair | Buffered | Live | Gains/losses | Live `predicate_unmet` |
+|---|---|---|---|---|
+| Local configured, normal, local_first, router | 88/156 | 74/156 | 2/16 | 14/156 |
+| None class, example chain | 77/104 | 73/104 | 2/6 | 1/104 |
+
+In the none-class latency pair the live arm had first useful content p95
+49521 ms against 54260 ms (lower), but p50 16980 ms against 15827 ms (higher)
+and 8 timeouts against 6. Parity is not met in either corpus pair, and the
+none-class streaming hypothesis is **not met**.
+
+### M7 factors (paired against C0, the 52 auto cases)
+
+| Cell | Option | Auto success | Gains/losses | Hypothesis measure |
+|---|---|---|---|---|
+| C0 | baseline | 39/52 | – | English simple local completion 4/12; complex generations per completed run 5.125 |
+| C1 | draft answer pass | 36/52 | 0/3 | local completion 6/12 |
+| C2 | many calls per generation | 38/52 | 3/4 | 3.17 generations |
+| C3 | prefetch | 38/52 | 1/2 | 3.0 generations |
+| C4 | draft + many + prefetch | 38/52 | 2/3 | 2.6 generations; external_only 32/52 vs 37/52 (0/5) |
+| C6 | R-minus-criteria ablation | 36/52 | 1/4 | corrections per completed run 0.43 vs 0.094 (English), 0.33 vs 0 (Chinese) |
+
+The two local-only latency cells differ only in `early_headers`: response
+headers arrived before the first answer token in all 39 eligible requests of
+L1 (first transport p50 2.9 ms against 533 ms in L0). The ordering against the
+start of the first answer generation is not measured.
+
+### Section 12.3 hypotheses and targets
+
+| Hypothesis or target | Status | Evidence |
+|---|---|---|
+| English simple local completion at least 80% | not met | 4/12 in the local_first/router cells of both configurations |
+| English simple tool proposals at least 95% | met | 12/12 model proposals |
+| No missed mandatory confirmation | met | zero in every corpus cell, mode and language |
+| p95 first model action at most 500 ms | not met | normal router p95 17465 ms (110 of 120 requests had an action) |
+| Draft pass raises local completion without lowering task success | not met under spec 0.45 | 6/12 local completion, auto 36/52 vs 39/52 |
+| Prefetch and many calls lower complex generations | met; no default change | auto success 38/52 vs 39/52 for both |
+| Completion criteria lower corrections | met | C6 ablation |
+| Early headers before the first answer generation | not measured | header before first token only |
+| None-class live streaming | not met | above |
+| Unsuitable device-aware | not measured | no unsuitable cohort |
+| Example matcher Jaccard | not measured | corpus component met; the section 12.4 capped benchmark is missing |
+| Tool narrowing precision | not measured | needs the ToolRet comparison |
+| External cost next to success | met | ledgers below |
+
+### External usage (gateway-observed, physical attempts)
+
+| Ledger | Attempts | Calls | Input tokens known (missing calls) | Output tokens known (missing calls) | Calls per success |
+|---|---|---|---|---|---|
+| M8 calibration | 2 | 455 | 678956 (9) | 56151 (9) | 2.68 (170 task successes) |
+| M8 candidate corpus | 16 | 3832 | 5512771 (117) | 411620 (117) | 3.08 (1243 task successes) |
+| M8 candidate latency | 14 | 3242 | 5070673 (27) | 274238 (27) | 3.17 per successful final answer |
+| M7 (shared attempts once) | 9 | 998 | 1383719 (60) | 108549 (60) | 2.20 (454 task successes) |
+
+Token rates per task stay null where any call's usage is unknown. No monetary
+cost is claimed.
+
+### Files
+
+The package is in [`evidence/2026-10-26-phase2/`](evidence/2026-10-26-phase2/):
+the matrix plan, index, frozen priors and controller snapshots as exact bytes,
+one `tar.zst` archive per physical attempt (exports, checkpoints, reports,
+runner logs, run stores with their WAL and SHM files, sandbox states), a
+`manifest.json` with every archive's and member's SHA-256, and the two
+analyses (`analysis/m8-analysis.*`, `analysis/m7-analysis.*`; JSON SHA-256
+`f7c9fa2ec742319f3f66e4b6a4e4b3cdf042b050d6fecc62a656857b6b8fe901` and
+`1fd573358e97b715d78e5f35e590d8e4f91051b270a2d883e685c11fd49fe40a`). Raw
+checkpoints keep their original absolute paths; the package README explains
+how to read them after extraction. No provider credential appears in any file.
