@@ -1116,11 +1116,13 @@ def hypotheses(views: dict) -> dict:
                 for m in ("first_useful_content_ms", "completion_ms")
             }
             lower = [d and d["lower_p95"] for d in directions.values()]
+            # No measured unsuitable cohort means the hypothesis was not tested here,
+            # whatever the full-population reliability shows.
             value = (
-                False
-                if guard["candidate_worse"]
-                else None
+                None
                 if unsuitable is None or None in lower
+                else False
+                if guard["candidate_worse"]
                 else unsuitable["gain"] == unsuitable["loss"] and all(lower)
             )
             scopes[f"{h}/{c}"] = dict(

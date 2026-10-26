@@ -1112,6 +1112,27 @@ def test_latency_verdicts_fail_when_the_candidate_loses_requests_to_timeouts(
     assert "0/10/10" in markdown
 
 
+def test_scope_without_an_unsuitable_cohort_stays_not_measured_when_latency_is_worse(
+    fixture_matrix, tmp_path, monkeypatch
+):
+    """RM25, spec 12.3: worse candidate reliability cannot turn a scope with no measured
+    unsuitable cohort into 'not met'; the reliability counts are still reported."""
+    module = fixture_analysis(monkeypatch)
+    matrix = copy_matrix(fixture_matrix, tmp_path)
+    rewrite_attempt(
+        matrix,
+        "placement-normal-device_aware-router-buffered-latency",
+        export=time_out_first_samples,
+    )
+    report, _ = module.analyze(matrix)
+    unsuitable = report["hypotheses"]["unsuitable_device_aware"]
+    scope = unsuitable["by_scope"]["normal/router"]
+    assert scope["class_transitions"] == {"ready/ready": 52}
+    assert scope["latency_reliability"]["candidate_worse"] == ["timeouts", "unobserved_total"]
+    assert scope["status"] == "not measured"
+    assert unsuitable["by_scope"]["constrained/router"]["status"] == "met"
+
+
 def test_cli_writes_utf8_reports_under_cp1252_default(fixture_matrix, tmp_path, monkeypatch):
     """RM16/RM25: a non-ASCII evidence root survives a Windows-style text default."""
     module = fixture_analysis(monkeypatch)
