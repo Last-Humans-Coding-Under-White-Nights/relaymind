@@ -2745,8 +2745,10 @@ runtime did not produce an unsuitable cohort, so the device-aware hypothesis
 for unsuitable machines is **not measured**, not refuted. This is itself a
 finding: the constrained configuration completed no English or Chinese simple
 case locally in any of its six corpus cells (0/12 each), yet detection kept
-it `ready`, so the unsuitable-class detection did not fire where local work
-never finished.
+it `ready`. In its local_first/router cell, 21 of the 22 failed simple runs
+(auto and local_only) used two or three local generations and spent the whole
+4-second local active budget (median 4002 ms; normal: 2435 ms), so local work
+was too slow to help while the unsuitable-class detection did not fire.
 
 | Question | Configuration, chain | Control | Candidate | Gains/losses |
 |---|---|---|---|---|
