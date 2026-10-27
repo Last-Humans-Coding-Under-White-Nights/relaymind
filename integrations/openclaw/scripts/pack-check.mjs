@@ -10,11 +10,15 @@ import { readFileSync } from "node:fs";
 const root = new URL("../", import.meta.url);
 const pkg = JSON.parse(readFileSync(new URL("package.json", root), "utf8"));
 const host = JSON.parse(readFileSync(new URL("node_modules/openclaw/package.json", root), "utf8"));
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+// npm through node when run by npm: a Windows npm.cmd shim cannot be spawned
+// without a shell (Node refuses .cmd files since 20.12).
+const cli = process.env.npm_execpath;
+const [npmFile, npmArgs] = cli ? [process.execPath, [cli]] : ["npm", []];
 const packed = JSON.parse(
-  execFileSync(npm, ["pack", "--dry-run", "--json", "--ignore-scripts"], {
+  execFileSync(npmFile, [...npmArgs, "pack", "--dry-run", "--json", "--ignore-scripts"], {
     cwd: root,
     encoding: "utf8",
+    shell: !cli && process.platform === "win32",
   }),
 );
 // npm prints an array, or an object keyed by package name when run from a script.

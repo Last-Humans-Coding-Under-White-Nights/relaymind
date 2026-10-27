@@ -117,8 +117,8 @@ describe("package.json", () => {
     expect(pkg.dependencies ?? {}).toEqual({});
   });
 
-  it("has the build, typecheck, test, and pack check scripts", () => {
-    for (const script of ["build", "typecheck", "test", "pack:check"]) {
+  it("has the build, typecheck, test, pack check, and release scripts", () => {
+    for (const script of ["build", "typecheck", "test", "pack:check", "pack:release"]) {
       expect(typeof pkg.scripts[script]).toBe("string");
     }
   });

@@ -47,7 +47,6 @@ import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createOpenAICompletionsTransportStreamFn } from "@openclaw/ai/transports";
 
-import entry from "../../src/index.ts";
 import { startRecorder } from "../host-transport/recorder.mjs";
 import { hostFailoverReason } from "../pinned-host.ts";
 
@@ -306,7 +305,19 @@ async function runScenario(scenario) {
   const recorder = await startRecorder({ upstream: gatewayUrl.origin });
   const baseUrl = scenario.baseUrl ?? recorder.origin + gatewayUrl.pathname;
   const { api, logs, providers } = recordingApi({ ...scenario.pluginConfig, baseUrl });
-  const output = { register_error: null, catalog: null, dynamic: null, results: [] };
+  // The plugin entry: the checkout's sources, or (#145) scenario.entry, the built
+  // dist/index.js of an unpacked release artifact.
+  const entryUrl = scenario.entry
+    ? pathToFileURL(scenario.entry).href
+    : new URL("../../src/index.ts", import.meta.url).href;
+  const { default: entry } = await import(entryUrl);
+  const output = {
+    entry: entryUrl,
+    register_error: null,
+    catalog: null,
+    dynamic: null,
+    results: [],
+  };
   try {
     try {
       entry.register(api);

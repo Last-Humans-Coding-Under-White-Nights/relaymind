@@ -11,3 +11,4 @@ dist/
 .env
 /.superpowers/
 integrations/openclaw/node_modules/
+/release/
