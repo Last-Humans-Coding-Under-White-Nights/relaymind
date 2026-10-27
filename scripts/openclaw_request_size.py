@@ -15,7 +15,8 @@ with the gateway's own ``measure_request``:
 - with ``--base-url`` of a running llama-server (models/README.md), through
   the pinned runtime's template and tokenizer: method ``tokenizer``;
 - without it, the UTF-8 length of the chat body's prompt fields: method
-  ``utf8_bytes``, an upper bound on the token count, labeled as such.
+  ``utf8_bytes``, an upper bound on the token count, labeled as such: a
+  request under the limit by this bound fits; one over it is undecided.
 
 The local limit is the manifest's ``launch_settings.ctx_size``, read the way
 the launcher reads it. Fitting the limit is necessary for local work, not
@@ -56,7 +57,8 @@ METHOD_NOTES = {
     "tokenizer": "token counts through the pinned runtime's chat template and tokenizer",
     "utf8_bytes": (
         "UTF-8 bytes of the chat body's prompt fields: an upper bound on the token "
-        "count, not a token count; a request that fits by this bound fits"
+        "count, not a token count; a request that fits by this bound fits, and one "
+        "over it is undecided (fits_local null) until a tokenizer count"
     ),
 }
 
@@ -85,15 +87,40 @@ def local_limit_of(manifest: Path) -> int:
     return context
 
 
+def _chat_body(data: dict) -> dict | None:
+    """The body of one stored request, when it is a chat request."""
+    if data.get("method", "POST") != "POST":
+        return None
+    if not str(data.get("path", "/v1/chat/completions")).endswith("/chat/completions"):
+        return None
+    body = data.get("body")
+    return body if isinstance(body, dict) else None
+
+
 def load_requests(directory: Path) -> list[tuple[str, int, dict]]:
-    """Every captured request body: (file name, exchange index, body)."""
+    """Every captured chat request body: (file path under directory, exchange index, body).
+
+    Two layouts are read: a fixture file with ``exchanges[].request`` (the
+    transport fixtures and ``capture_host_requests.mjs``), and one stored
+    request per file under a folder per run (the real-host probe in
+    ``docs/evidence/2026-10-27-openclaw-mac-probe/requests/``). Other requests,
+    such as ``GET /v1/models``, are not measured.
+    """
     requests = []
-    for path in sorted(directory.glob("*.json")):
+    for path in sorted(directory.rglob("*.json")):
         data = json.loads(path.read_text("utf-8"))
-        for index, exchange in enumerate(data.get("exchanges", [])):
-            body = exchange.get("request", {}).get("body")
-            if isinstance(body, dict):
-                requests.append((path.name, index, body))
+        if not isinstance(data, dict):
+            continue
+        source = path.relative_to(directory).as_posix()
+        if "exchanges" in data:
+            for index, exchange in enumerate(data["exchanges"]):
+                body = _chat_body(exchange.get("request") or {})
+                if body is not None:
+                    requests.append((source, index, body))
+        elif "body" in data:
+            body = _chat_body(data)
+            if body is not None:
+                requests.append((source, 0, body))
     return requests
 
 
@@ -123,19 +150,29 @@ async def measure_fixtures(
             function=None if choice is None else choice.name,
         )
         measured = await measure_request(adapter, capabilities, request.messages, offer.offered)
+        # A byte count bounds the token count from above: under the limit it
+        # proves a fit; over it, only the tokenizer count decides (None).
+        fits: bool | None = measured.fits
+        if not measured.fits and measured.method == "utf8_bytes":
+            fits = None
         row.update(
             size=measured.size,
             method=measured.method,
             messages=len(request.messages),
             tools=len(offer.offered),
-            fits_local=measured.fits,
+            fits_local=fits,
         )
         rows.append(row)
     measured_rows = [r for r in rows if "size" in r]
-    fits = sum(1 for r in measured_rows if r["fits_local"])
-    over = [r for r in measured_rows if not r["fits_local"]]
-    if external_context_limit is None:
+    fits = sum(1 for r in measured_rows if r["fits_local"] is True)
+    undecided = sum(1 for r in measured_rows if r["fits_local"] is None)
+    over = [r for r in measured_rows if r["fits_local"] is False]
+    if undecided:
+        auto: dict[str, int] = {"local": fits, "undecided": undecided}
+        local_only = {"local": fits, "undecided": undecided}
+    elif external_context_limit is None:
         auto = {"local": fits, "external_if_it_fits": len(over)}
+        local_only = {"local": fits, "needs_external": len(over)}
     else:
         # The same measurement against the external limit; a tokenizer count
         # is local-model tokens, so this is indicative for another tokenizer.
@@ -145,15 +182,18 @@ async def measure_fixtures(
             "external": external,
             "context_limit_exceeded": len(over) - external,
         }
+        local_only = {"local": fits, "needs_external": len(over)}
     sizes = [r["size"] for r in measured_rows]
     summary = {
         "captured": len(rows),
         "rejected": len(rows) - len(measured_rows),
         "measured": len(measured_rows),
         "fits_local": fits,
+        "undecided": undecided,
         "share_fits_local": fits / len(measured_rows) if measured_rows else None,
+        "share_fits_local_is": "lower_bound" if method == "utf8_bytes" else "measured",
         "auto": auto,
-        "local_only": {"local": fits, "needs_external": len(over)},
+        "local_only": local_only,
         "size_min": min(sizes) if sizes else None,
         "size_median": statistics.median(sizes) if sizes else None,
         "size_max": max(sizes) if sizes else None,

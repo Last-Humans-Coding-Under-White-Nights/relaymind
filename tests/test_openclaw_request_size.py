@@ -82,7 +82,7 @@ def test_without_a_tokenizer_every_number_is_a_utf8_upper_bound(tmp_path):
     assert all(r["method"] == "utf8_bytes" for r in report["requests"])
     first, second = report["requests"]
     assert first["fits_local"] is True
-    assert second["fits_local"] is False
+    assert second["fits_local"] is None
     assert report["summary"]["fits_local"] == 1
 
 
@@ -125,3 +125,53 @@ def test_the_main_entry_writes_a_labeled_offline_report(tmp_path):
     assert report["local_limit"] == 8192
     assert report["summary"]["captured"] == 1
     assert report["sources"] == ["a.json"]
+
+
+def probe_capture(path, request_body, *, method="POST", route="/v1/chat/completions"):
+    """One request as the Mac host probe stored it (one file per request)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = {"method": method, "path": route, "headers": {}, "body": request_body}
+    path.write_text(json.dumps(data), "utf-8")
+
+
+def test_the_host_probe_captures_are_read_one_request_per_file_in_run_folders(tmp_path):
+    """#135: the real-host capture (docs/evidence/2026-10-27-openclaw-mac-probe/requests/)
+    keeps one request per file under a folder per run; only chat requests are measured."""
+    probe_capture(tmp_path / "b1-hello" / "001-POST-_v1_chat_completions.json", body("hi"))
+    probe_capture(tmp_path / "c2-read" / "001-POST-_v1_chat_completions.json", body("a"))
+    probe_capture(tmp_path / "c2-read" / "002-POST-_v1_chat_completions.json", body("b"))
+    probe_capture(
+        tmp_path / "p0-refresh" / "001-GET-_v1_models.json", None, method="GET", route="/v1/models"
+    )
+    (tmp_path / "c2-read" / "events.jsonl").write_text("{}\n", "utf-8")
+    requests = size.load_requests(tmp_path)
+    assert [(source, index) for source, index, _ in requests] == [
+        ("b1-hello/001-POST-_v1_chat_completions.json", 0),
+        ("c2-read/001-POST-_v1_chat_completions.json", 0),
+        ("c2-read/002-POST-_v1_chat_completions.json", 0),
+    ]
+    assert requests[2][2]["messages"][1]["content"] == "b"
+
+
+def test_a_request_over_the_byte_bound_is_undecided_not_refused(tmp_path):
+    """RM13: bytes bound tokens from above, so a request over the bound may still fit;
+    only the tokenizer count decides it, and the report never counts it as needs_external."""
+    fixture(tmp_path, "a", body("x" * 10), body("y" * 9000), body("z" * 9000))
+    report = asyncio.run(size.measure_fixtures(size.load_requests(tmp_path), size.ByteBound(8192)))
+    rows = report["requests"]
+    assert [r["fits_local"] for r in rows] == [True, None, None]
+    summary = report["summary"]
+    assert summary["fits_local"] == 1
+    assert summary["undecided"] == 2
+    assert summary["share_fits_local"] == pytest.approx(1 / 3)
+    assert summary["share_fits_local_is"] == "lower_bound"
+    assert summary["local_only"] == {"local": 1, "undecided": 2}
+    assert summary["auto"] == {"local": 1, "undecided": 2}
+
+
+def test_a_tokenizer_count_decides_every_request(tmp_path):
+    fixture(tmp_path, "a", body("x" * 10), body("x" * 200))
+    adapter = ScriptedAdapter(capabilities=make_capabilities(context_limit=100))
+    report = asyncio.run(size.measure_fixtures(size.load_requests(tmp_path), adapter))
+    assert report["summary"]["undecided"] == 0
+    assert report["summary"]["share_fits_local_is"] == "measured"
