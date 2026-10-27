@@ -1277,6 +1277,14 @@ def hypotheses(views: dict) -> dict:
     return result
 
 
+def _local_success_rate(row: dict) -> float | None:
+    """Completed over completed plus escalated; unknown when a count is missing or null."""
+    completed, escalated = row.get("local_completed"), row.get("local_escalated")
+    if not all(isinstance(n, int) and not isinstance(n, bool) for n in (completed, escalated)):
+        return None
+    return completed / (completed + escalated) if completed + escalated else None
+
+
 def expected_wait(views: dict) -> dict:
     """Applicability of expected_wait: observations and initial prerequisites (section 14.4.3)."""
     result = {}
@@ -1287,10 +1295,7 @@ def expected_wait(views: dict) -> dict:
         for report in view["prerequisites"]:
             rows = []
             for row in report:
-                attempts = row.get("local_completed", 0) + row.get("local_escalated", 0)
-                rows.append(
-                    dict(row, p_local=row["local_completed"] / attempts if attempts else None)
-                )
+                rows.append(dict(row, p_local=_local_success_rate(row)))
             variants.append(rows)
         result[cell_id] = dict(
             placement_observations=summarize_placement(view["rows"])["expected_wait"],

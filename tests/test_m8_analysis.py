@@ -323,6 +323,24 @@ def test_latency_arm_counts_split_unobserved_requests_by_reason():
     assert module.latency_guard(module.pair_latency(left, left))["candidate_worse"] == []
 
 
+def test_expected_wait_success_rate_is_unknown_when_a_count_is_unknown():
+    """RM27, spec 14.4.3/14.4.4: a missing or null outcome count is unknown, never zero."""
+    module = analysis()
+    report = [
+        dict(skill_id="known", local_completed=3, local_escalated=1),
+        dict(skill_id="none_yet", local_completed=0, local_escalated=0),
+        dict(skill_id="null", local_completed=None, local_escalated=2),
+        dict(skill_id="missing", local_escalated=2),
+        dict(skill_id="no_escalated", local_completed=2),
+    ]
+    view = dict(rows=[], prerequisites=[report], learning=None)
+    result = module.expected_wait({"placement-normal-expected_wait-router-buffered-corpus": view})
+    rows = result["placement-normal-expected_wait-router-buffered-corpus"]["initial_prerequisites"]
+    assert {r["skill_id"]: r["p_local"] for r in rows} == dict(
+        known=0.75, none_yet=None, null=None, missing=None, no_escalated=None
+    )
+
+
 def test_physical_cost_separates_calibration_and_deduplicates_shared_controls():
     """RM16/RM25: interrupted calls cost money; missing usage is never a zero rate."""
     module = analysis()
