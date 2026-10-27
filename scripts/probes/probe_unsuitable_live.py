@@ -9,8 +9,8 @@ A. constrained, cold: a new runtime with the constrained extra arguments; the
    the class in run.accepted and the managed external route.
 B. constrained, warm: a new gateway and store on the same runtime, so the
    warm-up is served from the runtime's prefix cache and fits. Three local_only
-   requests then show local stages that run out of local time; readiness and
-   one more auto request show the stage rule.
+   requests then show local stages that run out of local time; readiness, one
+   more auto request, and readiness again show the stage rule.
 C. normal: a new runtime without extra arguments; the same three local_only
    requests and readiness show whether the normal configuration stays ready.
 
@@ -48,7 +48,9 @@ from probe_timing import _free_port, _stop  # noqa: E402
 
 CONSTRAINED = "--n-gpu-layers 0 --threads 2"
 AUTO_PROMPTS = ("simple-02", "simple-02-zh")
-LOCAL_ONLY_PROMPTS = ("simple-01", "simple-03", "simple-04")
+# Single-skill prompts: simple-01 can route to the parallel workflow, which ends the
+# local stage for another reason.
+LOCAL_ONLY_PROMPTS = ("simple-03", "simple-04", "simple-05")
 
 
 def corpus_prompts() -> dict[str, str]:
@@ -136,6 +138,7 @@ def phase(name, runtime_url, runtime, external, env, work, plan, prompts, *, rea
                 requests(gateway, directory / "sandbox", [(AUTO_PROMPTS[0], "auto")], prompts)
             )
             record["runs"] += extra
+            record["readiness_end"] = gateway.readiness()["body"]["local_model"]
         return record
     finally:
         gateway.stop()
@@ -185,7 +188,9 @@ def main(argv: list[str] | None = None) -> None:
                 name, url, runtime, external, env, work, plan, prompts, readiness_after=after
             )
         export["runtime_banner"] = runtime.banner
-        export["model"] = runtime.model_record()
+        model = runtime.model_record()
+        model["manifest"] = Path(model["manifest"]).resolve().relative_to(REPO_ROOT).as_posix()
+        export["model"] = model
     finally:
         if llama is not None:
             _stop(llama)
