@@ -163,7 +163,7 @@ starts its own llama-server.
   pass, escaped labels, missing historical fields (not recorded), and
   values recorded as null (shown with their meaning). Placement projections
   use illustrative optional event fields; they are not measured predictions.
-  Workflow steps remain a labeled placeholder pending #138.
+  The Workflow steps placeholder is removed by #173 (RM30 retired).
 
   The page script (`app.js`) runs in a real browser with
   `pytest tests/test_demo_ui_browser.py` (#89, #127, spec 0.27 and 0.31): Playwright
@@ -1007,9 +1007,10 @@ feature has a test of the default as well. Later pull requests append here.
 - The launcher (`relaymind serve --config`) has started with the pinned
   model on macOS (the harness above) and on x86-64 Windows (#110, five
   starts, `/readyz` 200 on all).
-- Phase 2 (spec 0.31, RM26 to RM32, AC17 to AC23) now has deterministic
+- Phase 2 (spec 0.31, RM26 to RM32 and AC17 to AC22; RM30 and AC23 were
+  retired in 0.47) now has deterministic
   coverage for gated streaming, operation without a local model, placement,
-  and the out-of-process selector (#133). Workflow packages remain pending. The budgets table (#142), the call timing and count
+  and the out-of-process selector (#133). The budgets table (#142), the call timing and count
   recording (#120), the draft answer pass (#121, AC17), early response
   headers (#140), admitted calls per generation (#122), prefetch (#123),
   both AC18, and the selection interface with its two built-in selectors
@@ -1022,13 +1023,19 @@ feature has a test of the default as well. Later pull requests append here.
   issues in [`ROADMAP.md`](ROADMAP.md) carry the tests. The offline
   spikes (#115, #118, #119) and the timing probes (#114, #116, #117) test
   their own scripts, not the gateway.
+- M9 OpenClaw integration (spec 0.47, RM33, AC24) is planned. #135 to
+  #139 and #145 define host-transport contract tests, plugin installation,
+  tool ownership, cancellation, error/retry behavior, and separate live
+  evaluation. No OpenClaw integration test or live result is claimed yet.
+  YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are
   implemented (#143, #144), with frozen SkillsBench/ToolRet inputs and
   [recorded Apple M1 comparisons](EVIDENCE.md#2026-10-23--m7-skill-and-tool-selection-benchmarks-apple-m1).
   These source-domain measurements use the documented catalog caps and
   do not replace the ops correctness corpus. The built-in selectors do
   not produce strict nonempty tool subsets, so these runs do not establish
-  a narrowing benefit. Workflow-plan evaluation remains pending (#145).
+  a narrowing benefit. The workflow-plan track was retired with RM30
+  (spec 0.47, section 12.4).
 
 ### Required trace events (RM16, RM22, RM25)
 

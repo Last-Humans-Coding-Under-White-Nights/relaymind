@@ -6,7 +6,8 @@ requirements it implements and the acceptance tests that close it. A
 milestone is done when its deterministic tests pass and its live checks are
 recorded in [`EVIDENCE.md`](EVIDENCE.md). Issues on GitHub carry an `M1`
 to `M9` label; the lists below name the issues where the order matters.
-M1 to M6 are the prototype; M7 to M9 are phase 2 (spec 0.31), the
+M1 to M6 are the prototype; M7 to M9 are phase 2 (spec 0.31, revised
+for OpenClaw integration in spec 0.47), the
 answer to customer feedback, with shorter waiting time as the objective
 (see
 [`design/2026-10-23-performance-first-routing.md`](design/2026-10-23-performance-first-routing.md)
@@ -721,30 +722,53 @@ met or not met with exact numbers in the constrained configuration; a
 selector swap by configuration, including an HTTP selector, leaves the
 orchestrator and the packages unchanged.
 
-## M9 — Workflows (spec 0.31, P1)
+## M9 — OpenClaw integration (spec 0.47, P1)
 
-Workflow packages are the execution plans of skills, named by the new
-manifest key `workflow`; selection by intent is skill selection, so the
-catalog, the RouteDecision, and the run states do not change. The fixed
-parallel workflow keeps its code, its `parallel_workflow` key, and
-AC14. Only the `auto` role needs M8's placement; the rest of M9 could
-start alongside M8.
+Ship an installable provider plugin that lets OpenClaw use RelayMind's
+bounded local/external inference through `relaymind-client-tools`.
+OpenClaw owns sessions, tool execution, and approvals; the Python gateway
+remains a separate loopback service. The feasibility analysis and alternatives
+are in [`design/2026-10-27-openclaw-integration.md`](design/2026-10-27-openclaw-integration.md).
+This is planned integration, not a claim of a working or faster plugin.
 
-- Workflow schema, strict YAML loader, and registry (#135; RM30).
-- Workflow runner with tool, model, and render steps, one shared stage
-  per plan, and per-step placement (#136; RM30, AC23).
-- Demo workflow packages and the skill manifest `workflow` field (#137;
-  section 9).
-- Workflow events in the trace view and the UI steps view (#138;
-  sections 8 and 9).
-- M9 evaluation (#139): each demo skill with and without its workflow.
-- Workflow plan benchmark (#145; section 12.4): plan precision,
-  recall, and Jaccard on the multi-member cases, plan validity, outcome
-  value; ordering is stated as not measured.
-- Closes: AC23.
+- Compatibility qualification and captured protocol fixtures (#135;
+  RM08, RM19, RM20, RM33; AC24). Pin the host/SDK and check its actual
+  requests against the existing chat contract before implementation.
+  Record the host's per-model compatibility switches and its defaults
+  for a loopback URL (they send `stream_options`, which the gateway
+  rejects) and the token size of its requests against the local input
+  limit, which bounds how much host work can run locally.
+- Remove the retired workflow steps placeholder from the demo UI
+  (#173; RM23, AC14). Independent of the plugin; can start now.
+- Provider package, model catalog, configuration, and token handover
+  (#136; RM12, RM19, RM26, RM33), after #135.
+- Text and host-owned tool round trips, request compatibility, and
+  buffered SSE (#137; RM08, RM09, RM19, RM20, RM33; AC10, AC24), after #136.
+- Cancellation, bounded retry behavior, errors, and trace correlation
+  (#138; RM14, RM17, RM20, RM22, RM33; AC11, AC12, AC24), after #137.
+- Installable artifact, CI compatibility checks, platform qualification,
+  and operator documentation (#145; RM18, RM19, RM33; AC24): packaging
+  and CI after #136, platform qualification and the guide after #138.
+- M9 live evaluation (#139; RM16, RM25, RM26, RM33; section 12.5), after
+  #145: direct external versus RelayMind external_only versus auto, plus
+  a separate no-local setup; exact success, latency, calls, and usage.
+- Closes: AC24. Existing AC10 to AC12 and AC14 remain regression gates.
 
-Exit: the generations-per-completed-run hypothesis for prefetch and
-workflows is reported with exact numbers; AC14 is unchanged.
+The first milestone version supports text and one host-owned function call
+per response. It does not claim managed skill selection or M8's managed
+placement for the client-owned alias. No dependency on an unfinished YAML
+runner, workflow benchmark, or managed live-streaming feature is introduced.
+
+Exit: the pinned plugin installs and runs through OpenClaw without a core
+fork; AC24 passes with the actual host transport over model doubles; live
+evidence and platform results are recorded separately. Performance gains
+are measured hypotheses, not acceptance claims inferred from compatibility.
+
+The unimplemented YAML workflow expansion and plan benchmark are removed
+from M9 (RM30 and AC23 retired). The implemented fixed parallel demo remains
+RM15/AC14. Issues #135 to #139 and #145 are repurposed with a scope-change
+note so their former purpose remains traceable; #173 removes the UI
+placeholder that the retired scope left behind.
 
 ## Out of scope for the prototype
 
@@ -841,3 +865,16 @@ listed here so the current order can be traced to its reason.
   `not_run`; the UI session errored because Playwright Chromium was not
   installed. Acceptance failures and environment gaps are retained in
   the report.
+
+- 2026-10-27, spec 0.47: M9 changes from Workflows to OpenClaw integration
+  at the owner's request. Retire the unimplemented RM30/AC23 expansion; add
+  RM33/AC24 for a provider plugin over the client-owned chat API. Reuse the
+  six open M9 issues with revised scope and dependencies. Preserve the
+  implemented fixed parallel demo and its historical evidence.
+  The revision is numbered 0.47 because the M8 evidence stack took 0.46
+  (#171, merged before this revision). The pinned OpenClaw source was read for the
+  host's request defaults and compatibility switches; section 7.5 names
+  the ones the plugin declares, so that the first request to the
+  loopback URL is not rejected for `stream_options` or a misplaced
+  developer message. The UI placeholder removal moved from #145 to #173
+  so it does not wait for the plugin.

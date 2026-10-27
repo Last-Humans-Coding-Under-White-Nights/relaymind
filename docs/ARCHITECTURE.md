@@ -22,10 +22,10 @@ spec is the source of truth; this page only explains where things live.
 | Schema boundary checks | `src/relaymind/schema_util.py` | Shared checks for published, versioned JSON Schemas (closed field sets, exact schema_version, first schema error; spec section 8). |
 | Timing instrumentation | `src/relaymind/stats.py` | Record spec 12.1 metrics per generation around any adapter; export JSON for adapter comparisons (M1 working data, not benchmark evidence). |
 
-## Phase 2 components (spec 0.31, planned)
+## Phase 2 components (spec 0.31, revised in 0.47)
 
-Specification 0.31 adds components that do not exist in the code yet;
-[`ROADMAP.md`](ROADMAP.md) M7 to M9 build them. Where they will live,
+Milestones M7 to M9 extend the components below; completed work is listed
+in the component map above and [`ROADMAP.md`](ROADMAP.md). Their locations,
 so that the dependency direction below stays true:
 
 | Spec component | Planned package | Responsibility |
@@ -33,12 +33,12 @@ so that the dependency direction below stays true:
 | Selector transport (RM28) | `src/relaymind/selection/` | The loopback HTTP transport for an out-of-process selector (#133). The interface, the chain, and the two built-in selectors exist; see the component map and the dependency direction below. It executes nothing. |
 | Placement policy (RM27) | `src/relaymind/orchestrator/placement.py` | Predicts where a generation runs from the timing samples the store keeps; never changes a budget. |
 | Timing samples (RM27) | `src/relaymind/store/` | A table of per-generation and warm-up samples, read by placement, written by the orchestrator. The figures it will hold (first-token time, cached and reasoning tokens) are already recorded in every `model.finished` event (#120). |
-| Workflow registry and runner (RM30) | `src/relaymind/workflows/` | Loads and validates `workflow.yaml` packages from the configured roots; runs tool, model, and render steps. The fixed parallel workflow stays in `orchestrator/local_loop.py` until a runner reproduces it. |
+| OpenClaw provider plugin (RM33, planned) | `integrations/openclaw/` | A TypeScript package using the public host SDK and the loopback client-owned chat API. OpenClaw owns sessions, tools, and approvals; RelayMind owns inference and its trace. |
 | Gated answer streaming (RM32) | `src/relaymind/orchestrator/local_loop.py`, `src/relaymind/api/chat.py` | The per-statement holdback of the live answer stream. Not implemented: `performance.answer_stream = live` stops startup. The draft answer pass (RM31, #121) and early response headers (RM32, #140) are implemented; see the orchestrator and API rows above. |
 
-Demo workflow packages (`workflow.yaml` plus optional `examples.json`)
-will live in `workflows/` at the repository root, the default workflow
-root, with the same root rules as skills.
+The YAML workflow package expansion is retired (spec 0.47, RM30). The
+implemented fixed parallel demo remains in the orchestrator (RM15, AC14).
+The OpenClaw package is planned; no plugin or live qualification exists yet.
 
 Demo skill packages (SKILL.md plus `skill.manifest.json`, spec sections
 4.2 and 9) live in `skills/` at the repository root, one directory per

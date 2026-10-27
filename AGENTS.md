@@ -8,7 +8,9 @@ codebase.
 1. **The spec is the single source of truth.**
    [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md) defines what RelayMind
    does. Every implementation task and every acceptance test must reference
-   requirement IDs from it (RM01–RM32, AC01–AC23; RM26–RM32 and AC17–AC23 are specified in 0.31 and not implemented yet). If code and spec disagree,
+   requirement IDs from it (RM01–RM33, AC01–AC24; RM30 and AC23 are retired;
+   RM33 and AC24 specify the planned M9 OpenClaw integration in 0.47).
+   Implementation status is recorded in docs/ROADMAP.md. If code and spec disagree,
    the spec wins. If the spec is wrong, revise the spec first, then change
    the code.
 2. **Tests come before code.** Write a failing test that captures the
@@ -36,6 +38,7 @@ codebase.
 | `evaluation/` | The frozen correctness corpus (`corpus.v1.json`, its digest in `corpus.v1.lock.json`), the expected skill of every case (`corpus.v1.skills.json`, frozen in the same lock), and the latency prompts (`latency_prompts.v1.json`); a changed case is a new corpus version (spec section 12.2) |
 | `models/` | Pinned model artifact manifests (RM18, spec section 6); GGUF files are downloaded per `models/README.md`, never checked in |
 | `skills/` | Demo skill packages, one directory per skill, SKILL.md plus `skill.manifest.json`; the default skill root (operators may configure others, spec section 4.2) |
+| `integrations/openclaw/` | Planned (RM33, spec 0.47, M9): the OpenClaw provider plugin, a TypeScript package over the loopback client-owned chat API (section 7.5); not implemented yet, see `docs/ARCHITECTURE.md` |
 | `tests/` | Test suite; `tests/fixtures/` holds sandbox demo data; `tests/test_demo_ui_browser.py` runs the UI page script in Chromium (Playwright; `playwright install chromium`) |
 | `scripts/` | Developer scripts: model manifest generation (RM18), the live acceptance harness, the corpus runner (with its offline draft-pass regrade), the latency benchmark (RM25), `--runtime-extra-args` for a constrained runtime configuration (RM18, spec 0.31 section 12.2), and the spikes in `scripts/probes/` (the offline ones over the corpus export, and the live timing probes of the runtime and of one provider); `scripts/README.md` lists what exists |
 | `docs/` | Spec, architecture, roadmap, testing guide, live evidence record (`docs/EVIDENCE.md`, raw exports in `docs/evidence/`), and design rationale for spec revisions (`docs/design/`, not normative) |
@@ -76,8 +79,8 @@ See spec section 3 for the full component contract.
    service as healthy, a draft as a log-backed diagnosis, or a schema
    example as a measured result.
 10. **A selector proposes, the gateway admits (RM28).** A selector,
-    a prefetch declaration, or a workflow file never executes anything,
-    grants a permission, or skips a clarification or a confirmation.
+    or a prefetch declaration never executes anything, grants a
+    permission, or skips a clarification or a confirmation.
 11. **Predictions are labeled (RM27).** A placement prediction is
     recorded next to the actual duration and never reported as a
     measurement; the placement policy never changes a budget.
