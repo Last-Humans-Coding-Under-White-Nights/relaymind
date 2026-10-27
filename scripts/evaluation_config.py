@@ -144,6 +144,26 @@ def _external_from_args(args: argparse.Namespace) -> ExternalLabel | None:
     return external_label(base_url, model, region)
 
 
+def _null_path(value: Any, path: str) -> str | None:
+    """The key path of the first JSON null in value, or None when there is none.
+
+    A TOML launch file has no null (spec 14.1), so an option the launch file
+    could not carry is refused here, by path and never by value (RM12).
+    """
+    if value is None:
+        return path
+    if isinstance(value, dict):
+        items = ((f"{path}.{key}" if path else str(key), item) for key, item in value.items())
+    elif isinstance(value, list):
+        items = ((f"{path}[{index}]", item) for index, item in enumerate(value))
+    else:
+        return None
+    for item_path, item in items:
+        if (found := _null_path(item, item_path)) is not None:
+            return found
+    return None
+
+
 def _request_options_from_args(
     args: argparse.Namespace, external: ExternalLabel | None
 ) -> dict[str, Any] | None:
@@ -158,6 +178,10 @@ def _request_options_from_args(
         raise ConfigurationError("--external-request-options must be a JSON object") from exc
     if not isinstance(value, dict):
         raise ConfigurationError("--external-request-options must be a JSON object")
+    if (path := _null_path(value, "")) is not None:
+        raise ConfigurationError(
+            f"--external-request-options: {path} is null, which a launch file cannot carry"
+        )
     try:
         return check_request_options(value)
     except ValueError as exc:

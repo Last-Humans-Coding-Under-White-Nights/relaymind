@@ -726,6 +726,29 @@ def test_external_request_options_are_checked_recorded_and_launched(settings, tm
     assert load_config(path).external.request_options == expected
 
 
+def test_external_request_options_refuse_null_at_any_depth(settings):
+    """RM25, spec 12.2 and 14.1: the options are checked as the launch file checks them,
+    and a TOML launch file has no null, so a JSON null at any depth is a usage error
+    before any launch, never a launch file that does not load."""
+    for bad in (
+        '{"reasoning_effort": null}',
+        '{"thinking": {"type": null}}',
+        '{"stop": ["x", null]}',
+        '{"extra": [{"a": null}]}',
+    ):
+        with pytest.raises(settings.ConfigurationError, match="null"):
+            parse(settings, *EXTERNAL_FLAGS, "--external-request-options", bad)
+
+
+def test_launch_file_writer_refuses_null():
+    """RM18, spec 14.1: TOML has no null; the writer refuses one instead of writing a
+    file the launcher cannot read."""
+    harness = load_script_module("live_acceptance")
+    for value in (None, {"a": None}, [1, None]):
+        with pytest.raises(ValueError, match="null"):
+            harness._toml(value)
+
+
 def test_prior_partition_carries_declared_request_options():
     """RM27, spec 14.4.1: a prior is exact to the provider options its samples used."""
     session = load_script_module("evaluation_session")

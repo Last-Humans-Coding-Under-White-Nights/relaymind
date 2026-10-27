@@ -1761,6 +1761,9 @@ class ExternalEndpoint:
 
 
 def _toml(value: object) -> str:
+    if value is None:
+        # TOML has no null; json.dumps would write one the launcher cannot read.
+        raise ValueError("a launch file value cannot be null")
     if isinstance(value, Path):
         value = value.as_posix()
     if isinstance(value, Mapping):
