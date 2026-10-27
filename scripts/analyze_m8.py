@@ -1650,9 +1650,11 @@ def _inside(path: Path, root: Path) -> bool:
 
 def check_outputs(matrix: Path, out: Path) -> Path:
     """Refuse unsafe outputs before anything is read: new files, outside matrix and checkout."""
+    if out.suffix != ".json":
+        raise ValueError(
+            "analysis output must be a JSON path (.json); the Markdown report goes next to it"
+        )
     markdown = out.with_suffix(".md")
-    if out == markdown:
-        raise ValueError("analysis output must be a JSON path; the Markdown report goes next to it")
     if out.is_dir():
         raise ValueError("analysis output must be a file path")
     for path in (out, markdown):

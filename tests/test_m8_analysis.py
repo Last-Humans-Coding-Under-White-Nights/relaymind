@@ -394,6 +394,17 @@ def test_cli_rejects_source_overwrite_before_reading_or_writing(tmp_path, name):
     assert list(matrix.iterdir()) == []
 
 
+@pytest.mark.parametrize("name", ["report.txt", "report", "report.md"])
+def test_cli_requires_a_json_output_path(tmp_path, name):
+    """RM16/RM25: the analysis output is JSON and its Markdown report goes next to it."""
+    module = analysis()
+    matrix = tmp_path / "m8"
+    matrix.mkdir()
+    with pytest.raises(ValueError, match="must be a JSON path"):
+        module.main(["--matrix", str(matrix), "--out", str(tmp_path / "out" / name)])
+    assert not (tmp_path / "out").exists()
+
+
 def test_cli_refuses_to_overwrite_frozen_evaluation_inputs(tmp_path):
     """RM16/RM25: the frozen corpus and prompt files read for validation stay unchanged."""
     module = analysis()
