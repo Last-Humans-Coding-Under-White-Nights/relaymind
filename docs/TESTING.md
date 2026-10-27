@@ -861,8 +861,10 @@ feature has a test of the default as well. Later pull requests append here.
 - `pytest tests/test_runner_configurations.py` (#128; RM03, RM25, RM26,
   RM29, RM31, RM32): the phase 2 runner configurations, alongside the corpus
   and latency script tests. They check launch-file round trips, validation,
-  no-local runtime bypass, external prerequisites, export/report labels and
-  offline regrading. Grading and metric regressions distinguish gateway-owned
+  no-local runtime bypass, external prerequisites, export/report labels,
+  declared external request options (spec 0.46: checked like the launch file,
+  recorded only when declared, and part of the prior partition) and offline
+  regrading. Grading and metric regressions distinguish gateway-owned
   answers from local-model completion and report no-local completion as not
   applicable. These deterministic checks do not constitute the live
   evaluation matrix or evidence for changing defaults.

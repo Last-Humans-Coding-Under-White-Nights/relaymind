@@ -31,7 +31,7 @@ def prior_configuration(runtime: Any, external: Any, configuration: Any) -> dict
             "base_url": external.base_url,
             "model": external.model,
             "context_limit": external.context_limit,
-            "request_options": {},
+            "request_options": dict(getattr(external, "request_options", None) or {}),
             "generation_options": asdict(EXTERNAL_OPTIONS),
         },
         "local_generation_options": asdict(LOCAL_OPTIONS),

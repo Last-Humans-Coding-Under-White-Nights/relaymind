@@ -2894,3 +2894,82 @@ analyses (`analysis/m8-analysis.*`, `analysis/m7-analysis.*`; JSON SHA-256
 `1fd573358e97b715d78e5f35e590d8e4f91051b270a2d883e685c11fd49fe40a`). Raw
 checkpoints keep their original absolute paths; the package README explains
 how to read them after extraction. No provider credential appears in any file.
+
+
+## 2026-10-27 — External model comparison: glm-4.6 and glm-5.3-flash with default and low reasoning, Apple M1
+
+A separate experiment, not part of the frozen M7/M8 matrices and not a
+specification default (the external model is operator configuration, section 1).
+Each arm is the default configuration (normal runtime, local_first,
+model_router, buffered, final answer pass, one call per generation, no
+prefetch) on the same 52-case, three-mode corpus (156 grades) and the same
+seeded 120-request latency schedule, one pass each. Only the external model and
+its declared request options change. The glm-4.6 cells ran on 25 October 2026
+and the glm-5.3-flash arms on 26 October 2026 (UTC, from the exports'
+`started_at_utc`); the entry and its package are dated 27 October, when they
+were recorded.
+
+| Arm | Corpus export SHA-256 | Latency export SHA-256 |
+|---|---|---|
+| glm-4.6 (M8 cells, revision `741a191`) | `ba3f4fc59fd44a176daaa4e821da44f9d8d5f76939b63cce80f5b68c3fa3d4c3` | `90851a3bc5fb36210d0d6bbb256d5de539712e8084490159e8de5d723bf2eb7b` |
+| glm-5.3-flash, default reasoning (`741a191`) | `169f48243f465d7eacc3048b3afd041b9cb37fafe7dba1cd89dc75e2fcf94e3d` | `0469f8c2f8d563408395e0704b3b906a6b1b5a53a6a84202ee74280bb25293a9` (rerun) |
+| glm-5.3-flash, `reasoning_effort` low (`8f51ba1`) | `d40382376d81210641195a1777e4376008230b4470c647f5a50c97cc5309d25e` | `7294d95cc2e21f956eaf3f937424edaaf925a30b636208a277a977c2c6a89f40` |
+
+The provider refuses to disable reasoning for glm-5.3-flash ("always engages in
+thinking"; it offers low, high or max), so `{"reasoning_effort": "low"}` through
+`--external-request-options` (spec 0.46) is the lowest setting. Every external
+call of that arm recorded these options in model.started.
+
+| Measure | glm-4.6 | glm-5.3-flash default | glm-5.3-flash low |
+|---|---|---|---|
+| Corpus task success, all modes | 88/156 | 85/156 | 90/156 |
+| auto (gains/losses against glm-4.6) | 41/52 | 40/52 (4/5) | 40/52 (4/5) |
+| external_only (gains/losses) | 36/52 | 33/52 (5/8) | 40/52 (7/3) |
+| local_only (gains/losses) | 11/52 | 12/52 (1/0) | 10/52 (0/1) |
+| First useful content p50/p95 ms (n) | 8947/22241 (91) | 7037/48740 (98) | 5118/24546 (110) |
+| Completion p50/p95 ms, successful answers (n) | 10779/23583 (71) | 10491/49233 (78) | 9215/25147 (90) |
+| Latency errors / timeouts of 120 | 29/0 | 22/0 | 10/0 |
+| External first token p50/p95 ms, latency measured calls (n) | 6661/8944 (209) | 4369/7832 (230) | 3492/7237 (215) |
+| Corpus external calls; input/output/reasoning tokens | 224; 337398/26742/11651 | 247; 365839/46542/30499 | 228; 355698/15437/1522 |
+| Corpus calls with unknown usage | 4 | 14 | 0 |
+
+The latency errors are of two kinds, and there is no provider or network
+error in the valid attempts:
+
+| Latency errors of 120 | glm-4.6 | glm-5.3-flash default | glm-5.3-flash low |
+|---|---|---|---|
+| `lat-07` ended completed, expected waiting_input | 10 | 9 | 10 |
+| External budget exhausted (run failed `external_failed`) | 19 | 13 | 0 |
+| Total | 29 | 22 | 10 |
+
+The budget failures were `external_generations` (6) for all 19 of glm-4.6
+(9 `lat-10`, 10 `lat-12`) and for 11 of glm-5.3-flash default (4 `lat-10`,
+7 `lat-12`); the other 2 of that arm were `external_seconds` (30.0), one
+`lat-02` and one `lat-07`. `lat-07` ("Is it healthy?") is the
+clarification prompt: in 29 of its 30 runs across the three arms the run
+answered instead of asking for a clarification, and the tenth glm-5.3-flash
+default run is the `lat-07` budget failure above.
+
+Conditions:
+
+- The first glm-5.3-flash default latency attempt is retained and invalid: the
+  lid was closed at 10:38:57Z, six minutes in, and the host slept until
+  14:43:44Z, so 63 runs failed `provider_unreachable`. The rerun ran on mains
+  power with no sleep or wake event in the power log, as did every other cell.
+- The glm-4.6 cells used the M8 normal timing prior, the glm-5.3-flash arms
+  none; local_first admission never reads the prior, so only the recorded
+  prediction fields differ.
+- Revisions `741a191` and `8f51ba1` have identical `src`, `skills`,
+  `evaluation` and sandbox fixtures; only evaluation scripts differ. Python was
+  3.14.7 for the glm-4.6 cells and 3.14.9 for the others.
+- The three arms ran at different times of day, one pass each; provider load
+  and sampling are not controlled.
+
+On this machine glm-5.3-flash with low reasoning effort answered sooner and
+failed fewer requests than glm-4.6 (no external budget ran out; its 10 errors
+are the `lat-07` runs that answered instead of asking), with slightly higher
+overall corpus success (90/156 against 88/156; auto 40/52 against 41/52) and
+about a third of the output tokens of its own default reasoning. Its p95 first
+useful content (24.5 s) is close to glm-4.6's (22.2 s); with default reasoning
+it was more than twice as long. No monetary cost is claimed here. The package
+is in [`evidence/2026-10-27-external-model/`](evidence/2026-10-27-external-model/).

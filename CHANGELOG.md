@@ -15,6 +15,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Runner provider request options (RM25; spec 0.46, sections 12.2 and 14.1):
+  `--external-request-options JSON` on the corpus and latency runners writes
+  `external_model.request_options`, uses the launch file's checks, enters the
+  prior partition, and is recorded in the export configuration only when
+  declared, so earlier configurations keep their identity.
+
+- External model comparison evidence (RM25): glm-4.6, glm-5.3-flash, and
+  glm-5.3-flash with `reasoning_effort` low in the default configuration on
+  Apple M1, one pass each, with per-attempt archives in
+  `docs/evidence/2026-10-27-external-model/`. Operator configuration only; no
+  specification default changes.
+
 - Phase 2 live evidence (#134, #128, #125; RM16, RM25–RM29, RM31, RM32; AC19):
   the complete M8 matrix (31 cells) and M7 matrix (9 cells) on Apple M1
   with Z.ai glm-4.6 at revision 741a191, one pass per cell, with both offline

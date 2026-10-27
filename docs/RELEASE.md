@@ -26,6 +26,14 @@ State as of 2026-10-23, including the supplied Windows exports at
 
 ## Passing deterministic tests
 
+- `python -m pytest` for the external request options branch
+  (`eval/external-request-options`, spec 0.46): 4854 passed, 1 skipped,
+  13 live tests deselected, on Linux x86_64 (Ubuntu 26.04.1), Python
+  3.14.4, without `llama-server` on PATH, so
+  `tests/test_live_acceptance.py::test_gateway_start_and_healthy`
+  skips. `ruff check .` and `ruff format --check .` pass. This is not
+  the Apple M1 machine of the measured results; no run of this branch
+  on it is recorded here.
 - `python -m pytest` for the phase 2 evidence and spec 0.45 branch
   (`m8/evidence-decisions`): 4781 passed, 0 failed, 13 live tests
   deselected, on Apple M1, macOS 27.0.1, Python 3.14.9, with
@@ -64,6 +72,7 @@ i7-1165G7, 16 GiB RAM, Windows 11 Pro (build 26200), llama.cpp b11785
 | 2026-10-23 | Launcher start and live acceptance on x86-64 Windows (#110, AC15): 5 gateway starts, 67/68 gateway checks held, 6/30 model checks passed; no external model available (7 scenarios `not_run`); UI session errored (Playwright Chromium not installed) | `docs/evidence/2026-10-23-live-acceptance-windows-x64.json` |
 | 2026-10-23 | Latency benchmark on x86-64 Windows, local path, 120 measured requests (#110, AC15) | `docs/evidence/2026-10-23-latency-windows-x64.json` |
 | 2026-10-25, 2026-10-26 | Phase 2 M8 matrix (31 cells) and M7 matrix (9 cells), Z.ai `glm-4.6` (#134, #128, #125) | `docs/evidence/2026-10-26-phase2/` |
+| 2026-10-25, 2026-10-26 | External model comparison in the default configuration: glm-4.6, glm-5.3-flash, and glm-5.3-flash with `reasoning_effort` low (corpus 88, 85 and 90 of 156) | `docs/evidence/2026-10-27-external-model/` |
 
 Key measured numbers (Apple M1 only):
 

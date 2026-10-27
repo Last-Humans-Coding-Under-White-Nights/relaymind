@@ -1756,11 +1756,21 @@ class ExternalEndpoint:
     context_limit: int
     # The environment variable that holds the credential; the files name only this.
     key_env: str = EXTERNAL_KEY_ENV
+    # external_model.request_options, sent verbatim (spec 14.1); None declares none.
+    request_options: Mapping[str, object] | None = None
 
 
 def _toml(value: object) -> str:
+    if value is None:
+        # TOML has no null; json.dumps would write one the launcher cannot read.
+        raise ValueError("a launch file value cannot be null")
     if isinstance(value, Path):
         value = value.as_posix()
+    if isinstance(value, Mapping):
+        # An inline table; quoted keys keep any text a valid TOML key.
+        return "{ " + ", ".join(f"{_toml(str(k))} = {_toml(v)}" for k, v in value.items()) + " }"
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(_toml(v) for v in value) + "]"
     return json.dumps(value, ensure_ascii=False)
 
 
@@ -1846,6 +1856,11 @@ def gateway_config(
             f"model = {_toml(external.model)}",
             f"context_limit = {external.context_limit}",
             f"api_key_env = {_toml(external.key_env)}",
+            *(
+                []
+                if external.request_options is None
+                else [f"request_options = {_toml(external.request_options)}"]
+            ),
         ]
     if ui:
         lines += ["[ui]", 'mode = "live"']
