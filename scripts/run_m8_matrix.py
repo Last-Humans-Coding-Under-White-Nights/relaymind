@@ -377,7 +377,8 @@ def main(argv: list[str] | None = None) -> None:
     if source["dirty"] is not False:
         raise ValueError("execution requires the reviewed clean committed checkout")
     args.runtime = resolve_runtime(args.runtime)
-    if args.runtime.name not in ("llama-server", "llama-server.exe"):
+    # Windows names are case-insensitive; shutil.which may return llama-server.EXE.
+    if args.runtime.name.lower() not in ("llama-server", "llama-server.exe"):
         raise ValueError("runtime must name the llama-server executable selected through PATH")
     if not args.runtime.is_file():
         raise ValueError("pinned runtime binary missing")
