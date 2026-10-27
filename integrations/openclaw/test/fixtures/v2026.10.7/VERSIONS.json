@@ -1,0 +1,12 @@
+{
+  "openclaw": "2026.10.7",
+  "@openclaw/ai": "2026.10.7",
+  "openai": "7.27.0",
+  "node": "v24.22.1",
+  "os": "Linux 7.0.0-38-generic",
+  "machine": "x86_64",
+  "relaymind_revision": {
+    "head": "3888c2437d141f49928646872b701d44ffa238f8",
+    "dirty": true
+  }
+}
