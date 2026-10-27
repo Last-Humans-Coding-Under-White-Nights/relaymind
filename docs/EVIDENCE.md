@@ -2904,7 +2904,10 @@ Each arm is the default configuration (normal runtime, local_first,
 model_router, buffered, final answer pass, one call per generation, no
 prefetch) on the same 52-case, three-mode corpus (156 grades) and the same
 seeded 120-request latency schedule, one pass each. Only the external model and
-its declared request options change.
+its declared request options change. The glm-4.6 cells ran on 25 October 2026
+and the glm-5.3-flash arms on 26 October 2026 (UTC, from the exports'
+`started_at_utc`); the entry and its package are dated 27 October, when they
+were recorded.
 
 | Arm | Corpus export SHA-256 | Latency export SHA-256 |
 |---|---|---|
