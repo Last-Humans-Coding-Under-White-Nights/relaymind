@@ -297,7 +297,10 @@ if len(sys.argv) > 2 and sys.argv[2] == "rewrite":
     replayed = "".join(c for c in call["id"] if c.isascii() and c.isalnum())[:40]
     reply = {**reply, "tool_calls": [{**call, "id": replayed}]}
 messages += [reply, {"role": "tool", "tool_call_id": replayed, "content": result}]
-print(post(messages)["content"])
+final = post(messages)["content"]
+# The host's own report says ok whatever the tool did (macOS probe, C2).
+print(json.dumps({"ok": True, "status": "ok", "final": final,
+                  "toolSummary": {"calls": 1, "failures": 0 if decision == "allow" else 1}}))
 """
 
 
@@ -396,3 +399,99 @@ def test_a_host_that_rewrites_the_call_id_still_reaches_the_next_run(tmp_path):
     assert [p["proposal_id"] for p in check["proposed"]] == ["call_write_1"]
     assert check["result_reached_next_run"] is True
     assert check["passed"] is True
+
+
+# -- the host's own report is not task success (#137; section 12.5) ------------------------
+
+
+def test_the_host_report_is_kept_apart_from_the_checks(tmp_path):
+    """Section 12.5: the host said ok for a denied tool on the probe; only evidence passes."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_TOOL_HOST, "deny"],
+        tmp_path / "export.json",
+        scenario="tool-approve",
+    )
+    assert export["status"] == "completed"
+    check = export["checks"]
+    assert check["host_report"] == {"ok": True, "status": "ok", "tool_calls": 1, "tool_failures": 1}
+    assert check["sandbox_lines"] == 0
+    assert check["passed"] is False
+
+
+def test_a_host_report_that_is_not_json_is_recorded_as_absent(tmp_path):
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_HOST], tmp_path / "export.json", scenario="text-tool"
+    )
+    assert export["checks"]["host_report"] is None
+
+
+# -- the host exec policy scenarios (#137; RM08, RM33, AC24) -------------------------------
+
+# A stand-in for the host's exec tool under tools.exec.mode: deny returns the
+# host's error result and runs nothing; full runs the command in the sandbox.
+STUB_EXEC_HOST = """
+import json, os, subprocess, sys, urllib.request
+mode = sys.argv[1]
+base = os.environ["RELAYMIND_BASE_URL"]
+token = os.environ["RELAYMIND_APP_TOKEN"]
+sandbox = os.environ["RELAYMIND_TEST_SANDBOX"]
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+exec_tool = {"type": "function", "function": {"name": "exec", "parameters": {
+    "type": "object", "required": ["command"],
+    "properties": {"title": {"type": "string"}, "command": {"type": "string"}}}}}
+def post(messages):
+    body = {"model": "relaymind-client-tools", "messages": messages, "tools": [exec_tool]}
+    request = urllib.request.Request(
+        base + "/chat/completions", data=json.dumps(body).encode(), method="POST",
+        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+    with opener.open(request) as response:
+        return json.loads(response.read())["choices"][0]["message"]
+messages = [{"role": "user", "content": "Write the note with exec."}]
+reply = post(messages)
+(call,) = reply["tool_calls"]
+command = json.loads(call["function"]["arguments"])["command"]
+if mode == "full":
+    subprocess.run(command, shell=True, cwd=sandbox, check=True)
+    result = "(no output)"
+else:
+    result = json.dumps({"status": "error", "tool": "exec",
+                         "error": "exec denied: host=gateway security=deny"})
+replayed = "".join(c for c in call["id"] if c.isalnum())[:40]
+reply = {**reply, "tool_calls": [{**call, "id": replayed}]}
+messages += [reply, {"role": "tool", "tool_call_id": replayed, "content": result}]
+post(messages)
+print(json.dumps({"ok": True, "status": "ok"}))
+"""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stub host runs a POSIX shell command")
+@pytest.mark.parametrize(
+    ("scenario", "mode", "lines"),
+    [("exec-deny", "deny", 0), ("exec-full", "full", 1)],
+)
+def test_the_exec_policy_scenarios_check_the_sandbox_and_the_gateway(
+    tmp_path, scenario, mode, lines
+):
+    """RM08, RM33, AC24: the observed headless policy pair (macOS probe, C2): deny and full."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_EXEC_HOST, mode], tmp_path / "export.json", scenario=scenario
+    )
+    assert export["status"] == "completed", export["stderr"]
+    check = export["checks"]
+    assert check["sandbox_lines"] == lines
+    assert check["expected_sandbox_lines"] == lines
+    assert check["gateway_tool_executions"] == 0
+    assert [p["tool_name"] for p in check["proposed"]] == ["exec"]
+    assert check["result_reached_next_run"] is True
+    assert check["passed"] is True
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stub host runs a POSIX shell command")
+def test_an_exec_denial_that_ran_anyway_does_not_pass(tmp_path):
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_EXEC_HOST, "full"],
+        tmp_path / "export.json",
+        scenario="exec-deny",
+    )
+    assert export["checks"]["sandbox_lines"] == 1
+    assert export["checks"]["passed"] is False
