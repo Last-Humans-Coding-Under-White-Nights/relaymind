@@ -17,13 +17,17 @@
 //   before checkPayload; see src/provider.ts);
 // - after the response: an answer with no text and no call is a failure, never
 //   an empty success, and more than one call in one response is a failure,
-//   because the gateway exposes one call per response.
+//   because the gateway exposes one call per response;
+// - a gateway failure (an HTTP error or a streamed error event) keeps its code
+//   and gets one sanitized, actionable message (src/errors.ts, #138), in the
+//   error event and the result alike.
 //
 // The wrapper forwards every event in order and never changes emitted text: it
 // only replaces the terminal "done" event of a response that breaks a rule with
 // an "error" event. The host keeps its tools, its approvals, and its retries.
 import type { ProviderWrapStreamFnContext } from "openclaw/plugin-sdk/plugin-entry";
 
+import { describeFailure, gatewayFailure } from "./errors.ts";
 import { checkContext, checkOptions, checkPayload } from "./input-guard.ts";
 
 /** The host's stream function and the types it carries, from the public SDK. */
@@ -60,21 +64,47 @@ export function checkAnswer(message: AssistantMessage): AssistantMessage {
   return message;
 }
 
-function policed(inner: AssistantMessageEventStreamLike): AssistantMessageEventStreamLike {
+/**
+ * A gateway failure with the plugin's sanitized, actionable message (src/errors.ts);
+ * any other message unchanged. The gateway's code stays the error code.
+ */
+export function withGatewayMessage(
+  message: AssistantMessage,
+  secrets: readonly (string | undefined)[] = [],
+): AssistantMessage {
+  const failure = gatewayFailure(message);
+  if (failure === undefined) return message;
+  return { ...message, errorMessage: describeFailure(failure, secrets) };
+}
+
+/** The final message under the plugin's rules: the answer rule, then the error message. */
+function settle(message: AssistantMessage, secrets: readonly (string | undefined)[]) {
+  return withGatewayMessage(checkAnswer(message), secrets);
+}
+
+function policed(
+  inner: AssistantMessageEventStreamLike,
+  secrets: () => readonly (string | undefined)[],
+): AssistantMessageEventStreamLike {
+  let settled: AssistantMessage | undefined;
+  const final = (message: AssistantMessage) => (settled ??= settle(message, secrets()));
   return {
     async *[Symbol.asyncIterator](): AsyncIterator<AssistantMessageEvent> {
       for await (const event of inner) {
         if (event.type === "done") {
-          const checked = checkAnswer(event.message);
+          const checked = final(event.message);
           if (checked !== event.message) {
             yield { type: "error", reason: "error", error: checked };
             continue;
           }
+        } else if (event.type === "error") {
+          yield { ...event, error: final(event.error) };
+          continue;
         }
         yield event;
       }
     },
-    result: async () => checkAnswer(await inner.result()),
+    result: async () => final(await inner.result()),
   };
 }
 
@@ -106,8 +136,14 @@ function refused(model: Model, error: Error): AssistantMessageEventStreamLike {
   };
 }
 
+export interface RelayMindStreamOptions {
+  /** The credential values seen in this process, removed from every message. */
+  secrets?: () => readonly (string | undefined)[];
+}
+
 /** The host's stream function with the guard before and the answer rule after. */
-export function relaymindStreamFn(base: StreamFn): StreamFn {
+export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStreamOptions = {}): StreamFn {
+  const secrets = streamOptions.secrets ?? (() => []);
   return async (model: Model, context: Context, options?: Options) => {
     try {
       checkContext(context);
@@ -123,6 +159,7 @@ export function relaymindStreamFn(base: StreamFn): StreamFn {
       checkPayload(next, context);
       return replaced;
     };
-    return policed(await base(model, context, { ...options, onPayload }));
+    const known = () => [...secrets(), options?.apiKey];
+    return policed(await base(model, context, { ...options, onPayload }), known);
   };
 }

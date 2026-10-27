@@ -218,6 +218,29 @@ describe("wrapStreamFn (the guard and the answer rule around the host transport,
   });
 });
 
+describe("the host's failover hooks (section 7.5, #138)", () => {
+  const { logger } = recordingLogger();
+  const provider = createRelayMindProvider({ pluginConfig: { baseUrl: BASE }, logger });
+  const overflow =
+    "RelayMind context_limit_exceeded (HTTP 400): The conversation does not fit. Gateway run run_1.";
+  const local = "RelayMind needs_external (HTTP 422): The request cannot complete. Gateway run run_1.";
+
+  it("matchesContextOverflowError is true only for context_limit_exceeded", () => {
+    expect(provider.matchesContextOverflowError?.({ errorMessage: overflow })).toBe(true);
+    expect(provider.matchesContextOverflowError?.({ errorMessage: local })).toBe(false);
+    expect(provider.matchesContextOverflowError?.({ errorMessage: "Connection error." })).toBeUndefined();
+  });
+
+  it("classifyFailoverReason names the class and leaves other errors to the host", () => {
+    expect(provider.classifyFailoverReason?.({ errorMessage: overflow })).toBe("context_overflow");
+    expect(provider.classifyFailoverReason?.({ errorMessage: local })).toBe("server_error");
+    expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "overloaded" })).toBe("overloaded");
+    expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "deadline_exceeded" })).toBe("timeout");
+    expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "unauthenticated" })).toBe("auth");
+    expect(provider.classifyFailoverReason?.({ errorMessage: "Connection error." })).toBeUndefined();
+  });
+});
+
 describe("catalog.run (the host hook)", () => {
   function context(apiKey: string | undefined, discoveryApiKey?: string, withSignal = true) {
     return {
