@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.49, OpenClaw host facts recorded on the wire (#135; RM33,
+  section 7.5): at v2026.10.7 the host's defaults for a loopback URL send
+  `stream_options` and, for a reasoning model, `reasoning_effort`; the
+  developer role is off by default there, and a developer switch turned on
+  places runtime context after the first user message. The plugin must also
+  keep the strict message keys, tool result name, and assistant-after-tool-result
+  switches off. The host refuses a request over the advertised context window
+  before sending it, so the window the plugin advertises is the larger limit
+  of the effective mode (external in auto and external_only). No gateway
+  contract change.
 - Specification 0.48, unsuitable detection from local stages (#170; RM26, RM27;
   section 14.4.7): the run store records, for every local stage, whether it ran out of
   local time, and handoff.started names the budget that stopped the local stage.
