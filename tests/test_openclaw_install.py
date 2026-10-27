@@ -230,3 +230,36 @@ def test_a_destination_inside_the_package_is_refused(node_dependencies):
     assert completed.returncode == 2
     assert "outside the package" in completed.stderr
     assert not (PACKAGE / "dist" / "x").exists()
+
+
+# -- CI (issue #145 item 2) -----------------------------------------------------------------
+
+
+def _ci_job(ci_text: str) -> dict:
+    import yaml
+
+    return yaml.safe_load(ci_text)["jobs"]["openclaw-plugin"]
+
+
+CI_FILE = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ci.yml"
+
+
+def test_ci_builds_tests_and_runs_the_artifact_through_the_pinned_host_on_each_platform():
+    """CI checks the declared host range, builds the release, and runs the host lifecycle."""
+    job = _ci_job(CI_FILE.read_text("utf-8"))
+    assert job["strategy"]["matrix"]["os"] == ["ubuntu-latest", "macos-latest", "windows-latest"]
+    assert job["env"]["RELAYMIND_OPENCLAW_NODE"] == "1"
+    (node,) = [s for s in job["steps"] if s.get("uses", "").startswith("actions/setup-node")]
+    engines = json.loads((PACKAGE / "package.json").read_text("utf-8"))["engines"]["node"]
+    # The lowest Node the pinned host accepts.
+    assert node["with"]["node-version"] == "24.22.1"
+    assert engines.startswith(">=24.22.1 ")
+    runs = "\n".join(s.get("run", "") for s in job["steps"])
+    for command in ("npm ci", "npm run typecheck", "npm test", "npm run pack:release"):
+        assert command in runs
+    assert "scripts/openclaw_install_check.py" in runs
+    assert "pytest -m live" not in runs
+    # Every OpenClaw test module runs with Node required, so none silently skips.
+    tests = Path(__file__).resolve().parent
+    for module in sorted(tests.glob("test_openclaw_*.py")):
+        assert f"tests/{module.name}" in runs, module.name

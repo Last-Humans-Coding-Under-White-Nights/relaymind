@@ -37,3 +37,78 @@ jobs:
 
       - name: Test
         run: pytest
+
+  # The OpenClaw provider plugin (#145; RM33, section 7.5): type, test, and a
+  # reproducible release build; the transport and plugin tiers against the real
+  # gateway over doubles (RELAYMIND_OPENCLAW_NODE=1 makes a missing dependency a
+  # failure, not a skip); then the release artifact through the pinned host's CLI
+  # lifecycle in an isolated host home. The gateway answers from doubles: this is
+  # a functional check on a GitHub runner, never live model evidence and never a
+  # qualification of a user's machine (section 12.5). Live tests stay opt-in.
+  openclaw-plugin:
+    strategy:
+      fail-fast: false
+      matrix:
+        # The pinned host documents macOS, Linux, and native Windows (WSL2 optional).
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      RELAYMIND_OPENCLAW_NODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # The lower bound of the pinned host's engines (>=24.22.1 <25 || >=26.12.1).
+          node-version: '24.22.1'
+          cache: npm
+          cache-dependency-path: integrations/openclaw/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        run: |
+          pip install -e ".[dev]"
+          npm ci --prefix integrations/openclaw
+
+      - name: Typecheck
+        working-directory: integrations/openclaw
+        run: npm run typecheck
+
+      - name: Plugin tests
+        working-directory: integrations/openclaw
+        run: npm test
+
+      - name: Release artifact
+        working-directory: integrations/openclaw
+        run: npm run pack:release -- ../../release/openclaw
+
+      - name: Transport, plugin, and artifact tiers
+        run: >
+          pytest tests/test_openclaw_host_transport.py tests/test_openclaw_plugin.py
+          tests/test_openclaw_round_trips.py tests/test_openclaw_cancel_errors.py
+          tests/test_openclaw_qualification_script.py tests/test_openclaw_host_captures.py
+          tests/test_openclaw_request_size.py tests/test_openclaw_install.py
+          tests/test_openclaw_install_check.py
+
+      - name: Pinned host lifecycle (install, inspect, round trips, removal)
+        run: |
+          tarball="release/openclaw/$(node -p "require('./release/openclaw/release.json').filename")"
+          python scripts/openclaw_install_check.py --tarball "$tarball" \
+            --out "ci-evidence/openclaw-install-check-${{ matrix.os }}.json" \
+            --label "GitHub Actions ${{ matrix.os }} runner, Node $(node --version)" \
+            -- node integrations/openclaw/node_modules/openclaw/openclaw.mjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: openclaw-plugin-${{ matrix.os }}
+          path: |
+            release/openclaw/
+            ci-evidence/
+          if-no-files-found: warn
