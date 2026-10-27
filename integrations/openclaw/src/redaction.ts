@@ -17,7 +17,7 @@ export interface Logger {
 export function redact(text: string, secrets: readonly (string | undefined)[]): string {
   let out = text;
   for (const secret of secrets) {
-    if (secret) out = out.split(secret).join(REDACTED);
+    if (secret) out = out.replaceAll(secret, REDACTED);
   }
   return out.replace(/\b(Bearer)\s+(?!<redacted>)\S+/gi, `$1 ${REDACTED}`);
 }

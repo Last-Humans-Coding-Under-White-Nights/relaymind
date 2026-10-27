@@ -55,13 +55,21 @@ export interface DiscoverParams {
   signal?: AbortSignal;
 }
 
+/**
+ * The advertised context window: the larger limit the mode can use. The host
+ * refuses a request over it before sending, so a local window in auto would
+ * refuse requests the gateway sends to the external model.
+ */
+function advertisedWindow(config: RelayMindPluginConfig): { window: number | undefined; local: boolean } {
+  const local = config.executionMode === "local_only";
+  const { externalContextLimit, localContextLimit } = config.limits;
+  return { window: local ? localContextLimit : externalContextLimit, local };
+}
+
 /** The model entry of the alias for the configured mode and limits (section 7.5). */
 export function catalogModel(config: RelayMindPluginConfig): RelayMindCatalogModel {
-  const { externalContextLimit, localContextLimit, maxCompletionTokens } = config.limits;
-  // The advertised window is the larger limit the mode can use: the host refuses
-  // a request over it before sending, so a local window in auto would refuse
-  // requests the gateway sends to the external model.
-  const window = config.executionMode === "local_only" ? localContextLimit : externalContextLimit;
+  const { maxCompletionTokens } = config.limits;
+  const { window } = advertisedWindow(config);
   const entry = relaymindModelEntry({
     baseUrl: config.baseUrl,
     ...(window !== undefined ? { contextWindow: window } : {}),
@@ -76,8 +84,7 @@ export function catalogModel(config: RelayMindPluginConfig): RelayMindCatalogMod
 
 function describeLimits(config: RelayMindPluginConfig): string {
   const mode = config.executionMode;
-  const local = mode === "local_only";
-  const window = local ? config.limits.localContextLimit : config.limits.externalContextLimit;
+  const { window, local } = advertisedWindow(config);
   const which = local ? "local limit" : "external limit";
   const windowText =
     window === undefined
@@ -151,78 +158,57 @@ function modeReadiness(
   return { ready, reason: typeof reason === "string" ? reason : null };
 }
 
+/** A discovery that publishes nothing. */
+const nothing = (kind: DiagnosisKind, message: string): Discovery => ({ diagnosis: { kind, message }, models: [] });
+
 /** Ask the gateway what it serves and whether the configured mode is ready. */
 export async function discoverRelayMind(params: DiscoverParams): Promise<Discovery> {
   const { config, token, signal } = params;
   const fetchImpl = params.fetch ?? fetch;
   const where = `RelayMind gateway at ${config.baseUrl}`;
   if (!token) {
-    return {
-      diagnosis: {
-        kind: "no_credential",
-        message: `No RelayMind application token is stored for the relaymind provider. ${TOKEN_HANDOVER}`,
-      },
-      models: [],
-    };
+    return nothing(
+      "no_credential",
+      `No RelayMind application token is stored for the relaymind provider. ${TOKEN_HANDOVER}`,
+    );
   }
   let listing: Response;
   try {
     listing = await get(`${config.baseUrl}/models`, token, fetchImpl, signal);
   } catch (error) {
     if (!(error instanceof Unreachable)) throw error;
-    return {
-      diagnosis: {
-        kind: "gateway_unreachable",
-        message:
-          `RelayMind gateway unreachable at ${config.baseUrl}: ${error.message}. Start it with ` +
-          "`relaymind serve --config <file>` and check the plugin's baseUrl.",
-      },
-      models: [],
-    };
+    return nothing(
+      "gateway_unreachable",
+      `RelayMind gateway unreachable at ${config.baseUrl}: ${error.message}. Start it with ` +
+        "`relaymind serve --config <file>` and check the plugin's baseUrl.",
+    );
   }
   if (isRedirect(listing)) {
-    return {
-      diagnosis: {
-        kind: "gateway_error",
-        message: `${where} answered GET /v1/models with a redirect; the plugin never follows a redirect with the credential.`,
-      },
-      models: [],
-    };
+    return nothing(
+      "gateway_error",
+      `${where} answered GET /v1/models with a redirect; the plugin never follows a redirect with the credential.`,
+    );
   }
   if (listing.status === 401) {
-    return { diagnosis: { kind: "auth_failed", message: RECONNECT }, models: [] };
+    return nothing("auth_failed", RECONNECT);
   }
   const body = await readJson(listing);
   if (!listing.ok) {
-    return {
-      diagnosis: {
-        kind: "gateway_error",
-        message: `${where} answered GET /v1/models with HTTP ${listing.status}${errorCode(body)}.`,
-      },
-      models: [],
-    };
+    return nothing("gateway_error", `${where} answered GET /v1/models with HTTP ${listing.status}${errorCode(body)}.`);
   }
   const data = (body as { data?: unknown } | undefined)?.data;
   if (!Array.isArray(data)) {
-    return {
-      diagnosis: { kind: "gateway_error", message: `${where} did not return a model list.` },
-      models: [],
-    };
+    return nothing("gateway_error", `${where} did not return a model list.`);
   }
   if (!data.some((model) => (model as { id?: unknown })?.id === MODEL_ID)) {
-    return {
-      diagnosis: {
-        kind: "alias_absent",
-        message:
-          `${where} does not serve ${MODEL_ID}: client-owned execution is not configured on the ` +
-          "gateway, so no model is published. `relaymind serve` serves it; check that baseUrl names " +
-          "that gateway.",
-      },
-      models: [],
-    };
+    return nothing(
+      "alias_absent",
+      `${where} does not serve ${MODEL_ID}: client-owned execution is not configured on the ` +
+        "gateway, so no model is published. `relaymind serve` serves it; check that baseUrl names " +
+        "that gateway.",
+    );
   }
-  const models = [catalogModel(config)];
-  return { diagnosis: await readiness(config, token, fetchImpl, signal), models };
+  return { diagnosis: await readiness(config, token, fetchImpl, signal), models: [catalogModel(config)] };
 }
 
 async function readiness(
@@ -243,10 +229,8 @@ async function readiness(
   try {
     response = await get(readyzUrl, token, fetchImpl, signal);
   } catch (error) {
-    if (!(error instanceof Unreachable)) {
-      if (signal?.aborted) throw error;
-      return unknown("GET /readyz failed");
-    }
+    // get() rethrows only the host's abort; everything else is Unreachable.
+    if (!(error instanceof Unreachable)) throw error;
     return unknown(`GET /readyz: ${error.message}`);
   }
   if (isRedirect(response) || (response.status !== 200 && response.status !== 503)) {
@@ -277,8 +261,10 @@ async function readiness(
   };
 }
 
+type OutcomeStatus = "ready" | "auth-rejected" | "unavailable";
+
 /** The host's per-provider catalog outcome status for a diagnosis. */
-const OUTCOME: Record<Exclude<DiagnosisKind, "no_credential">, "ready" | "auth-rejected" | "unavailable"> = {
+const OUTCOME: Record<Exclude<DiagnosisKind, "no_credential">, OutcomeStatus> = {
   ready: "ready",
   gateway_unreachable: "unavailable",
   gateway_error: "unavailable",
@@ -298,7 +284,7 @@ export interface RelayMindCatalogResult {
     apiKey?: string;
     models: RelayMindCatalogModel[];
   };
-  outcomes: { provider: typeof PROVIDER_ID; status: "ready" | "auth-rejected" | "unavailable" }[];
+  outcomes: { provider: typeof PROVIDER_ID; status: OutcomeStatus }[];
 }
 
 /**
