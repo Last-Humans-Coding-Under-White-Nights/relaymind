@@ -23,9 +23,12 @@
 // relaymind_test_write appends one line to a file in scenario.sandboxDir and is
 // gated by scenario.approval ("deny" or "allow"), which stands in for the
 // host's permission and approval policy: a denied call is not executed and the
-// host sends an error result instead. This is the deterministic stand-in; the
-// real host's approval prompt is the host CLI tier (scripts/openclaw_qualification.py
-// host --scenario tool-deny|tool-approve), run by an operator or CI.
+// host sends an error result instead. Each call ID is replayed the way the
+// pinned host does (hostReplayedCallId: underscores and the other
+// non-alphanumerics removed) unless scenario.replayCallIds is "verbatim". This
+// is the deterministic stand-in; the real host's policy is the host CLI tier
+// (scripts/openclaw_qualification.py host --scenario exec-deny|exec-full, and
+// tool-deny|tool-approve with an approval surface), run by an operator or CI.
 import "openclaw/plugin-sdk/provider-transport-runtime";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -84,6 +87,37 @@ export const HOST_TOOLS = {
 };
 
 const MUTATING = new Set(["relaymind_test_write"]);
+
+/**
+ * The ID the pinned host sends back for a call ID it received (section 7.5).
+ * Observed on the macOS host probe (OpenClaw 2026.10.7): call_probe_1 came
+ * back as callprobe1, in the assistant call and the tool result alike. The rest
+ * is the pinned source's "strict" rule (src/agents/tool-call-id.ts), applied to
+ * an openai-completions model whose provider declares no replay policy: keep
+ * [A-Za-z0-9], at most 40 characters. The source's hash for IDs that collide
+ * after that is not reproduced. Mirrors host_replayed_call_id in
+ * scripts/openclaw_qualification.py.
+ */
+export function hostReplayedCallId(id) {
+  return id.replace(/[^A-Za-z0-9]/g, "").slice(0, 40);
+}
+
+/**
+ * A call ID as the host replays it in the next request: scenario.replayCallIds
+ * "host" (the default, what the pinned host does) or "verbatim".
+ */
+function replayId(scenario, id) {
+  return scenario.replayCallIds === "verbatim" ? id : hostReplayedCallId(id);
+}
+
+function replayedAssistant(scenario, message) {
+  return {
+    ...message,
+    content: message.content.map((block) =>
+      block.type === "toolCall" ? { ...block, id: replayId(scenario, block.id) } : block,
+    ),
+  };
+}
 
 /** The host's side of one call: its approval policy, then its own execution. */
 function executeHostTool(scenario, call, approvals) {
@@ -185,7 +219,7 @@ async function converse(provider, fullModel, scenario, apiKey, output) {
     const message = await events.result();
     output.results.push({ ...summarize(message), text_deltas: deltas.join("") });
     if (message.stopReason !== "toolUse") break;
-    context.messages.push(message);
+    context.messages.push(replayedAssistant(scenario, message));
     for (const call of message.content.filter((block) => block.type === "toolCall")) {
       const outcome = executeHostTool(scenario, call, approvals);
       if (outcome.executed) {
@@ -193,7 +227,7 @@ async function converse(provider, fullModel, scenario, apiKey, output) {
       }
       context.messages.push({
         role: "toolResult",
-        toolCallId: call.id,
+        toolCallId: replayId(scenario, call.id),
         toolName: call.name,
         content: [{ type: "text", text: outcome.text }],
         isError: outcome.isError,

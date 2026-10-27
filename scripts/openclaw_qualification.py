@@ -453,10 +453,36 @@ def _text(output: bytes | str | None) -> str:
 
 WRITE_TOOL = "relaymind_test_write"
 WRITE_FILE = "note.txt"
+# The pinned host's replay rule for a tool call ID (section 7.5).
+HOST_CALL_ID_LIMIT = 40
 
 
 def write_call(call_id: str = "call_write_1") -> list:
     return tool_turn(WRITE_TOOL, call_id=call_id, name=WRITE_FILE, line="written by the host")
+
+
+def host_replayed_call_id(call_id: str) -> str:
+    """The ID the pinned host sends back for a call ID it received (section 7.5).
+
+    Observed on the macOS probe (OpenClaw 2026.10.7): ``call_probe_1`` was
+    replayed as ``callprobe1``, in the assistant call and the tool message
+    alike. The rest of the rule is read from the pinned source
+    (``src/agents/tool-call-id.ts``, "strict" mode, applied to an
+    openai-completions model whose provider declares no replay policy): only
+    ``[A-Za-z0-9]`` is kept, at most 40 characters. The source's extra hash
+    for two IDs that collide after that is not reproduced; such a reply does
+    not match here and is reported, never guessed.
+    """
+    kept = "".join(c for c in call_id if c.isascii() and c.isalnum())
+    return kept[:HOST_CALL_ID_LIMIT]
+
+
+def answers_call(issued: str, replayed: str) -> bool:
+    """Whether a later request's ID refers to a call the gateway issued.
+
+    Never an exact-string match alone: the host rewrites the IDs it replays.
+    """
+    return bool(replayed) and replayed in {issued, host_replayed_call_id(issued)}
 
 
 # The scripted turns of each host scenario, and the sandbox lines it must leave.
@@ -477,7 +503,11 @@ HOST_SCENARIOS: dict[str, tuple[Callable[[], list], int | None]] = {
 def host_checks(
     scenario: str, status: str, runs: Sequence[Mapping], requests: Sequence, sandbox: Path
 ) -> dict:
-    """What the scenario must show, read from the sandbox and the gateway (section 12.5)."""
+    """What the scenario must show, read from the sandbox and the gateway (section 12.5).
+
+    The call ID is matched the way the host rewrites it, never by the exact
+    string the gateway issued (section 7.5).
+    """
     expected = HOST_SCENARIOS[scenario][1]
     note = sandbox / WRITE_FILE
     lines = len(note.read_text("utf-8").splitlines()) if note.exists() else 0
@@ -488,9 +518,9 @@ def host_checks(
         if e["type"] == "tool.proposed"
     ]
     executions = sum(1 for run in runs for e in run["events"] if e["type"] == "tool.started")
-    ids = {p["proposal_id"] for p in proposed}
+    ids = [p["proposal_id"] for p in proposed if p["proposal_id"]]
     reached = any(
-        m.role.value == "tool" and m.tool_call_id in ids
+        m.role.value == "tool" and any(answers_call(i, m.tool_call_id or "") for i in ids)
         for request in requests[1:]
         for m in request.messages
     )

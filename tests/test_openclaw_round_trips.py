@@ -28,7 +28,7 @@ import pytest
 
 from api_helpers import RUN_ID_HEADER, RunningServer, make_app, token_of
 from gateway_helpers import build_gateway, replace_handler, text_turn, tool_turn
-from helpers import ScriptedAdapter, make_capabilities, of_type
+from helpers import ScriptedAdapter, load_script_module, make_capabilities, of_type
 from relaymind.adapters import Completed, Role, ToolCall
 from relaymind.api.app import ChatSettings, NativeSettings
 from relaymind.api.chat import ClientToolsChat
@@ -39,6 +39,8 @@ from relaymind.orchestrator.performance import PerformanceSettings
 from relaymind.orchestrator.route_decision import ExecutionMode
 from test_openclaw_host_transport import REQUIRED, _missing, body_keys_outside_7_1
 from test_openclaw_plugin import MODE_HEADER, drive_plugin, inference
+
+qualification = load_script_module("openclaw_qualification")
 
 SYSTEM_PROMPT = "You are a test host. Use the sandbox tools when asked."
 ECHO = "relaymind_test_echo"
@@ -137,23 +139,38 @@ def test_a_host_tool_round_trip_through_the_plugin(tmp_path, stream):
     (tool,) = first["request"]["body"]["tools"]
     assert tool["function"]["name"] == ECHO
     assert [t.name for t in gateway.adapter.requests[0].tool_schemas] == [ECHO]
-    # The second request carries the call and the host's result with the same ID.
+    # The second request carries the call and the host's result with one ID: the
+    # host's rewrite of the issued one (section 7.5), the same in both messages.
     messages = second["request"]["body"]["messages"]
     assert [m["role"] for m in messages] == ["system", "user", "assistant", "tool"]
-    assert messages[2]["tool_calls"][0]["id"] == "call_echo_1"
+    assert messages[2]["tool_calls"][0]["id"] == "callecho1"
     assert messages[3] == {
         "role": "tool",
         "content": "echo: lantern",
-        "tool_call_id": "call_echo_1",
+        "tool_call_id": "callecho1",
     }
     passed = tool_message(gateway.adapter.requests[1])
-    assert (passed.tool_call_id, passed.content) == ("call_echo_1", "echo: lantern")
+    assert (passed.tool_call_id, passed.content) == ("callecho1", "echo: lantern")
     first_run, second_run = run_ids(output)
     assert first_run != second_run
     (proposed,) = of_type(gateway_executed_nothing(gateway, first_run), "tool.proposed")
     assert proposed.payload["proposal_id"] == "call_echo_1"
+    # Correlation across the two runs never relies on the exact issued string.
+    assert qualification.answers_call(proposed.payload["proposal_id"], passed.tool_call_id)
     assert not of_type(gateway_executed_nothing(gateway, second_run), "tool.proposed")
     assert gateway.external.requests == []
+
+
+def test_the_gateway_accepts_a_verbatim_replay_as_well(tmp_path):
+    """Section 7.1: the same-request check holds for the issued ID and the host's rewrite."""
+    gateway, app = client_gateway(
+        tmp_path, [echo_call("call_echo_1"), text_turn(ANSWER)], external_turns=[]
+    )
+    output = drive(
+        app, tmp_path, prompt="Echo lantern.", hostTools=[ECHO], replayCallIds="verbatim"
+    )
+    assert [r["stop_reason"] for r in output["results"]] == ["toolUse", "stop"]
+    assert tool_message(gateway.adapter.requests[1]).tool_call_id == "call_echo_1"
 
 
 def test_a_host_tool_named_like_a_gateway_tool_is_never_run_by_the_gateway(tmp_path):
@@ -304,7 +321,7 @@ def test_a_mutation_the_host_denies_has_no_side_effect(tmp_path):
     gateway_executed_nothing(gateway, second_run)
     # The denial reached the model as the host's data, unchanged.
     passed = tool_message(gateway.adapter.requests[1])
-    assert passed.tool_call_id == "call_write_1"
+    assert passed.tool_call_id == "callwrite1"
     assert passed.content.startswith("denied by the host approval policy")
     assert output["results"][1]["text"] == "The host did not allow the write."
 
@@ -331,7 +348,7 @@ def test_a_mutation_the_host_allows_runs_exactly_once(tmp_path):
     for run_id in run_ids(output):
         gateway_executed_nothing(gateway, run_id)
     passed = tool_message(gateway.adapter.requests[1])
-    assert (passed.tool_call_id, passed.content) == ("call_write_1", "wrote one line to note.txt")
+    assert (passed.tool_call_id, passed.content) == ("callwrite1", "wrote one line to note.txt")
 
 
 def test_a_tool_result_is_passed_to_the_model_as_data(tmp_path):

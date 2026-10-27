@@ -291,7 +291,12 @@ if decision == "allow":
     result = "wrote one line"
 else:
     result = "denied by the host approval policy"
-messages += [reply, {"role": "tool", "tool_call_id": call["id"], "content": result}]
+replayed = call["id"]
+if len(sys.argv) > 2 and sys.argv[2] == "rewrite":
+    # What OpenClaw 2026.10.7 did on the macOS probe: call_probe_1 -> callprobe1.
+    replayed = "".join(c for c in call["id"] if c.isascii() and c.isalnum())[:40]
+    reply = {**reply, "tool_calls": [{**call, "id": replayed}]}
+messages += [reply, {"role": "tool", "tool_call_id": replayed, "content": result}]
 print(post(messages)["content"])
 """
 
@@ -355,3 +360,39 @@ def test_the_main_entry_passes_the_scenario(tmp_path, monkeypatch):
     assert seen["scenario"] == "tool-deny"
     with pytest.raises(SystemExit):
         qualification.main(["host", "--out", "x.json", "--scenario", "nope", "--", "true"])
+
+
+# -- the host's call ID rewrite (#137; RM19, section 7.5) ----------------------------------
+
+
+def test_the_host_replay_rule_is_the_observed_and_pinned_rewrite():
+    """Section 7.5: the host replays a call ID with only [A-Za-z0-9], at most 40 characters.
+
+    Observed on the macOS probe (OpenClaw 2026.10.7): call_probe_1 came back
+    as callprobe1. The other characters and the 40-character cap are read from
+    the pinned source (src/agents/tool-call-id.ts, "strict" mode), not observed.
+    """
+    replay = qualification.host_replayed_call_id
+    assert replay("call_probe_1") == "callprobe1"
+    assert replay("call_run_0123abcd_1") == "callrun0123abcd1"
+    assert replay("call-a.b:c") == "callabc"
+    assert replay("x" * 50) == "x" * 40
+    answers = qualification.answers_call
+    assert answers("call_write_1", "call_write_1")
+    assert answers("call_write_1", "callwrite1")
+    assert not answers("call_write_1", "callwrite2")
+    assert not answers("call_write_1", "")
+
+
+def test_a_host_that_rewrites_the_call_id_still_reaches_the_next_run(tmp_path):
+    """Section 7.5: no exact-string match across requests; the rewritten ID still answers."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_TOOL_HOST, "allow", "rewrite"],
+        tmp_path / "export.json",
+        scenario="tool-approve",
+    )
+    assert export["status"] == "completed", export["stderr"]
+    check = export["checks"]
+    assert [p["proposal_id"] for p in check["proposed"]] == ["call_write_1"]
+    assert check["result_reached_next_run"] is True
+    assert check["passed"] is True
