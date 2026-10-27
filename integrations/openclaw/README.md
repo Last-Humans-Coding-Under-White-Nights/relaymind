@@ -3,7 +3,8 @@
 Status: provider package (#136; RM08, RM12, RM19, RM26, RM33, spec section
 7.5) with text and host-owned tool round trips (#137) and cancellation, error
 mapping, retries, and run-ID correlation (#138), on top of the #135
-qualification. The plugin registers the `relaymind`
+qualification, and a release artifact, CI, and the operator guide below
+(#145). The plugin registers the `relaymind`
 provider through the public plugin SDK of OpenClaw v2026.10.7, publishes the
 client-owned alias `relaymind/relaymind-client-tools` when the gateway serves
 it, and holds the gateway's application token in the host's credential store.
@@ -25,6 +26,14 @@ Windows, are `not_run`. The `abort` (SIGINT mid-turn) and `external-failed`
 ([`docs/evidence/2026-10-28-openclaw-vps-functional-138/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-138/REPORT.md)):
 the run was cancelled, and the 503 was a named failure that the host
 retried 7 times; on macOS and Windows at this commit they are `not_run`.
+
+What has run on a real host, and what has not (details in
+[`docs/EVIDENCE.md`](../../docs/EVIDENCE.md#openclaw-plugin-platforms-145)):
+the whole install check of the release artifact
+(`scripts/openclaw_install_check.py`) passed against the pinned host on a
+Linux VPS, as a functional check over gateway doubles, not a
+supported-platform qualification. macOS and Windows runs of this revision
+are `not_run`; the CI job runs the same check on GitHub's runners.
 
 What the plugin claims, and nothing more: text input; at most one function
 call per response, executed by OpenClaw under its own approvals; the answer is
@@ -62,13 +71,204 @@ baseline are in
 | `src/input-guard.ts` | Unsupported input refused by field, never removed (#137) |
 | `src/diagnostics.ts`, `src/redaction.ts` | The capability statement and operator messages; the logger that scrubs the token |
 | `test/*.test.ts` | vitest: manifest, config, catalog, provider, redaction, the switches, the frozen fixtures |
-| `test/plugin-transport/drive-plugin.mjs` | plays the host around the plugin: register, catalog (or `resolveDynamicModel`), the conversation through the pinned transport wrapped by the plugin, the host's sandbox tools and approval decision, its abort signal, and a host retry of an unchanged request |
+| `test/plugin-transport/drive-plugin.mjs` | plays the host around the plugin (the checkout's sources, or the `entry` of an unpacked artifact): register, catalog (or `resolveDynamicModel`), the conversation through the pinned transport wrapped by the plugin, the host's sandbox tools and approval decision, its abort signal, and a host retry of an unchanged request |
 | `test/host-tool-plugin/` | test only, never packed: the `relaymind_test_echo` and `relaymind_test_write` host tools, every write behind the host's approval |
 | `test/host-transport/` | the #135 transport driver and recording proxy |
 | `test/fixtures/v2026.10.7/transport/` | the #135 deterministic transport fixtures, captured by `scripts/openclaw_qualification.py fixtures` |
 | `test/fixtures/v2026.10.7/host/` | reserved for captures made with `capture_host_requests.mjs`; the macOS host probe's captures are in `docs/evidence/2026-10-27-openclaw-mac-probe/` |
 | `scripts/capture_host_requests.mjs` | the controlled endpoint a real host is pointed at |
 | `scripts/pack-check.mjs` | checks the packed tarball: built entry, manifest, README, and public SDK imports only |
+| `scripts/release-pack.mjs` | `npm run pack:release -- <dir>`: the release artifact from a clean build, with `SHA256SUMS` and `release.json` (#145) |
+
+## Operator guide (#145)
+
+RM12, RM18, RM19, RM33; AC24; spec sections 7.5, 12.5, and 14. The steps use
+the command forms the pinned host (OpenClaw 2026.10.7) accepted on the macOS
+qualification and in the Linux VPS install check; the sections after this one
+hold the details. OpenClaw owns its sessions, tools, permissions, and
+approvals; RelayMind owns the inference, its checks, and its run trace.
+
+### 1. Requirements
+
+- OpenClaw 2026.10.7 exactly (`openclaw --version`): the package declares no
+  other release, and the host's own range check refuses it on another one.
+- Node `>=24.22.1 <25 || >=26.12.1`, the pinned host's engine range.
+- A RelayMind checkout with its Python install (`pip install -e .`), to start
+  the gateway.
+- The host and the gateway on the same machine: the plugin sends only to a
+  loopback `baseUrl` (`localhost`, `127.0.0.0/8`, `[::1]`), and the gateway
+  serves only loopback (section 7.1). A host in a container, a VM, or WSL2
+  with the gateway outside it is a different network and is not qualified.
+
+### 2. Start the gateway
+
+```bash
+relaymind serve --config relaymind.toml     # a copy of relaymind.example.toml
+```
+
+It prints `Serving on http://127.0.0.1:8080` and a new application token, once.
+The plugin never starts or stops the gateway. Local and external models are
+the gateway's configuration, not the plugin's: `[local_model]` (the pinned
+llama-server, `models/README.md`) and `[external_model]` (with its
+credential in `RELAYMIND_EXTERNAL_API_KEY` in the gateway's shell, never in
+OpenClaw). An `external_only` setup needs no local model; `local_only` makes
+zero external calls.
+
+Local context limit: an OpenClaw turn carries the host's ~30,000-character
+system prompt and its tool catalog. With the pinned tokenizer that is
+10,500 to 10,577 tokens per request (macOS qualification, branch
+`devnull.exile/m9-mac-qual`, commit `b575c01`), over the local model's 8192.
+So in `auto` every OpenClaw turn goes to the external model, and in
+`local_only` it is `needs_external` (`context_limit`); without an external
+model an OpenClaw turn cannot run. The local context stays 8192 (no runtime,
+manifest, or spec change).
+
+### 3. Get the release artifact
+
+Build it from a checkout (or take the CI job's uploaded artifact):
+
+```bash
+cd integrations/openclaw
+npm ci
+npm run pack:release -- ../../release/openclaw
+# release/openclaw/relaymind-openclaw-provider-0.1.0.tgz, SHA256SUMS, release.json
+```
+
+`pack:release` builds from a clean `dist/`, checks the package, and records
+the tarball's SHA-256, the pins, and the Node that built it. Two builds of
+one checkout are the same bytes, so a SHA-256 names a release.
+
+### 4. Install, configure, enable
+
+```bash
+openclaw plugins install npm-pack:release/openclaw/relaymind-openclaw-provider-0.1.0.tgz \
+  --force --accept-capabilities
+openclaw config set plugins.entries.relaymind.config.baseUrl http://127.0.0.1:8080/v1
+openclaw plugins enable relaymind
+openclaw plugins inspect relaymind --runtime --json   # status loaded, providerIds ["relaymind"], no diagnostics
+```
+
+Without `--accept-capabilities` the host refuses a local package (exit 1).
+It installs the plugin disabled until it is configured, so `plugins enable`
+is needed. Other settings (`executionMode`, `limits`, `maxRetries`,
+`diagnosticsPath`) are in "Configuration" below. A value outside the
+schema is refused by the host before the plugin runs (for example
+`executionMode: parallel_demo`); a non-loopback `baseUrl` is refused by the
+plugin at register (`plugins inspect` shows `status: error` with the reason).
+
+### 5. Store the token, and after every gateway restart
+
+```bash
+printf "%s\n" "$TOKEN" | openclaw models auth paste-api-key --provider relaymind
+openclaw models list --refresh --provider relaymind --json   # lists relaymind/relaymind-client-tools
+```
+
+The token is the one `relaymind serve` printed. Paste it on standard input:
+never as an argument and never in the plugin config. The gateway makes a new
+token at every start, so after a restart the stored one is stale. Requests
+and discovery then fail with 401 `unauthenticated` and the reconnect line
+("Token handover and reconnect" below). Store the new token the same way.
+That is the rotation: there is no other token to rotate. `models list` needs
+`--refresh` when no OpenClaw Gateway is running.
+
+### 6. Select the model
+
+```bash
+openclaw agent exec "Say hello" --model relaymind/relaymind-client-tools --json
+```
+
+Or set `relaymind/relaymind-client-tools` as the agent's model in the host
+config. The plugin serves this one client-owned alias and nothing else.
+Headless `agent exec` finds it through `resolveDynamicModel` ("How the host
+finds the model").
+
+### 7. Host permissions and approvals
+
+They are OpenClaw's. The gateway proposes at most one call per response and
+never runs, approves, or certifies a host tool (RM08, RM33). Headless
+`agent exec` has no approval surface: `tools.exec.mode: "ask"` fails closed,
+`deny` blocks, and `full` runs. The host's `"ok": true` is not task success:
+it says so for a denied tool too. Check the tool's effect and the gateway
+trace.
+
+### 8. Cancellation and errors
+
+Ctrl-C (SIGINT) on the host closes the request, and the gateway cancels the
+run that request owns (exit 130, no JSON report). Every gateway error
+reaches the host as one failure that names the gateway's code and run, never
+an empty answer. See "Cancellation, errors, and retries" for the table.
+Troubleshooting:
+
+| Symptom | Cause and fix |
+| --- | --- |
+| `Unknown model: relaymind/relaymind-client-tools` | the plugin is not enabled or not loaded (`plugins inspect relaymind --runtime --json`), or it is a package older than `resolveDynamicModel` (#136) |
+| catalog line `RelayMind gateway unreachable at ...` | the gateway is not running at `baseUrl`: start it, check the port |
+| `RelayMind rejected the stored application token (HTTP 401 unauthenticated)` | stale token after a gateway restart: step 5 |
+| `RelayMind needs_external (HTTP 422)`, reason `context_limit` | the turn is over the local limit in `local_only`, or no external model is configured (step 2) |
+| `RelayMind execution_mode_forbidden (HTTP 403)` | the gateway's `allowed_modes` does not permit the plugin's `executionMode` |
+| `RelayMind overloaded (HTTP 429)` | another run holds the gateway's execution slot; retry, or set `maxRetries` |
+| install exit 1, "requires capability consent" | add `--accept-capabilities` |
+| `plugins uninstall` asks for confirmation | add `--force` without a terminal |
+
+### 9. Trace inspection
+
+Every response carries `X-RelayMind-Run-ID`. With `diagnosticsPath` the
+plugin appends one JSON line per attempt with the run ID and the links
+("Diagnostics"). The gateway's run view and events are
+`GET /relay/v1/runs/<run_id>` and `/relay/v1/runs/<run_id>/events`, and with
+the demo UI configured, `/ui/runs/<run_id>`. All of them need the
+application token. One OpenClaw turn with a tool call is several RelayMind
+runs (the call, then each result), and they share the record's `turn`.
+The trace is authoritative for model calls. The host's usage fields for this
+provider are not a measurement (unified usage is unknown).
+
+### 10. Update and roll back
+
+The package declares exactly one OpenClaw release. A host update to another
+release makes the host refuse the plugin until a release qualified on it is
+installed. Update by installing the new artifact over the old one, and roll
+back by installing the previous tarball the same way. Check its SHA-256
+against the `SHA256SUMS` you kept:
+
+```bash
+openclaw plugins install npm-pack:<previous>.tgz --force --accept-capabilities
+openclaw plugins inspect relaymind --runtime --json
+```
+
+Whether an install over an existing one keeps `plugins.entries.relaymind`
+and the stored token was not checked (`not_run`). After it, check with
+`plugins inspect` and `models list --refresh`, and repeat steps 4 and 5 if
+either is gone.
+
+### 11. Disable and remove
+
+```bash
+openclaw plugins disable relaymind                  # keeps the install, config, and token
+openclaw plugins uninstall relaymind --force
+openclaw config unset plugins.entries.relaymind     # uninstall leaves {"enabled": false}
+openclaw models auth logout relaymind:manual --yes  # uninstall leaves the stored token
+```
+
+Uninstall removes the package, its install record, and its directory. On
+the pinned host it leaves the config entry and the `relaymind:manual` auth
+profile, and the token stays in the host's state database. The last two
+commands remove them. The install check verifies that afterwards no config
+entry, no profile, and no copy of the token remain in the host home. The
+host's `openclaw.json.bak*` backups hold no token. On the macOS probe an
+earlier install's folders were also left; remove them by hand if
+`plugins list` no longer shows the plugin.
+
+### 12. What the integration does not do
+
+- No live token streaming: the gateway buffers the answer and sends it whole
+  (a streamed response replays a finished run).
+- One call per response, and no parallel tool calls.
+- Small local context: see step 2. The plugin never trims or summarizes a
+  conversation to make it fit.
+- No managed skill selection, prefetch, or skill stage, and no managed
+  device-aware placement: client-owned execution has none (section 7.5).
+- Usage is unknown: the chat responses carry none. The run trace is the
+  record.
 
 ## Configuration
 
@@ -452,7 +652,12 @@ npm ci
 npm run typecheck
 npm test
 npm run pack:check     # builds dist/ and checks the packed tarball
+npm run pack:release -- ../../release/openclaw   # the release artifact, SHA256SUMS, release.json
 ```
+
+`pack:release` refuses a destination inside the package (the build would
+delete it, or the next pack could ship it); `release/` at the repository root
+is ignored by git.
 
 From the repository root, the Python tier runs the transport and the plugin
 against the real gateway over model doubles (it skips without `npm ci`; set
@@ -461,8 +666,18 @@ against the real gateway over model doubles (it skips without `npm ci`; set
 ```bash
 pytest tests/test_openclaw_host_transport.py tests/test_openclaw_plugin.py \
   tests/test_openclaw_round_trips.py tests/test_openclaw_cancel_errors.py \
-  tests/test_openclaw_qualification_script.py
+  tests/test_openclaw_qualification_script.py tests/test_openclaw_install.py \
+  tests/test_openclaw_install_check.py
 ```
+
+`tests/test_openclaw_install.py` checks the locked pins, that two release
+builds are the same bytes, that the tarball holds only the runtime files,
+and that the plugin round-trips text and a host tool from the unpacked
+artifact (not the checkout) through the pinned transport. It also checks that
+CI runs every OpenClaw test module. `tests/test_openclaw_install_check.py`
+checks the install check against a stub host. CI's `openclaw-plugin` job runs
+all of it on ubuntu, macOS, and Windows runners, then the install check with
+the pinned host.
 
 To recapture the transport fixtures (they must not change on the same pins):
 
@@ -529,6 +744,53 @@ After these two commands no file under the isolated host home held the
 token (Linux VPS functional check). The host also leaves `config.json.bak*`
 files from each config change; they did not hold the token. The full
 operator guide is #145.
+
+### Install check: the release artifact through a real host
+
+`scripts/openclaw_install_check.py` runs the operator guide's lifecycle with
+the pinned host against a gateway over model doubles, in a fresh host home
+(`OPENCLAW_HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_CONFIG_PATH`; the host's
+file log moved into it with `logging.file`):
+
+1. version;
+2. install with `--accept-capabilities`;
+3. `baseUrl`, enable, and inspect (loaded, the `relaymind` provider, no
+   diagnostics);
+4. the token through `paste-api-key` on standard input;
+5. `models list --refresh` listing the alias;
+6. a text exchange and a host-tool exchange (`agent exec`). In the tool
+   exchange the doubles propose the host's own `read` tool for `notes.txt`
+   in a sandbox, and the host's result must reach the next run with the
+   file's text, matched through the host's call ID rewrite;
+7. disable and uninstall;
+8. the removal of the config entry and the credential uninstall leaves.
+
+The token is never an argument, never in the host's environment, and never
+written to the export. The gateway trace and the sandbox decide a pass;
+the host's `"ok": true` does not.
+
+```bash
+cd integrations/openclaw && npm ci && npm run pack:release -- ../../release/openclaw && cd ../..
+python scripts/openclaw_install_check.py \
+  --tarball release/openclaw/relaymind-openclaw-provider-0.1.0.tgz \
+  --out docs/evidence/<date>-openclaw-install-check-<machine>.json \
+  --label "<machine>, <OS and version>, Node <version>, native|WSL2" \
+  -- node integrations/openclaw/node_modules/openclaw/openclaw.mjs   # or: -- openclaw
+```
+
+It prints `{"status", "passed", "failed"}` and exits 0 only when every step
+passed. A host that cannot start is `not_run`. The export records each step's
+command, exit code, duration, and output, the gateway runs with their
+events, the host's report, and what was left after uninstall and after
+removal. The gateway answers from doubles, so a pass is never live model
+evidence. It is a platform qualification only when the label and
+`docs/EVIDENCE.md` record it as one, with the OS, the host, Node, and, on
+Windows, native or WSL2 (section 12.5).
+
+A stale token on a running host (restart `relaymind serve`; `models list
+--refresh` reports the 401 reconnect line; paste the new token; it recovers)
+passed on the macOS qualification at `a52f8bf` and is not part of the
+install check.
 
 ## Operator runs
 

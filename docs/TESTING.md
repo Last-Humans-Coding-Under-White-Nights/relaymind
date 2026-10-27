@@ -1315,6 +1315,56 @@ failover to another model, and macOS and Windows at this commit are not_run
 (the exact host commands are in
 [`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
 
+### OpenClaw release artifact, CI, and install check (#145; RM12, RM18, RM19, RM33; AC24)
+
+What runs where:
+
+| Check | Where | Command |
+| --- | --- | --- |
+| typecheck, vitest, pack check | here, CI (ubuntu, macOS, Windows runners) | `cd integrations/openclaw && npm ci && npm run typecheck && npm test && npm run pack:check` |
+| release artifact | here, CI | `npm run pack:release -- ../../release/openclaw` |
+| transport, plugin, round trip, cancel, artifact tiers | here (skip without `npm ci`), CI with `RELAYMIND_OPENCLAW_NODE=1` (no skip) | `pytest tests/test_openclaw_*.py` |
+| install check over a stub host | the default `pytest`, every platform | `pytest tests/test_openclaw_install_check.py` |
+| install check with the pinned host | CI runners; an operator's machine | `python scripts/openclaw_install_check.py --tarball ... --out ... -- <openclaw>` |
+| live model, platform qualification | an operator's machine only | not part of any automated suite |
+
+- `tests/test_openclaw_install.py`: the lockfile (version 3) pins
+  `openclaw` and `@openclaw/ai` at 2026.10.7 with integrity, matches
+  `package.json`, and every build dependency is exact; two
+  `pack:release` builds of one checkout have the same SHA-256 and files,
+  and `SHA256SUMS` and `release.json` (pins, engines, integrity, the
+  building Node) name it; the tarball holds exactly `package.json`, the
+  README, `openclaw.plugin.json`, and one `dist/*.js` per source module;
+  the plugin unpacked from the artifact (the host's `openclaw` linked as
+  its peer) registers, resolves the alias the headless way, and
+  round-trips text and a host tool against the gateway over doubles, and
+  the driver reports which entry it loaded (the checkout's sources by
+  default); a destination inside the package is refused; the CI job runs
+  on the three runners with Node 24.22.1 and `RELAYMIND_OPENCLAW_NODE=1`,
+  builds the release, runs the install check, never runs live tests, and
+  lists every `tests/test_openclaw_*.py` module.
+- `tests/test_openclaw_install_check.py`: the install check against a stub
+  host with the pinned host's command forms and observed behavior (the key
+  in a SQLite state file, the call ID replayed without underscores,
+  `"ok": true` whatever happened, the config entry and credential left
+  after uninstall): every step in order in one isolated host home, the
+  token only on standard input; the text and the `read` tool exchanges
+  through the gateway, the gateway executing nothing, the host's result
+  holding the file's text and matched through the rewrite; the token, the
+  host home, the artifact folder, the checkout, and the user's home never
+  in the export; what uninstall leaves recorded and the removal steps
+  clearing it; a credential left after removal, a refused install (later
+  steps not_run), a failed exchange (cleanup still runs), a plugin the host
+  did not load, a host that says ok without running the tool, and a
+  missing host (not_run) never pass; the label keeps "not live model
+  evidence" and "not a supported-platform qualification".
+
+The install check with the pinned host passed once on a Linux VPS
+(`docs/evidence/2026-10-27-openclaw-install-check-linux-vps.json`; see
+`docs/EVIDENCE.md`), as a functional check over gateway doubles. It is not
+a platform qualification: macOS and Windows runs of this revision on a
+user's machine are not_run.
+
 ### What is not covered yet
 
 - The correctness corpus ran on Apple Silicon macOS only (#32). The
@@ -1379,7 +1429,10 @@ failover to another model, and macOS and Windows at this commit are not_run
   and a Linux VPS functional check (not a supported-platform qualification)
   ran the harness host scenarios on the real pinned host over doubles; a
   plugin approval answered by an operator, a macOS rerun, and any Windows
-  host run are not_run, and no live result is claimed.
+  host run are not_run, and no live result is claimed. The release artifact
+  and its install check (#145) passed against the pinned host on a Linux VPS
+  over doubles, a functional check; macOS and Windows qualifications of this
+  revision are not_run.
   YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are
   implemented (#143, #144), with frozen SkillsBench/ToolRet inputs and

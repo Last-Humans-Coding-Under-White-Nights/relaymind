@@ -8,6 +8,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- OpenClaw plugin release artifact, CI, install check, and operator guide
+  (#145; RM12, RM18, RM19, RM33; AC24; sections 7.5, 12.5, 14):
+  `npm run pack:release -- <dir>` (`integrations/openclaw/scripts/release-pack.mjs`)
+  builds the tarball from a clean `dist/` after the pack check and writes
+  `SHA256SUMS` and `release.json` (pins, engines, files, integrity, the
+  building Node); two builds of one checkout are the same bytes.
+  `tests/test_openclaw_install.py` checks the locked pins, the
+  reproducible build, the runtime-only contents, a text and a host-tool
+  round trip from the unpacked artifact (the plugin driver now takes the
+  entry to load), and that CI runs every OpenClaw test module.
+  `scripts/openclaw_install_check.py` runs the artifact through a host's
+  lifecycle in an isolated host home against a gateway over doubles:
+  install with `--accept-capabilities`, configure, enable, inspect, the
+  token through `paste-api-key` on standard input, discovery, a text and a
+  host `read` tool exchange, disable, `uninstall --force`, then
+  `config unset` and `models auth logout` for what uninstall leaves (the
+  config entry and the stored token). The trace and the sandbox decide a
+  pass, never the host's `"ok": true` (`tests/test_openclaw_install_check.py`,
+  over a stub host). It passed against the pinned host (OpenClaw 2026.10.7)
+  on a Linux VPS, recorded in `docs/evidence/` as a functional check over
+  doubles, not a supported-platform qualification. A new CI job
+  `openclaw-plugin` (ubuntu, macOS, Windows runners; Node 24.22.1) runs
+  typecheck, vitest, the release build, every OpenClaw pytest tier with
+  Node required, and the install check with the pinned host. The operator
+  guide (`integrations/openclaw/README.md`) covers gateway startup, local
+  and external configuration and the local context limit, loopback, token
+  transfer and rotation, model selection, host permissions, cancellation,
+  troubleshooting, trace inspection, update and rollback, and full removal.
+  `pack-check.mjs` spawns npm through node, so the Windows `npm.cmd` shim
+  needs no shell. macOS and Windows runs of this revision on a user's
+  machine are not_run (`docs/RELEASE.md` support gaps). No spec, gateway,
+  budget, or default change.
 - OpenClaw cancellation, errors, retries, and run trace correlation (#138;
   RM12, RM14, RM16, RM17, RM20, RM21, RM22, RM25, RM33; AC11, AC12, AC24):
   the plugin maps every gateway error code to the host's error class

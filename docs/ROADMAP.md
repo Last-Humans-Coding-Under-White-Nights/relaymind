@@ -827,6 +827,20 @@ This is planned integration, not a claim of a working or faster plugin.
 - Installable artifact, CI compatibility checks, platform qualification,
   and operator documentation (#145; RM18, RM19, RM33; AC24): packaging
   and CI after #136, platform qualification and the guide after #138.
+  Status: `npm run pack:release` builds the release artifact reproducibly
+  with its SHA-256 and release record (`tests/test_openclaw_install.py`:
+  locked pins, same bytes twice, runtime files only, a text and a host
+  tool round trip from the unpacked artifact). `scripts/openclaw_install_check.py`
+  runs the artifact through the host's lifecycle (install, enable, inspect,
+  token, discovery, a text and a host-tool exchange, disable, uninstall, and
+  removal of what uninstall leaves). It passed against the pinned host on a
+  Linux VPS over gateway doubles, as a functional check, not a
+  supported-platform qualification. The CI job `openclaw-plugin` runs the
+  package checks, every OpenClaw pytest tier, and the install check on
+  ubuntu, macOS, and Windows runners. The operator guide is in
+  `integrations/openclaw/README.md`. macOS and Windows runs of this
+  revision on a user's machine are not_run and listed as support gaps in
+  `docs/RELEASE.md`.
 - M9 live evaluation (#139; RM16, RM25, RM26, RM33; section 12.5), after
   #145: direct external versus RelayMind external_only versus auto, plus
   a separate no-local setup; exact success, latency, calls, and usage.
