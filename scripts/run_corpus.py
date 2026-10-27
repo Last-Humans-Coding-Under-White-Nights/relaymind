@@ -68,7 +68,9 @@ from relaymind.evaluation.corpus import (  # noqa: E402
     Case,
     Corpus,
     check_lock,
+    demo_skill_names,
     load_corpus,
+    load_skills_sidecar,
 )
 from relaymind.evaluation.environment import (  # noqa: E402
     application_revision,
@@ -95,6 +97,7 @@ from relaymind.tools.sandbox import MUTATING_DEMO_TOOLS  # noqa: E402
 REPO_ROOT = harness.REPO_ROOT
 CORPUS = REPO_ROOT / "evaluation" / "corpus.v1.json"
 LOCK = REPO_ROOT / "evaluation" / "corpus.v1.lock.json"
+SKILLS_SIDECAR = REPO_ROOT / "evaluation" / "corpus.v1.skills.json"
 SEED_DIR = REPO_ROOT / "tests" / "fixtures" / "sandbox"
 # A run that does not come to rest in this time is cancelled and graded as a timeout.
 RUN_TIMEOUT_SECONDS = 300.0
@@ -107,6 +110,13 @@ def load_frozen_corpus(path: Path = CORPUS) -> Corpus:
     corpus = load_corpus(path, seed_dir=SEED_DIR)
     check_lock(corpus, LOCK)
     return corpus
+
+
+def expected_skills(corpus: Corpus) -> dict[str, str | None]:
+    """The expected skill of every case, read once from the checked sidecar (RM28)."""
+    return load_skills_sidecar(
+        SKILLS_SIDECAR, corpus, skill_names=demo_skill_names(REPO_ROOT / "skills")
+    )
 
 
 def select_cases(
@@ -320,6 +330,7 @@ def _run_one(
 def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
     configuration = configuration_from_args(args)
     corpus = load_frozen_corpus()
+    skills = expected_skills(corpus)
     cases = select_cases(corpus, ids=args.cases, languages=args.languages)
     external = None
     if configuration.external is not None:
@@ -403,20 +414,11 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
                             local_model_configured=configuration.local_model_configured,
                         )
                     grade_json = grade.to_json_object()
-                    expected_skill = (
-                        corpus.expected_skills.get(case.case_id)
-                        if hasattr(corpus, "expected_skills")
-                        else json.loads(
-                            (REPO_ROOT / "evaluation/corpus.v1.skills.json").read_text(
-                                encoding="utf-8"
-                            )
-                        )["skills"][case.case_id]
-                    )
                     grade_json = enrich_grade(
                         grade_json,
                         case,
                         events,
-                        expected_skill,
+                        skills[case.case_id],
                         configuration.to_json_object(),
                         modern=True,
                     )
@@ -438,7 +440,7 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
             "configuration": configuration.to_json_object(),
             "prior_configuration": partition,
             "timing_prior": None if prior is None else prior.provenance,
-            "selection_sidecar_sha256": byte_digest(REPO_ROOT / "evaluation/corpus.v1.skills.json"),
+            "selection_sidecar_sha256": byte_digest(SKILLS_SIDECAR),
             "note": "Live runs of the frozen corpus (spec 0.28 section 12.2). Each case and mode "
             "ran in a new gateway from the case's seed. A failed grade is a finding, never "
             "dropped.",

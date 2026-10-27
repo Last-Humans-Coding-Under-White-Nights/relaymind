@@ -1,5 +1,7 @@
 """RM16/RM25/RM27/RM28: costs retain failed attempts and missing measurements."""
 
+import pytest
+
 
 def event(kind, actor="gateway", **payload):
     return {"event_type": kind, "actor": actor, "payload": payload}
@@ -90,7 +92,11 @@ def test_unknown_trace_is_not_free_external_work():
 
     value = summarize_placement(
         [
-            {"state": "completed", "success": True, "metrics": {"external_usage": []}},
+            {
+                "state": "completed",
+                "success": True,
+                "metrics": {"trace_observed": True, "external_usage": []},
+            },
             {"state": "error", "success": False},
         ]
     )
@@ -178,3 +184,13 @@ def test_missing_completed_traces_leave_generation_average_unknown():
         assert value["by_actor_purpose"] == ({"local/final": 1} if measured else {})
     zero = {"state": "completed", "metrics": trace_metrics([event("run.completed")])}
     assert summarize_placement([zero])["generations"]["per_completed_run"] == 0
+
+
+@pytest.mark.parametrize("metrics", [{}, {"external_usage": []}, {"trace_observed": None}])
+def test_metrics_without_an_observed_trace_are_unobserved(metrics):
+    """RM16/RM25, spec section 14.4.4: only trace_observed true counts as observed."""
+    from relaymind.evaluation.placement_metrics import summarize_placement
+
+    value = summarize_placement([{"state": "completed", "success": True, "metrics": metrics}])
+    assert value["external_cost"]["unobserved_runs"] == 1
+    assert value["external_cost"]["calls_per_completed_task"] is None

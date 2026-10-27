@@ -6,7 +6,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -350,6 +350,7 @@ def load_prior(path: Path, configuration: dict) -> PlacementPrior:
                             source_digest=ref["sha256"],
                             source_run_id=run_id,
                             recorded_at=datetime.fromisoformat(events[-1]["timestamp"])
+                            .astimezone(UTC)
                             .isoformat(timespec="microseconds")
                             .replace("+00:00", "Z"),
                             **outcome,

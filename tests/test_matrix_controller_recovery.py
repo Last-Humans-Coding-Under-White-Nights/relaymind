@@ -57,7 +57,7 @@ def real_corpus(tmp_path, monkeypatch, *, full=False, local=False, separator=Non
         "RELAYMIND_EXTERNAL_BASE_URL": "https://example.invalid/v1",
         "RELAYMIND_EXTERNAL_MODEL": "fixture",
     }
-    argv = driver.command(cell, directory, tmp_path, env, tmp_path / "llama-server")
+    argv = driver.command(cell, directory, tmp_path, env)
     if not full:
         argv += ["--cases", runner.load_frozen_corpus().cases[0].case_id]
     args = runner.argument_parser().parse_args(argv[2:])
@@ -428,7 +428,7 @@ def test_recovery_preserves_reviewed_cell_and_command_contract(name, expected):
     for cell in cells:
         directory = Path("/matrix") / cell["id"] / "initial"
         argv = (
-            driver.command(cell, directory, Path("/matrix"), env, Path("/runtime/llama-server"))
+            driver.command(cell, directory, Path("/matrix"), env)
             if name == "run_m8_matrix"
             else driver.command(cell, directory, env, root=driver.ROOT)
         )

@@ -136,9 +136,7 @@ def summarize_placement(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     for v in measured_completed:
         generations.update(v.get("generations", {}))
     usage = [u for v in values for u in v.get("external_usage", [])]
-    unobserved = sum(
-        "metrics" not in r or r.get("metrics", {}).get("trace_observed") is False for r in rows
-    )
+    unobserved = sum(r.get("metrics", {}).get("trace_observed") is not True for r in rows)
     cost = dict(
         unobserved_runs=unobserved,
         completed_tasks=success,

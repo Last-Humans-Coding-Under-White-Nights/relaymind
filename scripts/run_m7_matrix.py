@@ -24,7 +24,8 @@ ROOT = measurement_root(CONTROLLER_ROOT)
 from evaluation_config import configuration_from_args  # noqa: E402
 
 _shared = controller_module("run_m8_matrix")
-PINNED_RUNTIME = _shared.PINNED_RUNTIME
+resolve_runtime = _shared.resolve_runtime
+RUNTIME_ENV = _shared.RUNTIME_ENV
 attempt_cost = _shared.attempt_cost
 declare_restart = _shared.declare_restart
 provider_environment = _shared.provider_environment
@@ -322,7 +323,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--criteria-revision")
     parser.add_argument("--criteria-checkout", type=Path)
     parser.add_argument("--omit-criteria", action="store_true")
-    parser.add_argument("--runtime", type=Path, default=Path(PINNED_RUNTIME))
+    parser.add_argument(
+        "--runtime",
+        type=Path,
+        help=f"the llama-server to measure (default: ${RUNTIME_ENV}, else llama-server on PATH)",
+    )
     parser.add_argument("--provider-env", type=Path)
     parser.add_argument("--reuse-m8-index", type=Path)
     parser.add_argument("--measurement-root", type=Path, default=ROOT)
@@ -367,6 +372,7 @@ def main(argv: list[str] | None = None) -> None:
         source = sources[str(roots[c["id"]])]
         if source.get("dirty") is not False or source.get("head") != c["revision"]:
             raise ValueError("execution requires each reviewed clean committed revision")
+    args.runtime = resolve_runtime(args.runtime)
     if args.runtime.name not in ("llama-server", "llama-server.exe") or not args.runtime.is_file():
         raise ValueError("pinned runtime executable missing")
     index_path = out / "index.json"

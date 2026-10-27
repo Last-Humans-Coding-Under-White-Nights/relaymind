@@ -907,3 +907,11 @@ def test_the_cli_refuses_to_overwrite_the_source_export(runner, tmp_path, capsys
 def test_draft_pass_regrading_refuses_another_corpus_digest(runner, corpus):
     with pytest.raises(SystemExit, match="digest"):
         runner.regrade_draft_pass({"corpus": {"sha256": "0" * 64}, "grades": []}, corpus)
+
+
+def test_expected_skills_are_read_once_from_the_checked_sidecar(runner, corpus):
+    """RM28, spec section 12.2: the sidecar is loaded and checked once for every case."""
+    skills = runner.expected_skills(corpus)
+    assert set(skills) == {case.case_id for case in corpus.cases}
+    source = inspect.getsource(runner.run_corpus)
+    assert "corpus.v1.skills.json" not in source

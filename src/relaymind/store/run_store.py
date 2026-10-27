@@ -1191,6 +1191,8 @@ class RunStore:
                     raise ValueError("invalid imported outcome count")
             if row["local_completed"] + row["local_escalated"] > 1:
                 raise ValueError("conflicting local outcome")
+            if row["local_completed"] and row["external_generations"]:
+                raise ValueError("local completion cannot include external generations")
             for name in ("source_digest", "source_run_id", "skill_id"):
                 if not isinstance(row[name], str) or not row[name].strip():
                     raise ValueError("invalid imported outcome identity")

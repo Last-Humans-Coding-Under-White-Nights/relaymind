@@ -513,3 +513,24 @@ def test_parallel_prior_matches_live_without_local_escalation(tmp_path, failed):
     assert len([t for t in prior.timings if t.actor == "external"]) == len(external_calls)
     assert len(trace_metrics(events)["external_usage"]) == len(external_calls)
     assert events[-1]["payload"]["local_active_ms"] is None
+
+
+def test_imported_local_completion_cannot_include_external_generations(tmp_path):
+    """RM17/RM27, spec section 14.4.1: a local completion has no external generations."""
+    from relaymind.evaluation.prior import load_prior
+
+    gateway, path, config, _, _ = fixture_source(tmp_path)
+    prior = load_prior(path, config)
+    bad = [
+        {**prior.outcomes[0], "local_completed": 1, "local_escalated": 0, "external_generations": 5}
+    ]
+    with RunStore(tmp_path / "invalid.sqlite", clock=gateway.clock) as store:
+        with pytest.raises(ValueError, match="external generations"):
+            store.import_placement_prior(
+                bundle_digest=prior.bundle_digest,
+                configuration_digest=prior.configuration_digest,
+                timings=list(prior.timings),
+                outcomes=bad,
+                report=prior.provenance,
+            )
+        assert store.model_timings() == []
