@@ -1,0 +1,21 @@
+{
+  "name": "@relaymind/openclaw-provider",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@openclaw/ai": "2026.10.7",
+    "@types/node": "24.19.2",
+    "openclaw": "2026.10.7",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  },
+  "description": "RelayMind provider for OpenClaw: qualification harness and fixtures (RM33; the plugin follows in #136).",
+  "engines": {
+    "node": ">=24.22.1 <25 || >=26.12.1"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}
