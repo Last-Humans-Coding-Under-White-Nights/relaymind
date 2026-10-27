@@ -78,6 +78,33 @@ def test_the_main_entry_requires_a_command_for_host_mode(tmp_path):
         qualification.main(["host", "--out", str(tmp_path / "x.json")])
 
 
+def test_host_mode_keeps_a_separator_the_host_command_needs(tmp_path, monkeypatch):
+    """Only the "--" before the command is dropped; the command keeps its own."""
+    seen = {}
+
+    def fake_run_host(command, out, *, timeout):
+        seen["command"] = command
+        return {"status": "completed", "runs": []}
+
+    monkeypatch.setattr(qualification, "run_host", fake_run_host)
+    argv = ["host", "--out", str(tmp_path / "x.json"), "--"]
+    argv += ["openclaw", "agent", "exec", "--json", "--", "--literal prompt"]
+    assert qualification.main(argv) == 0
+    assert seen["command"] == ["openclaw", "agent", "exec", "--json", "--", "--literal prompt"]
+
+
+def test_a_host_command_past_the_timeout_is_recorded_as_timed_out(tmp_path):
+    """Section 12.5: a host that hangs still leaves an export with its runs, never a pass."""
+    out = tmp_path / "export.json"
+    script = "import sys, time; print('started', flush=True); time.sleep(30)"
+    export = qualification.run_host([sys.executable, "-c", script], out, timeout=1)
+    assert export["status"] == "timed_out"
+    assert export["exit_code"] is None
+    assert "started" in export["stdout"]
+    assert export["runs"] == []
+    assert json.loads(out.read_text("utf-8"))["status"] == "timed_out"
+
+
 def test_sanitizing_replaces_run_ids_ports_dates_and_machine_headers():
     scenario = qualification.SCENARIOS[1]
     output = {

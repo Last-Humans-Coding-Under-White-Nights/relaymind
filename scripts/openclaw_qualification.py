@@ -21,10 +21,10 @@ Two modes:
     final text turn scripted, runs an operator command (for example a real
     ``openclaw agent exec``) with ``RELAYMIND_BASE_URL`` and
     ``RELAYMIND_APP_TOKEN`` in its environment only, and writes one export:
-    the command's exit status, every run the gateway recorded with its trace
-    events, and the versions. The token is never written. This mode needs
-    a real OpenClaw install; it is run by an operator and CI, not by the
-    deterministic suite.
+    the command's exit status (``timed_out`` past ``--timeout``), every run
+    the gateway recorded with its trace events, and the versions. The token
+    is never written. This mode needs a real OpenClaw install; it is run by
+    an operator and CI, not by the deterministic suite.
 
 Usage:
     python scripts/openclaw_qualification.py fixtures \\
@@ -428,6 +428,13 @@ def capture_fixtures(out_dir: Path, *, driver: Path = DRIVER, node: str | None =
     return written
 
 
+def _text(output: bytes | str | None) -> str:
+    """Partial output of a timed-out child; it can be bytes even in text mode."""
+    if output is None:
+        return ""
+    return output.decode("utf-8", "replace") if isinstance(output, bytes) else output
+
+
 def run_host(command: Sequence[str], out: Path, *, timeout: float = 900) -> dict:
     """Serve one doubles gateway, run the operator command against it, export the runs."""
     with tempfile.TemporaryDirectory(prefix="openclaw-host-") as tmp:
@@ -460,6 +467,11 @@ def run_host(command: Sequence[str], out: Path, *, timeout: float = 900) -> dict
                     )
                 except FileNotFoundError as error:
                     status, exit_code, stdout, stderr = "not_run", None, "", str(error)
+                except subprocess.TimeoutExpired as error:
+                    # The runs the gateway recorded so far still go into the export.
+                    status, exit_code = "timed_out", None
+                    stdout, stderr = _text(error.stdout), _text(error.stderr)
+                    stderr += f"\ntimed out after {timeout} s"
                 stdout = stdout.replace(token, NOT_RECORDED)
                 stderr = stderr.replace(token, NOT_RECORDED)
                 run_ids = _run_ids(gateway)
@@ -515,7 +527,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         for path in capture_fixtures(args.out_dir, driver=args.driver):
             print(path)
         return 0
-    command = [part for part in args.command if part != "--"]
+    # Drop only the separator before the command; the command keeps its own "--".
+    command = list(args.command)
+    if command and command[0] == "--":
+        command = command[1:]
     if not command:
         parser.error("host needs a command after --")
     export = run_host(command, args.out, timeout=args.timeout)

@@ -133,4 +133,6 @@ python scripts/openclaw_qualification.py host \
 ```
 
 The harness passes the gateway URL and token in the command's environment
-only and never writes the token. A command that cannot start is `not_run`.
+only and never writes the token. A command that cannot start is `not_run`;
+one that runs past `--timeout` (900 s by default) is `timed_out`, and the
+export still holds the runs the gateway recorded.
