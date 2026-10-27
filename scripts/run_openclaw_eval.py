@@ -69,7 +69,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import openclaw_install_check as install_check  # noqa: E402
 
-from relaymind.evaluation.environment import application_revision, machine_manifest  # noqa: E402
+from relaymind.evaluation.environment import (  # noqa: E402
+    application_revision,
+    checkout_environment,
+    machine_manifest,
+)
 from relaymind.evaluation.openclaw import (  # noqa: E402
     ARMS,
     LOCK_FILE,
@@ -219,9 +223,9 @@ class Host:
         }
 
 
-def _step(name: str, result: Mapping) -> dict:
+def _recorded(result: Mapping) -> dict:
+    """A host command result as the export keeps it: its output cut to the tails."""
     return {
-        "name": name,
         "argv": result["argv"],
         "status": result["status"],
         "exit_code": result["exit_code"],
@@ -229,6 +233,10 @@ def _step(name: str, result: Mapping) -> dict:
         "stdout_tail": result["stdout"][-OUTPUT_TAIL:],
         "stderr_tail": result["stderr"][-OUTPUT_TAIL:],
     }
+
+
+def _step(name: str, result: Mapping) -> dict:
+    return {"name": name, **_recorded(result)}
 
 
 def _configured(name: str, keys: Sequence[str]) -> dict:
@@ -259,33 +267,24 @@ def setup_relaymind(
     arm: str, host: Host, handle: GatewayHandle, tarball: Path, limits: Mapping
 ) -> tuple[list[dict], dict, bool]:
     """Install, configure, enable, and give the plugin the token (on standard input)."""
-    steps = [_step("version", host.run(["--version"], timeout=SETUP_TIMEOUT))]
     config = plugin_config(arm, handle, host, limits)
-    plan: list[tuple[str, list[str] | None, str | None]] = [
-        (
-            "install",
-            ["plugins", "install", f"npm-pack:{tarball}", "--force", "--accept-capabilities"],
-            None,
-        ),
-        ("configure", None, None),
-        ("enable", ["plugins", "enable", PLUGIN_ID], None),
-        (
-            "store-token",
-            ["models", "auth", "paste-api-key", "--provider", PLUGIN_ID],
-            handle.token + "\n",
-        ),
-    ]
-    if steps[0]["status"] != "completed":
-        return steps, config, False
-    for name, args, stdin in plan:
-        if args is None:
-            host.merge_config({"plugins": {"entries": {PLUGIN_ID: {"config": config}}}})
-            steps.append(_configured(name, sorted(config)))
-            continue
+    steps: list[dict] = []
+
+    def ran(name: str, args: list[str], stdin: str | None = None) -> bool:
         steps.append(_step(name, host.run(args, stdin=stdin, timeout=SETUP_TIMEOUT)))
-        if steps[-1]["status"] != "completed":
-            return steps, config, False
-    return steps, config, True
+        return steps[-1]["status"] == "completed"
+
+    install = ["plugins", "install", f"npm-pack:{tarball}", "--force", "--accept-capabilities"]
+    if not (ran("version", ["--version"]) and ran("install", install)):
+        return steps, config, False
+    host.merge_config({"plugins": {"entries": {PLUGIN_ID: {"config": config}}}})
+    steps.append(_configured("configure", sorted(config)))
+    ok = ran("enable", ["plugins", "enable", PLUGIN_ID]) and ran(
+        "store-token",
+        ["models", "auth", "paste-api-key", "--provider", PLUGIN_ID],
+        handle.token + "\n",
+    )
+    return steps, config, ok
 
 
 def setup_direct(host: Host, direct: DirectEndpoint) -> tuple[list[dict], bool]:
@@ -400,15 +399,7 @@ def run_attempt(
         "language": task.language,
         "exec_policy": task.exec_policy,
         "expected_host_model": expected_host_model(slot.arm, direct),
-        "host": {
-            "argv": args,
-            "status": result["status"],
-            "exit_code": result["exit_code"],
-            "elapsed_ms": result["elapsed_ms"],
-            "report": _host_report(result["stdout"]),
-            "stdout_tail": result["stdout"][-OUTPUT_TAIL:],
-            "stderr_tail": result["stderr"][-OUTPUT_TAIL:],
-        },
+        "host": {**_recorded(result), "report": _host_report(result["stdout"])},
         "sandbox_after": after,
         "diagnostics": _diagnostics(host.diagnostics_path)[seen:] if handle else [],
         "window_runs": window,
@@ -531,10 +522,9 @@ def run_evaluation(
             close()
         # The host homes hold the direct arm's credential and the stored token.
         shutil.rmtree(work, ignore_errors=True)
+    # An arm without a record was not_run before setup; a failed setup marked its own.
     for arm in ARMS:
         arm_records.setdefault(arm, {"status": "not_run", "reason": not_run.get(arm)})
-        if arm in not_run and arm_records[arm].get("status") != "not_run":
-            arm_records[arm].update(status="not_run", reason=not_run[arm])
     summary = summarize(grades, arms=ARMS, not_run=not_run)
     document = {
         "kind": "relaymind.openclaw_evaluation",
@@ -643,8 +633,6 @@ class LiveBackend:
             ),
             "utf-8",
         )
-        from relaymind.evaluation.environment import checkout_environment
-
         gateway = harness.GatewayProcess(
             config, work / "gateway.log", checkout_environment(ROOT, dict(os.environ))
         )

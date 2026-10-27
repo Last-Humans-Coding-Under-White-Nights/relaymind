@@ -17,7 +17,6 @@ a completed task, and an unknown token count stays unknown.
 
 import hashlib
 import json
-import math
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -25,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from relaymind.canonical import canonical_digest
+from relaymind.evaluation.metrics import nearest_rank
 
 TASKS_FILE = "evaluation/openclaw_tasks.v1.json"
 LOCK_FILE = "evaluation/openclaw_tasks.v1.lock.json"
@@ -309,7 +309,7 @@ def parse_tasks(document: Mapping[str, Any]) -> TaskSet:
         raise TaskSetError("tasks must be a non-empty list")
     tasks = tuple(_parse_task(i, raw) for i, raw in enumerate(raw_tasks))
     ids = [t.task_id for t in tasks]
-    duplicates = sorted({i for i in ids if ids.count(i) > 1})
+    duplicates = sorted(i for i, n in Counter(ids).items() if n > 1)
     if duplicates:
         raise TaskSetError(f"duplicate task id(s) {', '.join(duplicates)}")
     english = {t.task_id: t for t in tasks if t.language == "en"}
@@ -445,11 +445,16 @@ def _model_calls(run: Mapping) -> list[Mapping]:
 _USAGE_FIELDS = ("input_tokens", "output_tokens", "cached_tokens")
 
 
+def _unknown(name: str) -> str:
+    """The key counting the calls that reported no value for a usage field."""
+    return f"{name.removesuffix('_tokens')}_unknown_calls"
+
+
 def _empty_tokens() -> dict[str, Any]:
     entry: dict[str, Any] = {"calls": 0}
     for name in _USAGE_FIELDS:
         entry[name] = None
-        entry[f"{name.removesuffix('_tokens')}_unknown_calls"] = 0
+        entry[_unknown(name)] = 0
     return entry
 
 
@@ -458,8 +463,7 @@ def _add_tokens(into: dict[str, dict], model: str, entry: Mapping[str, Any]) -> 
     target = into.setdefault(model, _empty_tokens())
     target["calls"] += entry["calls"]
     for name in _USAGE_FIELDS:
-        unknown = f"{name.removesuffix('_tokens')}_unknown_calls"
-        target[unknown] += entry[unknown]
+        target[_unknown(name)] += entry[_unknown(name)]
         if entry[name] is not None:
             target[name] = (target[name] or 0) + entry[name]
 
@@ -478,7 +482,7 @@ def run_tokens(runs: Iterable[Mapping]) -> dict[str, dict[str, Any]]:
             for name in _USAGE_FIELDS:
                 value = used.get(name)
                 entry[name] = value if isinstance(value, int) else None
-                entry[f"{name.removesuffix('_tokens')}_unknown_calls"] = int(entry[name] is None)
+                entry[_unknown(name)] = int(entry[name] is None)
             _add_tokens(tokens, call["model"], entry)
     return tokens
 
@@ -583,13 +587,14 @@ def grade_attempt(task: Task, attempt: Mapping[str, Any]) -> dict[str, Any]:
         if record.get("outcome") == "failed" and record.get("runId") in ("unavailable", None):
             if record.get("code"):
                 error_codes[record["code"]] += 1
-    calls = [call for run in runs for call in _model_calls(run)]
+    calls_by_run = [(run, _model_calls(run)) for run in runs]
+    calls = [call for _, of_run in calls_by_run for call in of_run]
     local_turns = sum(
         1
-        for run in runs
+        for run, of_run in calls_by_run
         if run["state"] == "completed"
-        and _model_calls(run)
-        and all(call["actor"] == "local" for call in _model_calls(run))
+        and of_run
+        and all(call["actor"] == "local" for call in of_run)
     )
     success = not failures
     return {
@@ -642,14 +647,6 @@ def grade_attempt(task: Task, attempt: Mapping[str, Any]) -> dict[str, Any]:
 
 
 # -- the summary -----------------------------------------------------------------------
-
-
-def nearest_rank(values: Sequence[float], q: float) -> float | None:
-    """The ceil(q n)-th smallest value (section 12.2), or None without values."""
-    if not values:
-        return None
-    ordered = sorted(values)
-    return ordered[max(1, math.ceil(q * len(ordered))) - 1]
 
 
 def _distribution(values: Sequence[float | None]) -> dict[str, Any]:
