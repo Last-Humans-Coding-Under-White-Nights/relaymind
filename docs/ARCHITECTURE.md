@@ -22,7 +22,7 @@ spec is the source of truth; this page only explains where things live.
 | Schema boundary checks | `src/relaymind/schema_util.py` | Shared checks for published, versioned JSON Schemas (closed field sets, exact schema_version, first schema error; spec section 8). |
 | Timing instrumentation | `src/relaymind/stats.py` | Record spec 12.1 metrics per generation around any adapter; export JSON for adapter comparisons (M1 working data, not benchmark evidence). |
 
-## Phase 2 components (spec 0.31, revised in 0.46)
+## Phase 2 components (spec 0.31, revised in 0.47)
 
 Milestones M7 to M9 extend the components below; completed work is listed
 in the component map above and [`ROADMAP.md`](ROADMAP.md). Their locations,
@@ -36,7 +36,7 @@ so that the dependency direction below stays true:
 | OpenClaw provider plugin (RM33, planned) | `integrations/openclaw/` | A TypeScript package using the public host SDK and the loopback client-owned chat API. OpenClaw owns sessions, tools, and approvals; RelayMind owns inference and its trace. |
 | Gated answer streaming (RM32) | `src/relaymind/orchestrator/local_loop.py`, `src/relaymind/api/chat.py` | The per-statement holdback of the live answer stream. Not implemented: `performance.answer_stream = live` stops startup. The draft answer pass (RM31, #121) and early response headers (RM32, #140) are implemented; see the orchestrator and API rows above. |
 
-The YAML workflow package expansion is retired (spec 0.46, RM30). The
+The YAML workflow package expansion is retired (spec 0.47, RM30). The
 implemented fixed parallel demo remains in the orchestrator (RM15, AC14).
 The OpenClaw package is planned; no plugin or live qualification exists yet.
 

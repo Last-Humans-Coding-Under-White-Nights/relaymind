@@ -21,8 +21,8 @@ an external endpoint (``--external-base-url`` and friends, with the
 credential in RELAYMIND_EXTERNAL_API_KEY) only local_only runs; auto and
 external_only are recorded as not run.
 
-Two options work offline on a stored export and call no model: --regrade
-recomputes the grades in place, and --regrade-draft-pass (RM31, spec 0.31,
+Two options work offline on a stored export and call no model: --regrade EXPORT
+recomputes grades into a distinct --out artifact, and --regrade-draft-pass (RM31, spec 0.31,
 #115) grades the same traces as if the skill-stage draft had been published
 as the answer, and writes a separate export labeled as an offline
 counterfactual.
@@ -49,8 +49,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import evaluation_session as session  # noqa: E402
 import live_acceptance as harness  # noqa: E402
 from evaluation_config import (  # noqa: E402
     ConfigurationError,
@@ -66,10 +68,13 @@ from relaymind.evaluation.corpus import (  # noqa: E402
     Case,
     Corpus,
     check_lock,
+    demo_skill_names,
     load_corpus,
+    load_skills_sidecar,
 )
 from relaymind.evaluation.environment import (  # noqa: E402
     application_revision,
+    checkout_environment,  # noqa: E402
     machine_manifest,
     runtime_devices,
 )
@@ -79,7 +84,9 @@ from relaymind.evaluation.grading import (  # noqa: E402
     grade_run,
     terminal_event,
 )
+from relaymind.evaluation.m7_metrics import enrich_metrics  # noqa: E402
 from relaymind.evaluation.metrics import render_corpus_markdown, summarize_corpus  # noqa: E402
+from relaymind.evaluation.prior import byte_digest  # noqa: E402
 from relaymind.orchestrator.performance import (  # noqa: E402
     draft_in_language,
     holds_tool_call_json,
@@ -90,6 +97,7 @@ from relaymind.tools.sandbox import MUTATING_DEMO_TOOLS  # noqa: E402
 REPO_ROOT = harness.REPO_ROOT
 CORPUS = REPO_ROOT / "evaluation" / "corpus.v1.json"
 LOCK = REPO_ROOT / "evaluation" / "corpus.v1.lock.json"
+SKILLS_SIDECAR = REPO_ROOT / "evaluation" / "corpus.v1.skills.json"
 SEED_DIR = REPO_ROOT / "tests" / "fixtures" / "sandbox"
 # A run that does not come to rest in this time is cancelled and graded as a timeout.
 RUN_TIMEOUT_SECONDS = 300.0
@@ -102,6 +110,13 @@ def load_frozen_corpus(path: Path = CORPUS) -> Corpus:
     corpus = load_corpus(path, seed_dir=SEED_DIR)
     check_lock(corpus, LOCK)
     return corpus
+
+
+def expected_skills(corpus: Corpus) -> dict[str, str | None]:
+    """The expected skill of every case, read once from the checked sidecar (RM28)."""
+    return load_skills_sidecar(
+        SKILLS_SIDECAR, corpus, skill_names=demo_skill_names(REPO_ROOT / "skills")
+    )
 
 
 def select_cases(
@@ -258,6 +273,7 @@ def _run_one(
     configuration: RunnerConfiguration,
     external: harness.ExternalEndpoint | None,
     work: Path,
+    prior=None,
 ) -> tuple[RunGrade, dict[str, Any], list[dict[str, Any]]]:
     """One gateway start for one case and mode; returns the grade, the record, and the trace."""
     plan_dir = work / f"{case.case_id}-{mode}"
@@ -276,7 +292,10 @@ def _run_one(
         ),
         encoding="utf-8",
     )
-    gateway = harness.GatewayProcess(config, plan_dir / "gateway.log", os.environ)
+    prior_report = session.seed_store(plan_dir, prior)
+    gateway = harness.GatewayProcess(
+        config, plan_dir / "gateway.log", checkout_environment(REPO_ROOT, dict(os.environ))
+    )
     gateway.start()
     api = harness.Api(gateway.output.url, gateway.output.token, sandbox_dir=plan_dir / "sandbox")
 
@@ -291,6 +310,8 @@ def _run_one(
         databases = api.sandbox()["databases"]
     finally:
         gateway.stop()
+    record["timing_prior"] = prior_report
+    record["timing_snapshot"] = session.snapshot_store(plan_dir)
     events = harness._traces(plan_dir / "runs.sqlite3", [record["run_id"]])[record["run_id"]]
     return (
         grade_record(
@@ -309,11 +330,15 @@ def _run_one(
 def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
     configuration = configuration_from_args(args)
     corpus = load_frozen_corpus()
+    skills = expected_skills(corpus)
     cases = select_cases(corpus, ids=args.cases, languages=args.languages)
     external = None
     if configuration.external is not None:
         external = harness.ExternalEndpoint(
-            args.external_base_url, args.external_model, args.external_context_limit
+            args.external_base_url,
+            args.external_model,
+            args.external_context_limit,
+            request_options=configuration.external_request_options,
         )
     if not configuration.local_model_configured and (
         external is None or not os.environ.get(harness.EXTERNAL_KEY_ENV)
@@ -324,20 +349,29 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
     )
     if external is not None and not os.environ.get(harness.EXTERNAL_KEY_ENV):
         # Without a usable endpoint the gateways are started without one, and the
-        # configuration label names none.
+        # configuration names neither the endpoint nor its request options.
         external = None
-        configuration = replace(configuration, external=None)
+        configuration = replace(configuration, external=None, external_request_options=None)
     runtime = (
         harness.check_runtime(Path(args.manifest), extra_args=args.runtime_extra_args)
         if configuration.local_model_configured
         else None
     )
-    application = harness.application_revision()
+    partition, prior, application, checkpoint = session.prepare(
+        args, REPO_ROOT, runtime, external, configuration
+    )
+    if (previous := session.existing_result(checkpoint, args.out)) is not None:
+        return previous
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
-    work = Path(tempfile.mkdtemp(prefix="relaymind-corpus-"))
+    work = (
+        Path(tempfile.mkdtemp(prefix="relaymind-corpus-"))
+        if checkpoint is None
+        else session.durable_work(args, "corpus", None)
+    )
     # The work dir goes on any exit, an interrupt included.
     with ExitStack() as cleanup:
-        cleanup.callback(shutil.rmtree, work, ignore_errors=True)
+        if checkpoint is None:
+            cleanup.callback(shutil.rmtree, work, ignore_errors=True)
         llama, local_url, cold_start = (
             runtime.launch(work / "llama-server.log") if runtime else (None, None, None)
         )
@@ -345,6 +379,9 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
         try:
             for case in cases:
                 for mode in modes:
+                    identity = f"{case.case_id}/{mode}"
+                    if checkpoint:
+                        checkpoint.start(identity)
                     print(f"{case.case_id} {mode}", flush=True)
                     try:
                         grade, record, events = _run_one(
@@ -355,8 +392,13 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
                             configuration=configuration,
                             external=external,
                             work=work,
+                            **({"prior": prior} if prior is not None else {}),
                         )
                     except Exception as exc:  # noqa: BLE001 - recorded and graded, never dropped
+                        if checkpoint:
+                            checkpoint.document["infrastructure_error"] = type(exc).__name__
+                            checkpoint._save()
+                            raise
                         record = {
                             "run_id": None,
                             "timed_out": False,
@@ -374,7 +416,20 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
                             None,
                             local_model_configured=configuration.local_model_configured,
                         )
-                    grades.append(grade.to_json_object())
+                    grade_json = grade.to_json_object()
+                    grade_json = enrich_grade(
+                        grade_json,
+                        case,
+                        events,
+                        skills[case.case_id],
+                        configuration.to_json_object(),
+                        modern=True,
+                    )
+                    grades.append(grade_json)
+                    if checkpoint:
+                        checkpoint.finish(
+                            identity, {"grade": grade_json, "record": record, "events": events}
+                        )
                     records[f"{case.case_id}/{mode}"] = record
                     if record["run_id"] is not None:
                         traces[record["run_id"]] = events
@@ -386,6 +441,9 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
         document = {
             "kind": "relaymind.correctness_corpus",
             "configuration": configuration.to_json_object(),
+            "prior_configuration": partition,
+            "timing_prior": None if prior is None else prior.provenance,
+            "selection_sidecar_sha256": byte_digest(SKILLS_SIDECAR),
             "note": "Live runs of the frozen corpus (spec 0.28 section 12.2). Each case and mode "
             "ran in a new gateway from the case's seed. A failed grade is a finding, never "
             "dropped.",
@@ -438,6 +496,8 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
         report = render_corpus_markdown(summary, title=f"Correctness corpus: {out.stem}")
         report = label_report(report, document.get("configuration"))
         out.with_suffix(".md").write_text(report, encoding="utf-8")
+        if checkpoint:
+            checkpoint.complete({"export_sha256": byte_digest(out), "grades": len(grades)})
         return document
 
 
@@ -446,7 +506,30 @@ def _summary(grades: Sequence[Mapping[str, Any]], corpus: Corpus) -> dict[str, A
     return summarize_corpus(grades, expected_routes=routes)
 
 
-def regrade(document: dict[str, Any], corpus: Corpus) -> dict[str, Any]:
+def enrich_grade(
+    grade: dict,
+    case: Case,
+    events: Sequence[Mapping[str, Any]],
+    expected_skill: str | None,
+    configuration: dict,
+    *,
+    modern: bool,
+) -> dict:
+    grade["metrics"] = enrich_metrics(
+        case,
+        events,
+        expected_skill=expected_skill,
+        selector_chain=configuration.get("selection", {}).get("chain", []),
+    )
+    if modern and grade.get("local_completion") and grade.get("state") == "completed":
+        grade["local_completion"] = grade["metrics"]["answer_owner"] == "local"
+    grade["local_owner_evidence"] = "explicit" if modern else "legacy compatibility"
+    return grade
+
+
+def regrade(
+    document: dict[str, Any], corpus: Corpus, *, source_sha256: str | None = None
+) -> dict[str, Any]:
     """Recompute the grades and summary of an export from its stored traces (no model call).
 
     The sandbox state after each run is taken from the stored grade.
@@ -454,6 +537,7 @@ def regrade(document: dict[str, Any], corpus: Corpus) -> dict[str, Any]:
     """
     if document["corpus"]["sha256"] != corpus.digest:
         raise SystemExit("the export was made with another corpus digest; it cannot be regraded")
+    skills = expected_skills(corpus)
     grades = []
     for old in document["grades"]:
         case, mode = corpus.case(old["case_id"]), old["mode"]
@@ -467,12 +551,28 @@ def regrade(document: dict[str, Any], corpus: Corpus) -> dict[str, Any]:
             old["databases"],
             local_model_configured=document.get("configuration", {}).get("local_model_configured"),
         )
-        grades.append(grade.to_json_object())
+        grades.append(
+            enrich_grade(
+                grade.to_json_object(),
+                case,
+                events,
+                skills[case.case_id],
+                document.get("configuration", {}),
+                modern="selection_sidecar_sha256" in document,
+            )
+        )
     return {
         **document,
         "grades": grades,
         "summary": _summary(grades, corpus),
-        "regraded_with": {"application": harness.application_revision()},
+        "analysis_history": [
+            *document.get("analysis_history", []),
+            *([document["regraded_with"]] if "regraded_with" in document else []),
+        ],
+        "regraded_with": {
+            "application": harness.application_revision(),
+            "source_sha256": source_sha256,
+        },
     }
 
 
@@ -886,7 +986,8 @@ def render_draft_pass_markdown(result: Mapping[str, Any]) -> str:
     return label_report("\n".join(lines), source.get("configuration"))
 
 
-def main(argv: Sequence[str] | None = None) -> None:
+def argument_parser() -> argparse.ArgumentParser:
+    """The same CLI schema is used for invocation and checkpoint reconciliation."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="the export file (JSON); the report is .md")
     parser.add_argument(
@@ -899,8 +1000,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--languages", nargs="+", choices=("en", "zh"))
     parser.add_argument(
         "--regrade",
-        action="store_true",
-        help="recompute the grades of the export named by --out from its traces, in place",
+        metavar="EXPORT",
+        default=False,
+        help="regrade immutable EXPORT into a distinct --out file from its stored traces",
     )
     parser.add_argument(
         "--regrade-draft-pass",
@@ -908,9 +1010,20 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="grade the stored traces of EXPORT as if the skill-stage draft had been published "
         "(RM31): an offline counterfactual, written to --out and its .md, never to EXPORT",
     )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    parser = argument_parser()
     args = parser.parse_args(argv)
     if (args.regrade or args.regrade_draft_pass) and (
-        args.performance or args.budgets or args.selection_chain or args.no_local_model
+        args.performance
+        or args.budgets
+        or args.selection_chain
+        or args.no_local_model
+        or args.placement
+        or args.timing_samples
+        or args.checkpoint
     ):
         parser.error("offline regrading keeps the source configuration; omit configuration flags")
     if args.regrade_draft_pass:
@@ -924,8 +1037,14 @@ def main(argv: Sequence[str] | None = None) -> None:
         out.with_suffix(".md").write_text(render_draft_pass_markdown(result), encoding="utf-8")
         return
     if args.regrade:
-        out = Path(args.out)
-        document = regrade(json.loads(out.read_text("utf-8")), load_frozen_corpus())
+        source, out = Path(args.regrade), Path(args.out)
+        if source.resolve() == out.resolve():
+            parser.error("--out must differ from the source export: the original is never changed")
+        document = regrade(
+            json.loads(source.read_text("utf-8")),
+            load_frozen_corpus(),
+            source_sha256=byte_digest(source),
+        )
         harness.write_json(out, document)
         report = render_corpus_markdown(
             document["summary"], title=f"Correctness corpus: {out.stem}"

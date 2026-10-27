@@ -9,7 +9,7 @@ codebase.
    [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md) defines what RelayMind
    does. Every implementation task and every acceptance test must reference
    requirement IDs from it (RM01–RM33, AC01–AC24; RM30 and AC23 are retired;
-   RM33 and AC24 specify the planned M9 OpenClaw integration in 0.46).
+   RM33 and AC24 specify the planned M9 OpenClaw integration in 0.47).
    Implementation status is recorded in docs/ROADMAP.md. If code and spec disagree,
    the spec wins. If the spec is wrong, revise the spec first, then change
    the code.

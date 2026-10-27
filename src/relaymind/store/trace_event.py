@@ -716,6 +716,7 @@ _PERFORMANCE_ACCEPTED_FIELDS: dict[str, Callable[[Any], None]] = {
     # RM29: the offered skills' prefetch declarations (the option is "prefetch").
     "prefetch_declarations": _check_prefetch_declarations,
     "answer_pass": _one_of("answer_pass", ("final", "draft")),
+    "answer_stream_effective": _one_of("answer_stream_effective", ("buffered", "live")),
     "answer_stream": _one_of("answer_stream", ("buffered", "live")),
     "calls_per_generation": _one_of("calls_per_generation", ("one", "many")),
     "prefetch": _boolean("prefetch"),
@@ -1016,6 +1017,11 @@ def _check_payload(event_type: EventType, payload: Mapping[str, Any], actor: str
     _check_placement_event(event_type, payload, actor)
     _check_workflow_fields(event_type, payload)
     _check_optional_fields(event_type, payload)
+    if event_type is EventType.ANSWER_DELTA and "call_id" in payload:
+        if not isinstance(payload.get("text"), str) or not _is_text(payload.get("model")):
+            raise TraceEventError("answer.delta needs text and model")
+        if not _is_text(payload["call_id"]):
+            raise TraceEventError("answer.delta call_id must be nonblank")
     if event_type is EventType.RUN_ACCEPTED:
         _check_accepted_payload(payload)
     if event_type is EventType.CACHE_HIT:
@@ -1024,6 +1030,15 @@ def _check_payload(event_type: EventType, payload: Mapping[str, Any], actor: str
         _check_clarification_payload(payload)
     if event_type is EventType.CLARIFICATION_ANSWERED:
         _check_answered_payload(payload)
+    if event_type in (
+        EventType.HANDOFF_STARTED,
+        EventType.RUN_COMPLETED,
+        EventType.RUN_FAILED,
+        EventType.RUN_CANCELLED,
+    ):
+        value = payload.get("local_active_ms")
+        if value is not None and not _is_count(value, 0):
+            raise TraceEventError("local_active_ms must be a non-negative integer or null")
     if event_type is EventType.HANDOFF_STARTED:
         _check_handoff_payload(payload)
     if event_type is EventType.CONFIRMATION_REQUIRED:

@@ -7,7 +7,7 @@ milestone is done when its deterministic tests pass and its live checks are
 recorded in [`EVIDENCE.md`](EVIDENCE.md). Issues on GitHub carry an `M1`
 to `M9` label; the lists below name the issues where the order matters.
 M1 to M6 are the prototype; M7 to M9 are phase 2 (spec 0.31, revised
-for OpenClaw integration in spec 0.46), the
+for OpenClaw integration in spec 0.47), the
 answer to customer feedback, with shorter waiting time as the objective
 (see
 [`design/2026-10-23-performance-first-routing.md`](design/2026-10-23-performance-first-routing.md)
@@ -722,7 +722,7 @@ met or not met with exact numbers in the constrained configuration; a
 selector swap by configuration, including an HTTP selector, leaves the
 orchestrator and the packages unchanged.
 
-## M9 — OpenClaw integration (spec 0.46, P1)
+## M9 — OpenClaw integration (spec 0.47, P1)
 
 Ship an installable provider plugin that lets OpenClaw use RelayMind's
 bounded local/external inference through `relaymind-client-tools`.
@@ -858,7 +858,7 @@ listed here so the current order can be traced to its reason.
   installed. Acceptance failures and environment gaps are retained in
   the report.
 
-- 2026-10-27, spec 0.46: M9 changes from Workflows to OpenClaw integration
+- 2026-10-27, spec 0.47: M9 changes from Workflows to OpenClaw integration
   at the owner's request. Retire the unimplemented RM30/AC23 expansion; add
   RM33/AC24 for a provider plugin over the client-owned chat API. Reuse the
   six open M9 issues with revised scope and dependencies. Preserve the

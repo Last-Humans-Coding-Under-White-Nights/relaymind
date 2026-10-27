@@ -1658,3 +1658,25 @@ def test_local_model_fields_are_validated_and_published():
         with pytest.raises(TraceEventError, match=key):
             validate_trace_event(data)
         assert not SCHEMA_VALIDATOR.is_valid(data), name
+
+
+LOCAL_ACTIVE_EVENTS = ("handoff.started", "run.completed", "run.failed", "run.cancelled")
+
+
+@pytest.mark.parametrize("event_type", LOCAL_ACTIVE_EVENTS)
+@pytest.mark.parametrize("value", [None, 0, 2500])
+def test_local_active_ms_accepts_null_and_non_negative_integers(event_type, value):
+    """RM25/RM27, spec section 14.4: local_active_ms is unknown (null) or a measured count."""
+    data = terminal_with(event_type, local_active_ms=value)
+    assert validate_trace_event(data).payload["local_active_ms"] == value
+    assert SCHEMA_VALIDATOR.is_valid(data)
+
+
+@pytest.mark.parametrize("event_type", LOCAL_ACTIVE_EVENTS)
+@pytest.mark.parametrize("invalid", [-1, 1.5, True, "3"])
+def test_local_active_ms_rejects_other_values_in_both_validators(event_type, invalid):
+    """RM25/RM27, spec section 14.4: a malformed local_active_ms is refused by name."""
+    data = terminal_with(event_type, local_active_ms=invalid)
+    with pytest.raises(TraceEventError, match="local_active_ms"):
+        validate_trace_event(data)
+    assert not SCHEMA_VALIDATOR.is_valid(data)

@@ -1,0 +1,353 @@
+{
+  "schema_version": 1,
+  "cells": [
+    {
+      "id": "calibration-normal-local_first-router-buffered-corpus",
+      "phase": "calibration",
+      "configuration": "normal",
+      "policy": "local_first",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "calibration-constrained-local_first-router-buffered-corpus",
+      "phase": "calibration",
+      "configuration": "constrained",
+      "policy": "local_first",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "placement-normal-local_first-router-buffered-corpus",
+      "phase": "placement",
+      "configuration": "normal",
+      "policy": "local_first",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "placement-normal-local_first-router-buffered-latency",
+      "phase": "placement",
+      "configuration": "normal",
+      "policy": "local_first",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "latency",
+      "requests": 124
+    },
+    {
+      "id": "placement-normal-local_first-example-router-buffered-corpus",
+      "phase": "placement",
+      "configuration": "normal",
+      "policy": "local_first",
+      "chain": "example-router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "placement-normal-local_first-example-router-buffered-latency",
+      "phase": "placement",
+      "configuration": "normal",
+      "policy": "local_first",
+      "chain": "example-router",
+      "stream": "buffered",
+      "runner": "latency",
+      "requests": 124
+    },
+    {
+      "id": "placement-normal-device_aware-router-buffered-corpus",
+      "phase": "placement",
+      "configuration": "normal",
+      "policy": "device_aware",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "placement-normal-device_aware-router-buffered-latency",
+      "phase": "placement",
+      "configuration": "normal",
+      "policy": "device_aware",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "latency",
+      "requests": 124
+    },
+    {
+      "id": "placement-normal-device_aware-example-router-buffered-corpus",
+      "phase": "placement",
+      "configuration": "normal",
+      "policy": "device_aware",
+      "chain": "example-router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "placement-normal-device_aware-example-router-buffered-latency",
+      "phase": "placement",
+      "configuration": "normal",
+      "policy": "device_aware",
+      "chain": "example-router",
+      "stream": "buffered",
+      "runner": "latency",
+      "requests": 124
+    },
+    {
+      "id": "placement-normal-expected_wait-router-buffered-corpus",
+      "phase": "placement",
+      "configuration": "normal",
+      "policy": "expected_wait",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "placement-normal-expected_wait-router-buffered-latency",
+      "phase": "placement",
+      "configuration": "normal",
+      "policy": "expected_wait",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "latency",
+      "requests": 124
+    },
+    {
+      "id": "placement-normal-expected_wait-example-router-buffered-corpus",
+      "phase": "placement",
+      "configuration": "normal",
+      "policy": "expected_wait",
+      "chain": "example-router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "placement-normal-expected_wait-example-router-buffered-latency",
+      "phase": "placement",
+      "configuration": "normal",
+      "policy": "expected_wait",
+      "chain": "example-router",
+      "stream": "buffered",
+      "runner": "latency",
+      "requests": 124
+    },
+    {
+      "id": "placement-constrained-local_first-router-buffered-corpus",
+      "phase": "placement",
+      "configuration": "constrained",
+      "policy": "local_first",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "placement-constrained-local_first-router-buffered-latency",
+      "phase": "placement",
+      "configuration": "constrained",
+      "policy": "local_first",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "latency",
+      "requests": 124
+    },
+    {
+      "id": "placement-constrained-local_first-example-router-buffered-corpus",
+      "phase": "placement",
+      "configuration": "constrained",
+      "policy": "local_first",
+      "chain": "example-router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "placement-constrained-local_first-example-router-buffered-latency",
+      "phase": "placement",
+      "configuration": "constrained",
+      "policy": "local_first",
+      "chain": "example-router",
+      "stream": "buffered",
+      "runner": "latency",
+      "requests": 124
+    },
+    {
+      "id": "placement-constrained-device_aware-router-buffered-corpus",
+      "phase": "placement",
+      "configuration": "constrained",
+      "policy": "device_aware",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "placement-constrained-device_aware-router-buffered-latency",
+      "phase": "placement",
+      "configuration": "constrained",
+      "policy": "device_aware",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "latency",
+      "requests": 124
+    },
+    {
+      "id": "placement-constrained-device_aware-example-router-buffered-corpus",
+      "phase": "placement",
+      "configuration": "constrained",
+      "policy": "device_aware",
+      "chain": "example-router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "placement-constrained-device_aware-example-router-buffered-latency",
+      "phase": "placement",
+      "configuration": "constrained",
+      "policy": "device_aware",
+      "chain": "example-router",
+      "stream": "buffered",
+      "runner": "latency",
+      "requests": 124
+    },
+    {
+      "id": "placement-constrained-expected_wait-router-buffered-corpus",
+      "phase": "placement",
+      "configuration": "constrained",
+      "policy": "expected_wait",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "placement-constrained-expected_wait-router-buffered-latency",
+      "phase": "placement",
+      "configuration": "constrained",
+      "policy": "expected_wait",
+      "chain": "router",
+      "stream": "buffered",
+      "runner": "latency",
+      "requests": 124
+    },
+    {
+      "id": "placement-constrained-expected_wait-example-router-buffered-corpus",
+      "phase": "placement",
+      "configuration": "constrained",
+      "policy": "expected_wait",
+      "chain": "example-router",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "placement-constrained-expected_wait-example-router-buffered-latency",
+      "phase": "placement",
+      "configuration": "constrained",
+      "policy": "expected_wait",
+      "chain": "example-router",
+      "stream": "buffered",
+      "runner": "latency",
+      "requests": 124
+    },
+    {
+      "id": "streaming-normal-local_first-router-live-corpus",
+      "phase": "streaming",
+      "configuration": "normal",
+      "policy": "local_first",
+      "chain": "router",
+      "stream": "live",
+      "runner": "corpus",
+      "requests": 156
+    },
+    {
+      "id": "streaming-none-local_first-example-buffered-corpus",
+      "phase": "streaming",
+      "configuration": "none",
+      "policy": "local_first",
+      "chain": "example",
+      "stream": "buffered",
+      "runner": "corpus",
+      "requests": 104
+    },
+    {
+      "id": "streaming-none-local_first-example-buffered-latency",
+      "phase": "streaming",
+      "configuration": "none",
+      "policy": "local_first",
+      "chain": "example",
+      "stream": "buffered",
+      "runner": "latency",
+      "requests": 124
+    },
+    {
+      "id": "streaming-none-local_first-example-live-corpus",
+      "phase": "streaming",
+      "configuration": "none",
+      "policy": "local_first",
+      "chain": "example",
+      "stream": "live",
+      "runner": "corpus",
+      "requests": 104
+    },
+    {
+      "id": "streaming-none-local_first-example-live-latency",
+      "phase": "streaming",
+      "configuration": "none",
+      "policy": "local_first",
+      "chain": "example",
+      "stream": "live",
+      "runner": "latency",
+      "requests": 124
+    }
+  ],
+  "run_order": [
+    "calibration-normal-local_first-router-buffered-corpus",
+    "calibration-constrained-local_first-router-buffered-corpus",
+    "placement-normal-local_first-router-buffered-corpus",
+    "placement-normal-local_first-router-buffered-latency",
+    "placement-normal-local_first-example-router-buffered-corpus",
+    "placement-normal-local_first-example-router-buffered-latency",
+    "placement-normal-device_aware-router-buffered-corpus",
+    "placement-normal-device_aware-router-buffered-latency",
+    "placement-normal-device_aware-example-router-buffered-corpus",
+    "placement-normal-device_aware-example-router-buffered-latency",
+    "placement-normal-expected_wait-router-buffered-corpus",
+    "placement-normal-expected_wait-router-buffered-latency",
+    "placement-normal-expected_wait-example-router-buffered-corpus",
+    "placement-normal-expected_wait-example-router-buffered-latency",
+    "placement-constrained-local_first-router-buffered-corpus",
+    "placement-constrained-local_first-router-buffered-latency",
+    "placement-constrained-local_first-example-router-buffered-corpus",
+    "placement-constrained-local_first-example-router-buffered-latency",
+    "placement-constrained-device_aware-router-buffered-corpus",
+    "placement-constrained-device_aware-router-buffered-latency",
+    "placement-constrained-device_aware-example-router-buffered-corpus",
+    "placement-constrained-device_aware-example-router-buffered-latency",
+    "placement-constrained-expected_wait-router-buffered-corpus",
+    "placement-constrained-expected_wait-router-buffered-latency",
+    "placement-constrained-expected_wait-example-router-buffered-corpus",
+    "placement-constrained-expected_wait-example-router-buffered-latency",
+    "streaming-normal-local_first-router-live-corpus",
+    "streaming-none-local_first-example-buffered-corpus",
+    "streaming-none-local_first-example-buffered-latency",
+    "streaming-none-local_first-example-live-corpus",
+    "streaming-none-local_first-example-live-latency"
+  ],
+  "corpus_runs": 2548,
+  "latency_requests": 1736,
+  "external_inference_ceiling": 21024,
+  "token_ceiling": null,
+  "defaults_changed": false
+}

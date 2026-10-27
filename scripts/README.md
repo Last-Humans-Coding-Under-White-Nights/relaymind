@@ -102,6 +102,9 @@
 
   `--cases`, `--modes`, and `--languages` run a subset; the export
   records the selection and whether it is the full corpus.
+  `--external-request-options '{"reasoning_effort": "low"}'` (both
+  runners) declares `external_model.request_options` for the gateways
+  they start; the export configuration records it only when given.
 - `latency_benchmark.py` — the latency experiment (#33, spec 0.28
   section 12.2) on the local path: one gateway started with
   `relaymind serve --config`, routing cache off, concurrency one, and no
@@ -190,9 +193,13 @@
   `--selection-chain SELECTOR ...`, and `--no-local-model`.
   Repeat `--performance` or `--budgets` to add more distinct keys. Boolean
   values are `true` or `false`; keys, types, ranges, and implemented options
-  are validated before runtime startup. Unsupported `answer_stream=live`
-  remains rejected. Baseline defaults remain unchanged and every export
-  and report header records the effective settings.
+  are validated before runtime startup. `answer_stream=live` enables the
+  managed statement gate; buffered remains the default. Every export
+  and report header records the effective settings. Corpus grades also retain
+  configured/effective stream policy and terminal error codes; report tables
+  keep live/buffered task success and `predicate_unmet` failures separate.
+  The actual paired provider corpus comparison is pending; this support is
+  not parity evidence.
 
   ```bash
   python scripts/run_corpus.py --out docs/evidence/<date>-draft-many.json \
@@ -446,3 +453,243 @@
       --selector-name example_keyword --selector-version 1 --seed 42 \
       --source-training neither --output /tmp/skills-example-keyword-http.json
   ```
+
+### M8 placement and streaming matrix (#134)
+
+`run_m8_matrix.py` writes a fixed offline execution plan unless `--execute` is
+present. The plan has 31 serial cells: two independent calibration corpora,
+12 placement corpus cells and 12 latency cells (normal/constrained × three
+policies × two selector chains), one local live corpus compared with the exact
+normal buffered control, and four no-local buffered/live corpus/latency cells.
+This is 2,548 corpus runs and 1,736 latency requests, including cold requests
+and warm-ups. The conservative external inference ceiling is 21,024 calls;
+there is no configured aggregate token ceiling. Actual failures and unknown
+usage remain visible. Calibration cost is separate from candidate cost.
+
+Run the offline plan from the reviewed checkout:
+
+```sh
+.venv/bin/python scripts/run_m8_matrix.py --out /tmp/relaymind-m8-measurements
+```
+
+After independent code review, the concrete execution command is:
+
+```sh
+.venv/bin/python scripts/run_m8_matrix.py \
+  --out /tmp/relaymind-m8-measurements \
+  --runtime /Users/dmitrykudryavtsev/llama-b11785-dl/x/llama-b11785/llama-server \
+  --provider-env /Users/dmitrykudryavtsev/.config/relaymind/external.env \
+  --execute
+```
+
+The optional provider file accepts literal assignments to the three
+`RELAYMIND_EXTERNAL_API_KEY`, `RELAYMIND_EXTERNAL_BASE_URL`, and
+`RELAYMIND_EXTERNAL_MODEL` environment variables. It is parsed without shell
+execution. The key is passed only in the child environment, never argv or the
+matrix index. Existing exported variables also work. Provider context remains
+128,000, provider options remain their defaults, and baseline budgets are
+unchanged. The runner checks the model artifact and runtime version before
+launch. A clean committed checkout is required; child gateway imports explicitly
+resolve that checkout's `src`, even with a shared virtualenv.
+
+Every export and retained SQLite/log directory stays outside the checkout.
+The matrix index records source bytes, runtime binary digest, settings, argv,
+run order, UTC boundaries, attempts, and export digests. Each runner's optional
+`--checkpoint FILE` writes fsynced request-start and request-result checkpoints.
+Before resuming, the matrix driver reconciles each retained runner checkpoint
+against its original CLI arguments, source, configuration, prior, request count,
+and export digest. A finalized runner result is promoted into the matrix index
+even if the driver was interrupted before publishing it; it never starts another
+attempt for that completed cell. Recovery also reads retained SQLite usage for
+older interrupted attempts, including crashes that bypassed exception handling.
+The full traces preserve actual usage; an unfinished request's retained database
+is evidence even when no client result was returned. Complete same-identity
+cells can be skipped on resume. A partial cell cannot resume its lost runtime
+or prefix-cache state: an explicit `--restart CELL=NEW_ATTEMPT` declares a new
+attempt before any new outcome. The original attempt remains incomplete and
+its costs remain in the retained evidence. Complete cells cannot be rerun for
+result selection. Source, provider, settings, seed, or retained-prior mismatch
+requires a separately labeled experiment; timestamps are never rebased.
+
+Both runners accept `--placement policy=local_first|device_aware|expected_wait`
+and `--timing-samples FILE`. The version-one `relaymind.placement_prior` bundle
+contains exact configuration partitions and source export byte digests/run IDs.
+It derives timings and terminal outcomes from validated actual traces through
+the shared live outcome projector; it creates no synthetic runs. Setting a
+partition's `include_outcomes` to false makes a timing-only prior, which cannot
+establish expected-wait applicability. Calibration bundles are frozen before
+candidate execution. Every case imports its same configuration's prior before
+startup; genuine startup warm-up samples are recorded separately. Latency uses
+one gateway and learns online after seeding.
+
+The exports include measured local phase time, prediction-error observations,
+selection set scores, generations per completed run, external usage per
+successful task (including failed-attempt cost), and missing-count denominators.
+Successful completion latency excludes clarification waits and failed streams;
+`stream_duration_ms` retains their transport duration. None of these deterministic
+checks is live model evidence or permission to change defaults.
+
+Generation summaries report measured and unobserved completed-run counts. If any
+completed run lacks generation observations, the overall generations-per-completed-run
+ratio is null; the separately labeled measured-only ratio and observed actor/purpose
+counts remain available. The prior importer validates every partition's structure
+and checks accepted/call model identities and recorded provider/answer options
+against its configuration. Legacy missing accepted local-model identity may use
+actual local calls; an explicit conflicting identity cannot use that fallback.
+
+
+### Recovering a finalized cell with a separate controller
+
+Both matrix scripts accept `--measurement-root PATH` (spec 14.4.5, RM16/RM17/RM25).
+Run the reviewed controller script from its own clean checkout and select the
+original clean measurement checkout explicitly. Runner/configuration/package
+imports and inference subprocesses use the measurement checkout; M7's shared
+reconciliation helper stays in the controller checkout. Its separately declared
+criteria checkout and revision still identify C6. Use the original interpreter
+path so recorded runner argv remains exact.
+
+`--reconcile-only` validates existing checkpoints, exports, source/configuration,
+cost and priors without reading provider credentials or starting a model. It is
+mutually exclusive with `--execute` and refuses `--restart`/`--provider-env`.
+Only retained finalized cells are recovered; unstarted cells stay unstarted and
+partial or stale evidence is refused. For example:
+
+```bash
+/path/to/original/python /path/to/controller/scripts/run_m8_matrix.py \
+  --measurement-root /path/to/frozen-measurement \
+  --out /path/to/existing-matrix --runtime /path/to/pinned/llama-server \
+  --reconcile-only
+```
+
+The controller compares expected exported identity using the runners' existing
+`<repo>`/`<work>` JSON serialization; raw checkpoint/source identity and artifact
+bytes remain unchanged. The index retains a separate `controller_history` with
+controller commit/script hashes, measured import paths, measurement identity,
+original artifact digests and recovery time. Before recovery updates the index,
+`controller-before-<sha256>.json` preserves its exact previous bytes, including
+interrupted status and coordinator-failure timestamps. Later resumes verify this
+snapshot and controller identity. Missing retained cost evidence is refused.
+
+After reviewing reconciliation, resume with the same controller, measurement root,
+output/runtime and original provider settings using `--execute`. Completed cells
+are skipped. Keep the same M7 revision, criteria checkout/revision and reuse-index
+arguments when reconciling or resuming M7. The fixed plans, counts and budgets do
+not change; do not rename a completed calibration as a new attempt.
+
+### M8 offline comparison report
+
+`analyze_m8.py` reads a finalized M8 matrix (plan, index, attempt checkpoints and
+exports, frozen priors) and writes a JSON analysis with a Markdown report next to
+it (spec 12.1–12.3 and 14.4; RM16, RM25–RM28, RM32; AC19, AC21). It starts no
+model, reads no credentials, opens or seeds no run store and never writes inside
+the matrix. The JSON and Markdown outputs must both be new files: an existing
+file, any path inside this checkout or the matrix, and (after the index is read)
+any path under the matrix root or measurement checkout that the index recorded
+are refused before anything is written. A file under the recorded checkout would
+change its source fingerprint and break a later driver resume.
+
+```sh
+.venv/bin/python scripts/analyze_m8.py --matrix /path/to/m8 --out /tmp/m8-analysis.json
+.venv/bin/python scripts/analyze_m8.py --inventory --matrix /path/to/m8 --out /tmp/m8-inventory.json
+```
+
+Acceptance comes before any comparison. All 31 cells must be complete: exact
+driver argv, source/configuration identity, the exact retained prior identity
+(compared with `load_prior` provenance of the relocated frozen prior, spec
+14.4.5), frozen prior linkage to its own calibration export, export/checkpoint
+byte digests, unique finalized request steps, the exact frozen `(case_id, mode)`
+set with locked language and class, the seeded 120-request latency schedule with
+its cold request and three warm-ups, required metrics, and frozen
+corpus/prompt/fixture bytes equal to the measured revision. Incomplete or changed
+evidence fails acceptance and is never turned into zero success, cost or timing;
+the full report then refuses to write. Initial expected-wait prerequisites are
+checked for presence only, because recomputing them needs a seeded run store.
+
+A latency request without trace metrics stays in every denominator (spec 12.2) as
+an unobserved finding when the runner recorded why: a timeout, an error without a
+run (connection refused, transport error or an unexpected HTTP status), or an
+error after the run started (including a failed trace read). The report counts
+these per arm and per reason next to every latency verdict, and a placement or
+streaming latency target is not met when the candidate arm has more timeouts,
+errors or unobserved requests than its control. A request with no metrics and no
+recorded timeout or error is missing evidence and fails acceptance (spec 14.4.4).
+
+The matrix may sit under another root than the one its index recorded. Files are
+found by the driver's `CELL/ATTEMPT/` layout; the recorded root is inferred from
+the recorded argv, and recorded argv, paths and identities stay in the report as
+provenance, unchanged. `--inventory` lists complete, incomplete, missing and
+invalid cells with their attempts and physical cost, and produces no comparison
+or verdict.
+
+An accepted report pairs the 39 comparisons over the existing cells (placement
+policies, example-first chain, local live corpus against its seeded buffered
+control, none-class corpus and latency). Corpus pairs use `(case_id, mode)` with
+gain, loss, both unchanged counts and measured class transitions; latency pairs
+use the recorded seeded order, with each arm's full observed distribution and
+finite-pair deltas. The streamed-failure headline counts `predicate_unmet` among
+effective live rows only, overall, per measured class and per mode/language/class.
+Missed confirmations sit next to reached confirmations and mutating tool starts
+counted from the exported traces. Physical cost keeps calibration, candidate corpus and
+candidate latency ledgers apart, includes interrupted attempts, and leaves unknown
+usage unknown; latency cohort cost counts successful final answers, labeled as
+such, never task success. Each section 12.3 hypothesis is met, not met or not measured, with
+evidence cells and digests; hypotheses this matrix cannot measure name the
+external evidence they need. Defaults are not changed by this report.
+
+### M7 metric completion and fixed experiment matrix
+
+`run_m7_matrix.py` plans the #128 experiments without reading credentials or
+starting inference. Supply the full reviewed production revision R. The default
+plan includes a separately reviewed criteria ablation revision; leave its hash
+unset while planning, or use `--omit-criteria` to declare the historical-only
+comparison. Execution refuses a missing experimental hash/checkout. The C6
+checkout must implement the experiment-only section 14.4.4 exception; this
+measurement patch does not create that revision or introduce a product flag.
+
+```bash
+.venv/bin/python scripts/run_m7_matrix.py \
+  --out /tmp/relaymind-m7-measurements --revision FULL_REVIEWED_HASH \
+  --criteria-revision FULL_EXPERIMENTAL_HASH
+```
+
+This is seven corpus cells (832 runs) and two latency cells (248 requests), with
+baseline budgets and a conservative 3,120 external-call ceiling per uninterrupted
+matrix. Omitting C6 is 728 runs and a 2,808-call ceiling. L0/L1 use the same seed
+20261023, local runtime, no provider and no prior; only early_headers changes.
+C1/C2/C3 change draft/many/prefetch individually; C4 combines those three; C5 has
+no local model and uses example_match. All other settings remain the defaults.
+Neither plan is measured evidence and token/currency cost is unknown.
+
+Add `--execute --criteria-checkout /path/to/reviewed-ablation` and the existing
+M8 `--runtime`/`--provider-env` options only after both revisions are reviewed and
+clean. Outputs must be outside the checkout. `--restart CELL=NEW_ATTEMPT`
+requires a new safe name and retains prior checkpoints, databases and costs.
+Finalized runner checkpoints are reconciled without repeating the cell.
+
+`--reuse-m8-index /path/to/m8/index.json` can reuse only the normal unseeded
+calibration corpus for C0 and the none/buffered corpus for C5. Reuse checks source
+and fixture bytes, runtime, model/manifest, effective settings, provider/context,
+corpus/sidecar, modes and a null prior. It never accepts seeded placement as C0.
+Valid reuse saves 260 corpus runs (572 incremental with C6), with an incremental
+1,872-call ceiling. Foreign attempts retain their physical identities and costs.
+M8 retains its 31 cells and existing options.
+
+Reanalysis now requires a distinct output and preserves measured application,
+configuration and previous analysis provenance, with source-byte SHA-256:
+
+```bash
+.venv/bin/python scripts/run_corpus.py \
+  --regrade docs/evidence/2026-10-22-corpus-apple-m1.json \
+  --out /tmp/relaymind-historical-reanalysis.json
+.venv/bin/python scripts/analyze_m7.py \
+  --matrix /tmp/relaymind-m7-measurements --out /tmp/relaymind-m7-analysis.json
+```
+
+The analysis is offline. It validates frozen case/mode coverage and immutable
+checkpoint/export identity, renders all M7 metric tables plus historical
+corrections by language/class/mode, and enumerates the section 12.3 hypotheses.
+It writes a report even when required observations/cells are missing, then exits
+unsuccessfully for failed reporting acceptance. A measured missed target is a
+valid finding. Header-before-answer-token is a diagnostic: without a comparable
+client/generation-start clock it does not prove the stronger generation-start
+hypothesis. No default or live capability decision follows from these tests.

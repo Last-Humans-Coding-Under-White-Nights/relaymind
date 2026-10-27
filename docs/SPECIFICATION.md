@@ -1,6 +1,6 @@
 # RelayMind Specification for Spec Driven Development
 
-Version 0.46 | 27 October 2026 | Proposed implementation baseline
+Version 0.47 | 27 October 2026 | Proposed implementation baseline
 
 RelayMind is a local AI gateway that makes the best use of external language models from a PC with limited resources: it keeps simple, bounded work on a small local model when the machine can run it fast enough, sends everything else to an external model with as few round trips and tokens as the task allows, preserves completed work across that switch, and shows every decision in a trace. This specification defines the prototype behavior, interfaces, acceptance criteria, and evidence required before making performance or quality claims. It is intended for engineers and coding agents implementing the prototype.
 
@@ -22,7 +22,7 @@ The implementation baseline adds these decisions: a single-user local service, P
 
 The complete demo includes P0 and the bounded parallel workflow. Routing-cache experiments may follow the uncached baseline. General PDF processing is excluded because the earlier PDF example illustrated latency, while the agreed prototype now centers on skills and tools.
 
-Phase 2 scope (introduced in spec 0.31, revised in 0.46). The current direction is: the gateway considers the measured performance of the device when it chooses between local and external work and never assumes that local inference is faster (RM27); it works without a local model, with external models, skill and tool selection, and progress feedback (RM26); it can serve as an OpenClaw provider plugin, with OpenClaw owning its tools and sessions (RM33); and its selection logic sits behind one interface that a third-party system can replace (RM28). The objective of the phase is the project's purpose stated above, the best use of an external model from a machine with limited resources, measured as shorter waiting time for the first useful response and for the completed result and as external calls and tokens per completed task, per section 12; the mechanisms are fewer generations and round trips (RM29, RM31, section 4.3), gated answer streaming (RM32), and placement from recorded timing samples (RM27). Phase 2 classifies a machine by what the gateway measures on it, never by its hardware type: suitable (the local model runs, and the measured samples predict that local work fits its budgets), unsuitable (the local model runs, but too slowly to help; the gateway detects this itself and uses managed external execution in auto, while local_only remains available, RM26), and none (the local model cannot run on the machine, or is not configured). The evaluation names each machine with its measured class. The reasoning behind the phase is in `docs/design/2026-10-23-performance-first-routing.md`; this document is the normative text.
+Phase 2 scope (introduced in spec 0.31, revised in 0.47). The current direction is: the gateway considers the measured performance of the device when it chooses between local and external work and never assumes that local inference is faster (RM27); it works without a local model, with external models, skill and tool selection, and progress feedback (RM26); it can serve as an OpenClaw provider plugin, with OpenClaw owning its tools and sessions (RM33); and its selection logic sits behind one interface that a third-party system can replace (RM28). The objective of the phase is the project's purpose stated above, the best use of an external model from a machine with limited resources, measured as shorter waiting time for the first useful response and for the completed result and as external calls and tokens per completed task, per section 12; the mechanisms are fewer generations and round trips (RM29, RM31, section 4.3), gated answer streaming (RM32), and placement from recorded timing samples (RM27). Phase 2 classifies a machine by what the gateway measures on it, never by its hardware type: suitable (the local model runs, and the measured samples predict that local work fits its budgets), unsuitable (the local model runs, but too slowly to help; the gateway detects this itself and uses managed external execution in auto, while local_only remains available, RM26), and none (the local model cannot run on the machine, or is not configured). The evaluation names each machine with its measured class. The reasoning behind the phase is in `docs/design/2026-10-23-performance-first-routing.md`; this document is the normative text.
 
 | Phase 2 priority | Included behavior |
 | --- | --- |
@@ -134,7 +134,7 @@ The gateway builds the envelope from the run's recorded state, not from model me
 
 Before dispatch the gateway measures the whole external request, messages and tool schemas, against the context limit of the external adapter. It uses the adapter's tokenizer when it has one. Otherwise it uses the UTF-8 byte length of the request, which is an upper bound on the token count, so a request that does not fit is never passed. A request over the limit ends the run as failed with error code context_limit_exceeded and reason code context_limit, before any external call. The same check runs again before every external generation, because tool results accumulate. Handoff needs external dispatch to be permitted: an effective execution mode other than local_only, a configured external model, and room in the entire-run limits. Otherwise the run ends as needs_external (RM04). A tool operation of the run that is still in flight, or that ended unknown_outcome, blocks handoff (RM14): the run ends as needs_external with reason code tool_failure, and the partial evidence stays in the trace. A stop that the external stage could not resolve either does not hand off: a selected skill none of whose allowed tools is permitted to the caller (RM08). The run ends as needs_external with reason code capability_missing and makes no external call. One more stop ends without a handoff. An admitted route=parallel is never handed to one external actor in place of the workflow: it runs the parallel workflow (RM15, below). An unavailable local model, a missing local capability or a failed local generation, ends as needs_external with reason code capability_missing, unless the operator policy permits degraded mode (section 11), in which case it hands off like any other stop.
 
-The external stage. On handoff the run enters external_running and records handoff.started. From then on the local actor holds no dispatch authority and cannot publish the final answer (RM14). The external model may propose tools from the envelope's allowed tools. The gateway validates each proposal (RM09), checks identifier provenance (RM05), and runs it through the same executor as a local proposal. A proposal that repeats a completed operation, the same tool with the same canonical arguments, gets the recorded result and runs no handler (RM10). A mutating tool proposed in the external stage goes through the same confirmation flow as a local proposal (RM11, section 5): the run suspends in waiting_confirmation from external_running, and an approved resume returns it to external_running. When a skill is selected, the external answer must meet its completion predicate. The answer is buffered, validated, and then published as answer.delta by the external model, which is then the final-answer model (RM16, RM20). External generations are limited by external_generations (default 6) and by external_seconds for each generation (default 30, section 11), inside the entire-run limits. The per-stage local limits do not apply to the external stage. When no skill was selected, for example in external_only, the envelope carries skill null, the external model gets the skill catalog descriptions and the permitted tools of the offered skills, and the external model does not load a skill body in this version.
+The external stage. On handoff the run enters external_running and records handoff.started. From then on the local actor holds no dispatch authority and cannot publish the final answer (RM14). The external model may propose tools from the envelope's allowed tools. The gateway validates each proposal (RM09), checks identifier provenance (RM05), and runs it through the same executor as a local proposal. A proposal that repeats a completed operation, the same tool with the same canonical arguments, gets the recorded result and runs no handler (RM10). A mutating tool proposed in the external stage goes through the same confirmation flow as a local proposal (RM11, section 5): the run suspends in waiting_confirmation from external_running, and an approved resume returns it to external_running. When a skill is selected, the external answer must meet its completion predicate. The answer is buffered, validated, and then published as answer.delta by the external model (except eligible live answer generations under section 7.3.1), which is then the final-answer model (RM16, RM20). External generations are limited by external_generations (default 6) and by external_seconds for each generation (default 30, section 11), inside the entire-run limits. The per-stage local limits do not apply to the external stage. When no skill was selected, for example in external_only, the envelope carries skill null, the external model gets the skill catalog descriptions and the permitted tools of the offered skills, and the external model does not load a skill body in this version.
 
 Completion criteria in the external request (spec 0.31; detail spec 0.35). The external request states the selected skill's completion criteria explicitly, generated from the registered predicate, so the external model is told what the gateway will check; the criteria are gateway rules, not tool output (RM12). They have two parts. The fixed part (the section labels it must use, the patterns it must not contain, and what to keep exactly, such as the status word) is the same for every run of a skill and sits in the first system message after the skill instructions. The value part (the exact values the answer must preserve) is a gateway rules system message placed at the end of the conversation before each external generation once a successful result exists; it replaces its earlier copy instead of adding another, and it is part of the request measured against the context limit (RM13). Its values come only from schema-typed fields of the latest successful tool result (an enum, a timestamp, an identifier of plain token shape, a count, a boolean), never from free text, so injected text in a tool result cannot reach it. A correction after a rejected answer names the checks the answer failed, in gateway text that does not quote the answer; the local correction is unchanged. The synthesis request of the parallel workflow keeps its own instruction and its generic correction and gets no criteria message (AC14). The reason is finding F6 of the 2026-10-23 analysis in `docs/EVIDENCE.md`: on the external path the predicate's rejections each cost a correction round trip. Corrections per completed run is a metric of section 12.1, reported before and after this change.
 
@@ -163,7 +163,7 @@ Measurement (RM15, RM25). A run that started the workflow reports a workflow obj
 
 **RM16** A completed run MUST identify the final-answer model and every actual model call. Data provenance MUST be preserved: an unavailable health service cannot be reported as healthy, and a drafted checklist cannot be reported as a diagnosis supported by logs.
 
-**RM30** Retired in spec 0.46 before implementation of the declarative workflow runner. YAML workflow packages, the skill manifest workflow key, workflow roots, and their plan benchmark are no longer deliverables. This identifier is reserved for historical references and MUST NOT be reused. The implemented fixed parallel workflow remains governed by RM15 and AC14. OpenClaw integration is RM33, section 7.5.
+**RM30** Retired in spec 0.47 before implementation of the declarative workflow runner. YAML workflow packages, the skill manifest workflow key, workflow roots, and their plan benchmark are no longer deliverables. This identifier is reserved for historical references and MUST NOT be reused. The implemented fixed parallel workflow remains governed by RM15 and AC14. OpenClaw integration is RM33, section 7.5.
 
 ## 5 State and persistence contract
 
@@ -194,7 +194,7 @@ Confirmation and resume. A resume in waiting_confirmation (section 7.4) carries 
 
 Clarification and resume. A clarification suspends the run in waiting_input and records the question in clarification.required (section 8). The run's language is fixed by its first RouteDecision and is kept across every resume; the resume input never changes it, so an identifier-only reply does not re-detect the language. When a resumed run routes again, the gateway sets the new RouteDecision's language to the run's language before validation; a different language in the router's output is overridden there, not treated as invalid output (section 8). On resume the gateway appends the clarification question as an assistant turn and the resume input as a user turn to the conversation context, and records the input and the waiting time in a clarification.answered event (section 8). For RM05 identifier provenance only user turns and tool results count; the gateway's own question, which may list valid values, is not provenance. When the clarify decision carries a skill_id, the resumed run continues with that skill: the gateway checks the new input for the missing identifier without a routing generation and moves to local_running, or asks again if the input still lacks it. When the clarify decision carries skill_id null, no skill was chosen, so the resumed run routes again with a routing generation. Either way the resumed run records route.selected for the decision that continues it (section 8): a continuation records the gateway's decision made without a model call, a re-route records the new routing generation's decision. skill.loaded (RM06) is emitted when the run enters local_running; a clarify decision loads no skill body, so the clarification itself emits none. A resume opens a new local stage charged under section 11. A run asks for clarification at most the configured number of rounds (section 11); when a further clarification would be needed, the run ends as failed with error code missing_input.
 
-OpenClaw sessions (spec 0.46, RM33). The host owns the session and sends the conversation on each request. Each client-owned chat request remains a separate run under section 7.2; the plugin introduces no gateway run state.
+OpenClaw sessions (spec 0.47, RM33). The host owns the session and sends the conversation on each request. Each client-owned chat request remains a separate run under section 7.2; the plugin introduces no gateway run state.
 
 ## 6 Model adapter contract
 
@@ -279,7 +279,7 @@ On this endpoint needs_external is an error before any answer content is sent, b
 
 Once answer streaming begins, final-answer ownership is fixed. A subsequent provider error fails the stream; the gateway MUST NOT silently append another model's replacement answer. A later correction is a distinct message or run.
 
-The stream is built in one of two ways. A buffered stream, which the managed alias uses unless answer_stream is live (RM32, spec 0.31), is the replay of a finished run: the run has already validated and published its answer, so the stream sends the role chunk, one content chunk for each answer.delta event in order, the finish chunk, and [DONE]. No provider is called while it is sent. A live stream is produced by a backend that forwards answer text while the provider is still generating it (the client-owned backend of section 7.2 buffers and validates its generation instead, so it does not produce one; from spec 0.31 the managed backend produces one under RM32). It sends the role chunk, then a content chunk for each non-empty piece in the order received, and the finish chunk and [DONE] only after the provider finished. The role chunk is held until the first non-empty piece arrives or the provider finishes, so nothing is sent before there is answer text. In both, an emitted content chunk is never revised, reordered, or retracted, and the joined content chunks are the answer. A request without stream collects the whole live answer before it responds. A client that disconnects from a live stream makes the gateway close the provider stream, which requests cancellation (section 7.4); a disconnect is not a provider failure.
+The stream is built in one of two ways. A buffered stream, which the managed alias uses unless answer_stream is live (RM32, spec 0.31), is the replay of a finished run: the run has already validated and published its answer, so the stream sends the role chunk, one content chunk for each answer.delta event in order, the finish chunk, and [DONE]. No provider is called while it is sent. A live stream is produced by a backend that forwards answer text while the provider is still generating it (the client-owned backend of section 7.2 buffers and validates its generation instead, so it does not produce one; from spec 0.31 the managed backend produces one under RM32). It sends the role chunk, then a content chunk for each non-empty piece in the order received, and the finish chunk and [DONE] only after the provider finished. The role chunk is held until the first non-empty piece arrives or the provider finishes, so nothing is sent before there is answer text. In both, an emitted content chunk is never revised, reordered, or retracted, and the joined content chunks are the answer. A managed request without stream selects effective buffered semantics before acceptance, including its correction loop (RM32); a generic live backend is collected before responding. A client that disconnects from a live stream makes the gateway close the provider stream, which requests cancellation (section 7.4); a disconnect is not a provider failure.
 
 Mid-stream failure (RM20, section 11). When the provider fails after the first chunk was sent, the status line can no longer change. The gateway then (1) asks the backend to record the run as failed (run.failed, error_code external_failed; a run that already ended never restarts, RM17), (2) sends one data event whose body is {"error": {"code": "external_failed", "message": <fixed text>, "run_id": <run ID>}}, which standard SDKs raise as an error, and (3) closes the connection without a chunk that has a finish_reason and without [DONE]. The message is fixed and carries no provider text (RM12). The gateway does not send a replacement answer, and it does not retry on another model. A failure before the first chunk, or of a request without stream, is a normal error response with its status: the run is recorded as failed in the same way and the response is external_failed (503) with the run ID and the same fixed message (section 11).
 
@@ -287,11 +287,116 @@ In managed mode, tool-planning output is buffered and validated. After the skill
 
 **RM31** Answer pass (spec 0.31). The skill-stage draft that meets the completion predicate MUST be publishable as the answer without a second generation. The option performance.answer_pass (section 14.1) selects final, the default, the baseline of section 12, and the only behavior before this revision (the second generation with tools disabled), or draft. Under draft the gateway publishes the validated draft when it is in the run's language and holds no tool-call JSON; otherwise, and whenever the caller sent a non-default answer option (section 7.1), the final generation runs and is validated as before, so the recorded answer_options are always what shaped the published answer. run.accepted records the option and run.completed records answer_pass_applied, the pass that produced the answer (section 8). The corpus of section 12.2 reports both settings. The case for draft is finding F1 of the 2026-10-23 analysis in `docs/EVIDENCE.md`. The default stays final until the offline regrade and a corpus run in this configuration report (section 12.3); the spec then revises the default with their numbers.
 
-**RM32** Gated answer streaming (spec 0.31). The managed alias MAY forward an answer while the provider generates it, under performance.answer_stream = live (section 14.1; buffered, the behavior before this revision and the benchmark baseline, is the default). Only an answer generation streams: a generation offered no tools, which under live the gateway makes once the skill's pending work is empty (every tool the skill needs has a recorded result, through proposals or prefetch), in the final pass, and in the synthesis call; under buffered the external loop keeps offering tools as before, so buffered behaves exactly as before this revision. A generation offered tools is buffered and validated as before, so preamble text and tool calls never reach the stream. The forwarded text is held back per statement: the gateway splits the text at statement ends and forwards a statement only after the completion predicate's per-statement checks pass (a preserved and unnegated status word, no forbidden pattern, identifiers from the evidence); the completeness checks run when the generation ends. A completeness failure after forwarding ends the stream with the mid-stream error event of this section, records run.failed with error code predicate_unmet, and sends no replacement text (RM20); a per-statement failure is never forwarded, so a client never sees a statement the gateway rejected (RM16). A per-statement failure before any statement was forwarded takes the correction loop inside the run's limits, because nothing reached the client; after a statement was forwarded it ends the stream as a completeness failure does. The same request without stream, or under buffered, takes the correction loop as before. Live and buffered runs are labeled in run.accepted and reported apart (section 12.2). The gate for live (section 12.3): task success on the corpus at parity with buffered, with the streamed failures (live runs that ended predicate_unmet where buffered would have taken a correction) reported; a forwarded-then-rejected count is zero by construction and is not the gate. The expected gain is bounded (findings F3 and F7 of the 2026-10-23 analysis in `docs/EVIDENCE.md`): the answer is a small part of an external run, and streaming leaves the fixed cost of each call untouched, so live is P1 and follows the correction-rate work of section 4.4. A compatible client still receives its first byte when the first answer generation starts, so on a simple task after at least one round trip; nothing earlier is sent (RM20). The native answer.delta events of a live answer are written as the statements are forwarded.
+**RM32** Gated answer streaming (spec 0.31). The managed alias MAY forward an answer while the provider generates it, under performance.answer_stream = live (section 14.1; buffered, the behavior before this revision and the benchmark baseline, is the default). Only an answer generation streams: a generation offered no tools, which under live the gateway makes once the skill's pending work is empty (every tool the skill needs has a recorded result, through proposals or prefetch), in the final pass, and in the synthesis call; under buffered the external loop keeps offering tools as before, so buffered behaves exactly as before this revision. A generation offered tools is buffered and validated as before, so preamble text and tool calls never reach the stream. The forwarded text is held back per statement: the gateway splits the text at statement ends and forwards a statement only after the completion predicate's per-statement checks pass (a preserved and unnegated status word, no forbidden pattern, identifiers from the evidence); the completeness checks run when the generation ends. A completeness failure after forwarding ends the stream with the mid-stream error event of this section, records run.failed with error code predicate_unmet, and sends no replacement text (RM20); a per-statement failure is never forwarded, so a client never sees a statement the gateway rejected (RM16). A per-statement failure before any statement was forwarded takes the correction loop inside the run's limits, because nothing reached the client; after a statement was forwarded it ends the stream as a completeness failure does. The same request without stream, or under buffered, takes the correction loop as before. Live and buffered runs are labeled in run.accepted and reported apart (section 12.2). The gate for live (section 12.3): task success on the corpus at parity with buffered, with the streamed failures (live runs that ended predicate_unmet where buffered would have taken a correction) reported; a forwarded-then-rejected count is zero by construction and is not the gate. The expected gain is bounded (findings F3 and F7 of the 2026-10-23 analysis in `docs/EVIDENCE.md`): the answer is a small part of an external run, and streaming leaves the fixed cost of each call untouched, so live is P1 and follows the correction-rate work of section 4.4. With early_headers false, the response waits for the first verified persisted content or a terminal outcome; with early_headers true, headers and keep-alive comments precede answer content. Neither headers nor comments commit answer ownership or count as first useful content (RM20). The native answer.delta events of a live answer are written as the statements are forwarded.
 
 Early response headers (spec 0.31). Under performance.early_headers = true (section 14.1; false, the default, is the behavior before this revision and the latency baseline), a streamed chat request receives its status line and headers, including X-RelayMind-Run-ID and a new header X-RelayMind-Events-URL that names the run's native event stream, as soon as the run is accepted, and an SSE comment line as a keep-alive while the run works; no chunk with content is sent before the answer, so RM20 holds, and a client that wants progress opens the native stream the header names. A run that ends without an answer under early headers ends the stream with the mid-stream error event of this section carrying its error code and reason code, because the status line is gone; a request without stream is unchanged. With early headers on, the first transport event of section 12.1 is the header time, is labeled so, and is never reported as first useful content.
 
 Usage is optional in the compatible response when a truthful unified count is unavailable. The native trace MUST retain usage per model and call, including cache counts when the provider returns them. Counts across different tokenizers MUST NOT be presented as if they belonged to one model.
+
+### 7.3.1 Verified live publication (spec 0.41; RM12, RM20, RM32, AC19)
+
+The following contract is normative.
+
+**Eligibility and execution policy**
+
+`answer_stream_effective` is a run execution policy chosen before acceptance:
+
+| Entry | Configured buffered | Configured live |
+| --- | --- | --- |
+| Managed chat, `stream=true` | buffered | live |
+| Managed chat, `stream=false` | buffered | buffered |
+| Native managed run | buffered | live |
+| Client-owned alias | buffered | buffered |
+
+Live policy permits progressive publication only from a selected managed skill's genuine answer generation: its request offers **no tools**, and it is the final pass, a post-evidence answer generation, or the post-join synthesis. The provisional `external_checklist` branch has no tools but is **not** an answer and never publishes. Routing, planning, repairs that offer tools, tool-enabled draft text and their tool calls remain buffered. With no selected skill/predicate, retain the existing buffered generic external answer; RM32 says MAY stream and provides no semantic gate for this case. Effective live is permission for eligible generations, not a claim that every run emitted progressive content.
+
+Keep RM31 unchanged: a tool-enabled validated draft can be published through the buffered draft path when its existing language, tool-JSON and caller-option guards pass. Do not stream that draft early or force a new final call just because live policy was requested. A no-tools stage under `answer_pass=final` that the existing loop treats as a finalize proposal remains a proposal until its actual final generation; avoid publishing it and then calling `_final` again.
+
+Keep an immutable set of the stage's offered tool names before clearing schemas. Pending work is empty only when each such tool has the required recorded successful evidence; never infer it from “some tool ran,” model text or merely a recorded failure. Publish the choice that latest outcomes govern this live eligibility check, so a later failed/unknown outcome does not revive stale success. Missing/truncated evidence still follows each predicate's `_latest` rules: performance diagnostics explicitly accept a successful truncated observation, whereas complete-result predicates do not. A failed eligibility check leaves planning/correction available. Use this rule after ordinary proposed tool executions and confirmed resumes as well as prefetch. Buffered policy retains its existing tool offers and loop behavior exactly.
+
+**Stateful gate and equivalence obligation**
+
+Freeze the generation's evidence snapshot, predicate ID and raw text stream. Never run the whole-answer predicate independently on sentences or classify a failure by matching English failed-check strings.
+
+Use the existing `_STATEMENT_END` language as the delimiter rule: `。！？；;` or newline always delimit; `. ! ?` delimit only with following whitespace or true EOF. Preserve every original character and newline, including delimiters; do not strip/rejoin or normalize Markdown/CRLF. Hold ASCII punctuation pending lookahead and treat unfinished final text as an EOF tail. Provider chunk boundaries have no semantic meaning.
+
+Segmentation alone does not establish a safe publication boundary. Retain original surrounding context and any ambiguous suffix before declaring safety: regex token boundaries, Chinese glosses, resource-subject detection, label/number attribution and multiline checklist labels must resolve independently of chunking. Adjacent safe statements may be held together when necessary; correctness takes precedence over prompt publication. Retaining the complete raw accumulated answer and an unpublished offset is acceptable within the existing bounded generation; do not introduce an unrecorded output budget.
+
+For each existing predicate P and frozen evidence R, define explicit cumulative safety S and final completeness C such that for **every** answer A:
+
+`P(A, R) == (S(A, R) and C(A, R))`.
+
+At EOF, also invoke the existing whole-answer predicate as the authoritative backstop. The equivalence must be demonstrated by differential tests on both languages, existing predicate fixtures/review regressions, and adversarial continuations, not asserted from a handful of passing sentences. A rejected stable statement is never persisted or forwarded. A missing value alone is a completeness failure, not a statement rejection. An absent/ineligible evidence snapshot fails before any publication.
+
+| Predicate | Cumulative safety from existing semantics | Completeness at EOF |
+| --- | --- | --- |
+| health_status_preserved | Every status attributed to returned service under `_stated_statuses`, including negation/gloss/resource boundaries, equals returned status | At least one attributed status; exact checked_at substring |
+| deployment_reported | Existing deployment-like-ID rejection; in no-deployment branch existing Chinese assigned-ID and revision checks | Service mention; when deployment exists exact returned ID and deployed_at; no extra absence assertion requirement |
+| incident_counts_reported | No existing cause phrase; every attributed labeled number equals its returned field, retaining existing specificity/precedence | Service mention and at least one value for each window/count label |
+| deletion_outcome_reported | No other matched demo database; no existing deletion-negation phrase | Successful deleted=true evidence; returned database mention and deletion verb |
+| performance_evidence_separated | No invented factual verifier: current predicate has no observation-truth safety check | Successful evidence (partial allowed), filled observations and filled hypotheses/insufficient-evidence sections using existing label grammar |
+| health_checklist_separated | Health safety only over the exact existing outside-checklist projection | First draft checklist label, plus health completeness on that projection |
+
+Checklist scope is particularly easy to change accidentally: current code uses the **first** draft label, removes through the **first** subsequent non-list observation heading (or EOF), and includes all subsequent text. It does not repeatedly toggle scope for later checklist labels. A list item `- Observation:` does not resume health checking. `_DRAFT_CHECKLIST_LABEL` contains `\s*` and can span newlines; retain an undecided heading prefix until its classification is stable. `_filled_sections` counts content only until the next recognized section label, and labels inside prose do not start sections. Retain line-start context even when a previous statement was already emitted.
+
+At true EOF resolve the tail, safety and final completeness **before publishing any remaining tail**. If no delta has committed, a failure still takes the existing correction/escalation route. If earlier deltas committed, failure terminates without publishing an unchecked/missing-completeness tail. Entirely empty/whitespace generation never creates an empty successful answer or claims ownership.
+
+Redaction is a second equivalence obligation: joined published content must equal the existing full-answer `scrub(A)` for an accepted A. Today `_publish` scrubs the whole answer before splitting. A configured secret may span provider chunks **and statement delimiters**, and whole-token replacement needs right-boundary lookahead. Keep any possible secret-match suffix, longest-first semantics and original token context; merging/delaying statements, up to buffering the answer when necessary, is allowed. Predicate verification still uses raw text, as buffered currently does; persist and forward only the scrubbed verified projection. Do not independently scrub each statement, and never persist unredacted gate buffers for debugging.
+
+**Commitment, ownership and terminal behavior**
+
+Treat publication as a serialized run operation: check active state/version, cancellation/deadline and dispatch authority; validate/scrub the stable unit; successfully append its nonempty delta; then commit the in-memory owner tuple `(call_id, model_id, dispatch_role)` and notify the transport. No await or concurrent generation can intervene between the persistent append and owner update. If append fails, forward nothing and terminate through the internal-error path. Publication checks must also prevent a terminal run receiving a late delta. Whitespace-only pieces do not establish an answer by themselves; preserve them with adjacent real content when safe.
+
+Every later published unit must have the same tuple. A second generation by the **same actor/model** is still a replacement and forbidden after commitment. `DispatchAuthority` currently remembers only local/external and allows repeated claims by the same actor; it also permits `hand_off_to_external` without checking answer ownership. Guard both escalation/dispatch and publication centrally, rather than relying on the transport to notice replacement. Do not call `_publish` again on already-published generation text when `_generate` returns.
+
+| Stop | Before committed content | After committed content |
+| --- | --- | --- |
+| Predicate safety/completeness rejection | Existing local repair/final escalation or external correction, unchanged budgets | `run.failed error_code=predicate_unmet`; one matching fixed SSE error, no replacement/retry |
+| Provider failure, malformed/no-tools native call, incomplete iterator | Existing provider/invalid-output route appropriate to stage | Terminal `external_failed`; fixed SSE error, no replacement |
+| Placement miss | Section 14.2.4 local_slow handoff/needs_external | Section 14.2.4(5): failed external_failed, local_slow, placement.deadline; SSE deadline_exceeded |
+| Entire-run/stage time stop | Existing budget mapping and permitted handoff; no dispatch without run budget | Terminal failure, never handoff; retain named exhausted budget and deadline response semantics |
+| User/native/disconnect/shutdown cancellation | Existing cancelled/cancel_requested | Same cancellation, never predicate_unmet/provider failure; retain earlier deltas |
+
+Cancellation wins an overlapping timeout as 14.2.4 requires, with terminal transitions remaining single-use/versioned. Check cancellation and elapsed deadlines before processing each candidate statement, before persistence and after iterator termination. Entire-run time wins its placement tie; otherwise applied placement timeout wins local-stage tie. A provider failure must not be relabeled predicate_unmet just because its unfinished prefix lacks complete fields. A success `Completed` marker is provisional until the iterator actually ends without failure: some adapters emit usage afterward, and a late exception still fails. A cancellation-resistant adapter's late text never resumes publication or opens another generation. Request best-effort provider cancellation once on an early rejected generation and finish/await cleanup before another dispatch.
+
+Keep `_generate` as the sole generation/budget/timing boundary, including `_finish_model_call` from #129 and placement handling from #130. Predicate success is task success, separate from transport/timing sample success. If a statement rejection stops reading early, record an interrupted/failed model call truthfully; a naturally completed generation failing only completeness can still be a successful provider timing sample. Do not fabricate complete usage, tool calls, finish reasons or successful samples from partial output.
+
+**Chat/native transport and exact additive schema choices**
+
+The following additive section 8 fields are validated by both Python and JSON validators. Older events lacking the additions remain valid; additions are required for newly produced applicable events:
+
+```text
+run.accepted.payload.answer_stream_effective: "buffered" | "live"
+  # answer_stream retains configured "buffered" | "live"
+answer.delta.payload.call_id: nonblank string
+  # existing text:string and model:nonblank string retained
+```
+
+No new event, run state or HTTP error code is needed. Cross-event invariants (runtime/store checks, not merely JSON Schema): call_id references this run's model.started, model/actor agree with that generation, tools_offered is empty for progressively published deltas, all live deltas have one call_id, and no delta follows a terminal event. Historical answer.delta without call_id means generation identity was not recorded, never invented by a reader. Effective live is the policy label; draft publication and other ineligible generations may still buffer under it. If an actual-applied metric is desired later, specify it separately rather than pretending answer_stream_effective promises progressive output occurred.
+
+Predicate SSE payload is exactly:
+
+`{"error":{"code":"predicate_unmet","message":"the answer did not meet the skill's completion criteria; no answer was completed","run_id":"<id>"}}`.
+
+Use a dedicated stream-error representation/typed terminal result for this stream-only code; retain existing `ApiError` status rules for genuine HTTP errors. Deadline/provider/internal payloads retain their stable existing codes and fixed safe messages; include reason_code when the terminal outcome supplies one. The transport must not run a generic zero-argument `live.fail()` that overwrites an already recorded predicate/deadline/cancellation outcome.
+
+Expose committed store deltas while the accepted run task is still running (one consumer/cursor with seq IDs, or a notification queue backed by persisted events). `ManagedChat.complete` and `early_stream` currently wait for the full task before replay and therefore cannot become live merely by returning a queue from `_publish`. Observe task termination **and drain previously persisted deltas** without duplicating any event; emit a successful finish/[DONE] only after the run actually completed and all deltas were delivered. Partial deltas followed by failed/cancelled state never produce a success marker. Cursor-before-start/notification-before-check discipline must avoid missing the first append. Bound the notification mechanism or use store cursors; never block native execution forever on a nonexistent chat consumer.
+
+With early_headers=false, wait for the first persisted verified content or a terminal outcome before creating the SSE response; precommit failures remain ordinary HTTP responses after recoveries are exhausted. With early_headers=true, preserve immediate headers/comments and send a terminal SSE error if needed; headers do not remove precommit recovery rights. Send the role chunk once immediately before the first content chunk. Native events keep store seq/replay ordering.
+
+The response owns the orchestrator task until the live iterator closes, even if an intermediate ChatResult becomes available earlier. Disconnect/response cleanup requests cancellation through the existing bounded path, asks providers to stop, and does not write provider-failure events. Native run ownership remains independent of event subscribers. Completed idempotent replays use stored scrubbed deltas and no generation; failed/cancelled duplicate handling stays as specified.
+
+**Existing predicate limits: do not silently strengthen them**
+
+The old predicates are syntactic evidence gates, not general truth checkers. These existing evaluations return True:
+
+- No deployment: `payments-api checked.` with NO_DEPLOYMENT. Criteria ask to state absence but predicate only forbids matched invented IDs/revisions. Adding an absence requirement must revise spec/criteria/predicate together and be separately tested in buffered mode.
+- Health: `Healthy: payments-api; payments-api is unavailable at <checked_at>.` with UNAVAILABLE. A status preceding the ID is outside current attribution grammar. Do not promise every conceivable contradictory health assertion is rejected.
+- Performance: `Observations: payments-api is healthy because aliens fixed it.\nHypotheses: None.` with METRICS. This predicate verifies evidence/section presence, not factual truth, exact counts or cause attribution. Strengthening it is a separate semantic change.
+- Deployment: the valid deployment report followed by `Owner account bogus-account-99.` still passes. It rejects its specific deployment-like ID patterns, not every identifier-shaped string.
+
+Likewise exact timestamp/ID checks are substring tests, not semantic entailment. A claim that RM32 verifies every arbitrary statement against all tool facts would exceed the current predicate contract. Preserve this limitation explicitly; add no universal “every number/ID must appear in evidence” rule. Tool-enabled generations and native calls never leak through managed content; the existing `holds_tool_call_json` guard applies to RM31 drafts only. Extending that textual guard to every final/external answer changes acceptance semantics and needs its own spec-first decision, rather than an unannounced live-only strengthening.
+
 
 ### 7.4 Native run API
 
@@ -341,7 +446,7 @@ A key is stored only when a run is created, in the same store transaction as the
 
 Keys leave with their run: the seven-day retention (section 5) and explicit deletion remove the key with the run, and after that the key is unknown and a request that carries it creates a new run. A reused key never authorizes a repeated side effect: a duplicate never reaches the orchestrator, and a completed operation is replayed from its record by the executor in any case (RM10). Resume and cancel do not read the header: expected_version already makes a retry of them safe (RM17).
 
-### 7.5 OpenClaw provider integration (spec 0.46, planned M9)
+### 7.5 OpenClaw provider integration (spec 0.47, planned M9)
 
 **RM33** RelayMind MUST provide an installable OpenClaw provider plugin using the host's public plugin SDK and the authenticated loopback chat API of sections 7.1 to 7.3. The plugin MUST use relaymind-client-tools. OpenClaw owns conversation state, tool execution, and its tool permissions and approval policy; RelayMind owns bounded inference, proposal validation, fallback before output is committed, and its run trace. The plugin MUST NOT execute host tools, import them into the managed registry, approve actions, or claim that RelayMind certified caller-reported tool results. No fork of OpenClaw is required. [S14, S15]
 
@@ -370,11 +475,11 @@ The following objects define required fields. Implementations MUST publish equiv
 | handoff.started payload | reason_code (the RM04 reason for the escalation); model (the external model); skill (name, version, content_hash) or null; operation_ids (the completed operations the envelope carries); allowed_tools; request (size, limit, and method, tokenizer or utf8_bytes, of the measured external request); degraded_mode (true) and local_failure (a non-blank cause) only when the local model was unavailable and the operator policy permitted degraded mode (section 11). |
 | TraceEvent | schema_version=1; run_id; seq; timestamp; elapsed_ms; event_type; actor; payload. |
 | run.accepted payload | requested_execution_mode (the header or native value, or null when absent); effective_execution_mode (the mode applied after defaults and policy); model_alias (the virtual alias from the chat request's model field, relaymind or relaymind-client-tools, or null for a native run (section 7.4)); budgets (the section 11 limits in force, RM03); skill_roots (the configured roots in order); skills_offered (array of name, version, and content_hash for every skill in the catalog offered to the router, or in external_only to the external model (section 7.4), empty for the client-owned alias).; original_messages (spec 0.20: the request's system, developer, user, and assistant text messages as role and content, in order, redacted by secret field name per RM12; it is the caller's own text, written when the run is accepted and before any secret value of the run is known, so a value typed in the request text is stored as typed, with the run's seven-day retention (section 5); the demo UI shows the original prompt from it, section 9); answer_options (spec 0.22: an object of the answer options the gateway applies to the answer generations of the run, with only the keys that apply: max_completion_tokens, the effective token budget (a legacy max_tokens is recorded under this name, section 7.1), temperature, and top_p; a key is absent when the run has no such option, so a run without options records {}, and so does a native run, which accepts none (section 7.4); a default-valued option that the adapters do not accept is not applied and so not recorded; the recorded values are what shaped the answer, which lets a report show its sampling settings from the trace, section 12.2; a run stored before spec 0.22 has no answer_options, which means the options were not recorded, not that there were none; the demo UI shows them, section 9); routing_cache (spec 0.26: optional boolean, true when the routing-result cache was enabled for the run, section 10; absent or false means the run is a cache-off baseline run, and a run stored before spec 0.26 has none). |
-| run.accepted additions (spec 0.31) | local_model (the configured local model_id, or null when none) with local_model_status (ready, unavailable, unsuitable, or absent) and local_model_reason (the measured cause, or null; RM26); placement_policy (local_first, device_aware, or expected_wait, RM27), with placement.margin, placement.probe_after_seconds, and selection.timeout_seconds recorded inside budgets next to the section 11 limits, under those dotted names (RM03; spec 0.36); calls_per_generation (one or many), prefetch (boolean), and early_headers (boolean), the performance options in force; answer_pass and answer_stream (the performance options in force, RM31, RM32); selection (the configured selector chain, in order, RM28), example_match_score and example_match_margin (the effective thresholds, section 14.1); prefetch_declarations (an object keyed by offered skill ID, whose values are arrays of declared prefetch calls, including empty arrays for skills with none, RM29). A run stored before spec 0.31 has none of them, which means they were not recorded. |
+| run.accepted additions (spec 0.31; 0.41) | answer_stream_effective (buffered or live, selected before acceptance; answer_stream remains the configured policy, section 7.3.1); local_model (the configured local model_id, or null when none) with local_model_status (ready, unavailable, unsuitable, or absent) and local_model_reason (the measured cause, or null; RM26); placement_policy (local_first, device_aware, or expected_wait, RM27), with placement.margin, placement.probe_after_seconds, and selection.timeout_seconds recorded inside budgets next to the section 11 limits, under those dotted names (RM03; spec 0.36); calls_per_generation (one or many), prefetch (boolean), and early_headers (boolean), the performance options in force; answer_pass and answer_stream (the performance options in force, RM31, RM32); selection (the configured selector chain, in order, RM28), example_match_score and example_match_margin (the effective thresholds, section 14.1); prefetch_declarations (an object keyed by offered skill ID, whose values are arrays of declared prefetch calls, including empty arrays for skills with none, RM29). A run stored before spec 0.31 has none of them, which means they were not recorded. |
 | route.selected payload | decision (the RouteDecision); mechanism (native_function_calling, routing_cache, bypass, execution_mode, degraded_mode, clarification_resume, client_owned, or, from spec 0.31, a selector's mechanism label, or, from spec 0.36, selector_chain for the gateway's decision when the selector chain chose nothing); model, call_id, input_tokens, and model_language for a routing generation; routing_cache hit or miss when the cache is enabled; and from spec 0.31: selector (name, version, mechanism, elapsed_ms, and attempts, one per selector tried, each with its name and outcome: selected, none, timeout, error, inadmissible, or not_placed when the placement policy did not run a model-based selector's generation (RM27); RM28; spec 0.36: name, version, and mechanism are null and elapsed_ms is the whole chain's when the chain chose nothing, and that route.selected is the gateway's own decision with mechanism selector_chain), tools_narrowed (the selector's narrowing intersected with the skill's allowlist, in allowlist order, when the selector narrowed; spec 0.36), a route.selected of model_router keeps the local model's actor and the fields of a routing generation, and the choice of any other selector has actor gateway, so it is not a model action (section 12.1), and placement (the model the routing generation ran on, or none, with the reason, predicted_ms and its inputs, and deadline_ms; RM27); and from spec 0.37, local_model_status (absent, unavailable, or unsuitable) on every route.selected of an auto run in managed external execution (RM26): the selector's choice, the gateway's clarification, the chain's failure, a clarification resume, and the client-owned alias's decision. |
 | model.started and model.finished additions (spec 0.31, revised in 0.33) | model.started: placement (role, reason, predicted_ms, deadline_ms; RM27) and request_options (the operator-declared provider options sent, section 6), present only when at least one option is declared, so a local call and an external call without declared options both leave it out. model.finished: first_token_ms (integer milliseconds from the request start on the run's monotonic clock, null when no token arrived); inside usage (null when the source returned no usage), next to input_tokens and output_tokens, cached_tokens and reasoning_tokens, each null when the source reported none and never a defaulted 0; predicted_ms, deadline_ms, and deadline_missed. |
 | tool.proposed additions (spec 0.31) | mechanism: model (a model's proposal, the default), prefetch (RM29), or the reserved legacy workflow value with step, the step ID (retired RM30; no package runner emits it); a gateway-made proposal has actor gateway and model null. tool.started and tool.finished of a gateway-made call carry the same mechanism (prefetch or workflow) and model null; a null model is valid only with actor gateway and one of those mechanisms, so a model-made call that lost its model is still refused (RM22). |
-| Retired workflow package events | Spec 0.46 removes the unimplemented requirement for workflow.started, workflow.step.started, workflow.step.finished, and workflow_steps (retired RM30). The fixed parallel workflow summary below remains required. Reserved workflow tool-mechanism fields in existing schemas remain readable; they do not establish package execution support. |
+| Retired workflow package events | Spec 0.47 removes the unimplemented requirement for workflow.started, workflow.step.started, workflow.step.finished, and workflow_steps (retired RM30). The fixed parallel workflow summary below remains required. Reserved workflow tool-mechanism fields in existing schemas remain readable; they do not establish package execution support. |
 | timing sample | Spec 0.38 clarifies RM27: schema_version=1; model; actor (local or external); purpose; kind (run, warm_up, or probe, replacing the earlier proposed warm_up flag); input_tokens, cached_tokens, first_token_ms, and output_tokens (each a non-negative integer or null when unreported); duration_ms (non-negative integer); succeeded (boolean); run_id (nullable link to a run; warm-up and probe have none); recorded_at (UTC timestamp). Kept in the run store, never a trace event. Call identity may be retained internally to prevent duplicate samples. |
 | clarification.required payload | question (the clarification text in the run's language); language; reason_code; skill_id (the clarify decision's skill_id: the skill whose required identifier the gateway found absent, or null for a clarification the model requested, per the cross-field rules below); missing (a non-blank name of the input the run waits for: the argument name of the absent required identifier when skill_id is set, or skill_selection when skill_id is null, because the model requested clarification before any skill was chosen and the gateway knows no narrower input); waiting_seconds (the section 11 waiting limit in force). |
 | confirmation.required payload | approval_id; tool_name; proposal_id; arguments (canonical, redacted per RM12); target (the value of the tool's confirmation target argument); state_version (the run version the approval is bound to); expires_at (UTC time, five minutes after issue); model (the proposing model). Never the token or its hash. |
@@ -408,6 +513,8 @@ RouteDecision fields MUST also satisfy these cross-field rules:
 A decision that breaks any rule is invalid output (reason code invalid_output): it never triggers a tool and is handled under RM03/RM04. The RouteDecision validator at the routing boundary owns these rules and checks every decision before route.selected is recorded; the skills_offered membership check reads the run.accepted payload, whose shape the run.accepted validator guarantees. The validator checks the decision it is given; the language rule holds because the gateway sets the language of every later decision (section 5), so a resumed routing generation cannot flip it.
 
 Reason codes include simple_skill, complex_skill, missing_input, local_budget, invalid_output, tool_failure, context_limit, capability_missing, parallel_workflow, and execution_mode (a route fixed by the effective execution mode, section 7.4). Spec 0.31 adds local_slow (a local generation the placement policy predicted over its limit, or that missed its deadline, RM27), no_local_model (a gateway without a usable local model: absent, unavailable, or unsuitable, RM26), and selection_failed (a selector chain that chose nothing, RM28) to the reason_code enum of RouteDecision and HandoffEnvelope under the same schema_version, an additive change like the fields spec 0.26 added to run.accepted; a decision stored earlier never carries them. They are operational labels, not generated chains of thought.
+
+answer.delta additionally carries call_id (nonblank string) for progressively generated output (spec 0.41, section 7.3.1). Historical and gateway-rendered output may omit it; readers never invent a generation identity.
 
 **RM22** Required events are run.accepted, route.selected, skill.loaded, model.started, model.finished, tool.proposed, tool.started, tool.finished, clarification.required, clarification.answered, confirmation.required, handoff.started, answer.delta, run.completed, run.failed, and run.cancelled. clarification.answered follows every resume that supplies input text and records the input and the waiting time (section 5); run.completed and run.failed report active time and waiting time separately as active_ms and waiting_ms (table above, section 12.1); run.cancelled carries the same timing fields. Cached routes, when enabled, emit cache.hit with the originating version (payload in the table above), immediately before the route.selected that uses the cached skill choice; that route.selected has actor gateway and mechanism routing_cache, and carries no model, call_id, or token count, because no routing generation ran. Every tool event includes its operation or proposal ID and originating model, or actor gateway with model null for a prefetch call (spec 0.31). run.accepted is the first event of a run; its payload is defined in the table above.
 
@@ -566,8 +673,8 @@ An external stage that cannot finish ends the run as failed with error code exte
 | First token per call | Spec 0.31: first_token_ms of every model call, by model and purpose, from the monotonic clock (section 6); the fixed cost of an external call is reported from it, never inferred from total durations. |
 | Selection accuracy | Spec 0.31: the share of corpus cases for which a selector chose the expected skill, per selector, language, and class, against the sidecar file of section 12.2 (RM28); and, on the selection benchmarks of section 12.4, precision, recall, and Jaccard per selector as the main metrics, with the none-rate and selection latency. On the corpus the expected set has one skill, or none for a case that expects a clarification first. |
 | Corrections per completed run | Spec 0.31: external answer generations the completion predicate rejected, per completed run, with their summed duration; the measure of the correction cost (section 4.4). See finding F6 of the 2026-10-23 analysis in `docs/EVIDENCE.md`. |
-| Streamed failures | Spec 0.31: live runs that ended predicate_unmet; reported with task success next to buffered, which is the gate of RM32. A forwarded-then-rejected count is zero by construction and is not reported as a result. |
-| Gateway completion | Retired planned metric (spec 0.46, RM30): there is no workflow render-step deliverable. A host tool result or a client-owned call proposal is not a gateway-generated answer or a completed host task. |
+| Streamed failures | Spec 0.41: export configured answer_stream and answer_stream_effective per case, terminal error_code and task success; summarize each effective policy separately and retain every failure. The paired live/buffered corpus comparison uses one final revision and frozen timing prior, and is required before changing defaults. Spec 0.31: live runs that ended predicate_unmet; reported with task success next to buffered, which is the gate of RM32. A forwarded-then-rejected count is zero by construction and is not reported as a result. |
+| Gateway completion | Retired planned metric (spec 0.47, RM30): there is no workflow render-step deliverable. A host tool result or a client-owned call proposal is not a gateway-generated answer or a completed host task. |
 | Prefetch correctness | Spec 0.31: resolved prefetch calls that match the case's acceptable calls. Tool correctness (above) grades model-made proposals only and reports its n, which may be 0 for a simple skill with prefetch on. |
 
 The 500 ms hypothesis is p95 first model action at or below 500 ms for the warmed, short-context, concurrency-one experiment with routing-result caching disabled. The UI displays this as model action latency, never as completed-answer latency. Report whether it is met on each tested machine; do not average a slow Windows result into a fast Mac result. A missed target is a finding, not grounds to fabricate an early response.
@@ -602,7 +709,7 @@ Latency runner (spec 0.28, #33). `scripts/latency_benchmark.py` measures the loc
 
 The two clocks are never subtracted from each other. A request that has no response within the per-request time limit is a timeout; a transport error, an error status that the prompt's label does not expect, or a run that ends other than its label is an error. Both are recorded with the sample, never dropped. Each metric reports p50 and p95 by the nearest-rank method (the ceil(q n)-th smallest of the n values present), its sample count, and the timeout fraction (timeouts over all measured requests), overall and per prompt label. The hypothesis is checked on the first model action of the measured runs. Cold startup reports the llama-server start to its first healthy /health response (it includes the model load), the model load time printed by the runtime when it prints one, the gateway start to its first healthy /healthz, and the cold request. The export records the runtime's /props response (context and default sampling), whether the adapter sets cache_prompt (the runtime's prefix cache behavior), and the cached_tokens of every measured model call.
 
-Phase 2 configurations and device classes (spec 0.31). The corpus and latency runners take the phase 2 options as labeled configurations, each a launch-file key (section 14.1), and record them in the export: answer_pass, calls_per_generation, prefetch, answer_stream, early_headers, placement.policy, the selector chain, the enabled fixed parallel workflows, and whether a local model is configured. The baseline of section 12.3 is the configuration before this revision, reproducible by the keys: answer_pass final, calls_per_generation one, prefetch false, answer_stream buffered, early_headers false, placement local_first, chain model_router; the layout and warm-up changes of sections 6 and 10 are code, so a before-and-after comparison names the application revisions. Each configuration is reported apart and never merged with another. The runners accept a timing-sample file, seeded or carried over from an earlier run, and an external model, so the placement rules can be exercised in a run that starts a new store per case; the samples used are in the export, and without them placement records predictions and skips nothing. Results are reported per machine, labeled with the class the gateway measured on it (suitable, unsuitable, or none; section 1); a class is the measurement of that machine, never a claim about other machines, and no hardware type is required for a class. A constrained configuration of one machine, such as a CPU-only runtime with fewer threads, is a valid way to measure the unsuitable class: its extra runtime arguments are recorded in the export with the thread and backend settings above, and it is reported as that configuration of that machine, never as another machine. The unsuitable class is any machine or configuration on which the warm-up or the recorded samples predict that local work does not fit its budgets. The expected skill of every corpus case is a sidecar file, `evaluation/corpus.v1.skills.json`, frozen with its own digest in the lock file, so corpus version 1 and its results stay comparable and the case file does not change. A run that used an out-of-process selector is reported in its own column (RM28). The latency runner also records the cold request's first-token time and, with warm-up on, the warm-up samples; the cached-token counts it reports are the ones section 6 reads, and a run of the runner before that change is reported as not measured for them.
+Phase 2 configurations and device classes (spec 0.31). The corpus and latency runners take the phase 2 options as labeled configurations, each a launch-file key (section 14.1), and record them in the export: answer_pass, calls_per_generation, prefetch, answer_stream, early_headers, placement.policy, the selector chain, the enabled fixed parallel workflows, and whether a local model is configured. The baseline of section 12.3 is the configuration before this revision, reproducible by the keys: answer_pass final, calls_per_generation one, prefetch false, answer_stream buffered, early_headers false, placement local_first, chain model_router; the layout and warm-up changes of sections 6 and 10 are code, so a before-and-after comparison names the application revisions. Each configuration is reported apart and never merged with another. The runners accept a timing-sample file, seeded or carried over from an earlier run, and an external model with, optionally, its declared request options (external_model.request_options of section 14.1, given as one JSON object, checked as the launch file checks them, and recorded in the export configuration only when declared, so a configuration without them keeps its identity; spec 0.46), so the placement rules can be exercised in a run that starts a new store per case; the samples used are in the export, and without them placement records predictions and skips nothing. Results are reported per machine, labeled with the class the gateway measured on it (suitable, unsuitable, or none; section 1); a class is the measurement of that machine, never a claim about other machines, and no hardware type is required for a class. A constrained configuration of one machine, such as a CPU-only runtime with fewer threads, is a valid way to measure the unsuitable class: its extra runtime arguments are recorded in the export with the thread and backend settings above, and it is reported as that configuration of that machine, never as another machine. The unsuitable class is any machine or configuration on which the warm-up or the recorded samples predict that local work does not fit its budgets. The expected skill of every corpus case is a sidecar file, `evaluation/corpus.v1.skills.json`, frozen with its own digest in the lock file, so corpus version 1 and its results stay comparable and the case file does not change. A run that used an out-of-process selector is reported in its own column (RM28). The latency runner also records the cold request's first-token time and, with warm-up on, the warm-up samples; the cached-token counts it reports are the ones section 6 reads, and a run of the runner before that change is reported as not measured for them.
 
 Release record (spec 0.28, section 14). `docs/RELEASE.md` is the release record. It lists, in separate sections, the implemented behavior, the passing deterministic tests (with the command and the count), the measured live results (each with its machine, date, and export), and the unmet or unmeasured targets, including platforms that were not run.
 
@@ -614,7 +721,7 @@ Proposed model-quality targets are at least 80 percent successful local completi
 
 The 500 ms target and quality percentages are experimental outcomes, not pre-existing facts. If a target fails, retain the evidence, qualify the candidate as unsuitable for that claim, and compare another model or narrower skill scope. Do not silently substitute a larger model while continuing to label results Qwen3-0.6B.
 
-Phase 2 hypotheses (spec 0.31), stated as experimental targets, not facts: the draft answer pass raises local completion on the English simple subset without lowering task success; prefetch and several calls per generation lower the generations per completed complex run; completion criteria in the external request lower corrections per completed run; early headers give a chat client its run reference before the first answer generation; live streaming lowers first useful content in the none class at task-success parity with buffered; on an unsuitable machine, device-aware auto has lower p95 first useful content and completion than local-first auto at equal task success; the example matcher's English selection Jaccard is at least the local router's, on the corpus and, under the router's eight-skill cap, on the skill benchmark of section 12.4; a selector's narrowing raises the precision of the local model's tool proposals on the tool benchmark without lowering their recall; and, in every configuration, external calls and tokens per completed task are reported next to task success, because the objective is the best use of the external model, not more of it. A missed target is a finding. Every default of this revision is the pre-revision behavior; a hypothesis that holds in its run changes the default in the next revision, with the numbers.
+Phase 2 hypotheses (spec 0.31), stated as experimental targets, not facts: the draft answer pass raises local completion on the English simple subset without lowering task success; prefetch and several calls per generation lower the generations per completed complex run; completion criteria in the external request lower corrections per completed run; early headers give a chat client its run reference before the first answer generation; live streaming lowers first useful content in the none class at task-success parity with buffered; on an unsuitable machine, device-aware auto has lower p95 first useful content and completion than local-first auto at equal task success; the example matcher's English selection Jaccard is at least the local router's, on the corpus and, under the router's eight-skill cap, on the skill benchmark of section 12.4; a selector's narrowing raises the precision of the local model's tool proposals on the tool benchmark without lowering their recall; and, in every configuration, external calls and tokens per completed task are reported next to task success, because the objective is the best use of the external model, not more of it. A missed target is a finding. Every default of this revision is the pre-revision behavior. A hypothesis that holds in its run makes its option a candidate default (spec 0.45): the next revision changes the default only when, in the same run, the option's paired full auto corpus cohort has at least as many task successes as the baseline's (gains at least losses, every planned case in the denominator), and records the numbers either way. Task success in these hypotheses means that full cohort, never a subset chosen after the run. Section 14.4.6 records the decisions of the first measured run.
 
 ### 12.4 Selection benchmarks (spec 0.31)
 
@@ -624,11 +731,11 @@ Skill selection. The source is SkillsBench (benchflow-ai/skillsbench, Apache-2.0
 
 Tool selection. The source is ToolRet-Training-20w (the ToolRet training set, Hugging Face mangopy/ToolRet-Training-20w), pinned to a dataset revision. Its licence is not stated on its card, so no row is checked in: the tool lock, evaluation/tools.v2.lock.json, holds the pinned revision, the sampled row ids, the sampling seed, and the SHA-256 of each derived case, and the runner fetches the revision, derives the cases, and refuses a case whose digest differs. The sample is a frozen random sample of 500 rows, stratified by the number of positive tools (one, two to three, four or more). Derivation: the request is the row's query (its instruction field is recorded in the export but not given to a selector, because RelayMind requests carry no such instruction); the candidates are the row's positive and negative tools, normalized to the gateway's tool declaration (name, description, an input schema from the tool's parameters with additionalProperties false; an entry in the RapidAPI style is mapped from its required and optional parameters) and registered in a benchmark-only registry whose handlers never run; normalized names that collide get numeric suffixes in the order of each declaration's digest, with a seeded hash between equal declarations, so a name never shows whether a candidate is positive (evaluation/tools.v1.lock.json, whose suffixes followed source order with the positives first, has the same rows and is kept only to reproduce the runs recorded with it, spec 0.37.1); one synthetic skill per case allows exactly the candidates, so the selection interface and the skill stage see them as they would see any skill's tools. Two tracks. The narrowing track scores the set of tools a selector keeps against the positives with precision, recall, and Jaccard, with completeness (every positive kept) and latency as diagnostics; the default model router does not narrow, so its kept set is every candidate (recall 1, precision the share of positives among the candidates), which is the baseline a narrowing selector must beat. The track needs no model; its scoring code runs in the default test suite on synthetic fixture cases written for the test, and the real sample runs on demand, because no dataset row is checked in. The proposal track scores the set of tools that the first skill-stage generation of a live model proposes (the local model under its budgets, or the external model; several calls under calls_per_generation many) against the positives with precision, recall, and Jaccard, with schema validity (proposals not rejected with unknown_tool or invalid_arguments) and the bypass rate (a candidate set over the model's input limit is counted, never dropped) as diagnostics; the proposal track is run with the full candidate set and again with the set a selector narrowed, which measures whether narrowing helps the small model. Argument correctness is not graded, because the source carries no reference arguments. A first generation that exceeds the configured calls_per_generation limit is invalid_output and contributes an empty predicted set to precision, recall, Jaccard, and completeness. Its returned tool names, proposal count, usage, and schema-validity results remain recorded as evidence; a budget rejection does not itself make a proposal schema-invalid. This rule does not remove proposed names from the set metrics solely because their tool name or arguments fail schema validation. When tool narrowing errors, times out, or returns invalid output, the full-candidate proposal arm may still be measured; the narrowed arm records the narrowing failure with an empty predicted set and no model invocation, and remains in the denominator. A schema-valid none or clarify result is an abstention, not a narrowing failure, and may be measured with its empty tool set.
 
-Retired plan benchmark (spec 0.46). The planned evaluation/plans.v1.json derivation and workflow-plan track are removed with RM30. The existing skill and tool selection benchmarks, their locks, and their historical results remain unchanged. OpenClaw evaluation follows section 12.5 and does not relabel managed-skill corpus results as host-tool results.
+Retired plan benchmark (spec 0.47). The planned evaluation/plans.v1.json derivation and workflow-plan track are removed with RM30. The existing skill and tool selection benchmarks, their locks, and their historical results remain unchanged. OpenClaw evaluation follows section 12.5 and does not relabel managed-skill corpus results as host-tool results.
 
 Protocol. scripts/selection_benchmark.py runs every selector through the SelectionRequest and SelectionResult shapes (RM28), the built-in ones in process and a third party over the HTTP transport, with the same files; the export records the selector's name and version, the files' digests, the seed, the machine manifest, the timing of every case, and, for a model, its manifest or endpoint; a run that times out or errors is recorded with the case, never dropped. Results of different selectors on the same file version are comparable; results on different versions are never merged, and a changed case is a new file version recorded in the changelog. A selector trained or tuned on a source's data is reported with that fact next to its scores, because its result on that source is not held out; models fine-tuned on ToolRet-Training-20w exist.
 
-### 12.5 OpenClaw integration evaluation (spec 0.46)
+### 12.5 OpenClaw integration evaluation (spec 0.47)
 
 M9 compares the same text and sandbox host-tool tasks through (1) OpenClaw with its direct external provider, (2) OpenClaw through RelayMind external_only to that same provider/model, and (3) OpenClaw through RelayMind auto on a machine with a usable local model. It also exercises a launch without a local model and reports it separately. external_only versus direct measures integration overhead; auto versus those arms tests whether local inference helps. A constrained configuration is reported separately when run, never assumed equivalent to a second machine. Freeze the bilingual task fixtures, expected tool names and arguments, host tool policy, prompts, budgets, sampling settings, and versions before measurement; report Chinese results separately as best-effort.
 
@@ -664,12 +771,12 @@ The following scenarios define the implementation acceptance suite. Model double
 | AC20 | A launch file without local_model: a simple request, a request with a missing identifier, a mutation, and a request the selector cannot place | Managed external execution with the skill body and predicate, a gateway clarification, a confirmation, and a catalog handoff; local_only and parallel_demo are forbidden; readiness, run.accepted, and the UI say no local model | RM11, RM21, RM23, RM26, RM28 |
 | AC21 | Timing samples of a slow and of a fast machine, a deadline miss, and a stale estimate | The slow set hands the skill stage off with the selected skill and reason local_slow before any local call; the fast set runs local; the miss cancels the generation, keeps its evidence, and escalates; the stale estimate runs one generation locally again; prediction and actual are recorded | RM03, RM13, RM16, RM27 |
 | AC22 | Swap the selector chain by configuration, including an out-of-process selector; a selector returns an unknown skill, a tool outside the allowlist, a mutation, and times out | The orchestrator and packages are unchanged; the unknown skill is inadmissible and falls through; narrowing only removes tools; nothing executes or is granted; the timeout falls through; route.selected names every selector tried | RM02, RM08, RM18, RM28 |
-| AC23 | Retired in spec 0.46 with the unimplemented YAML workflow requirement | Reserved for historical references; not an acceptance gate. The fixed parallel demo remains AC14. | Retired RM30 |
+| AC23 | Retired in spec 0.47 with the unimplemented YAML workflow requirement | Reserved for historical references; not an acceptance gate. The fixed parallel demo remains AC14. | Retired RM30 |
 | AC24 | Install the pinned OpenClaw plugin; run text and a host-owned tool round trip through RelayMind; exercise local, external, absent-local, cancellation, errors, and restart authentication | The plugin uses only the client-owned alias; OpenClaw executes the tool exactly once in the test and enforces its approval policy; RelayMind executes no host tools; calls and results preserve IDs; output is append-only; mode, run correlation, and errors are honest; compatibility and live evidence are recorded separately | RM03, RM08, RM09, RM12, RM14, RM16, RM17, RM19, RM20, RM22, RM25, RM26, RM33 |
 
 ## 14 Delivery and SDD change control
 
-Implementation deliverables are the gateway source, pinned dependencies, setup instructions for both platforms, model artifact manifest, skill packages, the OpenClaw provider plugin (spec 0.46), registered demo tools, native demo UI, versioned schemas, API examples, deterministic acceptance suite, evaluation corpus (English, with best-effort Chinese), the selection benchmark files and runner (section 12.4, spec 0.31), and benchmark report. Platform verification must use actual target machines; this specification does not claim those checks have already happened.
+Implementation deliverables are the gateway source, pinned dependencies, setup instructions for both platforms, model artifact manifest, skill packages, the OpenClaw provider plugin (spec 0.47), registered demo tools, native demo UI, versioned schemas, API examples, deterministic acceptance suite, evaluation corpus (English, with best-effort Chinese), the selection benchmark files and runner (section 12.4, spec 0.31), and benchmark report. Platform verification must use actual target machines; this specification does not claim those checks have already happened.
 
 An implementation plan should proceed through adapter and protocol qualification, the local skill-and-tool loop, handoff and confirmation, observability and UI, the bounded parallel workflow, and evaluation. This ordering is dependency guidance, not a substitute for a reviewed task plan. Phase 2 (spec 0.31) is planned in `docs/ROADMAP.md`.
 
@@ -880,6 +987,243 @@ All attempted cases, including transport errors, timeout, invalid identity and i
 ### 14.3.5 Standard-library example
 
 Ship `scripts/example_selector.py`: a loopback-bound standard-library HTTP server (http.server/json; no model/API call), configured fixed identity example_keyword/1, accepting POST /select and returning the published SelectionResult shape. A small deterministic keyword rule selects only an ID present in the request catalog, otherwise none; use a custom mechanism such as keyword_rule, confidence null and model_calls []. It never executes tools, requests permissions or returns gateway route/reason fields. Serve bounded JSON errors for unsupported method/path/body and no arbitrary filesystem content. The production transport's boundary tests provide full schema enforcement; the example need not claim to implement a JSON Schema engine using only the standard library. README links the two schema files and RM28, provides the launch item/server command, and states this example has no model and no measured accuracy claim.
+
+## 14.4 Reproducible placement evaluation (specification 0.42)
+
+These rules refine RM03, RM16, RM17, RM22, RM25–RM28 and RM32/AC19.
+They define measurement infrastructure, not measured results or a default change.
+
+### 14.4.1 Frozen placement priors
+
+Both evaluation runners accept `--timing-samples FILE`, a closed versioned
+`relaymind.placement_prior` bundle with exact configuration partitions. Each
+partition binds the local manifest/artifact, runtime arguments, generation
+settings and external endpoint/model/context/request options. Policy and selector
+chain are experimental factors, not interchangeable machine configurations.
+Sources carry export byte SHA-256 and explicit terminal source run IDs. All
+partitions and sources MUST validate before any store write or model launch.
+Source exports labeled counterfactual are ineligible. Full traces begin with
+run.accepted at sequence one, have contiguous sequence, consistent run identity,
+monotonic elapsed time, exactly one final terminal event, and agree with the
+source record and observed model-call counts. Every event passes the published
+TraceEvent validator. Unknown measurements remain unknown.
+
+Timings retain actual actor, purpose, kind, nullable counts and original UTC
+measurement timestamps, with source call identity; imported run samples are
+unowned and create no runs. Terminal outcomes MUST use the same pure projector
+as live recording: selected-skill non-routing local attempts count completed
+only with local final ownership and no handoff/external calls; they count
+escalated after actual handoff (even if the external stage fails/cancels), or
+an auto needs_external terminal. Pure cancellation, routing-only and local_only
+failure are not failed skill attempts. External cost includes actual external
+generations only for completed selected-skill runs. Grader success and HTTP
+selector claims do not substitute for those observations.
+
+A dedicated imported-history table retains source digest/run identity,
+configuration/bundle digest, original terminal timestamp and projector version.
+Import is atomic and immutable-source idempotent; conflicts fail. It creates no
+run, event, approval or tool operation. Evaluation imports require a fresh
+isolated store, preventing ambiguous overlap with live provenance. Imported
+outcomes combine with live estimates under existing model/skill filters only
+inside the selected exact configuration partition. Original seven-day retention
+and timing row limits apply; stale or truncated priors MUST fail the frozen-prior
+contract rather than be rebased. Import reports include byte/config/source
+digests, imported and retained counts, ineligible outcomes and reasons.
+
+Seed every case store before recovery/warm-up/startup. Preserve genuine startup
+samples and per-run measured class; hardware labels never replace measured
+class. A latency gateway learns online, labeled as such. Freeze independent
+normal/constrained calibration priors before candidate cells; every policy and
+chain, including controls, uses the same initial configuration-specific prior.
+Timing-only priors explicitly leave expected_wait outcome prerequisites unknown.
+
+### 14.4.2 Local active time
+
+`run.completed`, `run.failed`, `run.cancelled` and `handoff.started` MAY include
+`local_active_ms`, an exact nonnegative integer or null. Missing legacy values
+mean not recorded. It measures cumulative serial local-phase monotonic wall time
+using the existing active-stage clock, includes selection/tools/preparation,
+excludes suspended waits, and never changes a budget. Sum interval seconds then
+round once. At a snapshot it cannot exceed active_ms. Local attribution starts
+for local_only or usable-local auto/parallel_demo, and is measured zero for
+external_only or managed external execution with absent/unavailable/unsuitable
+local models. Successful handoff captures one boundary immediately before its
+transition and permanently freezes attribution at that same boundary only after
+the transition succeeds. Resumes after handoff never reopen it. Failed handoff
+preparation leaves the serial local phase active. Entering overlapping parallel
+branches marks the complete field unsupported/null. Recovery/untracked terminal
+paths without a live clock report null, never reconstructed model duration.
+
+### 14.4.3 Metrics and execution durability
+
+Report prediction error as predicted_ms minus matched actual local duration_ms,
+with observations, nearest-rank p50/p95, min/max, n and missing counts. Wasted
+local time uses terminal local_active_ms only for external-answer completions
+(proven by final owner and actual answer evidence) or needs_external failures.
+Waiting, cancellation, failed external and local completion are excluded; null
+and unsupported values stay missing, genuine zero remains zero. Model-duration
+sums MUST NOT substitute for local active time.
+
+Generations per completed run use terminal completed runs, grouped by actor and
+purpose. Selection precision/recall/Jaccard use the locked expected-skill sidecar,
+empty predictions score zero, and all attempts/failures remain in denominators.
+Report admitted selector versus attempts separately; a skipped/fall-through
+selector did not select the winner. External calls/tokens per completed task
+use all candidate attempts' gateway-observed external usage in the numerator
+and corpus task successes in the denominator, including failed attempts' cost.
+Unknown counts have explicit missing counts and zero denominators yield null.
+Separate configuration, mode, language, measured class and selector provenance.
+Expected_wait reports evaluated/declined counts and prerequisite applicability;
+a policy label alone proves no effect. Latency completion distributions include
+successful final answers only; errors/timeouts/stream durations remain separately
+recorded. Calibration cost stays outside candidate denominators.
+
+The fixed M8 driver records exact argv, source revision/file fingerprint, model
+and runtime pins, seed/source digests, UTC interval and counts. Child processes
+MUST import the measured checkout explicitly. Outputs remain outside source.
+Durable per-case/cell checkpoints preserve started/interrupted/failed attempts
+and actual available usage. Resume verifies immutable settings/source/prior
+identity, never silently retries a measured case or substitutes cached results
+from another identity. An interrupted latency online sequence is not silently
+restarted as the same cell. No calibration or provider calls precede code review.
+
+The required matrix is normal/constrained × three policies × two chains, full
+52-case three-mode corpus (156 grades/cell), and normative latency 120 measured
+plus four cold/warm-up requests/cell. Preserve baseline budgets, provider options,
+final answer pass, one call per generation, no prefetch/workflows/cache, buffered
+and early_headers=false. Add same-revision/prior local buffered/live corpus
+comparison; a none-class streaming claim additionally needs its own buffered/live
+104-run corpus and 120-sample latency cells. No silent retries, caps or omitted
+failures. Report every section 12.3 hypothesis met/not met/not measured with its
+provenance. A subsequent evidence-backed spec revision decides defaults;
+local_first, model_router and buffered remain unchanged in this revision.
+
+### 14.4.4 M7 measurement and comparison coverage (specification 0.43)
+
+M7 reports (RM16, RM25, RM26, RM28, RM29, RM31, RM32) retain the
+run-level tool rubric and additionally count correct model tool-and-argument
+proposals over observed model proposals. A prefetch-only run has model proposal
+n=0. Prefetch correctness counts resolved tool.proposed events whose mechanism
+is prefetch against acceptable_calls, whether admitted or rejected. Workflow
+proposals, unresolved bindings and budget-skipped declarations are excluded;
+admission, rejection and execution counts remain separate diagnostics.
+Completed answer owners are local, external, gateway or unknown, with completed
+eligibility and missing evidence counts. Legacy owner inference stays labeled;
+new measurements require a proven local owner to claim local completion.
+
+Corrections retain every terminal completed run in the denominator. A missing
+trace or metric is unknown, never zero; report known count, measured completed
+runs, missing completed runs and missing rejected durations. A population with
+missing coverage has no complete-population correction rate or duration total.
+First-token observations join model.started to model.finished by call_id and
+retain started-but-unfinished calls with null timings. Report model, actor,
+purpose, call_id, n/eligible/missing and distributions; never derive first token
+from total duration. Cold requests, launcher warmup, runner warmups and measured
+requests are separate populations. Legacy token totals are known subtotals.
+
+Corpus selector scores refer to the initial request, before clarification resume.
+Repeated progress histories of the same round do not duplicate attempts. Report
+per name/version/transport attempted, failed, skipped, scored and unobserved
+counts. Earlier failed selectors receive empty predictions, never the fallback
+winner; never-reached selectors are skipped. Singleton scores from built-in
+selectors do not claim unrecorded third-party candidate-set accuracy. Missing
+selection observations are explicit and prevent a complete-population score.
+Regrading shares live metric enrichment, preserves measured application and
+configuration plus previous analysis provenance, and records the source-byte
+digest and analyst revision in a distinct output artifact.
+
+The M7 matrix is an offline plan unless execution is explicit, and uses the
+same checkpoint, immutable identity, reconciliation and cost rules as M8.
+At reviewed revision R it includes baseline (156 corpus runs), draft (104),
+many calls (104), prefetch (104), draft+many+prefetch (156), and no-local with
+example_match (104); two local-only latency cells each have 120 measured,
+one cold and three runner-warmup requests, with early_headers changed only in
+the second. Neither latency cell configures an external provider or a prior.
+An optional controlled criteria-and-named-correction ablation uses a separately
+reviewed explicit revision R-minus-criteria (104 auto/local_only runs), never a
+product flag. For this experiment only, the section 4.4 requirement to send
+fixed/value completion criteria and name failed checks in corrections is waived:
+R-minus-criteria omits those messages and uses the existing generic correction.
+Its completion predicates, evidence, permissions, budgets, layout and local path
+remain those of R. This exception is not a shipping configuration or default.
+Without it the isolated criteria hypothesis is not measured.
+Baseline settings and budgets stay unchanged in every other dimension.
+Reuse is limited to baseline and no-local corpus exports with exact source,
+effective configuration, runtime/model/provider, corpus/sidecar and fixture
+identity, including an explicitly null prior. Seeded M8 controls cannot be M7
+baselines. Shared physical attempt cost is counted once by immutable identity,
+and all failed/interrupted predecessor attempts retain cost.
+
+Analysis validates immutable exports, renders missing coverage and comparisons,
+and enumerates section 12.3 hypotheses as met, not met or not measured. Missing
+required metrics fail reporting acceptance; a measured missed hypothesis is a
+valid finding. Historical before/current after comparisons retain actual hashes
+and language groups and are explicitly confounded, not isolated causal evidence.
+No default changes or live capability claims follow from deterministic tests.
+
+### 14.4.5 Matrix controller recovery (specification 0.44; RM16, RM17, RM25)
+
+A matrix controller MAY run from a separately reviewed, clean committed checkout
+using explicit `--measurement-root PATH`. The recorded measurement checkout stays
+immutable: runner/configuration/package imports, subprocess working directory,
+child import path, manifest, source fingerprint and exact per-cell arguments MUST
+refer to it. A separately declared experimental checkout/revision remains the
+source for its own cells. Controller code and shared reconciliation helpers come
+from the controller revision, never silently from the measurement checkout.
+
+Controller replacement MUST preserve the index's measurement identity, plan,
+settings, original attempts, raw checkpoints, exports and costs. Record separate
+durable credential-free provenance binding the controller revision/file digests,
+measurement identity, recovery reason, time and pre-recovery index/artifact digests.
+Later resume MUST verify that provenance. No controller change relabels measured
+source or permits a different model, runtime, provider, prior or budget.
+
+Validate raw checkpoint identity exactly. Compare exported identity against the
+expected identity after the runner's defined export serialization (including
+repository/work path scrubbing); never rewrite evidence or accept arbitrary path
+or source differences. Validate export/checkpoint digests, finalized unique request
+counts, configuration and prior retention before marking a cell complete. Exact
+unseeded C0/C5 reuse obeys these same checks against its original physical attempt.
+
+Both matrix controllers provide `--reconcile-only`, mutually exclusive with
+execution/restart: it reads no provider credentials, starts no inference, creates
+no attempt, and validates retained completed artifacts before publishing recovered
+completion/provenance and any required frozen calibration prior. Missing, stale,
+partial or changed evidence refuses recovery without changing coordinator state.
+A finalized cell recovered this way is skipped on execution resume; an incomplete
+cell still requires the existing explicit new-attempt procedure. Plan counts,
+run order, scoring, denominators and runtime defaults remain unchanged.
+
+### 14.4.6 Phase 2 default decisions (specification 0.45; #134, #128, #125)
+
+The M8 matrix (31 cells) and the M7 matrix (9 cells) ran on measured revision
+R = 741a19175430e83702a360c454a581b2829e3cb0, one Apple M1 machine, Qwen3-0.6B
+Q8_0 on llama.cpp b11785 and Z.ai glm-4.6, one pass per cell, 25 to 26 October
+2026. Every cell is complete and both analyses pass reporting acceptance. The
+evidence, digests and environment notes are in `docs/EVIDENCE.md` under
+"2026-10-26 — Phase 2 M7 and M8 measurements and default decisions". This
+revision keeps every default. No code default changes.
+
+| Default | Decision | Paired evidence (full cohort, gains/losses) |
+| --- | --- | --- |
+| placement.policy local_first | keep | router chain: device_aware 83/156 vs 88/156 (1/6) normal, 80/156 vs 83/156 (1/4) constrained; expected_wait 84/156 (3/7) and 82/156 (5/6). With the example-router chain the policies were within two cases of local_first except constrained expected_wait, 79/156 vs 89/156 (1/11). Every case of both configurations measured `ready`, so the unsuitable-machine hypothesis is not measured |
+| selection chain model_router | keep | example-router corpus success equal or higher in five of six pairs (local_first: 88/156 = 88/156 normal, 89/156 vs 83/156 constrained), lower first-useful p50 (1869 vs 8947 ms) but higher p95 (51338 vs 22241 ms); the Jaccard hypothesis needs the section 12.4 capped benchmark and is not measured |
+| answer_stream buffered | keep | live 74/156 vs 88/156 (2/16) with 14/156 `predicate_unmet`; none class 73/104 vs 77/104 (2/6), first-useful p95 49521 vs 54260 ms but p50 16980 vs 15827 ms and 8 vs 6 timeouts: not met |
+| answer_pass final | keep | draft raises English simple local completion 4/12 to 6/12, but auto 36/52 vs 39/52 (0/3): not held under section 12.3 |
+| calls_per_generation one, prefetch false | keep | complex generations per completed run 5.125 to 3.17 (many) and 3.0 (prefetch): held; auto 38/52 vs 39/52 for both (3/4, 1/2) and for the combined cell with the draft pass (2/3; it also lost 0/5 in external_only), so no candidate meets the section 12.3 condition |
+| completion criteria in the external request | keep (not an option) | the R-minus-criteria ablation had 0.43 vs 0.094 English and 0.33 vs 0 Chinese corrections per completed run |
+| early_headers false | keep | headers arrived before the first answer token in all 39 eligible requests; the before-first-generation clock is not measured |
+
+Single passes carry provider drift and sampling uncertainty; the decisions are
+evidence on this machine and configuration, not reliability guarantees, and no
+Windows performance is claimed. A later revision may change a default only with
+a new run that meets section 12.3, preferably repeated passes of the candidate
+and its baseline. The model-quality targets stay separately reported: English
+simple local completion 4/12 normal and 0/12 constrained (not met; the
+constrained configuration stayed `ready` although it completed nothing
+locally), model tool proposals 12/12 (met), no
+missed confirmation in any cell (met), and p95 first model action 500 ms (not
+met in any router latency cell).
 
 ## 15 Sources
 

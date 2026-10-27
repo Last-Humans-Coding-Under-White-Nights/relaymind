@@ -2665,3 +2665,311 @@ The keyword method has no semantic understanding, no Chinese word handling, no
 argument generation and only one pick for tasks that often require several
 skills. This run demonstrates production transport and honest evaluation, not
 useful general selection accuracy or live model capability.
+
+
+## 2026-10-24 — Gated streaming evidence boundary (#125)
+
+The spec 0.41 implementation has deterministic model-double tests for RM32/AC19,
+including actual socket/standard SDK handling of a verified prefix followed by
+`predicate_unmet`. These are protocol and gateway checks, not live model task
+success or timing measurements. No provider or corpus comparison ran in this
+implementation task. The paired live/buffered corpus run on the same final
+revision and frozen timing prior remains pending under the M8 comparison work.
+Failures must remain in both arms; neither a parity claim nor a default change
+follows from these deterministic tests. Buffered remains the default.
+
+### M8 matrix preparation (superseded)
+
+The measurements and the paired streaming comparison are recorded below under
+"2026-10-26 — Phase 2 M7 and M8 measurements and default decisions". The
+preparation note is kept as it was written:
+
+Specification 0.42 defines reproducible placement priors, serial local active
+time, evaluation denominators and durable matrix attempts (#134). The fixed
+execution driver and deterministic model-double tests are preparation only.
+No new provider/model runs or live/buffered parity measurements are claimed.
+Normal and constrained calibration priors must be collected on the reviewed
+committed implementation before the candidate matrix. Existing historical
+exports are unchanged and do not substitute for the new controls.
+
+
+## 2026-10-26 — Phase 2 M7 and M8 measurements and default decisions (#134, #128, #125), Apple M1
+
+The fixed M8 matrix (31 cells) and the M7 matrix (9 cells) of specification
+sections 14.4.3 and 14.4.4 ran to completion. The offline analyses of #166 pass
+reporting acceptance for both. Specification 0.45 (section 14.4.6) records the
+default decisions; every default is kept. One pass per cell on one machine:
+provider drift and sampling uncertainty remain, and nothing here is a
+reliability guarantee or a Windows result.
+
+### Identity and environment
+
+| Item | Recorded value |
+|---|---|
+| Machine | Apple M1, 8 CPU cores, 8 GiB RAM, 7 GPU cores; macOS 27.0.1 arm64 |
+| Measured revision R | `741a19175430e83702a360c454a581b2829e3cb0`, source SHA-256 `86f04cea8ee68a7d48242b42a9ef0c8a6f637120ad72c3a23c4715a00a69a7a4` |
+| Matrix controller | `8b7d42227a726ec322822b12c74c0e3466be36a3` (section 14.4.5); M7 C6 ablation revision `7fbf4660e2cf4bf57142e4ac54bda35d91c54c3e` |
+| Local model | Qwen3-0.6B Q8_0, artifact SHA-256 `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031` |
+| Runtime | llama.cpp b11785 (commit 8baabd53b), binary SHA-256 `981b460a278e9a0c880cef32d6fab42785a119084456b16845304cf38c32cf69`; constrained configuration adds `--n-gpu-layers 0 --threads 2` |
+| External model | Z.ai `glm-4.6`, `https://api.z.ai/api/paas/v4`, context limit 128000 |
+| M8 interval | 2026-10-25T06:02:23Z to 2026-10-26T07:21:57Z; plan SHA-256 `cf5c5bd202272c39afdf0bb8e835df1a01e18a9787b9547a3229a15d435814ee`, index `a24dd1def6d46f7fbccb28eaa52b8ae7284bf25b05ee4264ec0da042c75dc224` |
+| M7 interval | 2026-10-26T07:24:53Z to 09:43:32Z; plan `cf6e1c35a02e922b9bcd95a5fdfcc21fffc953cff8eac87d105fd2677d2f5d5e`, index `c6f32a88b19f8022e102772b8b744ac05085141bfc515a10bcf442d4afeace8f` |
+| Analyst revision | `074c0ddb5b02a1ad36d5387be2893beccae60e11` (clean) |
+
+Every M8 cell finished on its first attempt except
+`placement-constrained-expected_wait-example-router-buffered-corpus`: its
+`initial` attempt was interrupted on purpose to pause the run, is retained with
+its cost, and `resume-1` is the complete attempt. M7 reuses the unseeded M8
+calibration export as C0 and its none-class C5 export under the exact reuse
+checks; no M7 cell needed a second attempt.
+
+Conditions that a reader should know:
+
+- A Homebrew upgrade outside the matrix ran on the host from about 03:40 to
+  04:10 UTC on 26 October, during M8 cell
+  `streaming-normal-local_first-router-live-corpus`. That cell's timings were
+  recorded with the upgrade competing for the CPU; grading is unaffected. The
+  upgrade moved Python 3.14.7 to 3.14.9: M8 cells 1 to 27 (including the M7
+  baseline C0, a reused M8 export) recorded 3.14.7; the four none-class M8
+  cells (including the reused C5) and every cell M7 measured itself recorded
+  3.14.9. So the M7 comparisons against C0 also span this patch release. The
+  pinned llama-server links no Homebrew library and its digest is checked, so
+  the local runtime did not change.
+- The run paused from about 00:40 to 01:45 UTC on 26 October and resumed on
+  mains power with a settled load, as every other cell ran.
+
+### M8 placement and chain (paired corpus success, 156 grades per cell)
+
+Every case of both configurations was measured `ready`; the constrained
+runtime did not produce an unsuitable cohort, so the device-aware hypothesis
+for unsuitable machines is **not measured**, not refuted. This is itself a
+finding: in auto mode the constrained configuration completed no English or
+Chinese simple case locally in any of its six corpus cells (0/12 each; in
+local_only mode, English 1/12 in the local_first/router cell, 2/12 in the
+local_first/example-router cell and 0/12 everywhere else), yet detection
+kept it `ready`. In its local_first/router cell, 22 of the 24 local_only
+simple runs failed with `needs_external` (the other two completed locally,
+one of them without task success). 21 of those 22 used three or four local
+generations (the routing generation, two skill generations and at most one
+final or repair generation); 18 of those 21 spent the whole 4-second local
+active budget and the other three 3411 to 3746 ms (median local active time
+of the 22: 4002 ms; of the 17 such runs in the normal local_first/router
+cell: 2435 ms). All 24 auto simple runs of the cell succeeded only through
+the external model. Local work was too slow to help, yet the
+unsuitable-class detection did not fire. #170 tracks the detection change.
+
+| Question | Configuration, chain | Control | Candidate | Gains/losses |
+|---|---|---|---|---|
+| device_aware vs local_first | normal, router | 88/156 | 83/156 | 1/6 |
+| expected_wait vs local_first | normal, router | 88/156 | 84/156 | 3/7 |
+| device_aware vs local_first | constrained, router | 83/156 | 80/156 | 1/4 |
+| expected_wait vs local_first | constrained, router | 83/156 | 82/156 | 5/6 |
+| device_aware vs local_first | normal, example-router | 88/156 | 87/156 | 4/5 |
+| expected_wait vs local_first | normal, example-router | 88/156 | 89/156 | 7/6 |
+| device_aware vs local_first | constrained, example-router | 89/156 | 87/156 | 2/4 |
+| expected_wait vs local_first | constrained, example-router | 89/156 | 79/156 | 1/11 |
+| example-router vs router | normal, local_first | 88/156 | 88/156 | 6/6 |
+| example-router vs router | constrained, local_first | 83/156 | 89/156 | 8/2 |
+
+The table lists every policy against the local_first baseline in both chains
+and the chain comparison under local_first. The other paired corpus
+comparisons of `analysis/m8-analysis.json` (`comparisons`; candidate first,
+then gains/losses) are expected_wait against device_aware (normal 84/156 vs
+83/156, 5/4, and 89/156 vs 87/156, 8/6; constrained 82/156 vs 80/156, 5/3,
+and 79/156 vs 87/156, 3/11; router then example-router) and example-router
+against router under device_aware (normal 87/156 vs 83/156, 6/2; constrained
+87/156 vs 80/156, 8/1) and under expected_wait (normal 89/156 vs 84/156, 8/3;
+constrained 79/156 vs 82/156, 5/8).
+
+Latency (120 measured requests per cell, each arm's full population; completion
+counts successful final answers only). Normal configuration, local_first:
+
+| Chain | First useful content p50/p95 (n) | Completion p95 (n) | Errors/timeouts |
+|---|---|---|---|
+| router | 8947/22241 ms (91) | 23583 ms (71) | 29/0 |
+| example-router | 1869/51338 ms (109) | 51873 ms (79) | 10/1 |
+
+The example-router chain answers most requests sooner and fails fewer, but its
+slowest requests are more than twice as slow. Expected_wait evaluated its rule
+45 to 140 times per cell and declined local work 13 to 51 times; its full
+counts and prerequisites are in the analysis.
+
+Per-cell placement metrics of the corpus cells (#134), from
+`analysis/m8-analysis.json` (`cells.<id>.placement`). Prediction error is the
+gateway's predicted_ms minus the matched actual local duration; wasted local
+time counts only runs that ended with an external answer or needs_external, and
+is a measured zero in external_only; generations count every model call of the
+terminal completed runs; selection scores the initial request of all 156 runs
+against the locked expected skills; external calls are gateway-observed. The
+two configurations are never pooled.
+
+| Configuration | Policy | Chain | Task success | Prediction error p50/p95 ms (n) | Wasted local p50/p95 ms (n) | Generations per completed run | Initial-selection Jaccard (n) | External calls per task success |
+|---|---|---|---|---|---|---|---|---|
+| normal | local_first | router | 88/156 | -31/219 (300) | 430/2884 (123) | 3.38 | 0.538 (156) | 2.55 |
+| normal | device_aware | router | 83/156 | -11/254 (299) | 419/2737 (119) | 3.35 | 0.538 (156) | 2.64 |
+| normal | expected_wait | router | 84/156 | -24/177 (262) | 406/2713 (119) | 3.17 | 0.538 (156) | 2.87 |
+| normal | local_first | example-router | 88/156 | -2/276 (262) | 383/2452 (113) | 3.21 | 0.590 (156) | 2.58 |
+| normal | device_aware | example-router | 87/156 | -2/243 (255) | 384/2462 (115) | 3.09 | 0.590 (156) | 2.53 |
+| normal | expected_wait | example-router | 89/156 | -12/233 (212) | 18/2390 (120) | 2.96 | 0.590 (156) | 2.79 |
+| constrained | local_first | router | 83/156 | 7/904 (270) | 958/4005 (140) | 3.23 | 0.538 (156) | 2.84 |
+| constrained | device_aware | router | 80/156 | -38/588 (246) | 911/4004 (142) | 3.08 | 0.538 (156) | 3.02 |
+| constrained | expected_wait | router | 82/156 | 0/702 (211) | 850/4003 (143) | 2.92 | 0.538 (156) | 3.18 |
+| constrained | local_first | example-router | 89/156 | 16/973 (257) | 873/4007 (137) | 3.21 | 0.590 (156) | 2.70 |
+| constrained | device_aware | example-router | 87/156 | -38/821 (232) | 862/4004 (140) | 3.04 | 0.590 (156) | 2.75 |
+| constrained | expected_wait | example-router | 79/156 | -29/1082 (177) | 742/4003 (133) | 2.56 | 0.590 (156) | 3.34 |
+
+Constrained predictions miss by far more at p95 (588 to 1082 ms against 177 to
+276 ms) and its wasted local time reaches the 4-second active budget, which is
+the slowness #170 is about. The example-router chain has the higher initial
+selection Jaccard on this corpus (0.590 against 0.538) in every policy.
+
+### Gated streaming (#125)
+
+| Pair | Buffered | Live | Gains/losses | Live `predicate_unmet` |
+|---|---|---|---|---|
+| Local configured, normal, local_first, router | 88/156 | 74/156 | 2/16 | 14/156 |
+| None class, example chain | 77/104 | 73/104 | 2/6 | 1/104 |
+
+In the none-class latency pair the live arm had first useful content p95
+49521 ms against 54260 ms (lower), but p50 16980 ms against 15827 ms (higher)
+and 8 timeouts against 6. Parity is not met in either corpus pair, and the
+none-class streaming hypothesis is **not met**.
+
+### M7 factors (paired against C0, the 52 auto cases)
+
+| Cell | Option | Auto success | Gains/losses | Hypothesis measure |
+|---|---|---|---|---|
+| C0 | baseline | 39/52 | – | English simple local completion 4/12; complex generations per completed run 5.125 |
+| C1 | draft answer pass | 36/52 | 0/3 | local completion 6/12 |
+| C2 | many calls per generation | 38/52 | 3/4 | 3.17 generations |
+| C3 | prefetch | 38/52 | 1/2 | 3.0 generations |
+| C4 | draft + many + prefetch | 38/52 | 2/3 | 2.6 generations; external_only 32/52 vs 37/52 (0/5) |
+| C5 | no local model, example_match | 43/52 | 8/4 | external_only 34/52 vs 37/52 (1/4); reused M8 none-class export |
+| C6 | R-minus-criteria ablation | 36/52 | 1/4 | corrections per completed run 0.43 vs 0.094 (English), 0.33 vs 0 (Chinese) |
+
+The two local-only latency cells differ only in `early_headers`: response
+headers arrived before the first answer token in all 39 eligible requests of
+L1 (first transport p50 2.9 ms against 533 ms in L0). The ordering against the
+start of the first answer generation is not measured.
+
+### Section 12.3 hypotheses and targets
+
+| Hypothesis or target | Status | Evidence |
+|---|---|---|
+| English simple local completion at least 80% | not met | 4/12 normal and 0/12 constrained (local_first/router cells) |
+| English simple tool proposals at least 95% | met | 12/12 model proposals |
+| No missed mandatory confirmation | met | zero in every corpus cell, mode and language |
+| p95 first model action at most 500 ms | not met | normal router p95 17465 ms (110 of 120 requests had an action) |
+| Draft pass raises local completion without lowering task success | not met under spec 0.45 | 6/12 local completion, auto 36/52 vs 39/52; `m7-analysis.json` says met, from the English simple subset (11/12 vs 11/12) |
+| Prefetch and many calls lower complex generations | met; no default change | auto success 38/52 vs 39/52 for both |
+| Completion criteria lower corrections | met | C6 ablation |
+| Early headers before the first answer generation | not measured | header before first token only |
+| None-class live streaming | not met | above |
+| Unsuitable device-aware | not measured | no unsuitable cohort |
+| Example matcher Jaccard | not measured | corpus component met; the section 12.4 capped benchmark is missing |
+| Tool narrowing precision | not measured | needs the ToolRet comparison |
+| External cost next to success | met | ledgers below |
+
+### External usage (gateway-observed, physical attempts)
+
+| Ledger | Attempts | Calls | Input tokens known (missing calls) | Output tokens known (missing calls) | Calls per success |
+|---|---|---|---|---|---|
+| M8 calibration | 2 | 455 | 678956 (9) | 56151 (9) | 2.68 (170 task successes) |
+| M8 candidate corpus | 16 | 3832 | 5512771 (117) | 411620 (117) | 3.08 (1243 task successes) |
+| M8 candidate latency | 14 | 3242 | 5070673 (27) | 274238 (27) | 3.17 (1024 successful final answers) |
+| M7 (shared attempts once) | 9 | 998 | 1383719 (60) | 108549 (60) | 2.20 (454 task successes) |
+
+Token rates per task stay null where any call's usage is unknown. No monetary
+cost is claimed.
+
+### Files
+
+The package is in [`evidence/2026-10-26-phase2/`](evidence/2026-10-26-phase2/):
+the matrix plan, index, frozen priors and controller snapshots as exact bytes,
+one `tar.zst` archive per physical attempt (exports, checkpoints, reports,
+runner logs, run stores with their WAL and SHM files, sandbox states), a
+`manifest.json` with every archive's and member's SHA-256, and the two
+analyses (`analysis/m8-analysis.*`, `analysis/m7-analysis.*`; JSON SHA-256
+`f7c9fa2ec742319f3f66e4b6a4e4b3cdf042b050d6fecc62a656857b6b8fe901` and
+`1fd573358e97b715d78e5f35e590d8e4f91051b270a2d883e685c11fd49fe40a`). Raw
+checkpoints keep their original absolute paths; the package README explains
+how to read them after extraction. No provider credential appears in any file.
+
+
+## 2026-10-27 — External model comparison: glm-4.6 and glm-5.3-flash with default and low reasoning, Apple M1
+
+A separate experiment, not part of the frozen M7/M8 matrices and not a
+specification default (the external model is operator configuration, section 1).
+Each arm is the default configuration (normal runtime, local_first,
+model_router, buffered, final answer pass, one call per generation, no
+prefetch) on the same 52-case, three-mode corpus (156 grades) and the same
+seeded 120-request latency schedule, one pass each. Only the external model and
+its declared request options change. The glm-4.6 cells ran on 25 October 2026
+and the glm-5.3-flash arms on 26 October 2026 (UTC, from the exports'
+`started_at_utc`); the entry and its package are dated 27 October, when they
+were recorded.
+
+| Arm | Corpus export SHA-256 | Latency export SHA-256 |
+|---|---|---|
+| glm-4.6 (M8 cells, revision `741a191`) | `ba3f4fc59fd44a176daaa4e821da44f9d8d5f76939b63cce80f5b68c3fa3d4c3` | `90851a3bc5fb36210d0d6bbb256d5de539712e8084490159e8de5d723bf2eb7b` |
+| glm-5.3-flash, default reasoning (`741a191`) | `169f48243f465d7eacc3048b3afd041b9cb37fafe7dba1cd89dc75e2fcf94e3d` | `0469f8c2f8d563408395e0704b3b906a6b1b5a53a6a84202ee74280bb25293a9` (rerun) |
+| glm-5.3-flash, `reasoning_effort` low (`8f51ba1`) | `d40382376d81210641195a1777e4376008230b4470c647f5a50c97cc5309d25e` | `7294d95cc2e21f956eaf3f937424edaaf925a30b636208a277a977c2c6a89f40` |
+
+The provider refuses to disable reasoning for glm-5.3-flash ("always engages in
+thinking"; it offers low, high or max), so `{"reasoning_effort": "low"}` through
+`--external-request-options` (spec 0.46) is the lowest setting. Every external
+call of that arm recorded these options in model.started.
+
+| Measure | glm-4.6 | glm-5.3-flash default | glm-5.3-flash low |
+|---|---|---|---|
+| Corpus task success, all modes | 88/156 | 85/156 | 90/156 |
+| auto (gains/losses against glm-4.6) | 41/52 | 40/52 (4/5) | 40/52 (4/5) |
+| external_only (gains/losses) | 36/52 | 33/52 (5/8) | 40/52 (7/3) |
+| local_only (gains/losses) | 11/52 | 12/52 (1/0) | 10/52 (0/1) |
+| First useful content p50/p95 ms (n) | 8947/22241 (91) | 7037/48740 (98) | 5118/24546 (110) |
+| Completion p50/p95 ms, successful answers (n) | 10779/23583 (71) | 10491/49233 (78) | 9215/25147 (90) |
+| Latency errors / timeouts of 120 | 29/0 | 22/0 | 10/0 |
+| External first token p50/p95 ms, latency measured calls (n) | 6661/8944 (209) | 4369/7832 (230) | 3492/7237 (215) |
+| Corpus external calls; input/output/reasoning tokens | 224; 337398/26742/11651 | 247; 365839/46542/30499 | 228; 355698/15437/1522 |
+| Corpus calls with unknown usage | 4 | 14 | 0 |
+
+The latency errors are of two kinds, and there is no provider or network
+error in the valid attempts:
+
+| Latency errors of 120 | glm-4.6 | glm-5.3-flash default | glm-5.3-flash low |
+|---|---|---|---|
+| `lat-07` ended completed, expected waiting_input | 10 | 9 | 10 |
+| External budget exhausted (run failed `external_failed`) | 19 | 13 | 0 |
+| Total | 29 | 22 | 10 |
+
+The budget failures were `external_generations` (6) for all 19 of glm-4.6
+(9 `lat-10`, 10 `lat-12`) and for 11 of glm-5.3-flash default (4 `lat-10`,
+7 `lat-12`); the other 2 of that arm were `external_seconds` (30.0), one
+`lat-02` and one `lat-07`. `lat-07` ("Is it healthy?") is the
+clarification prompt: in 29 of its 30 runs across the three arms the run
+answered instead of asking for a clarification, and the tenth glm-5.3-flash
+default run is the `lat-07` budget failure above.
+
+Conditions:
+
+- The first glm-5.3-flash default latency attempt is retained and invalid: the
+  lid was closed at 10:38:57Z, six minutes in, and the host slept until
+  14:43:44Z, so 63 runs failed `provider_unreachable`. The rerun ran on mains
+  power with no sleep or wake event in the power log, as did every other cell.
+- The glm-4.6 cells used the M8 normal timing prior, the glm-5.3-flash arms
+  none; local_first admission never reads the prior, so only the recorded
+  prediction fields differ.
+- Revisions `741a191` and `8f51ba1` have identical `src`, `skills`,
+  `evaluation` and sandbox fixtures; only evaluation scripts differ. Python was
+  3.14.7 for the glm-4.6 cells and 3.14.9 for the others.
+- The three arms ran at different times of day, one pass each; provider load
+  and sampling are not controlled.
+
+On this machine glm-5.3-flash with low reasoning effort answered sooner and
+failed fewer requests than glm-4.6 (no external budget ran out; its 10 errors
+are the `lat-07` runs that answered instead of asking), with slightly higher
+overall corpus success (90/156 against 88/156; auto 40/52 against 41/52) and
+about a third of the output tokens of its own default reasoning. Its p95 first
+useful content (24.5 s) is close to glm-4.6's (22.2 s); with default reasoning
+it was more than twice as long. No monetary cost is claimed here. The package
+is in [`evidence/2026-10-27-external-model/`](evidence/2026-10-27-external-model/).

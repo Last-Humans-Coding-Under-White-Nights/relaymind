@@ -61,17 +61,29 @@ def _corrections(grades: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
     because that is not zero corrections (RM16). The duration is None when
     a rejected generation recorded none.
     """
-    measured = [g for g in grades if "corrections" in g]
-    if not measured:
+    if not any("corrections" in g for g in grades):
         return None
-    completed = [g for g in measured if g.get("state") == "completed"]
-    count = sum(g["corrections"] for g in completed)
-    durations = [g["correction_ms"] for g in completed if g["corrections"]]
+    completed = [g for g in grades if g.get("state") == "completed"]
+    measured = [
+        g
+        for g in completed
+        if g.get("corrections") is not None
+        # A grade made before trace metrics has no metrics block; a block
+        # that does not say the trace was observed is missing evidence.
+        and ("metrics" not in g or g["metrics"].get("trace_observed") is True)
+    ]
+    count = sum(g["corrections"] for g in measured)
+    durations = [g.get("correction_ms") for g in measured if g["corrections"]]
+    missing = len(completed) - len(measured)
     return {
         "completed_runs": len(completed),
+        "measured_completed_runs": len(measured),
+        "missing_completed_runs": missing,
         "corrections": count,
-        "per_completed_run": None if not completed else count / len(completed),
-        "duration_ms": None if None in durations else sum(durations),
+        "per_completed_run": count / len(completed) if completed and not missing else None,
+        "duration_ms": None if missing or None in durations else sum(durations),
+        "known_duration_ms": sum(v for v in durations if v is not None),
+        "missing_duration_runs": durations.count(None),
     }
 
 
@@ -112,6 +124,19 @@ def _block(grades: Sequence[Mapping[str, Any]], routes: Mapping[str, str]) -> di
             }
             for scope in ("http_attempted", "gateway_observed", "unknown")
         },
+        "answer_stream_policies": {
+            policy: {
+                "runs": len(group),
+                "success": rate(sum(g["success"] for g in group), len(group)),
+                "predicate_unmet": sum(g.get("error_code") == "predicate_unmet" for g in group),
+            }
+            for policy in ("buffered", "live", "unknown")
+            if (
+                group := [
+                    g for g in grades if (g.get("answer_stream_effective") or "unknown") == policy
+                ]
+            )
+        },
         "runs": len(grades),
         "success": rate(sum(g["success"] for g in grades), len(grades)),
         "tool_correct": rate(sum(g["tool_correct"] for g in grades), len(grades)),
@@ -126,8 +151,27 @@ def _block(grades: Sequence[Mapping[str, Any]], routes: Mapping[str, str]) -> di
             "external": sum(g["external_calls"] for g in grades),
         },
         "tokens": dict(sorted(tokens.items())),
+        "token_totals_scope": "known subtotals; missing counts in external_cost",
         "rejections": dict(sorted(rejections.items())),
     }
+    if any("metrics" in g for g in grades):
+        from relaymind.evaluation.m7_metrics import summarize_m7
+        from relaymind.evaluation.placement_metrics import summarize_placement
+
+        block["m7_metrics"] = summarize_m7(grades)
+        block["m7_by_measured_class"] = {
+            name: summarize_m7(
+                [g for g in grades if g.get("metrics", {}).get("local_class", "unknown") == name]
+            )
+            for name in sorted({g.get("metrics", {}).get("local_class", "unknown") for g in grades})
+        }
+        block["placement_metrics"] = summarize_placement(grades)
+        block["by_measured_class"] = {
+            name: summarize_placement(
+                [g for g in grades if g.get("metrics", {}).get("local_class", "unknown") == name]
+            )
+            for name in sorted({g.get("metrics", {}).get("local_class", "unknown") for g in grades})
+        }
     corrections = _corrections(grades)
     if corrections is not None:
         block["corrections"] = corrections
@@ -217,7 +261,9 @@ def _corrections_cell(block: Mapping[str, Any]) -> str:
     if value is None:
         return "-"
     duration = "not measured" if value["duration_ms"] is None else f"{value['duration_ms']} ms"
-    return f"{value['corrections']}/{value['completed_runs']}, {duration}"
+    missing = value.get("missing_completed_runs", 0)
+    suffix = f", missing completed: {missing}, rate unknown" if missing else ""
+    return f"{value['corrections']}/{value['completed_runs']}, {duration}{suffix}"
 
 
 # The corpus report columns: (label, cell of a summary block).
@@ -264,6 +310,64 @@ def render_corpus_markdown(summary: Mapping[str, Any], *, title: str) -> str:
                 lines.append(f"| {name} | " + " | ".join(cells) + " |")
             lines.append("")
             lines += _provenance_rows(data["all"].get("selector_provenance", {}), "runs")
+            if "m7_metrics" in data["all"]:
+                from relaymind.evaluation.m7_metrics import render_m7_metrics
+
+                for class_name, class_block in [*data["classes"].items(), ("all", data["all"])]:
+                    if "m7_metrics" not in class_block:
+                        continue
+                    lines += [f"### M7 observations: {class_name}", ""]
+                    lines += render_m7_metrics(class_block)
+
+            if "placement_metrics" in data["all"]:
+                lines += ["| measured metric | n / eligible | p50 | p95 |", "|---|---|---|---|"]
+                measured = data["all"]["placement_metrics"]
+                for name in ("prediction_error_ms", "wasted_local_ms"):
+                    value = measured[name]
+                    lines.append(
+                        f"| {name} | {value['n']} / {value['eligible']} | "
+                        f"{_ms(value['p50'])} | {_ms(value['p95'])} |"
+                    )
+                generations = measured["generations"]
+                lines += [
+                    "",
+                    f"generations per completed run: {generations['per_completed_run']}; "
+                    f"completed: {generations['completed_runs']}; "
+                    f"measured: {generations['measured_completed_runs']}; "
+                    f"missing: {generations['unobserved_completed_runs']}; "
+                    f"actor/purpose totals: {generations['by_actor_purpose']}.",
+                    "",
+                ]
+                cost = measured["external_cost"]
+                lines += [
+                    "| external cost | known total | missing calls | per successful task |",
+                    "|---|---|---|---|",
+                ]
+                lines += [
+                    f"| {key} (known token subtotal) | {cost[key + '_known_total']} | "
+                    f"{cost[key + '_missing_calls']} | {cost[key + '_per_completed_task']} |"
+                    for key in ("input_tokens", "output_tokens")
+                ]
+
+                lines += [
+                    "",
+                    f"External calls: {cost['calls']} across all attempts; "
+                    f"successful tasks: {cost['completed_tasks']}; "
+                    f"unobserved runs: {cost['unobserved_runs']}. "
+                    "Unknown token counts stay null in the JSON export.",
+                    "",
+                ]
+
+            lines += [
+                "| effective answer stream | runs | task success | predicate_unmet |",
+                "|---|---|---|---|",
+            ]
+            for policy, entry in data["all"].get("answer_stream_policies", {}).items():
+                lines.append(
+                    f"| {policy} | {entry['runs']} | {_fraction(entry['success'])} | "
+                    f"{entry['predicate_unmet']} |"
+                )
+            lines.append("")
     lines += ["## Section 12.3 targets (English simple subset)", ""]
     for mode, entry in summary["targets"].items():
         parts = []
@@ -286,7 +390,19 @@ def render_corpus_markdown(summary: Mapping[str, Any], *, title: str) -> str:
 def _latency_block(samples: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     metrics = {}
     for metric in LATENCY_METRICS:
-        values = [s[metric] for s in samples if s.get(metric) is not None]
+        values = [
+            s[metric]
+            for s in samples
+            if s.get(metric) is not None
+            and (
+                metric != "completion_ms"
+                or (
+                    s.get("state") == "completed"
+                    and s.get("error") is None
+                    and not s.get("timed_out")
+                )
+            )
+        ]
         metrics[metric] = {
             "n": len(values),
             "p50": nearest_rank(values, 0.5),
@@ -307,6 +423,15 @@ def summarize_latency(samples: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """Overall and per-label percentiles, and the 500 ms hypothesis (section 12.1)."""
     samples = list(samples)
     overall = _latency_block(samples)
+    if any("metrics" in s for s in samples):
+        from relaymind.evaluation.placement_metrics import summarize_placement
+
+        overall["placement_metrics"] = summarize_placement(
+            [
+                {**s, "success": s.get("state") == "completed" and s.get("error") is None}
+                for s in samples
+            ]
+        )
     labels = sorted({s["label"] for s in samples})
     by_label = {
         label: _latency_block([s for s in samples if s["label"] == label]) for label in labels
@@ -344,6 +469,14 @@ def summarize_latency(samples: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     return {
         "overall": overall,
         "by_label": by_label,
+        "by_measured_class": {
+            name: _latency_block(
+                [s for s in samples if s.get("metrics", {}).get("local_class", "unknown") == name]
+            )
+            for name in sorted(
+                {s.get("metrics", {}).get("local_class", "unknown") for s in samples}
+            )
+        },
         "hypothesis": hypothesis,
         "by_selector_provenance": scopes,
     }

@@ -569,15 +569,15 @@ feature has a test of the default as well. Later pull requests append here.
   run, record no `answer_pass_applied`. The default runs the final pass and
   records `final` (`tests/test_ac01_local_health.py` is unchanged), and
   `run.accepted` holds the five performance options in force.
-  `PerformanceSettings` refuses a wrong value and `answer_stream = live`;
+  `PerformanceSettings` refuses a wrong value; `answer_stream = live` is an opt-in gate;
   the language guard compares by value, so a plain `"zh"` is the Chinese
   run, and an unknown language is an error.
 - `pytest tests/test_launcher.py -k performance` (#121, #140; section 14.1):
   the `[performance]` keys are the `PerformanceSettings` fields, a file
   without the table keeps the defaults, each key reaches the settings, a
   wrong value or a key that does not exist is exit status 2 with one message
-  that starts with `[performance]`, `answer_stream = "live"` is refused as not
-  implemented, and the commented block of `relaymind.example.toml` loads
+  that starts with `[performance]`, `answer_stream = "live"` enables the gate,
+  and the commented block of `relaymind.example.toml` loads
   when uncommented.
 - `pytest tests/test_trace_event.py -k performance` (#121; RM22, section 8):
   the optional `run.accepted` option fields and `run.completed`
@@ -861,8 +861,10 @@ feature has a test of the default as well. Later pull requests append here.
 - `pytest tests/test_runner_configurations.py` (#128; RM03, RM25, RM26,
   RM29, RM31, RM32): the phase 2 runner configurations, alongside the corpus
   and latency script tests. They check launch-file round trips, validation,
-  no-local runtime bypass, external prerequisites, export/report labels and
-  offline regrading. Grading and metric regressions distinguish gateway-owned
+  no-local runtime bypass, external prerequisites, export/report labels,
+  declared external request options (spec 0.46: checked like the launch file,
+  recorded only when declared, and part of the prior partition) and offline
+  regrading. Grading and metric regressions distinguish gateway-owned
   answers from local-model completion and report no-local completion as not
   applicable. These deterministic checks do not constitute the live
   evaluation matrix or evidence for changing defaults.
@@ -923,6 +925,53 @@ feature has a test of the default as well. Later pull requests append here.
   the keyword SkillsBench export are transport evidence; no live model capability
   or useful keyword accuracy is implied.
 
+- `pytest tests/test_gated_streaming.py tests/test_completion_predicates.py`
+  (#125; RM12, RM17, RM20, RM32, AC19): verified live answer publication
+  uses deterministic model doubles. It exercises cumulative safety and final
+  completeness against the existing bilingual predicate cases, exact delimiter
+  preservation, multiline checklist scope, full-answer redaction, early and late
+  rejection, absent completion markers, provider failures, cancellation, deadline
+  ties, persisted call identity, synthesis after joining, and failed persistence.
+  The managed SSE tests include real socket/standard SDK error parsing, with
+  early headers on and off, plus idempotent replay; raw ASGI tests synchronize
+  on generated/published content before disconnecting. They make no inference
+  calls and do not measure task-success parity or a latency improvement.
+
+  The gate retains raw context privately. For checklist answers it waits until
+  the first complete draft label, then verifies complete lines. With known secret
+  values it conservatively withholds the whole answer so published text exactly
+  matches the existing full-answer scrub, including overlapping secrets. These
+  choices can delay first content. The predicates retain their documented
+  syntactic limitations; the performance predicate is a section/evidence check,
+  not a general factual verifier.
+
+  The opt-in `performance.answer_stream = "live"` applies to native managed runs
+  and streamed managed chat. Non-streamed chat and client-owned calls remain
+  effectively buffered. Corpus grades retain configured/effective policy and
+  terminal failure code, and report task success and `predicate_unmet` separately
+  for each effective policy. The actual paired provider corpus run on one final
+  revision and frozen timing prior is still required before changing defaults.
+
+- M8 evaluation infrastructure (RM17, RM25–RM28, RM32; specification 14.4).
+
+  Run the importer, local-phase clock, metric, checkpoint, matrix and runner
+  regressions with model doubles before executing the matrix:
+
+  ```sh
+  .venv/bin/python -m pytest -o pythonpath=src tests/test_placement_prior.py tests/test_local_active_measurement.py tests/test_m8_metrics.py tests/test_evaluation_checkpoints.py tests/test_m8_matrix_driver.py tests/test_matrix_controller_recovery.py tests/test_m8_analysis.py tests/test_runner_configurations.py tests/test_run_corpus_script.py tests/test_latency_benchmark_script.py
+  ```
+
+  The prior tests use declared synthetic test fixtures to validate projection and
+  retention, including an expected-wait decision from imported terminal history.
+  They establish no performance, provider parity, or model capability. The
+  checkpoint tests verify preservation/refusal behavior without inference.
+  `tests/test_m8_analysis.py` checks the offline M8 report on a relocated
+  fixture matrix: full 31-cell acceptance, inventory mode, paired comparisons,
+  cost ledgers, hypothesis verdicts (including candidate timeouts that would hide
+  behind an observed-value p95), and refusal of existing, checkout and recorded-root
+  outputs. It reads no real measurement.
+  Repository completion checks remain the entire pytest suite and Ruff lint/format.
+
 ### What is not covered yet
 
 - The correctness corpus ran on Apple Silicon macOS only (#32). The
@@ -953,15 +1002,15 @@ feature has a test of the default as well. Later pull requests append here.
   of the AC01 prompts are recorded on macOS and Windows as single-pass
   observations. The Windows cache-on run has 3 hits, 4 misses, and one
   run that ended before it had a route to label; 0/8 completed in each arm.
-- No production backend forwards a live provider stream yet, so the
-  mid-stream failure path is tested with a backend double.
+- Managed gated streaming has deterministic model-double and actual socket/SDK
+  coverage (AC19); real provider corpus parity is still pending.
 - The launcher (`relaymind serve --config`) has started with the pinned
   model on macOS (the harness above) and on x86-64 Windows (#110, five
   starts, `/readyz` 200 on all).
-- Phase 2 began in spec 0.31. No-local operation (#126, AC20), placement
-  (#130, AC21), and HTTP selectors (#133, AC22) now have deterministic
-  coverage described above; gated streaming (#125, AC19) remains pending
-  on this baseline. The budgets table (#142), the call timing and count
+- Phase 2 (spec 0.31, RM26 to RM32 and AC17 to AC22; RM30 and AC23 were
+  retired in 0.47) now has deterministic
+  coverage for gated streaming, operation without a local model, placement,
+  and the out-of-process selector (#133). The budgets table (#142), the call timing and count
   recording (#120), the draft answer pass (#121, AC17), early response
   headers (#140), admitted calls per generation (#122), prefetch (#123),
   both AC18, and the selection interface with its two built-in selectors
@@ -974,7 +1023,7 @@ feature has a test of the default as well. Later pull requests append here.
   issues in [`ROADMAP.md`](ROADMAP.md) carry the tests. The offline
   spikes (#115, #118, #119) and the timing probes (#114, #116, #117) test
   their own scripts, not the gateway.
-- M9 OpenClaw integration (spec 0.46, RM33, AC24) is planned. #135 to
+- M9 OpenClaw integration (spec 0.47, RM33, AC24) is planned. #135 to
   #139 and #145 define host-transport contract tests, plugin installation,
   tool ownership, cancellation, error/retry behavior, and separate live
   evaluation. No OpenClaw integration test or live result is claimed yet.
@@ -1079,13 +1128,14 @@ run. Build 11669 accepted `--chat-template-kwargs` with a deprecation
 warning on all platforms. The #58 update selects b11785 and the reasoning
 controls below; the old run does not qualify the new runtime.
 
-With the #57 fix (RM01, RM18; spec section 6), `LlamaCppAdapter` and
-both automated startup health-poll paths bypass environment and system
-proxies for `localhost` and IPv4/IPv6 loopback literals. These paths no
-longer require the session overrides above. Non-loopback endpoints and
-the external Chat Completions adapter retain normal proxy handling;
-process-wide proxy settings are unchanged. This policy applies to the
-Python clients, not the manual terminal commands below.
+With the #57 and #167 fixes (RM01, RM18, RM19; spec section 6), `LlamaCppAdapter`,
+both automated startup health-poll paths, and the live acceptance and evaluation
+harness (`live_acceptance.py`, `run_corpus.py`, `latency_benchmark.py`) bypass
+environment and system proxies for `localhost` and IPv4/IPv6 loopback literals. These
+paths no longer require the session overrides above. Non-loopback endpoints and the
+external Chat Completions adapter retain normal proxy handling; process-wide proxy
+settings are unchanged. This policy applies to the Python clients, not the manual
+terminal commands below.
 
 `pytest tests/test_loopback_proxy.py` checks routing with controlled proxy
 discovery and transport doubles, without a real proxy or model. The #56

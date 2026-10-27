@@ -352,6 +352,7 @@ def test_an_interrupted_run_removes_its_work_dir(runner, tmp_path, monkeypatch):
         runner.harness, "check_runtime", lambda manifest, extra_args=(): FakeRuntime()
     )
     monkeypatch.setattr(runner.harness, "application_revision", lambda: {})
+    monkeypatch.setattr(runner.session, "prior_configuration", lambda *args: {})
     monkeypatch.setattr(runner.harness, "_stop", stopped.append)
     monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: str(work))
     monkeypatch.setattr(runner, "_run_one", interrupt)
@@ -906,3 +907,11 @@ def test_the_cli_refuses_to_overwrite_the_source_export(runner, tmp_path, capsys
 def test_draft_pass_regrading_refuses_another_corpus_digest(runner, corpus):
     with pytest.raises(SystemExit, match="digest"):
         runner.regrade_draft_pass({"corpus": {"sha256": "0" * 64}, "grades": []}, corpus)
+
+
+def test_expected_skills_are_read_once_from_the_checked_sidecar(runner, corpus):
+    """RM28, spec section 12.2: the sidecar is loaded and checked once for every case."""
+    skills = runner.expected_skills(corpus)
+    assert set(skills) == {case.case_id for case in corpus.cases}
+    for function in (runner.run_corpus, runner.regrade):
+        assert "corpus.v1.skills.json" not in inspect.getsource(function)

@@ -592,3 +592,28 @@ def test_gateway_answer_is_not_a_local_completion():
     events = local_health_trace()
     events[-1]["payload"]["final_answer_model"] = "gateway"
     assert grade(make_case(), events).local_completion is False
+
+
+@pytest.mark.parametrize(
+    "configured,effective", [("live", "live"), ("live", "buffered"), (None, None)]
+)
+def test_stream_configuration_and_effective_policy_are_distinct(configured, effective):
+    """RM25/RM32: exports keep configured/effective modes and historical unknowns."""
+    trace = Trace()
+    if configured is not None:
+        trace.events[0]["payload"].update(
+            answer_stream=configured, answer_stream_effective=effective
+        )
+    result = grade_run(
+        make_case(),
+        "auto",
+        trace.events,
+        state="failed",
+        error_code="predicate_unmet",
+        databases=None,
+    )
+    record = result.to_json_object()
+    assert record["answer_stream"] == configured
+    assert record["answer_stream_effective"] == effective
+    assert record["error_code"] == "predicate_unmet"
+    assert not record["success"]

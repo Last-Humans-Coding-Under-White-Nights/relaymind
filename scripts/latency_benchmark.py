@@ -49,11 +49,14 @@ from typing import Any
 
 import httpx
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import evaluation_session as session  # noqa: E402
 import live_acceptance as harness  # noqa: E402
 from evaluation_config import (  # noqa: E402
     ConfigurationError,
+    RunnerConfiguration,
     add_configuration_arguments,
     configuration_from_args,
     label_report,
@@ -64,6 +67,7 @@ from relaymind.adapters.llamacpp import build_chat_request  # noqa: E402
 from relaymind.api.app import RUN_ID_HEADER  # noqa: E402
 from relaymind.canonical import canonical_digest  # noqa: E402
 from relaymind.evaluation.environment import (  # noqa: E402
+    checkout_environment,  # noqa: E402
     machine_manifest,
     parse_runtime_log,
     runtime_devices,
@@ -74,6 +78,8 @@ from relaymind.evaluation.metrics import (  # noqa: E402
     render_latency_markdown,
     summarize_latency,
 )
+from relaymind.evaluation.placement_metrics import trace_metrics  # noqa: E402
+from relaymind.evaluation.prior import byte_digest  # noqa: E402
 
 REPO_ROOT = harness.REPO_ROOT
 PROMPTS = REPO_ROOT / "evaluation" / "latency_prompts.v1.json"
@@ -133,7 +139,9 @@ def benchmark_config(*, early_headers: bool = False, startup_warmup: bool = True
         if performance.get("early_headers") is False:
             raise ValueError("early_headers conflicts with performance.early_headers=false")
         performance["early_headers"] = True
-    placement = None if startup_warmup else {"warmup": False}
+    placement = dict(options.pop("placement", None) or {})
+    if not startup_warmup:
+        placement["warmup"] = False
     external = options.pop("external", None)
     return harness.gateway_config(
         **options,
@@ -179,24 +187,9 @@ def first_useful_content_ms(events: Sequence[Mapping[str, Any]]) -> float | None
 
 
 def _model_calls(events: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    calls = []
-    for event in harness.of_type(events, "model.finished"):
-        usage = event["payload"].get("usage") or {}
-        calls.append(
-            {
-                "call_id": event["payload"].get("call_id"),
-                "actor": event.get("actor"),
-                "model": event["payload"].get("model"),
-                "purpose": event["payload"].get("purpose"),
-                "duration_ms": event["payload"].get("duration_ms"),
-                "input_tokens": usage.get("input_tokens"),
-                # None when the runtime reported no count: not measured (spec 0.31 section 6).
-                "cached_tokens": usage.get("cached_tokens"),
-                "reasoning_tokens": usage.get("reasoning_tokens"),
-                "first_token_ms": event["payload"].get("first_token_ms"),
-            }
-        )
-    return calls
+    from relaymind.evaluation.m7_metrics import model_calls
+
+    return model_calls(events)
 
 
 def _elapsed_ms(started: float) -> float:
@@ -242,7 +235,8 @@ async def _stream(api: harness.Api, prompt: str, sample: dict[str, Any]) -> None
             # Expected only after the error event; any other cut is a transport error.
             if sample["stream_error_code"] is None:
                 raise
-    sample["completion_ms"] = _elapsed_ms(started)
+    sample["stream_duration_ms"] = _elapsed_ms(started)
+    sample["completion_ms"] = sample["stream_duration_ms"]
 
 
 async def measure(
@@ -316,6 +310,10 @@ async def _read_trace(api: harness.Api, run_id: str, sample: dict[str, Any]) -> 
     sample["first_useful_content_ms"] = first_useful_content_ms(events)
     sample["model_calls"] = _model_calls(events)
     sample["selector_provenance"] = selector_provenance(events)
+    sample["trace"] = events
+    sample["metrics"] = trace_metrics(events)
+    if sample["state"] != "completed" or sample.get("stream_error_code") or sample.get("timed_out"):
+        sample["completion_ms"] = None
 
 
 Measure = Callable[..., Awaitable[dict[str, Any]]]
@@ -330,15 +328,25 @@ async def run_samples(
     timeout: float = REQUEST_TIMEOUT_SECONDS,
     measure_one: Measure = measure,
     external: bool = False,
+    checkpoint=None,
 ) -> dict[str, Any]:
     """The cold request, the warm-ups, then the measured runs in the seeded order."""
     options = {"timeout": timeout, **({"external": True} if external else {})}
     by_id = {p["id"]: p for p in prompts}
-    cold = await measure_one(api, prompts[0], **options)
-    warmups = [await measure_one(api, p, **options) for p in warmup_prompts(prompts)]
+
+    async def observed(identity, prompt):
+        if checkpoint:
+            checkpoint.start(identity)
+        value = await measure_one(api, prompt, **options)
+        if checkpoint:
+            checkpoint.finish(identity, value)
+        return value
+
+    cold = await observed("cold/0", prompts[0])
+    warmups = [await observed(f"warmup/{i}", p) for i, p in enumerate(warmup_prompts(prompts))]
     measured = []
     for index, prompt_id in enumerate(schedule(list(by_id), runs=runs, seed=seed)):
-        sample = await measure_one(api, by_id[prompt_id], **options)
+        sample = await observed(f"measured/{index}/{prompt_id}", by_id[prompt_id])
         measured.append({**sample, "order": index})
         print(f"{index:3} {prompt_id} {sample.get('error') or 'ok'}", flush=True)
     return {"cold": cold, "warmups": warmups, "measured": measured}
@@ -413,16 +421,29 @@ def _props(local_url: str) -> dict[str, Any] | None:
         return None
 
 
+def effective_configuration(
+    configuration: RunnerConfiguration, *, no_startup_warmup: bool = False
+) -> dict[str, Any]:
+    """The settings actually launched/exported, separate from raw checkpoint identity."""
+    document = configuration.to_json_object()
+    document["placement"]["warmup"] = configuration.local_model_configured and not no_startup_warmup
+    return document
+
+
 def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     configuration = configuration_from_args(args)
     early_headers = configuration.performance.early_headers
-    startup_warmup = configuration.local_model_configured and not getattr(
-        args, "no_startup_warmup", False
+    effective = effective_configuration(
+        configuration, no_startup_warmup=getattr(args, "no_startup_warmup", False)
     )
+    startup_warmup = effective["placement"]["warmup"]
     external = None
     if configuration.external is not None:
         external = harness.ExternalEndpoint(
-            args.external_base_url, args.external_model, args.external_context_limit
+            args.external_base_url,
+            args.external_model,
+            args.external_context_limit,
+            request_options=configuration.external_request_options,
         )
     if (external is not None and not os.environ.get(harness.EXTERNAL_KEY_ENV)) or (
         not configuration.local_model_configured and external is None
@@ -436,13 +457,22 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         if configuration.local_model_configured
         else None
     )
-    application = harness.application_revision()
+    partition, prior, application, checkpoint = session.prepare(
+        args, REPO_ROOT, runtime, external, configuration
+    )
+    if (previous := session.existing_result(checkpoint, args.out)) is not None:
+        return previous
     seed = args.seed if args.seed is not None else random.SystemRandom().randrange(2**31)
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
-    work = Path(tempfile.mkdtemp(prefix="relaymind-latency-"))
+    work = (
+        Path(tempfile.mkdtemp(prefix="relaymind-latency-"))
+        if checkpoint is None
+        else session.durable_work(args, "latency", None)
+    )
     # The work dir goes on any exit, an interrupt included.
     with ExitStack() as cleanup:
-        cleanup.callback(shutil.rmtree, work, ignore_errors=True)
+        if checkpoint is None:
+            cleanup.callback(shutil.rmtree, work, ignore_errors=True)
         llama_log = work / "llama-server.log"
         llama, local_url, cold_start = runtime.launch(llama_log) if runtime else (None, None, None)
         try:
@@ -462,7 +492,10 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                 ),
                 encoding="utf-8",
             )
-            gateway = harness.GatewayProcess(config, work / "gateway.log", os.environ)
+            prior_report = session.seed_store(work, prior)
+            gateway = harness.GatewayProcess(
+                config, work / "gateway.log", checkout_environment(REPO_ROOT, dict(os.environ))
+            )
             gateway_started = time.monotonic()
             output = gateway.start()
             gateway_ready = time.monotonic() - gateway_started
@@ -477,6 +510,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                         runs=args.runs,
                         timeout=args.timeout,
                         external=external is not None,
+                        **({"checkpoint": checkpoint} if checkpoint else {}),
                     )
                 finally:
                     await api.aclose()
@@ -496,10 +530,11 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         calls = [call for sample in measured for call in sample["model_calls"]]
         document = {
             "kind": "relaymind.latency_benchmark",
-            "configuration": {
-                **configuration.to_json_object(),
-                "placement": {"policy": "local_first", "warmup": startup_warmup},
-            },
+            "prior_configuration": partition,
+            "timing_prior": prior_report,
+            "timing_snapshot": session.snapshot_store(work),
+            "learning": "one gateway, online sequence after frozen initial prior",
+            "configuration": effective,
             "note": "Section 12.2 latency experiment in the recorded configuration, "
             "concurrency one, "
             "routing cache off. First transport event and first answer token are client times; "
@@ -580,17 +615,24 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
             "warmups": samples["warmups"],
             "samples": measured,
         }
+        from relaymind.evaluation.m7_metrics import latency_first_tokens, render_first_tokens
+
+        document["first_token_ms"] = latency_first_tokens(document)
         out = Path(args.out)
         harness.write_json(out, document, work=work)
         report = render_latency_markdown(
             summary, title=f"Latency benchmark: {out.stem}", early_headers=early_headers
         )
+        report += render_first_tokens(document["first_token_ms"])
         report = label_report(report, document["configuration"])
         out.with_suffix(".md").write_text(report, encoding="utf-8")
+        if checkpoint:
+            checkpoint.complete({"export_sha256": byte_digest(out), "samples": len(measured)})
         return document
 
 
-def main(argv: Sequence[str] | None = None) -> None:
+def argument_parser() -> argparse.ArgumentParser:
+    """The same CLI schema is used for invocation and checkpoint reconciliation."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="the export file (JSON); the report is .md")
     parser.add_argument(
@@ -613,6 +655,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     parser.add_argument("--runs", type=int, default=RUNS_PER_PROMPT)
     parser.add_argument("--timeout", type=float, default=REQUEST_TIMEOUT_SECONDS)
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    parser = argument_parser()
     args = parser.parse_args(argv)
     # Only option checks raise ConfigurationError, before anything starts; any other
     # failure keeps its traceback and is never reported as a usage error.

@@ -50,7 +50,9 @@ from relaymind.api.chat import (
     collect_live,
     completion_body,
     early_stream,
+    live_with_heartbeats,
     open_stream,
+    stream_chunks,
 )
 from relaymind.api.chat_request import (
     CLIENT_TOOLS,
@@ -200,7 +202,13 @@ def create_app(
         accepting = (
             backend
             if chat.stream
-            and orchestrator.performance.early_headers
+            and (
+                orchestrator.performance.early_headers
+                or (
+                    isinstance(backend, ManagedChat)
+                    and orchestrator.performance.answer_stream == "live"
+                )
+            )
             and isinstance(backend, AcceptingBackend)
             else None
         )
@@ -209,7 +217,7 @@ def create_app(
             try:
                 if accepting is not None:
                     accepted = accepting.accept(claimed, mode)
-                    return _early_response(request, orchestrator, native, chat, accepted)
+                    return await _early_response(request, orchestrator, native, chat, accepted)
                 result = await _until_disconnect(
                     request,
                     orchestrator,
@@ -422,7 +430,7 @@ class _EarlyStream(_ClosingStream):
             await self._cancel()
 
 
-def _early_response(
+async def _early_response(
     request: Request,
     orchestrator: LocalOrchestrator,
     native: NativeSettings,
@@ -440,23 +448,43 @@ def _early_response(
     async def cancel() -> None:
         # The bounded wait of the buffered disconnect and the native cancel (section 7.4).
         if not task.done():
-            orchestrator.request_cancel(task)
+            if not task.cancelling():
+                orchestrator.request_cancel(task)
             await asyncio.wait({task}, timeout=native.cancel_wait_seconds)
 
-    lines = early_stream(
-        chat.alias,
-        accepted.run_id,
-        task,
-        heartbeat_seconds=native.heartbeat_seconds,
-        on_internal_error=lambda exc: _log_internal(request, exc),
-    )
+    early = orchestrator.performance.early_headers
+    if accepted.progress is not None:
+        result = accepted.progress(task)
+        if early:
+            lines = live_with_heartbeats(
+                stream_chunks(chat.alias, result, int(time.time())), native.heartbeat_seconds
+            )
+        else:
+            try:
+                lines = await _until_disconnect(
+                    request,
+                    orchestrator,
+                    open_stream(chat.alias, result, int(time.time())),
+                    native.cancel_wait_seconds,
+                )
+            except BaseException:
+                await cancel()
+                raise
+    else:
+        lines = early_stream(
+            chat.alias,
+            accepted.run_id,
+            task,
+            heartbeat_seconds=native.heartbeat_seconds,
+            on_internal_error=lambda exc: _log_internal(request, exc),
+        )
     return _EarlyStream(
         lines,
         cancel=cancel,
         media_type="text/event-stream",
         headers={
             RUN_ID_HEADER: accepted.run_id,
-            EVENTS_URL_HEADER: events_url(accepted.run_id),
+            **({EVENTS_URL_HEADER: events_url(accepted.run_id)} if early else {}),
             "Cache-Control": "no-cache",
         },
     )

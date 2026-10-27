@@ -210,6 +210,10 @@ def test_corrections_per_completed_run_count_corrections_and_their_duration():
         "corrections": 3,
         "per_completed_run": 1.0,
         "duration_ms": 22000,
+        "known_duration_ms": 22000,
+        "measured_completed_runs": 3,
+        "missing_completed_runs": 0,
+        "missing_duration_runs": 0,
     }
 
 
@@ -395,3 +399,41 @@ def test_http_attempts_have_separate_corpus_and_latency_report_rows():
     assert latency["by_selector_provenance"]["http_attempted"]["samples"] == 1
     assert latency["by_selector_provenance"]["gateway_observed"]["samples"] == 0
     assert "| http_attempted | 1 |" in render_latency_markdown(latency, title="HTTP")
+
+
+def test_stream_policies_keep_success_and_predicate_failures_separate():
+    """RM25/RM32: live failures stay in the denominator and historical labels stay unknown."""
+    grades = [
+        grade(
+            "one",
+            "auto",
+            answer_stream="live",
+            answer_stream_effective="live",
+            success=False,
+            error_code="predicate_unmet",
+        ),
+        grade("two", "auto", answer_stream="live", answer_stream_effective="buffered"),
+        grade("three", "auto"),
+    ]
+    summary = summarize_corpus(grades)
+    policies = summary["modes"]["auto"]["en"]["all"]["answer_stream_policies"]
+    assert policies["live"]["success"] == rate(0, 1)
+    assert policies["live"]["predicate_unmet"] == 1
+    assert policies["buffered"]["success"] == rate(1, 1)
+    assert policies["unknown"]["runs"] == 1
+    assert "| live | 1 | 0/1 | 1 |" in render_corpus_markdown(summary, title="test")
+
+
+def test_corpus_markdown_skips_m7_rows_for_a_class_without_metrics():
+    """RM16/RM25: a class whose runs recorded no metrics is left out, not a crash."""
+    from relaymind.evaluation.m7_metrics import enrich_metrics
+    from test_evaluation_grading import make_case
+
+    metrics = enrich_metrics(make_case(), [], expected_skill=None, selector_chain=[])
+    grades = [
+        grade("simple-01", "auto", metrics=metrics),
+        grade("ambiguous-01", "auto", cls="ambiguous"),
+    ]
+    markdown = render_corpus_markdown(summarize_corpus(grades), title="t")
+    assert "### M7 observations: simple" in markdown
+    assert "### M7 observations: ambiguous" not in markdown

@@ -54,6 +54,7 @@ from relaymind.store.model_timings import (
     TimingEstimate,
     timing_estimate,
 )
+from relaymind.store.outcomes import is_local_attempt, project_outcome
 from relaymind.store.trace_event import (
     SCHEMA_VERSION,
     EventType,
@@ -220,6 +221,27 @@ MIGRATIONS: tuple[str, ...] = (
         last_attempt_at TEXT
     );
     INSERT INTO idle_probe(singleton) VALUES (1);
+    """,
+    """
+    CREATE TABLE imported_prior (
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        bundle_digest TEXT NOT NULL,
+        configuration_digest TEXT NOT NULL,
+        report TEXT NOT NULL
+    );
+    CREATE TABLE imported_outcomes (
+        source_digest TEXT NOT NULL,
+        source_run_id TEXT NOT NULL,
+        recorded_at TEXT NOT NULL,
+        local_model TEXT,
+        skill_id TEXT NOT NULL,
+        local_completed INTEGER NOT NULL,
+        local_escalated INTEGER NOT NULL,
+        external_model TEXT,
+        external_generations INTEGER NOT NULL,
+        projector_version INTEGER NOT NULL,
+        PRIMARY KEY(source_digest, source_run_id)
+    );
     """,
 )
 
@@ -998,6 +1020,9 @@ class RunStore:
         with self._lock:
             with self._write():
                 self._conn.execute("DELETE FROM model_timings WHERE recorded_at <= ?", (cutoff,))
+                self._conn.execute(
+                    "DELETE FROM imported_outcomes WHERE recorded_at <= ?", (cutoff,)
+                )
                 rows = self._conn.execute(
                     "DELETE FROM runs WHERE created_at <= ? RETURNING run_id", (cutoff,)
                 ).fetchall()
@@ -1095,6 +1120,24 @@ class RunStore:
                     (external_model, skill_id, self._retention_cutoff()),
                 ).fetchall()
             )
+            imported = self._conn.execute(
+                "SELECT COALESCE(SUM(local_completed),0), COALESCE(SUM(local_escalated),0)"
+                " FROM imported_outcomes WHERE local_model IS ? AND skill_id = ?"
+                " AND recorded_at > ?",
+                (model, skill_id, self._retention_cutoff()),
+            ).fetchone()
+            completed += imported[0]
+            escalated += imported[1]
+            if external_model is not None:
+                external = (
+                    list(external)
+                    + self._conn.execute(
+                        "SELECT external_generations FROM imported_outcomes"
+                        " WHERE external_model = ?"
+                        " AND skill_id = ? AND external_generations > 0 AND recorded_at > ?",
+                        (external_model, skill_id, self._retention_cutoff()),
+                    ).fetchall()
+                )
         return SkillOutcomeEstimate(
             local_completed=completed,
             local_escalated=escalated,
@@ -1106,6 +1149,123 @@ class RunStore:
             if external
             else None,
         )
+
+    def import_placement_prior(
+        self,
+        *,
+        bundle_digest: str,
+        configuration_digest: str,
+        timings: list[ModelTiming],
+        outcomes: list[dict[str, Any]],
+        report: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Atomically seed a fresh evaluation store; no synthetic run/event is written."""
+        for digest in (bundle_digest, configuration_digest):
+            if (
+                not isinstance(digest, str)
+                or len(digest) != 64
+                or any(c not in "0123456789abcdef" for c in digest)
+            ):
+                raise ValueError("invalid prior digest")
+        identities = set()
+        fields = {
+            "source_digest",
+            "source_run_id",
+            "recorded_at",
+            "local_model",
+            "skill_id",
+            "local_completed",
+            "local_escalated",
+            "external_model",
+            "external_generations",
+        }
+        for row in outcomes:
+            if not isinstance(row, dict) or set(row) != fields:
+                raise ValueError("invalid imported outcome fields")
+            identity = (row["source_digest"], row["source_run_id"])
+            if identity in identities:
+                raise ValueError("duplicate imported outcome")
+            identities.add(identity)
+            for name in ("local_completed", "local_escalated", "external_generations"):
+                if type(row[name]) is not int or row[name] < 0:
+                    raise ValueError("invalid imported outcome count")
+            if row["local_completed"] + row["local_escalated"] > 1:
+                raise ValueError("conflicting local outcome")
+            if row["local_completed"] and row["external_generations"]:
+                raise ValueError("local completion cannot include external generations")
+            for name in ("source_digest", "source_run_id", "skill_id"):
+                if not isinstance(row[name], str) or not row[name].strip():
+                    raise ValueError("invalid imported outcome identity")
+            for name in ("local_model", "external_model"):
+                if row[name] is not None and (
+                    not isinstance(row[name], str) or not row[name].strip()
+                ):
+                    raise ValueError("invalid imported model identity")
+            if row["external_generations"] and row["external_model"] is None:
+                raise ValueError("external outcome requires model identity")
+            timestamp = datetime.fromisoformat(row["recorded_at"])
+            if timestamp.utcoffset() is None or _iso(timestamp) != row["recorded_at"]:
+                raise ValueError("imported timestamp must be canonical UTC")
+        if report.get("timings") != len(timings) or report.get("outcomes") != len(outcomes):
+            raise ValueError("import report counts disagree")
+        for sample in timings:
+            sample.to_json_object()
+            if sample.run_id is not None:
+                raise ValueError("imported timing must be unowned")
+        with self._write():
+            cutoff = self._retention_cutoff()
+            if any(_iso(t.recorded_at) <= cutoff for t in timings) or any(
+                o["recorded_at"] <= cutoff for o in outcomes
+            ):
+                raise ValueError("prior retention expired; recalibrate without redating")
+            previous = self._conn.execute("SELECT * FROM imported_prior").fetchone()
+            if previous is not None:
+                if (
+                    previous["bundle_digest"] != bundle_digest
+                    or previous["configuration_digest"] != configuration_digest
+                ):
+                    raise ValueError("conflicting immutable prior")
+                if self.model_timings() != sorted(
+                    timings, key=lambda t: t.recorded_at
+                ) or self._conn.execute("SELECT COUNT(*) FROM imported_outcomes").fetchone()[
+                    0
+                ] != len(outcomes):
+                    raise ValueError("prior retention or subsequent measurements changed")
+                stored_outcomes = [
+                    dict(row)
+                    for row in self._conn.execute(
+                        "SELECT source_digest,source_run_id,recorded_at,local_model,skill_id,"
+                        "local_completed,local_escalated,external_model,external_generations "
+                        "FROM imported_outcomes ORDER BY source_digest,source_run_id"
+                    ).fetchall()
+                ]
+                if (
+                    stored_outcomes
+                    != sorted(outcomes, key=lambda r: (r["source_digest"], r["source_run_id"]))
+                    or json.loads(previous["report"]) != report
+                ):
+                    raise ValueError("conflicting immutable prior projection")
+                return json.loads(previous["report"])
+            if self._conn.execute("SELECT 1 FROM runs LIMIT 1").fetchone() or self.model_timings():
+                raise ValueError("prior import requires a fresh isolated store")
+            for sample in timings:
+                self.add_model_timing(sample)
+            if len(self.model_timings()) != len(timings):
+                raise ValueError("prior retention limits truncated timing rows")
+            for row in outcomes:
+                self._conn.execute(
+                    "INSERT INTO imported_outcomes (source_digest,source_run_id,recorded_at,"
+                    "local_model,skill_id,local_completed,local_escalated,external_model,"
+                    "external_generations,projector_version)"
+                    " VALUES (:source_digest,:source_run_id,:recorded_at,:local_model,:skill_id,"
+                    ":local_completed,:local_escalated,:external_model,:external_generations,1)",
+                    row,
+                )
+            self._conn.execute(
+                "INSERT INTO imported_prior VALUES (1,?,?,?)",
+                (bundle_digest, configuration_digest, json.dumps(report, sort_keys=True)),
+            )
+        return report
 
     def _record_outcome_event(self, event: TraceEvent) -> None:
         """Update bounded per-run progress inside the event transaction; finalize once.
@@ -1147,9 +1307,7 @@ class RunStore:
             if event.actor == "local":
                 # Spec 0.38.1: a parallel workflow branch call is not a local
                 # placement attempt, so its join or failure is no escalation.
-                attempt = (
-                    payload.get("purpose") not in (None, "routing") and "branch" not in payload
-                )
+                attempt = is_local_attempt(payload)
                 self._conn.execute(
                     "UPDATE model_run_progress SET local_model = COALESCE(local_model, ?),"
                     " local_attempt = MAX(local_attempt, ?) WHERE run_id = ?",
@@ -1171,41 +1329,14 @@ class RunStore:
             self._conn.execute(
                 "UPDATE model_run_progress SET terminal = 1 WHERE run_id = ?", (run_id,)
             )
-            if progress["skill_id"] is None:
+            outcome = project_outcome(dict(progress), kind.value, payload)
+            if outcome is None:
                 return
-            completed = kind is EventType.RUN_COMPLETED
-            local_completed = bool(
-                completed
-                and progress["local_attempt"]
-                and not progress["handoff"]
-                and not progress["external_generations"]
-                and payload["final_answer_model"] == progress["local_model"]
-            )
-            local_escalated = bool(
-                progress["local_attempt"]
-                and (
-                    progress["handoff"]
-                    or (
-                        kind is EventType.RUN_FAILED
-                        and payload["error_code"] == "needs_external"
-                        and progress["execution_mode"] == "auto"
-                    )
-                )
-            )
-            external_generations = progress["external_generations"] if completed else 0
             self._conn.execute(
                 "INSERT OR IGNORE INTO skill_outcomes"
                 " (run_id, local_model, skill_id, local_completed, local_escalated,"
                 " external_model, external_generations) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    run_id,
-                    progress["local_model"],
-                    progress["skill_id"],
-                    int(local_completed),
-                    int(local_escalated),
-                    progress["external_model"],
-                    external_generations,
-                ),
+                (run_id, *outcome.values()),
             )
 
     # -- events ----------------------------------------------------------

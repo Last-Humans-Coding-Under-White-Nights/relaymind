@@ -2,12 +2,14 @@
 
 import argparse
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 from urllib.parse import urlsplit
 
+from relaymind.adapters.chat_completions import check_request_options
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.performance import PerformanceSettings
+from relaymind.orchestrator.placement import PlacementSettings
 from relaymind.selection.settings import SelectionSettings
 
 
@@ -26,11 +28,19 @@ def add_configuration_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--budgets", nargs="+", action="extend", default=[], metavar="KEY=VALUE")
     parser.add_argument("--selection-chain", nargs="+", action="extend", metavar="SELECTOR")
     parser.add_argument("--no-local-model", action="store_true")
+    parser.add_argument("--placement", nargs="+", action="extend", default=[], metavar="KEY=VALUE")
+    parser.add_argument("--timing-samples", type=str)
+    parser.add_argument("--checkpoint", type=str)
     parser.add_argument("--external-base-url")
     parser.add_argument("--external-model")
     parser.add_argument("--external-context-limit", type=int)
     parser.add_argument(
         "--external-region", help="the endpoint region, if known (needs an external endpoint)"
+    )
+    parser.add_argument(
+        "--external-request-options",
+        metavar="JSON",
+        help="external_model.request_options as a JSON object, sent verbatim (spec 14.1)",
     )
 
 
@@ -87,6 +97,9 @@ class RunnerConfiguration:
     selection: SelectionSettings
     local_model_configured: bool
     external: ExternalLabel | None = None
+    placement: PlacementSettings = field(default_factory=PlacementSettings)
+    # Declared provider request options; None when none were declared.
+    external_request_options: dict[str, Any] | None = None
 
     def gateway_options(self) -> dict[str, Any]:
         return {
@@ -94,19 +107,24 @@ class RunnerConfiguration:
             "budgets": self.budgets.to_json_object(),
             "selection": {**asdict(self.selection), "chain": list(self.selection.chain)},
             "local_model": self.local_model_configured,
+            "placement": asdict(self.placement),
         }
 
     def to_json_object(self) -> dict[str, Any]:
-        return {
+        result = {
             "performance": self.performance.to_json_object(),
             "budgets": self.budgets.to_json_object(),
             "selection": {**asdict(self.selection), "chain": list(self.selection.chain)},
             "local_model_configured": self.local_model_configured,
             "external": None if self.external is None else asdict(self.external),
-            "placement": {"policy": "local_first"},
+            "placement": asdict(self.placement),
             "enabled_workflows": [],
             "routing_cache": False,
         }
+        # Present only when declared, so configurations without options keep their identity.
+        if self.external_request_options is not None:
+            result["external_request_options"] = self.external_request_options
+        return result
 
 
 def _external_from_args(args: argparse.Namespace) -> ExternalLabel | None:
@@ -126,6 +144,50 @@ def _external_from_args(args: argparse.Namespace) -> ExternalLabel | None:
     return external_label(base_url, model, region)
 
 
+def _null_path(value: Any, path: str) -> str | None:
+    """The key path of the first JSON null in value, or None when there is none.
+
+    A TOML launch file has no null (spec 14.1), so an option the launch file
+    could not carry is refused here, by path and never by value (RM12).
+    """
+    if value is None:
+        return path
+    if isinstance(value, dict):
+        items = ((f"{path}.{key}" if path else str(key), item) for key, item in value.items())
+    elif isinstance(value, list):
+        items = ((f"{path}[{index}]", item) for index, item in enumerate(value))
+    else:
+        return None
+    for item_path, item in items:
+        if (found := _null_path(item, item_path)) is not None:
+            return found
+    return None
+
+
+def _request_options_from_args(
+    args: argparse.Namespace, external: ExternalLabel | None
+) -> dict[str, Any] | None:
+    raw = getattr(args, "external_request_options", None)
+    if raw is None:
+        return None
+    if external is None:
+        raise ConfigurationError("--external-request-options needs an external endpoint")
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ConfigurationError("--external-request-options must be a JSON object") from exc
+    if not isinstance(value, dict):
+        raise ConfigurationError("--external-request-options must be a JSON object")
+    if (path := _null_path(value, "")) is not None:
+        raise ConfigurationError(
+            f"--external-request-options: {path} is null, which a launch file cannot carry"
+        )
+    try:
+        return check_request_options(value)
+    except ValueError as exc:
+        raise ConfigurationError(f"--external-request-options: {exc}") from exc
+
+
 def configuration_from_args(args: argparse.Namespace) -> RunnerConfiguration:
     """The validated configuration; every option error is a ConfigurationError."""
     performance = _settings(
@@ -142,13 +204,21 @@ def configuration_from_args(args: argparse.Namespace) -> RunnerConfiguration:
     if not local and "model_router" in chain:
         raise ConfigurationError("model_router requires a local model")
     budgets = _settings(getattr(args, "budgets", []), LocalBudgets().to_json_object(), "budgets")
+    external = _external_from_args(args)
+    request_options = _request_options_from_args(args, external)
     try:
         return RunnerConfiguration(
-            PerformanceSettings(**performance),
-            LocalBudgets(**budgets),
-            SelectionSettings(chain=tuple(chain)),
-            local,
-            _external_from_args(args),
+            performance=PerformanceSettings(**performance),
+            budgets=LocalBudgets(**budgets),
+            selection=SelectionSettings(chain=tuple(chain)),
+            local_model_configured=local,
+            external=external,
+            external_request_options=request_options,
+            placement=PlacementSettings(
+                **_settings(
+                    getattr(args, "placement", []), asdict(PlacementSettings()), "placement"
+                )
+            ),
         )
     except ConfigurationError:
         raise

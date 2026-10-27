@@ -8,14 +8,86 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Specification 0.46 redirects M9 from YAML workflows to OpenClaw
+- Specification 0.47 redirects M9 from YAML workflows to OpenClaw
   integration (#135 to #139, #145): retire the unimplemented RM30 and AC23
   without reusing their identifiers; add RM33, AC24, the provider ownership
   and compatibility contract, and a separate host-tool evaluation protocol.
   The fixed parallel demo (RM15, AC14) and existing benchmark evidence remain.
   This is a specification and backlog change; the plugin is not implemented.
 
+### Fixed
+
+- Loopback gateway health polls and API/SDK client calls in live acceptance
+  and evaluation scripts bypass environment and system proxies without
+  changing process-wide settings (#167; RM01, RM18, RM19). Non-loopback endpoints
+  keep normal proxy handling.
+
 ### Added
+
+- Runner provider request options (RM25; spec 0.46, sections 12.2 and 14.1):
+  `--external-request-options JSON` on the corpus and latency runners writes
+  `external_model.request_options`, uses the launch file's checks, enters the
+  prior partition, and is recorded in the export configuration only when
+  declared, so earlier configurations keep their identity.
+
+- External model comparison evidence (RM25): glm-4.6, glm-5.3-flash, and
+  glm-5.3-flash with `reasoning_effort` low in the default configuration on
+  Apple M1, one pass each, with per-attempt archives in
+  `docs/evidence/2026-10-27-external-model/`. Operator configuration only; no
+  specification default changes.
+
+- Phase 2 live evidence (#134, #128, #125; RM16, RM25–RM29, RM31, RM32; AC19):
+  the complete M8 matrix (31 cells) and M7 matrix (9 cells) on Apple M1
+  with Z.ai glm-4.6 at revision 741a191, one pass per cell, with both offline
+  analyses, per-attempt archives and a digest manifest in
+  `docs/evidence/2026-10-26-phase2/`. EVIDENCE and RELEASE record the results,
+  the unmet and unmeasured targets, and the conditions of the run.
+
+- Specification 0.45 keeps every phase 2 default with the measured numbers
+  (section 14.4.6): local_first, model_router, buffered answers, final answer
+  pass, one call per generation and no prefetch. Section 12.3 now changes a
+  default only when the option's paired full auto corpus cohort has at least
+  as many task successes as the baseline in the same run.
+
+- Matrix controller recovery (#128, #134; RM16, RM17, RM25): explicit immutable
+  measurement roots, exact corpus/latency export normalization, credential-free
+  finalized-cell reconciliation, original-index snapshots and separate controller
+  provenance. M7 exact unseeded C0/C5 reuse retains the same validation and costs.
+
+- Specification 0.44 defines separate reviewed matrix controllers and immutable
+  measurement checkouts, exact serialized export identity, durable recovery
+  provenance and credential-free finalized-cell reconciliation for M7/M8
+  (RM16, RM17, RM25). Plans, budgets, defaults and measured evidence are unchanged.
+
+- M7 evaluation completion (#128; RM16, RM17, RM25–RM29, RM31, RM32):
+  proposal/prefetch accuracy, answer ownership, joined first-token observations,
+  initial selector attempts, explicit missing correction coverage, immutable
+  regrading, offline matrix planning, exact C0/C5 reuse and comparison reports.
+  The live matrix, experimental ablation revision and default decisions remain pending.
+
+- Specification 0.43 defines M7 metric coverage, initial-selection attribution,
+  provenance-preserving reanalysis and the offline/explicit-execute comparison
+  matrix (#128; RM16, RM17, RM25–RM29, RM31, RM32). Defaults remain unchanged.
+
+- M8 evaluation infrastructure (#134; RM17, RM25–RM28, RM32): validated
+  configuration-specific measured priors, serial local active time, honest
+  cost/selection/placement metrics and durable matrix checkpoints. Provider
+  measurements and the default decision remain pending.
+
+- Specification 0.42 defines validated frozen placement-history imports, measured
+  serial local active time, honest evaluation denominators and durable M8 matrix
+  execution (#134; RM03, RM16, RM17, RM22, RM25–RM28, RM32/AC19).
+  Defaults and live evidence remain unchanged pending reviewed measurements.
+
+- Opt-in verified managed answer streaming (#125; RM12, RM16, RM17, RM20,
+  RM32; AC09, AC19): cumulative predicate gates, exact generation ownership,
+  persisted live deltas, safe terminal SSE errors, and configured/effective
+  corpus labels. Buffered stays the default; provider corpus parity is pending.
+
+- Specification 0.41 defines verified live answer publication, cumulative predicate
+  safety/completeness, exact generation commitment, full-answer redaction, effective
+  stream policy, terminal SSE behavior and labeled corpus comparison (#125;
+  RM12, RM16, RM17, RM20, RM32; AC09, AC19). Buffered remains the default.
 
 - Loopback HTTP selectors (#133; RM12, RM22, RM25, RM28; AC22): fixed
   configured identity, proxy/redirect isolation, bounded cancellable requests

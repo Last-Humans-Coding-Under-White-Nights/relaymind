@@ -185,6 +185,11 @@ curl -s http://127.0.0.1:8080/v1/chat/completions \
   with `X-RelayMind-Events-URL` naming the run's event stream (open it with
   the same token to follow the run), then a keep-alive comment while it
   works. No answer text is sent before the answer is ready.
+- **Verified live answers.** Set `answer_stream = "live"` in `[performance]`
+  to publish eligible managed answer statements as they pass the skill gate.
+  A late failure ends the stream without replacement text. Buffered remains
+  the default while provider corpus parity is pending; non-streamed chat and
+  client-owned calls stay buffered.
 - **Fewer round trips.** In the same `[performance]` table,
   `calls_per_generation = "many"` lets the model ask for several read-only
   tools in one step, and `prefetch = true` runs the read-only calls a skill

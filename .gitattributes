@@ -2,3 +2,6 @@
 /evaluation/*.json text eol=lf
 # Evidence exports are cited by SHA-256, so their bytes must not change either.
 /docs/evidence/*.json text eol=lf
+/docs/evidence/**/*.json text eol=lf
+/docs/evidence/**/*.md text eol=lf
+/docs/evidence/**/*.tar.zst binary
