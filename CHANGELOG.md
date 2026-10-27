@@ -260,6 +260,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   #137). The local context stays
   8192, so in practice OpenClaw turns go external in auto and get
   needs_external in local_only. The plugin itself is #136's.
+- OpenClaw evaluation tasks, grading, and runner (#139; RM16, RM18, RM25,
+  RM26, RM33; AC24; spec 0.50 section 12.5): `evaluation/openclaw_tasks.v1.json`
+  (6 English and 6 best-effort Chinese tasks: text, host `read`, `write`, and
+  `exec` under `deny` and `full`; 3 repeats, seed 139) with its digest and
+  order digest in `evaluation/openclaw_tasks.v1.lock.json`;
+  `relaymind.evaluation.openclaw` loads and checks them, derives the paired
+  sampling order from SHA-256 ranks, grades an attempt from the host's exit
+  status, answer, tool report, sandbox, the plugin's diagnostics, and the
+  gateway runs, and summarizes the arms with exact counts and unknown usage
+  kept unknown; `scripts/run_openclaw_eval.py` runs the four arms through a
+  real host, each in its own host home and gateway, and writes the raw
+  export and a Markdown report without the token or the credential. Tests:
+  `tests/test_openclaw_eval_fixtures.py`, `tests/test_openclaw_eval_grading.py`,
+  and `tests/test_openclaw_eval_runner.py` (stub host, gateway doubles), also
+  in the CI `openclaw-plugin` job. The measurement is not run: every arm is
+  not_run in `docs/EVIDENCE.md` and `docs/RELEASE.md`.
 - Specification 0.50, the OpenClaw evaluation files, arms, and grading (#139;
   RM16, RM18, RM25, RM26, RM33; AC24; section 12.5): the tasks are
   `evaluation/openclaw_tasks.v1.json`, frozen by its digest in

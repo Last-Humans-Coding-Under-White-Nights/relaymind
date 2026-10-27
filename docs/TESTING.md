@@ -1449,6 +1449,81 @@ it with its own "Context window exceeded" error, and there is no gateway run
 422 `needs_external` (`context_limit`), which the plugin classes `format`,
 so the host does not send it again. Use `auto` with an external model.
 
+### OpenClaw evaluation tasks, grading, and runner (#139; RM16, RM18, RM25, RM26, RM33; AC24)
+
+```bash
+pytest tests/test_openclaw_eval_fixtures.py tests/test_openclaw_eval_grading.py \
+  tests/test_openclaw_eval_runner.py
+```
+
+These run in the default `pytest`, need no Node, host, or model, and are
+deterministic (spec 0.50 section 12.5). They test the frozen tasks, the
+grading rules, and the runner; they are not live evidence, and no part of
+the measurement has run.
+
+- `tests/test_openclaw_eval_fixtures.py`: `evaluation/openclaw_tasks.v1.json`
+  matches its lock (digest and the digest of the sampling order); a changed
+  prompt is refused as a new version; the file freezes the four arms, the
+  repeat count, the seed, the time limit, and the host release; every
+  English task has a best-effort Chinese pair with the same kind, policy,
+  tools, and sandbox; both kinds and both exec policies are present, with a
+  denied and an allowed exec; tool tasks name only the pinned host's tools
+  and plain sandbox file names; no task reuses a corpus prompt and the
+  corpus lock is unchanged; malformed files (unknown fields, other arms, an
+  ask policy, another language, duplicate IDs, zero repeats, another schema
+  version, a non-host tool, a path out of the sandbox, a Chinese task
+  without its English task) are refused; the sampling order holds every
+  slot once with a task's arms next to each other, is the same on every
+  run, changes with the seed, and is not from Python's random module; the
+  argument patterns (`*`, exact, suffix, substring).
+- `tests/test_openclaw_eval_grading.py`: one attempt is graded from the
+  host's exit status, final answer, tool report, the sandbox, the plugin's
+  diagnostics records, and the gateway runs. The host's `"ok": true` with a
+  failed tool is not a success (and is counted as ok but failed); a proposed
+  call the host did not run is not a completed task; a denied exec passes
+  only when nothing was written; a gateway tool execution, an uncorrelated
+  run, a mismatched proposal, a timeout, and exit 130 (a host interrupt)
+  fail or are counted; a host failover is counted apart and never an arm
+  success; first useful content comes only from an answer or a proposal in
+  the trace, never from a header or keep-alive; the direct arm has unknown
+  gateway measures and keeps the host's statements; retries and failed
+  attempts are counted, a record without a run ID stays unavailable;
+  needs_external, context_limit_exceeded, and cancellations are counted;
+  unknown usage stays unknown and two models are never merged. The summary
+  has exact counts per arm and language (Chinese best-effort and apart),
+  not_run arms with their reason, nearest-rank p50 and p95, and paired
+  comparisons only on pairs both arms completed; the Markdown report states
+  these rules.
+- `tests/test_openclaw_eval_runner.py`: `scripts/run_openclaw_eval.py` over a
+  stub host (the pinned host's command forms, the decorated user message,
+  the call ID replayed without underscores, `"ok": true` always) and doubles
+  gateways, with a doubles gateway as the direct arm's provider: each arm
+  in its own host home and gateway, the frozen order filtered to the
+  selected tasks, an unavailable arm not_run with its reason, every attempt
+  graded and passing, external_only running no local call and auto running
+  local ones, a fresh sandbox per attempt under the task's policy, the
+  install with `--accept-capabilities`, the token only on standard input,
+  the plugin's mode and diagnostics path, neither secret nor a host path
+  in the export or report, the arm availability rules, and a task file that
+  differs from its lock refused by the CLI.
+
+The measurement itself (section 12.5) needs a real host, the external
+provider's credential, and the pinned local model, and is an operator run:
+
+```bash
+export RELAYMIND_EXTERNAL_API_KEY=...
+python scripts/run_openclaw_eval.py \
+    --tarball release/openclaw/relaymind-openclaw-provider-0.1.0.tgz \
+    --external-base-url <url> --external-model <model> --external-context-limit <n> \
+    --out docs/evidence/<date>-openclaw-eval-<machine>/ \
+    -- node integrations/openclaw/node_modules/openclaw/openclaw.mjs
+```
+
+It is not_run. With the local context at 8192 tokens (no change, #139),
+every OpenClaw request measured so far was over the local limit, so
+relaymind_auto is expected to send every turn external; the run records
+what happens, never this expectation.
+
 ### What is not covered yet
 
 - The correctness corpus ran on Apple Silicon macOS only (#32). The
@@ -1517,6 +1592,10 @@ so the host does not send it again. Use `auto` with an external model.
   and its install check (#145) passed against the pinned host on a Linux VPS
   over doubles, a functional check; macOS and Windows qualifications of this
   revision are not_run.
+  The M9 evaluation (#139, spec 0.50) has its frozen tasks,
+  grading, and runner tested over a stub host and doubles
+  ([OpenClaw evaluation](#openclaw-evaluation-tasks-grading-and-runner-139-rm16-rm18-rm25-rm26-rm33-ac24));
+  the measurement in all four arms is not_run.
   YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are
   implemented (#143, #144), with frozen SkillsBench/ToolRet inputs and

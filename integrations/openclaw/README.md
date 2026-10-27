@@ -1155,3 +1155,33 @@ another model were not run on a real host (`not_run`); they are covered
 over doubles by `tests/test_openclaw_cancel_errors.py`, and failover is
 host policy. On macOS (Q11, at `a52f8bf`, through a config-file provider
 row) the abort passed; macOS and Windows at this commit are `not_run`.
+
+### M9 evaluation (#139, operator, not run yet)
+
+The section 12.5 measurement (spec 0.50) runs the frozen tasks of
+`evaluation/openclaw_tasks.v1.json` through a real host in four arms:
+`direct` (the host's own provider entry for the external model),
+`relaymind_external_only` and `relaymind_auto` (this plugin against a
+gateway with the external model and the pinned local model), and
+`relaymind_no_local` (this plugin against a gateway without a local
+model). The runner starts each gateway with `relaymind serve --config`, and
+llama-server from the manifest for the arms with a local model, and gives
+each arm its own host home:
+
+```bash
+export RELAYMIND_EXTERNAL_API_KEY=...
+python scripts/run_openclaw_eval.py \
+  --tarball release/openclaw/relaymind-openclaw-provider-0.1.0.tgz \
+  --external-base-url <url> --external-model <model> --external-context-limit <n> \
+  --out docs/evidence/<date>-openclaw-eval-<machine>/ \
+  -- node integrations/openclaw/node_modules/openclaw/openclaw.mjs
+```
+
+An arm without its endpoint, credential, or local model is recorded as
+not_run. The host's `"ok": true` never counts as a success; a host failover
+is counted apart. The direct arm writes the provider's key into the
+temporary host home's config file (removed at the end, never exported);
+whether the pinned host accepts that provider entry as written is not
+verified. Record the result in `docs/EVIDENCE.md` ("M9 OpenClaw
+evaluation").
+

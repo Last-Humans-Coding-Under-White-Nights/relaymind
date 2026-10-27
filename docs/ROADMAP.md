@@ -845,6 +845,12 @@ This is planned integration, not a claim of a working or faster plugin.
 - M9 live evaluation (#139; RM16, RM25, RM26, RM33; section 12.5), after
   #145: direct external versus RelayMind external_only versus auto, plus
   a separate no-local setup; exact success, latency, calls, and usage.
+  Status (spec 0.50): the frozen bilingual tasks and their lock
+  (`evaluation/openclaw_tasks.v1.json`), grading and the arm summary
+  (`relaymind.evaluation.openclaw`), and the runner
+  (`scripts/run_openclaw_eval.py`) are implemented and tested over a stub
+  host and doubles. The measurement in all four arms is not_run; the issue
+  stays open until it is recorded in `docs/EVIDENCE.md`.
 - Closes: AC24. Existing AC10 to AC12 and AC14 remain regression gates.
 
 The first milestone version supports text and one host-owned function call

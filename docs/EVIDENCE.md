@@ -3344,3 +3344,31 @@ Mac access); Windows on a user's machine, native and WSL2, stays `not_run`
 (no Windows machine). Neither do these runs cover the stale-token
 reconnect, the interrupt, the tool policy scenarios, a host update or
 rollback, or any live model.
+
+## M9 OpenClaw evaluation (#139, spec 0.50)
+
+Section 12.5. Nothing below has run: every row is `not_run`. The tasks,
+grading, and runner exist and are tested over a stub host and gateway
+doubles (`tests/test_openclaw_eval_*.py`), which is not live evidence.
+
+| Arm | Machine | Host, Node, plugin | Gateway, models | Result | Export |
+| --- | --- | --- | --- | --- | --- |
+| direct | | | | `not_run` | none |
+| relaymind_external_only | | | | `not_run` | none |
+| relaymind_auto | | | | `not_run` | none |
+| relaymind_no_local | | | | `not_run` | none |
+| a constrained configuration | | | | `not_run` (optional; reported apart when run) | none |
+
+A recorded run fills each row from its export
+(`scripts/run_openclaw_eval.py --out <dir>`): the machine manifest, the
+OpenClaw release and the Node version against the host's engine range, the
+plugin artifact's SHA-256, the RelayMind revision, the external model and
+endpoint host, the local model manifest and runtime banner, the task file
+digest, and per arm and language the exact success count over all attempts,
+host failovers, timeouts, interrupts, errors by code, needs_external and
+context_limit_exceeded runs, local turns, external calls, completion and
+first useful content p50 and p95, and tokens per model with unknown counts
+apart. Chinese rows are best-effort and kept apart. The expectation that
+relaymind_auto sends every turn external at the 8192-token local context is
+not a result until a run shows it.
+
