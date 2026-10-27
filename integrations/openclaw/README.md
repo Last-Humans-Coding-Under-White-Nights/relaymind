@@ -767,8 +767,16 @@ wrote to the documented default `/tmp/openclaw/`, outside the isolation):
 8. the removal of the config entry and the credential uninstall leaves.
 
 The token is never an argument, never in the host's environment, and never
-written to the export. The gateway trace and the sandbox decide a pass;
-the host's `"ok": true` does not.
+written to the export. The host inherits none of the shell's `OPENCLAW_*`
+settings (profile, Gateway URL, token) and no proxy, and its local Gateway
+port points at a closed loopback port, so a running OpenClaw Gateway of
+yours is never reached. The gateway trace and the sandbox decide a pass;
+the host's `"ok": true` does not: both exchanges need completed gateway runs
+and the gateway's own answer. A removal passes only when the config reads as
+strict JSON without the entry and profile and no host file a host could read
+back holds the token (SQLite files are read through SQLite, so a deleted
+row left in free space does not count); anything the check cannot read is
+unknown, never clean.
 
 ```bash
 cd integrations/openclaw && npm ci && npm run pack:release -- ../../release/openclaw && cd ../..

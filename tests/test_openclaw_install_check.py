@@ -15,8 +15,11 @@ uninstall. A real host run is an operator or CI step, never this suite.
 """
 
 import json
+import shutil
+import socket
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -47,15 +50,23 @@ if fail and " ".join(args).startswith(fail):
     raise SystemExit(1)
 
 def load():
-    return json.loads(config_path.read_text()) if config_path.exists() else {}
+    if not config_path.exists():
+        return {}
+    lines = config_path.read_text().splitlines()
+    return json.loads("\n".join(line for line in lines if not line.startswith("//")))
 
 def save(config):
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(json.dumps(config))
+    # STUB_JSON5: a config the host may write that strict JSON cannot read.
+    comment = "// written by the stub\n" if os.environ.get("STUB_JSON5") else ""
+    config_path.write_text(comment + json.dumps(config))
 
 def db():
     (state / "state").mkdir(exist_ok=True)
     conn = sqlite3.connect(state / "state" / "openclaw.sqlite")
+    # Many SQLite builds keep deleted rows in free space and WAL frames.
+    conn.execute("pragma secure_delete=0")
+    conn.execute("pragma journal_mode=wal")
     conn.execute(
         "create table if not exists config_machine_state (key text primary key, value text)")
     return conn
@@ -370,3 +381,150 @@ def test_a_missing_artifact_is_refused_before_the_host_runs(stub_host, tmp_path)
             + stub_host
         )
     assert not Path(tmp_path / "x.json").exists()
+
+
+def test_a_removed_credential_left_in_sqlite_free_space_is_not_reported(
+    stub_host, tarball, tmp_path
+):
+    """Only the rows a host can read count: a deleted row's bytes in free pages do not."""
+    export = run(stub_host, tarball, tmp_path, host_home=tmp_path / "host")
+    assert export["leftovers"]["after_removal"]["credential_in_host_state"] is False
+    assert export["passed"] is True
+
+
+def test_a_config_strict_json_cannot_read_is_never_reported_clean(
+    stub_host, tarball, tmp_path, monkeypatch
+):
+    """Honest evidence: an unreadable config is unknown, and unknown never passes removal."""
+    monkeypatch.setenv("STUB_JSON5", "1")
+    export = run(stub_host, tarball, tmp_path)
+    after = export["leftovers"]["after_removal"]
+    assert after["config_entry"] is None
+    assert after["auth_profile"] is None
+    (step,) = [s for s in export["steps"] if s["name"] == "remove-credential"]
+    assert step["status"] == "failed"
+    assert export["passed"] is False
+
+
+def test_a_missing_or_partial_config_is_unknown(tmp_path):
+    assert install_check._profile_present(tmp_path / "absent.json") == (False, False)
+    partial = tmp_path / "partial.json"
+    partial.write_text('{"plugins": {"entries": {"relaymind"', "utf-8")
+    assert install_check._profile_present(partial) == (None, None)
+    odd = tmp_path / "odd.json"
+    odd.write_text('{"plugins": [], "auth": "x"}', "utf-8")
+    assert install_check._profile_present(odd) == (None, None)
+
+
+def test_an_unreadable_sqlite_file_counts_as_holding_the_credential(tmp_path):
+    """A host state file the check cannot read is never reported clean."""
+    broken = tmp_path / "openclaw.sqlite"
+    broken.write_bytes(b"SQLite format 3\x00" + b"\x00" * 50)
+    assert install_check._credential_in(broken, "token-123") is True
+
+
+def test_the_host_inherits_no_openclaw_gateway_profile_or_proxy(tmp_path, monkeypatch):
+    """Section 12.5: no operator OpenClaw state, Gateway, or proxy reaches the host."""
+    for name, value in {
+        "OPENCLAW_PROFILE": "work",
+        "OPENCLAW_GATEWAY_URL": "ws://127.0.0.1:18789",
+        "OPENCLAW_GATEWAY_TOKEN": "operator-gateway-token",
+        "OPENCLAW_GATEWAY_PORT": "18789",
+        "ALL_PROXY": "socks5://proxy:1080",
+        "all_proxy": "socks5://proxy:1080",
+        "https_proxy": "http://proxy:3128",
+        "RELAYMIND_APP_TOKEN": "x",
+    }.items():
+        monkeypatch.setenv(name, value)
+    env = install_check.host_environment(tmp_path)
+    for name in ("OPENCLAW_PROFILE", "OPENCLAW_GATEWAY_URL", "OPENCLAW_GATEWAY_TOKEN"):
+        assert name not in env
+    assert not {k for k in env if k.upper() in {"ALL_PROXY", "HTTPS_PROXY", "HTTP_PROXY"}}
+    assert not any(k.startswith("RELAYMIND_") for k in env)
+    assert {k for k in env if k.startswith("OPENCLAW_")} == {
+        "OPENCLAW_HOME",
+        "OPENCLAW_STATE_DIR",
+        "OPENCLAW_CONFIG_PATH",
+        "OPENCLAW_GATEWAY_PORT",
+    }
+    # The local Gateway port is one nothing listens on, never the default 18789.
+    port = int(env["OPENCLAW_GATEWAY_PORT"])
+    assert port != 18789
+    with socket.socket() as probe, pytest.raises(OSError):
+        probe.settimeout(1)
+        probe.connect(("127.0.0.1", port))
+
+
+def test_a_host_that_stops_starting_after_install_still_lists_and_cleans_up(
+    stub_host, tarball, tmp_path, monkeypatch
+):
+    """An OSError mid-run: the rest is not_run, and the cleanup steps still run."""
+    real = install_check._run
+
+    def flaky(command, args, stdin, env, timeout):
+        if args[:2] == ["agent", "exec"]:
+            raise OSError(7, "Argument list too long")
+        return real(command, args, stdin, env, timeout)
+
+    monkeypatch.setattr(install_check, "_run", flaky)
+    export = run(stub_host, tarball, tmp_path)
+    assert [s["name"] for s in export["steps"]] == list(install_check.STEPS)
+    status = {s["name"]: s["status"] for s in export["steps"]}
+    assert status["install"] == "passed"
+    assert status["text-exchange"] == "not_run"
+    assert "Argument list too long" in export["steps"][8]["stderr"]
+    assert status["tool-exchange"] == "not_run"
+    for name in install_check.CLEANUP_STEPS:
+        assert status[name] == "passed"
+    assert export["status"] == "completed"
+    assert export["passed"] is False
+
+
+def test_the_export_is_written_when_the_temporary_home_cannot_be_removed(
+    stub_host, tarball, tmp_path, monkeypatch
+):
+    """Windows may still hold a file in the host home; the evidence is written anyway."""
+    real = shutil.rmtree
+
+    def locked(path, *args, **kwargs):
+        if "openclaw-install-check-" in str(path):
+            raise PermissionError(13, "The process cannot access the file", str(path))
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(install_check.shutil, "rmtree", locked)
+    export = run(stub_host, tarball, tmp_path)
+    assert export["passed"] is True
+    assert json.loads((tmp_path / "export.json").read_text("utf-8"))["passed"] is True
+
+
+def _message(role, content, tool_call_id=None):
+    return SimpleNamespace(
+        role=SimpleNamespace(value=role), content=content, tool_call_id=tool_call_id
+    )
+
+
+def _tool_runs(state):
+    proposed = {
+        "type": "tool.proposed",
+        "payload": {"tool_name": "read", "proposal_id": "call_read_1"},
+    }
+    answer = {"type": "answer.delta", "payload": {"text": install_check.TOOL_ANSWER}}
+    return [
+        {"run_id": "r1", "state": "completed", "events": [proposed]},
+        {"run_id": "r2", "state": state, "events": [answer]},
+    ]
+
+
+def test_a_tool_exchange_passes_only_on_completed_runs_with_the_gateway_answer():
+    """The gateway trace decides: a failed run, or host text the gateway never sent, fails."""
+    requests = [SimpleNamespace(messages=[_message("tool", install_check.NOTE_TEXT, "callread1")])]
+    stdout = json.dumps({"ok": True, "payloads": [{"text": install_check.TOOL_ANSWER}]})
+    assert install_check.tool_checks(stdout, _tool_runs("completed"), requests)["passed"] is True
+    for state in ("failed", "cancelled"):
+        checks = install_check.tool_checks(stdout, _tool_runs(state), requests)
+        assert checks["passed"] is False, state
+    no_answer = _tool_runs("completed")
+    no_answer[1]["events"] = []
+    checks = install_check.tool_checks(stdout, no_answer, requests)
+    assert checks["gateway_answer"] == ""
+    assert checks["passed"] is False

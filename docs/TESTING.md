@@ -1339,7 +1339,8 @@ What runs where:
   its peer) registers, resolves the alias the headless way, and
   round-trips text and a host tool against the gateway over doubles, and
   the driver reports which entry it loaded (the checkout's sources by
-  default); a destination inside the package is refused; the CI job runs
+  default); a destination inside the package (even a child folder named
+  `..release`) is refused; the CI job runs
   on the three runners with Node 24.22.1 and `RELAYMIND_OPENCLAW_NODE=1`,
   builds the release, runs the install check, never runs live tests, and
   lists every `tests/test_openclaw_*.py` module.
@@ -1353,10 +1354,17 @@ What runs where:
   holding the file's text and matched through the rewrite; the token, the
   host home, the artifact folder, the checkout, and the user's home never
   in the export; what uninstall leaves recorded and the removal steps
-  clearing it; a credential left after removal, a refused install (later
-  steps not_run), a failed exchange (cleanup still runs), a plugin the host
-  did not load, a host that says ok without running the tool, and a
-  missing host (not_run) never pass; the label keeps "not live model
+  clearing it (the stub's SQLite runs with secure_delete off and WAL, so a
+  deleted row's bytes stay on disk and must not count); a credential left
+  after removal, a config strict JSON cannot read (unknown), an unreadable
+  SQLite file, a refused install (later steps not_run), a failed exchange
+  (cleanup still runs), a host that stops starting after install (the rest
+  listed not_run, cleanup still runs), a plugin the host did not load, a
+  host that says ok without running the tool, a tool exchange whose gateway
+  run did not complete or did not send the answer, and a missing host
+  (not_run) never pass; no `OPENCLAW_*` setting, Gateway, or proxy of the
+  operator reaches the host; the export is written even when the temporary
+  host home cannot be removed; the label keeps "not live model
   evidence" and "not a supported-platform qualification".
 
 The install check with the pinned host passed once on a Linux VPS

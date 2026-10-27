@@ -26,7 +26,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `config unset` and `models auth logout` for what uninstall leaves (the
   config entry and the stored token). The trace and the sandbox decide a
   pass, never the host's `"ok": true` (`tests/test_openclaw_install_check.py`,
-  over a stub host). It passed against the pinned host (OpenClaw 2026.10.7)
+  over a stub host): both exchanges need completed gateway runs and the
+  gateway's answer; a removal passes only on a config read as strict JSON
+  and no token in a file a host could read back (SQLite through SQLite, so
+  a deleted row's bytes in free space or WAL do not count), and anything
+  unreadable is unknown, never clean. The host inherits no `OPENCLAW_*`
+  setting or proxy of the shell and its local Gateway port is a closed
+  loopback port; a host that stops starting mid-run leaves the rest
+  not_run and still cleans up; the export is written even when the
+  temporary host home cannot be removed. The npm and pack-report helpers
+  (`scripts/npm.mjs`) and the run records, proposals, tool executions, and
+  loopback environment (`openclaw_qualification.py`) are shared, not
+  copied. It passed against the pinned host (OpenClaw 2026.10.7)
   on a Linux VPS, recorded in `docs/evidence/` as a functional check over
   doubles, not a supported-platform qualification. A new CI job
   `openclaw-plugin` (ubuntu, macOS, Windows runners; Node 24.22.1) runs
@@ -37,7 +48,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   transfer and rotation, model selection, host permissions, cancellation,
   troubleshooting, trace inspection, update and rollback, and full removal.
   `pack-check.mjs` spawns npm through node, so the Windows `npm.cmd` shim
-  needs no shell. macOS and Windows runs of this revision on a user's
+  needs no shell; `release-pack.mjs` treats a child folder named like
+  `..release` as inside the package. macOS and Windows runs of this revision on a user's
   machine are not_run (`docs/RELEASE.md` support gaps). No spec, gateway,
   budget, or default change.
 - OpenClaw cancellation, errors, retries, and run trace correlation (#138;

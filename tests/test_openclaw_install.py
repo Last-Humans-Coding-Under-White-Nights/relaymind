@@ -32,9 +32,8 @@ PINNED = "2026.10.7"
 RUNTIME_FILES = {"package.json", "README.md", "openclaw.plugin.json"}
 
 
-def _npm() -> list[str]:
-    """npm through node, so a Windows npm.cmd shim never needs a shell."""
-    node = Path(_node())
+def _npm_cli(node: Path) -> Path | None:
+    """The npm-cli.js beside this node, or None where npm is a native shim (Volta)."""
     candidates = [
         # POSIX: bin/npm links to lib/node_modules/npm/bin/npm-cli.js.
         Path(shutil.which("npm") or node.with_name("npm")).resolve(),
@@ -42,7 +41,18 @@ def _npm() -> list[str]:
         # Windows: npm.cmd sits next to node.exe.
         node.parent / "node_modules" / "npm" / "bin" / "npm-cli.js",
     ]
-    cli = next(c for c in candidates if c.suffix == ".js" and c.exists())
+    return next((c for c in candidates if c.suffix == ".js" and c.exists()), None)
+
+
+def _npm() -> list[str]:
+    """npm through node, so a Windows npm.cmd shim never needs a shell."""
+    node = Path(_node())
+    cli = _npm_cli(node)
+    if cli is None:
+        reason = f"no npm-cli.js found for {node}: npm is not a link to it (a native shim?)"
+        if REQUIRED:
+            pytest.fail(reason)
+        pytest.skip(reason)
     return [str(node), str(cli)]
 
 
@@ -230,6 +240,35 @@ def test_a_destination_inside_the_package_is_refused(node_dependencies):
     assert completed.returncode == 2
     assert "outside the package" in completed.stderr
     assert not (PACKAGE / "dist" / "x").exists()
+
+
+def test_a_child_folder_named_like_a_parent_is_still_inside(node_dependencies):
+    """relative() gives '..release' for <package>/..release: inside, not a parent."""
+    target = PACKAGE / "..release"
+    try:
+        completed = subprocess.run(
+            [_node(), str(PACKAGE / "scripts" / "release-pack.mjs"), "..release"],
+            cwd=PACKAGE,
+            env={k: v for k, v in os.environ.items() if k != "INIT_CWD"},
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert completed.returncode == 2, completed.stdout + completed.stderr
+        assert "outside the package" in completed.stderr
+        assert not target.exists()
+    finally:
+        shutil.rmtree(target, ignore_errors=True)
+
+
+def test_an_npm_that_is_a_native_shim_gives_a_clear_reason(tmp_path, monkeypatch):
+    """No npm-cli.js beside node: None, so the fixture skips or fails with a reason."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "node").write_text("")
+    (bin_dir / "npm").write_text("#!/bin/sh\n")
+    monkeypatch.setattr(shutil, "which", lambda name: str(bin_dir / name))
+    assert _npm_cli(bin_dir / "node") is None
 
 
 # -- CI (issue #145 item 2) -----------------------------------------------------------------

@@ -8,11 +8,12 @@
 // pinned OpenClaw release, the declared Node range, and the Node that built it.
 // npm pack fixes file dates and order, and the build is deterministic, so two
 // builds of one checkout are the same bytes (tests/test_openclaw_install.py).
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { npm, packReport } from "./npm.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const dest = process.argv[2];
@@ -22,28 +23,18 @@ if (!dest) {
 }
 const out = resolve(process.env.INIT_CWD ?? process.cwd(), dest);
 // Under the package, the build would delete it (dist/) or npm pack could ship it.
+// Outside means a parent step (".." alone or "../..."), or another drive on
+// Windows; a child folder such as "..release" is inside.
 const inside = relative(root, out);
-if (!inside.startsWith("..") && !isAbsolute(inside)) {
+const outside = inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside);
+if (!outside) {
   console.error(`the destination must be outside the package: ${out}`);
   process.exit(2);
 }
 mkdirSync(out, { recursive: true });
 
-// npm through node: a Windows npm.cmd shim cannot be spawned without a shell.
-function npm(args) {
-  const cli = process.env.npm_execpath;
-  const [file, argv] = cli ? [process.execPath, [cli, ...args]] : ["npm", args];
-  return execFileSync(file, argv, {
-    cwd: root,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "inherit"],
-    shell: !cli && process.platform === "win32",
-  });
-}
-
 npm(["run", "--silent", "pack:check"]);
-const packed = JSON.parse(npm(["pack", "--json", "--ignore-scripts", "--pack-destination", out]));
-const [report] = Array.isArray(packed) ? packed : Object.values(packed);
+const report = packReport(npm(["pack", "--json", "--ignore-scripts", "--pack-destination", out]));
 const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
 const host = JSON.parse(readFileSync(resolve(root, "node_modules/openclaw/package.json"), "utf8"));
 const tarball = readFileSync(resolve(out, report.filename));

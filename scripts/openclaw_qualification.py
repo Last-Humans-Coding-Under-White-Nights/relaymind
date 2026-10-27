@@ -318,16 +318,24 @@ def _gateway(scenario: Scenario, work: Path):
     return gateway, app
 
 
+PROXY_VARIABLES = frozenset({"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"})
+
+
+def loopback_environment(drop: Callable[[str], bool] = lambda _name: False) -> dict[str, str]:
+    """This process's environment with no proxy for loopback, less the names drop() picks.
+
+    Shared by the qualification and the install check, so both strip the same
+    proxy variables (either case).
+    """
+    env = {k: v for k, v in os.environ.items() if k.upper() not in PROXY_VARIABLES and not drop(k)}
+    env["NO_PROXY"] = "127.0.0.1,localhost,::1"
+    return env
+
+
 def child_environment(base_url: str, token: str) -> dict[str, str]:
     """The child's environment: the gateway URL and token, and no proxy for loopback."""
-    env = {k: v for k, v in os.environ.items() if k.upper() not in {"HTTP_PROXY", "HTTPS_PROXY"}}
-    env.update(
-        {
-            "RELAYMIND_BASE_URL": base_url,
-            "RELAYMIND_APP_TOKEN": token,
-            "NO_PROXY": "127.0.0.1,localhost,::1",
-        }
-    )
+    env = loopback_environment()
+    env.update({"RELAYMIND_BASE_URL": base_url, "RELAYMIND_APP_TOKEN": token})
     return env
 
 
@@ -374,6 +382,36 @@ def _run_ids(gateway) -> list[str]:
         row[0]
         for row in gateway.store._conn.execute("SELECT run_id FROM runs ORDER BY created_at, rowid")
     ]
+
+
+def run_records(gateway, run_ids: Sequence[str]) -> list[dict]:
+    """Each run's state and its trace events, as the exports record them."""
+    return [
+        {
+            "run_id": run_id,
+            "state": gateway.store.get_run(run_id).state,
+            "events": [
+                {"type": e.event_type.value, "payload": e.payload}
+                for e in gateway.store.events(run_id)
+            ],
+        }
+        for run_id in run_ids
+    ]
+
+
+def proposals(runs: Sequence[Mapping]) -> list[dict]:
+    """The tool calls the gateway proposed to the host, run by run."""
+    return [
+        {"run_id": run["run_id"], **{k: e["payload"].get(k) for k in ("tool_name", "proposal_id")}}
+        for run in runs
+        for e in run["events"]
+        if e["type"] == "tool.proposed"
+    ]
+
+
+def tool_executions(runs: Sequence[Mapping]) -> int:
+    """Tools the gateway itself started; a host tool must never be one."""
+    return sum(1 for run in runs for e in run["events"] if e["type"] == "tool.started")
 
 
 def _wait_until_settled(gateway, timeout: float = 10.0) -> None:
@@ -747,13 +785,8 @@ def host_checks(
     expected = HOST_SCENARIOS[scenario][1]
     note = sandbox / WRITE_FILE
     lines = len(note.read_text("utf-8").splitlines()) if note.exists() else 0
-    proposed = [
-        {"run_id": run["run_id"], **{k: e["payload"].get(k) for k in ("tool_name", "proposal_id")}}
-        for run in runs
-        for e in run["events"]
-        if e["type"] == "tool.proposed"
-    ]
-    executions = sum(1 for run in runs for e in run["events"] if e["type"] == "tool.started")
+    proposed = proposals(runs)
+    executions = tool_executions(runs)
     ids = [p["proposal_id"] for p in proposed if p["proposal_id"]]
     # The IDs the host sent back in its tool results, as it sent them: the
     # export shows the host's rewrite instead of only whether it matched.
@@ -921,18 +954,7 @@ def run_host(
                     status, exit_code, stdout, stderr = "not_run", None, "", str(error)
                 stdout = stdout.replace(token, NOT_RECORDED)
                 stderr = stderr.replace(token, NOT_RECORDED)
-                run_ids = _run_ids(gateway)
-                runs = [
-                    {
-                        "run_id": run_id,
-                        "state": gateway.store.get_run(run_id).state,
-                        "events": [
-                            {"type": e.event_type.value, "payload": e.payload}
-                            for e in gateway.store.events(run_id)
-                        ],
-                    }
-                    for run_id in run_ids
-                ]
+                runs = run_records(gateway, _run_ids(gateway))
                 export = {
                     "kind": "openclaw-host-qualification",
                     "evidence": "deterministic gateway doubles; not live model evidence",
@@ -946,9 +968,7 @@ def run_host(
                     "base_url": running.base_url,
                     "versions": versions(),
                     "runs": runs,
-                    "host_tool_executions_by_gateway": sum(
-                        1 for run in runs for e in run["events"] if e["type"] == "tool.started"
-                    ),
+                    "host_tool_executions_by_gateway": tool_executions(runs),
                     "checks": (
                         abort_checks(signal_sent, runs, adapter)
                         if adapter is not None

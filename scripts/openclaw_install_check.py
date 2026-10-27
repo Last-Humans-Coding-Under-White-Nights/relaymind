@@ -47,8 +47,8 @@ Usage:
 import argparse
 import hashlib
 import json
-import os
 import shutil
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -130,19 +130,31 @@ class Context:
         return Path(self.env["OPENCLAW_STATE_DIR"])
 
 
+def _closed_port() -> int:
+    """A loopback port nothing listens on (bound, then released)."""
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
 def host_environment(home: Path) -> dict[str, str]:
-    """The host's environment: an isolated home, no proxy, no RelayMind token."""
-    env = {
-        k: v
-        for k, v in os.environ.items()
-        if k.upper() not in {"HTTP_PROXY", "HTTPS_PROXY"} and not k.startswith("RELAYMIND_")
-    }
+    """The host's environment: an isolated home, no proxy, no RelayMind token.
+
+    None of the operator's OPENCLAW_* settings (profile, Gateway URL, token,
+    port) is inherited, and the local Gateway port points at a closed loopback
+    port, so the host cannot reach an operator's running OpenClaw Gateway on
+    the default 18789 (headless approval then fails closed, as the macOS probe
+    saw with no Gateway).
+    """
+    env = qualification.loopback_environment(
+        lambda name: name.upper().startswith(("RELAYMIND_", "OPENCLAW_"))
+    )
     env.update(
         {
             "OPENCLAW_HOME": str(home / "home"),
             "OPENCLAW_STATE_DIR": str(home / "state"),
             "OPENCLAW_CONFIG_PATH": str(home / "openclaw.json"),
-            "NO_PROXY": "127.0.0.1,localhost,::1",
+            "OPENCLAW_GATEWAY_PORT": str(_closed_port()),
         }
     )
     return env
@@ -182,36 +194,23 @@ def check_discover(stdout: str, _ctx: Context) -> tuple[bool, dict]:
     return MODEL_REF in relaymind, {"relaymind_models": relaymind}
 
 
-def _runs(ctx: Context, run_ids: Sequence[str]) -> list[dict]:
-    return [
-        {
-            "run_id": run_id,
-            "state": ctx.gateway.store.get_run(run_id).state,
-            "events": [
-                {"type": e.event_type.value, "payload": e.payload}
-                for e in ctx.gateway.store.events(run_id)
-            ],
-        }
-        for run_id in run_ids
-    ]
-
-
-def _executions(runs: Sequence[Mapping]) -> int:
-    return sum(1 for run in runs for e in run["events"] if e["type"] == "tool.started")
-
-
-def text_checks(stdout: str, runs: Sequence[Mapping]) -> dict:
-    answer = "".join(
+def _answer(runs: Sequence[Mapping]) -> str:
+    """The answer text the gateway streamed in these runs."""
+    return "".join(
         e["payload"].get("text", "")
         for run in runs
         for e in run["events"]
         if e["type"] == "answer.delta"
     )
+
+
+def text_checks(stdout: str, runs: Sequence[Mapping]) -> dict:
+    answer = _answer(runs)
     checks = {
         "runs": [run["run_id"] for run in runs],
         "gateway_answer": answer,
         "answer_in_host_output": TEXT_ANSWER in stdout,
-        "gateway_tool_executions": _executions(runs),
+        "gateway_tool_executions": qualification.tool_executions(runs),
         "host_report": qualification.host_report(stdout),
     }
     checks["passed"] = (
@@ -226,12 +225,7 @@ def text_checks(stdout: str, runs: Sequence[Mapping]) -> dict:
 
 def tool_checks(stdout: str, runs: Sequence[Mapping], requests: Sequence) -> dict:
     """The host ran its read tool once and sent the file's text to the next run."""
-    proposed = [
-        {"run_id": run["run_id"], **{k: e["payload"].get(k) for k in ("tool_name", "proposal_id")}}
-        for run in runs
-        for e in run["events"]
-        if e["type"] == "tool.proposed"
-    ]
+    proposed = qualification.proposals(runs)
     ids = [p["proposal_id"] for p in proposed if p["proposal_id"]]
     answers = [
         m
@@ -243,15 +237,19 @@ def tool_checks(stdout: str, runs: Sequence[Mapping], requests: Sequence) -> dic
     checks: dict[str, Any] = {
         "runs": [run["run_id"] for run in runs],
         "proposed": proposed,
+        "gateway_answer": _answer(runs),
         "replayed_call_id": answers[0].tool_call_id if answers else None,
         "result_reached_next_run": bool(answers),
         "host_result_holds_the_file": any(NOTE_TEXT in (m.content or "") for m in answers),
         "answer_in_host_output": TOOL_ANSWER in stdout,
-        "gateway_tool_executions": _executions(runs),
+        "gateway_tool_executions": qualification.tool_executions(runs),
         "host_report": qualification.host_report(stdout),
     }
     checks["passed"] = (
-        [p["tool_name"] for p in proposed] == ["read"]
+        bool(runs)
+        and all(run["state"] == "completed" for run in runs)
+        and [p["tool_name"] for p in proposed] == ["read"]
+        and checks["gateway_answer"] == TOOL_ANSWER
         and checks["result_reached_next_run"]
         and checks["host_result_holds_the_file"]
         and checks["answer_in_host_output"]
@@ -260,26 +258,74 @@ def tool_checks(stdout: str, runs: Sequence[Mapping], requests: Sequence) -> dic
     return checks
 
 
-def _profile_present(config_path: Path) -> tuple[bool, bool]:
+def _profile_present(config_path: Path) -> tuple[bool | None, bool | None]:
+    """The plugin's config entry and auth profile: True, False, or None for unknown.
+
+    No config file at OPENCLAW_CONFIG_PATH holds no entry. A file this check
+    cannot read as strict JSON of the expected shape (half written, JSON5) is
+    unknown, never "nothing left".
+    """
     try:
-        config = json.loads(config_path.read_text("utf-8"))
-    except (OSError, ValueError):
+        text = config_path.read_text("utf-8")
+    except FileNotFoundError:
         return False, False
-    entry = PLUGIN_ID in (config.get("plugins") or {}).get("entries", {})
-    profile = PROFILE_ID in ((config.get("auth") or {}).get("profiles") or {})
-    return entry, profile
+    except OSError:
+        return None, None
+    try:
+        config = json.loads(text)
+        plugins = config.get("plugins") or {}
+        auth = config.get("auth") or {}
+        entries = plugins.get("entries") or {}
+        profiles = auth.get("profiles") or {}
+        if not all(isinstance(part, dict) for part in (entries, profiles)):
+            return None, None
+    except (ValueError, AttributeError):
+        return None, None
+    return PLUGIN_ID in entries, PROFILE_ID in profiles
+
+
+SQLITE_SIDECARS = ("-wal", "-shm", "-journal")
+
+
+def _sqlite_sidecar(path: Path) -> bool:
+    """A WAL, shared-memory, or rollback file beside a SQLite database.
+
+    Reading the database reads its committed WAL frames; a sidecar's raw bytes
+    may still hold rows that were deleted.
+    """
+    for suffix in SQLITE_SIDECARS:
+        if path.name.endswith(suffix):
+            main = path.with_name(path.name.removesuffix(suffix))
+            return main.is_file() and _is_sqlite(main)
+    return False
+
+
+def _is_sqlite(path: Path) -> bool:
+    try:
+        with path.open("rb") as handle:
+            return handle.read(16) == b"SQLite format 3\x00"
+    except OSError:
+        return False
 
 
 def _credential_in(path: Path, token: str) -> bool:
-    """Whether the token is in a host file: SQLite tables read as SQLite, others as bytes."""
+    """Whether the token is in a host file a host could read back.
+
+    A SQLite database is read through SQLite, its live rows only: with
+    secure_delete off (the default in many builds) a deleted row's bytes stay
+    in free pages and WAL frames, which no host reads. Other files are read as
+    bytes. A file this check cannot read counts as holding the token.
+    """
+    if _sqlite_sidecar(path):
+        return False
     try:
         data = path.read_bytes()
+    except FileNotFoundError:
+        return False
     except OSError:
-        return False
-    if token.encode() in data:
         return True
-    if not data.startswith(b"SQLite format 3"):
-        return False
+    if not data.startswith(b"SQLite format 3\x00"):
+        return token.encode() in data
     try:
         conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
         try:
@@ -294,7 +340,7 @@ def _credential_in(path: Path, token: str) -> bool:
         finally:
             conn.close()
     except sqlite3.Error:
-        return False
+        return True
 
 
 def leftovers(ctx: Context) -> dict:
@@ -307,8 +353,8 @@ def leftovers(ctx: Context) -> dict:
     }
 
 
-def _argv(ctx: Context, name: str) -> tuple[list[str], str | None]:
-    """The host arguments of one step and its standard input."""
+def _argv(ctx: Context) -> dict[str, tuple[list[str], str | None]]:
+    """Each step's host arguments and its standard input."""
     return {
         "version": (["--version"], None),
         "isolate-log": (
@@ -336,7 +382,7 @@ def _argv(ctx: Context, name: str) -> tuple[list[str], str | None]:
         "uninstall": (["plugins", "uninstall", PLUGIN_ID, "--force"], None),
         "remove-config": (["config", "unset", f"plugins.entries.{PLUGIN_ID}"], None),
         "remove-credential": (["models", "auth", "logout", PROFILE_ID, "--yes"], None),
-    }[name]
+    }
 
 
 def _exec(ctx: Context, prompt: str) -> list[str]:
@@ -401,11 +447,12 @@ def run_steps(command: Sequence[str], ctx: Context, timeout: float) -> tuple[lis
     steps: list[dict] = []
     exchanges: dict[str, dict] = {}
     found: dict[str, dict] = {}
-    status = "completed"
     stopped = False
     installed = False
+    ran = False
+    argv = _argv(ctx)
     for name in STEPS:
-        args, stdin = _argv(ctx, name)
+        args, stdin = argv[name]
         step: dict[str, Any] = {
             "name": name,
             "argv": [_sanitize(a, ctx) for a in args],
@@ -419,9 +466,12 @@ def run_steps(command: Sequence[str], ctx: Context, timeout: float) -> tuple[lis
         try:
             code, stdout, stderr, timed_out, seconds = _run(command, args, stdin, ctx.env, timeout)
         except OSError as error:
-            # The host command cannot start: nothing ran, nothing passed.
-            step["stderr"] = str(error)
-            return steps, exchanges, "not_run"
+            # The host command cannot start: this step did not run. The rest
+            # stays listed as not_run, and the cleanup still runs if installed.
+            step["stderr"] = _sanitize(str(error), ctx)
+            stopped = True
+            continue
+        ran = True
         step.update(
             {
                 "exit_code": code,
@@ -438,7 +488,7 @@ def run_steps(command: Sequence[str], ctx: Context, timeout: float) -> tuple[lis
         if name in ("text-exchange", "tool-exchange"):
             qualification._wait_until_settled(ctx.gateway)
             new = [r for r in qualification._run_ids(ctx.gateway) if r not in before]
-            runs = _runs(ctx, new)
+            runs = qualification.run_records(ctx.gateway, new)
             if name == "text-exchange":
                 checks = text_checks(stdout, runs)
             else:
@@ -449,14 +499,15 @@ def run_steps(command: Sequence[str], ctx: Context, timeout: float) -> tuple[lis
             found["after_uninstall"] = leftovers(ctx)
         if name == "remove-credential":
             found["after_removal"] = leftovers(ctx)
-            passed = passed and not any(found["after_removal"].values())
+            # Unknown (None) is never clean.
+            passed = passed and all(v is False for v in found["after_removal"].values())
         step["status"] = "timed_out" if timed_out else ("passed" if passed else "failed")
         if name == "install" and passed:
             installed = True
         if not passed:
             stopped = True
     exchanges["_leftovers"] = found
-    return steps, exchanges, status
+    return steps, exchanges, "completed" if ran else "not_run"
 
 
 def _artifact(tarball: Path) -> dict:
@@ -479,7 +530,10 @@ def run_install_check(
 ) -> dict:
     """Run the lifecycle against one doubles gateway; write and return the export."""
     tarball = Path(tarball).resolve()
-    with tempfile.TemporaryDirectory(prefix="openclaw-install-check-") as tmp:
+    # Removed by hand at the end: a file a host child still holds (Windows)
+    # must never stop the export from being written.
+    tmp = tempfile.mkdtemp(prefix="openclaw-install-check-")
+    try:
         home = Path(host_home).resolve() if host_home else Path(tmp) / "host"
         sandbox = home / "sandbox"
         sandbox.mkdir(parents=True, exist_ok=True)
@@ -505,7 +559,7 @@ def run_install_check(
                 )
                 steps, exchanges, status = run_steps(command, ctx, timeout)
                 found = exchanges.pop("_leftovers", {})
-                runs = _runs(ctx, qualification._run_ids(gateway))
+                runs = qualification.run_records(gateway, qualification._run_ids(gateway))
                 version = next(
                     (s.get("stdout", "").strip() for s in steps if s["name"] == "version"), ""
                 )
@@ -526,12 +580,17 @@ def run_install_check(
                     "exchanges": exchanges,
                     "leftovers": found,
                     "runs": runs,
-                    "host_tool_executions_by_gateway": _executions(runs),
+                    "host_tool_executions_by_gateway": qualification.tool_executions(runs),
                     "versions": qualification.versions(),
                 }
                 text = _sanitize(json.dumps(export, indent=2, ensure_ascii=False, default=str), ctx)
         finally:
             gateway.store.close()
+    finally:
+        try:
+            shutil.rmtree(tmp)
+        except OSError as error:
+            print(f"could not remove the temporary host home {tmp}: {error}", file=sys.stderr)
     if token in text:
         raise RuntimeError("the token reached the export")
     out.parent.mkdir(parents=True, exist_ok=True)
