@@ -52,7 +52,7 @@ def sample(prompt_id, order, value, *, cls="ready", **fields):
         "timed_out": False,
         "first_useful_content_ms": value,
         "completion_ms": value,
-        "metrics": {"local_class": cls},
+        "metrics": {"trace_observed": True, "local_class": cls},
         **fields,
     }
 
@@ -280,6 +280,31 @@ def test_latency_metric_coverage_keeps_recorded_failures_as_unobserved_findings(
     assert module.latency_metric_coverage(document)["accepted"] is False
     assert module.latency_metric_coverage(document)["missing"] == [0]
     assert module.latency_metric_coverage({"samples": []})["accepted"] is False
+
+
+def test_latency_metrics_without_an_observed_trace_are_not_observed():
+    """RM16/RM25, spec 12.2/14.4.4: a metrics block counts only with trace_observed true.
+
+    An empty block or trace_observed false is no trace: a recorded reason keeps the
+    request as an unobserved finding, no reason fails acceptance.
+    """
+    module = analysis()
+    empty = sample("p", 0, None, metrics={})
+    unread = sample("p", 1, None, metrics={"trace_observed": False, "local_class": "ready"})
+    timeout = sample(
+        "p", 2, None, state=None, error="timeout", timed_out=True, metrics={"trace_observed": False}
+    )
+    assert module.unobserved_reason(sample("p", 3, 5)) is None
+    assert module.unobserved_reason(empty) == "missing_metrics"
+    assert module.unobserved_reason(unread) == "missing_metrics"
+    assert module.unobserved_reason(timeout) == "timeout"
+    coverage = module.latency_metric_coverage(
+        {"first_token_ms": {}, "samples": [sample("p", 3, 5), empty, unread, timeout]}
+    )
+    assert coverage["accepted"] is False
+    assert coverage["missing"] == [1, 2]
+    assert coverage["unobserved_reasons"] == {"timeout": 1}
+    assert module.pair_latency([timeout], [timeout])["B"]["unobserved"] == {"timeout": 1}
 
 
 def test_latency_arm_counts_split_unobserved_requests_by_reason():

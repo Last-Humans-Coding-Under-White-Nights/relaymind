@@ -141,8 +141,11 @@ def _successful(sample) -> bool:
 
 
 def unobserved_reason(sample) -> str | None:
-    """Why a recorded latency request has no trace metrics; None when it has them."""
-    if "metrics" in sample:
+    """Why a recorded latency request has no trace metrics; None when it has them.
+
+    A metrics block counts only when it says the trace was observed (spec 14.4.4).
+    """
+    if (sample.get("metrics") or {}).get("trace_observed") is True:
         return None
     if sample.get("timed_out"):
         return "timeout"
