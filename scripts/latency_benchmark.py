@@ -187,24 +187,9 @@ def first_useful_content_ms(events: Sequence[Mapping[str, Any]]) -> float | None
 
 
 def _model_calls(events: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    calls = []
-    for event in harness.of_type(events, "model.finished"):
-        usage = event["payload"].get("usage") or {}
-        calls.append(
-            {
-                "call_id": event["payload"].get("call_id"),
-                "actor": event.get("actor"),
-                "model": event["payload"].get("model"),
-                "purpose": event["payload"].get("purpose"),
-                "duration_ms": event["payload"].get("duration_ms"),
-                "input_tokens": usage.get("input_tokens"),
-                # None when the runtime reported no count: not measured (spec 0.31 section 6).
-                "cached_tokens": usage.get("cached_tokens"),
-                "reasoning_tokens": usage.get("reasoning_tokens"),
-                "first_token_ms": event["payload"].get("first_token_ms"),
-            }
-        )
-    return calls
+    from relaymind.evaluation.m7_metrics import model_calls
+
+    return model_calls(events)
 
 
 def _elapsed_ms(started: float) -> float:
@@ -627,11 +612,15 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
             "warmups": samples["warmups"],
             "samples": measured,
         }
+        from relaymind.evaluation.m7_metrics import latency_first_tokens, render_first_tokens
+
+        document["first_token_ms"] = latency_first_tokens(document)
         out = Path(args.out)
         harness.write_json(out, document, work=work)
         report = render_latency_markdown(
             summary, title=f"Latency benchmark: {out.stem}", early_headers=early_headers
         )
+        report += render_first_tokens(document["first_token_ms"])
         report = label_report(report, document["configuration"])
         out.with_suffix(".md").write_text(report, encoding="utf-8")
         if checkpoint:

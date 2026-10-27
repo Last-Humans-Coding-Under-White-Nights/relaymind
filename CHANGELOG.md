@@ -15,6 +15,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Matrix controller recovery (#128, #134; RM16, RM17, RM25): explicit immutable
+  measurement roots, exact corpus/latency export normalization, credential-free
+  finalized-cell reconciliation, original-index snapshots and separate controller
+  provenance. M7 exact unseeded C0/C5 reuse retains the same validation and costs.
+
+- Specification 0.44 defines separate reviewed matrix controllers and immutable
+  measurement checkouts, exact serialized export identity, durable recovery
+  provenance and credential-free finalized-cell reconciliation for M7/M8
+  (RM16, RM17, RM25). Plans, budgets, defaults and measured evidence are unchanged.
+
+- M7 evaluation completion (#128; RM16, RM17, RM25–RM29, RM31, RM32):
+  proposal/prefetch accuracy, answer ownership, joined first-token observations,
+  initial selector attempts, explicit missing correction coverage, immutable
+  regrading, offline matrix planning, exact C0/C5 reuse and comparison reports.
+  The live matrix, experimental ablation revision and default decisions remain pending.
+
+- Specification 0.43 defines M7 metric coverage, initial-selection attribution,
+  provenance-preserving reanalysis and the offline/explicit-execute comparison
+  matrix (#128; RM16, RM17, RM25–RM29, RM31, RM32). Defaults remain unchanged.
+
 - M8 evaluation infrastructure (#134; RM17, RM25–RM28, RM32): validated
   configuration-specific measured priors, serial local active time, honest
   cost/selection/placement metrics and durable matrix checkpoints. Provider

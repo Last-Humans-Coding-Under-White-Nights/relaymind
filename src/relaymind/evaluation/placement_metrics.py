@@ -62,15 +62,12 @@ def trace_metrics(
                 and e["payload"].get("model") == p.get("final_answer_model")
                 for e in events
             )
-    routes = [e["payload"] for e in events if e["event_type"] == "route.selected"]
-    selected = next(
-        (
-            p.get("skill_id") or (p.get("decision") or {}).get("skill_id")
-            for p in routes
-            if p.get("skill_id") or (p.get("decision") or {}).get("skill_id")
-        ),
-        None,
-    )
+    from relaymind.evaluation.m7_metrics import initial_selection
+
+    initial, attempts = initial_selection(events)
+    routes = [e["payload"] for e in initial if e["event_type"] == "route.selected"]
+    first_route = routes[0] if routes else {}
+    selected = first_route.get("skill_id") or (first_route.get("decision") or {}).get("skill_id")
     predicted = set() if selected is None else {selected}
     expected = set() if expected_skill is None else {expected_skill}
     intersection = len(predicted & expected)
@@ -104,6 +101,9 @@ def trace_metrics(
         ),
         external_usage=usage,
         selection=selection,
+        selection_observed=bool(
+            routes or attempts or any(e["event_type"] == "clarification.required" for e in initial)
+        ),
         admitted_selector=next(
             (
                 (p.get("selector") or {}).get("name")
@@ -119,9 +119,7 @@ def trace_metrics(
                 e["event_type"] == "answer.delta" and e["payload"].get("call_id") for e in events
             )
         ),
-        selector_attempts=[
-            a for e in events for a in (e["payload"].get("selector") or {}).get("attempts", [])
-        ],
+        selector_attempts=attempts,
         placements=placements,
     )
 
@@ -155,7 +153,13 @@ def summarize_placement(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             if success and not unobserved and len(known) == len(usage)
             else None
         )
-    selections = [v["selection"] for v in values if "selection" in v]
+    selections = [
+        v["selection"]
+        for v in values
+        if "selection" in v
+        and v.get("trace_observed") is True
+        and v.get("selection_observed") is True
+    ]
     placements = [p for v in values for p in v.get("placements", [])]
     evaluated = [
         p
@@ -192,8 +196,11 @@ def summarize_placement(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         selection=dict(
             n=len(rows),
             measured=len(selections),
+            missing=len(rows) - len(selections),
             **{
-                k: sum(s[k] for s in selections) / len(rows) if rows else None
+                k: sum(s[k] for s in selections) / len(rows)
+                if rows and len(selections) == len(rows)
+                else None
                 for k in ("precision", "recall", "jaccard")
             },
         ),

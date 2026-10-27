@@ -533,3 +533,100 @@ counts remain available. The prior importer validates every partition's structur
 and checks accepted/call model identities and recorded provider/answer options
 against its configuration. Legacy missing accepted local-model identity may use
 actual local calls; an explicit conflicting identity cannot use that fallback.
+
+
+### Recovering a finalized cell with a separate controller
+
+Both matrix scripts accept `--measurement-root PATH` (spec 14.4.5, RM16/RM17/RM25).
+Run the reviewed controller script from its own clean checkout and select the
+original clean measurement checkout explicitly. Runner/configuration/package
+imports and inference subprocesses use the measurement checkout; M7's shared
+reconciliation helper stays in the controller checkout. Its separately declared
+criteria checkout and revision still identify C6. Use the original interpreter
+path so recorded runner argv remains exact.
+
+`--reconcile-only` validates existing checkpoints, exports, source/configuration,
+cost and priors without reading provider credentials or starting a model. It is
+mutually exclusive with `--execute` and refuses `--restart`/`--provider-env`.
+Only retained finalized cells are recovered; unstarted cells stay unstarted and
+partial or stale evidence is refused. For example:
+
+```bash
+/path/to/original/python /path/to/controller/scripts/run_m8_matrix.py \
+  --measurement-root /path/to/frozen-measurement \
+  --out /path/to/existing-matrix --runtime /path/to/pinned/llama-server \
+  --reconcile-only
+```
+
+The controller compares expected exported identity using the runners' existing
+`<repo>`/`<work>` JSON serialization; raw checkpoint/source identity and artifact
+bytes remain unchanged. The index retains a separate `controller_history` with
+controller commit/script hashes, measured import paths, measurement identity,
+original artifact digests and recovery time. Before recovery updates the index,
+`controller-before-<sha256>.json` preserves its exact previous bytes, including
+interrupted status and coordinator-failure timestamps. Later resumes verify this
+snapshot and controller identity. Missing retained cost evidence is refused.
+
+After reviewing reconciliation, resume with the same controller, measurement root,
+output/runtime and original provider settings using `--execute`. Completed cells
+are skipped. Keep the same M7 revision, criteria checkout/revision and reuse-index
+arguments when reconciling or resuming M7. The fixed plans, counts and budgets do
+not change; do not rename a completed calibration as a new attempt.
+
+### M7 metric completion and fixed experiment matrix
+
+`run_m7_matrix.py` plans the #128 experiments without reading credentials or
+starting inference. Supply the full reviewed production revision R. The default
+plan includes a separately reviewed criteria ablation revision; leave its hash
+unset while planning, or use `--omit-criteria` to declare the historical-only
+comparison. Execution refuses a missing experimental hash/checkout. The C6
+checkout must implement the experiment-only section 14.4.4 exception; this
+measurement patch does not create that revision or introduce a product flag.
+
+```bash
+.venv/bin/python scripts/run_m7_matrix.py \
+  --out /tmp/relaymind-m7-measurements --revision FULL_REVIEWED_HASH \
+  --criteria-revision FULL_EXPERIMENTAL_HASH
+```
+
+This is seven corpus cells (832 runs) and two latency cells (248 requests), with
+baseline budgets and a conservative 3,120 external-call ceiling per uninterrupted
+matrix. Omitting C6 is 728 runs and a 2,808-call ceiling. L0/L1 use the same seed
+20261023, local runtime, no provider and no prior; only early_headers changes.
+C1/C2/C3 change draft/many/prefetch individually; C4 combines those three; C5 has
+no local model and uses example_match. All other settings remain the defaults.
+Neither plan is measured evidence and token/currency cost is unknown.
+
+Add `--execute --criteria-checkout /path/to/reviewed-ablation` and the existing
+M8 `--runtime`/`--provider-env` options only after both revisions are reviewed and
+clean. Outputs must be outside the checkout. `--restart CELL=NEW_ATTEMPT`
+requires a new safe name and retains prior checkpoints, databases and costs.
+Finalized runner checkpoints are reconciled without repeating the cell.
+
+`--reuse-m8-index /path/to/m8/index.json` can reuse only the normal unseeded
+calibration corpus for C0 and the none/buffered corpus for C5. Reuse checks source
+and fixture bytes, runtime, model/manifest, effective settings, provider/context,
+corpus/sidecar, modes and a null prior. It never accepts seeded placement as C0.
+Valid reuse saves 260 corpus runs (572 incremental with C6), with an incremental
+1,872-call ceiling. Foreign attempts retain their physical identities and costs.
+M8 retains its 31 cells and existing options.
+
+Reanalysis now requires a distinct output and preserves measured application,
+configuration and previous analysis provenance, with source-byte SHA-256:
+
+```bash
+.venv/bin/python scripts/run_corpus.py \
+  --regrade docs/evidence/2026-10-22-corpus-apple-m1.json \
+  --out /tmp/relaymind-historical-reanalysis.json
+.venv/bin/python scripts/analyze_m7.py \
+  --matrix /tmp/relaymind-m7-measurements --out /tmp/relaymind-m7-analysis.json
+```
+
+The analysis is offline. It validates frozen case/mode coverage and immutable
+checkpoint/export identity, renders all M7 metric tables plus historical
+corrections by language/class/mode, and enumerates the section 12.3 hypotheses.
+It writes a report even when required observations/cells are missing, then exits
+unsuccessfully for failed reporting acceptance. A measured missed target is a
+valid finding. Header-before-answer-token is a diagnostic: without a comparable
+client/generation-start clock it does not prove the stronger generation-start
+hypothesis. No default or live capability decision follows from these tests.

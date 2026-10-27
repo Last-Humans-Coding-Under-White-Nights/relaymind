@@ -956,7 +956,7 @@ feature has a test of the default as well. Later pull requests append here.
   regressions with model doubles before executing the matrix:
 
   ```sh
-  .venv/bin/python -m pytest -o pythonpath=src tests/test_placement_prior.py tests/test_local_active_measurement.py tests/test_m8_metrics.py tests/test_evaluation_checkpoints.py tests/test_m8_matrix_driver.py tests/test_runner_configurations.py tests/test_run_corpus_script.py tests/test_latency_benchmark_script.py
+  .venv/bin/python -m pytest -o pythonpath=src tests/test_placement_prior.py tests/test_local_active_measurement.py tests/test_m8_metrics.py tests/test_evaluation_checkpoints.py tests/test_m8_matrix_driver.py tests/test_matrix_controller_recovery.py tests/test_runner_configurations.py tests/test_run_corpus_script.py tests/test_latency_benchmark_script.py
   ```
 
   The prior tests use declared synthetic test fixtures to validate projection and

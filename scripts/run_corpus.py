@@ -21,8 +21,8 @@ an external endpoint (``--external-base-url`` and friends, with the
 credential in RELAYMIND_EXTERNAL_API_KEY) only local_only runs; auto and
 external_only are recorded as not run.
 
-Two options work offline on a stored export and call no model: --regrade
-recomputes the grades in place, and --regrade-draft-pass (RM31, spec 0.31,
+Two options work offline on a stored export and call no model: --regrade EXPORT
+recomputes grades into a distinct --out artifact, and --regrade-draft-pass (RM31, spec 0.31,
 #115) grades the same traces as if the skill-stage draft had been published
 as the answer, and writes a separate export labeled as an offline
 counterfactual.
@@ -84,8 +84,8 @@ from relaymind.evaluation.grading import (  # noqa: E402
     grade_run,
     terminal_event,
 )
+from relaymind.evaluation.m7_metrics import enrich_metrics  # noqa: E402
 from relaymind.evaluation.metrics import render_corpus_markdown, summarize_corpus  # noqa: E402
-from relaymind.evaluation.placement_metrics import trace_metrics  # noqa: E402
 from relaymind.evaluation.prior import byte_digest  # noqa: E402
 from relaymind.orchestrator.performance import (  # noqa: E402
     draft_in_language,
@@ -414,8 +414,13 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
                             local_model_configured=configuration.local_model_configured,
                         )
                     grade_json = grade.to_json_object()
-                    grade_json["metrics"] = trace_metrics(
-                        events, expected_skill=skills[case.case_id]
+                    grade_json = enrich_grade(
+                        grade_json,
+                        case,
+                        events,
+                        skills[case.case_id],
+                        configuration.to_json_object(),
+                        modern=True,
                     )
                     grades.append(grade_json)
                     if checkpoint:
@@ -498,7 +503,30 @@ def _summary(grades: Sequence[Mapping[str, Any]], corpus: Corpus) -> dict[str, A
     return summarize_corpus(grades, expected_routes=routes)
 
 
-def regrade(document: dict[str, Any], corpus: Corpus) -> dict[str, Any]:
+def enrich_grade(
+    grade: dict,
+    case: Case,
+    events: Sequence[Mapping[str, Any]],
+    expected_skill: str | None,
+    configuration: dict,
+    *,
+    modern: bool,
+) -> dict:
+    grade["metrics"] = enrich_metrics(
+        case,
+        events,
+        expected_skill=expected_skill,
+        selector_chain=configuration.get("selection", {}).get("chain", []),
+    )
+    if modern and grade.get("local_completion") and grade.get("state") == "completed":
+        grade["local_completion"] = grade["metrics"]["answer_owner"] == "local"
+    grade["local_owner_evidence"] = "explicit" if modern else "legacy compatibility"
+    return grade
+
+
+def regrade(
+    document: dict[str, Any], corpus: Corpus, *, source_sha256: str | None = None
+) -> dict[str, Any]:
     """Recompute the grades and summary of an export from its stored traces (no model call).
 
     The sandbox state after each run is taken from the stored grade.
@@ -506,6 +534,7 @@ def regrade(document: dict[str, Any], corpus: Corpus) -> dict[str, Any]:
     """
     if document["corpus"]["sha256"] != corpus.digest:
         raise SystemExit("the export was made with another corpus digest; it cannot be regraded")
+    skills = expected_skills(corpus)
     grades = []
     for old in document["grades"]:
         case, mode = corpus.case(old["case_id"]), old["mode"]
@@ -519,12 +548,28 @@ def regrade(document: dict[str, Any], corpus: Corpus) -> dict[str, Any]:
             old["databases"],
             local_model_configured=document.get("configuration", {}).get("local_model_configured"),
         )
-        grades.append(grade.to_json_object())
+        grades.append(
+            enrich_grade(
+                grade.to_json_object(),
+                case,
+                events,
+                skills[case.case_id],
+                document.get("configuration", {}),
+                modern="selection_sidecar_sha256" in document,
+            )
+        )
     return {
         **document,
         "grades": grades,
         "summary": _summary(grades, corpus),
-        "regraded_with": {"application": harness.application_revision()},
+        "analysis_history": [
+            *document.get("analysis_history", []),
+            *([document["regraded_with"]] if "regraded_with" in document else []),
+        ],
+        "regraded_with": {
+            "application": harness.application_revision(),
+            "source_sha256": source_sha256,
+        },
     }
 
 
@@ -952,8 +997,9 @@ def argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--languages", nargs="+", choices=("en", "zh"))
     parser.add_argument(
         "--regrade",
-        action="store_true",
-        help="recompute the grades of the export named by --out from its traces, in place",
+        metavar="EXPORT",
+        default=False,
+        help="regrade immutable EXPORT into a distinct --out file from its stored traces",
     )
     parser.add_argument(
         "--regrade-draft-pass",
@@ -988,8 +1034,14 @@ def main(argv: Sequence[str] | None = None) -> None:
         out.with_suffix(".md").write_text(render_draft_pass_markdown(result), encoding="utf-8")
         return
     if args.regrade:
-        out = Path(args.out)
-        document = regrade(json.loads(out.read_text("utf-8")), load_frozen_corpus())
+        source, out = Path(args.regrade), Path(args.out)
+        if source.resolve() == out.resolve():
+            parser.error("--out must differ from the source export: the original is never changed")
+        document = regrade(
+            json.loads(source.read_text("utf-8")),
+            load_frozen_corpus(),
+            source_sha256=byte_digest(source),
+        )
         harness.write_json(out, document)
         report = render_corpus_markdown(
             document["summary"], title=f"Correctness corpus: {out.stem}"

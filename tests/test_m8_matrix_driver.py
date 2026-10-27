@@ -108,6 +108,9 @@ def lifecycle_fixture(tmp_path, monkeypatch, runner_kind="corpus"):
     )
     source = {"head": "reviewed-fixture", "dirty": False}
     monkeypatch.setattr(driver, "matrix_cells", lambda: [cell])
+    monkeypatch.setattr(
+        driver, "controller_record", lambda *a: {"head": "offline-controller", "dirty": False}
+    )
     monkeypatch.setattr(driver, "source_fingerprint", lambda root: source)
     env = {
         "RELAYMIND_EXTERNAL_BASE_URL": "https://example.invalid/v1",
@@ -378,7 +381,11 @@ def test_every_latency_command_reconciles_the_real_runner_export(tmp_path, monke
 
     driver = load_script_module("run_m8_matrix")
     runner = load_script_module("latency_benchmark")
-    source = {"head": "declared-offline-test-fixture", "dirty": False}
+    source = {
+        "head": "declared-offline-test-fixture",
+        "dirty": False,
+        "package_path": str(driver.ROOT / "src/relaymind/__init__.py"),
+    }
     monkeypatch.setattr(runner.session, "source_fingerprint", lambda root: source)
     env = {
         "RELAYMIND_EXTERNAL_BASE_URL": "https://example.invalid/v1",
