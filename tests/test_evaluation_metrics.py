@@ -422,3 +422,18 @@ def test_stream_policies_keep_success_and_predicate_failures_separate():
     assert policies["buffered"]["success"] == rate(1, 1)
     assert policies["unknown"]["runs"] == 1
     assert "| live | 1 | 0/1 | 1 |" in render_corpus_markdown(summary, title="test")
+
+
+def test_corpus_markdown_skips_m7_rows_for_a_class_without_metrics():
+    """RM16/RM25: a class whose runs recorded no metrics is left out, not a crash."""
+    from relaymind.evaluation.m7_metrics import enrich_metrics
+    from test_evaluation_grading import make_case
+
+    metrics = enrich_metrics(make_case(), [], expected_skill=None, selector_chain=[])
+    grades = [
+        grade("simple-01", "auto", metrics=metrics),
+        grade("ambiguous-01", "auto", cls="ambiguous"),
+    ]
+    markdown = render_corpus_markdown(summarize_corpus(grades), title="t")
+    assert "### M7 observations: simple" in markdown
+    assert "### M7 observations: ambiguous" not in markdown

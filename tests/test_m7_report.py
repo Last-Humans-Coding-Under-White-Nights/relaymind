@@ -160,3 +160,20 @@ def test_complex_generation_hypothesis_uses_only_languages_with_complex_cases():
     assert result["status"] == "met"
     assert result["values"] == {"en": [4.0, 3.0, 2.5]}
     assert result["not_applicable"] == {"zh": "the frozen corpus has no zh complex cases"}
+
+
+def test_unmeasured_corrections_are_not_measured_rather_than_a_crash():
+    """RM16/RM25, spec section 14.4.4: missing corrections are unknown, never zero."""
+    report = load_script_module("analyze_m7")
+    row = report.correction_row("historical", "auto", "en", "all", {})
+    assert row == (
+        "| historical | auto | en | all | not measured | not measured | not measured "
+        "| not measured |"
+    )
+
+    def document():
+        language = {"all": {}, "classes": {}}
+        return {"summary": {"modes": {"auto": {"en": language, "zh": language}}}}
+
+    result = report.hypotheses({"M7-C0": document(), "M7-C6": document()})
+    assert result["criteria_corrections"]["status"] == "not measured"

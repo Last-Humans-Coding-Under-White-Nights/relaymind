@@ -86,13 +86,13 @@ def record_controller(index: dict, record: dict, index_path: Path, artifacts: li
         if history[-1]["controller"] != record:
             raise ValueError("controller provenance differs from the retained controller")
         for entry in history:
-            digest = entry.get("previous_index_sha256")
-            if digest is not None:
-                snapshot = index_path.with_name("controller-before-" + digest + ".json")
+            snapshot_digest = entry.get("previous_index_sha256")
+            if snapshot_digest is not None:
+                snapshot = index_path.with_name("controller-before-" + snapshot_digest + ".json")
                 if (
                     entry.get("previous_index_file") != snapshot.name
                     or not snapshot.exists()
-                    or byte_digest(snapshot) != digest
+                    or byte_digest(snapshot) != snapshot_digest
                 ):
                     raise ValueError("controller recovery index snapshot differs or is missing")
         return

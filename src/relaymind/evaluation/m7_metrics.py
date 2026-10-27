@@ -190,12 +190,20 @@ def summarize_m7(rows: Sequence[Mapping[str, Any]]) -> dict:
         for r in rows
         if r.get("state") == "completed"
     )
+    records = [a for v in values for a in v.get("initial_selector_records", [])]
+    # A skipped selector records no version or transport; when its attempts
+    # name exactly one identity, it is the same configured selector.
+    identities = defaultdict(set)
+    for a in records:
+        if a["attempted"]:
+            identities[a.get("name")].add((a.get("version"), a.get("transport")))
     groups = defaultdict(list)
-    for v in values:
-        for a in v.get("initial_selector_records", []):
-            groups[
-                "/".join(str(a.get(k) or "unknown") for k in ("name", "version", "transport"))
-            ].append(a)
+    for a in records:
+        version, transport = a.get("version"), a.get("transport")
+        if not a["attempted"] and len(identities[a.get("name")]) == 1:
+            ((version, transport),) = identities[a.get("name")]
+        key = "/".join(str(x or "unknown") for x in (a.get("name"), version, transport))
+        groups[key].append(a)
     selectors = {}
     for key, attempts in sorted(groups.items()):
         scored = [a["scores"] for a in attempts if a.get("scores") is not None]
@@ -300,16 +308,17 @@ def render_m7_metrics(block: Mapping[str, Any]) -> list[str]:
 
 def latency_first_tokens(document: Mapping[str, Any]) -> dict:
     """Keep the latency protocol's four populations apart, including launcher samples."""
-    cold = document.get("cold_start", {})
+    # An aborted benchmark may record null entries; they are missing, not empty.
+    cold = document.get("cold_start") or {}
     calls = []
     for phase, requests in (
-        ("cold", [cold.get("cold_request", {})]),
+        ("cold", [cold["cold_request"]] if cold.get("cold_request") else []),
         ("runner_warmup", document.get("warmups", [])),
         ("measured", document.get("samples", [])),
     ):
         for request in requests:
             calls.extend({**call, "phase": phase} for call in request.get("model_calls", []))
-    startup = cold.get("startup_warmup", {})
+    startup = cold.get("startup_warmup") or {}
     calls.extend(
         {
             "actor": "local",

@@ -157,8 +157,8 @@ def summarize_placement(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         v["selection"]
         for v in values
         if "selection" in v
-        and v.get("trace_observed") is not False
-        and v.get("selection_observed") is not False
+        and v.get("trace_observed") is True
+        and v.get("selection_observed") is True
     ]
     placements = [p for v in values for p in v.get("placements", [])]
     evaluated = [

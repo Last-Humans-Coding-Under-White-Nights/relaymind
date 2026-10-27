@@ -534,6 +534,7 @@ def regrade(
     """
     if document["corpus"]["sha256"] != corpus.digest:
         raise SystemExit("the export was made with another corpus digest; it cannot be regraded")
+    skills = expected_skills(corpus)
     grades = []
     for old in document["grades"]:
         case, mode = corpus.case(old["case_id"]), old["mode"]
@@ -552,9 +553,7 @@ def regrade(
                 grade.to_json_object(),
                 case,
                 events,
-                json.loads(
-                    (REPO_ROOT / "evaluation/corpus.v1.skills.json").read_text(encoding="utf-8")
-                )["skills"][case.case_id],
+                skills[case.case_id],
                 document.get("configuration", {}),
                 modern="selection_sidecar_sha256" in document,
             )

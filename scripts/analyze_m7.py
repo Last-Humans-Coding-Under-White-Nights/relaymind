@@ -81,6 +81,17 @@ def physical_cost(attempts: list[dict], *, successes: int) -> dict:
     return result
 
 
+def correction_row(label: str, mode: str, language: str, cls: str, block: dict) -> str:
+    """One correction table row; a block without corrections was not measured (RM16)."""
+    v = block.get("corrections")
+    cells = (
+        ["not measured"] * 4
+        if v is None
+        else [v["corrections"], v["completed_runs"], v["missing_completed_runs"], v["duration_ms"]]
+    )
+    return f"| {label} | {mode} | {language} | {cls} | " + " | ".join(map(str, cells)) + " |"
+
+
 def verdict(value: bool | None) -> str:
     return "not measured" if value is None else "met" if value else "not met"
 
@@ -157,7 +168,8 @@ def hypotheses(documents: dict) -> dict:
     if all(k in documents for k in ("M7-C0", "M7-C6")):
         values = {
             lang: [
-                block(cell, lang)["corrections"]["per_completed_run"] for cell in ("M7-C6", "M7-C0")
+                (block(cell, lang).get("corrections") or {}).get("per_completed_run")
+                for cell in ("M7-C6", "M7-C0")
             ]
             for lang in ("en", "zh")
         }
@@ -392,12 +404,7 @@ def analyze(matrix: Path) -> tuple[dict, str]:
         for mode, languages in doc["summary"]["modes"].items():
             for language, data in languages.items():
                 for cls, block in [("all", data["all"]), *data["classes"].items()]:
-                    v = block["corrections"]
-                    lines.append(
-                        f"| {label} | {mode} | {language} | {cls} | {v['corrections']} | "
-                        f"{v['completed_runs']} | {v['missing_completed_runs']} | "
-                        f"{v['duration_ms']} |"
-                    )
+                    lines.append(correction_row(label, mode, language, cls, block))
     history = []
     for name in HISTORICAL["latency"]:
         path = ROOT / name

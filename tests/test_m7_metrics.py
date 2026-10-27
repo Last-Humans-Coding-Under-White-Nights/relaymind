@@ -287,3 +287,98 @@ def test_source_fingerprint_includes_fixture_identity(tmp_path):
     fixture.write_text('{"changed":true}', encoding="utf-8")
     after = source_fingerprint(tmp_path)
     assert before["source_sha256"] != after["source_sha256"]
+
+
+@pytest.mark.parametrize("metrics", [{}, {"trace_observed": None}, {"m7_observed": True}])
+def test_corrections_without_an_observed_trace_are_missing(metrics):
+    """RM16/RM25, spec section 14.4.4: a metrics block without trace_observed true is unknown."""
+    result = _corrections([{"state": "completed", "corrections": 0, "metrics": metrics}])
+    assert result["measured_completed_runs"] == 0
+    assert result["missing_completed_runs"] == 1
+    assert result["per_completed_run"] is None
+
+
+def test_corrections_of_an_export_made_before_trace_metrics_still_count():
+    """RM16/RM25: a historical grade has no metrics block; its recorded corrections are kept."""
+    result = _corrections([{"state": "completed", "corrections": 1, "correction_ms": 5}])
+    assert result["measured_completed_runs"] == 1
+    assert result["missing_completed_runs"] == 0
+
+
+@pytest.mark.parametrize("flag", ["trace_observed", "selection_observed"])
+def test_selection_without_both_observations_is_missing(flag):
+    """RM16/RM25, spec section 14.4.4: a missing observation flag prevents a complete score."""
+    from relaymind.evaluation.placement_metrics import summarize_placement
+
+    metrics = {
+        "trace_observed": True,
+        "selection_observed": True,
+        "selection": {"precision": 1, "recall": 1, "jaccard": 1},
+    }
+    del metrics[flag]
+    complete = summarize_placement(
+        [
+            {
+                "state": "completed",
+                "metrics": {
+                    "trace_observed": True,
+                    "selection_observed": True,
+                    "selection": {"precision": 1, "recall": 1, "jaccard": 1},
+                },
+            }
+        ]
+    )
+    partial = summarize_placement([{"state": "completed", "metrics": metrics}])
+    assert partial["selection"] != complete["selection"]
+    assert partial["selection"]["missing"] == 1
+
+
+@pytest.mark.parametrize(
+    "cold_start",
+    [
+        {"cold_request": None, "startup_warmup": None},
+        {"cold_request": None},
+        {"startup_warmup": None},
+        None,
+    ],
+)
+def test_latency_first_tokens_accepts_null_cold_start_entries(cold_start):
+    """RM16/RM25: an aborted cold start is missing evidence, never a crash."""
+    from relaymind.evaluation.m7_metrics import latency_first_tokens
+
+    call = {"actor": "local", "model": "q", "purpose": "route", "first_token_ms": 7}
+    result = latency_first_tokens({"cold_start": cold_start, "samples": [{"model_calls": [call]}]})
+    assert sum(v["eligible"] for v in result.values()) == 1
+
+
+def test_a_skipped_selector_joins_its_attempted_identity():
+    """RM25/RM28: one configured selector is one row, attempted or skipped."""
+    from relaymind.evaluation.m7_metrics import enrich_metrics, summarize_m7
+
+    router = {
+        "name": "model_router",
+        "version": "1",
+        "transport": "in_process",
+        "outcome": "selected",
+        "elapsed_ms": 20,
+    }
+    matcher = {**router, "name": "example_match"}
+    chain = ["example_match", "model_router"]
+    attempted = enrich_metrics(
+        make_case(),
+        [event("route.selected", selector={"name": "model_router", "attempts": [router]})],
+        expected_skill=None,
+        selector_chain=chain,
+    )
+    skipped = enrich_metrics(
+        make_case(),
+        [event("route.selected", selector={"name": "example_match", "attempts": [matcher]})],
+        expected_skill=None,
+        selector_chain=chain,
+    )
+    groups = summarize_m7(
+        [{"state": "completed", "metrics": attempted}, {"state": "completed", "metrics": skipped}]
+    )["selection_by_attempted_selector"]
+    assert set(groups) == {"example_match/1/in_process", "model_router/1/in_process"}
+    assert groups["model_router/1/in_process"]["attempted"] == 1
+    assert groups["model_router/1/in_process"]["skipped"] == 1

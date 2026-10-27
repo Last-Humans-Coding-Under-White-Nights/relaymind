@@ -68,7 +68,9 @@ def _corrections(grades: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
         g
         for g in completed
         if g.get("corrections") is not None
-        and g.get("metrics", {}).get("trace_observed") is not False
+        # A grade made before trace metrics has no metrics block; a block
+        # that does not say the trace was observed is missing evidence.
+        and ("metrics" not in g or g["metrics"].get("trace_observed") is True)
     ]
     count = sum(g["corrections"] for g in measured)
     durations = [g.get("correction_ms") for g in measured if g["corrections"]]
@@ -312,6 +314,8 @@ def render_corpus_markdown(summary: Mapping[str, Any], *, title: str) -> str:
                 from relaymind.evaluation.m7_metrics import render_m7_metrics
 
                 for class_name, class_block in [*data["classes"].items(), ("all", data["all"])]:
+                    if "m7_metrics" not in class_block:
+                        continue
                     lines += [f"### M7 observations: {class_name}", ""]
                     lines += render_m7_metrics(class_block)
 
