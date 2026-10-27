@@ -2926,13 +2926,26 @@ call of that arm recorded these options in model.started.
 | First useful content p50/p95 ms (n) | 8947/22241 (91) | 7037/48740 (98) | 5118/24546 (110) |
 | Completion p50/p95 ms, successful answers (n) | 10779/23583 (71) | 10491/49233 (78) | 9215/25147 (90) |
 | Latency errors / timeouts of 120 | 29/0 | 22/0 | 10/0 |
-| External first token p50/p95 ms, measured calls | 6661/8944 | 4369/7832 | 3492/7237 |
+| External first token p50/p95 ms, latency measured calls (n) | 6661/8944 (209) | 4369/7832 (230) | 3492/7237 (215) |
 | Corpus external calls; input/output/reasoning tokens | 224; 337398/26742/11651 | 247; 365839/46542/30499 | 228; 355698/15437/1522 |
 | Corpus calls with unknown usage | 4 | 14 | 0 |
 
-Every latency error in all three arms is the gateway's external budget
-(`external_generations` or `external_seconds`) running out; there is no
-provider or network error in the valid attempts.
+The latency errors are of two kinds, and there is no provider or network
+error in the valid attempts:
+
+| Latency errors of 120 | glm-4.6 | glm-5.3-flash default | glm-5.3-flash low |
+|---|---|---|---|
+| `lat-07` ended completed, expected waiting_input | 10 | 9 | 10 |
+| External budget exhausted (run failed `external_failed`) | 19 | 13 | 0 |
+| Total | 29 | 22 | 10 |
+
+The budget failures were `external_generations` (6) for all 19 of glm-4.6
+(9 `lat-10`, 10 `lat-12`) and for 11 of glm-5.3-flash default (4 `lat-10`,
+7 `lat-12`); the other 2 of that arm were `external_seconds` (30.0), one
+`lat-02` and one `lat-07`. `lat-07` ("Is it healthy?") is the
+clarification prompt: in 29 of its 30 runs across the three arms the run
+answered instead of asking for a clarification, and the tenth glm-5.3-flash
+default run is the `lat-07` budget failure above.
 
 Conditions:
 
@@ -2950,9 +2963,10 @@ Conditions:
   and sampling are not controlled.
 
 On this machine glm-5.3-flash with low reasoning effort answered sooner and
-failed fewer requests than glm-4.6, with slightly higher overall corpus success
-(90/156 against 88/156; auto 40/52 against 41/52) and about a third of the
-output tokens of its own default reasoning. Its p95 first
+failed fewer requests than glm-4.6 (no external budget ran out; its 10 errors
+are the `lat-07` runs that answered instead of asking), with slightly higher
+overall corpus success (90/156 against 88/156; auto 40/52 against 41/52) and
+about a third of the output tokens of its own default reasoning. Its p95 first
 useful content (24.5 s) is close to glm-4.6's (22.2 s); with default reasoning
 it was more than twice as long. No monetary cost is claimed here. The package
 is in [`evidence/2026-10-27-external-model/`](evidence/2026-10-27-external-model/).
