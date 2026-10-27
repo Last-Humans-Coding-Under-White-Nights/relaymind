@@ -1175,6 +1175,35 @@ def test_a_recorded_command_the_parser_refuses_makes_its_cells_invalid(
     assert capsys.readouterr().err == ""
 
 
+@pytest.mark.parametrize("change", ["conflicting", "malformed"])
+def test_inventory_lists_a_cell_whose_attempt_cost_cannot_be_counted(
+    fixture_matrix, tmp_path, monkeypatch, change
+):
+    """RM16/RM25: a cost ledger that cannot be built marks the cell invalid; inventory
+    still lists every cell instead of crashing."""
+    module = fixture_analysis(monkeypatch)
+    matrix = copy_matrix(fixture_matrix, tmp_path)
+    target = "placement-normal-device_aware-router-buffered-corpus"
+
+    def edit(index):
+        if change == "conflicting":
+            # Two attempts under one name: one physical identity with two costs.
+            index["attempts"][INTERRUPTED][0]["name"] = "retry"
+        else:
+            index["attempts"][target][-1]["cost"] = {"calls": "many"}
+
+    rewrite_index(matrix, edit)
+    result = module.inventory(matrix)
+    cell_id = INTERRUPTED if change == "conflicting" else target
+    record = result["cells"][cell_id]
+    assert result["accepted"] is False
+    assert cell_id in result["invalid"] and record["status"] == "invalid"
+    assert record["physical_cost"] is None
+    assert "physical cost" in record["reason"]
+    assert "requests_validated" not in record
+    assert sum(result["counts"].values()) == 31
+
+
 @pytest.mark.parametrize(
     "change", ["export_bytes", "prior_bytes", "prior_identity", "argv", "plan_cells"]
 )

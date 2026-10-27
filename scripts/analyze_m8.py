@@ -937,6 +937,14 @@ def _recorded_export(argv) -> str | None:
     return argv[argv.index("--out") + 1] if argv and "--out" in argv[:-1] else None
 
 
+COHORT_FIELDS = (
+    "measured_classes",
+    "requests_validated",
+    "cohort_external_cost",
+    "cohort_success_scope",
+)
+
+
 def _inventory(matrix: Path) -> tuple[dict, dict]:
     matrix = matrix.resolve()
     _check(
@@ -1002,15 +1010,25 @@ def _inventory(matrix: Path) -> tuple[dict, dict]:
                         else "latency successful final answers (not task success)",
                     )
         rows = context["views"].get(cell["id"], {}).get("rows")
-        record["physical_cost"] = ledger(
-            _cost_attempts(cell, attempts),
-            successes=_successes(cell, rows) if rows is not None else None,
-            scope="calibration population"
-            if cell["phase"] == "calibration"
-            else "candidate corpus task successes"
-            if cell["runner"] == "corpus"
-            else "latency successful final answers (endpoint outcome, not task success)",
-        )
+        try:
+            record["physical_cost"] = ledger(
+                _cost_attempts(cell, attempts),
+                successes=_successes(cell, rows) if rows is not None else None,
+                scope="calibration population"
+                if cell["phase"] == "calibration"
+                else "candidate corpus task successes"
+                if cell["runner"] == "corpus"
+                else "latency successful final answers (endpoint outcome, not task success)",
+            )
+        except (ValueError, KeyError, TypeError, AttributeError) as error:
+            # The recorded cost cannot be counted: invalid evidence, still listed.
+            context["views"].pop(cell["id"], None)
+            for key in COHORT_FIELDS:
+                record.pop(key, None)
+            reason = f"physical cost: {error}"
+            if record["status"] == "invalid":
+                reason = f"{record['reason']}; {reason}"
+            record.update(physical_cost=None, status="invalid", reason=reason)
         lists[record["status"]].append(cell["id"])
         cells[cell["id"]] = record
     accepted = not problems and len(lists["complete"]) == len(driver.matrix_cells())
