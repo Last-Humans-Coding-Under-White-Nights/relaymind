@@ -1,0 +1,490 @@
+{
+  "evidence": "docs/evidence/2026-10-26-phase2",
+  "hypothesis": {
+    "candidate": "streaming-none-local_first-example-buffered",
+    "control": "placement-constrained-local_first-example-router-buffered",
+    "corpus_auto": {
+      "N": 52,
+      "gain": 3,
+      "loss": 5,
+      "success_A": {
+        "denominator": 52,
+        "numerator": 45,
+        "rate": 0.8653846153846154
+      },
+      "success_B": {
+        "denominator": 52,
+        "numerator": 43,
+        "rate": 0.8269230769230769
+      }
+    },
+    "corpus_auto_groups": {
+      "auto/en/adversarial": {
+        "N": 6,
+        "gain": 2,
+        "loss": 1,
+        "success_A": {
+          "denominator": 6,
+          "numerator": 4,
+          "rate": 0.6666666666666666
+        },
+        "success_B": {
+          "denominator": 6,
+          "numerator": 5,
+          "rate": 0.8333333333333334
+        }
+      },
+      "auto/en/ambiguous": {
+        "N": 6,
+        "gain": 0,
+        "loss": 1,
+        "success_A": {
+          "denominator": 6,
+          "numerator": 5,
+          "rate": 0.8333333333333334
+        },
+        "success_B": {
+          "denominator": 6,
+          "numerator": 4,
+          "rate": 0.6666666666666666
+        }
+      },
+      "auto/en/complex": {
+        "N": 10,
+        "gain": 1,
+        "loss": 3,
+        "success_A": {
+          "denominator": 10,
+          "numerator": 6,
+          "rate": 0.6
+        },
+        "success_B": {
+          "denominator": 10,
+          "numerator": 4,
+          "rate": 0.4
+        }
+      },
+      "auto/en/mutation": {
+        "N": 6,
+        "gain": 0,
+        "loss": 0,
+        "success_A": {
+          "denominator": 6,
+          "numerator": 6,
+          "rate": 1.0
+        },
+        "success_B": {
+          "denominator": 6,
+          "numerator": 6,
+          "rate": 1.0
+        }
+      },
+      "auto/en/simple": {
+        "N": 12,
+        "gain": 0,
+        "loss": 0,
+        "success_A": {
+          "denominator": 12,
+          "numerator": 12,
+          "rate": 1.0
+        },
+        "success_B": {
+          "denominator": 12,
+          "numerator": 12,
+          "rate": 1.0
+        }
+      },
+      "auto/zh/simple": {
+        "N": 12,
+        "gain": 0,
+        "loss": 0,
+        "success_A": {
+          "denominator": 12,
+          "numerator": 12,
+          "rate": 1.0
+        },
+        "success_B": {
+          "denominator": 12,
+          "numerator": 12,
+          "rate": 1.0
+        }
+      }
+    },
+    "external_work": {
+      "candidate": {
+        "clarification": {
+          "external_calls_per_request": 0.0,
+          "median_external_call_ms": null,
+          "requests": 30
+        },
+        "routing": {
+          "external_calls_per_request": 4.53,
+          "median_external_call_ms": 7833,
+          "requests": 30
+        },
+        "simple": {
+          "external_calls_per_request": 2.27,
+          "median_external_call_ms": 8099,
+          "requests": 60
+        }
+      },
+      "control": {
+        "clarification": {
+          "external_calls_per_request": 0.0,
+          "median_external_call_ms": null,
+          "requests": 30
+        },
+        "routing": {
+          "external_calls_per_request": 4.23,
+          "median_external_call_ms": 7267,
+          "requests": 30
+        },
+        "simple": {
+          "external_calls_per_request": 0.83,
+          "median_external_call_ms": 7392,
+          "requests": 60
+        }
+      }
+    },
+    "latency": {
+      "completion_ms": {
+        "lower_p95": false,
+        "n_A_B": [
+          81,
+          68
+        ],
+        "p50_A_B": [
+          11794.437,
+          17604.998
+        ],
+        "p50_agrees": true,
+        "p95_A_B": [
+          53424.14,
+          55568.915
+        ]
+      },
+      "first_useful_content_ms": {
+        "lower_p95": false,
+        "n_A_B": [
+          111,
+          98
+        ],
+        "p50_A_B": [
+          10358.0,
+          15827.0
+        ],
+        "p50_agrees": true,
+        "p95_A_B": [
+          53087.0,
+          54260.0
+        ]
+      }
+    },
+    "latency_reliability": {
+      "A": {
+        "errors": 9,
+        "samples": 120,
+        "timeout_fraction": 0.0,
+        "timeouts": 0,
+        "unobserved": {},
+        "unobserved_total": 0
+      },
+      "B": {
+        "errors": 16,
+        "samples": 120,
+        "timeout_fraction": 0.05,
+        "timeouts": 6,
+        "unobserved": {
+          "timeout": 6
+        },
+        "unobserved_total": 6
+      },
+      "candidate_worse": [
+        "timeouts",
+        "errors",
+        "unobserved_total"
+      ]
+    },
+    "limitations": [
+      "The arms ran at different times on 25 and 26 October 2026; provider latency may have drifted between them.",
+      "Startup warm-up time is in neither arm.",
+      "The control arm is the recorded local_first run; with the spec 0.48 rule live, its auto runs after the first streak would have been managed external execution."
+    ],
+    "scope": "constrained local_first auto (example-router chain, classified unsuitable by the spec 0.48 stage rule) against none-class auto (example chain), paired by case and latency schedule; equal observed task success, lower p95 first useful content and completion, and no more timeouts, errors or unobserved requests in the candidate",
+    "status": "not met"
+  },
+  "index_sha256": "a24dd1def6d46f7fbccb28eaa52b8ae7284bf25b05ee4264ec0da042c75dc224",
+  "kind": "relaymind.unsuitable_detection_analysis",
+  "replay": {
+    "by_cell": {
+      "calibration-constrained-local_first-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "bc04b17bbb0c2f3ad2cb34e2fcf51098d37ca2b64eeb83b464908e5fcc82daf4",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 12,
+        "first_unsuitable_acceptance_index": 9,
+        "longest_streak": 11,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 32,
+        "ran_out_of_time": 55,
+        "stages": 100,
+        "warmup_classes": {
+          "ready": 155,
+          "unsuitable": 1
+        }
+      },
+      "calibration-normal-local_first-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "d71c647652c1b99d862156ddfacbe8bc138530508cb81ad579371937194ec150",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 0,
+        "first_unsuitable_acceptance_index": null,
+        "longest_streak": 0,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 0,
+        "ran_out_of_time": 0,
+        "stages": 100,
+        "warmup_classes": {
+          "ready": 156
+        }
+      },
+      "placement-constrained-device_aware-example-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "dc095270151c8b4c35fd9d2a6c611ba10897487274b05d5d770cd90507502420",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 11,
+        "first_unsuitable_acceptance_index": 9,
+        "longest_streak": 11,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 0,
+        "ran_out_of_time": 56,
+        "stages": 96,
+        "warmup_classes": {
+          "ready": 155,
+          "unsuitable": 1
+        }
+      },
+      "placement-constrained-device_aware-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "da949c155f754e4700e39708a702b691962cfa4a875d47cdc03e11bc2a9f42d3",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 21,
+        "first_unsuitable_acceptance_index": 9,
+        "longest_streak": 22,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 0,
+        "ran_out_of_time": 61,
+        "stages": 100,
+        "warmup_classes": {
+          "ready": 155,
+          "unsuitable": 1
+        }
+      },
+      "placement-constrained-expected_wait-example-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "8722247ac6aa930e774efec380ff197066645f8d515419e662cb297d8696b5b7",
+        "attempt": "resume-1",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 24,
+        "first_unsuitable_acceptance_index": 9,
+        "longest_streak": 14,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 0,
+        "ran_out_of_time": 47,
+        "stages": 79,
+        "warmup_classes": {
+          "ready": 155,
+          "unsuitable": 1
+        }
+      },
+      "placement-constrained-expected_wait-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "3ce6c1c1c8970aa395c67bd934461f9721fd7a2bf3519de2b4d4652c847d966b",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 24,
+        "first_unsuitable_acceptance_index": 9,
+        "longest_streak": 26,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 0,
+        "ran_out_of_time": 66,
+        "stages": 102,
+        "warmup_classes": {
+          "ready": 155,
+          "unsuitable": 1
+        }
+      },
+      "placement-constrained-local_first-example-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "6e84bb46c6d8528f896be29fd60e8be77710cd39a15a7a6faac0eed35bb879a5",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 4,
+        "first_unsuitable_acceptance_index": 36,
+        "longest_streak": 7,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 35,
+        "ran_out_of_time": 50,
+        "stages": 97,
+        "warmup_classes": {
+          "ready": 155,
+          "unsuitable": 1
+        }
+      },
+      "placement-constrained-local_first-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "5c5e311fad20a8e6a8c0b2a21301404d9275d21d28843644d4cb6556a009c4ea",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 13,
+        "first_unsuitable_acceptance_index": 9,
+        "longest_streak": 12,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 31,
+        "ran_out_of_time": 55,
+        "stages": 101,
+        "warmup_classes": {
+          "ready": 155,
+          "unsuitable": 1
+        }
+      },
+      "placement-normal-device_aware-example-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "c03910c31785b98c157862ecd3192456c469cdf4b90a549f9b17a52d0a01fca0",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 0,
+        "first_unsuitable_acceptance_index": null,
+        "longest_streak": 1,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 0,
+        "ran_out_of_time": 5,
+        "stages": 92,
+        "warmup_classes": {
+          "ready": 156
+        }
+      },
+      "placement-normal-device_aware-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "0053ec33877b43df4b221699ea1db5d3392d638dd2c90502b287f6b76eb47827",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 0,
+        "first_unsuitable_acceptance_index": null,
+        "longest_streak": 1,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 0,
+        "ran_out_of_time": 2,
+        "stages": 100,
+        "warmup_classes": {
+          "ready": 156
+        }
+      },
+      "placement-normal-expected_wait-example-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "889f8549b855e3c3c053af253c4d79dbc26917aecbe3948269f37e464e22a0de",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 0,
+        "first_unsuitable_acceptance_index": null,
+        "longest_streak": 1,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 0,
+        "ran_out_of_time": 6,
+        "stages": 80,
+        "warmup_classes": {
+          "ready": 156
+        }
+      },
+      "placement-normal-expected_wait-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "402949e812f7519389587eb09871122e93513d5aae1915a606a8947c34d2fb96",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 0,
+        "first_unsuitable_acceptance_index": null,
+        "longest_streak": 2,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 0,
+        "ran_out_of_time": 15,
+        "stages": 101,
+        "warmup_classes": {
+          "ready": 156
+        }
+      },
+      "placement-normal-local_first-example-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "3047d41cbb6233c4de61f342d3350900b96fd4ed756180cd5885285d1a6a2cd5",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 0,
+        "first_unsuitable_acceptance_index": null,
+        "longest_streak": 0,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 0,
+        "ran_out_of_time": 0,
+        "stages": 92,
+        "warmup_classes": {
+          "ready": 156
+        }
+      },
+      "placement-normal-local_first-router-buffered-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "5046dc50369428f48f688b49b3d40f5a5b0c30284ebf786b7bcafca2b728dacb",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 0,
+        "first_unsuitable_acceptance_index": null,
+        "longest_streak": 0,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 0,
+        "ran_out_of_time": 0,
+        "stages": 100,
+        "warmup_classes": {
+          "ready": 156
+        }
+      },
+      "streaming-normal-local_first-router-live-corpus": {
+        "active_seconds": 4.0,
+        "archive_sha256": "6597dca61052cf9f9abd20c4ea34ef99dba09e5cdab8cf8d84c8a61912b0a0cc",
+        "attempt": "initial",
+        "auto_runs": 52,
+        "auto_runs_the_rule_classifies_unsuitable": 0,
+        "first_unsuitable_acceptance_index": null,
+        "longest_streak": 1,
+        "probe_after_seconds": 600.0,
+        "ran_out_by_budget_proxy": 1,
+        "ran_out_of_time": 2,
+        "stages": 100,
+        "warmup_classes": {
+          "ready": 156
+        }
+      }
+    },
+    "by_configuration": {
+      "constrained": {
+        "cells": 7,
+        "cells_where_the_rule_fires": 7,
+        "longest_streak": 26,
+        "warmup_classes": {
+          "ready": 1085,
+          "unsuitable": 7
+        }
+      },
+      "normal": {
+        "cells": 8,
+        "cells_where_the_rule_fires": 0,
+        "longest_streak": 2,
+        "warmup_classes": {
+          "ready": 1248
+        }
+      }
+    }
+  },
+  "specification": "0.48",
+  "stage_streak": 3
+}

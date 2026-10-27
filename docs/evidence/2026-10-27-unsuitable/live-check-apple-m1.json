@@ -1,0 +1,425 @@
+{
+  "kind": "relaymind.unsuitable_live_check",
+  "specification": "0.48",
+  "started_at_utc": "2026-10-27T06:41:13+00:00",
+  "application": {
+    "head": "cd8dc855daab8ecb9f0d0153268e0c0674ed47d4",
+    "dirty": false
+  },
+  "external": {
+    "base_url": "https://api.z.ai/api/paas/v4",
+    "model": "glm-5.3-flash"
+  },
+  "prompts": {
+    "simple-02": "What is the current health status of staging-api?",
+    "simple-02-zh": "staging-api 当前的健康状态是什么？",
+    "simple-03": "Give me the health of payments-api.",
+    "simple-04": "Report staging-api health.",
+    "simple-05": "Which deployment is currently live on staging-api?"
+  },
+  "phases": {
+    "constrained-cold": {
+      "launch_lines": [
+        "Local warm-up finished: routing 3356 ms (first token 3297 ms, cached 0), skill 2271 ms (first token 2016 ms, cached 0).",
+        "Local model: unsuitable (the routing and skill warm-ups took 3356 + 2271 = 5627 ms; the local stage limit (active_seconds) is 4 s); auto runs as managed external execution.",
+        "Serving on http://127.0.0.1:61962",
+        "Application token: <not recorded>"
+      ],
+      "readiness_at_start": {
+        "model_id": "qwen3-0.6b",
+        "status": "unsuitable",
+        "reason": "the routing and skill warm-ups took 3356 + 2271 = 5627 ms; the local stage limit (active_seconds) is 4 s"
+      },
+      "runs": [
+        {
+          "case_id": "simple-02",
+          "mode": "auto",
+          "run_id": "run_e250cd9592f94847a81a1a9f67ca88f5",
+          "state": "completed",
+          "local_model_status": "unsuitable",
+          "local_model_reason": "the routing and skill warm-ups took 3356 + 2271 = 5627 ms; the local stage limit (active_seconds) is 4 s",
+          "route_reason_code": "no_local_model",
+          "route_local_model_status": "unsuitable",
+          "local_stage_end": {
+            "reason_code": "no_local_model",
+            "budget": null,
+            "local_active_ms": 0
+          },
+          "model_calls": [
+            {
+              "actor": "external",
+              "purpose": "external"
+            },
+            {
+              "actor": "external",
+              "purpose": "external"
+            }
+          ]
+        },
+        {
+          "case_id": "simple-02-zh",
+          "mode": "auto",
+          "run_id": "run_643966a49d354774a3fe6e9f8a17345f",
+          "state": "completed",
+          "local_model_status": "unsuitable",
+          "local_model_reason": "the routing and skill warm-ups took 3356 + 2271 = 5627 ms; the local stage limit (active_seconds) is 4 s",
+          "route_reason_code": "no_local_model",
+          "route_local_model_status": "unsuitable",
+          "local_stage_end": {
+            "reason_code": "no_local_model",
+            "budget": null,
+            "local_active_ms": 0
+          },
+          "model_calls": [
+            {
+              "actor": "external",
+              "purpose": "external"
+            },
+            {
+              "actor": "external",
+              "purpose": "external"
+            }
+          ]
+        }
+      ]
+    },
+    "constrained-warm": {
+      "launch_lines": [
+        "Local warm-up finished: routing 285 ms (first token 220 ms, cached 968), skill 481 ms (first token 217 ms, cached 567).",
+        "Serving on http://127.0.0.1:61994",
+        "Application token: <not recorded>"
+      ],
+      "readiness_at_start": {
+        "model_id": "qwen3-0.6b",
+        "status": "ready",
+        "reason": null
+      },
+      "runs": [
+        {
+          "case_id": "simple-03",
+          "mode": "local_only",
+          "run_id": "run_a19f1844f28143f0aac4c71f320f98c0",
+          "state": "failed",
+          "local_model_status": "ready",
+          "local_model_reason": null,
+          "route_reason_code": "simple_skill",
+          "route_local_model_status": null,
+          "local_stage_end": {
+            "reason_code": "local_budget",
+            "budget": "active_seconds",
+            "local_active_ms": 4002
+          },
+          "model_calls": [
+            {
+              "actor": "local",
+              "purpose": "routing"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            }
+          ]
+        },
+        {
+          "case_id": "simple-04",
+          "mode": "local_only",
+          "run_id": "run_5c7816a84bab40daa7e0fda809f65607",
+          "state": "failed",
+          "local_model_status": "ready",
+          "local_model_reason": null,
+          "route_reason_code": "simple_skill",
+          "route_local_model_status": null,
+          "local_stage_end": {
+            "reason_code": "local_budget",
+            "budget": "active_seconds",
+            "local_active_ms": 4002
+          },
+          "model_calls": [
+            {
+              "actor": "local",
+              "purpose": "routing"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            }
+          ]
+        },
+        {
+          "case_id": "simple-05",
+          "mode": "local_only",
+          "run_id": "run_b2fc5fa8af3c4962bc3e47dd29de9d40",
+          "state": "failed",
+          "local_model_status": "ready",
+          "local_model_reason": null,
+          "route_reason_code": "simple_skill",
+          "route_local_model_status": null,
+          "local_stage_end": {
+            "reason_code": "local_budget",
+            "budget": "active_seconds",
+            "local_active_ms": 4002
+          },
+          "model_calls": [
+            {
+              "actor": "local",
+              "purpose": "routing"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            }
+          ]
+        },
+        {
+          "case_id": "simple-02",
+          "mode": "auto",
+          "run_id": "run_f9749395051c41ad951f6eaf423305f0",
+          "state": "completed",
+          "local_model_status": "unsuitable",
+          "local_model_reason": "the last 3 local stages ran out of local time (active_seconds 4 s); the latest ended at 2026-10-27T06:42:29Z",
+          "route_reason_code": "no_local_model",
+          "route_local_model_status": "unsuitable",
+          "local_stage_end": {
+            "reason_code": "no_local_model",
+            "budget": null,
+            "local_active_ms": 0
+          },
+          "model_calls": [
+            {
+              "actor": "external",
+              "purpose": "external"
+            },
+            {
+              "actor": "external",
+              "purpose": "external"
+            }
+          ]
+        }
+      ],
+      "readiness_after": {
+        "model_id": "qwen3-0.6b",
+        "status": "unsuitable",
+        "reason": "the last 3 local stages ran out of local time (active_seconds 4 s); the latest ended at 2026-10-27T06:42:29Z"
+      },
+      "readiness_end": {
+        "model_id": "qwen3-0.6b",
+        "status": "unsuitable",
+        "reason": "the last 3 local stages ran out of local time (active_seconds 4 s); the latest ended at 2026-10-27T06:42:29Z"
+      }
+    },
+    "normal": {
+      "launch_lines": [
+        "Local warm-up finished: routing 756 ms (first token 718 ms, cached 0), skill 762 ms (first token 574 ms, cached 0).",
+        "Serving on http://127.0.0.1:62049",
+        "Application token: <not recorded>"
+      ],
+      "readiness_at_start": {
+        "model_id": "qwen3-0.6b",
+        "status": "ready",
+        "reason": null
+      },
+      "runs": [
+        {
+          "case_id": "simple-03",
+          "mode": "local_only",
+          "run_id": "run_1a973a0854104247b2a1562b892a853c",
+          "state": "completed",
+          "local_model_status": "ready",
+          "local_model_reason": null,
+          "route_reason_code": "simple_skill",
+          "route_local_model_status": null,
+          "local_stage_end": {
+            "reason_code": null,
+            "budget": null,
+            "local_active_ms": 2693
+          },
+          "model_calls": [
+            {
+              "actor": "local",
+              "purpose": "routing"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            },
+            {
+              "actor": "local",
+              "purpose": "final"
+            }
+          ]
+        },
+        {
+          "case_id": "simple-04",
+          "mode": "local_only",
+          "run_id": "run_35c1287d5b084c569d47dd9a40d69b5f",
+          "state": "failed",
+          "local_model_status": "ready",
+          "local_model_reason": null,
+          "route_reason_code": "simple_skill",
+          "route_local_model_status": null,
+          "local_stage_end": {
+            "reason_code": "invalid_output",
+            "budget": null,
+            "local_active_ms": 2568
+          },
+          "model_calls": [
+            {
+              "actor": "local",
+              "purpose": "routing"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            },
+            {
+              "actor": "local",
+              "purpose": "final"
+            }
+          ]
+        },
+        {
+          "case_id": "simple-05",
+          "mode": "local_only",
+          "run_id": "run_789f5a96986d4105823ec980ed78268e",
+          "state": "completed",
+          "local_model_status": "ready",
+          "local_model_reason": null,
+          "route_reason_code": "simple_skill",
+          "route_local_model_status": null,
+          "local_stage_end": {
+            "reason_code": null,
+            "budget": null,
+            "local_active_ms": 3292
+          },
+          "model_calls": [
+            {
+              "actor": "local",
+              "purpose": "routing"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            },
+            {
+              "actor": "local",
+              "purpose": "final"
+            }
+          ]
+        },
+        {
+          "case_id": "simple-02",
+          "mode": "auto",
+          "run_id": "run_e89f05dee7064451a220737d87b313fe",
+          "state": "completed",
+          "local_model_status": "ready",
+          "local_model_reason": null,
+          "route_reason_code": "simple_skill",
+          "route_local_model_status": null,
+          "local_stage_end": {
+            "reason_code": null,
+            "budget": null,
+            "local_active_ms": 2981
+          },
+          "model_calls": [
+            {
+              "actor": "local",
+              "purpose": "routing"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            },
+            {
+              "actor": "local",
+              "purpose": "skill"
+            },
+            {
+              "actor": "local",
+              "purpose": "final"
+            }
+          ]
+        }
+      ],
+      "readiness_after": {
+        "model_id": "qwen3-0.6b",
+        "status": "ready",
+        "reason": null
+      },
+      "readiness_end": {
+        "model_id": "qwen3-0.6b",
+        "status": "ready",
+        "reason": null
+      }
+    }
+  },
+  "runtimes": {
+    "constrained-cold": {
+      "argv": [
+        "--ctx-size",
+        "8192",
+        "--jinja",
+        "--reasoning",
+        "off",
+        "--reasoning-format",
+        "deepseek",
+        "--n-gpu-layers",
+        "0",
+        "--threads",
+        "2"
+      ],
+      "extra_args": [
+        "--n-gpu-layers",
+        "0",
+        "--threads",
+        "2"
+      ],
+      "cold_start_seconds": 2.289
+    },
+    "normal": {
+      "argv": [
+        "--ctx-size",
+        "8192",
+        "--jinja",
+        "--reasoning",
+        "off",
+        "--reasoning-format",
+        "deepseek"
+      ],
+      "extra_args": [],
+      "cold_start_seconds": 0.72
+    }
+  },
+  "runtime_banner": "version: 0.7.0-dev (build 11785, commit 8baabd53b)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64",
+  "model": {
+    "manifest": "models/qwen3-0.6b-q8_0.manifest.json",
+    "model_id": "qwen3-0.6b",
+    "model_file": "Qwen3-0.6B-Q8_0.gguf",
+    "model_sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+    "quantization": "Q8_0"
+  },
+  "finished_at_utc": "2026-10-27T06:43:21+00:00"
+}

@@ -1318,6 +1318,12 @@ work did not help. So placement.detect_stages stays false, every default stays
 as in 0.47, and the section 12.3 hypothesis is recorded as not met with these
 numbers. A later revision may revisit it with a faster external model, repeated
 passes, or a rule that counts the work a local stage leaves for the external one.
+A live check on the same machine (`live-check-apple-m1.json` in the same
+directory) confirmed both rules with placement.detect_stages true: a cold
+constrained runtime was classified unsuitable at startup (3356 + 2271 ms), a
+warm one started ready and became unsuitable after three local_only stages that
+each ran out of local time, after which auto ran as managed external execution;
+the normal configuration stayed ready.
 
 ## 15 Sources
 
