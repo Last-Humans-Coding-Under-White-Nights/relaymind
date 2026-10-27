@@ -266,15 +266,21 @@ def node_binary() -> str:
     return node
 
 
+def _gated_gateway(work: Path, turns: list):
+    """A gateway whose local model holds every generation open until cancelled."""
+    adapter = GatedAdapter(turns=turns)
+    gateway = build_gateway(
+        work,
+        None,
+        local_model=ConfiguredModel(adapter=adapter, model_id="gated"),
+        external_turns=[],
+    )
+    return adapter, gateway
+
+
 def _gateway(scenario: Scenario, work: Path):
     if scenario.gated:
-        adapter = GatedAdapter(turns=[text_turn("never")])
-        gateway = build_gateway(
-            work,
-            None,
-            local_model=ConfiguredModel(adapter=adapter, model_id="gated"),
-            external_turns=[],
-        )
+        _adapter, gateway = _gated_gateway(work, [text_turn("never")])
     else:
         gateway = build_gateway(
             work,
@@ -684,27 +690,41 @@ def _interrupt_when_started(
     the command's own process group. Never longer than timeout.
     """
     windows = sys.platform == "win32"
-    process = subprocess.Popen(
-        list(command),
-        env=dict(env),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if windows else 0,  # type: ignore[attr-defined]
-    )
-    deadline = time.monotonic() + timeout
-    while process.poll() is None and not adapter.started.is_set() and time.monotonic() < deadline:
-        time.sleep(0.05)
-    sent = False
-    if process.poll() is None and adapter.started.is_set():
-        time.sleep(ABORT_AFTER_SECONDS)
-        process.send_signal(signal.CTRL_BREAK_EVENT if windows else signal.SIGINT)  # type: ignore[attr-defined]
-        sent = True
-    try:
-        stdout, stderr = process.communicate(timeout=max(1.0, deadline - time.monotonic()))
-    except subprocess.TimeoutExpired:
-        process.kill()
-        stdout, stderr = process.communicate()
+    # Files, not pipes: nothing reads the output until the host ends, and a host
+    # that logs more than a pipe holds would block before it sends its request.
+    with (
+        tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as out,
+        tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as err,
+    ):
+        process = subprocess.Popen(
+            list(command),
+            env=dict(env),
+            stdout=out,
+            stderr=err,
+            text=True,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if windows else 0,  # type: ignore[attr-defined]
+        )
+        deadline = time.monotonic() + timeout
+        while (
+            process.poll() is None and not adapter.started.is_set() and time.monotonic() < deadline
+        ):
+            time.sleep(0.05)
+        sent = False
+        if process.poll() is None and adapter.started.is_set():
+            time.sleep(ABORT_AFTER_SECONDS)
+            process.send_signal(signal.CTRL_BREAK_EVENT if windows else signal.SIGINT)  # type: ignore[attr-defined]
+            sent = True
+        timed_out = False
+        try:
+            process.wait(timeout=max(1.0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            timed_out = True
+        out.seek(0)
+        err.seek(0)
+        stdout, stderr = out.read(), err.read()
+    if timed_out:
         return "timed_out", None, stdout, stderr + f"\ntimed out after {timeout} s", sent
     if sent:
         status = "interrupted"
@@ -723,13 +743,7 @@ def run_host(
         sandbox.mkdir()
         adapter = None
         if scenario == "abort":
-            adapter = GatedAdapter(turns=turns(sandbox))
-            gateway = build_gateway(
-                Path(tmp),
-                None,
-                local_model=ConfiguredModel(adapter=adapter, model_id="gated"),
-                external_turns=[],
-            )
+            adapter, gateway = _gated_gateway(Path(tmp), turns(sandbox))
         else:
             gateway = build_gateway(Path(tmp), turns(sandbox), external_turns=[])
         app = make_app(gateway, client_tools=ClientToolsChat(gateway.orchestrator))

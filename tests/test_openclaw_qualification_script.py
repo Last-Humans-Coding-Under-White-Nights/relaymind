@@ -636,3 +636,29 @@ def test_an_abort_scenario_whose_host_finishes_unsignalled_does_not_pass(tmp_pat
     )
     assert export["checks"]["signal_sent"] is False
     assert export["checks"]["passed"] is False
+
+
+# A host that logs more than a pipe buffer (64 KiB) before its request, as a
+# real host with verbose logging can (#138 review).
+STUB_VERBOSE_INTERRUPTED_HOST = STUB_INTERRUPTED_HOST.replace(
+    "signal.signal(signal.SIGINT, lambda *_: sys.exit(130))",
+    "signal.signal(signal.SIGINT, lambda *_: sys.exit(130))\n"
+    "sys.stderr.write('log line\\n' * 30000); sys.stderr.flush()\n"
+    "sys.stdout.write('out line\\n' * 30000); sys.stdout.flush()",
+)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stub host handles POSIX SIGINT")
+def test_the_abort_scenario_reads_a_verbose_host_output_while_it_waits(tmp_path):
+    """A host that writes more than a pipe holds before its request is still interrupted."""
+    assert "log line" in STUB_VERBOSE_INTERRUPTED_HOST
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_VERBOSE_INTERRUPTED_HOST],
+        tmp_path / "export.json",
+        scenario="abort",
+        timeout=30,
+    )
+    assert export["status"] == "interrupted", export["stderr"][-500:]
+    assert export["checks"]["signal_sent"] is True
+    assert export["checks"]["passed"] is True
+    assert export["stderr"].endswith("log line\n")
