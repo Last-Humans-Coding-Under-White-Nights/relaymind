@@ -542,7 +542,7 @@ def expected_argv(cell: dict, attempt: dict, roots: dict, provider: dict) -> lis
     """The driver's exact command for this attempt under the recorded roots."""
     _check(roots["matrix"] and roots["checkout"], "index records no matrix or checkout root")
     recorded = Path(roots["matrix"])
-    argv = driver.command(cell, recorded / cell["id"] / attempt["name"], recorded, provider, None)
+    argv = driver.command(cell, recorded / cell["id"] / attempt["name"], recorded, provider)
     here = str(driver.ROOT)
     return [attempt["argv"][0]] + [
         roots["checkout"] + v[len(here) :] if v.startswith(here + os.sep) else v for v in argv[1:]

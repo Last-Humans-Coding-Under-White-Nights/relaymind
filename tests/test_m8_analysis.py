@@ -566,7 +566,7 @@ def latency_sample(prompt, order, cell):
 def write_attempt(out, cell, name, *, source, prior_conf, prior, prior_digest, modules):
     driver, corpus, runner_corpus, runner_latency, config, controller = modules
     recorded_dir = Path(RECORDED) / cell["id"] / name
-    argv = driver.command(cell, recorded_dir, Path(RECORDED), PROVIDER, None)
+    argv = driver.command(cell, recorded_dir, Path(RECORDED), PROVIDER)
     here = str(driver.ROOT)
     argv = [argv[0]] + [CHECKOUT + v[len(here) :] if v.startswith(here) else v for v in argv[1:]]
     runner = runner_corpus if cell["runner"] == "corpus" else runner_latency
@@ -759,7 +759,7 @@ def build_matrix(out):
         name = "initial"
         if cell["id"] == INTERRUPTED:
             recorded_dir = Path(RECORDED) / cell["id"] / "initial"
-            argv = driver.command(cell, recorded_dir, Path(RECORDED), PROVIDER, None)
+            argv = driver.command(cell, recorded_dir, Path(RECORDED), PROVIDER)
             here = str(driver.ROOT)
             argv = [argv[0]] + [
                 CHECKOUT + v[len(here) :] if v.startswith(here) else v for v in argv[1:]
