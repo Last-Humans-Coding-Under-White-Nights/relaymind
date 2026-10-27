@@ -373,7 +373,9 @@ def main(argv: list[str] | None = None) -> None:
         if source.get("dirty") is not False or source.get("head") != c["revision"]:
             raise ValueError("execution requires each reviewed clean committed revision")
     args.runtime = resolve_runtime(args.runtime)
-    if args.runtime.name not in ("llama-server", "llama-server.exe") or not args.runtime.is_file():
+    # Windows names are case-insensitive; shutil.which may return llama-server.EXE.
+    name = args.runtime.name.lower()
+    if name not in ("llama-server", "llama-server.exe") or not args.runtime.is_file():
         raise ValueError("pinned runtime executable missing")
     index_path = out / "index.json"
     retained = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else None
