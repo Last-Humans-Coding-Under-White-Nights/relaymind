@@ -29,20 +29,24 @@ const NEVER_REMOVED =
 
 type Part = { type?: unknown };
 
+/** Refuse the first part of message m that is not text. */
+function checkTextParts(parts: Part[], m: number): void {
+  parts.forEach((part, p) => {
+    if (part.type !== "text") {
+      throw new RelayMindInputError(
+        `messages[${m}].content[${p}].type`,
+        `is ${String(part.type)}; ${NEVER_REMOVED}`,
+      );
+    }
+  });
+}
+
 /** Refuse a host context that the transport would change before sending. */
 export function checkContext(context: Context): void {
   context.messages.forEach((message, m) => {
     if (message.role !== "user" && message.role !== "toolResult") return;
     const content = message.content as string | Part[];
-    if (typeof content === "string") return;
-    content.forEach((part, p) => {
-      if (part.type !== "text") {
-        throw new RelayMindInputError(
-          `messages[${m}].content[${p}].type`,
-          `is ${String(part.type)}; ${NEVER_REMOVED}`,
-        );
-      }
-    });
+    if (typeof content !== "string") checkTextParts(content, m);
   });
 }
 
@@ -104,14 +108,6 @@ export function checkPayload(payload: unknown, context: Context): void {
   }
   const messages = Array.isArray(body.messages) ? (body.messages as { content?: unknown }[]) : [];
   messages.forEach((message, m) => {
-    if (!Array.isArray(message.content)) return;
-    (message.content as Part[]).forEach((part, p) => {
-      if (part.type !== "text") {
-        throw new RelayMindInputError(
-          `messages[${m}].content[${p}].type`,
-          `is ${String(part.type)}; ${NEVER_REMOVED}`,
-        );
-      }
-    });
+    if (Array.isArray(message.content)) checkTextParts(message.content as Part[], m);
   });
 }
