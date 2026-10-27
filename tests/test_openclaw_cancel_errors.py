@@ -597,8 +597,13 @@ def test_a_redacted_tool_call_is_not_replayed(tmp_path):
     assert len(all_run_ids(gateway)) == 1
 
 
-def test_a_retry_of_a_cancelled_request_is_409_run_terminal(tmp_path):
-    """Section 7.4: a cancelled run's key is never run again; a retry needs a new key."""
+def test_a_cancelled_runs_key_sent_again_is_409_run_terminal(tmp_path):
+    """Section 7.4: a cancelled run's key is never run again.
+
+    A new plugin process starts with an empty key ledger, so it sends the
+    cancelled run's key again; the gateway answers 409 run_terminal, naming
+    the run, and creates nothing.
+    """
     adapter = GatedAdapter(turns=[text_turn("never")])
     gateway, app = client_gateway(
         tmp_path,
@@ -606,14 +611,56 @@ def test_a_retry_of_a_cancelled_request_is_409_run_terminal(tmp_path):
         local_model=ConfiguredModel(adapter=adapter, model_id="gated"),
         external_turns=[],
     )
+    scenario = {"prompt": "Say hello.", "fixedTimestamps": True}
+    with RunningServer(app) as running:
+        drive(running, app, tmp_path, abort={"afterMs": 1500}, **scenario)
+        (run_id,) = all_run_ids(gateway)
+        terminal(gateway, run_id)
+        again = drive(running, app, tmp_path, **scenario)
+    assert gateway.store.get_run(run_id).state == "cancelled"
+    assert failure_of(again).startswith("RelayMind run_terminal (HTTP 409): ")
+    assert f"Gateway run {run_id}" in failure_of(again)
+    assert all_run_ids(gateway) == [run_id]
+
+
+def test_a_host_retry_of_a_cancelled_request_is_a_new_run_under_a_new_key(tmp_path):
+    """Section 7.4: a retry after a failure uses a new key and is a new run.
+
+    In the same plugin process the key ledger knows the cancelled run spent
+    its key, so the host's retry of the unchanged request sends <key>-retry1
+    and gets an answer, never 409 run_terminal (#138 review).
+    """
+    adapter = ThreadGate(turns=[text_turn("Hello again.")])
+    gateway, app = client_gateway(
+        tmp_path,
+        None,
+        local_model=ConfiguredModel(adapter=adapter, model_id="thread-gated"),
+        external_turns=[],
+    )
+
+    def cancelled_first():
+        ids = all_run_ids(gateway)
+        return bool(ids) and gateway.store.get_run(ids[0]).state == "cancelled"
+
+    def open_after_cancel():
+        wait_for(cancelled_first, 30, "the first run to be cancelled")
+        adapter.gate.set()
+
+    opener = threading.Thread(target=open_after_cancel, daemon=True)
+    opener.start()
     with RunningServer(app) as running:
         output = drive(
             running, app, tmp_path, prompt="Say hello.", abort={"afterMs": 1500}, repeat="first"
         )
-    (run_id,) = all_run_ids(gateway)
-    assert gateway.store.get_run(run_id).state == "cancelled"
-    assert output["repeated"]["error_message"].startswith("RelayMind run_terminal (HTTP 409): ")
-    assert f"Gateway run {run_id}" in output["repeated"]["error_message"]
+    opener.join(5)
+    first, second = all_run_ids(gateway)
+    assert gateway.store.get_run(first).state == "cancelled"
+    assert gateway.store.get_run(second).state == "completed"
+    one, two = inference(output)
+    assert (
+        two["request"]["headers"][KEY_HEADER] == f"{one['request']['headers'][KEY_HEADER]}-retry1"
+    )
+    assert output["repeated"]["text"] == "Hello again."
 
 
 def test_a_key_survives_a_gateway_token_change(tmp_path):

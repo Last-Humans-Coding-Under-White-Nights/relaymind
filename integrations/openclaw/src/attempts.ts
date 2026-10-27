@@ -20,7 +20,7 @@ import { appendFileSync } from "node:fs";
 
 import { gatewayFailure } from "./errors.ts";
 import type { Logger } from "./redaction.ts";
-import type { AttemptReport } from "./stream.ts";
+import { headerValue, type AttemptReport } from "./stream.ts";
 
 export const ATTEMPT_LOG_PREFIX = "RelayMind inference attempt ";
 const RUN_ID = /^run_[A-Za-z0-9_-]{1,120}$/;
@@ -43,19 +43,13 @@ export interface AttemptRecord {
   usage: "unknown";
 }
 
-function header(headers: Record<string, string> | undefined, name: string): string | undefined {
-  if (!headers) return undefined;
-  for (const [key, value] of Object.entries(headers)) if (key.toLowerCase() === name) return value;
-  return undefined;
-}
-
 const runIdOf = (value: unknown) => (typeof value === "string" && RUN_ID.test(value) ? value : null);
 
 /** The record of one attempt; baseUrl is the plugin's configured /v1 root. */
 export function attemptRecord(report: AttemptReport, baseUrl: string): AttemptRecord {
   const raw = report.raw;
   const failure = gatewayFailure(raw);
-  const fromHeader = runIdOf(header(report.response?.headers, "x-relaymind-run-id"));
+  const fromHeader = runIdOf(headerValue(report.response?.headers, "x-relaymind-run-id"));
   const fromBody = failure?.runId ? runIdOf(failure.runId) : null;
   const responseId = (raw as { responseId?: unknown }).responseId;
   const fromResponse =
@@ -79,7 +73,7 @@ export function attemptRecord(report: AttemptReport, baseUrl: string): AttemptRe
     status: failure ? failure.status : (report.response?.status ?? null),
     code: failure?.code ?? null,
     reasonCode: failure?.reasonCode ?? null,
-    replayed: header(report.response?.headers, "idempotent-replayed") === "true",
+    replayed: headerValue(report.response?.headers, "idempotent-replayed") === "true",
     retried: report.retried,
     nativeRunUrl: runId ? `${origin}/relay/v1/runs/${runId}` : null,
     uiUrl: runId ? `${origin}/ui/runs/${runId}` : null,

@@ -23,10 +23,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (`src/idempotency.ts`): the pinned transport gives
   `resolveTransportTurnState` a new random turn ID on every call, so the
   host's turn ID cannot name a retry. A host retry of the same request
-  replays a completed run; the next turn gets a new key. The plugin makes
-  one attempt by default; the new `maxRetries` setting (at most 2) retries
-  only a 429 under the same key and a 504 under a new key, before any
-  answer content. Each attempt is recorded with its turn, key, outcome,
+  replays a completed run (also one that completed under a plugin retry
+  key); a payload whose run ended failed or cancelled sends
+  `<key>-retry<n+1>` next, a new run (section 7.4), so a host retry after a
+  504 or an abort is never stuck on 409 `run_terminal`; the next turn gets
+  a new key. An abort during the retry wait ends the request aborted. The
+  plugin makes one attempt by default; the new `maxRetries` setting (at
+  most 2) retries only a 429 under the same key and a 504 under a new key,
+  before any answer content. Each attempt is recorded with its turn, key, outcome,
   code, and RelayMind run ID (or `unavailable`), with native run and UI
   links and usage unknown, through the redacting logger and the optional
   `diagnosticsPath` JSON lines file (`src/attempts.ts`); nothing goes into
@@ -36,7 +40,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   completion; a native events disconnect; 401, 403, 409, 422, 429, 503,
   504, and a stream error event; replays, conflicts, a redacted call, a
   cancelled run's key, and a token change. The qualification harness's host
-  mode gains `--scenario abort` (SIGINT once the generation started). The
+  mode gains `--scenario abort` (SIGINT once the generation started; the
+  host's output goes to files, so a verbose host cannot block on a full
+  pipe). The
   real host's interrupt, retries, and failover are not run.
 - OpenClaw text and host-owned tool round trips (#137; RM01, RM03, RM04,
   RM08, RM09, RM12, RM19, RM20, RM26, RM33; AC10, AC24): the provider's

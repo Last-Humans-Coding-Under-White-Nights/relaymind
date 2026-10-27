@@ -1225,8 +1225,14 @@ cd ../.. && pytest tests/test_openclaw_cancel_errors.py tests/test_openclaw_qual
   the host set kept; one attempt by default; with `maxRetries`, a 429 is
   retried under the same key and a 504 under the retry key, never shown to
   the host, at most `maxRetries` times; 503, 422, 409, 401, and 400 are
-  never retried, nor a response with content or an aborted request; a
-  `maxRetries` above 2 is refused.
+  never retried, nor a response with content or an aborted request; an
+  abort during the retry wait ends the request aborted (event, result, and
+  record), never as the 429; a `maxRetries` above 2 is refused. A host
+  retry of the same conversation: after a 504 or a 409 `run_terminal` it
+  sends `<key>-retry1`, after a plugin retry that succeeded it sends the
+  key that succeeded, after an answer or a 429 it keeps the key, and a key
+  the host set is never changed (`provider.test.ts`: the ledger is shared
+  across `wrapStreamFn` calls).
 - `integrations/openclaw/test/attempts.test.ts`: the attempt record takes
   the run ID from `X-RelayMind-Run-ID`, the error body, or the chat
   response ID, else `unavailable` (never a value that is not a gateway run
@@ -1237,7 +1243,9 @@ cd ../.. && pytest tests/test_openclaw_cancel_errors.py tests/test_openclaw_qual
   504 gives two records, two run IDs, one turn.
 - `integrations/openclaw/test/stream.test.ts`, `provider.test.ts`,
   `config.test.ts`, `manifest.test.ts`: the gateway's message in the error
-  event and the result alike, a non-gateway failure unchanged; the failover
+  event and the result alike, a non-gateway failure unchanged; a stream
+  that ends without a terminal event ends with the result's own reason (a
+  call `toolUse`, a failure or an abort an error event, never `done`); the failover
   hooks; `maxRetries` 0 to 2 and an absolute `diagnosticsPath` in the
   settings and the manifest's closed schema.
 - `tests/test_openclaw_cancel_errors.py`: the plugin driver against the
@@ -1256,12 +1264,15 @@ cd ../.. && pytest tests/test_openclaw_cancel_errors.py tests/test_openclaw_qual
   the tool-result turn gets a new key and run in the same turn; a retry of
   the follow-up after an allowed write replays the answer and the host
   wrote once; a changed payload under the host's key, a redacted call, and
-  a cancelled run's key are 409; a key survives a gateway token change.
+  a cancelled run's key sent by a new plugin process are 409; a host retry
+  of a cancelled request in the same process sends `<key>-retry1` and gets
+  an answer from a new run; a key survives a gateway token change.
 - `tests/test_openclaw_qualification_script.py`: the host mode's
   `--scenario abort` against a stub host that exits 130 on SIGINT: the
   harness interrupts it once the generation started, the run is cancelled,
   no answer text, `passed`; a host that ended before the interrupt does
-  not pass.
+  not pass; a host that logs more than a pipe holds before its request is
+  still interrupted (its output goes to files).
 
 The aborts here come from the driver's abort signal and a stub's SIGINT.
 The real host's interrupt against the gateway is the host CLI tier, not run

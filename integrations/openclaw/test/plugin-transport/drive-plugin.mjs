@@ -193,10 +193,7 @@ function recordingApi(pluginConfig) {
   };
 }
 
-/**
- * The host's conversation for one model entry: the pinned transport wrapped by
- * the plugin's wrapStreamFn, with the host's own tool loop around it.
- */
+/** The host signal of request index: scenario.abort applies to the first request only. */
 function abortFor(scenario, index) {
   const controller = new AbortController();
   const abort = index === 0 ? scenario.abort : undefined;

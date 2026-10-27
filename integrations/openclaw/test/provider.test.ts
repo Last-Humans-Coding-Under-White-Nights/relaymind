@@ -218,6 +218,38 @@ describe("wrapStreamFn (the guard and the answer rule around the host transport,
   });
 });
 
+describe("wrapStreamFn keys across host calls (section 7.4, #138)", () => {
+  it("a host retry through a second wrapStreamFn call does not resend a spent key", async () => {
+    const { logger } = recordingLogger();
+    const provider = createRelayMindProvider({ pluginConfig: { baseUrl: BASE }, logger });
+    const sent: string[] = [];
+    const failed = {
+      role: "assistant",
+      content: [],
+      stopReason: "error",
+      errorCode: "deadline_exceeded",
+      errorMessage: "504 deadline",
+      errorBody: JSON.stringify({ code: "deadline_exceeded", run_id: "run_slow" }),
+    };
+    const streamFn = (_model: unknown, _context: unknown, options: { headers: Record<string, string> }) => {
+      sent.push(options.headers["Idempotency-Key"]!);
+      return {
+        async *[Symbol.asyncIterator]() {
+          yield { type: "error", reason: "error", error: failed };
+        },
+        result: async () => failed,
+      };
+    };
+    const context = { messages: [{ role: "user", content: "Hi.", timestamp: 1 }] };
+    for (let i = 0; i < 2; i++) {
+      const wrapped = provider.wrapStreamFn?.({ provider: PROVIDER_ID, modelId: MODEL_ID, streamFn } as never);
+      await (await wrapped!({ id: MODEL_ID } as never, context as never, {} as never)).result();
+    }
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toBe(`${sent[0]}-retry1`);
+  });
+});
+
 describe("the host's failover hooks (section 7.5, #138)", () => {
   const { logger } = recordingLogger();
   const provider = createRelayMindProvider({ pluginConfig: { baseUrl: BASE }, logger });

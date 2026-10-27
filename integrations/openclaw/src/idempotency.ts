@@ -18,7 +18,8 @@
 // header; not the base URL, since a key is scoped to the gateway that stores it
 // and a restart may move its port), the host session, the system prompt, every message (with the
 // host's timestamps), the tools, and the request options that change the body.
-// The same conversation sent again gives the same key; the next turn (a new
+// The same conversation sent again gives the same base key (KeyLedger below
+// moves it on once its run ended failed or cancelled); the next turn (a new
 // user message or a tool result) gives a new one by construction. The
 // credential is not part of it: a key belongs to the gateway's one caller, not
 // to its token, so a key survives a gateway restart (section 7.4).
@@ -114,6 +115,41 @@ export function idempotencyKey({ model, context, options }: KeyInput): string {
  */
 export function retryKey(key: string, n: number): string {
   return `${key}-retry${n}`;
+}
+
+/** Whether a payload's key may be sent again: kept, or spent by a run that ended without an answer. */
+export type KeyFate = "keep" | "spent";
+
+const LEDGER_SIZE = 256;
+
+/**
+ * The key each payload sends next, in this process (section 7.4). The same
+ * payload keeps its key while the gateway can still replay it or stored
+ * nothing (a completed answer, a 429). A key whose run ended failed or
+ * cancelled is spent: the gateway answers it with 409 run_terminal, and a retry
+ * after a failure uses a new key, so the next request of that payload, the
+ * host's retry or the plugin's, sends <key>-retry<n+1>. A key that succeeded
+ * after a plugin retry stays the payload's key, so a host retry replays it.
+ * A new process starts empty: a spent key first gets 409 run_terminal, which
+ * spends it, and the retry after that gets a new key. At most 256 payloads are
+ * held; the oldest is dropped first.
+ */
+export class KeyLedger {
+  private readonly entries = new Map<string, { n: number; spent: boolean }>();
+
+  /** The key to send for a payload, and its retry number (0 for the base key). */
+  next(baseKey: string): { key: string; n: number } {
+    const entry = this.entries.get(baseKey);
+    const n = entry === undefined ? 0 : entry.spent ? entry.n + 1 : entry.n;
+    return { key: n === 0 ? baseKey : retryKey(baseKey, n), n };
+  }
+
+  /** What the attempt under retry number n left behind. */
+  record(baseKey: string, n: number, fate: KeyFate): void {
+    this.entries.delete(baseKey);
+    this.entries.set(baseKey, { n, spent: fate === "spent" });
+    if (this.entries.size > LEDGER_SIZE) this.entries.delete(this.entries.keys().next().value!);
+  }
 }
 
 /**

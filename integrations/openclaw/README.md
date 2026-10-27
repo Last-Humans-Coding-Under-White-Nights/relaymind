@@ -231,11 +231,20 @@ passes `resolveTransportTurnState` a new random `turnId` and `attempt: 1` on
 every call (`@openclaw/ai` 2026.10.7), so it differs on every retry; whether
 the real host keeps it across retries was not checked on the probe. So:
 
-- the host sending the same conversation again (a retry) sends the same key:
-  a completed run is replayed (`Idempotent-Replayed: true`, the same run ID,
-  no model call, no tool proposal repeated); a run still active is 409
-  `idempotency_conflict`; a failed or cancelled run is 409 `run_terminal`;
-  a stored call whose arguments were redacted is 409, never replayed altered;
+- the host sending the same conversation again (a retry) sends the key that
+  payload last used: a completed run is replayed (`Idempotent-Replayed: true`,
+  the same run ID, no model call, no tool proposal repeated), including one
+  that completed under a plugin retry key; a run still active is 409
+  `idempotency_conflict`; a stored call whose arguments were redacted is
+  409, never replayed altered;
+- a retry after a failure uses a new key (section 7.4): the plugin keeps, per
+  provider and in memory, the key each payload sent last (at most 256
+  payloads). When that key's run ended failed or cancelled (a 504, a 503, a
+  422, an abort, a transport failure, or a 409 `run_terminal`), the next
+  request of the same payload sends `<key>-retry<n+1>` and is a new run. A
+  429 and other refusals that created no run keep the key. A new host
+  process starts empty: its first retry of a failed run's key gets 409
+  `run_terminal`, and the retry after that gets a new key;
 - the next turn (a new user message, or the tool result after a call) gets a
   new key and a new run, by construction;
 - a request retry never asks the host to repeat a host tool: after the tool
@@ -246,12 +255,24 @@ gateway's seven-day key retention replays the stored answer; the host's
 per-message timestamps make that unlikely, but the key cannot tell a
 deliberate repeat from a retry.
 
+Limit: the key is computed before the body exists (the pinned transport
+builds the request headers, then the body, then runs `onPayload`), so it
+covers what the body is built from, not the bytes sent. A host change that
+is in the conversation, such as the timestamp and the `Runtime:` line the
+macOS probe saw on the user message (the same bytes in both requests of one
+turn), is covered. A field a host wrapper added per call in `onPayload`
+would not be: a retry of that request would get 409 `idempotency_conflict`,
+a named failure, never a different answer or a second run. No such wrapper
+was seen on the probe.
+
 **Retries.** The plugin makes one attempt by default (`maxRetries: 0`). With
 `maxRetries` 1 or 2 it retries only a 429 `overloaded` (same key: the gateway
 stored nothing) and a 504 `deadline_exceeded` (a new key,
 `<key>-retry<n>`: the failed run holds the first one), only before any
 answer content, never after an abort, and after 500 ms times the retry
-number. A retried attempt is not shown to the host; the last failure is.
+number. A retried attempt is not shown to the host; the last failure is. An
+abort during the wait ends the request as aborted, never as the failure that
+was about to be retried, and its attempt record says `aborted`.
 The host's own retries are bounded by the key as above.
 
 ## Token handover and reconnect

@@ -12,8 +12,8 @@ import { createOpenAICompletionsTransportStreamFn } from "@openclaw/ai/transport
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PROVIDER_ID, relaymindModelEntry } from "../src/compat.ts";
-import { retryKey } from "../src/idempotency.ts";
-import { relaymindStreamFn, type RelayMindStreamOptions } from "../src/stream.ts";
+import { KeyLedger, retryKey } from "../src/idempotency.ts";
+import { relaymindStreamFn, type AttemptReport, type RelayMindStreamOptions } from "../src/stream.ts";
 // @ts-expect-error recorder.mjs is plain JavaScript without declarations (#135)
 import { startRecorder } from "./host-transport/recorder.mjs";
 
@@ -91,8 +91,17 @@ async function send(
     ...options,
   } as never);
   const seen: string[] = [];
-  for await (const event of events) seen.push(event.type);
-  return { message: await events.result(), seen };
+  const all: { type: string; reason?: string }[] = [];
+  for await (const event of events) {
+    seen.push(event.type);
+    all.push(event as never);
+  }
+  return { message: await events.result(), seen, events: all };
+}
+
+async function until(condition: () => boolean) {
+  for (let i = 0; i < 200 && !condition(); i++) await new Promise((r) => setTimeout(r, 10));
+  expect(condition()).toBe(true);
 }
 
 const keys = () => recorder!.exchanges.map((x: any) => x.request.headers["idempotency-key"]);
@@ -214,7 +223,88 @@ describe("the bounded retry rule (maxRetries)", () => {
     expect(recorder!.exchanges.length).toBeLessThanOrEqual(1);
   });
 
+  it("an abort during the retry wait ends the request aborted, never as the last failure", async () => {
+    // The host's cancel is the outcome: a 429 shown here would read as an
+    // overload of this provider for a turn the user cancelled.
+    const model = await start([error(429, "overloaded"), ANSWER]);
+    const controller = new AbortController();
+    const reports: AttemptReport[] = [];
+    const pending = send(
+      model,
+      { maxRetries: 1, retryDelayMs: 10_000, onAttempt: (r) => reports.push(r) },
+      { options: { signal: controller.signal } },
+    );
+    await until(() => recorder!.exchanges.length === 1);
+    await new Promise((r) => setTimeout(r, 100));
+    controller.abort();
+    const { message, events } = await pending;
+    expect(message.stopReason).toBe("aborted");
+    expect(message.errorMessage ?? "").not.toMatch(/overloaded/);
+    expect(events.at(-1)).toMatchObject({ type: "error", reason: "aborted" });
+    expect(recorder!.exchanges).toHaveLength(1);
+    expect(reports).toHaveLength(1);
+    expect(reports[0]!.raw.stopReason).toBe("aborted");
+    expect(reports[0]!.retried).toBe(false);
+  });
+
   it("refuses a maxRetries above 2 by name", () => {
     expect(() => relaymindStreamFn((() => undefined) as never, { maxRetries: 3 })).toThrow(/maxRetries/);
+  });
+});
+
+describe("a host retry of the same conversation (section 7.4: a retry after a failure uses a new key)", () => {
+  it("after a 504 the host's retry gets a new key, not the failed run's", async () => {
+    const model = await start([error(504, "deadline_exceeded", "run_slow"), ANSWER]);
+    const ledger = new KeyLedger();
+    expect((await send(model, { keys: ledger })).message.stopReason).toBe("error");
+    expect((await send(model, { keys: ledger })).message.stopReason).toBe("stop");
+    const [first, second] = keys();
+    expect(second).toBe(retryKey(first, 1));
+  });
+
+  it("after a plugin retry that succeeded, the host's retry replays the key that succeeded", async () => {
+    const model = await start([error(504, "deadline_exceeded", "run_slow"), ANSWER, ANSWER]);
+    const ledger = new KeyLedger();
+    expect((await send(model, { maxRetries: 1, keys: ledger })).message.stopReason).toBe("stop");
+    expect((await send(model, { keys: ledger })).message.stopReason).toBe("stop");
+    const [first, second, third] = keys();
+    expect(second).toBe(retryKey(first, 1));
+    expect(third).toBe(second);
+  });
+
+  it("after a completed answer the host's retry keeps the key, so the gateway replays it", async () => {
+    const model = await start([ANSWER]);
+    const ledger = new KeyLedger();
+    await send(model, { keys: ledger });
+    await send(model, { keys: ledger });
+    const [first, second] = keys();
+    expect(second).toBe(first);
+  });
+
+  it("after a 429 the host's retry keeps the key: nothing was stored", async () => {
+    const model = await start([error(429, "overloaded"), ANSWER]);
+    const ledger = new KeyLedger();
+    await send(model, { keys: ledger });
+    await send(model, { keys: ledger });
+    const [first, second] = keys();
+    expect(second).toBe(first);
+  });
+
+  it("after a 409 run_terminal (a key spent before this process) the next retry gets a new key", async () => {
+    const model = await start([error(409, "run_terminal", "run_old"), ANSWER]);
+    const ledger = new KeyLedger();
+    expect((await send(model, { keys: ledger })).message.stopReason).toBe("error");
+    expect((await send(model, { keys: ledger })).message.stopReason).toBe("stop");
+    const [first, second] = keys();
+    expect(second).toBe(retryKey(first, 1));
+  });
+
+  it("a key the host set itself is never changed", async () => {
+    const model = await start([error(504, "deadline_exceeded", "run_slow"), ANSWER]);
+    const ledger = new KeyLedger();
+    const options = { headers: { "Idempotency-Key": "host-key-1" } };
+    await send(model, { keys: ledger }, { options });
+    await send(model, { keys: ledger }, { options });
+    expect(keys()).toEqual(["host-key-1", "host-key-1"]);
   });
 });

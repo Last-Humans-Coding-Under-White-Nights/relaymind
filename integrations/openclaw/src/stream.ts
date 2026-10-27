@@ -29,12 +29,13 @@
 // The wrapper forwards every event in order and never changes emitted text: it
 // only replaces the terminal "done" event of a response that breaks a rule with
 // an "error" event. The host keeps its tools, its approvals, and its own retries;
-// a host retry of the same conversation sends the same key, so the gateway
-// replays a completed run instead of running it again (section 7.4).
+// a host retry of the same conversation sends the key it last used, so the
+// gateway replays a completed run instead of running it again, and a key whose
+// run ended failed or cancelled is never sent again (section 7.4, KeyLedger).
 import type { ProviderWrapStreamFnContext } from "openclaw/plugin-sdk/plugin-entry";
 
-import { describeFailure, gatewayFailure, retryRule } from "./errors.ts";
-import { IDEMPOTENCY_HEADER, idempotencyKey, retryKey, turnId } from "./idempotency.ts";
+import { describeFailure, gatewayFailure, retryRule, type GatewayFailure } from "./errors.ts";
+import { IDEMPOTENCY_HEADER, idempotencyKey, KeyLedger, turnId, type KeyFate } from "./idempotency.ts";
 import { MAX_RETRIES } from "./config.ts";
 import { checkContext, checkOptions, checkPayload } from "./input-guard.ts";
 
@@ -112,6 +113,39 @@ function failedMessage(model: Model, reason: string): AssistantMessage {
   };
 }
 
+const isFailure = (message: AssistantMessage) =>
+  message.stopReason === "error" || message.stopReason === "aborted";
+
+/** The terminal event of a final message: "error" for a failure, "done" otherwise, with its own reason. */
+function terminalEvent(message: AssistantMessage): AssistantMessageEvent {
+  return (
+    isFailure(message)
+      ? { type: "error", reason: message.stopReason, error: message }
+      : { type: "done", reason: message.stopReason, message }
+  ) as AssistantMessageEvent;
+}
+
+/** The final message of a request the host aborted before the plugin sent it again. */
+function abortedMessage(model: Model): AssistantMessage {
+  return { ...failedMessage(model, "Request was aborted"), stopReason: "aborted" };
+}
+
+/**
+ * What an attempt leaves its key (src/idempotency.ts KeyLedger). An answer keeps
+ * it (a retry replays it); so does a refusal that created no run (a 429 stores
+ * nothing) and a conflict (the key is another payload's, or its run is still
+ * going). A run that ended failed or cancelled spends it (section 7.4: 409
+ * run_terminal), and so does an abort or a transport failure, whose run may
+ * exist and did not complete: a new key costs at most a new run.
+ */
+function keyFate(message: AssistantMessage, failure: GatewayFailure | undefined): KeyFate {
+  if (!isFailure(message)) return "keep";
+  if (failure === undefined) return "spent";
+  if (failure.code === "idempotency_conflict") return "keep";
+  if (failure.code === "run_terminal" || retryRule(failure.code) === "new_key") return "spent";
+  return failure.runId ? "spent" : "keep";
+}
+
 /** A failed stream that sends nothing: the request was refused before it was built. */
 function refused(model: Model, error: Error): AssistantMessageEventStreamLike {
   const message = failedMessage(model, error.message);
@@ -154,7 +188,7 @@ function channel<T>() {
   };
 }
 
-/** What one attempt sent and got back, for diagnostics (src/diagnostics.ts). */
+/** What one attempt sent and got back, for diagnostics (src/attempts.ts). */
 export interface AttemptReport {
   /** The OpenClaw turn of the request (src/idempotency.ts turnId). */
   turn: string;
@@ -177,13 +211,16 @@ export interface RelayMindStreamOptions {
   retryDelayMs?: number;
   /** Called once per attempt, after its outcome is known. */
   onAttempt?: (report: AttemptReport) => void;
+  /** The key each payload sends next; one per provider, so a host retry sees the earlier attempts. */
+  keys?: KeyLedger;
 }
 
 const RETRY_DELAY_MS = 500;
-/** Events that show answer content: after one, the attempt is the answer and is never retried. */
-const CONTENT_FREE = new Set(["start"]);
+/** The one event that shows no answer content; after any other, the attempt is the answer and is never retried. */
+const CONTENT_FREE = "start";
 
-function hasHeader(headers: Record<string, string> | undefined, name: string): string | undefined {
+/** The value of a header, matched without regard to case; undefined when it is absent. */
+export function headerValue(headers: Record<string, string> | undefined, name: string): string | undefined {
   if (!headers) return undefined;
   const wanted = name.toLowerCase();
   for (const [key, value] of Object.entries(headers)) if (key.toLowerCase() === wanted) return value;
@@ -217,6 +254,7 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
     throw new RangeError(`maxRetries must be an integer from 0 to ${MAX_RETRIES}`);
   }
   const delayMs = streamOptions.retryDelayMs ?? RETRY_DELAY_MS;
+  const keys = streamOptions.keys ?? new KeyLedger();
   return async (model: Model, context: Context, options?: Options) => {
     try {
       checkContext(context);
@@ -234,7 +272,7 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
     };
     const known = () => [...secrets(), options?.apiKey];
     // A key the host set itself is the host's: kept as is, and never retried by the plugin.
-    const hostKey = hasHeader(options?.headers, IDEMPOTENCY_HEADER);
+    const hostKey = headerValue(options?.headers, IDEMPOTENCY_HEADER);
     const baseKey = hostKey ?? idempotencyKey({ model, context, options });
     const turn = turnId(context, (options as { sessionId?: string } | undefined)?.sessionId);
     const out = channel<AssistantMessageEvent>();
@@ -263,7 +301,7 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
             terminal = { event, raw: event.type === "done" ? event.message : event.error };
             break;
           }
-          if (!committed && CONTENT_FREE.has(event.type)) {
+          if (!committed && event.type === CONTENT_FREE) {
             held.push(event);
             continue;
           }
@@ -275,7 +313,7 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
         }
         if (terminal === undefined) {
           const raw = await inner.result();
-          terminal = { event: { type: "done", reason: "stop", message: raw } as AssistantMessageEvent, raw };
+          terminal = { event: terminalEvent(raw), raw };
         }
       } catch (error) {
         const raw = failedMessage(model, error instanceof Error ? error.message : String(error));
@@ -287,9 +325,9 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
     const emit = (held: AssistantMessageEvent[], event: AssistantMessageEvent, raw: AssistantMessage) => {
       const settled = settle(raw, known());
       out.push(...held);
-      if (event.type === "done" && settled === raw) out.push(event);
-      else if (event.type === "done") out.push({ type: "error", reason: "error", error: settled });
-      else out.push({ ...event, error: settled } as AssistantMessageEvent);
+      if (event.type === "done" && settled === raw && !isFailure(raw)) out.push(event);
+      else if (event.type === "error") out.push({ ...event, error: settled } as AssistantMessageEvent);
+      else out.push(terminalEvent(settled));
       resolveFinal(settled);
     };
 
@@ -303,33 +341,34 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
     };
 
     const run = async () => {
-      let key = baseKey;
-      let newKeys = 0;
+      // A host key is sent as is; the plugin's own key follows the ledger (section 7.4).
+      let { key, n } = hostKey ? { key: hostKey, n: 0 } : keys.next(baseKey);
       for (let attempt = 1; ; attempt++) {
         const outcome = await attemptOnce(key, attempt);
-        const failure = gatewayFailure(outcome.raw);
+        // Under the answer rule: an empty answer is recorded as the failure the host sees.
+        const checked = checkAnswer(outcome.raw);
+        const failure = gatewayFailure(checked);
+        if (!hostKey) keys.record(baseKey, n, keyFate(checked, failure));
         const rule = failure ? retryRule(failure.code) : "none";
-        const retry =
-          !hostKey &&
-          !outcome.committed &&
-          rule !== "none" &&
-          attempt <= maxRetries &&
-          !options?.signal?.aborted &&
-          (await wait(delayMs * attempt, options?.signal ?? undefined));
+        const retryable = !hostKey && !outcome.committed && rule !== "none" && attempt <= maxRetries;
+        // wait() is false only when the host aborts: then the abort is the outcome, not the last failure.
+        const retry = retryable && (await wait(delayMs * attempt, options?.signal ?? undefined));
+        const aborted = retryable && !retry ? abortedMessage(model) : undefined;
         report({
           turn,
           attempt,
           idempotencyKey: key,
           ...(outcome.response ? { response: outcome.response } : {}),
-          // Under the answer rule: an empty answer is recorded as the failure the host sees.
-          raw: checkAnswer(outcome.raw),
+          raw: aborted ?? checked,
           retried: retry,
         });
         if (retry) {
-          if (rule === "new_key") key = retryKey(baseKey, ++newKeys);
+          // The ledger gives the same key after a 429 and <key>-retry<n+1> after a 504.
+          ({ key, n } = keys.next(baseKey));
           continue;
         }
-        emit(outcome.held, outcome.event, outcome.raw);
+        if (aborted) emit(outcome.held, terminalEvent(aborted), aborted);
+        else emit(outcome.held, outcome.event, outcome.raw);
         break;
       }
     };

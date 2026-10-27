@@ -142,6 +142,8 @@ const UNKNOWN: CodeRule = {
   explain: `RelayMind returned an error the plugin does not know. ${PROVIDER_FAILURE}`,
 };
 
+const ruleOf = (code: string): CodeRule => RULES[code] ?? UNKNOWN;
+
 /** The prefix of every message the plugin writes for a gateway failure. */
 const PREFIX = /^RelayMind ([a-z_]{1,64}) \((?:HTTP \d{3}|stream error event)\): /;
 /** The plugin's own empty-answer failure (src/stream.ts). */
@@ -203,7 +205,7 @@ export function describeFailure(
   failure: GatewayFailure,
   secrets: readonly (string | undefined)[],
 ): string {
-  const rule = RULES[failure.code] ?? UNKNOWN;
+  const rule = ruleOf(failure.code);
   const where = failure.status === null ? "stream error event" : `HTTP ${failure.status}`;
   const parts = [`RelayMind ${failure.code} (${where}): ${rule.explain}`];
   if (failure.gatewayMessage) parts.push(`Gateway: "${oneLine(failure.gatewayMessage, secrets)}".`);
@@ -214,7 +216,7 @@ export function describeFailure(
 
 /** The retry rule of a gateway code (section 7.5): only 429 and 504 may be retried. */
 export function retryRule(code: string): RetryRule {
-  return (RULES[code] ?? UNKNOWN).retry;
+  return ruleOf(code).retry;
 }
 
 interface HookContext {
@@ -234,7 +236,7 @@ export function failoverReason(ctx: HookContext): RelayMindFailoverReason | unde
   if (EMPTY_ANSWER.test(ctx.errorMessage ?? "")) return "empty_response";
   const code = codeOf(ctx);
   if (code === undefined) return undefined;
-  return (RULES[code] ?? UNKNOWN).reason;
+  return ruleOf(code).reason;
 }
 
 /** matchesContextOverflowError: true only for context_limit_exceeded; undefined for other errors. */

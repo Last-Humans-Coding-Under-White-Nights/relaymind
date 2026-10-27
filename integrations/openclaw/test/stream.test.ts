@@ -434,3 +434,58 @@ describe("checkAnswer (the plugin's own rule on the final message)", () => {
     expect(out.errorMessage).toMatch(/empty answer/);
   });
 });
+
+describe("a stream that ends without a terminal event", () => {
+  const message = (stopReason: string, content: unknown[], extra: Record<string, unknown> = {}) => ({
+    role: "assistant",
+    api: "openai-completions",
+    provider: PROVIDER_ID,
+    model: "relaymind-client-tools",
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: {} },
+    timestamp: 1,
+    content,
+    stopReason,
+    ...extra,
+  });
+  // A base stream function whose iterator ends early; result() still resolves.
+  const endsEarly =
+    (final: unknown): StreamFn =>
+    async () =>
+      ({
+        async *[Symbol.asyncIterator]() {
+          yield { type: "start", partial: final };
+        },
+        result: async () => final,
+      }) as never;
+
+  async function drive(final: unknown) {
+    const stream = relaymindStreamFn(endsEarly(final));
+    const events = await stream(
+      { id: "relaymind-client-tools", api: "openai-completions", provider: PROVIDER_ID } as never,
+      { messages: [{ role: "user", content: "Hi.", timestamp: 1 }] } as never,
+      {} as never,
+    );
+    const seen: { type: string; reason?: string }[] = [];
+    for await (const event of events) seen.push(event as never);
+    return { seen, result: await events.result() };
+  }
+
+  it("a call keeps its toolUse reason", async () => {
+    const call = message("toolUse", [{ type: "toolCall", id: "c1", name: ECHO.name, arguments: {} }]);
+    const { seen } = await drive(call);
+    expect(seen.at(-1)).toMatchObject({ type: "done", reason: "toolUse" });
+  });
+
+  it("a failure that is not the gateway's is an error event, never done", async () => {
+    const failure = message("error", [], { errorMessage: "socket hang up", errorCode: "ECONNRESET" });
+    const { seen, result } = await drive(failure);
+    expect(seen.at(-1)).toMatchObject({ type: "error", reason: "error" });
+    expect(seen.map((e) => e.type)).not.toContain("done");
+    expect(result.stopReason).toBe("error");
+  });
+
+  it("an aborted result is an error event with reason aborted", async () => {
+    const { seen } = await drive(message("aborted", [], { errorMessage: "Request was aborted" }));
+    expect(seen.at(-1)).toMatchObject({ type: "error", reason: "aborted" });
+  });
+});
