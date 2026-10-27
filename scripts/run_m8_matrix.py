@@ -5,6 +5,7 @@ import importlib
 import json
 import os
 import shlex
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -23,7 +24,17 @@ from relaymind.evaluation.environment import checkout_environment, source_finger
 from relaymind.evaluation.prior import byte_digest, load_prior  # noqa: E402
 from relaymind.store import RunStore  # noqa: E402
 
-PINNED_RUNTIME = "/Users/dmitrykudryavtsev/llama-b11785-dl/x/llama-b11785/llama-server"
+RUNTIME_ENV = "RELAYMIND_RUNTIME"
+
+
+def resolve_runtime(given: Path | None) -> Path:
+    """The llama-server to measure: --runtime, else RELAYMIND_RUNTIME, else the one on PATH."""
+    if given is not None:
+        return given
+    found = os.environ.get(RUNTIME_ENV) or shutil.which("llama-server")
+    if not found:
+        raise ValueError(f"pass --runtime, set {RUNTIME_ENV}, or put llama-server on PATH")
+    return Path(found)
 
 
 def matrix_cells() -> list[dict]:
@@ -142,7 +153,7 @@ def freeze_prior(export: Path, out: Path) -> None:
         prior.seed(store)
 
 
-def command(cell: dict, attempt_dir: Path, out: Path, env: dict, runtime: Path) -> list[str]:
+def command(cell: dict, attempt_dir: Path, out: Path, env: dict) -> list[str]:
     runner = "run_corpus.py" if cell["runner"] == "corpus" else "latency_benchmark.py"
     argv = [
         sys.executable,
@@ -328,7 +339,11 @@ def reconcile_attempt(
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--runtime", type=Path, default=Path(PINNED_RUNTIME))
+    parser.add_argument(
+        "--runtime",
+        type=Path,
+        help=f"the llama-server to measure (default: ${RUNTIME_ENV}, else llama-server on PATH)",
+    )
     parser.add_argument("--provider-env", type=Path)
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--restart", metavar="CELL=ATTEMPT")
@@ -361,6 +376,7 @@ def main(argv: list[str] | None = None) -> None:
     source = source_fingerprint(ROOT)
     if source["dirty"] is not False:
         raise ValueError("execution requires the reviewed clean committed checkout")
+    args.runtime = resolve_runtime(args.runtime)
     if args.runtime.name not in ("llama-server", "llama-server.exe"):
         raise ValueError("runtime must name the llama-server executable selected through PATH")
     if not args.runtime.is_file():
@@ -405,7 +421,7 @@ def main(argv: list[str] | None = None) -> None:
                     previous_attempt,
                     cell,
                     previous_dir,
-                    command(cell, previous_dir, out, env, args.runtime),
+                    command(cell, previous_dir, out, env),
                     source,
                 )
             finally:
@@ -429,7 +445,7 @@ def main(argv: list[str] | None = None) -> None:
         attempt = declare_restart(index, cell, name)
         attempt_dir = out / cell["id"] / name
         attempt_dir.mkdir(parents=True, exist_ok=False)
-        argv = command(cell, attempt_dir, out, env, args.runtime)
+        argv = command(cell, attempt_dir, out, env)
         attempt.update(
             argv=argv, prior_sha256=prior_digest, status="started", started_at_utc=utc_now()
         )

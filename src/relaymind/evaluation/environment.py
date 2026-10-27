@@ -158,8 +158,14 @@ def application_revision(repo_root: Path) -> dict[str, Any]:
 
 
 def checkout_environment(repo_root: Path, environ: dict[str, str]) -> dict[str, str]:
-    """Make every child import the measured checkout, including with a shared venv."""
-    return {**environ, "PYTHONPATH": str(repo_root / "src")}
+    """Make every child import the measured checkout, including with a shared venv.
+
+    The checkout comes first; entries already on PYTHONPATH are kept after it.
+    """
+    paths = [str(repo_root / "src")]
+    if environ.get("PYTHONPATH"):
+        paths.append(environ["PYTHONPATH"])
+    return {**environ, "PYTHONPATH": os.pathsep.join(paths)}
 
 
 def source_fingerprint(repo_root: Path) -> dict[str, Any]:

@@ -64,3 +64,15 @@ def test_latency_checkpoints_every_request_including_cold_warmups(tmp_path):
     assert len(checkpoint.document["steps"]) == 16
     assert all(s["result"] is not None for s in checkpoint.document["steps"])
     assert len(result["measured"]) == 12
+
+
+def test_source_environment_keeps_the_existing_pythonpath_after_the_checkout(tmp_path):
+    """RM25: the checkout comes first; entries already on PYTHONPATH are kept after it."""
+    import os
+
+    from relaymind.evaluation.environment import checkout_environment
+
+    env = checkout_environment(tmp_path, {"PYTHONPATH": "/other/src" + os.pathsep + "/more"})
+    assert env["PYTHONPATH"].split(os.pathsep) == [str(tmp_path / "src"), "/other/src", "/more"]
+    assert checkout_environment(tmp_path, {})["PYTHONPATH"] == str(tmp_path / "src")
+    assert checkout_environment(tmp_path, {"PYTHONPATH": ""})["PYTHONPATH"] == str(tmp_path / "src")

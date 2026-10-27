@@ -386,7 +386,7 @@ def test_every_latency_command_reconciles_the_real_runner_export(tmp_path, monke
     }
     monkeypatch.setenv(runner.harness.EXTERNAL_KEY_ENV, "fixture-secret")
     attempt_dir = tmp_path / cell["id"] / "initial"
-    argv = driver.command(cell, attempt_dir, tmp_path, env, tmp_path / "llama-server")
+    argv = driver.command(cell, attempt_dir, tmp_path, env)
     args = runner.argument_parser().parse_args(argv[2:])
     raw = runner.configuration_from_args(args)
     runtime = None
@@ -473,3 +473,32 @@ def test_every_latency_command_reconciles_the_real_runner_export(tmp_path, monke
     driver.reconcile_attempt(attempt, cell, attempt_dir, argv, source)
     assert attempt["status"] == "complete"
     assert attempt["requests"] == 124
+
+
+def test_runtime_defaults_to_the_environment_or_llama_server_on_path(tmp_path, monkeypatch):
+    """RM18/RM25: no developer path is built in; the runtime comes from the operator."""
+    driver = load_script_module("run_m8_matrix")
+    on_path = tmp_path / "bin" / "llama-server"
+    on_path.parent.mkdir()
+    on_path.write_text("#!/bin/sh\n")
+    on_path.chmod(0o755)
+    named = tmp_path / "named" / "llama-server"
+    monkeypatch.setenv("PATH", str(on_path.parent))
+    monkeypatch.delenv("RELAYMIND_RUNTIME", raising=False)
+    assert driver.resolve_runtime(None) == on_path
+    monkeypatch.setenv("RELAYMIND_RUNTIME", str(named))
+    assert driver.resolve_runtime(None) == named
+    assert driver.resolve_runtime(tmp_path / "given" / "llama-server") == (
+        tmp_path / "given" / "llama-server"
+    )
+    monkeypatch.delenv("RELAYMIND_RUNTIME")
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    with pytest.raises(ValueError, match="--runtime"):
+        driver.resolve_runtime(None)
+
+
+def test_the_driver_has_no_developer_runtime_path():
+    """RM18: the default must work on any machine, not one developer's checkout."""
+    driver = load_script_module("run_m8_matrix")
+    assert not hasattr(driver, "PINNED_RUNTIME")
+    assert "/Users/" not in (driver.ROOT / "scripts" / "run_m8_matrix.py").read_text("utf-8")
