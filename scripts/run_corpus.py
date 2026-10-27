@@ -349,9 +349,9 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
     )
     if external is not None and not os.environ.get(harness.EXTERNAL_KEY_ENV):
         # Without a usable endpoint the gateways are started without one, and the
-        # configuration label names none.
+        # configuration names neither the endpoint nor its request options.
         external = None
-        configuration = replace(configuration, external=None)
+        configuration = replace(configuration, external=None, external_request_options=None)
     runtime = (
         harness.check_runtime(Path(args.manifest), extra_args=args.runtime_extra_args)
         if configuration.local_model_configured

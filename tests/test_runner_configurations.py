@@ -749,6 +749,44 @@ def test_launch_file_writer_refuses_null():
             harness._toml(value)
 
 
+def test_corpus_without_key_drops_request_options_with_the_endpoint(
+    settings, tmp_path, monkeypatch
+):
+    """RM25, spec 12.2: without the API key the corpus runner starts its gateways with no
+    external endpoint; the recorded configuration then names neither the endpoint nor its
+    request options."""
+    runner = load_script_module("run_corpus")
+    monkeypatch.delenv(runner.harness.EXTERNAL_KEY_ENV, raising=False)
+    monkeypatch.setattr(runner.harness, "check_runtime", lambda *args, **kwargs: None)
+    seen = {}
+
+    class Stop(Exception):
+        pass
+
+    def prepare(args, root, runtime, external, configuration):
+        seen["external"] = external
+        seen["configuration"] = configuration.to_json_object()
+        raise Stop
+
+    monkeypatch.setattr(runner.session, "prepare", prepare)
+    args = runner.argument_parser().parse_args(
+        [
+            "--out",
+            str(tmp_path / "out.json"),
+            "--modes",
+            "local_only",
+            *EXTERNAL_FLAGS,
+            "--external-request-options",
+            '{"reasoning_effort": "low"}',
+        ]
+    )
+    with pytest.raises(Stop):
+        runner.run_corpus(args)
+    assert seen["external"] is None
+    assert seen["configuration"]["external"] is None
+    assert "external_request_options" not in seen["configuration"]
+
+
 def test_prior_partition_carries_declared_request_options():
     """RM27, spec 14.4.1: a prior is exact to the provider options its samples used."""
     session = load_script_module("evaluation_session")
