@@ -163,7 +163,7 @@ starts its own llama-server.
   pass, escaped labels, missing historical fields (not recorded), and
   values recorded as null (shown with their meaning). Placement projections
   use illustrative optional event fields; they are not measured predictions.
-  Workflow steps remain a labeled placeholder pending #138.
+  The Workflow steps placeholder is removed by #173 (RM30 retired).
 
   The page script (`app.js`) runs in a real browser with
   `pytest tests/test_demo_ui_browser.py` (#89, #127, spec 0.27 and 0.31): Playwright

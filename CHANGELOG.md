@@ -12,6 +12,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   integration (#135 to #139, #145): retire the unimplemented RM30 and AC23
   without reusing their identifiers; add RM33, AC24, the provider ownership
   and compatibility contract, and a separate host-tool evaluation protocol.
+  Section 7.5 names the host compatibility switches the plugin declares,
+  the request-size and advertised-limit rules, and the error-class
+  mapping; AC24 adds an oversized request.
   The fixed parallel demo (RM15, AC14) and existing benchmark evidence remain.
   This is a specification and backlog change; the plugin is not implemented.
 

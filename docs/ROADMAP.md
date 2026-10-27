@@ -734,6 +734,12 @@ This is planned integration, not a claim of a working or faster plugin.
 - Compatibility qualification and captured protocol fixtures (#135;
   RM08, RM19, RM20, RM33; AC24). Pin the host/SDK and check its actual
   requests against the existing chat contract before implementation.
+  Record the host's per-model compatibility switches and its defaults
+  for a loopback URL (they send `stream_options`, which the gateway
+  rejects) and the token size of its requests against the local input
+  limit, which bounds how much host work can run locally.
+- Remove the retired workflow steps placeholder from the demo UI
+  (#173; RM23, AC14). Independent of the plugin; can start now.
 - Provider package, model catalog, configuration, and token handover
   (#136; RM12, RM19, RM26, RM33), after #135.
 - Text and host-owned tool round trips, request compatibility, and
@@ -741,7 +747,8 @@ This is planned integration, not a claim of a working or faster plugin.
 - Cancellation, bounded retry behavior, errors, and trace correlation
   (#138; RM14, RM17, RM20, RM22, RM33; AC11, AC12, AC24), after #137.
 - Installable artifact, CI compatibility checks, platform qualification,
-  and operator documentation (#145; RM18, RM19, RM33; AC24), after #138.
+  and operator documentation (#145; RM18, RM19, RM33; AC24): packaging
+  and CI after #136, platform qualification and the guide after #138.
 - M9 live evaluation (#139; RM16, RM25, RM26, RM33; section 12.5), after
   #145: direct external versus RelayMind external_only versus auto, plus
   a separate no-local setup; exact success, latency, calls, and usage.
@@ -760,7 +767,8 @@ are measured hypotheses, not acceptance claims inferred from compatibility.
 The unimplemented YAML workflow expansion and plan benchmark are removed
 from M9 (RM30 and AC23 retired). The implemented fixed parallel demo remains
 RM15/AC14. Issues #135 to #139 and #145 are repurposed with a scope-change
-note so their former purpose remains traceable.
+note so their former purpose remains traceable; #173 removes the UI
+placeholder that the retired scope left behind.
 
 ## Out of scope for the prototype
 
@@ -863,3 +871,10 @@ listed here so the current order can be traced to its reason.
   RM33/AC24 for a provider plugin over the client-owned chat API. Reuse the
   six open M9 issues with revised scope and dependencies. Preserve the
   implemented fixed parallel demo and its historical evidence.
+  The revision is numbered 0.47 because 0.46 is reserved by the pending
+  M8 evidence stack (#171). The pinned OpenClaw source was read for the
+  host's request defaults and compatibility switches; section 7.5 names
+  the ones the plugin declares, so that the first request to the
+  loopback URL is not rejected for `stream_options` or a misplaced
+  developer message. The UI placeholder removal moved from #145 to #173
+  so it does not wait for the plugin.
