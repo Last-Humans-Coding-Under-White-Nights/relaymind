@@ -589,3 +589,50 @@ def test_the_exec_command_writes_to_the_sandbox_by_absolute_path(tmp_path):
     sandbox = tmp_path / "host sandbox"
     command = qualification.exec_command(sandbox)
     assert command == f"echo written-by-the-host >> '{sandbox / 'note.txt'}'"
+
+
+# A stand-in for a host that is interrupted mid-turn (#138): one streamed chat
+# request that it never finishes reading; on SIGINT it exits 130, the way the
+# pinned host did on the macOS probe, without a JSON report.
+STUB_INTERRUPTED_HOST = """
+import json, os, signal, sys, urllib.request
+signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
+base = os.environ["RELAYMIND_BASE_URL"]
+token = os.environ["RELAYMIND_APP_TOKEN"]
+body = {"model": "relaymind-client-tools", "stream": True,
+        "messages": [{"role": "user", "content": "Hi"}]}
+request = urllib.request.Request(
+    base + "/chat/completions", data=json.dumps(body).encode(), method="POST",
+    headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+opener.open(request).read()
+print(json.dumps({"ok": True}))
+"""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stub host handles POSIX SIGINT")
+def test_the_abort_scenario_interrupts_the_host_mid_turn_and_checks_the_run(tmp_path):
+    """RM14, RM33, AC12, AC24: SIGINT to the host closes its request; the run is cancelled."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_INTERRUPTED_HOST],
+        tmp_path / "export.json",
+        scenario="abort",
+    )
+    assert export["status"] == "interrupted", export["stderr"]
+    assert export["exit_code"] == 130
+    check = export["checks"]
+    assert check["signal_sent"] is True
+    (run,) = export["runs"]
+    assert run["state"] == "cancelled"
+    assert check["cancelled_runs"] == [run["run_id"]]
+    assert check["answer_deltas"] == 0
+    assert check["passed"] is True
+
+
+def test_an_abort_scenario_whose_host_finishes_unsignalled_does_not_pass(tmp_path):
+    """The host ended before the harness could interrupt it: nothing was cancelled."""
+    export = qualification.run_host(
+        [sys.executable, "-c", "print('done')"], tmp_path / "export.json", scenario="abort"
+    )
+    assert export["checks"]["signal_sent"] is False
+    assert export["checks"]["passed"] is False
