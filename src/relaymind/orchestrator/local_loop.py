@@ -3512,6 +3512,11 @@ class _Run:
                 raise ExternalFailure(
                     f"external generation failed: {failure.code}", generation_error=failure.code
                 )
+            if gate is not None and generation.calls and not generation.published:
+                # A tool proposal where none was offered is invalid_output (section
+                # 4.1); before any statement was forwarded the caller escalates it
+                # exactly as under buffered (RM32).
+                return call_id, generation
             raise self._local_unavailable(f"local generation failed: {failure.code}")
         self.meter.check_time(on_external)
         return call_id, generation

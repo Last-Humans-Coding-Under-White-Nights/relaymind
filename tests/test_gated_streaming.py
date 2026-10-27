@@ -916,3 +916,24 @@ def test_early_rejection_awaits_optional_iterator_cleanup_before_next_dispatch(t
         assert len(gateway.adapter.cancelled) == 1
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("answer_stream", ["buffered", "live"])
+def test_precommit_tool_proposal_in_local_answer_is_invalid_output(tmp_path, answer_stream):
+    """RM04/RM32, spec section 4.1 and the 14.2 stop table: a tool proposal in the
+    local answer generation, before any statement was forwarded, takes the
+    invalid_output route under live exactly as under buffered."""
+    from gateway_helpers import assert_needs_external, tool_turn
+
+    gateway = build_gateway(
+        tmp_path,
+        [
+            route_turn("check-service-health"),
+            *health_tail()[:-1],
+            tool_turn("get_service_health", call_id="call_2", service="staging-api"),
+        ],
+        performance=PerformanceSettings(answer_stream=answer_stream),
+    )
+    outcome, events = run(gateway)
+    assert_needs_external(gateway, outcome, events, "invalid_output")
+    assert len(of_type(events, "tool.started")) == 1
