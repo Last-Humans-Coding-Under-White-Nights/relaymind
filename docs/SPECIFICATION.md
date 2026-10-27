@@ -1192,7 +1192,7 @@ revision keeps every default. No code default changes.
 | selection chain model_router | keep | example-router corpus success equal or higher in five of six pairs (local_first: 88/156 = 88/156 normal, 89/156 vs 83/156 constrained), lower first-useful p50 (1869 vs 8947 ms) but higher p95 (51338 vs 22241 ms); the Jaccard hypothesis needs the section 12.4 capped benchmark and is not measured |
 | answer_stream buffered | keep | live 74/156 vs 88/156 (2/16) with 14/156 `predicate_unmet`; none class 73/104 vs 77/104 (2/6), first-useful p95 49521 vs 54260 ms but p50 16980 vs 15827 ms and 8 vs 6 timeouts: not met |
 | answer_pass final | keep | draft raises English simple local completion 4/12 to 6/12, but auto 36/52 vs 39/52 (0/3): not held under section 12.3 |
-| calls_per_generation one, prefetch false | keep | complex generations per completed run 5.125 to 3.17 (many) and 3.0 (prefetch): held; auto 38/52 vs 39/52 for both (3/4, 1/2) and the combined cell lost 0/5 in external_only, so no candidate meets the section 12.3 condition |
+| calls_per_generation one, prefetch false | keep | complex generations per completed run 5.125 to 3.17 (many) and 3.0 (prefetch): held; auto 38/52 vs 39/52 for both (3/4, 1/2) and for the combined cell with the draft pass (2/3; it also lost 0/5 in external_only), so no candidate meets the section 12.3 condition |
 | completion criteria in the external request | keep (not an option) | the R-minus-criteria ablation had 0.43 vs 0.094 English and 0.33 vs 0 Chinese corrections per completed run |
 | early_headers false | keep | headers arrived before the first answer token in all 39 eligible requests; the before-first-generation clock is not measured |
 
