@@ -788,6 +788,16 @@ This is planned integration, not a claim of a working or faster plugin.
   `stream_options`). macOS and Windows runs of this package are not_run.
 - Text and host-owned tool round trips, request compatibility, and
   buffered SSE (#137; RM08, RM09, RM19, RM20, RM33; AC10, AC24), after #136.
+  Status: the provider's stream wrapper refuses unsupported input by name
+  before sending (images, structured output, parallel calls, strict tools,
+  a dropped tool) and turns an empty answer or more than one call into a
+  failure; text and host tool round trips, the host's deny and allow
+  decisions on a sandbox mutation, tool_choice, validation, modes, fallback,
+  absent-local operation, and an oversized catalog are covered through the
+  pinned transport over doubles (`tests/test_openclaw_round_trips.py`). The
+  real host's approval scenarios
+  (`scripts/openclaw_qualification.py host --scenario tool-deny|tool-approve`)
+  are not_run.
 - Cancellation, bounded retry behavior, errors, and trace correlation
   (#138; RM14, RM17, RM20, RM22, RM33; AC11, AC12, AC24), after #137.
 - Installable artifact, CI compatibility checks, platform qualification,

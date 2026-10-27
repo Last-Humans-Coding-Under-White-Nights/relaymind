@@ -1101,6 +1101,67 @@ temp dir; a few minutes, no model). The same steps on macOS and Windows for
 this package are not_run
 ([`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
 
+### OpenClaw round trips (#137; RM01, RM03, RM04, RM08, RM09, RM12, RM19, RM20, RM26, RM33; AC10, AC24)
+
+```bash
+cd integrations/openclaw && npm run typecheck && npm test
+cd ../.. && pytest tests/test_openclaw_round_trips.py tests/test_openclaw_qualification_script.py
+```
+
+- `integrations/openclaw/test/input-guard.test.ts`: the guard refuses, by
+  field, an image part in a user message or a tool result (the pinned host
+  would replace it with "(image omitted: ...)" text), a structured response
+  format, `parallel_tool_calls: true` (quoting `unsupported_parameter`), a
+  strict tool, `n` other than 1, a non-text content part, and a payload
+  that lost a host tool; a text and tools request passes unchanged.
+- `integrations/openclaw/test/stream.test.ts`: the provider's stream
+  wrapper over the pinned transport, against scripted gateway replies
+  (the #135 fixtures and synthetic streams): a text replay, a non-streamed
+  answer, one complete call, keep-alive comments that are not content, an
+  error event after content or before any (early headers), a stream with no
+  finish chunk, malformed JSON, and an HTTP error are failures; an empty or
+  blank answer and two calls in one response are failures the plugin adds;
+  refused input sends no request; the host's own payload hook still runs.
+- `integrations/openclaw/test/provider.test.ts`: `wrapStreamFn` wraps the
+  host's stream and turns an empty success into a failure.
+- `integrations/openclaw/test/host-tool-plugin.test.ts`: the test-only
+  host tool plugin (`test/host-tool-plugin/`): the echo and write tools,
+  the approval hook on every write, and a write that stays in the sandbox.
+- `tests/test_openclaw_round_trips.py`: the plugin driver sends the host's
+  conversation through the pinned transport wrapped by the plugin, and
+  plays the host's tool execution and approval policy. Text and a host tool
+  round trip, streamed and buffered; tool_choice none, required, and named;
+  arguments that break the schema never reach the host; matching call and
+  result IDs; one call exposed of two; a host tool named like a gateway tool
+  that the gateway never runs; a sandbox mutation the host denies (no side
+  effect) and allows (exactly one line); a tool result passed as data and a
+  secret argument redacted in the trace; auto fallback before output with
+  one answer owner, local_only with zero external calls, external_only
+  without a local model, an oversized catalog in auto (external) and
+  local_only (needs_external, no external call), with every host tool
+  forwarded; budgets as configured and no managed selection; early-header
+  comments that are not content; the plugin's refusals before sending.
+  Recorded at the pin: the host sends its tool catalog ordered by name.
+- `tests/test_openclaw_qualification_script.py`: the host mode's
+  `--scenario tool-deny|tool-approve` checks against a stub host: the
+  sandbox lines, no gateway tool execution, the proposed call, and the
+  host's result in the next run; a denial that wrote anyway and a scenario
+  that did not run never pass.
+
+The deny and allow decisions here come from the driver standing in for the
+host's policy. The real host's approval prompt on the test host tools is
+the host CLI tier, not run yet:
+
+```bash
+python scripts/openclaw_qualification.py host --scenario tool-deny \
+  --out docs/evidence/<date>-openclaw-tool-deny.json -- openclaw agent exec ...
+python scripts/openclaw_qualification.py host --scenario tool-approve \
+  --out docs/evidence/<date>-openclaw-tool-approve.json -- openclaw agent exec ...
+```
+
+(the exact host command is in
+[`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
+
 The Node-dependent tests skip with the reason when `node` or
 `integrations/openclaw/node_modules` is missing; `RELAYMIND_OPENCLAW_NODE=1`
 makes that a failure. This tier runs the host's transport, not its agent
@@ -1171,7 +1232,10 @@ probe), and its requests are checked offline by
   8192 local limit; one live AC24 turn in auto without an external model
   (config-row workaround, #136) ended needs_external / context_limit with
   0 model calls. The harness host scenarios at `a52f8bf` failed (#136, #137); Linux and Windows host runs
-  are not_run. The plugin itself is #136's.
+  are not_run. The plugin (#136) and its round trips (#137) are covered over doubles
+  ([OpenClaw round trips](#openclaw-round-trips-137-rm01-rm03-rm04-rm08-rm09-rm12-rm19-rm20-rm26-rm33-ac10-ac24));
+  the real host's tool approval scenarios with this plugin are not_run,
+  and no live result is claimed.
   YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are
   implemented (#143, #144), with frozen SkillsBench/ToolRet inputs and

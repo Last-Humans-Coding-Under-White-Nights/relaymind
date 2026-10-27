@@ -8,6 +8,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- OpenClaw text and host-owned tool round trips (#137; RM01, RM03, RM04,
+  RM08, RM09, RM12, RM19, RM20, RM26, RM33; AC10, AC24): the provider's
+  `wrapStreamFn` (`integrations/openclaw/src/stream.ts`) refuses, by field
+  and before sending, input the pinned host would change silently (an image
+  part becomes "(image omitted: ...)" text) or the gateway refuses
+  (a structured response format, `parallel_tool_calls: true`, a strict
+  tool, `n` other than 1, a dropped host tool), and turns an answer with no
+  text and no call, or a response with more than one call, into a failure;
+  it never trims or rewrites. `tests/test_openclaw_round_trips.py` drives
+  the plugin's wrapped transport against the gateway over doubles: text and
+  a host tool round trip, streamed and buffered; tool_choice; schema
+  validation; matching IDs; the host's deny and allow decisions on a
+  sandbox mutation (no side effect, then exactly one); tool results as data
+  and redacted secrets; fallback, local_only, external_only without a local
+  model, an oversized catalog; budgets and no managed selection;
+  early-header comments that are not content. The qualification harness's
+  host mode gains `--scenario tool-deny|tool-approve` with checks read from
+  the sandbox and the trace, and `test/host-tool-plugin/` holds the
+  test-only host tools. The real host's approval scenarios are not run. No
+  specification or gateway change.
 - OpenClaw provider plugin package (#136; RM08, RM12, RM19, RM26, RM33):
   `integrations/openclaw/` now has the plugin manifest
   (`openclaw.plugin.json`), the entry and the `relaymind` provider built on

@@ -211,15 +211,15 @@ pinned source was read.
 | Text | runtime context after the first user message | switch | `supportsDeveloperRole: false`: sent as `user`; with the switch on, `developer` is 400 invalid_request | runtime-context, developer-switch-on; host: no developer message in any run |
 | Text | user and assistant string content; assistant `content: null` with `tool_calls` | supported | | text-streamed, tool-round-trip |
 | Text | text content parts | supported | `requiresStringContent: false`; 7.1 joins text parts | source |
-| Text | image or video parts | switch, rejection | `input: ["text"]`; a non-text part is unsupported_parameter | source |
+| Text | image or video parts | adaptation, rejection | with `input: ["text"]` the host replaces an image with "(image omitted: ...)" text (recorded by #137); the plugin refuses the request by field before sending, and the gateway refuses a non-text part as unsupported_parameter | #137 stream.test.ts, test_openclaw_round_trips.py |
 | Text | `reasoning_content`, `reasoning_details` on assistant messages | switch | `reasoning: false`; sent only for thinking blocks or DeepSeek-style providers | source |
 | Text | extra message keys | switch | `strictMessageKeys: false` (true drops tool fields, and the next turn is invalid_request); no other key was sent | tool-round-trip; host: b2-readfile-compat, c2-readfile-compat-base7 |
 | Text | user message decorated by the host (timestamp before, runtime line after) | supported | accepted as user text; the gateway never sees the raw prompt | host: every run |
 | Tools | `tools[].function` name, description, parameters | supported | the host sorts tools by name; schemas unchanged | tool-round-trip |
 | Tools | `strict` on a function | switch | `supportsStrictMode: false`: no key | tool-round-trip |
 | Tools | `tool_choice` | supported | `auto` sent with tools; none, required, and named are 7.1 values | tool-round-trip |
-| Tools | `parallel_tool_calls: true` from operator params | rejection | 400 unsupported_parameter, named; the plugin documents it and never rewrites it | operator-parallel-tool-calls |
-| Tools | tool call IDs and arguments | supported | the transport preserves IDs; the real host removes `_` from a replayed ID, the same in the call and the result, so the same-request check passes; no exact-string match across requests (#137) | tool-round-trip; host: c2-readfile-compat-base7, d2-readfile-nostream |
+| Tools | `parallel_tool_calls: true` from operator params | rejection | 400 unsupported_parameter, named (raw transport); through the plugin (#137) the request is refused by name before sending, quoting that code; never rewritten | operator-parallel-tool-calls; #137 test_openclaw_round_trips.py |
+| Tools | tool call IDs and arguments | supported | the transport preserves IDs; arguments re-serialized as compact JSON; the real host removes `_` from a replayed ID, the same in the call and the result, so the same-request check passes; no exact-string match across requests (#137) | tool-round-trip; host: c2-readfile-compat-base7, d2-readfile-nostream |
 | Tools | tool message `name` | switch | `requiresToolResultName: false` (the host sent none either way) | tool-round-trip; host: c2-readfile-compat-base7 |
 | Tools | synthetic assistant after tool results | switch | `requiresAssistantAfterToolResult: false` (the host inserted none either way) | source; host: c2-readfile-compat-base7, b2-readfile-compat |
 | Tools | host executes the call | supported | once, by the host; the gateway has no tool.started or tool.finished | tool-round-trip |
@@ -227,11 +227,12 @@ pinned source was read.
 | Stream | streamed and buffered responses | supported | role chunk, content or tool-call chunks, finish chunk, `[DONE]`; the host streams unless the model sets `params.streaming: false` | text-streamed, text-buffered, tool-round-trip; host: d1, d2 |
 | Stream | no `usage` in chunks or body | adaptation | the host accepts it silently and records zeros it did not receive; the plugin must report usage as unknown (#138) | text-streamed; host: b1 (all ten switches), d1 (base switches) |
 | Stream | SSE comments (early-header keep-alives) | supported | counted as liveness, not content (source); early_headers is off by default | source |
-| Stream | streamed error events | not exercised | the buffered backend errors before the first byte; live answer streaming is not advertised | |
+| Stream | streamed error events | supported | the pinned transport ends with `stopReason: "error"` on an `{"error": ...}` data event, before or after content, and on a stream without a finish chunk or with malformed JSON (#137, against scripted replies); the real host with an error event is not_run | #137 stream.test.ts |
+| Stream | an empty answer or more than one call | adaptation | the transport would report an empty `stop` as success; the plugin's stream wrapper makes it, and a response with two calls, a failure (#137) | #137 stream.test.ts |
 | Request | `reasoning_effort` | switch | `supportsReasoningEffort: false`, `reasoning: false`; host default with reasoning on is 400 | host-default-reasoning; host: never sent with reasoning off |
 | Request | `store` | switch | `supportsStore: false` (store false would be accepted) | text-streamed |
 | Request | `prompt_cache_key` | switch | `supportsPromptCacheKey: false` | text-streamed |
-| Request | `response_format` json | switch, rejection | `supportsJsonSchemaResponseFormat: false`; a requested json format is unsupported_parameter | source |
+| Request | `response_format` json | switch, rejection | `supportsJsonSchemaResponseFormat: false`; the plugin refuses a structured format by name before sending (#137); the gateway refuses it as unsupported_parameter | source; #137 input-guard.test.ts |
 | Request | token field | switch | `maxTokensField: "max_completion_tokens"`, value from the entry's `maxTokens`; over the gateway's limit is 400 invalid_request | token-limit; host: `max_completion_tokens` in every run |
 | Request | `temperature`, `top_p` | supported | only when the agent sets them; applied per 7.1 | source |
 | Request | `frequency_penalty`, `presence_penalty`, `seed`, `stop` | rejection | sent only when the agent sets them; nondefault values are unsupported_parameter | source |

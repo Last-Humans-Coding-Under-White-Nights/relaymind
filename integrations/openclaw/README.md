@@ -1,19 +1,21 @@
 # RelayMind provider for OpenClaw
 
 Status: provider package (#136; RM08, RM12, RM19, RM26, RM33, spec section
-7.5), on top of the #135 qualification. The plugin registers the `relaymind`
+7.5) with text and host-owned tool round trips (#137), on top of the #135
+qualification. The plugin registers the `relaymind`
 provider through the public plugin SDK of OpenClaw v2026.10.7, publishes the
 client-owned alias `relaymind/relaymind-client-tools` when the gateway serves
 it, and holds the gateway's application token in the host's credential store.
-Round trips with host tools are #137, cancellation, error mapping, and retries
-#138, the installable artifact, CI, and the operator guide #145. The real
+Cancellation, error mapping, and retries are #138, the installable artifact,
+CI, and the operator guide #145. The real
 pinned host loaded this package once, in a Linux VPS functional check (not a
 supported-platform qualification) against the gateway over model doubles
 ([`docs/evidence/2026-10-28-openclaw-vps-functional-136/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-136/REPORT.md)):
 install, enable, inspect, token setup, `models list --refresh`, a text turn
 through `agent exec`, the stale-token 401 line and recovery, and removal
 all worked with the command forms below. This package on macOS and Windows
-is `not_run`.
+is `not_run`. The real host's approval prompt on a host tool has not been
+exercised yet: those are operator steps (below), not_run.
 
 What the plugin claims, and nothing more: text input; at most one function
 call per response, executed by OpenClaw under its own approvals; the answer is
@@ -44,9 +46,12 @@ baseline are in
 | `src/catalog.ts` | Discovery (`GET /v1/models`, `GET /readyz`), the diagnosis, the published entry and its limits, the host outcome |
 | `src/config.ts` | The plugin settings: loopback `baseUrl`, `executionMode`, copied `limits` |
 | `src/compat.ts` | `relaymindModelCompat()` (the per-model switches) and `relaymindModelEntry()` (#135) |
+| `src/stream.ts` | The provider's `wrapStreamFn`: the input guard before sending, and an empty answer or more than one call made a failure (#137) |
+| `src/input-guard.ts` | Unsupported input refused by field, never removed (#137) |
 | `src/diagnostics.ts`, `src/redaction.ts` | The capability statement and operator messages; the logger that scrubs the token |
 | `test/*.test.ts` | vitest: manifest, config, catalog, provider, redaction, the switches, the frozen fixtures |
-| `test/plugin-transport/drive-plugin.mjs` | plays the host around the plugin: register, catalog (or `resolveDynamicModel`), one request through the pinned transport |
+| `test/plugin-transport/drive-plugin.mjs` | plays the host around the plugin: register, catalog (or `resolveDynamicModel`), the conversation through the pinned transport wrapped by the plugin, and the host's sandbox tools and approval decision |
+| `test/host-tool-plugin/` | test only, never packed: the `relaymind_test_echo` and `relaymind_test_write` host tools, every write behind the host's approval |
 | `test/host-transport/` | the #135 transport driver and recording proxy |
 | `test/fixtures/v2026.10.7/transport/` | the #135 deterministic transport fixtures, captured by `scripts/openclaw_qualification.py fixtures` |
 | `test/fixtures/v2026.10.7/host/` | reserved for captures made with `capture_host_requests.mjs`; the macOS host probe's captures are in `docs/evidence/2026-10-27-openclaw-mac-probe/` |
@@ -103,8 +108,44 @@ host configuration; the schema is closed (an unknown key is refused by name):
   `local_only`; a limit not set for the mode is not advertised. The model
   name states the mode, and the catalog log line states which limit the
   window is.
-- An operator `parallel_tool_calls: true` model parameter stays refused by
-  the gateway (400 `unsupported_parameter`); the plugin does not rewrite it.
+- An operator `parallel_tool_calls: true` model parameter stays refused: the
+  plugin refuses the request before sending it, by name and with the
+  gateway's code (`unsupported_parameter`), and never rewrites the value
+  (see "What the plugin refuses and why").
+
+## Round trips and host tools (#137)
+
+The host sends the whole conversation and its tool catalog on every request;
+the plugin forwards them unchanged (the pinned host orders the catalog by
+name). A response is a text answer or exactly one function call. OpenClaw
+executes the call under its own permissions and approvals, and sends the
+result in the next request, which is a new RelayMind run: RelayMind records
+`tool.proposed` and never starts, finishes, approves, or certifies a host
+tool. A tool result reaches the model as data, unchanged; it grants nothing.
+The gateway's answer is buffered: a streamed response is a replay of a
+finished run (keep-alive comments under early headers are never content),
+so there is no token-by-token generation.
+
+### What the plugin refuses and why
+
+The pinned host adapts input a model cannot take instead of failing; each
+of these would change the question, so the plugin refuses the request
+before sending it and names the field (it never trims, summarizes, or
+drops a message or a tool):
+
+| Input | Field named | Why |
+| --- | --- | --- |
+| an image part in a user message or a tool result | `messages[i].content[j].type` | the host would replace it with "(image omitted: ...)" text; the alias is text only |
+| a structured response format | `response_format` | section 7.1 refuses it (`unsupported_parameter`); the switches turn structured output off |
+| `parallel_tool_calls: true` (an operator model parameter) | `parallel_tool_calls` | the gateway refuses it (`unsupported_parameter`): one call per response |
+| a strict tool | `tools[i].function.strict` | section 7.1 has no strict schemas |
+| `n` other than 1 | `n` | one choice per response |
+| a payload that lost a host tool | `tools` | the plugin never drops a tool |
+
+After the response, an answer with no text and no call, and a response with
+more than one call, are failures, never an empty success. The pinned
+transport already fails a stream without a finish chunk, an `{"error": ...}`
+data event, malformed JSON, a malformed call, and an HTTP error.
 
 ## Token handover and reconnect
 
@@ -210,7 +251,7 @@ against the real gateway over model doubles (it skips without `npm ci`; set
 
 ```bash
 pytest tests/test_openclaw_host_transport.py tests/test_openclaw_plugin.py \
-  tests/test_openclaw_qualification_script.py
+  tests/test_openclaw_round_trips.py tests/test_openclaw_qualification_script.py
 ```
 
 To recapture the transport fixtures (they must not change on the same pins):
@@ -427,3 +468,36 @@ The harness passes the gateway URL and token in the command's environment
 only and never writes the token. A command that cannot start is `not_run`;
 one that runs past `--timeout` (900 s by default) is `timed_out`, and the
 export still holds the runs the gateway recorded.
+
+### Host tool approval (#137, operator, not run yet)
+
+The `tool-deny` and `tool-approve` scenarios script one call to the mutating
+sandbox tool `relaymind_test_write`. Install the test host tools next to the
+provider (test only; never on a real workspace), then answer the host's
+approval prompt with deny in one run and allow-once in the other:
+
+```bash
+openclaw plugins install integrations/openclaw/test/host-tool-plugin --force
+python scripts/openclaw_qualification.py host --scenario tool-deny \
+  --out docs/evidence/<date>-openclaw-tool-deny-<machine>.json \
+  -- openclaw agent exec --config <the relaymind config above> --json \
+     --model relaymind/relaymind-client-tools "Write a note with the test write tool"
+python scripts/openclaw_qualification.py host --scenario tool-approve \
+  --out docs/evidence/<date>-openclaw-tool-approve-<machine>.json \
+  -- openclaw agent exec --config <the relaymind config above> --json \
+     --model relaymind/relaymind-client-tools "Write a note with the test write tool"
+openclaw plugins uninstall relaymind-test-host-tools
+```
+
+As above, the host command names follow the pinned documentation and are to
+be confirmed on the first run.
+
+The tool writes into `RELAYMIND_TEST_SANDBOX`, an empty directory the
+harness creates and passes in the command's environment. The export's
+`checks` read the sandbox and the trace: a denial left no line, an approval
+exactly one, the gateway executed nothing and proposed the call, and the
+host's result reached the next run; `passed` is false for a scenario that
+did not complete. How the pinned host answers an approval headlessly
+(`agent exec` with a permission mode, or an interactive prompt) is to be
+confirmed on the first run; if a plugin tool cannot be gated, the fallback
+is the host's own `exec` tool under an allowlist, recorded with the result.
