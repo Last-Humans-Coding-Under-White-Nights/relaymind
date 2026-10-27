@@ -9,7 +9,9 @@ rests on the real host, not only on the pinned transport:
 
 - with no switches the host sends ``stream_options`` to a loopback URL, which
   the gateway rejects by name;
-- with the base switches every request stays inside section 7.1;
+- with the base switches every request stays inside section 7.1; these runs
+  declared the switches on a config-file provider, and the one plugin-model
+  run declared none, so the switches on a plugin-supplied model are not_run;
 - ``strictMessageKeys: true`` strips the tool linkage, and the gateway
   rejects the follow-up turn;
 - the host rewrites the tool call ID it replays (``call_probe_1`` became
@@ -33,13 +35,20 @@ REQUESTS = PROBE / "requests"
 
 # Runs whose host config set no compat object (the host's loopback defaults).
 NO_SWITCHES = ["a1-hello-nocompat", "a2-readfile-nocompat", "c1-write-allow"]
-# Runs with the base switches (supportsUsageInStreaming false and the others).
+# Runs with the seven base switches (configs/config-b-base.json and
+# config-d-nostream.json: supportsUsageInStreaming false and the others), the
+# configuration compat.ts declares. All are config-file providers.
 BASE_SWITCHES = [
-    "b1-hello-compat",
     "c2-readfile-compat-base7",
     "d1-hello-nostream",
     "d2-readfile-nostream",
 ]
+# Runs with all ten switches of the brief (configs/config-b.json), which adds
+# strictMessageKeys true; not the plugin's configuration (REPORT.md, A.2).
+ALL_TEN_SWITCHES = ["b1-hello-compat", "b2-readfile-compat"]
+# The one run whose model a plugin supplied; it declared no switches, so no
+# capture shows the switches on a plugin-supplied model (#136 must).
+PLUGIN_MODEL = "p1-plugin-hello-storedkey"
 # The capture server's tool call ID (probe-src/server/capture-server.mjs).
 SERVER_CALL_ID = "call_probe_1"
 
@@ -107,6 +116,25 @@ def test_with_the_switches_every_host_request_stays_inside_section_7_1(run):
         if "tool" in roles:
             assert roles[-1] == "tool"
         parse_chat_request(body, served=(CLIENT_TOOLS,))
+
+
+@pytest.mark.parametrize("run", ALL_TEN_SWITCHES)
+def test_with_all_ten_switches_a_first_turn_stays_inside_section_7_1(run):
+    """Without a tool result to strip, the ten-key run's first turn passes too."""
+    first = chat_requests(run)[0]["body"]
+    assert "stream_options" not in first
+    assert set(first) <= SECTION_7_1_FIELDS
+    parse_chat_request(first, served=(CLIENT_TOOLS,))
+
+
+def test_the_plugin_model_run_declared_no_switches_and_sent_stream_options():
+    """The probe's plugin model ran with the host defaults: it is no evidence that
+    switches on a plugin-supplied model reach the wire."""
+    (request,) = chat_requests(PLUGIN_MODEL)
+    assert request["body"]["stream_options"] == {"include_usage": True}
+    with pytest.raises(ApiError) as error:
+        parse_chat_request(request["body"], served=(CLIENT_TOOLS,))
+    assert error.value.code == "unsupported_parameter"
 
 
 def test_the_host_streams_unless_the_model_turns_streaming_off():

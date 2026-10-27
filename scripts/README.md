@@ -25,12 +25,16 @@
   over the limit is undecided. It reads the fixture layout and the host
   probe's one-request-per-file layout, and reports the share that fits the
   manifest's `ctx_size` and what auto and local_only do with the rest.
+  The deciding tokenizer count runs on fresh captures as the host sent
+  them (`integrations/openclaw/README.md`); the stored probe captures are
+  sanitized and smaller, so a run on them passes `--sanitized` and every
+  size is a lower bound.
 
   ```bash
   python scripts/openclaw_request_size.py \
-      --fixtures docs/evidence/2026-10-27-openclaw-mac-probe/requests \
+      --fixtures <unsanitized captures> \
       --manifest models/qwen3-0.6b-q8_0.manifest.json \
-      [--base-url http://127.0.0.1:8033] --out <report.json>
+      [--base-url http://127.0.0.1:8033] [--sanitized] --out <report.json>
   ```
 - `gen_model_manifest.py` — generate a model artifact manifest from a
   GGUF file (RM18, spec section 6). Hashes are computed from the

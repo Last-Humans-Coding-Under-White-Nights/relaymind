@@ -18,15 +18,21 @@ with the gateway's own ``measure_request``:
   ``utf8_bytes``, an upper bound on the token count, labeled as such: a
   request under the limit by this bound fits; one over it is undecided.
 
+Captures rewritten after capture (``--sanitized``; the stored host probe
+captures, whose placeholders made them smaller than what the host sent)
+give only a lower bound on each host request: a size over the limit proves
+the host's request is over it, and nothing else is decided. The deciding
+tokenizer count runs on fresh, unsanitized captures.
+
 The local limit is the manifest's ``launch_settings.ctx_size``, read the way
 the launcher reads it. Fitting the limit is necessary for local work, not
 sufficient: the model must still produce an admissible answer or call.
 
 Usage:
     python scripts/openclaw_request_size.py \\
-        --fixtures docs/evidence/2026-10-27-openclaw-mac-probe/requests \\
+        --fixtures <unsanitized captures> \\
         --manifest models/qwen3-0.6b-q8_0.manifest.json \\
-        [--base-url http://127.0.0.1:8033] [--external-context-limit N] \\
+        [--base-url http://127.0.0.1:8033] [--external-context-limit N] [--sanitized] \\
         --out docs/evidence/<date>-openclaw-request-size-<machine>.json
 """
 
@@ -59,6 +65,16 @@ METHOD_NOTES = {
         "UTF-8 bytes of the chat body's prompt fields: an upper bound on the token "
         "count, not a token count; a request that fits by this bound fits, and one "
         "over it is undecided (fits_local null) until a tokenizer count"
+    ),
+}
+CAPTURES_NOTES = {
+    False: "requests as the host sent them",
+    True: (
+        "sanitized captures: placeholders replaced local paths and names after "
+        "capture, which made the stored requests smaller than what the host sent "
+        "(the host probe stored about 26,700 system prompt characters of 29,942), "
+        "so every size is a lower bound on the host's request: a size over the "
+        "limit proves the host's request is over it, one under it decides nothing"
     ),
 }
 
@@ -124,15 +140,40 @@ def load_requests(directory: Path) -> list[tuple[str, int, dict]]:
     return requests
 
 
+def _fits(size: int, limit: int, *, upper: bool, lower: bool) -> bool | None:
+    """Whether the host's request fits ``limit``, when ``size`` proves it.
+
+    ``upper``: ``size`` bounds the host's token count from above (a byte
+    count of an as-sent capture), so a size under the limit proves a fit.
+    ``lower``: from below (a tokenizer count of a sanitized capture), so a
+    size over the limit proves the request is over. Both: an exact count.
+    Otherwise the size decides nothing (None).
+    """
+    if size <= limit:
+        return True if upper else None
+    return False if lower else None
+
+
 async def measure_fixtures(
     requests: Sequence[tuple[str, int, dict]],
     adapter: Any,
     *,
     external_context_limit: int | None = None,
+    sanitized: bool = False,
 ) -> dict[str, Any]:
-    """Measure each request; summarize what auto and local_only would do by size."""
+    """Measure each request; summarize what auto and local_only would do by size.
+
+    ``sanitized``: the captures were rewritten after capture (the host probe's
+    placeholders made them smaller than what the host sent), so a size is a
+    lower bound on the host's request, never its size.
+    """
     capabilities = await adapter.capabilities()
     method = "tokenizer" if capabilities.tokenizer_available else "utf8_bytes"
+    # A byte count bounds the token count from above; a sanitized capture's
+    # size bounds the host's from below; a tokenizer count of an as-sent
+    # capture is exact.
+    lower = method == "tokenizer"
+    upper = not sanitized
     rows = []
     for source, index, body in requests:
         row: dict[str, Any] = {"source": source, "exchange": index}
@@ -150,11 +191,7 @@ async def measure_fixtures(
             function=None if choice is None else choice.name,
         )
         measured = await measure_request(adapter, capabilities, request.messages, offer.offered)
-        # A byte count bounds the token count from above: under the limit it
-        # proves a fit; over it, only the tokenizer count decides (None).
-        fits: bool | None = measured.fits
-        if not measured.fits and measured.method == "utf8_bytes":
-            fits = None
+        fits = _fits(measured.size, measured.limit, upper=upper, lower=lower)
         row.update(
             size=measured.size,
             method=measured.method,
@@ -162,46 +199,56 @@ async def measure_fixtures(
             tools=len(offer.offered),
             fits_local=fits,
         )
+        if external_context_limit is not None and fits is not True:
+            # Indicative for another tokenizer: a count here is local-model tokens.
+            row["fits_external"] = _fits(
+                measured.size, external_context_limit, upper=upper, lower=lower
+            )
         rows.append(row)
     measured_rows = [r for r in rows if "size" in r]
     fits = sum(1 for r in measured_rows if r["fits_local"] is True)
-    undecided = sum(1 for r in measured_rows if r["fits_local"] is None)
+    undecided_rows = [r for r in measured_rows if r["fits_local"] is None]
     over = [r for r in measured_rows if r["fits_local"] is False]
-    if undecided:
-        auto: dict[str, int] = {"local": fits, "undecided": undecided}
-        local_only = {"local": fits, "undecided": undecided}
-    elif external_context_limit is None:
-        auto = {"local": fits, "external_if_it_fits": len(over)}
-        local_only = {"local": fits, "needs_external": len(over)}
+    local_only: dict[str, int] = {"local": fits, "needs_external": len(over)}
+    if external_context_limit is None:
+        auto: dict[str, int] = {"local": fits, "external_if_it_fits": len(over)}
     else:
-        # The same measurement against the external limit; a tokenizer count
-        # is local-model tokens, so this is indicative for another tokenizer.
-        external = sum(1 for r in over if r["size"] <= external_context_limit)
         auto = {
             "local": fits,
-            "external": external,
-            "context_limit_exceeded": len(over) - external,
+            "external": sum(1 for r in over if r["fits_external"] is True),
+            "context_limit_exceeded": sum(1 for r in over if r["fits_external"] is False),
         }
-        local_only = {"local": fits, "needs_external": len(over)}
+        external_undecided = sum(1 for r in over if r["fits_external"] is None)
+        if external_undecided:
+            auto["external_undecided"] = external_undecided
+    if undecided_rows:
+        auto["undecided"] = len(undecided_rows)
+        local_only["undecided"] = len(undecided_rows)
     sizes = [r["size"] for r in measured_rows]
-    summary = {
+    summary: dict[str, Any] = {
         "captured": len(rows),
         "rejected": len(rows) - len(measured_rows),
         "measured": len(measured_rows),
         "fits_local": fits,
-        "undecided": undecided,
+        "undecided": len(undecided_rows),
         "share_fits_local": fits / len(measured_rows) if measured_rows else None,
-        "share_fits_local_is": "lower_bound" if method == "utf8_bytes" else "measured",
+        "share_fits_local_is": "measured" if upper and lower else "lower_bound",
         "auto": auto,
         "local_only": local_only,
         "size_min": min(sizes) if sizes else None,
         "size_median": statistics.median(sizes) if sizes else None,
         "size_max": max(sizes) if sizes else None,
     }
+    if external_context_limit is not None:
+        summary["undecided_within_external_limit"] = sum(
+            1 for r in undecided_rows if r["fits_external"] is True
+        )
     return {
         "kind": "openclaw-request-size",
         "method": method,
         "method_note": METHOD_NOTES[method],
+        "captures": "sanitized" if sanitized else "as_sent",
+        "captures_note": CAPTURES_NOTES[sanitized],
         "local_limit": capabilities.context_limit,
         "external_context_limit": external_context_limit,
         "note": NOTE,
@@ -224,6 +271,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--base-url", help="a running llama-server for tokenizer counts")
     parser.add_argument("--external-context-limit", type=int)
+    parser.add_argument(
+        "--sanitized",
+        action="store_true",
+        help="the captures were sanitized after capture: every size is a lower bound",
+    )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     limit = local_limit_of(args.manifest)
@@ -233,6 +285,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             requests,
             _adapter(args.base_url, limit),
             external_context_limit=args.external_context_limit,
+            sanitized=args.sanitized,
         )
     )
     report["manifest"] = str(args.manifest)

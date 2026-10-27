@@ -35,12 +35,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   switches off. The host refuses a request over the advertised context window
   before sending it, so the window the plugin advertises is the larger limit
   of the effective mode (external in auto and external_only). The real host
-  confirmed the loopback defaults and the switches on macOS, and showed that
+  confirmed the loopback defaults and the switches on macOS for a config-file
+  provider (switches on a plugin-supplied model are not_run; #136 must show
+  them on the wire), and showed that
   it rewrites the tool call IDs it replays (underscores removed, the same in
   the call and its result): nothing may match a later request to an earlier
   proposal by the exact ID string. The host decorates the user message, and
   a request over the UTF-8 byte bound is undecided, never needs_external,
-  until a tokenizer count. No gateway contract change.
+  until a tokenizer count; a count of sanitized captures is a lower bound and
+  never proves a fit. No gateway contract change.
 - Specification 0.48, unsuitable detection from local stages (#170; RM26, RM27;
   section 14.4.7): the run store records, for every local stage, whether it ran out of
   local time, and handoff.started names the budget that stopped the local stage.

@@ -71,8 +71,9 @@ the host probe decides.
 | Pinned transport against the real gateway (doubles) | ran, Linux x86-64 VPS | `tests/test_openclaw_host_transport.py`, 16 transport fixtures in `integrations/openclaw/test/fixtures/v2026.10.7/transport/` |
 | Real host (`openclaw agent exec`) against the doubles gateway | not_run | `scripts/openclaw_qualification.py host -- <command>` (operator, CI) |
 | Real host request capture (system prompt, tool catalog) | ran, macOS 27.0.1 arm64, Node v26.12.1, `OpenClaw 2026.10.7 (157d8c2)`, against the probe's own capture server | `docs/evidence/2026-10-27-openclaw-mac-probe/requests/`; checked by `tests/test_openclaw_host_captures.py` |
-| Captured request sizes, UTF-8 upper bound | ran offline on the host captures: undecided (below) | `docs/evidence/2026-10-27-openclaw-request-size-mac-probe-utf8.json` |
-| Captured request sizes, tokenizer count | not_run (needs llama-server with the pinned model) | `scripts/openclaw_request_size.py --base-url` |
+| Captured request sizes, UTF-8 upper bound | ran offline on the sanitized host captures (`--sanitized`): undecided (below) | `docs/evidence/2026-10-27-openclaw-request-size-mac-probe-utf8.json` |
+| Captured request sizes, tokenizer count | not_run (needs llama-server with the pinned model and fresh, unsanitized captures) | `scripts/openclaw_request_size.py --base-url` |
+| Switches on a plugin-supplied model (catalog or `resolveDynamicModel`) | not_run; the probe's plugin model declared none | #136 |
 
 The transport tier is the host's own `openai-completions` stream function,
 `createOpenAICompletionsTransportStreamFn` from the public
@@ -132,6 +133,13 @@ operator `params` wrapper (simulated through the transport's own
 From [`REPORT.md`](../evidence/2026-10-27-openclaw-mac-probe/REPORT.md)
 and the captured requests; each fact names its run in `requests/`.
 
+- Every switch run declared its switches on a config-file provider
+  (`models.providers.relaymind-capture`). The one run whose model a plugin
+  supplied (p1-plugin-hello-storedkey) declared none and sent
+  `stream_options`, so whether the host honors switches on a
+  plugin-supplied model (catalog or `resolveDynamicModel`, the way the
+  RelayMind plugin will supply it) is **not_run**. #136 must show it on the
+  wire before it claims compatibility (spec 0.49).
 - `strictMessageKeys: true` strips `tool_calls` from the assistant message
   and `tool_call_id` from the tool message (b2-readfile-compat); the
   gateway's validator rejects that turn as invalid_request. With the base
@@ -204,9 +212,9 @@ pinned source was read.
 | Tools | tool message `name` | switch | `requiresToolResultName: false` (the host sent none either way) | tool-round-trip; host: c2-readfile-compat-base7 |
 | Tools | synthetic assistant after tool results | switch | `requiresAssistantAfterToolResult: false` (the host inserted none either way) | source; host: c2-readfile-compat-base7, b2-readfile-compat |
 | Tools | host executes the call | supported | once, by the host; the gateway has no tool.started or tool.finished | tool-round-trip |
-| Stream | `stream_options: {include_usage: true}` | switch | `supportsUsageInStreaming: false`; without it 400 unsupported_parameter | host-default-loopback, text-streamed; host: a1-hello-nocompat, a2-readfile-nocompat, c1-write-allow (sent); b1-hello-compat, c2-readfile-compat-base7, d1-hello-nostream (absent) |
+| Stream | `stream_options: {include_usage: true}` | switch | `supportsUsageInStreaming: false`; without it 400 unsupported_parameter | host-default-loopback, text-streamed; host: a1-hello-nocompat, a2-readfile-nocompat, c1-write-allow (sent); c2-readfile-compat-base7, d1-hello-nostream (absent, base switches), b1-hello-compat (absent, all ten switches); config provider only, a plugin-supplied model with the switch is not_run |
 | Stream | streamed and buffered responses | supported | role chunk, content or tool-call chunks, finish chunk, `[DONE]`; the host streams unless the model sets `params.streaming: false` | text-streamed, text-buffered, tool-round-trip; host: d1, d2 |
-| Stream | no `usage` in chunks or body | adaptation | the host accepts it silently and records zeros it did not receive; the plugin must report usage as unknown (#138) | text-streamed; host: b1, d1 |
+| Stream | no `usage` in chunks or body | adaptation | the host accepts it silently and records zeros it did not receive; the plugin must report usage as unknown (#138) | text-streamed; host: b1 (all ten switches), d1 (base switches) |
 | Stream | SSE comments (early-header keep-alives) | supported | counted as liveness, not content (source); early_headers is off by default | source |
 | Stream | streamed error events | not exercised | the buffered backend errors before the first byte; live answer streaming is not advertised | |
 | Request | `reasoning_effort` | switch | `supportsReasoningEffort: false`, `reasoning: false`; host default with reasoning on is 400 | host-default-reasoning; host: never sent with reasoning off |
@@ -273,8 +281,12 @@ paths with shorter placeholders, so the stored captures, and the byte
 sizes above, are likely smaller than what the host sent: about 40,450
 body bytes as received); a plugin model that declared `contextWindow` and
 `maxTokens` got a shorter one (about 20,000 characters stored, the probe's
-p1 run; the cause was not investigated). The tokenizer count is the number
-#139's local-value hypothesis needs; the operator command is in
+p1 run; the cause was not investigated). Because the stored captures are
+smaller than what the host sent, a tokenizer count on them is only a lower
+bound on each host request (`--sanitized`): it can prove a request is over
+the limit, never that it fits. The deciding count runs on fresh captures
+as the host sent them. That count is the number #139's local-value
+hypothesis needs; the operator steps are in
 `integrations/openclaw/README.md`.
 
 ## Approaches considered

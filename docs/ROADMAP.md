@@ -753,9 +753,11 @@ This is planned integration, not a claim of a working or faster plugin.
   in the design doc; no gateway contract change is needed. A real host
   (2026.10.7, macOS) ran against a capture server; its requests are in
   `docs/evidence/2026-10-27-openclaw-mac-probe/` and stay inside section
-  7.1 with the switches. Their size is known only as a UTF-8 upper bound
+  7.1 with the switches on a config-file provider; the switches on a
+  plugin-supplied model are not_run (#136 must show them). Their size is known only as a UTF-8 upper bound
   (about 37,500 bytes against 8192 tokens, undecided). The real host
-  against the gateway and the tokenizer count are not_run (operator steps
+  against the gateway and the tokenizer count (on fresh, unsanitized
+  captures) are not_run (operator steps
   in `integrations/openclaw/README.md`), so the size report that bounds
   #139 is still to be recorded before #136 starts.
 - Remove the retired workflow steps placeholder from the demo UI

@@ -3064,8 +3064,9 @@ validator. Both are contract evidence, not live evidence (spec section 12.5).
 | --- | --- | --- |
 | Real host request capture (system prompt, tool catalog, history) | ran (macOS, capture server) | `docs/evidence/2026-10-27-openclaw-mac-probe/requests/` |
 | Real OpenClaw host against the gateway over doubles (text, host tool) | not_run | `scripts/openclaw_qualification.py host` (see `integrations/openclaw/README.md`) |
-| Captured request sizes, UTF-8 upper bound | ran offline: 7 measured, 0 proved to fit, 7 undecided | `docs/evidence/2026-10-27-openclaw-request-size-mac-probe-utf8.json` |
-| Captured request sizes, tokenizer count against the local limit (8192, `qwen3-0.6b-q8_0`), share that fits in auto and local_only | not_run | `scripts/openclaw_request_size.py --base-url <llama-server>` |
+| Captured request sizes, UTF-8 upper bound | ran offline on the sanitized captures (`--sanitized`): 7 measured, 0 proved to fit, 7 undecided | `docs/evidence/2026-10-27-openclaw-request-size-mac-probe-utf8.json` |
+| Captured request sizes, tokenizer count against the local limit (8192, `qwen3-0.6b-q8_0`), share that fits in auto and local_only | not_run (needs fresh, unsanitized captures) | `scripts/openclaw_request_size.py --base-url <llama-server>` (steps in `integrations/openclaw/README.md`) |
+| Switches on a plugin-supplied model (catalog or `resolveDynamicModel`) | not_run: the switch runs used a config-file provider; the one plugin-model run declared none and sent `stream_options` | #136 |
 
 The size report read the 26 captured chat requests. The gateway's validator
 rejects 19 of them: 18 were sent without the switches (`stream_options`), and
@@ -3075,8 +3076,10 @@ fields (median 37,576; two or four messages, eleven tools). A byte count only
 bounds the token count from above, so none of them is decided against the
 8192-token local limit: the share that fits locally is at least 0 of 7, and
 the tokenizer count that decides it is still not run. The stored captures are
-sanitized and likely a little smaller than what the host sent (about 40,450
-body bytes as received).
+sanitized and smaller than what the host sent (about 26,700 system prompt
+characters stored against 29,942 received; about 40,450 body bytes as
+received), so a tokenizer count on them would only be a lower bound on each
+host request; the deciding count runs on fresh, unsanitized captures.
 
 Other host facts recorded in the probe: the host removes underscores from the
 tool call ID it replays (`call_probe_1` came back as `callprobe1`, in the call

@@ -165,8 +165,8 @@ def test_a_request_over_the_byte_bound_is_undecided_not_refused(tmp_path):
     assert summary["undecided"] == 2
     assert summary["share_fits_local"] == pytest.approx(1 / 3)
     assert summary["share_fits_local_is"] == "lower_bound"
-    assert summary["local_only"] == {"local": 1, "undecided": 2}
-    assert summary["auto"] == {"local": 1, "undecided": 2}
+    assert summary["local_only"] == {"local": 1, "needs_external": 0, "undecided": 2}
+    assert summary["auto"] == {"local": 1, "external_if_it_fits": 0, "undecided": 2}
 
 
 def test_a_tokenizer_count_decides_every_request(tmp_path):
@@ -175,3 +175,76 @@ def test_a_tokenizer_count_decides_every_request(tmp_path):
     report = asyncio.run(size.measure_fixtures(size.load_requests(tmp_path), adapter))
     assert report["summary"]["undecided"] == 0
     assert report["summary"]["share_fits_local_is"] == "measured"
+
+
+def test_on_sanitized_captures_a_tokenizer_count_proves_only_that_a_request_is_over(tmp_path):
+    """RM16, section 12: the probe's stored captures are smaller than what the host
+    sent (shorter placeholders), so their size is a lower bound on the host's: a
+    count over the limit proves the host's request is over, one under proves nothing."""
+    fixture(tmp_path, "a", body("x" * 10), body("x" * 200))
+    adapter = ScriptedAdapter(capabilities=make_capabilities(context_limit=100))
+    report = asyncio.run(
+        size.measure_fixtures(size.load_requests(tmp_path), adapter, sanitized=True)
+    )
+    assert report["captures"] == "sanitized"
+    assert "lower bound" in report["captures_note"]
+    assert [r["fits_local"] for r in report["requests"]] == [None, False]
+    summary = report["summary"]
+    assert summary["fits_local"] == 0
+    assert summary["undecided"] == 1
+    assert summary["share_fits_local_is"] == "lower_bound"
+    assert summary["local_only"] == {"local": 0, "needs_external": 1, "undecided": 1}
+    assert summary["auto"] == {"local": 0, "external_if_it_fits": 1, "undecided": 1}
+
+
+def test_on_sanitized_captures_the_byte_bound_decides_nothing(tmp_path):
+    """Neither bound holds: bytes bound the stored request's tokens, not the host's."""
+    fixture(tmp_path, "a", body("x" * 10), body("y" * 9000))
+    report = asyncio.run(
+        size.measure_fixtures(size.load_requests(tmp_path), size.ByteBound(8192), sanitized=True)
+    )
+    assert [r["fits_local"] for r in report["requests"]] == [None, None]
+    assert report["summary"]["share_fits_local_is"] == "lower_bound"
+
+
+def test_unsanitized_captures_are_labeled_as_the_host_sent_them(tmp_path):
+    fixture(tmp_path, "a", body("x" * 10))
+    adapter = ScriptedAdapter(capabilities=make_capabilities(context_limit=100))
+    report = asyncio.run(size.measure_fixtures(size.load_requests(tmp_path), adapter))
+    assert report["captures"] == "as_sent"
+    assert report["summary"]["share_fits_local_is"] == "measured"
+
+
+def test_undecided_requests_under_the_external_limit_by_the_byte_bound_fit_externally(tmp_path):
+    """A byte bound under the external limit proves an external fit, even when the
+    local fit is undecided; the report keeps that count and the external limit result."""
+    fixture(tmp_path, "a", body("x" * 10), body("y" * 9000), body("z" * 200_000))
+    report = asyncio.run(
+        size.measure_fixtures(
+            size.load_requests(tmp_path), size.ByteBound(8192), external_context_limit=128_000
+        )
+    )
+    summary = report["summary"]
+    assert summary["auto"] == {
+        "local": 1,
+        "external": 0,
+        "context_limit_exceeded": 0,
+        "undecided": 2,
+    }
+    assert summary["undecided_within_external_limit"] == 1
+    assert [r.get("fits_external") for r in report["requests"]] == [None, True, None]
+
+
+def test_the_main_entry_labels_sanitized_captures(tmp_path):
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    fixture(fixtures, "a", body("hello"))
+    out = tmp_path / "report.json"
+    from pathlib import Path
+
+    manifest = Path(__file__).resolve().parent.parent / "models/qwen3-0.6b-q8_0.manifest.json"
+    args = ["--fixtures", str(fixtures), "--manifest", str(manifest), "--out", str(out)]
+    assert size.main([*args, "--sanitized"]) == 0
+    report = json.loads(out.read_text("utf-8"))
+    assert report["captures"] == "sanitized"
+    assert report["requests"][0]["fits_local"] is None

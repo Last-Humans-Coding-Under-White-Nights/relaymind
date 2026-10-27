@@ -2,6 +2,8 @@
   "kind": "openclaw-request-size",
   "method": "utf8_bytes",
   "method_note": "UTF-8 bytes of the chat body's prompt fields: an upper bound on the token count, not a token count; a request that fits by this bound fits, and one over it is undecided (fits_local null) until a tokenizer count",
+  "captures": "sanitized",
+  "captures_note": "sanitized captures: placeholders replaced local paths and names after capture, which made the stored requests smaller than what the host sent (the host probe stored about 26,700 system prompt characters of 29,942), so every size is a lower bound on the host's request: a size over the limit proves the host's request is over it, one under it decides nothing",
   "local_limit": 8192,
   "external_context_limit": null,
   "note": "Fitting the local limit is necessary for local work, not sufficient: the local model must still produce an admissible answer or call (sections 7.2 and 11).",
@@ -15,10 +17,12 @@
     "share_fits_local_is": "lower_bound",
     "auto": {
       "local": 0,
+      "external_if_it_fits": 0,
       "undecided": 7
     },
     "local_only": {
       "local": 0,
+      "needs_external": 0,
       "undecided": 7
     },
     "size_min": 37544,

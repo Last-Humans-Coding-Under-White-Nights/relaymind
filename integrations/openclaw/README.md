@@ -131,21 +131,40 @@ can name local paths (the script replaces the home directory with `<home>`).
 
 ### Request size against the local limit
 
+The deciding count is a tokenizer count of requests as the host sent them.
+The stored probe captures cannot give it: the probe's sanitizer replaced
+local paths and names with shorter placeholders, so they are smaller than
+what the host sent (about 26,700 system prompt characters stored against
+29,942 received). Capture fresh requests on the Mac with the probe's
+capture server (`docs/evidence/2026-10-27-openclaw-mac-probe/REPORT.md`,
+section 2; config `configs/config-b-base.json`, the base switches), then
+count them before any sanitizing:
+
 ```bash
+node docs/evidence/2026-10-27-openclaw-mac-probe/probe-src/server/capture-server.mjs \
+  <scratch>/captures          # 127.0.0.1:8089; run the hello and read-file turns
 python scripts/openclaw_request_size.py \
-  --fixtures docs/evidence/2026-10-27-openclaw-mac-probe/requests \
+  --fixtures <scratch>/captures \
   --manifest models/qwen3-0.6b-q8_0.manifest.json \
   --base-url http://127.0.0.1:8033 \
   --out docs/evidence/<date>-openclaw-request-size-<machine>.json
 ```
 
+Commit only the report (it holds sizes and file names, no request text),
+never the raw captures. A run on the stored captures must pass
+`--sanitized`: every size is then a lower bound on the host's request, so
+a count over the limit proves the request is over it and one under it
+decides nothing.
+
 The script reads both the probe's layout (one request per file, a folder
 per run) and the fixture layout of `capture_host_requests.mjs`. Without
 `--base-url` every number is a UTF-8 byte upper bound, labeled so: a
-request over the bound is undecided, never needs_external. That offline
-run is recorded in
+request over the bound is undecided, never needs_external. With
+`--external-context-limit` the report also counts the requests that
+provably fit the external limit. The offline run on the stored captures is
+recorded in
 `docs/evidence/2026-10-27-openclaw-request-size-mac-probe-utf8.json`
-(0 of 7 proved to fit, 7 undecided).
+(`--sanitized`; 0 of 7 proved to fit, 7 undecided).
 
 ### Real host against the gateway over doubles
 

@@ -1009,12 +1009,15 @@ cd ../.. && pytest tests/test_openclaw_host_transport.py \
 - `tests/test_openclaw_host_captures.py`: the real host's captured
   requests (macOS probe, `docs/evidence/2026-10-27-openclaw-mac-probe/`)
   against the gateway's validator: the loopback defaults are rejected by
-  name, the switches keep every request inside 7.1, `strictMessageKeys:
+  name, the switches on a config-file provider keep every request inside 7.1
+  (the one plugin-model run declared none), `strictMessageKeys:
   true` breaks the tool linkage, and the host's rewritten call ID still
   passes the same-request check. No Node needed.
 - `tests/test_openclaw_request_size.py`: the size report over captured
   requests, with its method on every number; over the UTF-8 bound a
-  request is undecided.
+  request is undecided, a sanitized capture's size is a lower bound that
+  never proves a fit, and a byte bound under the external limit still
+  counts as an external fit.
 
 The Node-dependent tests skip with the reason when `node` or
 `integrations/openclaw/node_modules` is missing; `RELAYMIND_OPENCLAW_NODE=1`

@@ -94,6 +94,9 @@ describe("relaymindModelEntry (RM33, section 7.5)", () => {
   });
 });
 
+// The probe declared these switches on a config-file provider
+// (models.providers); no capture shows them on a plugin-supplied model, so
+// this checks the values only, not that the host honors them there (#136).
 describe("the switches on the real host (#135, docs/evidence/2026-10-27-openclaw-mac-probe)", () => {
   const configs = new URL(
     "../../../docs/evidence/2026-10-27-openclaw-mac-probe/configs/",
