@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Specification 0.46 redirects M9 from YAML workflows to OpenClaw
+  integration (#135 to #139, #145): retire the unimplemented RM30 and AC23
+  without reusing their identifiers; add RM33, AC24, the provider ownership
+  and compatibility contract, and a separate host-tool evaluation protocol.
+  The fixed parallel demo (RM15, AC14) and existing benchmark evidence remain.
+  This is a specification and backlog change; the plugin is not implemented.
+
 ### Added
 
 - Loopback HTTP selectors (#133; RM12, RM22, RM25, RM28; AC22): fixed

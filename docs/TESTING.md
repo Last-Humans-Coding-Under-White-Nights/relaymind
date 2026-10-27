@@ -958,10 +958,10 @@ feature has a test of the default as well. Later pull requests append here.
 - The launcher (`relaymind serve --config`) has started with the pinned
   model on macOS (the harness above) and on x86-64 Windows (#110, five
   starts, `/readyz` 200 on all).
-- Phase 2 (spec 0.31, RM26 to RM32, AC17 to AC23) is mostly specified and
-  not implemented: there is no test for gated streaming, operation without
-  a local model, the placement policy, the out-of-process selector (#133),
-  or workflow packages. The budgets table (#142), the call timing and count
+- Phase 2 began in spec 0.31. No-local operation (#126, AC20), placement
+  (#130, AC21), and HTTP selectors (#133, AC22) now have deterministic
+  coverage described above; gated streaming (#125, AC19) remains pending
+  on this baseline. The budgets table (#142), the call timing and count
   recording (#120), the draft answer pass (#121, AC17), early response
   headers (#140), admitted calls per generation (#122), prefetch (#123),
   both AC18, and the selection interface with its two built-in selectors
@@ -974,6 +974,11 @@ feature has a test of the default as well. Later pull requests append here.
   issues in [`ROADMAP.md`](ROADMAP.md) carry the tests. The offline
   spikes (#115, #118, #119) and the timing probes (#114, #116, #117) test
   their own scripts, not the gateway.
+- M9 OpenClaw integration (spec 0.46, RM33, AC24) is planned. #135 to
+  #139 and #145 define host-transport contract tests, plugin installation,
+  tool ownership, cancellation, error/retry behavior, and separate live
+  evaluation. No OpenClaw integration test or live result is claimed yet.
+  YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are
   implemented (#143, #144), with frozen SkillsBench/ToolRet inputs and
   [recorded Apple M1 comparisons](EVIDENCE.md#2026-10-23--m7-skill-and-tool-selection-benchmarks-apple-m1).

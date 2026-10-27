@@ -8,7 +8,9 @@ codebase.
 1. **The spec is the single source of truth.**
    [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md) defines what RelayMind
    does. Every implementation task and every acceptance test must reference
-   requirement IDs from it (RM01–RM32, AC01–AC23; RM26–RM32 and AC17–AC23 are specified in 0.31 and not implemented yet). If code and spec disagree,
+   requirement IDs from it (RM01–RM33, AC01–AC24; RM30 and AC23 are retired;
+   RM33 and AC24 specify the planned M9 OpenClaw integration in 0.46).
+   Implementation status is recorded in docs/ROADMAP.md. If code and spec disagree,
    the spec wins. If the spec is wrong, revise the spec first, then change
    the code.
 2. **Tests come before code.** Write a failing test that captures the
