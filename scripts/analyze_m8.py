@@ -35,7 +35,7 @@ import json
 import os
 import sys
 from collections import Counter, defaultdict
-from pathlib import Path, PurePath
+from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -532,6 +532,12 @@ def recorded_roots(index: dict) -> dict:
         matrix=next(iter(roots), None),
         checkout=_recorded_parent(package, 3) if package else None,
     )
+
+
+def _recorded_path(path: str) -> PurePath:
+    """A recorded path in the style it was recorded in, whatever the analyst platform."""
+    windows = "\\" in path or (len(path) > 1 and path[1] == ":" and path[0].isalpha())
+    return PureWindowsPath(path) if windows else PurePosixPath(path)
 
 
 def _recorded_parent(path: str, levels: int) -> str:
@@ -1628,10 +1634,11 @@ def check_recorded_outputs(matrix: Path, out: Path, markdown: Path) -> None:
         if "--out" in (argv := attempt.get("argv") or [])[:-1]
     ]
     for path in filter(None, recorded):
-        parents = PurePath(path).parents
+        parents = _recorded_path(path).parents
         if len(parents) < 3:
             continue
-        root = parents[2]  # CHECKOUT/src/relaymind/__init__.py or MATRIX/CELL/ATTEMPT/export.json
+        # CHECKOUT/src/relaymind/__init__.py or MATRIX/CELL/ATTEMPT/export.json
+        root = str(parents[2])
         for candidate in {Path(root), Path(root).resolve()}:
             if _inside(out, candidate) or _inside(markdown, candidate):
                 raise ValueError(f"analysis output must be outside the recorded root {root}")

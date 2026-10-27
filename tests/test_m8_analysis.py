@@ -413,6 +413,37 @@ def test_cli_refuses_outputs_under_the_recorded_roots(fixture_matrix, recorded):
         module.main(["--inventory", "--matrix", str(fixture_matrix), "--out", recorded + "/i.json"])
 
 
+def test_cli_refuses_outputs_under_recorded_windows_roots(tmp_path, monkeypatch):
+    """RM16/RM17, spec 14.4.5: a root recorded with backslashes is still guarded.
+
+    On POSIX the Windows root resolves under the working directory, so an output in a
+    directory with that literal name is the only place the guard can be seen.
+    """
+    module = analysis()
+    matrix = tmp_path / "m8"
+    matrix.mkdir()
+    recorded = {
+        "matrix": r"C:\recorded\m8",
+        "checkout": r"C:\recorded\checkout",
+    }
+    index = dict(
+        identity=dict(source=dict(package_path=recorded["checkout"] + r"\src\relaymind\x.py")),
+        attempts={
+            "cell": [dict(argv=["python", "run.py", "--out", recorded["matrix"] + r"\c\a\x.json"])]
+        },
+    )
+    (matrix / "index.json").write_text(json.dumps(index), encoding="utf-8")
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    for root in recorded.values():
+        out = work / root / "analysis.json"
+        with pytest.raises(ValueError, match="recorded root"):
+            module.check_recorded_outputs(matrix, out, out.with_suffix(".md"))
+    out = work / "elsewhere" / "analysis.json"
+    module.check_recorded_outputs(matrix, out, out.with_suffix(".md"))
+
+
 def test_exact_prior_identity_survives_relocation_with_the_real_loader(tmp_path):
     """Spec 14.4.5/RM17: load_prior provenance has no absolute path, so it survives a move."""
     module = analysis()
