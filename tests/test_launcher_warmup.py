@@ -151,9 +151,11 @@ def test_the_example_file_documents_the_placement_table(tmp_path):
         if not line.startswith("# "):
             break
         block.append(line[2:])
-    assert len(block) == 7
+    assert len(block) == 8
     config = load_config(write_config(tmp_path, "\n" + "\n".join(block) + "\n"))
     assert (config.warmup, config.warmup_seconds, config.detect) == (True, 30.0, True)
+    # Spec 0.48: detect_stages is documented with its default, off.
+    assert config.detect_stages is False
 
 
 # -- build_app sends nothing; the warm-up is its own step ----------------------------------
