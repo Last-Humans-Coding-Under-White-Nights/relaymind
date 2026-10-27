@@ -519,7 +519,7 @@ def recorded_roots(index: dict) -> dict:
             if not argv:
                 continue
             recorded = argv[argv.index("--out") + 1]
-            out = PurePath(recorded)
+            out = _recorded_path(recorded)
             _check(
                 (out.name, out.parent.name, out.parent.parent.name)
                 == ("export.json", attempt["name"], cell_id),
@@ -548,13 +548,21 @@ def _recorded_parent(path: str, levels: int) -> str:
 
 
 def expected_argv(cell: dict, attempt: dict, roots: dict, provider: dict) -> list[str]:
-    """The driver's exact command for this attempt under the recorded roots."""
+    """The driver's exact command for this attempt under the recorded roots.
+
+    Paths keep the separators of the machine that recorded them, so a matrix recorded
+    on Windows checks the same on POSIX and the other way round.
+    """
     _check(roots["matrix"] and roots["checkout"], "index records no matrix or checkout root")
-    recorded = Path(roots["matrix"])
+    recorded = _recorded_path(roots["matrix"])
     argv = driver.command(cell, recorded / cell["id"] / attempt["name"], recorded, provider)
-    here = str(driver.ROOT)
+    here, checkout = str(driver.ROOT), _recorded_path(roots["checkout"])
+    sep = "\\" if isinstance(checkout, PureWindowsPath) else "/"
     return [attempt["argv"][0]] + [
-        roots["checkout"] + v[len(here) :] if v.startswith(here + os.sep) else v for v in argv[1:]
+        roots["checkout"] + v[len(here) :].replace(os.sep, sep)
+        if v.startswith(here + os.sep)
+        else v
+        for v in argv[1:]
     ]
 
 
@@ -702,8 +710,8 @@ def validate_cell(cell: dict, attempts: list, context: dict) -> dict:
             prior_configuration=identity.get("prior_configuration"),
             timing_prior=prior,
         ),
-        root=PurePath(argv[1]).parents[1],
-        work=PurePath(argv[argv.index("--checkpoint") + 1]).with_suffix(".work"),
+        root=_recorded_path(argv[1]).parents[1],
+        work=_recorded_path(argv[argv.index("--checkpoint") + 1]).with_suffix(".work"),
     )
     environment = document if corpus_runner else document.get("environment") or {}
     timing_prior = document.get("timing_prior")

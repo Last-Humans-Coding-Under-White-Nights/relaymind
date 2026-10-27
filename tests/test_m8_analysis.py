@@ -8,8 +8,9 @@ builds a disposable gateway store, through the existing prior test fixture.
 import copy
 import hashlib
 import json
+import os
 import shutil
-from pathlib import Path, PurePath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import SimpleNamespace
 
 import pytest
@@ -619,12 +620,25 @@ def latency_sample(prompt, order, cell):
     }
 
 
-def write_attempt(out, cell, name, *, source, prior_conf, prior, prior_digest, modules):
+def recorded_style(root):
+    return PureWindowsPath if "\\" in root else PurePosixPath
+
+
+def recorded_command(driver, cell, name, roots):
+    """The driver's command as the recording machine wrote it, in its own path style."""
+    recorded, checkout = roots
+    style = recorded_style(recorded)
+    argv = driver.command(cell, style(recorded) / cell["id"] / name, style(recorded), PROVIDER)
+    here, sep = str(driver.ROOT), "\\" if style is PureWindowsPath else "/"
+    return [argv[0]] + [
+        checkout + v[len(here) :].replace(os.sep, sep) if v.startswith(here) else v
+        for v in argv[1:]
+    ]
+
+
+def write_attempt(out, cell, name, *, source, prior_conf, prior, prior_digest, modules, roots):
     driver, corpus, runner_corpus, runner_latency, config, controller = modules
-    recorded_dir = Path(RECORDED) / cell["id"] / name
-    argv = driver.command(cell, recorded_dir, Path(RECORDED), PROVIDER)
-    here = str(driver.ROOT)
-    argv = [argv[0]] + [CHECKOUT + v[len(here) :] if v.startswith(here) else v for v in argv[1:]]
+    argv = recorded_command(driver, cell, name, roots)
     runner = runner_corpus if cell["runner"] == "corpus" else runner_latency
     args = runner.argument_parser().parse_args(argv[2:])
     settings = config.configuration_from_args(args)
@@ -658,8 +672,8 @@ def write_attempt(out, cell, name, *, source, prior_conf, prior, prior_digest, m
             prior_configuration=prior_conf,
             timing_prior=exported_prior,
         ),
-        root=PurePath(CHECKOUT),
-        work=PurePath(RECORDED) / cell["id"] / name / "checkpoint.work",
+        root=recorded_style(roots[1])(roots[1]),
+        work=recorded_style(roots[0])(roots[0]) / cell["id"] / name / "checkpoint.work",
     )
     endpoint = dict(
         base_url=PROVIDER["RELAYMIND_EXTERNAL_BASE_URL"],
@@ -752,7 +766,7 @@ def write_attempt(out, cell, name, *, source, prior_conf, prior, prior_digest, m
     return attempt, document
 
 
-def build_matrix(out):
+def build_matrix(out, roots=(RECORDED, CHECKOUT)):
     """Write all 31 finalized fixture cells as if recorded under another root."""
     module = analysis()
     driver = load_script_module("run_m8_matrix")
@@ -783,7 +797,7 @@ def build_matrix(out):
         dirty=False,
         source_sha256=fingerprint["source_sha256"],
         files=fingerprint["files"],
-        package_path=CHECKOUT + "/src/relaymind/__init__.py",
+        package_path=str(recorded_style(roots[1])(roots[1], "src", "relaymind", "__init__.py")),
     )
     identity = dict(
         source=source,
@@ -814,12 +828,7 @@ def build_matrix(out):
         attempts = []
         name = "initial"
         if cell["id"] == INTERRUPTED:
-            recorded_dir = Path(RECORDED) / cell["id"] / "initial"
-            argv = driver.command(cell, recorded_dir, Path(RECORDED), PROVIDER)
-            here = str(driver.ROOT)
-            argv = [argv[0]] + [
-                CHECKOUT + v[len(here) :] if v.startswith(here) else v for v in argv[1:]
-            ]
+            argv = recorded_command(driver, cell, "initial", roots)
             (out / cell["id"] / "initial").mkdir(parents=True)
             attempts.append(
                 dict(
@@ -841,6 +850,7 @@ def build_matrix(out):
             prior=prior,
             prior_digest=prior_digest,
             modules=modules,
+            roots=roots,
         )
         attempts.append(attempt)
         index["attempts"][cell["id"]] = attempts
@@ -885,6 +895,12 @@ def build_matrix(out):
 @pytest.fixture(scope="module")
 def fixture_matrix(tmp_path_factory):
     return build_matrix(tmp_path_factory.mktemp("relocated") / "m8")
+
+
+@pytest.fixture(scope="module")
+def windows_matrix(tmp_path_factory):
+    roots = (r"C:\recorded\m8", r"C:\recorded\checkout")
+    return build_matrix(tmp_path_factory.mktemp("windows") / "m8", roots)
 
 
 def digests(root):
@@ -1040,6 +1056,22 @@ def test_relocated_complete_matrix_produces_accepted_comparisons_and_retains_pro
     assert report["defaults"]["changed"] is False
     assert "Reporting acceptance: passed" in markdown
     assert "not measured" in markdown
+
+
+def test_a_matrix_recorded_on_windows_is_accepted_on_any_platform(
+    windows_matrix, tmp_path, monkeypatch
+):
+    """RM16/RM25, spec 14.4.3/14.4.5: recorded commands and roots keep their own path
+    style, so the expected command of a Windows matrix matches its recorded argv."""
+    module = fixture_analysis(monkeypatch)
+    argv = module._read_json(windows_matrix / "index.json")["attempts"][INTERRUPTED][-1]["argv"]
+    assert argv[1] == r"C:\recorded\checkout\scripts\latency_benchmark.py"
+    result = module.inventory(windows_matrix)
+    assert result["invalid"] == [] and result["problems"] == []
+    assert result["accepted"] is True
+    report, _ = module.analyze(windows_matrix)
+    assert report["reporting_accepted"] is True
+    assert report["provenance"]["matrix_root_recorded"] == r"C:\recorded\m8"
 
 
 def test_inventory_mode_reports_complete_and_missing_cells_without_comparisons(
