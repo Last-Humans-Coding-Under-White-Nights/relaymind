@@ -1,0 +1,374 @@
+{
+  "schema_version": 1,
+  "suite": "openclaw_tasks",
+  "version": 1,
+  "frozen_on": "2026-10-27",
+  "note": "OpenClaw integration evaluation tasks (spec 0.50 section 12.5, #139). Not the managed-skill corpus of section 12.2: these run through the OpenClaw host with its own tools and policy. Each attempt starts in a fresh sandbox working directory holding only the task's sandbox files. A changed task, arm, repeat count, seed, or time limit is a new version.",
+  "chinese_review": "The Chinese prompts are translations by the maintainers and are not reviewed by a native speaker; their results are best-effort and reported apart.",
+  "host": {
+    "release": "2026.10.7",
+    "command": [
+      "agent",
+      "exec"
+    ],
+    "options": [
+      "--json",
+      "--config <host config>",
+      "--cwd <sandbox>",
+      "--model <arm model ref>"
+    ]
+  },
+  "arms": [
+    "direct",
+    "relaymind_external_only",
+    "relaymind_auto",
+    "relaymind_no_local"
+  ],
+  "repeats": 3,
+  "sampling_seed": 139,
+  "time_limit_seconds": 300,
+  "tasks": [
+    {
+      "id": "text-reply-en",
+      "kind": "text",
+      "language": "en",
+      "best_effort": false,
+      "english_task": null,
+      "prompt": "Reply with only the word lantern, in lowercase.",
+      "sandbox": {},
+      "exec_policy": "deny",
+      "expected_tools": [],
+      "expected_sandbox": {},
+      "required_evidence": [
+        [
+          "lantern"
+        ]
+      ],
+      "forbidden_evidence": [],
+      "rubric": "A plain text turn: the answer is the word lantern. No tool is needed; a tool call the host makes is recorded, not judged."
+    },
+    {
+      "id": "text-reply-zh",
+      "kind": "text",
+      "language": "zh",
+      "best_effort": true,
+      "english_task": "text-reply-en",
+      "prompt": "请只回复一个英文单词 lantern，全部小写。",
+      "sandbox": {},
+      "exec_policy": "deny",
+      "expected_tools": [],
+      "expected_sandbox": {},
+      "required_evidence": [
+        [
+          "lantern"
+        ]
+      ],
+      "forbidden_evidence": [],
+      "rubric": "The Chinese version of text-reply-en; best-effort."
+    },
+    {
+      "id": "text-sum-en",
+      "kind": "text",
+      "language": "en",
+      "best_effort": false,
+      "english_task": null,
+      "prompt": "What is 17 plus 25? Reply with the number only.",
+      "sandbox": {},
+      "exec_policy": "deny",
+      "expected_tools": [],
+      "expected_sandbox": {},
+      "required_evidence": [
+        [
+          "42"
+        ]
+      ],
+      "forbidden_evidence": [],
+      "rubric": "A plain text turn with a checkable answer: 42."
+    },
+    {
+      "id": "text-sum-zh",
+      "kind": "text",
+      "language": "zh",
+      "best_effort": true,
+      "english_task": "text-sum-en",
+      "prompt": "17 加 25 等于多少？只回复数字。",
+      "sandbox": {},
+      "exec_policy": "deny",
+      "expected_tools": [],
+      "expected_sandbox": {},
+      "required_evidence": [
+        [
+          "42"
+        ]
+      ],
+      "forbidden_evidence": [],
+      "rubric": "The Chinese version of text-sum-en; best-effort."
+    },
+    {
+      "id": "read-note-en",
+      "kind": "host_tool",
+      "language": "en",
+      "best_effort": false,
+      "english_task": null,
+      "prompt": "Read the file notes.txt in the current directory and tell me where the lantern is.",
+      "sandbox": {
+        "notes.txt": "The lantern is on the second shelf.\n"
+      },
+      "exec_policy": "deny",
+      "expected_tools": [
+        [
+          {
+            "tool": "read",
+            "arguments": {
+              "path": {
+                "suffix": "notes.txt"
+              }
+            }
+          }
+        ]
+      ],
+      "expected_sandbox": {
+        "notes.txt": {
+          "lines": 1,
+          "contains": [
+            "second shelf"
+          ]
+        }
+      },
+      "required_evidence": [
+        [
+          "second shelf"
+        ]
+      ],
+      "forbidden_evidence": [],
+      "rubric": "A read-only host tool round trip: the host's read tool runs once on notes.txt, its result reaches the next request, and the answer names the second shelf. The file is unchanged."
+    },
+    {
+      "id": "read-note-zh",
+      "kind": "host_tool",
+      "language": "zh",
+      "best_effort": true,
+      "english_task": "read-note-en",
+      "prompt": "读取当前目录中的 notes.txt 文件，告诉我灯笼在哪里。",
+      "sandbox": {
+        "notes.txt": "The lantern is on the second shelf.\n"
+      },
+      "exec_policy": "deny",
+      "expected_tools": [
+        [
+          {
+            "tool": "read",
+            "arguments": {
+              "path": {
+                "suffix": "notes.txt"
+              }
+            }
+          }
+        ]
+      ],
+      "expected_sandbox": {
+        "notes.txt": {
+          "lines": 1,
+          "contains": [
+            "second shelf"
+          ]
+        }
+      },
+      "required_evidence": [
+        [
+          "second shelf",
+          "第二层",
+          "第二个架子",
+          "第二格",
+          "第二排"
+        ]
+      ],
+      "forbidden_evidence": [],
+      "rubric": "The Chinese version of read-note-en; the answer may name the shelf in Chinese or quote the file. Best-effort."
+    },
+    {
+      "id": "write-file-en",
+      "kind": "host_tool",
+      "language": "en",
+      "best_effort": false,
+      "english_task": null,
+      "prompt": "Create a file named done.txt in the current directory that contains the single word ready.",
+      "sandbox": {},
+      "exec_policy": "deny",
+      "expected_tools": [
+        [
+          {
+            "tool": "write",
+            "arguments": {}
+          }
+        ]
+      ],
+      "expected_sandbox": {
+        "done.txt": {
+          "lines": 1,
+          "contains": [
+            "ready"
+          ]
+        }
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [],
+      "rubric": "A mutating host tool the host allows: its write tool creates done.txt with one line holding ready. The exec policy is deny, so the shell is not a way around the write tool."
+    },
+    {
+      "id": "write-file-zh",
+      "kind": "host_tool",
+      "language": "zh",
+      "best_effort": true,
+      "english_task": "write-file-en",
+      "prompt": "在当前目录中创建一个名为 done.txt 的文件，内容只有一个英文单词 ready。",
+      "sandbox": {},
+      "exec_policy": "deny",
+      "expected_tools": [
+        [
+          {
+            "tool": "write",
+            "arguments": {}
+          }
+        ]
+      ],
+      "expected_sandbox": {
+        "done.txt": {
+          "lines": 1,
+          "contains": [
+            "ready"
+          ]
+        }
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [],
+      "rubric": "The Chinese version of write-file-en; best-effort."
+    },
+    {
+      "id": "exec-append-full-en",
+      "kind": "host_tool",
+      "language": "en",
+      "best_effort": false,
+      "english_task": null,
+      "prompt": "Use the exec tool to run this shell command in the current directory: echo ready >> log.txt. Then tell me whether it ran.",
+      "sandbox": {},
+      "exec_policy": "full",
+      "expected_tools": [
+        [
+          {
+            "tool": "exec",
+            "arguments": {
+              "command": {
+                "contains": "log.txt"
+              }
+            }
+          }
+        ]
+      ],
+      "expected_sandbox": {
+        "log.txt": {
+          "lines": 1,
+          "contains": [
+            "ready"
+          ]
+        }
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [],
+      "rubric": "The host's exec tool under tools.exec.mode full: the host runs the command once and log.txt holds one line. The host's policy, not RelayMind, allows it."
+    },
+    {
+      "id": "exec-append-full-zh",
+      "kind": "host_tool",
+      "language": "zh",
+      "best_effort": true,
+      "english_task": "exec-append-full-en",
+      "prompt": "使用 exec 工具在当前目录中运行这个 shell 命令：echo ready >> log.txt。然后告诉我它是否运行了。",
+      "sandbox": {},
+      "exec_policy": "full",
+      "expected_tools": [
+        [
+          {
+            "tool": "exec",
+            "arguments": {
+              "command": {
+                "contains": "log.txt"
+              }
+            }
+          }
+        ]
+      ],
+      "expected_sandbox": {
+        "log.txt": {
+          "lines": 1,
+          "contains": [
+            "ready"
+          ]
+        }
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [],
+      "rubric": "The Chinese version of exec-append-full-en; best-effort."
+    },
+    {
+      "id": "exec-append-deny-en",
+      "kind": "host_tool",
+      "language": "en",
+      "best_effort": false,
+      "english_task": null,
+      "prompt": "Use the exec tool to run this shell command in the current directory: echo ready >> log.txt. Then tell me whether it ran.",
+      "sandbox": {},
+      "exec_policy": "deny",
+      "expected_tools": [
+        [
+          {
+            "tool": "exec",
+            "arguments": {
+              "command": {
+                "contains": "log.txt"
+              }
+            }
+          }
+        ]
+      ],
+      "expected_sandbox": {
+        "log.txt": {
+          "absent": true
+        }
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [],
+      "rubric": "The same command under tools.exec.mode deny: the host attempts exec and refuses it, nothing is written, and the host reports the call. The host still says ok true (macOS probe); only the sandbox and the host's tool report decide."
+    },
+    {
+      "id": "exec-append-deny-zh",
+      "kind": "host_tool",
+      "language": "zh",
+      "best_effort": true,
+      "english_task": "exec-append-deny-en",
+      "prompt": "使用 exec 工具在当前目录中运行这个 shell 命令：echo ready >> log.txt。然后告诉我它是否运行了。",
+      "sandbox": {},
+      "exec_policy": "deny",
+      "expected_tools": [
+        [
+          {
+            "tool": "exec",
+            "arguments": {
+              "command": {
+                "contains": "log.txt"
+              }
+            }
+          }
+        ]
+      ],
+      "expected_sandbox": {
+        "log.txt": {
+          "absent": true
+        }
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [],
+      "rubric": "The Chinese version of exec-append-deny-en; best-effort."
+    }
+  ]
+}
