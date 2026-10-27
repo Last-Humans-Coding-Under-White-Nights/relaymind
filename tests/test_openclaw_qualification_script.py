@@ -165,6 +165,40 @@ def test_every_scenario_has_a_committed_fixture():
     assert versions["@openclaw/ai"] == "2026.10.7"
 
 
+# What a capture reads and writes: a change to any of them needs a new capture.
+CAPTURE_INPUTS = (
+    "scripts/openclaw_qualification.py",
+    "integrations/openclaw/package.json",
+    "integrations/openclaw/package-lock.json",
+    "integrations/openclaw/test/host-transport",
+    "integrations/openclaw/test/fixtures/v2026.10.7/transport",
+)
+
+
+def test_the_recorded_revision_holds_the_committed_harness_and_fixtures():
+    """Section 12.5 provenance: VERSIONS.json names a clean revision that holds them."""
+    import shutil
+    import subprocess
+
+    revision = json.loads((FIXTURES / "VERSIONS.json").read_text("utf-8"))["relaymind_revision"]
+    assert revision["dirty"] is False
+    head = revision["head"]
+    if shutil.which("git") is None:
+        pytest.skip("git is not on PATH")
+    known = subprocess.run(
+        ["git", "-C", str(ROOT), "cat-file", "-e", f"{head}^{{commit}}"], capture_output=True
+    )
+    if known.returncode != 0:
+        pytest.skip(f"revision {head} is not in this clone (shallow checkout?)")
+    diff = subprocess.run(
+        ["git", "-C", str(ROOT), "diff", "--name-only", head, "HEAD", "--", *CAPTURE_INPUTS],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert diff.stdout == "", f"capture inputs changed since {head}; capture again"
+
+
 def test_the_committed_transport_fixtures_are_reproducible(tmp_path):
     """#135 done-when: the sanitized wire fixtures are reproducible on the same pins."""
     missing = qualification_missing()

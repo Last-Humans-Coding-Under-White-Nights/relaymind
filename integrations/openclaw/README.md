@@ -48,6 +48,12 @@ python scripts/openclaw_qualification.py fixtures \
   --out-dir integrations/openclaw/test/fixtures/v2026.10.7/transport
 ```
 
+Capture from a clean checkout of a commit that already holds the harness, the
+driver, and the fixtures, then commit `VERSIONS.json` on its own: it records
+that commit as its provenance, and
+`tests/test_openclaw_qualification_script.py` fails when the tree was dirty or
+when a capture input changed after the recorded commit.
+
 ## Operator runs (not run yet)
 
 These need a real OpenClaw v2026.10.7 install, and the size measurement
