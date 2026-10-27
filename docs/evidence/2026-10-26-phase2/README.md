@@ -40,6 +40,13 @@ zstd -d --long=27 -c m8/<cell>/initial.tar.zst | tar -x -C /some/empty/dir
 `<matrix>/<cell>/<attempt>/...`, the same relative layout as the measured
 root.
 
+The archives do not hold the matrix files. Before pointing an offline
+analyzer at an extracted matrix (`scripts/analyze_m8.py --matrix DIR` or
+`scripts/analyze_m7.py --matrix DIR`), extract every archive of that matrix
+into the same root and copy that matrix's `plan.json` and `index.json` from
+this package into `DIR`, next to the cell directories; both analyzers read
+`DIR/plan.json` and `DIR/index.json`.
+
 ## Paths and replay
 
 Raw checkpoints, exports and the index record the original absolute paths
