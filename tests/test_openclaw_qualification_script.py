@@ -105,9 +105,9 @@ def test_host_mode_keeps_a_separator_the_host_command_needs(tmp_path, monkeypatc
     """Only the "--" before the command is dropped; the command keeps its own."""
     seen = {}
 
-    def fake_run_host(command, out, *, timeout):
+    def fake_run_host(command, out, *, timeout, scenario):
         seen["command"] = command
-        return {"status": "completed", "runs": []}
+        return {"status": "completed", "runs": [], "checks": {"passed": True}}
 
     monkeypatch.setattr(qualification, "run_host", fake_run_host)
     argv = ["host", "--out", str(tmp_path / "x.json"), "--"]
@@ -258,3 +258,100 @@ def test_the_driver_knows_it_is_the_entry_point_on_every_platform():
     source = qualification.DRIVER.read_text("utf-8")
     assert "file://${process.argv[1]}" not in source
     assert "import.meta.url === pathToFileURL(process.argv[1]).href" in source
+
+
+# -- the host approval scenarios (#137; RM08, RM33, AC24) ----------------------------------
+
+# A stand-in for the host's tool loop: the write call, the host's decision, and
+# the result in a second request. The decision comes from the argument.
+STUB_TOOL_HOST = """
+import json, os, sys, urllib.request
+decision = sys.argv[1]
+base = os.environ["RELAYMIND_BASE_URL"]
+token = os.environ["RELAYMIND_APP_TOKEN"]
+sandbox = os.environ["RELAYMIND_TEST_SANDBOX"]
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+write = {"type": "function", "function": {"name": "relaymind_test_write", "parameters": {
+    "type": "object", "properties": {"name": {"type": "string"}, "line": {"type": "string"}},
+    "required": ["name", "line"], "additionalProperties": False}}}
+def post(messages):
+    body = {"model": "relaymind-client-tools", "messages": messages, "tools": [write]}
+    request = urllib.request.Request(
+        base + "/chat/completions", data=json.dumps(body).encode(), method="POST",
+        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+    with opener.open(request) as response:
+        return json.loads(response.read())["choices"][0]["message"]
+messages = [{"role": "user", "content": "Write a note."}]
+reply = post(messages)
+(call,) = reply["tool_calls"]
+arguments = json.loads(call["function"]["arguments"])
+if decision == "allow":
+    with open(os.path.join(sandbox, arguments["name"]), "a") as f:
+        f.write(arguments["line"] + "\\n")
+    result = "wrote one line"
+else:
+    result = "denied by the host approval policy"
+messages += [reply, {"role": "tool", "tool_call_id": call["id"], "content": result}]
+print(post(messages)["content"])
+"""
+
+
+@pytest.mark.parametrize(
+    ("scenario", "decision", "lines"),
+    [("tool-deny", "deny", 0), ("tool-approve", "allow", 1)],
+)
+def test_the_approval_scenarios_check_the_sandbox_and_the_gateway(
+    tmp_path, scenario, decision, lines
+):
+    """RM08, RM33, AC24: the export says whether the host's decision held, from evidence."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_TOOL_HOST, decision],
+        tmp_path / "export.json",
+        scenario=scenario,
+    )
+    assert export["status"] == "completed", export["stderr"]
+    assert export["scenario"] == scenario
+    check = export["checks"]
+    assert check["sandbox_lines"] == lines
+    assert check["expected_sandbox_lines"] == lines
+    assert check["gateway_tool_executions"] == 0
+    assert [p["tool_name"] for p in check["proposed"]] == ["relaymind_test_write"]
+    assert check["result_reached_next_run"] is True
+    assert check["passed"] is True
+    first, second = export["runs"]
+    assert {r["state"] for r in (first, second)} == {"completed"}
+
+
+def test_a_denial_that_wrote_anyway_does_not_pass(tmp_path):
+    """Section 12.5: the check reads the sandbox; a write under tool-deny fails the scenario."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_TOOL_HOST, "allow"],
+        tmp_path / "export.json",
+        scenario="tool-deny",
+    )
+    assert export["status"] == "completed"
+    assert export["checks"]["sandbox_lines"] == 1
+    assert export["checks"]["passed"] is False
+
+
+def test_a_scenario_that_did_not_run_is_not_a_pass(tmp_path):
+    export = qualification.run_host(
+        ["openclaw-not-installed-here"], tmp_path / "export.json", scenario="tool-approve"
+    )
+    assert export["status"] == "not_run"
+    assert export["checks"]["passed"] is False
+
+
+def test_the_main_entry_passes_the_scenario(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_run_host(command, out, *, timeout, scenario):
+        seen["scenario"] = scenario
+        return {"status": "completed", "runs": [], "checks": {"passed": True}}
+
+    monkeypatch.setattr(qualification, "run_host", fake_run_host)
+    argv = ["host", "--out", str(tmp_path / "x.json"), "--scenario", "tool-deny", "--", "true"]
+    assert qualification.main(argv) == 0
+    assert seen["scenario"] == "tool-deny"
+    with pytest.raises(SystemExit):
+        qualification.main(["host", "--out", "x.json", "--scenario", "nope", "--", "true"])

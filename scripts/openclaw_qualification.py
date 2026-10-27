@@ -17,19 +17,30 @@ Two modes:
     committed set).
 
 ``host``
-    Starts one gateway with a text turn, a sandbox host tool call, and a
-    final text turn scripted, runs an operator command (for example a real
-    ``openclaw agent exec``) with ``RELAYMIND_BASE_URL`` and
-    ``RELAYMIND_APP_TOKEN`` in its environment only, and writes one export:
-    the command's exit status (``timed_out`` past ``--timeout``), every run
-    the gateway recorded with its trace events, and the versions. The token
-    is never written. This mode needs a real OpenClaw install; it is run by
-    an operator and CI, not by the deterministic suite.
+    Starts one gateway with the scripted turns of ``--scenario``, runs an
+    operator command (for example a real ``openclaw agent exec``) with
+    ``RELAYMIND_BASE_URL``, ``RELAYMIND_APP_TOKEN``, and
+    ``RELAYMIND_TEST_SANDBOX`` (a fresh empty directory) in its environment
+    only, and writes one export: the command's exit status (``timed_out``
+    past ``--timeout``), every run the gateway recorded with its trace
+    events, the versions, and the scenario's checks. The token is never
+    written. This mode needs a real OpenClaw install; it is run by an
+    operator and CI, not by the deterministic suite.
+
+    Scenarios (#137): ``text-tool`` (the default: a text turn, the sandbox
+    echo call, a final text turn); ``tool-deny`` and ``tool-approve`` (a
+    call to the mutating sandbox tool ``relaymind_test_write``, then a final
+    text turn). The host's own approval policy decides; the export checks,
+    from the sandbox and the trace, that a denial wrote nothing, that an
+    approval wrote exactly one line, that the gateway executed no tool and
+    proposed the call, and that the host's result reached the next run. A
+    scenario that did not complete never passes.
 
 Usage:
     python scripts/openclaw_qualification.py fixtures \\
         --out-dir integrations/openclaw/test/fixtures/v2026.10.7/transport
-    python scripts/openclaw_qualification.py host --out <export.json> -- <command> [args...]
+    python scripts/openclaw_qualification.py host --out <export.json> \\
+        [--scenario text-tool|tool-deny|tool-approve] -- <command> [args...]
 
 Deterministic transport fixtures are not live evidence (section 12.5).
 """
@@ -440,26 +451,85 @@ def _text(output: bytes | str | None) -> str:
     return output.decode("utf-8", "replace") if isinstance(output, bytes) else output
 
 
-def run_host(command: Sequence[str], out: Path, *, timeout: float = 900) -> dict:
+WRITE_TOOL = "relaymind_test_write"
+WRITE_FILE = "note.txt"
+
+
+def write_call(call_id: str = "call_write_1") -> list:
+    return tool_turn(WRITE_TOOL, call_id=call_id, name=WRITE_FILE, line="written by the host")
+
+
+# The scripted turns of each host scenario, and the sandbox lines it must leave.
+HOST_SCENARIOS: dict[str, tuple[Callable[[], list], int | None]] = {
+    "text-tool": (
+        lambda: [
+            text_turn("Hello from RelayMind."),
+            echo_call(),
+            text_turn("The tool said: echo: lantern."),
+        ],
+        None,
+    ),
+    "tool-deny": (lambda: [write_call(), text_turn("The host did not allow the write.")], 0),
+    "tool-approve": (lambda: [write_call(), text_turn("The note was written.")], 1),
+}
+
+
+def host_checks(
+    scenario: str, status: str, runs: Sequence[Mapping], requests: Sequence, sandbox: Path
+) -> dict:
+    """What the scenario must show, read from the sandbox and the gateway (section 12.5)."""
+    expected = HOST_SCENARIOS[scenario][1]
+    note = sandbox / WRITE_FILE
+    lines = len(note.read_text("utf-8").splitlines()) if note.exists() else 0
+    proposed = [
+        {"run_id": run["run_id"], **{k: e["payload"].get(k) for k in ("tool_name", "proposal_id")}}
+        for run in runs
+        for e in run["events"]
+        if e["type"] == "tool.proposed"
+    ]
+    executions = sum(1 for run in runs for e in run["events"] if e["type"] == "tool.started")
+    ids = {p["proposal_id"] for p in proposed}
+    reached = any(
+        m.role.value == "tool" and m.tool_call_id in ids
+        for request in requests[1:]
+        for m in request.messages
+    )
+    checks: dict[str, Any] = {
+        "sandbox_lines": lines,
+        "expected_sandbox_lines": expected,
+        "gateway_tool_executions": executions,
+        "proposed": proposed,
+        "result_reached_next_run": reached,
+    }
+    checks["passed"] = (
+        status == "completed"
+        and executions == 0
+        and bool(proposed)
+        and reached
+        and (expected is None or lines == expected)
+    )
+    return checks
+
+
+def run_host(
+    command: Sequence[str], out: Path, *, timeout: float = 900, scenario: str = "text-tool"
+) -> dict:
     """Serve one doubles gateway, run the operator command against it, export the runs."""
+    turns, _ = HOST_SCENARIOS[scenario]
     with tempfile.TemporaryDirectory(prefix="openclaw-host-") as tmp:
-        gateway = build_gateway(
-            Path(tmp),
-            [
-                text_turn("Hello from RelayMind."),
-                echo_call(),
-                text_turn("The tool said: echo: lantern."),
-            ],
-            external_turns=[],
-        )
+        sandbox = Path(tmp) / "host-sandbox"
+        sandbox.mkdir()
+        gateway = build_gateway(Path(tmp), turns(), external_turns=[])
         app = make_app(gateway, client_tools=ClientToolsChat(gateway.orchestrator))
         token = token_of(app)
         try:
             with RunningServer(app) as running:
+                env = child_environment(running.base_url, token)
+                env["RELAYMIND_TEST_SANDBOX"] = str(sandbox)
                 try:
                     completed = subprocess.run(
                         list(command),
-                        env=child_environment(running.base_url, token),
+                        env=env,
                         capture_output=True,
                         text=True,
                         timeout=timeout,
@@ -495,6 +565,7 @@ def run_host(command: Sequence[str], out: Path, *, timeout: float = 900) -> dict
                 export = {
                     "kind": "openclaw-host-qualification",
                     "evidence": "deterministic gateway doubles; not live model evidence",
+                    "scenario": scenario,
                     "status": status,
                     "command": list(command),
                     "exit_code": exit_code,
@@ -506,6 +577,9 @@ def run_host(command: Sequence[str], out: Path, *, timeout: float = 900) -> dict
                     "runs": runs,
                     "host_tool_executions_by_gateway": sum(
                         1 for run in runs for e in run["events"] if e["type"] == "tool.started"
+                    ),
+                    "checks": host_checks(
+                        scenario, status, runs, gateway.adapter.requests, sandbox
                     ),
                 }
         finally:
@@ -527,6 +601,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     host = sub.add_parser("host", help="run an operator command against a doubles gateway")
     host.add_argument("--out", type=Path, required=True)
     host.add_argument("--timeout", type=float, default=900)
+    host.add_argument("--scenario", choices=sorted(HOST_SCENARIOS), default="text-tool")
     host.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if args.mode == "fixtures":
@@ -539,9 +614,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         command = command[1:]
     if not command:
         parser.error("host needs a command after --")
-    export = run_host(command, args.out, timeout=args.timeout)
-    print(json.dumps({"status": export["status"], "runs": len(export["runs"])}))
-    return 0 if export["status"] == "completed" else 1
+    export = run_host(command, args.out, timeout=args.timeout, scenario=args.scenario)
+    passed = export["checks"]["passed"]
+    print(json.dumps({"status": export["status"], "runs": len(export["runs"]), "passed": passed}))
+    return 0 if export["status"] == "completed" and passed else 1
 
 
 if __name__ == "__main__":

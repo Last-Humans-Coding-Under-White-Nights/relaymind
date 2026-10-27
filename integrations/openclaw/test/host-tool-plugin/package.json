@@ -1,0 +1,16 @@
+{
+  "name": "@relaymind/openclaw-test-host-tools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Test only, never shipped: two disposable sandbox tools for the RelayMind host qualification (#137).",
+  "type": "module",
+  "main": "./index.js",
+  "files": ["index.js", "openclaw.plugin.json", "README.md"],
+  "openclaw": {
+    "extensions": ["./index.js"],
+    "compat": { "pluginApi": "2026.10.7", "minGatewayVersion": "2026.10.7" },
+    "build": { "openclawVersion": "2026.10.7", "pluginSdkVersion": "2026.10.7" }
+  },
+  "peerDependencies": { "openclaw": "2026.10.7" },
+  "engines": { "node": ">=24.22.1 <25 || >=26.12.1" }
+}
