@@ -260,6 +260,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   #137). The local context stays
   8192, so in practice OpenClaw turns go external in auto and get
   needs_external in local_only. The plugin itself is #136's.
+- Specification 0.50, the OpenClaw evaluation files, arms, and grading (#139;
+  RM16, RM18, RM25, RM26, RM33; AC24; section 12.5): the tasks are
+  `evaluation/openclaw_tasks.v1.json`, frozen by its digest in
+  `evaluation/openclaw_tasks.v1.lock.json`, apart from the managed-skill
+  corpus; the four arms are `direct`, `relaymind_external_only`,
+  `relaymind_auto`, and `relaymind_no_local`, in a seeded paired order; an
+  attempt succeeds on the host's exit status, its final answer, its tool
+  calls, the sandbox, and the gateway trace, never on the host's `"ok"`; a
+  host failover is counted apart; the report gives exact counts per arm and
+  language, the two clocks apart, and tokens per model with unknown counts
+  kept unknown. No gateway contract change.
 - Specification 0.49, OpenClaw host facts recorded on the wire (#135; RM33,
   section 7.5): at v2026.10.7 the host's defaults for a loopback URL send
   `stream_options` and, for a reasoning model, `reasoning_effort`; the
