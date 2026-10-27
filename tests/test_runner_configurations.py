@@ -749,6 +749,34 @@ def test_launch_file_writer_refuses_null():
             harness._toml(value)
 
 
+def test_latency_launch_file_carries_declared_request_options(settings, tmp_path):
+    """RM25, spec 12.2 and 14.1: the latency runner's launch file carries the declared
+    options to [external_model] unchanged, and the launcher loads them."""
+    runner = load_script_module("latency_benchmark")
+    options = '{"reasoning_effort": "low", "thinking": {"type": "disabled"}, "stop": ["x"]}'
+    declared = parse(settings, *EXTERNAL_FLAGS, "--external-request-options", options)
+    manifest, artifact = make_artifact(tmp_path)
+    endpoint = runner.harness.ExternalEndpoint(
+        "https://api.example.invalid/v1",
+        "remote-model",
+        8192,
+        request_options=declared.external_request_options,
+    )
+    path = tmp_path / "latency-request-options.toml"
+    path.write_text(
+        runner.benchmark_config(
+            work=tmp_path,
+            manifest=manifest,
+            artifact=artifact,
+            local_url="http://127.0.0.1:8081",
+            port=8099,
+            external=endpoint,
+            **declared.gateway_options(),
+        )
+    )
+    assert load_config(path).external.request_options == json.loads(options)
+
+
 def test_corpus_without_key_drops_request_options_with_the_endpoint(
     settings, tmp_path, monkeypatch
 ):
