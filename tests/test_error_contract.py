@@ -270,3 +270,34 @@ def test_each_mapped_exception_declares_the_status_and_code_of_its_mapping(kind,
     """One status per code: an exception's own http_status and code agree with the table."""
     assert kind.http_status == STATUS_BY_CODE[code]
     assert getattr(kind, "code", code) == code
+
+
+def test_a_stream_only_predicate_failure_outside_a_stream_is_409_run_terminal():
+    """RM32, section 7.1: a predicate_unmet run that reaches an ordinary HTTP
+    response, before any stream started, is 409 run_terminal naming the error
+    code, never a 500."""
+    from relaymind.api.chat import StreamFailure
+
+    error = error_from_exception(StreamFailure("run_1"))
+    assert (error.status, error.code, error.run_id) == (409, "run_terminal", "run_1")
+    assert "predicate_unmet" in error.message
+
+
+def test_a_buffered_streamed_chat_never_reports_predicate_unmet_as_500(tmp_path):
+    """RM32, section 7.1: the buffered chat path maps a predicate_unmet outcome
+    to 409 run_terminal, the run is never reported as a 500."""
+    from api_helpers import chat, make_app
+    from relaymind.orchestrator.local_loop import RunOutcome
+    from relaymind.orchestrator.run_state import RunState
+
+    gateway = build_gateway(tmp_path, [route_turn("check-service-health"), *health_tail()])
+
+    async def failed(*args, **kwargs):
+        return RunOutcome("run_1", RunState.FAILED, error_code="predicate_unmet")
+
+    gateway.orchestrator.run = failed
+    response = chat(make_app(gateway), stream=True, raise_app_exceptions=False)
+    assert response.status_code == 409
+    error = response.json()["error"]
+    assert (error["code"], error["run_id"]) == ("run_terminal", "run_1")
+    assert "predicate_unmet" in error["message"]
