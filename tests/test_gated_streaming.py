@@ -957,3 +957,31 @@ def test_buffered_publication_marks_the_generation_published(tmp_path, monkeypat
     outcome, events = run(gateway)
     assert outcome.state is RunState.COMPLETED
     assert "".join(e.payload["text"] for e in of_type(events, "answer.delta")) == STAGING_OK
+
+
+@pytest.mark.parametrize("stage", ["push", "finish"])
+def test_a_gateway_fault_under_live_is_internal_not_a_provider_failure(
+    tmp_path, monkeypatch, stage
+):
+    """RM16/RM32, spec section 5: an unexpected exception in the gateway's own
+    statement gate ends the run as internal_error; it is never recorded as an
+    interrupted provider call that hands off or reads as an outage."""
+    from relaymind.skills.predicates import StatementGate
+    from test_local_loop import only_run_id
+
+    def broken(self, *args):
+        raise KeyError("gate bug")
+
+    monkeypatch.setattr(StatementGate, stage, broken)
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn("check-service-health"), *health_tail()],
+        performance=PerformanceSettings(answer_stream="live"),
+        external_turns=[text_turn(STAGING_OK)],
+    )
+    with pytest.raises(KeyError):
+        asyncio.run(gateway.orchestrator.run_text("Is staging-api healthy right now?"))
+    run_id = only_run_id(gateway)
+    assert gateway.store.get_run(run_id).error_code == "internal_error"
+    assert gateway.external.requests == []
+    assert not of_type(gateway.store.events(run_id), "handoff.started")
