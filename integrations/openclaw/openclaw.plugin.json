@@ -1,0 +1,73 @@
+{
+  "id": "relaymind",
+  "name": "RelayMind",
+  "description": "RelayMind local gateway as an OpenClaw model provider: the client-owned alias relaymind-client-tools over the loopback chat API; OpenClaw keeps its sessions, tools, and approvals.",
+  "categories": ["models"],
+  "activation": {
+    "onStartup": false
+  },
+  "providers": ["relaymind"],
+  "setup": {
+    "providers": [
+      {
+        "id": "relaymind",
+        "envVars": ["RELAYMIND_APP_TOKEN"]
+      }
+    ]
+  },
+  "providerAuthChoices": [
+    {
+      "provider": "relaymind",
+      "method": "api-key",
+      "choiceId": "relaymind-app-token",
+      "choiceLabel": "RelayMind application token",
+      "choiceHint": "The token `relaymind serve` printed when it started",
+      "groupId": "relaymind",
+      "groupLabel": "RelayMind",
+      "groupHint": "Local gateway (loopback only)",
+      "optionKey": "relaymindAppToken",
+      "cliFlag": "--relaymind-app-token",
+      "cliOption": "--relaymind-app-token <token>",
+      "cliDescription": "RelayMind application token (printed by relaymind serve at each start)"
+    }
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["baseUrl"],
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "description": "The gateway's loopback /v1 URL, such as http://127.0.0.1:8080/v1 (localhost, 127.0.0.0/8, or [::1] only)."
+      },
+      "executionMode": {
+        "type": "string",
+        "enum": ["auto", "local_only", "external_only"],
+        "default": "auto",
+        "description": "Sent as X-RelayMind-Execution-Mode on every request. parallel_demo is not a mode of this alias."
+      },
+      "limits": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Copies of the gateway's configured limits; a limit not set is not advertised.",
+        "properties": {
+          "externalContextLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "external_model.context_limit of the gateway's launch file; the window advertised in auto and external_only."
+          },
+          "localContextLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The local context of the pinned model manifest's launch settings; the window advertised in local_only."
+          },
+          "maxCompletionTokens": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "chat.max_completion_tokens of the gateway's launch file; the advertised output limit."
+          }
+        }
+      }
+    }
+  }
+}
