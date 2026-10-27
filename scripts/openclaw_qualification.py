@@ -68,7 +68,6 @@ NOT_RECORDED = "<not recorded>"
 SYSTEM_PROMPT = "You are a test host. Use relaymind_test_echo when asked to echo."
 ECHO_PROMPT = "Echo the word lantern with the tool."
 LONG_PROMPT = "Say hello. " * 20
-RUN_ID_HEADER = "x-relaymind-run-id"
 # SDK headers whose value depends on the machine, not on the pins.
 ENVIRONMENT_HEADERS = ("x-stainless-os", "x-stainless-arch", "x-stainless-runtime-version")
 
@@ -293,7 +292,7 @@ def run_driver(
                 raise RuntimeError(f"{scenario.name}: driver failed: {completed.stderr[-2000:]}")
             if scenario.gated:
                 _wait_until_settled(gateway)
-            run_ids = [row[0] for row in gateway.store._conn.execute("SELECT run_id FROM runs")]
+            run_ids = _run_ids(gateway)
             states = {run_id: gateway.store.get_run(run_id).state for run_id in run_ids}
             text = out_path.read_text("utf-8")
             for secret in {token_of(app), token}:
@@ -303,6 +302,11 @@ def run_driver(
     finally:
         gateway.store.close()
     return sanitize_fixture(scenario, output, run_ids, states)
+
+
+def _run_ids(gateway) -> list[str]:
+    """Every run the gateway's store holds, in store order."""
+    return [row[0] for row in gateway.store._conn.execute("SELECT run_id FROM runs")]
 
 
 def _wait_until_settled(gateway, timeout: float = 10.0) -> None:
@@ -437,12 +441,13 @@ def run_host(command: Sequence[str], out: Path, *, timeout: float = 900) -> dict
             external_turns=[],
         )
         app = make_app(gateway, client_tools=ClientToolsChat(gateway.orchestrator))
+        token = token_of(app)
         try:
             with RunningServer(app) as running:
                 try:
                     completed = subprocess.run(
                         list(command),
-                        env=child_environment(running.base_url, token_of(app)),
+                        env=child_environment(running.base_url, token),
                         capture_output=True,
                         text=True,
                         timeout=timeout,
@@ -455,10 +460,9 @@ def run_host(command: Sequence[str], out: Path, *, timeout: float = 900) -> dict
                     )
                 except FileNotFoundError as error:
                     status, exit_code, stdout, stderr = "not_run", None, "", str(error)
-                token = token_of(app)
                 stdout = stdout.replace(token, NOT_RECORDED)
                 stderr = stderr.replace(token, NOT_RECORDED)
-                run_ids = [row[0] for row in gateway.store._conn.execute("SELECT run_id FROM runs")]
+                run_ids = _run_ids(gateway)
                 runs = [
                     {
                         "run_id": run_id,

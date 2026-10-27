@@ -103,7 +103,7 @@ async function runScenario(scenario) {
       if (scenario.abortAfterMs !== undefined) {
         timer = setTimeout(() => controller.abort(), scenario.abortAfterMs);
       }
-      const events = stream(model, context, {
+      const events = await stream(model, context, {
         apiKey: token,
         signal: controller.signal,
         streaming: scenario.stream !== false,
@@ -116,8 +116,8 @@ async function runScenario(scenario) {
           : {}),
       });
       const seen = [];
-      for await (const event of await events) seen.push(event.type);
-      const message = await (await events).result();
+      for await (const event of events) seen.push(event.type);
+      const message = await events.result();
       clearTimeout(timer);
       results.push({ ...summarize(message), events: [...new Set(seen)] });
       if (message.stopReason !== "toolUse") break;

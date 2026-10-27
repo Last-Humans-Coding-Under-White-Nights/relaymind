@@ -87,13 +87,11 @@ export async function startRecorder(options) {
           ? options.replies(exchange.request, replyIndex++)
           : options.replies[Math.min(replyIndex++, options.replies.length - 1)];
       const body = typeof reply.body === "string" ? reply.body : JSON.stringify(reply.body);
-      res.writeHead(reply.status ?? 200, reply.headers ?? { "content-type": "application/json" });
+      const status = reply.status ?? 200;
+      const headers = reply.headers ?? { "content-type": "application/json" };
+      res.writeHead(status, headers);
       res.end(body);
-      exchange.response = {
-        status: reply.status ?? 200,
-        headers: reply.headers ?? { "content-type": "application/json" },
-        body: parseResponse(reply.headers, body),
-      };
+      exchange.response = { status, headers, body: parseResponse(headers, body) };
     }
   });
   await new Promise((resolve) => server.listen(options.port ?? 0, "127.0.0.1", resolve));
