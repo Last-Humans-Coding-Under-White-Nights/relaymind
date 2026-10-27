@@ -26,6 +26,13 @@ State as of 2026-10-23, including the supplied Windows exports at
 
 ## Passing deterministic tests
 
+- `python -m pytest` for the phase 2 evidence and spec 0.45 branch
+  (`m8/evidence-decisions`): 4781 passed, 0 failed, 13 live tests
+  deselected, on Apple M1, macOS 27.0.1, Python 3.14.9, with
+  `llama-server` on PATH. Without it,
+  `tests/test_live_acceptance.py::test_gateway_start_and_healthy` skips
+  (4780 passed, 1 skipped). `ruff check .` and `ruff format --check .`
+  pass.
 - `python -m pytest` for the #110 documentation and evidence PR on
   current master: 3188 passed, 1 skipped, 12 live tests deselected,
   macOS 26.7, Python 3.12.14. `ruff check .` and
@@ -56,6 +63,7 @@ i7-1165G7, 16 GiB RAM, Windows 11 Pro (build 26200), llama.cpp b11785
 | 2026-10-22 | Latency benchmark, local path, 120 measured requests (#33) | `docs/evidence/2026-10-22-latency-apple-m1.json` |
 | 2026-10-23 | Launcher start and live acceptance on x86-64 Windows (#110, AC15): 5 gateway starts, 67/68 gateway checks held, 6/30 model checks passed; no external model available (7 scenarios `not_run`); UI session errored (Playwright Chromium not installed) | `docs/evidence/2026-10-23-live-acceptance-windows-x64.json` |
 | 2026-10-23 | Latency benchmark on x86-64 Windows, local path, 120 measured requests (#110, AC15) | `docs/evidence/2026-10-23-latency-windows-x64.json` |
+| 2026-10-25, 2026-10-26 | Phase 2 M8 matrix (31 cells) and M7 matrix (9 cells), Z.ai `glm-4.6` (#134, #128, #125) | `docs/evidence/2026-10-26-phase2/` |
 
 Key measured numbers (Apple M1 only):
 
@@ -108,11 +116,36 @@ Key measured numbers (x86-64 Windows, Intel i7-1165G7, CPU backend):
 - Monetary cost: not estimated (optional in section 12.2; no dated rate
   source was used).
 
-### M8 evaluation preparation (#134)
+### Phase 2 evaluation (#134, #128, #125)
 
-The evaluation code adds exact-configuration imported timing/outcome priors,
-measured serial local active time, trace-derived placement/cost/selection metrics,
-and a durable fixed matrix driver. The live corpus/latency matrix, paired
-streaming comparison, and evidence-backed default decision remain pending.
-`local_first`, `model_router`, and buffered answer streaming remain defaults.
-No deterministic test establishes useful model performance or provider parity.
+Implemented: exact-configuration imported timing/outcome priors, measured
+serial local active time, trace-derived placement/cost/selection metrics, M7
+proposal and ownership metrics, durable matrix controllers with recovery, and
+offline M7/M8 analyses (`scripts/analyze_m7.py`, `scripts/analyze_m8.py`).
+
+Measured on Apple M1 at revision `741a191`, 25 to 26 October 2026, with Z.ai
+`glm-4.6`: the full M8 matrix (31 cells) and M7 matrix (9 cells), one pass per
+cell; package in `docs/evidence/2026-10-26-phase2/`, details in
+[`EVIDENCE.md`](EVIDENCE.md). Specification 0.45 keeps every default:
+
+- `local_first`: with the router chain, device_aware and expected_wait lost
+  paired corpus success in both configurations (normal: 83/156 and 84/156
+  against 88/156); with the example-router chain no policy gained more than one
+  case, and constrained expected_wait lost ten.
+- `model_router`: the example-router chain matched or beat it in five of six
+  corpus pairs and answered sooner at p50, but its p95 was more than twice as
+  slow, and its Jaccard benchmark gate is not measured.
+- Buffered answers: live streaming 74/156 against 88/156 (14 `predicate_unmet`)
+  and none class 73/104 against 77/104.
+- Final answer pass, one call per generation, no prefetch: the narrow M7
+  hypotheses for draft, many calls and prefetch were measured, but each lost
+  auto task success against the baseline (36, 38 and 38 of 52 against 39).
+
+Unmet or not measured: English simple local completion 4/12 normal and 0/12
+constrained (target 80%);
+p95 first model action 500 ms; the unsuitable-machine device-aware hypothesis
+(no case was measured unsuitable, even on the CPU-only two-thread
+configuration); none-class streaming; early headers before the first
+generation; example-matcher Jaccard and tool narrowing on the section 12.4
+benchmarks. No native Windows phase 2 measurement exists. No deterministic
+test establishes useful model performance or provider parity.

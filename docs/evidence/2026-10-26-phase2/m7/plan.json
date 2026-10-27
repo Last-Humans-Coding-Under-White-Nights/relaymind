@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "kind": "relaymind.m7_matrix",
+  "cells": [
+    {
+      "id": "M7-C0",
+      "runner": "corpus",
+      "revision": "741a19175430e83702a360c454a581b2829e3cb0",
+      "modes": [
+        "auto",
+        "external_only",
+        "local_only"
+      ],
+      "requests": 156,
+      "no_local_model": false,
+      "performance": {
+        "answer_pass": "final",
+        "calls_per_generation": "one",
+        "prefetch": false,
+        "answer_stream": "buffered",
+        "early_headers": false
+      },
+      "selection_chain": [
+        "model_router"
+      ],
+      "timing_prior": null
+    },
+    {
+      "id": "M7-C1",
+      "runner": "corpus",
+      "revision": "741a19175430e83702a360c454a581b2829e3cb0",
+      "modes": [
+        "auto",
+        "local_only"
+      ],
+      "requests": 104,
+      "no_local_model": false,
+      "performance": {
+        "answer_pass": "draft",
+        "calls_per_generation": "one",
+        "prefetch": false,
+        "answer_stream": "buffered",
+        "early_headers": false
+      },
+      "selection_chain": [
+        "model_router"
+      ],
+      "timing_prior": null
+    },
+    {
+      "id": "M7-C2",
+      "runner": "corpus",
+      "revision": "741a19175430e83702a360c454a581b2829e3cb0",
+      "modes": [
+        "auto",
+        "local_only"
+      ],
+      "requests": 104,
+      "no_local_model": false,
+      "performance": {
+        "answer_pass": "final",
+        "calls_per_generation": "many",
+        "prefetch": false,
+        "answer_stream": "buffered",
+        "early_headers": false
+      },
+      "selection_chain": [
+        "model_router"
+      ],
+      "timing_prior": null
+    },
+    {
+      "id": "M7-C3",
+      "runner": "corpus",
+      "revision": "741a19175430e83702a360c454a581b2829e3cb0",
+      "modes": [
+        "auto",
+        "local_only"
+      ],
+      "requests": 104,
+      "no_local_model": false,
+      "performance": {
+        "answer_pass": "final",
+        "calls_per_generation": "one",
+        "prefetch": true,
+        "answer_stream": "buffered",
+        "early_headers": false
+      },
+      "selection_chain": [
+        "model_router"
+      ],
+      "timing_prior": null
+    },
+    {
+      "id": "M7-C4",
+      "runner": "corpus",
+      "revision": "741a19175430e83702a360c454a581b2829e3cb0",
+      "modes": [
+        "auto",
+        "external_only",
+        "local_only"
+      ],
+      "requests": 156,
+      "no_local_model": false,
+      "performance": {
+        "answer_pass": "draft",
+        "calls_per_generation": "many",
+        "prefetch": true,
+        "answer_stream": "buffered",
+        "early_headers": false
+      },
+      "selection_chain": [
+        "model_router"
+      ],
+      "timing_prior": null
+    },
+    {
+      "id": "M7-C5",
+      "runner": "corpus",
+      "revision": "741a19175430e83702a360c454a581b2829e3cb0",
+      "modes": [
+        "auto",
+        "external_only"
+      ],
+      "requests": 104,
+      "no_local_model": true,
+      "performance": {
+        "answer_pass": "final",
+        "calls_per_generation": "one",
+        "prefetch": false,
+        "answer_stream": "buffered",
+        "early_headers": false
+      },
+      "selection_chain": [
+        "example_match"
+      ],
+      "timing_prior": null
+    },
+    {
+      "id": "M7-C6",
+      "runner": "corpus",
+      "revision": "7fbf4660e2cf4bf57142e4ac54bda35d91c54c3e",
+      "modes": [
+        "auto",
+        "local_only"
+      ],
+      "requests": 104,
+      "no_local_model": false,
+      "performance": {
+        "answer_pass": "final",
+        "calls_per_generation": "one",
+        "prefetch": false,
+        "answer_stream": "buffered",
+        "early_headers": false
+      },
+      "selection_chain": [
+        "model_router"
+      ],
+      "timing_prior": null
+    },
+    {
+      "id": "M7-L0",
+      "runner": "latency",
+      "revision": "741a19175430e83702a360c454a581b2829e3cb0",
+      "modes": [],
+      "requests": 124,
+      "no_local_model": false,
+      "performance": {
+        "answer_pass": "final",
+        "calls_per_generation": "one",
+        "prefetch": false,
+        "answer_stream": "buffered",
+        "early_headers": false
+      },
+      "selection_chain": [
+        "model_router"
+      ],
+      "timing_prior": null
+    },
+    {
+      "id": "M7-L1",
+      "runner": "latency",
+      "revision": "741a19175430e83702a360c454a581b2829e3cb0",
+      "modes": [],
+      "requests": 124,
+      "no_local_model": false,
+      "performance": {
+        "answer_pass": "final",
+        "calls_per_generation": "one",
+        "prefetch": false,
+        "answer_stream": "buffered",
+        "early_headers": true
+      },
+      "selection_chain": [
+        "model_router"
+      ],
+      "timing_prior": null
+    }
+  ],
+  "run_order": [
+    "M7-C0",
+    "M7-C1",
+    "M7-C2",
+    "M7-C3",
+    "M7-C4",
+    "M7-C5",
+    "M7-C6",
+    "M7-L0",
+    "M7-L1"
+  ],
+  "corpus_runs": 832,
+  "latency_requests": 248,
+  "external_inference_ceiling": 3120,
+  "token_ceiling": null,
+  "ceiling_scope": "One uninterrupted attempt per cell; restarts add retained cost and bounds.",
+  "conditional_reuse": {
+    "cells": [
+      "M7-C0",
+      "M7-C5"
+    ],
+    "incremental_corpus_runs": 572,
+    "external_inference_ceiling": 1872
+  },
+  "criteria_hypothesis": "controlled revision comparison",
+  "historical_sources": {
+    "corpus": "docs/evidence/2026-10-22-corpus-apple-m1.json",
+    "corpus_sha256": "931c7e260f81d586547bc0834d3befb1f9d558c011e39343f4da5e6f8b778284",
+    "latency": [
+      "docs/evidence/2026-10-23-latency-before-apple-m1.json",
+      "docs/evidence/2026-10-23-latency-after-warmup-apple-m1.json",
+      "docs/evidence/2026-10-23-latency-after-no-warmup-apple-m1.json"
+    ],
+    "comparison_scope": "Historical comparisons are confounded; not an isolated criteria effect."
+  },
+  "defaults_changed": false
+}
