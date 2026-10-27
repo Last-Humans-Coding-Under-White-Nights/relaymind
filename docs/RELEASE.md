@@ -158,3 +158,44 @@ configuration); none-class streaming; early headers before the first
 generation; example-matcher Jaccard and tool narrowing on the section 12.4
 benchmarks. No native Windows phase 2 measurement exists. No deterministic
 test establishes useful model performance or provider parity.
+
+### OpenClaw provider plugin (#145; RM33, AC24, section 12.5)
+
+The artifact: `relaymind-openclaw-provider-<version>.tgz`, built with
+`npm run pack:release -- <dir>` in `integrations/openclaw/`. Next to it are
+`SHA256SUMS` and `release.json`, which names the pins, the engines, the
+packed files, the npm integrity, and the Node that built it. Two builds of
+one checkout are the same bytes (`tests/test_openclaw_install.py`). It holds
+the built `dist/*.js`, `openclaw.plugin.json`, the README (the operator
+guide), and `package.json`, and has no runtime dependency (`openclaw` is the
+peer the host provides). It is not published to a registry. CI uploads it
+from each runner. Declared compatibility: OpenClaw 2026.10.7 only
+(`openclaw.compat.pluginApi` and the peer dependency), Node
+`>=24.22.1 <25 || >=26.12.1`.
+
+Supported environments. A row says what ran on that environment, never more.
+The gateway in every host check below answered from model doubles; no live
+model evidence for the plugin exists yet (#139).
+
+| Environment | OpenClaw runtime | Node against the host's range | Status |
+| --- | --- | --- | --- |
+| macOS 27.0.1 arm64, Apple M1 (user's machine) | 2026.10.7 (157d8c2), npm prefix install | v26.12.1, in `>=26.12.1` | an earlier revision (`a52f8bf`) only: package checks, install, inspect, token, 401 reconnect, and interrupt passed; `agent exec` could not find the model, and the tool policy scenarios failed. This revision: `not_run` |
+| Windows, native | 2026.10.7 documents a native Windows CLI and Gateway, WSL2 optional | `not_run` | `not_run`: no Windows machine. Support gap |
+| Windows, WSL2 | not checked | `not_run` | `not_run`. Never reported as native Windows |
+| Linux x86_64 VPS, Ubuntu 26.04.1 (not a target platform of section 1) | 2026.10.7 (157d8c2), the package's devDependency | v24.22.1, in `>=24.22.1 <25` | install check passed: a functional check over doubles, not a supported-platform qualification |
+| GitHub Actions runners (ubuntu, macOS, Windows) | 2026.10.7, the devDependency | 24.22.1 | the `openclaw-plugin` job; its result is on the pull request, not recorded here |
+
+Support gaps: no qualification of this revision on macOS or Windows exists.
+The macOS qualification needs a rerun of the install check, the host tool
+policy, and the interrupt at this revision. Windows (native, and WSL2 if
+used) has never run the host. Each stays a gap until an export is recorded
+in [`EVIDENCE.md`](EVIDENCE.md#openclaw-plugin-platforms-145), with the OS
+build, the host version, the Node version against the host's range, and
+whether Windows was native or WSL2. The operator commands are in
+`integrations/openclaw/README.md` ("Install check").
+
+Measured on the macOS qualification: every OpenClaw request it measured
+(3 host requests and 7 probe captures) was 10,500 to 10,577 tokens with the
+pinned tokenizer, over the local limit of 8192. An OpenClaw turn therefore
+goes external in `auto` and is `needs_external` in `local_only`. The local
+context stays 8192.
