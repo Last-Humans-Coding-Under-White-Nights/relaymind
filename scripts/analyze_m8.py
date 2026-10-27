@@ -919,7 +919,7 @@ def _matrix_checks(plan: dict, index: dict, matrix: Path, problems: list) -> dic
 
 
 def _recorded_export(argv) -> str | None:
-    return argv[argv.index("--out") + 1] if argv and "--out" in argv else None
+    return argv[argv.index("--out") + 1] if argv and "--out" in argv[:-1] else None
 
 
 def _inventory(matrix: Path) -> tuple[dict, dict]:

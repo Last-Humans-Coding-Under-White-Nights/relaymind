@@ -341,6 +341,16 @@ def test_expected_wait_success_rate_is_unknown_when_a_count_is_unknown():
     )
 
 
+def test_recorded_export_is_unknown_when_out_has_no_value():
+    """RM16: a truncated recorded command lists no export instead of crashing inventory."""
+    module = analysis()
+    assert module._recorded_export(["python", "run.py", "--out", "m8/c/a/export.json"]) == (
+        "m8/c/a/export.json"
+    )
+    assert module._recorded_export(["python", "run.py", "--out"]) is None
+    assert module._recorded_export(None) is None
+
+
 def test_physical_cost_separates_calibration_and_deduplicates_shared_controls():
     """RM16/RM25: interrupted calls cost money; missing usage is never a zero rate."""
     module = analysis()
