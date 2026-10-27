@@ -38,7 +38,7 @@ so that the dependency direction below stays true:
 
 The YAML workflow package expansion is retired (spec 0.47, RM30). The
 implemented fixed parallel demo remains in the orchestrator (RM15, AC14).
-The OpenClaw package is planned; no plugin or live qualification exists yet.
+The OpenClaw package holds the #135 qualification (declared host switches, the pinned transport driver, and frozen wire fixtures); no plugin or live qualification exists yet.
 
 Demo skill packages (SKILL.md plus `skill.manifest.json`, spec sections
 4.2 and 9) live in `skills/` at the repository root, one directory per

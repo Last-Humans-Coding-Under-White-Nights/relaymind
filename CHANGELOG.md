@@ -8,6 +8,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- OpenClaw compatibility qualification (#135; RM33, AC24):
+  `integrations/openclaw/` pins `openclaw` and `@openclaw/ai` 2026.10.7
+  and declares the host switches (`src/compat.ts`); a Node driver runs the
+  pinned `openai-completions` transport against the real gateway over model
+  doubles (`tests/test_openclaw_host_transport.py`); 16 sanitized,
+  reproducible wire fixtures are frozen under
+  `integrations/openclaw/test/fixtures/v2026.10.7/`; the field-by-field
+  compatibility table is in `docs/design/2026-10-27-openclaw-integration.md`.
+  `scripts/openclaw_qualification.py` captures the fixtures and runs an
+  operator's real host against a doubles gateway;
+  `scripts/openclaw_request_size.py` reports captured request sizes against
+  the local limit. The real-host run, the host capture, and the size
+  measurement are not run; no plugin exists yet (#136).
 - Specification 0.49, OpenClaw host facts recorded on the wire (#135; RM33,
   section 7.5): at v2026.10.7 the host's defaults for a loopback URL send
   `stream_options` and, for a reasoning model, `reasoning_effort`; the

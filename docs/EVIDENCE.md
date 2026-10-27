@@ -3046,3 +3046,21 @@ above) could change the balance; a later revision may measure that.
 A first live run at `74780a0` is not kept: it ran while the offline analysis was
 decompressing archives, and its local_only prompts included simple-01, which
 routes to the parallel workflow, so the streak never reached three.
+
+## 2026-10-27 — OpenClaw host qualification and request size (#135, spec 0.49): not run
+
+No live or real-host evidence exists for M9 yet. What ran is deterministic:
+the pinned `@openclaw/ai` 2026.10.7 transport against the gateway over model
+doubles on a Linux x86-64 VPS (Node v24.22.1), recorded as fixtures in
+`integrations/openclaw/test/fixtures/v2026.10.7/transport/`. That is contract
+evidence, not live evidence (spec section 12.5).
+
+| Item | Status | Command |
+| --- | --- | --- |
+| Real OpenClaw host against the gateway over doubles (text, host tool) | not_run | `scripts/openclaw_qualification.py host` (see `integrations/openclaw/README.md`) |
+| Real host request capture (system prompt, tool catalog, history) | not_run | `integrations/openclaw/scripts/capture_host_requests.mjs` |
+| Captured request sizes against the local limit (8192, `qwen3-0.6b-q8_0`), share that fits in auto and local_only | not_run | `scripts/openclaw_request_size.py --base-url <llama-server>` |
+
+The size share is the number #139's local-value hypothesis depends on; it is
+to be recorded here, with its method (tokenizer or UTF-8 upper bound), before
+#136 starts.

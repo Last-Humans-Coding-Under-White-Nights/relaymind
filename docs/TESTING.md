@@ -972,6 +972,49 @@ feature has a test of the default as well. Later pull requests append here.
   outputs. It reads no real measurement.
   Repository completion checks remain the entire pytest suite and Ruff lint/format.
 
+### OpenClaw host transport (#135; RM33, AC24)
+
+The pinned OpenClaw transport (`@openclaw/ai` 2026.10.7, under the host
+transport policy of `openclaw` 2026.10.7) runs against the real gateway
+over model doubles. It needs Node `>=24.22.1 <25` (or `>=26.12.1`) and
+the package's dependencies:
+
+```bash
+cd integrations/openclaw && npm ci && npm run typecheck && npm test
+cd ../.. && pytest tests/test_openclaw_host_transport.py \
+  tests/test_openclaw_qualification_script.py tests/test_openclaw_request_size.py
+```
+
+- `integrations/openclaw/test/compat.test.ts`: every declared host
+  switch, and that the pinned transport resolves them for a loopback URL.
+- `integrations/openclaw/test/fixtures.test.ts`: the frozen transport
+  fixtures carry the pins, hold no credential, send only section 7.1
+  fields and message keys under the declared switches, turn every gateway
+  error into a host failure, and record the tool round trip and the abort.
+- `tests/test_openclaw_host_transport.py`: the Node driver
+  (`integrations/openclaw/test/host-transport/drive.mjs`) plays the host
+  against a gateway on a loopback socket: the host defaults that 7.1
+  rejects (`stream_options`, `reasoning_effort`, a late developer message
+  with the switch on), the declared switches, streamed and buffered text,
+  a host tool round trip (the host executes it once; the gateway records
+  `tool.proposed` and no `tool.started`), an operator
+  `parallel_tool_calls: true`, oversized requests in auto, local_only,
+  and over both limits, the advertised window the host enforces before
+  sending, external_only, a stale token, and an abort during a buffered
+  generation (the run ends cancelled with cancel_requested).
+- `tests/test_openclaw_qualification_script.py`: the harness's host mode
+  keeps the token out of its export and records a missing command as
+  not_run; a fresh capture reproduces the committed fixtures.
+- `tests/test_openclaw_request_size.py`: the size report over captured
+  requests, with its method on every number.
+
+The Node-dependent tests skip with the reason when `node` or
+`integrations/openclaw/node_modules` is missing; `RELAYMIND_OPENCLAW_NODE=1`
+makes that a failure. This tier runs the host's transport, not its agent
+loop: the real-host run (`scripts/openclaw_qualification.py host`) and the
+host request capture are operator steps, not run yet
+([`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
+
 ### What is not covered yet
 
 - The correctness corpus ran on Apple Silicon macOS only (#32). The
@@ -1023,10 +1066,12 @@ feature has a test of the default as well. Later pull requests append here.
   issues in [`ROADMAP.md`](ROADMAP.md) carry the tests. The offline
   spikes (#115, #118, #119) and the timing probes (#114, #116, #117) test
   their own scripts, not the gateway.
-- M9 OpenClaw integration (spec 0.47, RM33, AC24) is planned. #135 to
-  #139 and #145 define host-transport contract tests, plugin installation,
-  tool ownership, cancellation, error/retry behavior, and separate live
-  evaluation. No OpenClaw integration test or live result is claimed yet.
+- M9 OpenClaw integration (spec 0.47, RM33, AC24): #135 runs the pinned
+  host transport against the gateway over model doubles
+  ([OpenClaw host transport](#openclaw-host-transport-135-rm33-ac24)).
+  The real host has not been run: the real-host qualification, the host
+  request capture, and the request size measurement are not_run. No plugin
+  exists yet (#136), and no live result is claimed.
   YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are
   implemented (#143, #144), with frozen SkillsBench/ToolRet inputs and

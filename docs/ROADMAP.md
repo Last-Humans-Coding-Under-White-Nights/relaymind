@@ -748,6 +748,12 @@ This is planned integration, not a claim of a working or faster plugin.
   for a loopback URL (they send `stream_options`, which the gateway
   rejects) and the token size of its requests against the local input
   limit, which bounds how much host work can run locally.
+  Status (spec 0.49): the pinned transport ran against the gateway over
+  model doubles, with 16 frozen wire fixtures and the compatibility table
+  in the design doc; no gateway contract change is needed. The real-host
+  run, the host request capture, and the request size measurement are
+  not_run (operator steps in `integrations/openclaw/README.md`), so the
+  size report that bounds #139 is still to be recorded before #136 starts.
 - Remove the retired workflow steps placeholder from the demo UI
   (#173; RM23, AC14). Independent of the plugin; can start now.
 - Provider package, model catalog, configuration, and token handover
