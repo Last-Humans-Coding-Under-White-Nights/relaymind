@@ -242,6 +242,12 @@ describe("through the provider and the pinned transport", () => {
     expect(lines.join("\n")).not.toContain(TOKEN);
   });
 
+  it("an empty answer the plugin fails is recorded as failed, not as an answer", async () => {
+    const { result, records } = await converse([sse("run_empty", "")]);
+    expect(result.stopReason).toBe("error");
+    expect(records[0]).toMatchObject({ runId: "run_empty", outcome: "failed" });
+  });
+
   it("two attempts of one turn record two run IDs under one turn", async () => {
     const { records } = await converse(
       [

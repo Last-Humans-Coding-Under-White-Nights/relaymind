@@ -162,7 +162,7 @@ export interface AttemptReport {
   idempotencyKey: string;
   /** The HTTP status and headers of an accepted (2xx) response; undefined otherwise. */
   response?: { status: number; headers: Record<string, string> };
-  /** The final message of the attempt under the plugin's rules (raw for gateway fields). */
+  /** The attempt's final message under the answer rule, with the transport's gateway fields. */
   raw: AssistantMessage;
   /** Whether the plugin retries after this attempt. */
   retried: boolean;
@@ -302,7 +302,7 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
       }
     };
 
-    void (async () => {
+    const run = async () => {
       let key = baseKey;
       let newKeys = 0;
       for (let attempt = 1; ; attempt++) {
@@ -321,7 +321,8 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
           attempt,
           idempotencyKey: key,
           ...(outcome.response ? { response: outcome.response } : {}),
-          raw: outcome.raw,
+          // Under the answer rule: an empty answer is recorded as the failure the host sees.
+          raw: checkAnswer(outcome.raw),
           retried: retry,
         });
         if (retry) {
@@ -331,8 +332,14 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
         emit(outcome.held, outcome.event, outcome.raw);
         break;
       }
-      out.end();
-    })();
+    };
+    // Whatever happens, the host gets one terminal event and a result.
+    void run()
+      .catch((error: unknown) => {
+        const raw = failedMessage(model, error instanceof Error ? error.message : String(error));
+        emit([], { type: "error", reason: "error", error: raw }, raw);
+      })
+      .finally(() => out.end());
 
     return {
       [Symbol.asyncIterator]: () => out[Symbol.asyncIterator](),
