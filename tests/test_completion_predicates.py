@@ -836,21 +836,68 @@ def test_statement_factorization_matches_all_existing_parameter_cases():
     """
     from relaymind.skills.predicates import StatementGate, StatementRejected, completion_parts
 
-    defaults = {
-        "test_incident_counts_reported": ("incident_counts_reported", [COUNTS]),
-        "test_health_checklist_separated": ("health_checklist_separated", [UNAVAILABLE]),
-        "test_health_checklist_structure": ("health_checklist_separated", [UNAVAILABLE]),
-        "test_incident_counts_without_causes_or_conflicts": ("incident_counts_reported", [COUNTS]),
+    # Suites whose predicate, results, or answer are fixed in the test body.
+    defaults: dict[str, tuple[str, list, str | None]] = {
+        "test_incident_counts_reported": ("incident_counts_reported", [COUNTS], None),
+        "test_health_checklist_separated": ("health_checklist_separated", [UNAVAILABLE], None),
+        "test_health_checklist_structure": ("health_checklist_separated", [UNAVAILABLE], None),
+        "test_incident_counts_without_causes_or_conflicts": (
+            "incident_counts_reported",
+            [COUNTS],
+            None,
+        ),
         "test_deletion_answer_reports_the_returned_outcome": (
             "deletion_outcome_reported",
             [DELETED],
+            None,
+        ),
+        "test_deletion_outcome_reported": (
+            "deletion_outcome_reported",
+            None,
+            "Deleted sandbox database demo-orders-db.",
         ),
         "test_performance_sections_are_real_and_non_empty": (
             "performance_evidence_separated",
             [METRICS],
+            None,
         ),
+        "test_performance_labels_must_start_their_own_sections": (
+            "performance_evidence_separated",
+            [METRICS],
+            None,
+        ),
+        "test_no_deployment_like_id_is_claimed_when_none_exists": (
+            "deployment_reported",
+            [NO_DEPLOYMENT],
+            None,
+        ),
+        "test_words_that_start_with_dep_are_not_deployment_ids": (
+            "deployment_reported",
+            [NO_DEPLOYMENT],
+            None,
+        ),
+        "test_other_deployment_like_ids_are_still_invented": (
+            "deployment_reported",
+            [NO_DEPLOYMENT],
+            None,
+        ),
+        "test_health_status_rejects_negated_or_mixed_statuses": (
+            "health_status_preserved",
+            None,
+            None,
+        ),
+        "test_deployment_ids_come_from_the_tool_result": ("deployment_reported", None, None),
     }
-    checked = 0
+    # Single regressions with no parameters, replayed explicitly.
+    cases: list[tuple[str, str, str, list]] = [
+        (
+            "test_a_draft_item_that_mentions_an_observation_stays_in_the_checklist",
+            "health_checklist_separated",
+            "Diagnostic checklist (draft, not log-backed):\n"
+            "- Record an observation: payments-api is unavailable (2026-10-20T02:59:00Z).\n",
+            [UNAVAILABLE],
+        ),
+    ]
     for name, fn in list(globals().items()):
         if not callable(fn) or not name.startswith("test_"):
             continue
@@ -862,31 +909,36 @@ def test_statement_factorization_matches_all_existing_parameter_cases():
                 if isinstance(mark.args[0], str)
                 else mark.args[0]
             )
+            if "answer" not in fields and name not in defaults:
+                continue
             for row in mark.args[1]:
-                row = getattr(row, "values", row)
-                values = dict(zip(fields, row if len(fields) > 1 else (row,), strict=True))
-                if "answer" not in values or not isinstance(values["answer"], str):
-                    continue
-                predicate, results = defaults.get(name, (name.removeprefix("test_"), None))
+                # pytest.param always holds a tuple; a bare row of one field does not.
+                row = row.values if hasattr(row, "values") else row
+                row = row if len(fields) > 1 or isinstance(row, tuple) else (row,)
+                values = dict(zip(fields, row, strict=True))
+                predicate, results, answer = defaults.get(
+                    name, (name.removeprefix("test_"), None, None)
+                )
                 predicate = values.get("predicate", predicate)
                 results = values.get("results", results)
-                if predicate not in COMPLETION_PREDICATES or results is None:
-                    continue
-                answer = values["answer"]
-                expected = COMPLETION_PREDICATES[predicate](answer, results)
-                safety, complete = completion_parts(predicate, answer, results)
-                assert (safety and complete) == expected
-                for width in (1, 5, len(answer) or 1):
-                    gate = StatementGate(predicate, results)
-                    try:
-                        pieces = [
-                            gate.feed(answer[i : i + width]) for i in range(0, len(answer), width)
-                        ]
-                        pieces.append(gate.finish())
-                    except StatementRejected:
-                        assert not expected, (name, answer, width)
-                    else:
-                        assert expected, (name, answer, width)
-                        assert "".join(pieces) == answer
-                checked += 1
-    assert checked > 75
+                answer = values.get("answer", answer)
+                # Never skip a suite silently: every answer fixture is replayed.
+                assert predicate in COMPLETION_PREDICATES, (name, predicate)
+                assert results is not None and isinstance(answer, str), name
+                cases.append((name, predicate, answer, results))
+    for name, predicate, answer, results in cases:
+        expected = COMPLETION_PREDICATES[predicate](answer, results)
+        safety, complete = completion_parts(predicate, answer, results)
+        assert (safety and complete) == expected
+        for width in (1, 5, len(answer) or 1):
+            gate = StatementGate(predicate, results)
+            try:
+                pieces = [gate.feed(answer[i : i + width]) for i in range(0, len(answer), width)]
+                pieces.append(gate.finish())
+            except StatementRejected:
+                assert not expected, (name, answer, width)
+            else:
+                assert expected, (name, answer, width)
+                assert "".join(pieces) == answer
+    assert len(cases) >= 115
+    assert {name for name, *_ in cases} >= set(defaults)
