@@ -1,6 +1,6 @@
 // The plugin configuration (RM12, RM19, RM26, RM33; spec sections 7.1 and 7.5).
 //
-// Four settings, mirrored by the closed configSchema of openclaw.plugin.json:
+// Five settings, mirrored by the closed configSchema of openclaw.plugin.json:
 // - baseUrl: the gateway's /v1 root on a loopback address only. The gateway is a
 //   separately started process; the plugin never forwards to another host.
 // - executionMode: auto, local_only, or external_only, sent on every request as
@@ -11,6 +11,9 @@
 // - maxRetries: the plugin's own retries after a 429 or a 504 before any answer
 //   content, 0 (the default: one attempt) to 2 (section 7.5, #138). A value
 //   outside that range is refused, never clamped.
+// - diagnosticsPath: an absolute file path; one JSON line per inference attempt
+//   (the run-ID correlation of section 7.5, src/attempts.ts) is appended to it.
+//   Unset, the records go to the host logger only.
 // The application token is not configuration: it lives in the host's credential
 // store (the api-key auth method), so no error here can echo it.
 
@@ -33,6 +36,8 @@ export interface RelayMindPluginConfig {
   limits: RelayMindLimits;
   /** Plugin retries after 429 or 504 before any content: 0 to 2, 0 by default. */
   maxRetries: number;
+  /** An absolute path for the attempt records (JSON lines); unset by default. */
+  diagnosticsPath?: string;
 }
 
 /** A configuration the plugin refuses; the message names the setting, never a secret. */
@@ -40,7 +45,7 @@ export class RelayMindConfigError extends Error {
   override name = "RelayMindConfigError";
 }
 
-const KEYS = new Set(["baseUrl", "executionMode", "limits", "maxRetries"]);
+const KEYS = new Set(["baseUrl", "diagnosticsPath", "executionMode", "limits", "maxRetries"]);
 export const MAX_RETRIES = 2;
 const LIMIT_KEYS = ["externalContextLimit", "localContextLimit", "maxCompletionTokens"] as const;
 const SAFE_TO_ECHO = /^[a-z_]{1,32}$/;
@@ -125,6 +130,15 @@ function parseRetries(raw: unknown): number {
   return raw;
 }
 
+function parseDiagnosticsPath(raw: unknown): string | undefined {
+  if (raw === undefined) return undefined;
+  // POSIX or Windows absolute: the host's working directory never decides where records go.
+  if (typeof raw !== "string" || !(raw.startsWith("/") || /^[A-Za-z]:[\\/]/.test(raw))) {
+    fail("diagnosticsPath must be an absolute file path");
+  }
+  return raw;
+}
+
 /** Check the plugin configuration; throw a RelayMindConfigError naming the first problem. */
 export function parsePluginConfig(raw: unknown): RelayMindPluginConfig {
   if (raw === undefined || raw === null) parseBaseUrl(undefined);
@@ -135,15 +149,17 @@ export function parsePluginConfig(raw: unknown): RelayMindPluginConfig {
   for (const key of Object.keys(record)) {
     if (!KEYS.has(key)) {
       fail(
-        `${key} is not a setting (the settings are baseUrl, executionMode, limits, maxRetries); ` +
+        `${key} is not a setting (the settings are baseUrl, executionMode, limits, maxRetries, diagnosticsPath); ` +
           "a credential belongs in the host's credential setup, not here",
       );
     }
   }
+  const diagnosticsPath = parseDiagnosticsPath(record.diagnosticsPath);
   return {
     baseUrl: parseBaseUrl(record.baseUrl),
     executionMode: parseMode(record.executionMode),
     limits: parseLimits(record.limits),
     maxRetries: parseRetries(record.maxRetries),
+    ...(diagnosticsPath === undefined ? {} : { diagnosticsPath }),
   };
 }

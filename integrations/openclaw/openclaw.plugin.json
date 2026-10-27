@@ -40,6 +40,11 @@
         "type": "string",
         "description": "The gateway's loopback /v1 URL, such as http://127.0.0.1:8080/v1 (localhost, 127.0.0.0/8, or [::1] only)."
       },
+      "diagnosticsPath": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Optional absolute file path: one JSON line per inference attempt (turn, attempt, Idempotency-Key, RelayMind run ID or unavailable, outcome, code, native run and UI links). Never the token or message content."
+      },
       "executionMode": {
         "type": "string",
         "enum": ["auto", "local_only", "external_only"],

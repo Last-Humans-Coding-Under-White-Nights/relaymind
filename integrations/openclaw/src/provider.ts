@@ -26,6 +26,7 @@ import { catalogModel, catalogResult, discoverRelayMind, type RelayMindCatalogMo
 import { MODEL_ID, PROVIDER_ID } from "./compat.ts";
 import { parsePluginConfig, type RelayMindPluginConfig } from "./config.ts";
 import { RECONNECT, TOKEN_HANDOVER } from "./diagnostics.ts";
+import { attemptRecord, createAttemptLog } from "./attempts.ts";
 import { failoverReason, isContextOverflow } from "./errors.ts";
 import { redactingLogger, type Logger } from "./redaction.ts";
 import { relaymindStreamFn, type StreamFn } from "./stream.ts";
@@ -65,6 +66,10 @@ export function createRelayMindProvider(options: RelayMindProviderOptions): Prov
   // The credential values seen in this process, redacted from every message.
   const secrets = new Set<string>();
   const logger = redactingLogger(options.logger, () => [...secrets]);
+  const logAttempt = createAttemptLog({
+    logger,
+    ...(config.diagnosticsPath ? { path: config.diagnosticsPath } : {}),
+  });
   return {
     id: PROVIDER_ID,
     label: "RelayMind",
@@ -123,6 +128,7 @@ export function createRelayMindProvider(options: RelayMindProviderOptions): Prov
       relaymindStreamFn(ctx.streamFn ?? hostStreamSimple, {
         secrets: () => [...secrets],
         maxRetries: config.maxRetries,
+        onAttempt: (report) => logAttempt(attemptRecord(report, config.baseUrl)),
       }),
     // Truthful classes for the host's failover decision (section 7.5, src/errors.ts):
     // a class never triggers or hides a failover; that is host policy.

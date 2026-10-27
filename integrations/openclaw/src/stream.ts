@@ -34,7 +34,7 @@
 import type { ProviderWrapStreamFnContext } from "openclaw/plugin-sdk/plugin-entry";
 
 import { describeFailure, gatewayFailure, retryRule } from "./errors.ts";
-import { IDEMPOTENCY_HEADER, idempotencyKey, retryKey } from "./idempotency.ts";
+import { IDEMPOTENCY_HEADER, idempotencyKey, retryKey, turnId } from "./idempotency.ts";
 import { MAX_RETRIES } from "./config.ts";
 import { checkContext, checkOptions, checkPayload } from "./input-guard.ts";
 
@@ -156,6 +156,8 @@ function channel<T>() {
 
 /** What one attempt sent and got back, for diagnostics (src/diagnostics.ts). */
 export interface AttemptReport {
+  /** The OpenClaw turn of the request (src/idempotency.ts turnId). */
+  turn: string;
   attempt: number;
   idempotencyKey: string;
   /** The HTTP status and headers of an accepted (2xx) response; undefined otherwise. */
@@ -234,6 +236,7 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
     // A key the host set itself is the host's: kept as is, and never retried by the plugin.
     const hostKey = hasHeader(options?.headers, IDEMPOTENCY_HEADER);
     const baseKey = hostKey ?? idempotencyKey({ model, context, options });
+    const turn = turnId(context, (options as { sessionId?: string } | undefined)?.sessionId);
     const out = channel<AssistantMessageEvent>();
     let resolveFinal!: (message: AssistantMessage) => void;
     const final = new Promise<AssistantMessage>((resolve) => (resolveFinal = resolve));
@@ -290,6 +293,15 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
       resolveFinal(settled);
     };
 
+    // Diagnostics never fail a request.
+    const report = (attempt: AttemptReport) => {
+      try {
+        streamOptions.onAttempt?.(attempt);
+      } catch {
+        // A broken diagnostics writer is not the answer's problem.
+      }
+    };
+
     void (async () => {
       let key = baseKey;
       let newKeys = 0;
@@ -304,7 +316,8 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
           attempt <= maxRetries &&
           !options?.signal?.aborted &&
           (await wait(delayMs * attempt, options?.signal ?? undefined));
-        streamOptions.onAttempt?.({
+        report({
+          turn,
           attempt,
           idempotencyKey: key,
           ...(outcome.response ? { response: outcome.response } : {}),

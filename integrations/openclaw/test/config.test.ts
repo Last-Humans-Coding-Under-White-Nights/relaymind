@@ -131,6 +131,24 @@ describe("maxRetries (section 7.5: single attempt by default, bounded retries, #
   });
 });
 
+describe("diagnosticsPath (section 7.5: run-ID correlation, #138)", () => {
+  const base = { baseUrl: "http://127.0.0.1:8080/v1" };
+
+  it("is unset by default: the records go to the host logger only", () => {
+    expect(parsePluginConfig(base).diagnosticsPath).toBeUndefined();
+  });
+
+  it("keeps an absolute path", () => {
+    expect(parsePluginConfig({ ...base, diagnosticsPath: "/var/tmp/rm/attempts.jsonl" }).diagnosticsPath).toBe(
+      "/var/tmp/rm/attempts.jsonl",
+    );
+  });
+
+  it.each(["attempts.jsonl", "", 3])("refuses %s by name", (value) => {
+    expect(errorOf({ ...base, diagnosticsPath: value }).message).toMatch(/diagnosticsPath must be an absolute file path/);
+  });
+});
+
 describe("closed key set (RM12: the token is not plugin configuration)", () => {
   it("refuses an unknown key by name and never echoes its value", () => {
     const message = errorOf({ baseUrl: "http://127.0.0.1:8080/v1", apiKey: TOKEN }).message;
