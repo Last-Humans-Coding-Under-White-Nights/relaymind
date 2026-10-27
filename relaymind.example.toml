@@ -89,10 +89,11 @@ enabled_workflows = []
 #     or top_p; otherwise the final generation runs.
 #   early_headers: a streamed chat request gets its status line, X-RelayMind-Run-ID,
 #     and X-RelayMind-Events-URL as soon as the run is accepted, then SSE comment
-#     keep-alives, and the answer chunks only at the end (RM32). A client that
+#     keep-alives, and answer chunks once verified (RM32). A client that
 #     wants progress opens the native event stream the header names.
-#   answer_stream: only buffered exists; live is refused at startup until gated
-#     answer streaming is implemented (RM32).
+#   answer_stream: buffered (default), or live to publish verified answer statements
+#     as generated. Late failures end the stream without a replacement (RM32).
+#     Non-streamed managed chat and client-owned calls stay buffered.
 #   calls_per_generation: many admits several read-only tool calls from one
 #     generation, up to the per-stage tool_calls limit in a local stage and
 #     the remaining run_tool_executions limit in the external stage (section

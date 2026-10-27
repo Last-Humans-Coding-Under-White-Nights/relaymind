@@ -21,7 +21,8 @@ free text (RM12).
 """
 
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -715,3 +716,159 @@ COMPLETION_CRITERIA: Mapping[str, CompletionCriteria] = {
         failed_checks=health_checklist_separated_failed_checks,
     ),
 }
+
+
+# RM32: explicit safety/completeness factorization. The original predicates stay
+# authoritative and unchanged; neither failures nor decisions depend on prose.
+def completion_parts(
+    predicate_id: str, answer: str, results: Sequence[ToolResult]
+) -> tuple[bool, bool]:
+    """Cumulative safety and final completeness under the existing syntax (AC19)."""
+    if predicate_id == "health_checklist_separated":
+        label = _DRAFT_CHECKLIST_LABEL.search(answer)
+        if label is None:
+            safe, _ = completion_parts("health_status_preserved", answer, results)
+            return safe, False
+        rest = answer[label.end() :]
+        resume = _OBSERVATION_HEADING.search(rest)
+        outside = answer[: label.start()] + (rest[resume.start() :] if resume else "")
+        return completion_parts("health_status_preserved", outside, results)
+    if predicate_id == "health_status_preserved":
+        data = _latest(results, "get_service_health")
+        if data is None:
+            return False, False
+        stated = _stated_statuses(answer, data["service"])
+        return all(s == data["status"] for s in stated), bool(stated) and data[
+            "checked_at"
+        ] in answer
+    if predicate_id == "deployment_reported":
+        data = _latest(results, "get_latest_deployment")
+        if data is None:
+            return False, False
+        complete = _id_mention(data["service"]).search(answer) is not None
+        if data["deployment_id"] is None:
+            safe = (
+                _DEPLOYMENT_LIKE_ID.search(answer) is None
+                and _ZH_DEPLOYMENT_NUMBER.search(answer) is None
+                and all(m.group() == data.get("revision") for m in _REVISION_LIKE.finditer(answer))
+            )
+        else:
+            safe = all(
+                m.group() == data["deployment_id"] for m in _DEPLOYMENT_LIKE_ID.finditer(answer)
+            )
+            complete = (
+                complete and data["deployment_id"] in answer and data["deployed_at"] in answer
+            )
+        return safe, complete
+    if predicate_id == "incident_counts_reported":
+        data = _latest(results, "get_incident_counts")
+        if data is None:
+            return False, False
+        numbers = _labeled_numbers(answer)
+        return (
+            not _CAUSE_WORDS.search(answer)
+            and all(all(n == data[k] for n in ns) for k, ns in numbers.items()),
+            _id_mention(data["service"]).search(answer) is not None and all(numbers.values()),
+        )
+    if predicate_id == "deletion_outcome_reported":
+        data = _latest(results, "delete_demo_database")
+        if data is None or data["deleted"] is not True:
+            return False, False
+        return (
+            all(
+                m.group().lower() == data["database_id"] for m in _DEMO_DATABASE_ID.finditer(answer)
+            )
+            and _DELETION_NEGATED.search(answer) is None,
+            _id_mention(data["database_id"]).search(answer) is not None
+            and _DELETION_VERB.search(answer) is not None,
+        )
+    if predicate_id == "performance_evidence_separated":
+        evidence = any(
+            _latest(results, tool, require_complete=False) is not None for tool in _EVIDENCE_TOOLS
+        )
+        filled = _filled_sections(answer)
+        return evidence, evidence and "observation" in filled and bool(
+            filled & {"hypothesis", "insufficient"}
+        )
+    raise KeyError(predicate_id)
+
+
+def pending_evidence_complete(
+    tool_names: Sequence[str], predicate_id: str, results: Sequence[ToolResult]
+) -> bool:
+    """Latest successful outcomes only; performance alone accepts truncated data."""
+    return all(
+        _latest(results, name, require_complete=predicate_id != "performance_evidence_separated")
+        is not None
+        for name in tool_names
+    )
+
+
+class StatementRejected(Exception):
+    """A stable prefix is unsafe or the normally ended answer is incomplete."""
+
+
+class StatementGate:
+    """A generation's frozen evidence, raw context and unpublished offset (RM32).
+
+    A delimiter is retained verbatim. ASCII punctuation needs real lookahead.
+    Checklist labels can span arbitrary whitespace/newlines, so publication waits
+    for its first complete draft label and then uses complete lines. With known
+    secrets the run conservatively buffers to EOF for exact full-text redaction.
+    """
+
+    def __init__(
+        self, predicate_id: str, results: Sequence[ToolResult], *, hold: bool = False
+    ) -> None:
+        self.predicate_id = predicate_id
+        self.results = deepcopy(tuple(results))
+        self.raw = ""
+        self.offset = 0
+        self.hold = hold
+        self.rejected = False
+
+    def push(self, text: str) -> Iterator[str]:
+        """Yield stable verified units in order, even within one provider delta."""
+        if self.rejected:
+            raise StatementRejected
+        self.raw += text
+        if self.hold:
+            return
+        label = None
+        if self.predicate_id == "health_checklist_separated":
+            label = _DRAFT_CHECKLIST_LABEL.search(self.raw)
+            if label is None:
+                return
+        for end in _STATEMENT_END.finditer(self.raw, self.offset):
+            stop = end.end()
+            if end.group() in ".!?" and stop == len(self.raw):
+                continue
+            if label is not None and (stop <= label.end() or end.group() != "\n"):
+                continue
+            safe, _ = completion_parts(self.predicate_id, self.raw[:stop], self.results)
+            if not safe:
+                self.rejected = True
+                raise StatementRejected
+            piece = self.raw[self.offset : stop]
+            if piece.strip():
+                self.offset = stop
+                yield piece
+
+    def feed(self, text: str) -> str:
+        """Collect the units of push; publication uses push to preserve ordering."""
+        return "".join(self.push(text))
+
+    def finish(self) -> str:
+        """Resolve the true EOF tail before releasing it, with the old backstop."""
+        safe, complete = completion_parts(self.predicate_id, self.raw, self.results)
+        if (
+            self.rejected
+            or not self.raw.strip()
+            or not (safe and complete)
+            or not COMPLETION_PREDICATES[self.predicate_id](self.raw, self.results)
+        ):
+            self.rejected = True
+            raise StatementRejected
+        tail = self.raw[self.offset :]
+        self.offset = len(self.raw)
+        return tail

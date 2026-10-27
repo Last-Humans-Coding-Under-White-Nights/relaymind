@@ -692,6 +692,7 @@ def test_run_accepted_carries_the_section_8_payload(tmp_path):
         "answer_options": {},
         # Spec 0.32 section 8: the performance options in force, here the baseline.
         **PerformanceSettings().to_json_object(),
+        "answer_stream_effective": "buffered",
         # RM29: the offered skills' prefetch declarations are recorded whatever the option says.
         "prefetch_declarations": gateway.skills.prefetch_declarations(gateway.skills.names()),
         # RM28: the selector chain in force and the example_match thresholds, the baseline.
@@ -1039,9 +1040,12 @@ def test_an_adapter_without_a_locality_is_refused():
         ConfiguredModel(adapter=adapter, model_id="m")
 
 
-def test_external_calls_are_counted_from_the_adapter_locality(tmp_path):
-    """RM16: every actual model call is labelled; external calls are counted."""
-    gateway = build_gateway(tmp_path, HEALTH_RUN)
+@pytest.mark.parametrize("answer_stream", ["buffered", "live"])
+def test_external_calls_are_counted_from_the_adapter_locality(tmp_path, answer_stream):
+    """RM16/RM32: dispatch role does not overwrite actual adapter locality."""
+    gateway = build_gateway(
+        tmp_path, HEALTH_RUN, performance=PerformanceSettings(answer_stream=answer_stream)
+    )
     gateway.adapter.locality = "external"
     outcome, events = run(gateway)
     assert {e.actor for e in of_type(events, "model.started")} == {"external"}

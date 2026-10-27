@@ -395,3 +395,26 @@ def test_http_attempts_have_separate_corpus_and_latency_report_rows():
     assert latency["by_selector_provenance"]["http_attempted"]["samples"] == 1
     assert latency["by_selector_provenance"]["gateway_observed"]["samples"] == 0
     assert "| http_attempted | 1 |" in render_latency_markdown(latency, title="HTTP")
+
+
+def test_stream_policies_keep_success_and_predicate_failures_separate():
+    """RM25/RM32: live failures stay in the denominator and historical labels stay unknown."""
+    grades = [
+        grade(
+            "one",
+            "auto",
+            answer_stream="live",
+            answer_stream_effective="live",
+            success=False,
+            error_code="predicate_unmet",
+        ),
+        grade("two", "auto", answer_stream="live", answer_stream_effective="buffered"),
+        grade("three", "auto"),
+    ]
+    summary = summarize_corpus(grades)
+    policies = summary["modes"]["auto"]["en"]["all"]["answer_stream_policies"]
+    assert policies["live"]["success"] == rate(0, 1)
+    assert policies["live"]["predicate_unmet"] == 1
+    assert policies["buffered"]["success"] == rate(1, 1)
+    assert policies["unknown"]["runs"] == 1
+    assert "| live | 1 | 0/1 | 1 |" in render_corpus_markdown(summary, title="test")

@@ -2665,3 +2665,15 @@ The keyword method has no semantic understanding, no Chinese word handling, no
 argument generation and only one pick for tasks that often require several
 skills. This run demonstrates production transport and honest evaluation, not
 useful general selection accuracy or live model capability.
+
+
+## 2026-10-24 — Gated streaming evidence boundary (#125)
+
+The spec 0.41 implementation has deterministic model-double tests for RM32/AC19,
+including actual socket/standard SDK handling of a verified prefix followed by
+`predicate_unmet`. These are protocol and gateway checks, not live model task
+success or timing measurements. No provider or corpus comparison ran in this
+implementation task. The paired live/buffered corpus run on the same final
+revision and frozen timing prior remains pending under the M8 comparison work.
+Failures must remain in both arms; neither a parity claim nor a default change
+follows from these deterministic tests. Buffered remains the default.
