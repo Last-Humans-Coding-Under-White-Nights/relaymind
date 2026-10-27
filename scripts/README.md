@@ -21,13 +21,14 @@
   against the local input limit (#135; RM13, RM26, section 7.5). Each
   request is validated as the gateway does and measured with
   `measure_request`: tokenizer counts through a running llama-server
-  (`--base-url`), or the labeled UTF-8 upper bound. It reports the share
-  that fits the manifest's `ctx_size` and what auto and local_only do with
-  the rest.
+  (`--base-url`), or the labeled UTF-8 upper bound, under which a request
+  over the limit is undecided. It reads the fixture layout and the host
+  probe's one-request-per-file layout, and reports the share that fits the
+  manifest's `ctx_size` and what auto and local_only do with the rest.
 
   ```bash
   python scripts/openclaw_request_size.py \
-      --fixtures integrations/openclaw/test/fixtures/v2026.10.7/host \
+      --fixtures docs/evidence/2026-10-27-openclaw-mac-probe/requests \
       --manifest models/qwen3-0.6b-q8_0.manifest.json \
       [--base-url http://127.0.0.1:8033] --out <report.json>
   ```

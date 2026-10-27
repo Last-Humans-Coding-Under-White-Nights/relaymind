@@ -24,7 +24,7 @@ sufficient: the model must still produce an admissible answer or call.
 
 Usage:
     python scripts/openclaw_request_size.py \\
-        --fixtures integrations/openclaw/test/fixtures/v2026.10.7/host \\
+        --fixtures docs/evidence/2026-10-27-openclaw-mac-probe/requests \\
         --manifest models/qwen3-0.6b-q8_0.manifest.json \\
         [--base-url http://127.0.0.1:8033] [--external-context-limit N] \\
         --out docs/evidence/<date>-openclaw-request-size-<machine>.json

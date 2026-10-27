@@ -19,7 +19,7 @@ baseline for #136 to #138 are in
 | `test/host-transport/drive.mjs` | runs the pinned `openai-completions` transport against a gateway and plays the host |
 | `test/host-transport/recorder.mjs` | the recording loopback proxy and scripted endpoint |
 | `test/fixtures/v2026.10.7/transport/` | deterministic transport fixtures, captured by `scripts/openclaw_qualification.py fixtures` |
-| `test/fixtures/v2026.10.7/host/` | real-host captures (not run yet) |
+| `test/fixtures/v2026.10.7/host/` | reserved for captures made with `capture_host_requests.mjs`; the macOS host probe's captures are in `docs/evidence/2026-10-27-openclaw-mac-probe/` |
 | `scripts/capture_host_requests.mjs` | the controlled endpoint a real host is pointed at |
 
 ## Checks
@@ -54,12 +54,24 @@ that commit as its provenance, and
 `tests/test_openclaw_qualification_script.py` fails when the tree was dirty or
 when a capture input changed after the recorded commit.
 
-## Operator runs (not run yet)
+## Operator runs
 
 These need a real OpenClaw v2026.10.7 install, and the size measurement
 with tokenizer counts needs `llama-server` with the pinned model
 (`models/README.md`). Their results are evidence only when recorded in
 `docs/EVIDENCE.md`; until then they are `not_run`.
+
+Status: a host capture ran on macOS with the probe's own capture server
+(`docs/evidence/2026-10-27-openclaw-mac-probe/REPORT.md`, checked by
+`tests/test_openclaw_host_captures.py`). The tokenizer size count and the
+real host against the gateway are not run.
+
+Host facts from that probe that the steps below rely on: a model in the
+host config needs `name`; `strictMessageKeys` must stay false (true strips
+the tool linkage); isolate the host with `OPENCLAW_HOME`,
+`OPENCLAW_STATE_DIR`, `OPENCLAW_CONFIG_PATH`, and `--config` (the host
+still writes its log to `/tmp/openclaw/`); the host removes underscores
+from a replayed tool call ID, so compare IDs with that in mind.
 
 ### Host capture (operator)
 
@@ -75,7 +87,8 @@ node scripts/capture_host_requests.mjs --port 8089 \
 
 In the host configuration, add a custom provider for the capture (the
 switches are `relaymindModelCompat()`; the field names are the host's
-`models.providers` schema at the pin, to be confirmed on the first run):
+`models.providers` schema at the pin, confirmed by the macOS probe, where
+`name` is required):
 
 ```json5
 {
@@ -120,13 +133,19 @@ can name local paths (the script replaces the home directory with `<home>`).
 
 ```bash
 python scripts/openclaw_request_size.py \
-  --fixtures integrations/openclaw/test/fixtures/v2026.10.7/host \
+  --fixtures docs/evidence/2026-10-27-openclaw-mac-probe/requests \
   --manifest models/qwen3-0.6b-q8_0.manifest.json \
   --base-url http://127.0.0.1:8033 \
   --out docs/evidence/<date>-openclaw-request-size-<machine>.json
 ```
 
-Without `--base-url` every number is a UTF-8 byte upper bound, labeled so.
+The script reads both the probe's layout (one request per file, a folder
+per run) and the fixture layout of `capture_host_requests.mjs`. Without
+`--base-url` every number is a UTF-8 byte upper bound, labeled so: a
+request over the bound is undecided, never needs_external. That offline
+run is recorded in
+`docs/evidence/2026-10-27-openclaw-request-size-mac-probe-utf8.json`
+(0 of 7 proved to fit, 7 undecided).
 
 ### Real host against the gateway over doubles
 

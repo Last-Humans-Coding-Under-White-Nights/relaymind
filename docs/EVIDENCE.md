@@ -3047,20 +3047,43 @@ A first live run at `74780a0` is not kept: it ran while the offline analysis was
 decompressing archives, and its local_only prompts included simple-01, which
 routes to the parallel workflow, so the streak never reached three.
 
-## 2026-10-27 — OpenClaw host qualification and request size (#135, spec 0.49): not run
+## 2026-10-27 — OpenClaw host qualification and request size (#135, spec 0.49)
 
-No live or real-host evidence exists for M9 yet. What ran is deterministic:
-the pinned `@openclaw/ai` 2026.10.7 transport against the gateway over model
-doubles on a Linux x86-64 VPS (Node v24.22.1), recorded as fixtures in
-`integrations/openclaw/test/fixtures/v2026.10.7/transport/`. That is contract
-evidence, not live evidence (spec section 12.5).
+Two tiers ran; neither used a live model. The pinned `@openclaw/ai`
+2026.10.7 transport ran against the gateway over model doubles on a Linux
+x86-64 VPS (Node v24.22.1), recorded as fixtures in
+`integrations/openclaw/test/fixtures/v2026.10.7/transport/`. A real host,
+`OpenClaw 2026.10.7 (157d8c2)` on macOS 27.0.1 arm64 (Node v26.12.1, npm
+11.20.0), ran `openclaw agent exec` against the probe's own capture server,
+not against the gateway; its sanitized captures and answers are in
+[`docs/evidence/2026-10-27-openclaw-mac-probe/`](evidence/2026-10-27-openclaw-mac-probe/REPORT.md),
+and `tests/test_openclaw_host_captures.py` checks them with the gateway's
+validator. Both are contract evidence, not live evidence (spec section 12.5).
 
-| Item | Status | Command |
+| Item | Status | Evidence or command |
 | --- | --- | --- |
+| Real host request capture (system prompt, tool catalog, history) | ran (macOS, capture server) | `docs/evidence/2026-10-27-openclaw-mac-probe/requests/` |
 | Real OpenClaw host against the gateway over doubles (text, host tool) | not_run | `scripts/openclaw_qualification.py host` (see `integrations/openclaw/README.md`) |
-| Real host request capture (system prompt, tool catalog, history) | not_run | `integrations/openclaw/scripts/capture_host_requests.mjs` |
-| Captured request sizes against the local limit (8192, `qwen3-0.6b-q8_0`), share that fits in auto and local_only | not_run | `scripts/openclaw_request_size.py --base-url <llama-server>` |
+| Captured request sizes, UTF-8 upper bound | ran offline: 7 measured, 0 proved to fit, 7 undecided | `docs/evidence/2026-10-27-openclaw-request-size-mac-probe-utf8.json` |
+| Captured request sizes, tokenizer count against the local limit (8192, `qwen3-0.6b-q8_0`), share that fits in auto and local_only | not_run | `scripts/openclaw_request_size.py --base-url <llama-server>` |
 
-The size share is the number #139's local-value hypothesis depends on; it is
-to be recorded here, with its method (tokenizer or UTF-8 upper bound), before
-#136 starts.
+The size report read the 26 captured chat requests. The gateway's validator
+rejects 19 of them: 18 were sent without the switches (`stream_options`), and
+one is the follow-up turn whose tool linkage `strictMessageKeys: true` stripped.
+The 7 sent with the switches measure 37,544 to 37,841 UTF-8 bytes of prompt
+fields (median 37,576; two or four messages, eleven tools). A byte count only
+bounds the token count from above, so none of them is decided against the
+8192-token local limit: the share that fits locally is at least 0 of 7, and
+the tokenizer count that decides it is still not run. The stored captures are
+sanitized and likely a little smaller than what the host sent (about 40,450
+body bytes as received).
+
+Other host facts recorded in the probe: the host removes underscores from the
+tool call ID it replays (`call_probe_1` came back as `callprobe1`, in the call
+and its result); it decorates the user message with a timestamp and a runtime
+line; it accepts a response without `usage`; it never refused the loopback base
+URL. Not checked there: the login prompt, the env-var credential path, a
+catalog timeout, turn-ID stability on retry, plugin-tool approval, and Windows.
+
+The size share is the number #139's local-value hypothesis depends on; the
+tokenizer count is to be recorded here, with its method, before #136 starts.

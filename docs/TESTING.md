@@ -982,7 +982,8 @@ the package's dependencies:
 ```bash
 cd integrations/openclaw && npm ci && npm run typecheck && npm test
 cd ../.. && pytest tests/test_openclaw_host_transport.py \
-  tests/test_openclaw_qualification_script.py tests/test_openclaw_request_size.py
+  tests/test_openclaw_qualification_script.py tests/test_openclaw_request_size.py \
+  tests/test_openclaw_host_captures.py
 ```
 
 - `integrations/openclaw/test/compat.test.ts`: every declared host
@@ -1005,15 +1006,25 @@ cd ../.. && pytest tests/test_openclaw_host_transport.py \
 - `tests/test_openclaw_qualification_script.py`: the harness's host mode
   keeps the token out of its export and records a missing command as
   not_run; a fresh capture reproduces the committed fixtures.
+- `tests/test_openclaw_host_captures.py`: the real host's captured
+  requests (macOS probe, `docs/evidence/2026-10-27-openclaw-mac-probe/`)
+  against the gateway's validator: the loopback defaults are rejected by
+  name, the switches keep every request inside 7.1, `strictMessageKeys:
+  true` breaks the tool linkage, and the host's rewritten call ID still
+  passes the same-request check. No Node needed.
 - `tests/test_openclaw_request_size.py`: the size report over captured
-  requests, with its method on every number.
+  requests, with its method on every number; over the UTF-8 bound a
+  request is undecided.
 
 The Node-dependent tests skip with the reason when `node` or
 `integrations/openclaw/node_modules` is missing; `RELAYMIND_OPENCLAW_NODE=1`
 makes that a failure. This tier runs the host's transport, not its agent
-loop: the real-host run (`scripts/openclaw_qualification.py host`) and the
-host request capture are operator steps, not run yet
-([`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
+loop: the real-host run against the gateway
+(`scripts/openclaw_qualification.py host`) is an operator step, not run
+yet ([`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
+The host request capture ran on macOS against a capture server (the host
+probe), and its requests are checked offline by
+`tests/test_openclaw_host_captures.py`.
 
 ### What is not covered yet
 
@@ -1069,8 +1080,9 @@ host request capture are operator steps, not run yet
 - M9 OpenClaw integration (spec 0.47, RM33, AC24): #135 runs the pinned
   host transport against the gateway over model doubles
   ([OpenClaw host transport](#openclaw-host-transport-135-rm33-ac24)).
-  The real host has not been run: the real-host qualification, the host
-  request capture, and the request size measurement are not_run. No plugin
+  A real host ran on macOS against a capture server (the host probe);
+  the real host against the gateway and the tokenizer size count are
+  not_run, and the UTF-8 bound leaves the request size undecided. No plugin
   exists yet (#136), and no live result is claimed.
   YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are
