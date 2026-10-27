@@ -2764,9 +2764,22 @@ unsuitable-class detection did not fire. #170 tracks the detection change.
 | expected_wait vs local_first | normal, router | 88/156 | 84/156 | 3/7 |
 | device_aware vs local_first | constrained, router | 83/156 | 80/156 | 1/4 |
 | expected_wait vs local_first | constrained, router | 83/156 | 82/156 | 5/6 |
+| device_aware vs local_first | normal, example-router | 88/156 | 87/156 | 4/5 |
+| expected_wait vs local_first | normal, example-router | 88/156 | 89/156 | 7/6 |
+| device_aware vs local_first | constrained, example-router | 89/156 | 87/156 | 2/4 |
 | expected_wait vs local_first | constrained, example-router | 89/156 | 79/156 | 1/11 |
 | example-router vs router | normal, local_first | 88/156 | 88/156 | 6/6 |
 | example-router vs router | constrained, local_first | 83/156 | 89/156 | 8/2 |
+
+The table lists every policy against the local_first baseline in both chains
+and the chain comparison under local_first. The other paired corpus
+comparisons of `analysis/m8-analysis.json` (`comparisons`; candidate first,
+then gains/losses) are expected_wait against device_aware (normal 84/156 vs
+83/156, 5/4, and 89/156 vs 87/156, 8/6; constrained 82/156 vs 80/156, 5/3,
+and 79/156 vs 87/156, 3/11; router then example-router) and example-router
+against router under device_aware (normal 87/156 vs 83/156, 6/2; constrained
+87/156 vs 80/156, 8/1) and under expected_wait (normal 89/156 vs 84/156, 8/3;
+constrained 79/156 vs 82/156, 5/8).
 
 Latency (120 measured requests per cell, each arm's full population; completion
 counts successful final answers only). Normal configuration, local_first:
