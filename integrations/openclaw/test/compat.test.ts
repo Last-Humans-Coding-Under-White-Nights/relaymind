@@ -4,6 +4,7 @@
 // they send stream_options on every streamed request, which section 7.1 rejects.
 // The plugin declares the switches below so the host stays inside the 7.1 subset.
 // #135 confirms every switch on the wire (test/fixtures/v2026.10.7/transport/).
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { resolveOpenAICompletionsCompat } from "@openclaw/ai/transports";
 
@@ -90,5 +91,27 @@ describe("relaymindModelEntry (RM33, section 7.5)", () => {
 
   it("pins the qualified OpenClaw release", () => {
     expect(PINNED_OPENCLAW).toBe("2026.10.7");
+  });
+});
+
+describe("the switches on the real host (#135, docs/evidence/2026-10-27-openclaw-mac-probe)", () => {
+  const configs = new URL(
+    "../../../docs/evidence/2026-10-27-openclaw-mac-probe/configs/",
+    import.meta.url,
+  );
+  const compatOf = (name: string): Record<string, unknown> =>
+    JSON.parse(readFileSync(new URL(name, configs), "utf8")).models.providers["relaymind-capture"]
+      .models[0].compat;
+
+  it("agree with every switch of the base config the host ran inside section 7.1", () => {
+    const declared = relaymindModelCompat() as unknown as Record<string, unknown>;
+    for (const [key, value] of Object.entries(compatOf("config-b-base.json"))) {
+      expect(declared[key], key).toEqual(value);
+    }
+  });
+
+  it("differ from the config whose strictMessageKeys stripped the tool linkage", () => {
+    expect(compatOf("config-b.json").strictMessageKeys).toBe(true);
+    expect(relaymindModelCompat().strictMessageKeys).toBe(false);
   });
 });
