@@ -27,8 +27,12 @@ State as of 2026-10-23, including the supplied Windows exports at
 ## Passing deterministic tests
 
 - `python -m pytest` for the phase 2 evidence and spec 0.45 branch
-  (`m8/evidence-decisions`): 4781 passed, 0 failed, on Apple M1, macOS
-  27.0.1, Python 3.14.9. `ruff check .` and `ruff format --check .` pass.
+  (`m8/evidence-decisions`): 4781 passed, 0 failed, 13 live tests
+  deselected, on Apple M1, macOS 27.0.1, Python 3.14.9, with
+  `llama-server` on PATH. Without it,
+  `tests/test_live_acceptance.py::test_gateway_start_and_healthy` skips
+  (4780 passed, 1 skipped). `ruff check .` and `ruff format --check .`
+  pass.
 - `python -m pytest` for the #110 documentation and evidence PR on
   current master: 3188 passed, 1 skipped, 12 live tests deselected,
   macOS 26.7, Python 3.12.14. `ruff check .` and
