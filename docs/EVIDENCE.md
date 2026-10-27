@@ -2973,3 +2973,76 @@ about a third of the output tokens of its own default reasoning. Its p95 first
 useful content (24.5 s) is close to glm-4.6's (22.2 s); with default reasoning
 it was more than twice as long. No monetary cost is claimed here. The package
 is in [`evidence/2026-10-27-external-model/`](evidence/2026-10-27-external-model/).
+
+## 2026-10-27 — Unsuitable detection from local stages (#170, spec 0.48), Apple M1
+
+Spec 0.48 section 14.4.7. Two parts: an offline analysis of the recorded phase 2
+package (no cell rerun) and a short live check of the class. Neither is a
+performance run.
+
+| Item | Value |
+|---|---|
+| Offline analysis | `docs/evidence/2026-10-27-unsuitable/analysis.json` (SHA-256 `c38fef3ee87f0db349db35cd087acabd5f69044c46ab5284f734b861db0886ec`) and `.md`, from `scripts/analyze_unsuitable.py` at `ff77dc4` over `docs/evidence/2026-10-26-phase2` (M8 index `a24dd1def6d46f7fbccb28eaa52b8ae7284bf25b05ee4264ec0da042c75dc224`). After the PR #174 review the script was rerun with the corrected capability_missing exclusion and wrote byte-identical JSON; `.md` was rendered again from that JSON, so counts read as text instead of Python dictionaries |
+| Live check | `docs/evidence/2026-10-27-unsuitable/live-check-apple-m1.json` (SHA-256 `95a04a12056528a4be02210101b7111d9bde1ccb357cc835b1c0ad017aaf270d`), `scripts/probes/probe_unsuitable_live.py` at `cd8dc85` (clean), 2026-10-27 06:41 to 06:43 UTC |
+| Machine and runtime | The phase 2 Apple M1; Qwen3-0.6B Q8_0 on llama.cpp b11785; constrained configuration `--n-gpu-layers 0 --threads 2` |
+| External model | Offline: glm-4.6 (the recorded cells). Live: glm-5.3-flash, used only to answer the managed external runs |
+| Published equivalents of the measured revisions | After the runs the branch was rebased onto the M9 plan (#172) and squash-merged as PR #174, so `cd8dc85`, `ff77dc4`, and `74780a0` are not on `master`. Their `src/`, `scripts/`, `tests/`, `evaluation/`, and `relaymind.example.toml` are byte-identical to the PR #174 commits "Use single-skill prompts in the live unsuitable check and read readiness last" (the live check's `cd8dc85`), "Report the external work per latency request in the unsuitable analysis" (the analysis's `ff77dc4`), and "Record local stage outcomes and add the detect_stages option" (the discarded first live run's `74780a0`); each pair differs only by the M9 documents. The review fixes in the PR's last commit change the code after these revisions; rerunning the analysis with them wrote byte-identical JSON. The exports keep the revisions they recorded |
+
+### Why the constrained configuration stayed `ready`
+
+The phase 2 runner kept one llama-server for a whole cell. Only the first case
+of each constrained cell had a cold warm-up (routing 3315 ms, skill 2281 ms);
+the other 155 were served from the prefix cache (routing at most 613 ms). The
+spec 0.47 check timed only the routing warm-up, and 3315 ms fits the 4000 ms
+stage budget, so every case was `ready`.
+
+### Replay of the spec 0.48 rules (offline)
+
+| Configuration | Corpus attempts | Stage rule fires | Longest streak of stages that ran out of local time | Startup check, cases |
+|---|---|---|---|---|
+| normal | 8 | 0 | 2 | 1248 ready |
+| constrained | 7 | 7 | 7 to 26 | 1085 ready, 7 unsuitable (the cold case of each) |
+
+The threshold of three has a margin of one stage over the normal cells. In the
+local_first cells, 98 of the constrained outcomes that ran out of local time
+come from handoff.started events recorded before spec 0.48 added the budget
+field; the replay counts a local_budget handoff that reached active_seconds as
+running out of time (per-cell counts in the analysis). The replay ignores the
+feedback the rule would have had.
+
+### Section 12.3 unsuitable hypothesis: not met
+
+Control: constrained local_first auto, example-router chain (recorded 25
+October). Candidate: none-class auto, example chain (recorded 26 October), the
+same managed external path an unsuitable class takes (proved equal by
+`tests/test_unsuitable_stages.py`).
+
+| Measure | Local-first, constrained | Managed external (none class) |
+|---|---|---|
+| Auto corpus success (gains/losses) | 45/52 | 43/52 (3/5) |
+| First useful content p50/p95 ms (n) | 10358/53087 (111) | 15827/54260 (98) |
+| Completion p50/p95 ms (n) | 11794/53424 (81) | 17605/55569 (68) |
+| Timeouts / errors / unobserved | 0 / 9 / 0 | 6 / 16 / 6 |
+| External calls per simple latency request | 0.83 | 2.27 |
+| Median external call, simple requests | 7392 ms | 8099 ms |
+
+A constrained local stage that runs out of local time has usually already run
+the skill's tool, and the handoff carries the result, so the external stage
+needs fewer calls. On this machine and with glm-4.6, running out of local time
+did not mean that local work did not help. `placement.detect_stages` stays
+false and no default changes. The arms ran on different days, so provider
+latency may have drifted (the per-call medians differ by 9%), startup warm-up
+time is in neither arm, and a faster external model (the glm-5.3-flash entry
+above) could change the balance; a later revision may measure that.
+
+### Live check of the class (`detect_stages = true`)
+
+| Phase | Startup | Requests | Class after |
+|---|---|---|---|
+| Constrained, new runtime (cold) | `unsuitable`: routing and skill warm-ups 3356 + 2271 = 5627 ms against 4 s | 2 auto (simple-02, simple-02-zh): `unsuitable` in run.accepted, route `no_local_model`, two external calls each, no local call | `unsuitable` |
+| Constrained, new gateway on the warm runtime | `ready`: warm-ups 285 + 481 ms (968 and 567 cached tokens) | 3 local_only (simple-03, -04, -05): each `local_budget`, budget `active_seconds`, 4002 ms; then 1 auto: `unsuitable`, `no_local_model` | `unsuitable` ("the last 3 local stages ran out of local time") |
+| Normal, new runtime | `ready`: 756 + 762 ms | 3 local_only: 2 completed, 1 `invalid_output`; 1 auto completed locally | `ready` |
+
+A first live run at `74780a0` is not kept: it ran while the offline analysis was
+decompressing archives, and its local_only prompts included simple-01, which
+routes to the parallel workflow, so the streak never reached three.

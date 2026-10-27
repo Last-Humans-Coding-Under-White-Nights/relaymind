@@ -21,10 +21,12 @@ Detection (RM26, spec 0.37 section 14.1). With placement.detect true,
 answer with the model loaded within warmup_seconds, or the model is
 unavailable; then, with warmup true, the routing-shaped warm-up must
 finish within the local per-stage active budget, or the model is
-unsuitable. That warm-up is the first request after the model loaded, so
-it is measured cold. A warm-up that fails, or that is cut off by
-warmup_seconds before the stage budget ran out, says the model could not
-generate, so it is unavailable.
+unsuitable; with placement.detect_stages true (spec 0.48) the
+routing-shaped and skill-shaped warm-ups must finish within it together,
+because a local stage needs both. They are the first requests after the
+model loaded, so they are measured cold when the runtime has just started.
+A warm-up that fails, or that is cut off by warmup_seconds before the stage
+budget ran out, says the model could not generate, so it is unavailable.
 """
 
 import asyncio
@@ -304,33 +306,58 @@ async def wait_until_available(
         await sleep(min(poll_seconds, remaining))
 
 
-def classify_warmup(result: WarmupResult, *, seconds: float, active_seconds: float) -> LocalStatus:
-    """The class the routing-shaped warm-up measured (RM26, spec 0.37).
+def classify_warmup(
+    result: WarmupResult, *, seconds: float, active_seconds: float, stages: bool = False
+) -> LocalStatus:
+    """The class the warm-up measured (RM26, spec 0.37 and 0.48).
 
-    Over the per-stage active budget is unsuitable. A warm-up cut off by
-    warmup_seconds at or after that budget did not fit it either; one cut
-    off sooner, or one that failed, is unavailable. Only the routing sample
-    decides the class: a skill-shaped warm-up that fails or is cut off after
-    a routing one that fits leaves the model ready (the launcher still
-    prints the warm-up line that says it did not finish).
+    By default (spec 0.37) the routing-shaped warm-up alone must fit the
+    per-stage active budget. With stages (placement.detect_stages, spec 0.48)
+    a local stage needs a routing and a skill generation within that budget,
+    so the routing-shaped and skill-shaped warm-ups together must fit it;
+    without a skill-shaped sample the routing one alone decides. A
+    warm-up cut off by warmup_seconds at or after that budget did not fit it
+    either; a routing one cut off sooner, or one that failed, is unavailable. A
+    skill-shaped warm-up that failed, or was cut off before the budget ran out,
+    leaves a fitting routing one ready (the launcher still prints the warm-up
+    line that says it did not finish).
     """
     limit = f"the local stage limit (active_seconds) is {active_seconds:g} s"
+    budget_ms = active_seconds * 1000
     routing = next((s for s in result.samples if s.purpose == "routing"), None)
-    if routing is not None:
-        if routing.duration_ms > active_seconds * 1000:
+    skill = next((s for s in result.samples if s.purpose == "skill"), None)
+    if routing is None:
+        if result.timed_out and seconds >= active_seconds:
             return LocalStatus(
                 LocalModelClass.UNSUITABLE,
-                f"the routing warm-up took {routing.duration_ms} ms; {limit}",
+                f"the routing warm-up did not finish within {seconds:g} s; {limit}",
             )
-        return LocalStatus.ready()
-    if result.timed_out and seconds >= active_seconds:
+        return LocalStatus(
+            LocalModelClass.UNAVAILABLE, f"the routing warm-up did not finish: {result.detail}"
+        )
+    if routing.duration_ms > budget_ms:
         return LocalStatus(
             LocalModelClass.UNSUITABLE,
-            f"the routing warm-up did not finish within {seconds:g} s; {limit}",
+            f"the routing warm-up took {routing.duration_ms} ms; {limit}",
         )
-    return LocalStatus(
-        LocalModelClass.UNAVAILABLE, f"the routing warm-up did not finish: {result.detail}"
-    )
+    if not stages:
+        return LocalStatus.ready()
+    if skill is not None:
+        total = routing.duration_ms + skill.duration_ms
+        if total > budget_ms:
+            return LocalStatus(
+                LocalModelClass.UNSUITABLE,
+                f"the routing and skill warm-ups took {routing.duration_ms} +"
+                f" {skill.duration_ms} = {total} ms; {limit}",
+            )
+    elif result.timed_out and seconds >= active_seconds:
+        return LocalStatus(
+            LocalModelClass.UNSUITABLE,
+            f"the routing warm-up took {routing.duration_ms} ms and the skill warm-up did not"
+            f" finish in the rest of the {seconds:g} s warm-up limit (placement.warmup_seconds);"
+            f" {limit}",
+        )
+    return LocalStatus.ready()
 
 
 async def detect_local_model(
@@ -355,7 +382,10 @@ async def detect_local_model(
         return LocalStatus.ready(), None
     result = await warm_up(orchestrator, adapter, seconds=seconds)
     status = classify_warmup(
-        result, seconds=seconds, active_seconds=orchestrator.budgets.active_seconds
+        result,
+        seconds=seconds,
+        active_seconds=orchestrator.budgets.active_seconds,
+        stages=orchestrator.detect_stages,
     )
     return status, result
 

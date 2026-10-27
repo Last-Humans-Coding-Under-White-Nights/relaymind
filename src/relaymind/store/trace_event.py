@@ -478,6 +478,9 @@ def _check_handoff_payload(payload: Mapping[str, Any]) -> None:
         values = payload[key]
         if not _is_array(values) or not all(_is_text(value) for value in values):
             raise TraceEventError(f"'{key}' must be an array of non-blank strings")
+    # Spec 0.48: the section 11 limit that stopped the local stage, when one did.
+    if "budget" in payload and not _is_text(payload["budget"]):
+        raise TraceEventError("'budget' must be a non-blank string")
     request = payload["request"]
     if not (
         isinstance(request, Mapping)

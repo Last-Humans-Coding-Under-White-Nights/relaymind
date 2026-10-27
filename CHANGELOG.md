@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Specification 0.48, unsuitable detection from local stages (#170; RM26, RM27;
+  section 14.4.7): the run store records, for every local stage, whether it ran out of
+  local time, and handoff.started names the budget that stopped the local stage.
+  With the new launcher key `placement.detect_stages = true` (default false) the
+  startup check holds the routing-shaped and skill-shaped warm-ups to
+  active_seconds together, and a ready model whose three latest local stages
+  all ran out of local time is unsuitable until that streak is older than
+  `probe_after_seconds`. `scripts/analyze_unsuitable.py` replays both rules on
+  the phase 2 package and measures the section 12.3 unsuitable hypothesis from
+  recorded cells: not met (managed external execution 43/52 against 45/52 auto
+  successes and higher p95 latency), because a local stage that runs out of time
+  still runs the tool work the external stage reuses. No default changes.
+
 ### Changed
 
 - Specification 0.47 redirects M9 from YAML workflows to OpenClaw
