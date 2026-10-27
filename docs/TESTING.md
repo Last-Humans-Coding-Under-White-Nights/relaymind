@@ -1067,9 +1067,11 @@ cd ../.. && pytest tests/test_openclaw_plugin.py
   restart is 401 with the reconnect line and the fresh token restores
   access, an unreachable gateway is not an auth failure, a gateway without
   client-owned execution publishes nothing, external_only runs without a
-  local model, local_only without one is refused by the gateway's policy,
-  local_only makes no external call, and parallel_demo is refused before
-  anything is sent.
+  local model, local_only outside the policy is named as a policy refusal,
+  local_only permitted without a local model is diagnosed as not ready and
+  refused by the gateway through the local model's class (RM26) with no
+  external call, local_only makes no external call, and parallel_demo is
+  refused before anything is sent.
 
 The real host loading the packed plugin, and the token setup after a real
 gateway restart, are operator steps, not run yet

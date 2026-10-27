@@ -18,7 +18,7 @@
       "relaymind"
     ],
     "compat": {
-      "pluginApi": ">=2026.10.7",
+      "pluginApi": "2026.10.7",
       "minGatewayVersion": "2026.10.7"
     },
     "build": {
@@ -27,7 +27,7 @@
     }
   },
   "peerDependencies": {
-    "openclaw": ">=2026.10.7"
+    "openclaw": "2026.10.7"
   },
   "devDependencies": {
     "@openclaw/ai": "2026.10.7",

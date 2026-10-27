@@ -17,6 +17,13 @@ selection, prefetch, or skill stage, and no managed device-aware placement
 (client-owned execution has none, section 7.5); usage is unknown. The
 gateway's run trace is authoritative for the model calls.
 
+Declared compatibility is the qualified release only: `openclaw.compat.pluginApi`
+and the `openclaw` peer dependency are both exactly `2026.10.7`, so the host's
+own range check refuses to load the plugin on any other release (a numeric
+correction such as `2026.10.7-1` is the same release). A later release is
+declared only after it is qualified again: the #135 capture rerun against it,
+its fixtures recorded under `test/fixtures/v<release>/`, and the pins moved.
+
 The compatibility table, the SDK seams found at the pin, and the frozen
 baseline are in
 [`docs/design/2026-10-27-openclaw-integration.md`](../../docs/design/2026-10-27-openclaw-integration.md#compatibility-qualification-135).

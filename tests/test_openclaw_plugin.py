@@ -238,8 +238,8 @@ def test_an_external_only_setup_works_without_a_local_model(tmp_path):
     assert len(gateway.external.requests) == 1
 
 
-def test_local_only_without_a_local_model_is_named_and_refused(tmp_path):
-    """RM26, section 7.5: the policy keeps local_only refused; the plugin never changes the mode."""
+def test_local_only_outside_the_policy_is_named_and_refused(tmp_path):
+    """Section 7.4, 7.5: the policy keeps local_only refused; the plugin never changes the mode."""
     settings = ChatSettings(
         allowed_modes=frozenset({ExecutionMode.AUTO, ExecutionMode.EXTERNAL_ONLY})
     )
@@ -265,6 +265,49 @@ def test_local_only_without_a_local_model_is_named_and_refused(tmp_path):
     assert exchange["response"]["status"] == 403
     assert exchange["response"]["body"]["error"]["code"] == "execution_mode_forbidden"
     assert output["results"][0]["stop_reason"] == "error"
+    assert gateway.external.requests == []
+
+
+def test_local_only_permitted_without_a_local_model_is_not_ready_and_refused(tmp_path):
+    """RM26, section 7.4, 7.5: policy permits local_only, the local model is absent.
+
+    /readyz names local_only not ready because the local model is absent,
+    so the plugin diagnoses mode_not_ready (not a policy refusal), and the
+    gateway refuses the request through the class of the local model
+    (mode_refusal), never by changing the mode or calling the external model.
+    """
+    settings = ChatSettings(
+        allowed_modes=frozenset(
+            {ExecutionMode.AUTO, ExecutionMode.LOCAL_ONLY, ExecutionMode.EXTERNAL_ONLY}
+        )
+    )
+    gateway, app = client_gateway(
+        tmp_path,
+        [],
+        settings=settings,
+        local_status=LocalStatus.absent(),
+        external_turns=[text_turn("never")],
+    )
+    with RunningServer(app) as running:
+        output = drive_plugin(
+            running.base_url,
+            token_of(app),
+            tmp_path,
+            prompt="Say hello.",
+            pluginConfig={"executionMode": "local_only"},
+        )
+    (warning,) = warnings(output)
+    assert "RelayMind mode local_only is not ready" in warning
+    assert "absent" in warning
+    assert "does not permit" not in warning
+    (exchange,) = inference(output)
+    assert exchange["request"]["headers"][MODE_HEADER] == "local_only"
+    assert exchange["response"]["status"] == 403
+    error = exchange["response"]["body"]["error"]
+    assert error["code"] == "execution_mode_forbidden"
+    assert error["message"] == LocalStatus.absent().refusal(ExecutionMode.LOCAL_ONLY)
+    assert output["results"][0]["stop_reason"] == "error"
+    assert gateway.adapter.requests == []
     assert gateway.external.requests == []
 
 

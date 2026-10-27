@@ -21,7 +21,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   unreachable gateway, a stale token (401, with the reconnect
   instruction), an absent alias, and the configured mode's readiness
   apart, and never log the token. `npm run pack:check` checks the packed
-  tarball. `tests/test_openclaw_plugin.py` drives the plugin and the pinned
+  tarball. The declared compatibility is exactly the qualified release
+  (`openclaw.compat.pluginApi` and the `openclaw` peer dependency are
+  `2026.10.7`), so the host refuses to load it on an unqualified release.
+  `tests/test_openclaw_plugin.py` drives the plugin and the pinned
   transport against the gateway over doubles. The transport fixtures were
   recaptured unchanged because `package.json` changed. The real-host load
   and token setup are not run. No specification or gateway change.

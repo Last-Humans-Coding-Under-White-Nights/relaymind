@@ -65,13 +65,33 @@ describe("package.json", () => {
   it("pins the qualified OpenClaw release and declares its compatibility", () => {
     expect(pkg.openclaw.build.openclawVersion).toBe(PINNED_OPENCLAW);
     expect(pkg.openclaw.build.pluginSdkVersion).toBe(PINNED_OPENCLAW);
-    expect(pkg.openclaw.compat.pluginApi).toBe(`>=${PINNED_OPENCLAW}`);
+    // Only the qualified release is declared compatible (section 7.5): a later
+    // host is a new qualification (#135 capture), not an assumption.
+    expect(pkg.openclaw.compat.pluginApi).toBe(PINNED_OPENCLAW);
+    expect(pkg.openclaw.compat.minGatewayVersion).toBe(PINNED_OPENCLAW);
     expect(pkg.devDependencies.openclaw).toBe(PINNED_OPENCLAW);
     expect(pkg.devDependencies["@openclaw/ai"]).toBe(PINNED_OPENCLAW);
     expect(host.version).toBe(PINNED_OPENCLAW);
     // The host provides openclaw/plugin-sdk at runtime.
-    expect(pkg.peerDependencies.openclaw).toBe(`>=${PINNED_OPENCLAW}`);
+    expect(pkg.peerDependencies.openclaw).toBe(PINNED_OPENCLAW);
     expect(pkg.engines.node).toBe(host.engines.node);
+  });
+
+  it("is accepted by the pinned host's own range check only on the qualified release", async () => {
+    // The host's package-compat module decides whether a plugin loads.
+    const dist = new URL("node_modules/openclaw/dist/", root);
+    const [file] = readdirSync(dist).filter((name) => /^package-compat-.*\.mjs$/.test(name));
+    expect(file).toBeDefined();
+    const compat = await import(new URL(file!, dist).href);
+    const satisfies = compat.n as (version: string, range: string) => boolean;
+    const range = pkg.openclaw.compat.pluginApi as string;
+    expect(satisfies(PINNED_OPENCLAW, range)).toBe(true);
+    // A numeric correction of the same release is the same release.
+    expect(satisfies(`${PINNED_OPENCLAW}-1`, range)).toBe(true);
+    for (const later of ["2026.10.8", "2026.11.1", "2027.1.1"]) {
+      expect(satisfies(later, range)).toBe(false);
+    }
+    expect(satisfies("2026.10.6", range)).toBe(false);
   });
 
   it("has no runtime dependency the host would have to install", () => {
