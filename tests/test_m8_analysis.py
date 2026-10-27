@@ -1074,6 +1074,22 @@ def test_a_matrix_recorded_on_windows_is_accepted_on_any_platform(
     assert report["provenance"]["matrix_root_recorded"] == r"C:\recorded\m8"
 
 
+def test_report_renders_a_corpus_comparison_without_pairs(fixture_matrix, monkeypatch):
+    """RM25, spec 14.4.3: a zero denominator is null and renders as unknown, not a crash."""
+    module = fixture_analysis(monkeypatch)
+    report, _ = module.analyze(fixture_matrix)
+    corpus = next(c for c in report["comparisons"] if c["runner"] == "corpus")
+    corpus["paired"] = {**corpus["paired"], **module._paired([]), "class_transitions": {}}
+    assert corpus["paired"]["success_delta"] is None
+    row = next(
+        line
+        for line in module.render(report).splitlines()
+        if line.startswith(f"| {corpus['question']} | {corpus['configuration']} |")
+        and corpus["candidate"] in line
+    )
+    assert "| - | no pairs |" in row
+
+
 def test_inventory_mode_reports_complete_and_missing_cells_without_comparisons(
     fixture_matrix, tmp_path, monkeypatch
 ):

@@ -1420,6 +1420,10 @@ def _ms(value) -> str:
     return "-" if value is None else f"{value:.0f}"
 
 
+def _delta(value) -> str:
+    return "-" if value is None else f"{value:.3f}"
+
+
 def _inventory_lines(public: dict) -> list[str]:
     counts = public["counts"]
     lines = [
@@ -1482,7 +1486,7 @@ def render(report: dict) -> str:
             f"| {c['question']} | {c['configuration']} | {c['control']} | {c['candidate']} | "
             f"{_fraction(p['success_A'])} | {_fraction(p['success_B'])} | {p['gain']} | "
             f"{p['loss']} | {p['unchanged_success']}/{p['unchanged_failure']} | "
-            f"{p['success_delta']:.3f} | {p['parity']} | {p['class_transitions']} |"
+            f"{_delta(p['success_delta'])} | {p['parity']} | {p['class_transitions']} |"
         )
     lines += [
         "",
