@@ -7,8 +7,10 @@ from typing import Any
 
 # Spec 0.48 section 14.4.7: the limits whose stop means the local stage ran out of time.
 TIME_BUDGETS = frozenset({"active_seconds", "run_active_seconds"})
-# A failure that says nothing about the device records no stage outcome.
-_NO_STAGE_EVIDENCE = frozenset({"interrupted", "internal_error", "capability_missing"})
+# A failure that says nothing about the device records no stage outcome: these
+# error codes, and the reason code capability_missing (RM04), which a failed
+# local model gives with needs_external or with a degraded-mode handoff.
+_NO_STAGE_EVIDENCE = frozenset({"interrupted", "internal_error"})
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,8 @@ def project_stage_outcome(
     if kind == "run.cancelled" or payload.get("local_active_ms") is None:
         return None
     if kind == "run.failed" and payload.get("error_code") in _NO_STAGE_EVIDENCE:
+        return None
+    if payload.get("reason_code") == "capability_missing":
         return None
     return payload.get("reason_code") == "local_slow" or payload.get("budget") in TIME_BUDGETS
 

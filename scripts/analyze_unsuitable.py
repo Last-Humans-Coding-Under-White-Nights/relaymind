@@ -324,6 +324,18 @@ def analyze(evidence: Path, work: Path) -> dict:
     )
 
 
+def _classes(counts: dict) -> str:
+    return ", ".join(f"{name} {count}" for name, count in counts.items())
+
+
+def _or_none(value) -> str:
+    return "none" if value is None else str(value)
+
+
+def _rate(share: dict) -> str:
+    return f"{share['numerator']}/{share['denominator']} ({share['rate']:.1%})"
+
+
 def render(report: dict) -> str:
     lines = [
         "# Unsuitable detection on the phase 2 evidence (#170, spec 0.48)",
@@ -341,7 +353,7 @@ def render(report: dict) -> str:
     for name, c in report["replay"]["by_configuration"].items():
         lines.append(
             f"| {name} | {c['cells']} | {c['cells_where_the_rule_fires']} |"
-            f" {c['longest_streak']} | {c['warmup_classes']} |"
+            f" {c['longest_streak']} | {_classes(c['warmup_classes'])} |"
         )
     lines += [
         "",
@@ -356,7 +368,8 @@ def render(report: dict) -> str:
             f"| {cell} | {c['stages']} | {c['ran_out_of_time']} ({c['ran_out_by_budget_proxy']})"
             f" | {c['longest_streak']} | {c['auto_runs']} |"
             f" {c['auto_runs_the_rule_classifies_unsuitable']} |"
-            f" {c['first_unsuitable_acceptance_index']} | {c['warmup_classes']} |"
+            f" {_or_none(c['first_unsuitable_acceptance_index'])}"
+            f" | {_classes(c['warmup_classes'])} |"
         )
     h = report["hypothesis"]
     corpus = h["corpus_auto"]
@@ -367,8 +380,9 @@ def render(report: dict) -> str:
         f"Status: **{h['status']}**. {h['scope']}.",
         "",
         f"- Control: `{h['control']}`; candidate: `{h['candidate']}`.",
-        f"- Auto corpus pairs: N {corpus['N']}, success {corpus['success_A']} (control) vs"
-        f" {corpus['success_B']} (candidate), gains {corpus['gain']}, losses {corpus['loss']}.",
+        f"- Auto corpus pairs: N {corpus['N']}, success {_rate(corpus['success_A'])} (control)"
+        f" vs {_rate(corpus['success_B'])} (candidate), gains {corpus['gain']},"
+        f" losses {corpus['loss']}.",
     ]
     for metric, d in h["latency"].items():
         lines.append(
@@ -386,7 +400,12 @@ def render(report: dict) -> str:
     lines += ["", "External work per latency request (calls, median call ms):", ""]
     for side, labels in h["external_work"].items():
         parts = [
-            f"{label} {w['external_calls_per_request']} calls, {w['median_external_call_ms']} ms"
+            f"{label} {w['external_calls_per_request']} calls, "
+            + (
+                "no call to time"
+                if w["median_external_call_ms"] is None
+                else f"{w['median_external_call_ms']} ms"
+            )
             for label, w in labels.items()
         ]
         lines.append(f"- {side}: " + "; ".join(parts))

@@ -784,6 +784,11 @@ SAMPLE_EVENTS.update(
         "handoff-degraded-blank-cause": terminal_with(
             "handoff.started", degraded_mode=True, local_failure=" "
         ),
+        "handoff-budget": terminal_with(
+            "handoff.started", reason_code="local_budget", budget="active_seconds"
+        ),
+        "handoff-blank-budget": terminal_with("handoff.started", budget=" "),
+        "handoff-numeric-budget": terminal_with("handoff.started", budget=4),
     }
 )
 
@@ -1062,6 +1067,16 @@ def test_a_degraded_handoff_names_its_cause():
     ):
         with pytest.raises(TraceEventError):
             validate_trace_event(SAMPLE_EVENTS[name])
+
+
+def test_a_handoff_may_name_the_limit_that_stopped_the_local_stage():
+    """Spec 0.48 section 8: budget is optional on handoff.started and non-blank when present."""
+    validate_trace_event(SAMPLE_EVENTS["handoff-budget"])
+    SCHEMA_VALIDATOR.validate(SAMPLE_EVENTS["handoff-budget"])
+    for name in ("handoff-blank-budget", "handoff-numeric-budget"):
+        with pytest.raises(TraceEventError, match="budget"):
+            validate_trace_event(SAMPLE_EVENTS[name])
+        assert not SCHEMA_VALIDATOR.is_valid(SAMPLE_EVENTS[name]), name
 
 
 def validator_accepts(data):

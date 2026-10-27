@@ -2982,11 +2982,11 @@ performance run.
 
 | Item | Value |
 |---|---|
-| Offline analysis | `docs/evidence/2026-10-27-unsuitable/analysis.json` (SHA-256 `c38fef3ee87f0db349db35cd087acabd5f69044c46ab5284f734b861db0886ec`) and `.md`, from `scripts/analyze_unsuitable.py` at `ff77dc4` over `docs/evidence/2026-10-26-phase2` (M8 index `a24dd1def6d46f7fbccb28eaa52b8ae7284bf25b05ee4264ec0da042c75dc224`) |
+| Offline analysis | `docs/evidence/2026-10-27-unsuitable/analysis.json` (SHA-256 `c38fef3ee87f0db349db35cd087acabd5f69044c46ab5284f734b861db0886ec`) and `.md`, from `scripts/analyze_unsuitable.py` at `ff77dc4` over `docs/evidence/2026-10-26-phase2` (M8 index `a24dd1def6d46f7fbccb28eaa52b8ae7284bf25b05ee4264ec0da042c75dc224`). After the PR #174 review the script was rerun with the corrected capability_missing exclusion and wrote byte-identical JSON; `.md` was rendered again from that JSON, so counts read as text instead of Python dictionaries |
 | Live check | `docs/evidence/2026-10-27-unsuitable/live-check-apple-m1.json` (SHA-256 `95a04a12056528a4be02210101b7111d9bde1ccb357cc835b1c0ad017aaf270d`), `scripts/probes/probe_unsuitable_live.py` at `cd8dc85` (clean), 2026-10-27 06:41 to 06:43 UTC |
 | Machine and runtime | The phase 2 Apple M1; Qwen3-0.6B Q8_0 on llama.cpp b11785; constrained configuration `--n-gpu-layers 0 --threads 2` |
 | External model | Offline: glm-4.6 (the recorded cells). Live: glm-5.3-flash, used only to answer the managed external runs |
-| Published equivalents of the measured revisions | The branch was rebased onto the M9 plan update `ed444f2` after the runs. The live check's `cd8dc85` is `cfdf43b`, the analysis's `ff77dc4` is `cf15709`, and the discarded first live run's `74780a0` is `b091e4b`. For each pair, `git diff` shows `src/`, `scripts/`, `tests/`, `evaluation/`, and `relaymind.example.toml` byte-identical; the pairs differ only by the M9 documents of `ed444f2`. The exports keep the revisions they recorded |
+| Published equivalents of the measured revisions | The branch was rebased onto the M9 plan updates `ed444f2` and `80ad856` after the runs. The live check's `cd8dc85` is `e038eca`, the analysis's `ff77dc4` is `f49033e`, and the discarded first live run's `74780a0` is `0bbb2fe`. For each pair, `git diff` shows `src/`, `scripts/`, `tests/`, `evaluation/`, and `relaymind.example.toml` byte-identical; the pairs differ only by the M9 documents of those two commits. Later review fixes on this branch change the code after these revisions. The exports keep the revisions they recorded |
 
 ### Why the constrained configuration stayed `ready`
 

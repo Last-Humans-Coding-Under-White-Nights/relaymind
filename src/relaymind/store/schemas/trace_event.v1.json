@@ -1001,7 +1001,8 @@
               },
               "degraded_mode": {"const": true},
               "local_failure": {"type": "string", "pattern": "\\S"},
-              "workflow": {"type": "string", "pattern": "\\S"}
+              "workflow": {"type": "string", "pattern": "\\S"},
+              "budget": {"type": "string", "pattern": "\\S"}
             },
             "required": [
               "reason_code",

@@ -189,7 +189,13 @@ def main(argv: list[str] | None = None) -> None:
             )
         export["runtime_banner"] = runtime.banner
         model = runtime.model_record()
-        model["manifest"] = Path(model["manifest"]).resolve().relative_to(REPO_ROOT).as_posix()
+        manifest = Path(model["manifest"]).resolve()
+        # Repo-relative when the manifest is in the checkout, as recorded evidence is.
+        model["manifest"] = (
+            manifest.relative_to(REPO_ROOT).as_posix()
+            if manifest.is_relative_to(REPO_ROOT)
+            else str(manifest)
+        )
         export["model"] = model
     finally:
         if llama is not None:

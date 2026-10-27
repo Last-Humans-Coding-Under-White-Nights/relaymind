@@ -122,3 +122,13 @@ def test_the_replay_fires_after_three_stages_that_ran_out_of_time(tmp_path):
     assert result["auto_runs"] == 1 and result["auto_runs_the_rule_classifies_unsuitable"] == 1
     # Each case's cold warm-up, 3315 + 2281 ms, is over the 4-second stage.
     assert result["warmup_classes"] == {"unsuitable": 4}
+
+
+def test_the_report_renders_counts_and_rates_as_text():
+    """The markdown report shows numbers a reader can read, never a Python repr."""
+    evidence = ROOT / "docs" / "evidence" / "2026-10-27-unsuitable" / "analysis.json"
+    text = analysis.render(json.loads(evidence.read_text()))
+
+    assert "{'" not in text and "None" not in text
+    assert "| normal | 8 | 0 | 2 | ready 1248 |" in text
+    assert "success 45/52 (86.5%) (control) vs 43/52 (82.7%) (candidate)" in text

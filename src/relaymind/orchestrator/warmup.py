@@ -353,7 +353,9 @@ def classify_warmup(
     elif result.timed_out and seconds >= active_seconds:
         return LocalStatus(
             LocalModelClass.UNSUITABLE,
-            f"the skill warm-up did not finish within {seconds:g} s after the routing one; {limit}",
+            f"the routing warm-up took {routing.duration_ms} ms and the skill warm-up did not"
+            f" finish in the rest of the {seconds:g} s warm-up limit (placement.warmup_seconds);"
+            f" {limit}",
         )
     return LocalStatus.ready()
 

@@ -32,6 +32,7 @@ from gateway_helpers import (
     tool_turn,
 )
 from helpers import T0, FakeClock, of_type
+from relaymind.adapters import GenerationFailed
 from relaymind.api.app import ChatSettings
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_status import (
@@ -43,7 +44,7 @@ from relaymind.orchestrator.local_status import (
 from relaymind.orchestrator.placement import PlacementSettings
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
-from relaymind.store.outcomes import StageOutcome
+from relaymind.store.outcomes import StageOutcome, project_stage_outcome
 from relaymind.store.run_store import utc_iso
 from test_ac02_handoff import ANSWER as COMPLEX_ANSWER
 from test_ac02_handoff import PROMPT as COMPLEX_PROMPT
@@ -240,6 +241,86 @@ def test_external_only_records_no_local_stage(tmp_path):
     gateway = gateway_with(tmp_path, [], clock=FakeClock(), external_turns=[text_turn("Hi.")])
     run(gateway, "Say hi.", execution_mode="external_only")
     assert stage_outcomes(gateway) == []
+
+
+LOCAL_STAGE = {"local_generation": True, "execution_mode": "local_only"}
+
+
+@pytest.mark.parametrize(
+    ("kind", "payload"),
+    [
+        pytest.param(
+            "run.failed",
+            {"error_code": "internal_error", "local_active_ms": 4100},
+            id="internal_error",
+        ),
+        pytest.param(
+            "run.failed",
+            {"error_code": "interrupted", "local_active_ms": 4100},
+            id="interrupted",
+        ),
+        # capability_missing is a reason code (RM04): with needs_external when
+        # degraded mode is off, and on handoff.started when it is on.
+        pytest.param(
+            "run.failed",
+            {
+                "error_code": "needs_external",
+                "reason_code": "capability_missing",
+                "local_active_ms": 4100,
+            },
+            id="needs_external-capability_missing",
+        ),
+        pytest.param(
+            "handoff.started",
+            {
+                "reason_code": "capability_missing",
+                "degraded_mode": True,
+                "local_failure": "unreachable",
+                "local_active_ms": 4100,
+            },
+            id="degraded-handoff",
+        ),
+    ],
+)
+def test_a_failure_that_says_nothing_about_the_device_records_no_outcome(kind, payload):
+    """Spec 0.48 section 14.4.7: no evidence, so neither ran out of time nor fit."""
+    assert project_stage_outcome(LOCAL_STAGE, kind, payload) is None
+
+
+@pytest.mark.parametrize("degraded", [False, True], ids=["needs_external", "degraded"])
+def test_a_local_failure_between_time_outs_does_not_end_the_streak(tmp_path, degraded):
+    """A crashed local model is not a stage that fit, so the streak carries on."""
+    clock = FakeClock()
+    routings = 0
+
+    def tick(request):
+        nonlocal routings
+        if request.generation_id.endswith("routing"):
+            routings += 1
+            if routings != 3:  # the third run's routing fails at once
+                clock.advance(4.5)
+
+    gateway = gateway_with(
+        tmp_path,
+        [
+            route_turn("check-service-health"),
+            route_turn("check-service-health"),
+            [GenerationFailed(code="unreachable", message="no route to host")],
+            route_turn("check-service-health"),
+        ],
+        clock=clock,
+        on_generate=tick,
+        external_turns=[text_turn(STAGING_OK)],
+        degraded_mode=degraded,
+    )
+    time_out_locally(gateway, STAGE_STREAK - 1)
+    _, events = run(gateway, execution_mode="auto" if degraded else "local_only")
+    ended = of_type(events, "handoff.started" if degraded else "run.failed")[0]
+    assert ended.payload["reason_code"] == "capability_missing"
+
+    assert [o.ran_out_of_time for o in stage_outcomes(gateway)] == [True] * (STAGE_STREAK - 1)
+    time_out_locally(gateway, 1)
+    assert gateway.orchestrator.local_status.status == LocalModelClass.UNSUITABLE
 
 
 # -- the class the gateway reports and uses ------------------------------------------

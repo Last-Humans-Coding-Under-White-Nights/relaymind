@@ -667,7 +667,8 @@ def test_a_skill_warm_up_cut_off_at_or_after_the_stage_budget_is_unsuitable():
     status = classify_warmup(result, seconds=4, active_seconds=4, stages=True)
     assert status.status == LocalModelClass.UNSUITABLE
     assert status.reason == (
-        "the skill warm-up did not finish within 4 s after the routing one;"
+        "the routing warm-up took 1200 ms and the skill warm-up did not finish in the rest"
+        " of the 4 s warm-up limit (placement.warmup_seconds);"
         " the local stage limit (active_seconds) is 4 s"
     )
 

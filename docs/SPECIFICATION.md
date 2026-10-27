@@ -1251,8 +1251,10 @@ run.completed or run.failed while the run is still local. The outcome is "ran ou
 of local time" when that event has reason_code local_slow (RM27) or names the
 budget active_seconds or run_active_seconds, and "fit" otherwise, including a
 stop on a generation or tool limit, which measures the model and not the device.
-A cancelled or interrupted run, and a run.failed with error code internal_error
-or capability_missing, record no outcome. A stage that waits for clarification or
+A cancelled or interrupted run, a run.failed with error code internal_error, and
+an event with reason code capability_missing (RM04: a local model that failed,
+whether the run then ends as needs_external or hands off in degraded mode,
+section 11), record no outcome. A stage that waits for clarification or
 confirmation records its outcome when it ends. The outcome carries the local
 model ID, the run ID, and the time of the ending event; it is derived from the
 trace event that the store writes in the same transaction, so the trace proves it.
