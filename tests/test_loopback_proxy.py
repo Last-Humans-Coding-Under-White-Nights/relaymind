@@ -1,4 +1,5 @@
-"""RM01, RM18 / spec section 6: bypass proxies only for local inference (#57).
+"""RM01, RM18, RM19 / spec section 6: bypass proxies for local inference and
+harness calls (#57, #167).
 
 Keep HTTPX's client routing, replacing proxy discovery and network transports.
 This reproduces environment/system proxy discovery without a real proxy or model.
@@ -45,8 +46,8 @@ def proxy_routes(monkeypatch):
     def transport(*args, proxy=None, **kwargs):
         def handle(request):
             routes.append((proxy is not None, request.url.path))
-            if request.url.path == "/health":
-                return httpx.Response(200)
+            if request.url.path in ("/health", "/healthz", "/readyz"):
+                return httpx.Response(200, json={"status": "ok"})
             return sse_response(
                 [delta_chunk({"content": "pong"}), delta_chunk({}, finish_reason="stop")]
             )
@@ -155,3 +156,71 @@ def test_startup_health_polls_bypass_discovered_proxy(caller, proxy_routes, monk
 
     assert stopped == [True]
     assert proxy_routes == [(False, "/health")]
+
+
+@pytest.mark.parametrize(("host", "loopback"), ENDPOINTS)
+@pytest.mark.parametrize("scheme", ["http", "https"])
+def test_live_harness_api_routes_by_base_url(host, loopback, scheme, proxy_routes, tmp_path):
+    before = dict(os.environ)
+    harness = load_script_module("live_acceptance")
+    base_url = f"{scheme}://{host}:8000"
+
+    async def run():
+        api = harness.Api(base_url, "test-token", sandbox_dir=tmp_path)
+        try:
+            assert (await api.http.get("/healthz")).status_code == 200
+        finally:
+            await api.aclose()
+
+    asyncio.run(run())
+    assert proxy_routes == [(not loopback, "/healthz")]
+    assert dict(os.environ) == before
+
+
+@pytest.mark.parametrize(("host", "loopback"), ENDPOINTS)
+def test_live_harness_sdk_routes_by_base_url(host, loopback, proxy_routes, tmp_path):
+    before = dict(os.environ)
+    harness = load_script_module("live_acceptance")
+    base_url = f"http://{host}:8000"
+
+    async def run():
+        api = harness.Api(base_url, "test-token", sandbox_dir=tmp_path)
+        try:
+            sdk = api.sdk()
+            stream = await sdk.chat.completions.create(
+                model="relaymind",
+                messages=[{"role": "user", "content": "ping"}],
+                stream=True,
+            )
+            async for _ in stream:
+                pass
+        finally:
+            await api.aclose()
+
+    asyncio.run(run())
+    assert proxy_routes == [(not loopback, "/v1/chat/completions")]
+    assert dict(os.environ) == before
+
+
+@pytest.mark.parametrize(("host", "loopback"), ENDPOINTS)
+@pytest.mark.parametrize("scheme", ["http", "https"])
+def test_live_harness_gateway_process_health_and_readiness_routes_by_base_url(
+    host, loopback, scheme, proxy_routes, tmp_path
+):
+    before = dict(os.environ)
+    harness = load_script_module("live_acceptance")
+    base_url = f"{scheme}://{host}:8000"
+    gateway = harness.GatewayProcess.__new__(harness.GatewayProcess)
+    gateway.output = harness.LaunchOutput(
+        url=base_url,
+        token="test-token",
+        recovered=0,
+        recorded_lines=[],
+    )
+    gateway.log = tmp_path / "gateway.log"
+
+    gateway._wait_healthy()
+    readiness = gateway.readiness()
+    assert readiness["status"] == 200
+    assert proxy_routes == [(not loopback, "/healthz"), (not loopback, "/readyz")]
+    assert dict(os.environ) == before

@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Loopback gateway health polls and API/SDK client calls in live acceptance
+  and evaluation scripts bypass environment and system proxies without
+  changing process-wide settings (#167; RM01, RM18, RM19). Non-loopback endpoints
+  keep normal proxy handling.
+
 ### Added
 
 - M8 evaluation infrastructure (#134; RM17, RM25–RM28, RM32): validated

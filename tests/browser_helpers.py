@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from api_helpers import RUN_ID_HEADER, RunningServer, chat_body, token_of
+from relaymind.adapters.local_http import is_loopback_url
 from relaymind.api.native import NativeSettings
 from ui_helpers import ui_app
 
@@ -85,7 +86,11 @@ def open_run(page, run_id):
 
 def chat_run_id(base, token, prompt, **fields):
     """Make one chat completion over HTTP; return the run it owned."""
-    with httpx.Client(base_url=base, headers={"Authorization": f"Bearer {token}"}) as client:
+    with httpx.Client(
+        base_url=base,
+        headers={"Authorization": f"Bearer {token}"},
+        trust_env=not is_loopback_url(base),
+    ) as client:
         response = client.post(
             "/v1/chat/completions", json=chat_body(prompt=prompt, **fields), timeout=30
         )
