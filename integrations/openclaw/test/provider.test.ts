@@ -178,6 +178,46 @@ describe("resolveDynamicModel (the headless agent exec path; RM19, RM33, section
   });
 });
 
+describe("wrapStreamFn (the guard and the answer rule around the host transport, #137)", () => {
+  const { logger } = recordingLogger();
+  const provider = createRelayMindProvider({ pluginConfig: { baseUrl: BASE }, logger });
+
+  function fakeStream(message: Record<string, unknown>) {
+    const calls: unknown[] = [];
+    const streamFn = (model: unknown, context: unknown, options: unknown) => {
+      calls.push({ model, context, options });
+      const done = { type: "done", reason: message.stopReason, message };
+      return {
+        async *[Symbol.asyncIterator]() {
+          yield done;
+        },
+        result: async () => message,
+      };
+    };
+    return { calls, streamFn };
+  }
+
+  it("wraps the host's stream for this provider", async () => {
+    const answer = { role: "assistant", content: [{ type: "text", text: "Hi." }], stopReason: "stop" };
+    const { calls, streamFn } = fakeStream(answer);
+    const wrapped = provider.wrapStreamFn?.({ provider: PROVIDER_ID, modelId: MODEL_ID, streamFn } as never);
+    expect(typeof wrapped).toBe("function");
+    const events = await wrapped!({ id: MODEL_ID } as never, { messages: [] } as never, {} as never);
+    expect(await events.result()).toEqual(answer);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("turns an empty success from the host's stream into a failure", async () => {
+    const { streamFn } = fakeStream({ role: "assistant", content: [], stopReason: "stop" });
+    const wrapped = provider.wrapStreamFn?.({ provider: PROVIDER_ID, modelId: MODEL_ID, streamFn } as never);
+    const events = await wrapped!({ id: MODEL_ID } as never, { messages: [] } as never, {} as never);
+    const types: string[] = [];
+    for await (const event of events) types.push(event.type);
+    expect(types).toEqual(["error"]);
+    expect((await events.result()).stopReason).toBe("error");
+  });
+});
+
 describe("catalog.run (the host hook)", () => {
   function context(apiKey: string | undefined, discoveryApiKey?: string, withSignal = true) {
     return {

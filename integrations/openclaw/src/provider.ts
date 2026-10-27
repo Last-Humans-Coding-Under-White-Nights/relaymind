@@ -13,6 +13,8 @@
 // catalog hook and found a plugin model only through resolveDynamicModel (macOS
 // host probe, OpenClaw 2026.10.7). When the gateway does not serve the alias, a
 // request then fails with the gateway's own error; nothing else is resolved.
+// Its stream wrapper (src/stream.ts) refuses unsupported input by name before a
+// request is sent and turns an empty answer into a failure (#137).
 import type {
   ProviderCatalogContext,
   ProviderPlugin,
@@ -25,6 +27,7 @@ import { MODEL_ID, PROVIDER_ID } from "./compat.ts";
 import { parsePluginConfig, type RelayMindPluginConfig } from "./config.ts";
 import { RECONNECT, TOKEN_HANDOVER } from "./diagnostics.ts";
 import { redactingLogger, type Logger } from "./redaction.ts";
+import { relaymindStreamFn, type StreamFn } from "./stream.ts";
 
 export const TOKEN_ENV_VAR = "RELAYMIND_APP_TOKEN";
 
@@ -107,7 +110,17 @@ export function createRelayMindProvider(options: RelayMindProviderOptions): Prov
     // Linux VPS functional check (docs/evidence/2026-10-28-openclaw-vps-functional-136/).
     resolveDynamicModel: (ctx: ProviderResolveDynamicModelContext) =>
       ctx.provider === PROVIDER_ID && ctx.modelId === MODEL_ID ? (runtimeModel(config) as never) : undefined,
+    // Applied by the host after its generic wrappers; ctx.streamFn is the
+    // transport the host would otherwise call.
+    wrapStreamFn: (ctx) =>
+      relaymindStreamFn(ctx.streamFn ?? hostStreamSimple),
     buildMissingAuthMessage: () => `No RelayMind application token is stored. ${TOKEN_HANDOVER}`,
     buildAuthDoctorHint: () => RECONNECT,
   };
 }
+
+/** The host's default stream function, loaded only when the host passes none. */
+const hostStreamSimple: StreamFn = async (model, context, options) => {
+  const { streamSimple } = await import("openclaw/plugin-sdk/llm");
+  return streamSimple(model, context, options);
+};
