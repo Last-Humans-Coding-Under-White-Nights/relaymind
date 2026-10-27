@@ -1,6 +1,6 @@
 // The plugin configuration (RM12, RM19, RM26, RM33; spec sections 7.1 and 7.5).
 //
-// Three settings, mirrored by the closed configSchema of openclaw.plugin.json:
+// Four settings, mirrored by the closed configSchema of openclaw.plugin.json:
 // - baseUrl: the gateway's /v1 root on a loopback address only. The gateway is a
 //   separately started process; the plugin never forwards to another host.
 // - executionMode: auto, local_only, or external_only, sent on every request as
@@ -8,6 +8,9 @@
 //   name, never changed into another mode.
 // - limits: copies of the gateway's configured limits; a limit that is not set is
 //   never estimated (section 7.5).
+// - maxRetries: the plugin's own retries after a 429 or a 504 before any answer
+//   content, 0 (the default: one attempt) to 2 (section 7.5, #138). A value
+//   outside that range is refused, never clamped.
 // The application token is not configuration: it lives in the host's credential
 // store (the api-key auth method), so no error here can echo it.
 
@@ -28,6 +31,8 @@ export interface RelayMindPluginConfig {
   baseUrl: string;
   executionMode: ExecutionMode;
   limits: RelayMindLimits;
+  /** Plugin retries after 429 or 504 before any content: 0 to 2, 0 by default. */
+  maxRetries: number;
 }
 
 /** A configuration the plugin refuses; the message names the setting, never a secret. */
@@ -35,7 +40,8 @@ export class RelayMindConfigError extends Error {
   override name = "RelayMindConfigError";
 }
 
-const KEYS = new Set(["baseUrl", "executionMode", "limits"]);
+const KEYS = new Set(["baseUrl", "executionMode", "limits", "maxRetries"]);
+export const MAX_RETRIES = 2;
 const LIMIT_KEYS = ["externalContextLimit", "localContextLimit", "maxCompletionTokens"] as const;
 const SAFE_TO_ECHO = /^[a-z_]{1,32}$/;
 
@@ -111,6 +117,14 @@ function parseLimits(raw: unknown): RelayMindLimits {
   return limits;
 }
 
+function parseRetries(raw: unknown): number {
+  if (raw === undefined) return 0;
+  if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 0 || raw > MAX_RETRIES) {
+    fail(`maxRetries must be an integer from 0 to ${MAX_RETRIES}`);
+  }
+  return raw;
+}
+
 /** Check the plugin configuration; throw a RelayMindConfigError naming the first problem. */
 export function parsePluginConfig(raw: unknown): RelayMindPluginConfig {
   if (raw === undefined || raw === null) parseBaseUrl(undefined);
@@ -121,7 +135,7 @@ export function parsePluginConfig(raw: unknown): RelayMindPluginConfig {
   for (const key of Object.keys(record)) {
     if (!KEYS.has(key)) {
       fail(
-        `${key} is not a setting (the settings are baseUrl, executionMode, limits); ` +
+        `${key} is not a setting (the settings are baseUrl, executionMode, limits, maxRetries); ` +
           "a credential belongs in the host's credential setup, not here",
       );
     }
@@ -130,5 +144,6 @@ export function parsePluginConfig(raw: unknown): RelayMindPluginConfig {
     baseUrl: parseBaseUrl(record.baseUrl),
     executionMode: parseMode(record.executionMode),
     limits: parseLimits(record.limits),
+    maxRetries: parseRetries(record.maxRetries),
   };
 }

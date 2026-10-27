@@ -33,7 +33,13 @@ describe("openclaw.plugin.json", () => {
     expect(schema.type).toBe("object");
     expect(schema.additionalProperties).toBe(false);
     expect(schema.required).toEqual(["baseUrl"]);
-    expect(Object.keys(schema.properties).sort()).toEqual(["baseUrl", "executionMode", "limits"]);
+    expect(Object.keys(schema.properties).sort()).toEqual([
+      "baseUrl",
+      "executionMode",
+      "limits",
+      "maxRetries",
+    ]);
+    expect(schema.properties.maxRetries).toMatchObject({ type: "integer", minimum: 0, maximum: 2, default: 0 });
     // parallel_demo is not a mode of this alias (section 7.5).
     expect(schema.properties.executionMode.enum).toEqual([...EXECUTION_MODES]);
     expect(schema.properties.executionMode.default).toBe("auto");

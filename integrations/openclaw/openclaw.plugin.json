@@ -67,6 +67,13 @@
             "description": "chat.max_completion_tokens of the gateway's launch file; the advertised output limit."
           }
         }
+      },
+      "maxRetries": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 2,
+        "default": 0,
+        "description": "The plugin's own retries after 429 overloaded (same Idempotency-Key) or 504 deadline_exceeded (a new key), only before any answer content. 0 is one attempt."
       }
     }
   }

@@ -20,14 +20,22 @@
 //   because the gateway exposes one call per response;
 // - a gateway failure (an HTTP error or a streamed error event) keeps its code
 //   and gets one sanitized, actionable message (src/errors.ts, #138), in the
-//   error event and the result alike.
+//   error event and the result alike;
+// - every request carries an Idempotency-Key for its inference payload
+//   (src/idempotency.ts), and the plugin makes one attempt unless maxRetries
+//   allows a retry of a 429 (same key) or a 504 (a new key) before any answer
+//   content; a failed attempt it retries is never shown to the host.
 //
 // The wrapper forwards every event in order and never changes emitted text: it
 // only replaces the terminal "done" event of a response that breaks a rule with
-// an "error" event. The host keeps its tools, its approvals, and its retries.
+// an "error" event. The host keeps its tools, its approvals, and its own retries;
+// a host retry of the same conversation sends the same key, so the gateway
+// replays a completed run instead of running it again (section 7.4).
 import type { ProviderWrapStreamFnContext } from "openclaw/plugin-sdk/plugin-entry";
 
-import { describeFailure, gatewayFailure } from "./errors.ts";
+import { describeFailure, gatewayFailure, retryRule } from "./errors.ts";
+import { IDEMPOTENCY_HEADER, idempotencyKey, retryKey } from "./idempotency.ts";
+import { MAX_RETRIES } from "./config.ts";
 import { checkContext, checkOptions, checkPayload } from "./input-guard.ts";
 
 /** The host's stream function and the types it carries, from the public SDK. */
@@ -82,35 +90,9 @@ function settle(message: AssistantMessage, secrets: readonly (string | undefined
   return withGatewayMessage(checkAnswer(message), secrets);
 }
 
-function policed(
-  inner: AssistantMessageEventStreamLike,
-  secrets: () => readonly (string | undefined)[],
-): AssistantMessageEventStreamLike {
-  let settled: AssistantMessage | undefined;
-  const final = (message: AssistantMessage) => (settled ??= settle(message, secrets()));
+/** A failed message for an attempt that produced none (refused, or the stream threw). */
+function failedMessage(model: Model, reason: string): AssistantMessage {
   return {
-    async *[Symbol.asyncIterator](): AsyncIterator<AssistantMessageEvent> {
-      for await (const event of inner) {
-        if (event.type === "done") {
-          const checked = final(event.message);
-          if (checked !== event.message) {
-            yield { type: "error", reason: "error", error: checked };
-            continue;
-          }
-        } else if (event.type === "error") {
-          yield { ...event, error: final(event.error) };
-          continue;
-        }
-        yield event;
-      }
-    },
-    result: async () => final(await inner.result()),
-  };
-}
-
-/** A failed stream that sends nothing: the request was refused before it was built. */
-function refused(model: Model, error: Error): AssistantMessageEventStreamLike {
-  const message: AssistantMessage = {
     role: "assistant",
     content: [],
     api: model.api,
@@ -125,9 +107,14 @@ function refused(model: Model, error: Error): AssistantMessageEventStreamLike {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "error",
-    errorMessage: error.message,
+    errorMessage: reason,
     timestamp: Date.now(),
   };
+}
+
+/** A failed stream that sends nothing: the request was refused before it was built. */
+function refused(model: Model, error: Error): AssistantMessageEventStreamLike {
+  const message = failedMessage(model, error.message);
   return {
     async *[Symbol.asyncIterator](): AsyncIterator<AssistantMessageEvent> {
       yield { type: "error", reason: "error", error: message };
@@ -136,14 +123,98 @@ function refused(model: Model, error: Error): AssistantMessageEventStreamLike {
   };
 }
 
+/** A single-consumer event queue: the wrapper writes, the host reads. */
+function channel<T>() {
+  const items: T[] = [];
+  let ended = false;
+  let wake: (() => void) | undefined;
+  const notify = () => {
+    wake?.();
+    wake = undefined;
+  };
+  return {
+    push(...values: T[]) {
+      items.push(...values);
+      notify();
+    },
+    end() {
+      ended = true;
+      notify();
+    },
+    async *[Symbol.asyncIterator](): AsyncIterator<T> {
+      for (;;) {
+        if (items.length > 0) {
+          yield items.shift()!;
+          continue;
+        }
+        if (ended) return;
+        await new Promise<void>((resolve) => (wake = resolve));
+      }
+    },
+  };
+}
+
+/** What one attempt sent and got back, for diagnostics (src/diagnostics.ts). */
+export interface AttemptReport {
+  attempt: number;
+  idempotencyKey: string;
+  /** The HTTP status and headers of an accepted (2xx) response; undefined otherwise. */
+  response?: { status: number; headers: Record<string, string> };
+  /** The final message of the attempt under the plugin's rules (raw for gateway fields). */
+  raw: AssistantMessage;
+  /** Whether the plugin retries after this attempt. */
+  retried: boolean;
+}
+
 export interface RelayMindStreamOptions {
   /** The credential values seen in this process, removed from every message. */
   secrets?: () => readonly (string | undefined)[];
+  /** Plugin retries after a 429 or a 504 before any content; 0 (the default) to 2. */
+  maxRetries?: number;
+  /** The wait before retry n is n times this; 500 ms by default. */
+  retryDelayMs?: number;
+  /** Called once per attempt, after its outcome is known. */
+  onAttempt?: (report: AttemptReport) => void;
 }
 
-/** The host's stream function with the guard before and the answer rule after. */
+const RETRY_DELAY_MS = 500;
+/** Events that show answer content: after one, the attempt is the answer and is never retried. */
+const CONTENT_FREE = new Set(["start"]);
+
+function hasHeader(headers: Record<string, string> | undefined, name: string): string | undefined {
+  if (!headers) return undefined;
+  const wanted = name.toLowerCase();
+  for (const [key, value] of Object.entries(headers)) if (key.toLowerCase() === wanted) return value;
+  return undefined;
+}
+
+function wait(ms: number, signal: AbortSignal | undefined): Promise<boolean> {
+  if (signal?.aborted) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve(true);
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve(false);
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/**
+ * The host's stream function with the guard before, the answer rule and the
+ * error mapping after, an Idempotency-Key on every request, and the bounded
+ * retry rule of section 7.5 (src/idempotency.ts, #138).
+ */
 export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStreamOptions = {}): StreamFn {
   const secrets = streamOptions.secrets ?? (() => []);
+  const maxRetries = streamOptions.maxRetries ?? 0;
+  if (!Number.isInteger(maxRetries) || maxRetries < 0 || maxRetries > MAX_RETRIES) {
+    throw new RangeError(`maxRetries must be an integer from 0 to ${MAX_RETRIES}`);
+  }
+  const delayMs = streamOptions.retryDelayMs ?? RETRY_DELAY_MS;
   return async (model: Model, context: Context, options?: Options) => {
     try {
       checkContext(context);
@@ -160,6 +231,99 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
       return replaced;
     };
     const known = () => [...secrets(), options?.apiKey];
-    return policed(await base(model, context, { ...options, onPayload }), known);
+    // A key the host set itself is the host's: kept as is, and never retried by the plugin.
+    const hostKey = hasHeader(options?.headers, IDEMPOTENCY_HEADER);
+    const baseKey = hostKey ?? idempotencyKey({ model, context, options });
+    const out = channel<AssistantMessageEvent>();
+    let resolveFinal!: (message: AssistantMessage) => void;
+    const final = new Promise<AssistantMessage>((resolve) => (resolveFinal = resolve));
+
+    const attemptOnce = async (key: string, attempt: number) => {
+      let response: AttemptReport["response"];
+      const hostOnResponse = options?.onResponse;
+      const headers = hostKey ? { ...options?.headers } : { ...options?.headers, [IDEMPOTENCY_HEADER]: key };
+      const held: AssistantMessageEvent[] = [];
+      let committed = false;
+      let terminal: { event: AssistantMessageEvent; raw: AssistantMessage } | undefined;
+      try {
+        const inner = await base(model, context, {
+          ...options,
+          headers,
+          onPayload,
+          onResponse: async (r: { status: number; headers: Record<string, string> }, m: Model) => {
+            response = { status: r.status, headers: r.headers };
+            return hostOnResponse?.(r, m);
+          },
+        } as Options);
+        for await (const event of inner) {
+          if (event.type === "done" || event.type === "error") {
+            terminal = { event, raw: event.type === "done" ? event.message : event.error };
+            break;
+          }
+          if (!committed && CONTENT_FREE.has(event.type)) {
+            held.push(event);
+            continue;
+          }
+          if (!committed) {
+            committed = true;
+            out.push(...held.splice(0));
+          }
+          out.push(event);
+        }
+        if (terminal === undefined) {
+          const raw = await inner.result();
+          terminal = { event: { type: "done", reason: "stop", message: raw } as AssistantMessageEvent, raw };
+        }
+      } catch (error) {
+        const raw = failedMessage(model, error instanceof Error ? error.message : String(error));
+        terminal = { event: { type: "error", reason: "error", error: raw }, raw };
+      }
+      return { response, held, committed, ...terminal };
+    };
+
+    const emit = (held: AssistantMessageEvent[], event: AssistantMessageEvent, raw: AssistantMessage) => {
+      const settled = settle(raw, known());
+      out.push(...held);
+      if (event.type === "done" && settled === raw) out.push(event);
+      else if (event.type === "done") out.push({ type: "error", reason: "error", error: settled });
+      else out.push({ ...event, error: settled } as AssistantMessageEvent);
+      resolveFinal(settled);
+    };
+
+    void (async () => {
+      let key = baseKey;
+      let newKeys = 0;
+      for (let attempt = 1; ; attempt++) {
+        const outcome = await attemptOnce(key, attempt);
+        const failure = gatewayFailure(outcome.raw);
+        const rule = failure ? retryRule(failure.code) : "none";
+        const retry =
+          !hostKey &&
+          !outcome.committed &&
+          rule !== "none" &&
+          attempt <= maxRetries &&
+          !options?.signal?.aborted &&
+          (await wait(delayMs * attempt, options?.signal ?? undefined));
+        streamOptions.onAttempt?.({
+          attempt,
+          idempotencyKey: key,
+          ...(outcome.response ? { response: outcome.response } : {}),
+          raw: outcome.raw,
+          retried: retry,
+        });
+        if (retry) {
+          if (rule === "new_key") key = retryKey(baseKey, ++newKeys);
+          continue;
+        }
+        emit(outcome.held, outcome.event, outcome.raw);
+        break;
+      }
+      out.end();
+    })();
+
+    return {
+      [Symbol.asyncIterator]: () => out[Symbol.asyncIterator](),
+      result: () => final,
+    } as AssistantMessageEventStreamLike;
   };
 }

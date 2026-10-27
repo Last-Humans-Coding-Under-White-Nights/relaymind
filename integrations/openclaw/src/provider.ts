@@ -120,7 +120,10 @@ export function createRelayMindProvider(options: RelayMindProviderOptions): Prov
     // checkPayload, so the guard reads the final payload (src/stream.ts). A
     // change an outer wrapper makes outside onPayload is not seen by the guard.
     wrapStreamFn: (ctx) =>
-      relaymindStreamFn(ctx.streamFn ?? hostStreamSimple, { secrets: () => [...secrets] }),
+      relaymindStreamFn(ctx.streamFn ?? hostStreamSimple, {
+        secrets: () => [...secrets],
+        maxRetries: config.maxRetries,
+      }),
     // Truthful classes for the host's failover decision (section 7.5, src/errors.ts):
     // a class never triggers or hides a failover; that is host policy.
     matchesContextOverflowError: (ctx) => isContextOverflow(ctx),
