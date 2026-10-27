@@ -31,6 +31,8 @@ Usage:
 """
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import sys
@@ -613,6 +615,19 @@ def validate_prior(configuration: str, context: dict) -> dict:
     return bundle
 
 
+def _parse_recorded(runner, argv: list[str]) -> argparse.Namespace:
+    """Parse a recorded command; a refusal is invalid evidence, never a process exit."""
+    errors = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(errors):
+            return runner.argument_parser().parse_args(argv)
+    except SystemExit:
+        message = errors.getvalue().strip().splitlines()
+        raise ValueError(
+            "recorded command does not parse: " + (message[-1] if message else "argparse exit")
+        ) from None
+
+
 def validate_cell(cell: dict, attempts: list, context: dict) -> dict:
     """Driver reconciliation semantics on retained files only; returns the analysis view."""
     names = [a.get("name") for a in attempts]
@@ -667,7 +682,7 @@ def validate_cell(cell: dict, attempts: list, context: dict) -> dict:
         "checkpoint request steps are incomplete or duplicated",
     )
     runner = run_corpus if corpus_runner else latency_benchmark
-    args = runner.argument_parser().parse_args(argv[2:])
+    args = _parse_recorded(runner, argv[2:])
     settings = configuration_from_args(args)
     identity = checkpoint.get("identity") or {}
     _check(

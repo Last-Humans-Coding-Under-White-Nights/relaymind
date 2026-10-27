@@ -1154,6 +1154,27 @@ def test_inventory_mode_reports_complete_and_missing_cells_without_comparisons(
     assert not full.exists() and not full.with_suffix(".md").exists()
 
 
+def test_a_recorded_command_the_parser_refuses_makes_its_cells_invalid(
+    fixture_matrix, monkeypatch, capsys
+):
+    """RM16/RM25: validator drift that refuses a recorded command is invalid evidence;
+    inventory lists the cells instead of exiting."""
+    import argparse
+
+    module = fixture_analysis(monkeypatch)
+    monkeypatch.setattr(module.run_corpus, "argument_parser", argparse.ArgumentParser)
+    result = module.inventory(fixture_matrix)
+    corpus = [c["id"] for c in module.driver.matrix_cells() if c["runner"] == "corpus"]
+    assert result["accepted"] is False
+    # Seeded latency cells follow, because their calibration prior is now unverified.
+    assert set(corpus) <= set(result["invalid"])
+    for cell_id in corpus:
+        reason = result["cells"][cell_id]["reason"]
+        assert reason.startswith("recorded command does not parse: ")
+        assert "unrecognized arguments" in reason
+    assert capsys.readouterr().err == ""
+
+
 @pytest.mark.parametrize(
     "change", ["export_bytes", "prior_bytes", "prior_identity", "argv", "plan_cells"]
 )
