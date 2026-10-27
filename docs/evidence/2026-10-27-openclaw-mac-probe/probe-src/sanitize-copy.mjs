@@ -13,6 +13,9 @@ const rules = [
   [token, "<redacted>"],
   [S, "<scratch>"],
   [S.replace(/^\/private/, ""), "<scratch>"],
+  // A scratch path a CLI table cut short ("/private/tmp/<name>-<uid>...") never
+  // matches the full path above.
+  [/\/(private\/)?tmp\/[A-Za-z]+-\d+[^\s"│]*/g, "<scratch>..."],
   [/\/(private\/)?var\/folders\/[^/\s"]+\/[^/\s"]+\/T/g, "<os-tmpdir>"],
   [home, "~"],
   // Host names to hide, comma separated (computer name, local host name).

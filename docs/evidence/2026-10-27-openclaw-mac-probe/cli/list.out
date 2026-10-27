@@ -242,7 +242,7 @@ Source roots:
 │                               │                   │          │          │ Grok web and X search, code    │           │
 │                               │                   │          │          │ execution, speech, and media   │           │
 │                               │                   │          │          │ generation.                    │           │
-│ Probe                         │ probe             │ openclaw │ disabled │ /private/tmp/claude-50...in-   │ 0.1.2     │
+│ Probe                         │ probe             │ openclaw │ disabled │ <scratch>...                   │ 0.1.2     │
 │                               │                   │          │          │ probe/dist/index.js            │           │
 │                               │                   │          │          │ Throwaway provider plugin for  │           │
 │                               │                   │          │          │ the RelayMind Mac probe.       │           │
