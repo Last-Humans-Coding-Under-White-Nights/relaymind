@@ -484,15 +484,18 @@ def test_every_latency_command_reconciles_the_real_runner_export(tmp_path, monke
 
 def test_runtime_defaults_to_the_environment_or_llama_server_on_path(tmp_path, monkeypatch):
     """RM18/RM25: no developer path is built in; the runtime comes from the operator."""
+    import os
+
     driver = load_script_module("run_m8_matrix")
-    on_path = tmp_path / "bin" / "llama-server"
+    # shutil.which on Windows only finds names with a PATHEXT extension.
+    on_path = tmp_path / "bin" / ("llama-server.exe" if os.name == "nt" else "llama-server")
     on_path.parent.mkdir()
     on_path.write_text("#!/bin/sh\n")
     on_path.chmod(0o755)
     named = tmp_path / "named" / "llama-server"
     monkeypatch.setenv("PATH", str(on_path.parent))
     monkeypatch.delenv("RELAYMIND_RUNTIME", raising=False)
-    assert driver.resolve_runtime(None) == on_path
+    assert os.path.normcase(driver.resolve_runtime(None)) == os.path.normcase(on_path)
     monkeypatch.setenv("RELAYMIND_RUNTIME", str(named))
     assert driver.resolve_runtime(None) == named
     assert driver.resolve_runtime(tmp_path / "given" / "llama-server") == (
