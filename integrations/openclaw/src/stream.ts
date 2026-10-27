@@ -11,7 +11,10 @@
 // test/stream.test.ts). The wrapper adds what the plugin owns:
 //
 // - before sending: the input guard (src/input-guard.ts) on the host context,
-//   the request options, and the final payload, after every host payload hook;
+//   the request options, and the final payload, after every host payload hook
+//   (the plugin is the innermost wrapper; the host's generic wrappers sit
+//   outside it and patch the payload through options.onPayload, which runs
+//   before checkPayload; see src/provider.ts);
 // - after the response: an answer with no text and no call is a failure, never
 //   an empty success, and more than one call in one response is a failure,
 //   because the gateway exposes one call per response.

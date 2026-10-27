@@ -16,7 +16,7 @@ import { createOpenAICompletionsTransportStreamFn } from "@openclaw/ai/transport
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PROVIDER_ID, relaymindModelEntry } from "../src/compat.ts";
-import { checkAnswer, relaymindStreamFn } from "../src/stream.ts";
+import { checkAnswer, relaymindStreamFn, type StreamFn } from "../src/stream.ts";
 // @ts-expect-error recorder.mjs is plain JavaScript without declarations (#135)
 import { startRecorder } from "./host-transport/recorder.mjs";
 
@@ -75,7 +75,12 @@ async function run(
   {
     context = {},
     options = {},
-  }: { context?: Record<string, unknown>; options?: Record<string, unknown> } = {},
+    outer = (fn: StreamFn) => fn,
+  }: {
+    context?: Record<string, unknown>;
+    options?: Record<string, unknown>;
+    outer?: (fn: StreamFn) => StreamFn;
+  } = {},
 ) {
   recorder = await startRecorder({ replies });
   const model = {
@@ -84,7 +89,7 @@ async function run(
     provider: PROVIDER_ID,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   };
-  const stream = relaymindStreamFn(createOpenAICompletionsTransportStreamFn() as never);
+  const stream = outer(relaymindStreamFn(createOpenAICompletionsTransportStreamFn() as never));
   const events = await stream(
     model as never,
     {
@@ -299,6 +304,30 @@ describe("refused input is never sent", () => {
   it("an operator parallel_tool_calls true fails before the request", async () => {
     const { message, exchanges } = await run([fixtureReply("text-streamed")], {
       options: { onPayload: (payload: object) => ({ ...payload, parallel_tool_calls: true }) },
+    });
+    expect(message.stopReason).toBe("error");
+    expect(message.errorMessage).toContain("parallel_tool_calls");
+    expect(exchanges).toEqual([]);
+  });
+
+  it("an outer host wrapper's in-place payload patch is still refused by name", async () => {
+    // The pinned host (applyExtraParamsToAgent) applies wrapStreamFn first, so
+    // the plugin is the innermost wrapper; its generic wrappers sit outside and
+    // patch the payload through options.onPayload, in place, the way the host's
+    // streamWithPayloadPatch does. The guard sees that patch only because the
+    // plugin's onPayload calls the host hook before checkPayload.
+    const parallelToolCalls: (fn: StreamFn) => StreamFn = (fn) => (model, context, options) => {
+      const original = options?.onPayload;
+      return fn(model, context, {
+        ...options,
+        onPayload: (payload: unknown) => {
+          (payload as Record<string, unknown>).parallel_tool_calls = true;
+          return original?.(payload, model);
+        },
+      });
+    };
+    const { message, exchanges } = await run([fixtureReply("text-streamed")], {
+      outer: parallelToolCalls,
     });
     expect(message.stopReason).toBe("error");
     expect(message.errorMessage).toContain("parallel_tool_calls");

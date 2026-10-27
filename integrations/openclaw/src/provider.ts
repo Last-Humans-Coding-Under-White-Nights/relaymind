@@ -110,8 +110,14 @@ export function createRelayMindProvider(options: RelayMindProviderOptions): Prov
     // Linux VPS functional check (docs/evidence/2026-10-28-openclaw-vps-functional-136/).
     resolveDynamicModel: (ctx: ProviderResolveDynamicModelContext) =>
       ctx.provider === PROVIDER_ID && ctx.modelId === MODEL_ID ? (runtimeModel(config) as never) : undefined,
-    // Applied by the host after its generic wrappers; ctx.streamFn is the
-    // transport the host would otherwise call.
+    // The pinned host (applyExtraParamsToAgent) calls this first, on its base
+    // transport (ctx.streamFn), so the plugin is the innermost wrapper: the
+    // host's generic wrappers (extra params, string content, strict message
+    // keys, tools compat, payload policy, parallel_tool_calls) are layered
+    // outside it and have not run when it is called. They patch the request
+    // through options.onPayload, which the plugin's onPayload calls before
+    // checkPayload, so the guard reads the final payload (src/stream.ts). A
+    // change an outer wrapper makes outside onPayload is not seen by the guard.
     wrapStreamFn: (ctx) =>
       relaymindStreamFn(ctx.streamFn ?? hostStreamSimple),
     buildMissingAuthMessage: () => `No RelayMind application token is stored. ${TOKEN_HANDOVER}`,
