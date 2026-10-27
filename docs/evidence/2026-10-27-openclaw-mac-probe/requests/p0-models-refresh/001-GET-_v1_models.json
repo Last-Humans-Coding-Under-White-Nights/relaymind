@@ -1,0 +1,19 @@
+{
+  "received_at": "2026-10-27T15:26:54.942Z",
+  "method": "GET",
+  "path": "/v1/models",
+  "headers": {
+    "host": "127.0.0.1:8089",
+    "connection": "keep-alive",
+    "authorization": "Bearer <redacted>",
+    "authorization__token_length": 43,
+    "authorization__matches_expected_index": 1,
+    "accept": "*/*",
+    "accept-language": "*",
+    "sec-fetch-mode": "cors",
+    "user-agent": "node",
+    "accept-encoding": "gzip, deflate"
+  },
+  "body_bytes": 0,
+  "body": null
+}

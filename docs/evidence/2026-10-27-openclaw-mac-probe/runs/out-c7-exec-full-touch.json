@@ -1,0 +1,35 @@
+{
+  "ok": true,
+  "status": "ok",
+  "final": "The tool returned. First line: (no output)",
+  "payloads": [
+    {
+      "text": "The tool returned. First line: (no output)",
+      "mediaUrl": null
+    }
+  ],
+  "usage": {
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "cost": {
+      "total": 0
+    }
+  },
+  "codeModeEngaged": false,
+  "assistantTurns": 2,
+  "bridgeCalls": {
+    "search": 0,
+    "describe": 0,
+    "call": 0
+  },
+  "toolSummary": {
+    "calls": 1,
+    "tools": [
+      "exec"
+    ],
+    "failures": 0
+  },
+  "model": "relaymind-client-tools",
+  "provider": "relaymind-capture",
+  "sessionId": "365db1c8-cc22-4458-be70-05848ecf4230"
+}

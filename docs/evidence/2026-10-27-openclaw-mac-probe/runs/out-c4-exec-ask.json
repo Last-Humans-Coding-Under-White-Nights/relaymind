@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "status": "ok",
+  "final": "The tool returned. First line: Exec denied (SYSTEM_RUN_DENIED: approval cannot safely bind this command): echo probe > probe-exec.txt",
+  "payloads": [
+    {
+      "text": "The tool returned. First line: Exec denied (SYSTEM_RUN_DENIED: approval cannot safely bind this command): echo probe > probe-exec.txt",
+      "mediaUrl": null
+    }
+  ],
+  "usage": {
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "cost": {
+      "total": 0
+    }
+  },
+  "codeModeEngaged": false,
+  "assistantTurns": 2,
+  "bridgeCalls": {
+    "search": 0,
+    "describe": 0,
+    "call": 0
+  },
+  "toolSummary": {
+    "calls": 1,
+    "tools": [
+      "exec"
+    ],
+    "failures": 1,
+    "unresolvedError": {
+      "toolName": "exec"
+    }
+  },
+  "model": "relaymind-client-tools",
+  "provider": "relaymind-capture",
+  "sessionId": "7d192a95-d42b-4373-a902-4b6ba51d099c"
+}

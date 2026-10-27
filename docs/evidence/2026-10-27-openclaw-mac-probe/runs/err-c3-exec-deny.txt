@@ -1,0 +1,7 @@
+[agent/embedded] tool-search: cataloged 40 tools behind compact prompt surface
+[tools] exec failed: exec denied: host=gateway security=deny raw_params={"title":"probe","command":{"omitted":true,"reason":"exec command may contain credentials","type":"string","chars":27,"sha256":"d17f872a9e80d8eb"}}
+[agents/agent-command] [agent] run 6acea39f-44fe-4c1e-b2f4-f2e47488b5fe ended with stopReason=stop
+[trajectory] retention deferred until the next append: WorkerTaskError: Session history database read was revoked
+[state/agent-db] agent database clean-close receipt: active-leases
+[state/agent-db] agent database clean-close receipt: active-leases
+[state/agent-db] agent database clean-close receipt: lease-not-held

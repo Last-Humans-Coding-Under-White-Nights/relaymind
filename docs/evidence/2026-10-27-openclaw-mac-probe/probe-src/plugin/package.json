@@ -1,0 +1,29 @@
+{
+  "name": "openclaw-plugin-probe",
+  "version": "0.1.2",
+  "description": "Throwaway provider plugin for the RelayMind Mac probe.",
+  "type": "module",
+  "files": [
+    "dist",
+    "openclaw.plugin.json"
+  ],
+  "peerDependencies": {
+    "openclaw": ">=2026.10.7"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.10.7"
+    },
+    "build": {
+      "openclawVersion": "2026.10.7"
+    }
+  }
+}

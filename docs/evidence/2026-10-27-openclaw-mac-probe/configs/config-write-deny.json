@@ -1,0 +1,26 @@
+{
+  "models": {
+    "providers": {
+      "relaymind-capture": {
+        "baseUrl": "http://127.0.0.1:8089/v1",
+        "api": "openai-completions",
+        "apiKey": "<redacted>",
+        "models": [
+          {
+            "id": "relaymind-client-tools",
+            "name": "relaymind-client-tools",
+            "reasoning": false,
+            "input": [
+              "text"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "tools": {
+    "deny": [
+      "write"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "plugins": {
+    "entries": {
+      "probe": {
+        "enabled": false
+      }
+    }
+  },
+  "meta": {
+    "migrations": {
+      "modelPolicyAllowlist": true,
+      "utilityModelSeparation": true
+    },
+    "lastTouchedVersion": "2026.10.7"
+  },
+  "auth": {
+    "profiles": {
+      "probe:manual": {
+        "provider": "probe",
+        "mode": "api_key"
+      }
+    }
+  }
+}

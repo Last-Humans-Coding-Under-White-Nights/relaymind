@@ -1,0 +1,15 @@
+[agent/embedded] tool-search: cataloged 40 tools behind compact prompt surface
+[tools] exec failed: Exec approval registration failed: GatewayTransportError: Gateway not reachable at ws://127.0.0.1:18789 (ECONNREFUSED).
+Start it with `openclaw gateway run` or check `openclaw gateway status`.
+Gateway target: ws://127.0.0.1:18789
+Source: local loopback
+Config: <os-tmpdir>/openclaw-agent-exec-yYX0sG/openclaw.json
+Bind: loopback raw_params={"title":"probe","command":{"omitted":true,"reason":"exec command may contain credentials","type":"string","chars":20,"sha256":"4732cdfe87016857"}}
+[agents/agent-command] [agent] run ef6a6f67-6a35-4f7a-90e3-ef7140665a9d ended with stopReason=stop
+[trajectory] retention deferred until the next append: WorkerTaskError: Session history database read was revoked
+[state/agent-db] agent database clean-close receipt: active-leases
+[state/agent-db] agent database clean-close receipt: active-leases
+[state/agent-db] agent database clean-close receipt: lease-not-held
+real 10.70
+user 11.13
+sys 2.46

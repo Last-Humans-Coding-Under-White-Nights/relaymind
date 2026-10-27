@@ -1,0 +1,33 @@
+{
+  "id": "probe",
+  "name": "Probe",
+  "description": "Throwaway provider plugin for the RelayMind Mac probe.",
+  "version": "0.1.2",
+  "providers": [
+    "probe"
+  ],
+  "setup": {
+    "providers": [
+      {
+        "id": "probe",
+        "envVars": [
+          "PROBE_TOKEN"
+        ]
+      }
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "activation": {
+    "onStartup": true,
+    "providers": [
+      "probe"
+    ],
+    "capabilities": [
+      "provider"
+    ]
+  }
+}

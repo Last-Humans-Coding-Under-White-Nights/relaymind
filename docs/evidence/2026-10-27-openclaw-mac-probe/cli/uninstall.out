@@ -1,0 +1,4 @@
+Plugin: Probe (probe)
+Will remove: plugin settings, install record, directory: <scratch>/oc/state/npm/projects/openclaw-plugin-probe__openclaw-generation__g-96471dd94c6116df
+Uninstalled plugin "probe". Removed: plugin settings, install record, directory.
+Saved for the next Gateway start.

@@ -1,0 +1,3 @@
+Gateway is not running. Refreshing the local model catalog.
+Model                                      Input      Ctx         Local Auth  Tags
+probe/relaymind-client-tools               text       33k         yes   yes   

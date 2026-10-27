@@ -1,0 +1,4 @@
+{"t":"2026-10-27T15:15:35.837Z","event":"request","method":"POST","path":"/v1/chat/completions","file":"001-POST-_v1_chat_completions.json"}
+{"t":"2026-10-27T15:15:35.838Z","event":"reply_plan","plan":{"toolCall":{"name":"read","arguments":{"path":"notes.txt"}}},"stream":true}
+{"t":"2026-10-27T15:15:35.926Z","event":"request","method":"POST","path":"/v1/chat/completions","file":"002-POST-_v1_chat_completions.json"}
+{"t":"2026-10-27T15:15:35.927Z","event":"reply_plan","plan":{"text":"The tool returned. First line: probe line one"},"stream":true}

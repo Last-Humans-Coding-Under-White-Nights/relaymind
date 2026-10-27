@@ -1,0 +1,10 @@
+[agent/embedded] tool-search: cataloged 40 tools behind compact prompt surface
+[agents/agent-command] [agent] run 3713ed57-faaa-4946-90f8-d452dc77a327 ended with stopReason=stop
+[trajectory] retention deferred until the next append: WorkerTaskError: Session history database read was revoked
+[state/agent-db] agent database clean-close receipt: active-leases
+[state/agent-db] agent database clean-close receipt: active-leases
+[state/agent-db] agent database stale lease: owner-pid-dead; previous release not observed
+[state/agent-db] agent database integrityGateReason=stale-lease-full because=legacy-provenance-missing
+[state/agent-db] agent database integrity gate
+[state/agent-db] agent database clean-close receipt: written
+[state/agent-db] agent database clean-close receipt: lease-not-held
