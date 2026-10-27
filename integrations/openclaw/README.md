@@ -482,7 +482,9 @@ Headless `openclaw agent exec` has no approval surface: on the macOS probe,
 running Gateway (`ECONNREFUSED`), `deny` blocked the host's `exec` tool, and
 `full` ran it. The `exec-deny` and `exec-full` scenarios use that pair: the
 gateway proposes one call to the host's own `exec` tool,
-`echo written-by-the-host >> note.txt`, and the host decides. Run the host in
+`echo written-by-the-host >> '<sandbox>/note.txt'`, and the host decides. The
+path is absolute, so a command the host ran in another working directory still
+lands in the sandbox, and a deny that did not hold never passes. Run the host in
 the sandbox the harness creates, with a config whose `tools.exec.mode` is
 `deny` in one run and `full` in the other (the rest as above):
 

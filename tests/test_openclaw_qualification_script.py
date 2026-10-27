@@ -450,8 +450,10 @@ messages = [{"role": "user", "content": "Write the note with exec."}]
 reply = post(messages)
 (call,) = reply["tool_calls"]
 command = json.loads(call["function"]["arguments"])["command"]
-if mode == "full":
-    subprocess.run(command, shell=True, cwd=sandbox, check=True)
+if mode in ("full", "full-elsewhere"):
+    # full-elsewhere: the host's exec workdir is not the sandbox.
+    workdir = sandbox if mode == "full" else os.path.dirname(sandbox)
+    subprocess.run(command, shell=True, cwd=workdir, check=True)
     result = "(no output)"
 else:
     result = json.dumps({"status": "error", "tool": "exec",
@@ -495,3 +497,27 @@ def test_an_exec_denial_that_ran_anyway_does_not_pass(tmp_path):
     )
     assert export["checks"]["sandbox_lines"] == 1
     assert export["checks"]["passed"] is False
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stub host runs a POSIX shell command")
+def test_an_exec_denial_that_ran_in_another_workdir_does_not_pass(tmp_path):
+    """RM08, AC24: the exec command names the sandbox file by absolute path.
+
+    A host that ignored ``tools.exec.mode`` and ran the command outside the
+    sandbox must still leave its line in the sandbox, so the deny never passes.
+    """
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_EXEC_HOST, "full-elsewhere"],
+        tmp_path / "export.json",
+        scenario="exec-deny",
+    )
+    assert export["status"] == "completed", export["stderr"]
+    assert export["checks"]["sandbox_lines"] == 1
+    assert export["checks"]["passed"] is False
+
+
+def test_the_exec_command_writes_to_the_sandbox_by_absolute_path(tmp_path):
+    """The scripted exec proposal does not depend on the host's working directory."""
+    sandbox = tmp_path / "host sandbox"
+    command = qualification.exec_command(sandbox)
+    assert command == f"echo written-by-the-host >> '{sandbox / 'note.txt'}'"

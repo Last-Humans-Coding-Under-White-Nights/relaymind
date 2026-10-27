@@ -29,8 +29,9 @@ Two modes:
 
     Scenarios (#137): ``text-tool`` (the default: a text turn, the sandbox
     echo call, a final text turn); ``exec-deny`` and ``exec-full`` (a call
-    to the host's own ``exec`` tool that appends one line to ``note.txt``,
-    then a final text turn), for the host's ``tools.exec.mode`` ``deny``
+    to the host's own ``exec`` tool that appends one line to the sandbox's
+    ``note.txt`` by absolute path, so the host's working directory cannot hide
+    a run, then a final text turn), for the host's ``tools.exec.mode`` ``deny``
     and ``full``, the headless policy pair the macOS probe observed;
     ``tool-deny`` and ``tool-approve`` (a call to the mutating sandbox tool
     ``relaymind_test_write``, then a final text turn), which need an
@@ -59,6 +60,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -463,7 +465,6 @@ WRITE_TOOL = "relaymind_test_write"
 WRITE_FILE = "note.txt"
 # The host's own shell tool, under its tools.exec.mode policy (macOS probe, C2).
 EXEC_TOOL = "exec"
-EXEC_COMMAND = f"echo written-by-the-host >> {WRITE_FILE}"
 # The pinned host's replay rule for a tool call ID (section 7.5).
 HOST_CALL_ID_LIMIT = 40
 
@@ -472,8 +473,20 @@ def write_call(call_id: str = "call_write_1") -> list:
     return tool_turn(WRITE_TOOL, call_id=call_id, name=WRITE_FILE, line="written by the host")
 
 
-def exec_call(call_id: str = "call_exec_1") -> list:
-    return tool_turn(EXEC_TOOL, call_id=call_id, title="relaymind note", command=EXEC_COMMAND)
+def exec_command(sandbox: Path) -> str:
+    """The shell command the exec scenarios propose: one line into the sandbox file.
+
+    The path is absolute, so the line lands in the sandbox whatever working
+    directory the host's exec uses: a deny the host ignored, or ran outside
+    ``--cwd``, still shows up in ``sandbox_lines`` and never passes.
+    """
+    return f"echo written-by-the-host >> {shlex.quote(str(sandbox / WRITE_FILE))}"
+
+
+def exec_call(sandbox: Path, call_id: str = "call_exec_1") -> list:
+    return tool_turn(
+        EXEC_TOOL, call_id=call_id, title="relaymind note", command=exec_command(sandbox)
+    )
 
 
 def host_replayed_call_id(call_id: str) -> str:
@@ -522,20 +535,27 @@ def host_report(stdout: str) -> dict | None:
     }
 
 
-# The scripted turns of each host scenario, and the sandbox lines it must leave.
-HOST_SCENARIOS: dict[str, tuple[Callable[[], list], int | None]] = {
+# The scripted turns of each host scenario (built for its sandbox), and the
+# sandbox lines it must leave.
+HOST_SCENARIOS: dict[str, tuple[Callable[[Path], list], int | None]] = {
     "text-tool": (
-        lambda: [
+        lambda _sandbox: [
             text_turn("Hello from RelayMind."),
             echo_call(),
             text_turn("The tool said: echo: lantern."),
         ],
         None,
     ),
-    "tool-deny": (lambda: [write_call(), text_turn("The host did not allow the write.")], 0),
-    "tool-approve": (lambda: [write_call(), text_turn("The note was written.")], 1),
-    "exec-deny": (lambda: [exec_call(), text_turn("The host did not allow the command.")], 0),
-    "exec-full": (lambda: [exec_call(), text_turn("The note was written.")], 1),
+    "tool-deny": (
+        lambda _sandbox: [write_call(), text_turn("The host did not allow the write.")],
+        0,
+    ),
+    "tool-approve": (lambda _sandbox: [write_call(), text_turn("The note was written.")], 1),
+    "exec-deny": (
+        lambda sandbox: [exec_call(sandbox), text_turn("The host did not allow the command.")],
+        0,
+    ),
+    "exec-full": (lambda sandbox: [exec_call(sandbox), text_turn("The note was written.")], 1),
 }
 
 
@@ -596,7 +616,7 @@ def run_host(
     with tempfile.TemporaryDirectory(prefix="openclaw-host-") as tmp:
         sandbox = Path(tmp) / "host-sandbox"
         sandbox.mkdir()
-        gateway = build_gateway(Path(tmp), turns(), external_turns=[])
+        gateway = build_gateway(Path(tmp), turns(sandbox), external_turns=[])
         app = make_app(gateway, client_tools=ClientToolsChat(gateway.orchestrator))
         token = token_of(app)
         try:
