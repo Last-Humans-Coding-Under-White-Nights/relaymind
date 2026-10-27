@@ -1,0 +1,412 @@
+"""The OpenClaw evaluation runner over a stub host and doubles gateways (spec 0.50, #139).
+
+RM12, RM16, RM25, RM26, RM33; AC24; section 12.5. ``scripts/run_openclaw_eval.py``
+gives each arm its own isolated host home (and, for a RelayMind arm, its own
+gateway), installs and configures the plugin, stores the token through the
+host's credential command on standard input, and runs every task of the
+frozen order with ``openclaw agent exec --json`` in a fresh sandbox. Here the
+host is a stub that keeps the real host's command forms and observed
+behavior (macOS probe, 27 October 2026: the decorated user message, the call
+ID replayed without underscores, ``"ok": true`` whatever happened), the
+gateway answers from model doubles, and the "external provider" of the
+direct arm is a doubles gateway too. Nothing here is live evidence; the
+measurement itself is an operator run.
+"""
+
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+from api_helpers import RunningServer, make_app, token_of
+from gateway_helpers import build_gateway, text_turn, tool_turn
+from helpers import ScriptedAdapter, load_script_module
+from relaymind.adapters import Role
+from relaymind.api.app import ChatSettings
+from relaymind.api.chat import ClientToolsChat
+from relaymind.evaluation.openclaw import ARMS, load_tasks, sampling_order
+from relaymind.orchestrator.local_loop import ConfiguredModel
+from relaymind.orchestrator.local_status import LocalStatus
+from relaymind.orchestrator.route_decision import ExecutionMode
+
+runner = load_script_module("run_openclaw_eval")
+
+REPO = Path(__file__).resolve().parent.parent
+TASKS = load_tasks(REPO / "evaluation" / "openclaw_tasks.v1.json")
+SELECTED = ("text-reply-en", "read-note-en", "exec-append-deny-zh")
+EVIDENCE = "not live evidence: a stub host over gateway doubles"
+
+# The host stand-in: config in OPENCLAW_CONFIG_PATH, the stored key under
+# OPENCLAW_STATE_DIR, a log of every call, and the plugin's diagnostics
+# records written the way the plugin writes them.
+STUB_HOST = r"""
+import json, os, re, subprocess, sys, urllib.request
+from pathlib import Path
+
+args = sys.argv[1:]
+state = Path(os.environ["OPENCLAW_STATE_DIR"])
+state.mkdir(parents=True, exist_ok=True)
+config_path = Path(os.environ["OPENCLAW_CONFIG_PATH"])
+with open(state / "calls.jsonl", "a") as log:
+    log.write(json.dumps({"args": args, "env_token": "RELAYMIND_APP_TOKEN" in os.environ}) + "\n")
+
+def load():
+    return json.loads(config_path.read_text()) if config_path.exists() else {}
+
+def save(config):
+    config_path.write_text(json.dumps(config))
+
+config = load()
+entries = config.setdefault("plugins", {}).setdefault("entries", {})
+if args == ["--version"]:
+    print("OpenClaw 2026.10.7 (stub)")
+elif args[:2] == ["plugins", "install"]:
+    if "--accept-capabilities" not in args:
+        raise SystemExit("requires capability consent")
+    entries["relaymind"] = {"enabled": False}
+    save(config)
+elif args[:2] == ["plugins", "enable"]:
+    entries.setdefault(args[2], {})["enabled"] = True
+    save(config)
+elif args[:3] == ["models", "auth", "paste-api-key"]:
+    (state / "key").write_text(sys.stdin.readline().strip())
+elif args[:2] == ["agent", "exec"]:
+    prompt = args[2]
+    ref = args[args.index("--model") + 1]
+    cwd = Path(args[args.index("--cwd") + 1])
+    assert args[args.index("--config") + 1] == str(config_path)
+    provider, model = ref.split("/", 1)
+    headers = {"Content-Type": "application/json"}
+    diagnostics = None
+    if provider == "relaymind":
+        plugin = entries["relaymind"]
+        assert plugin["enabled"] is True
+        base = plugin["config"]["baseUrl"]
+        key = (state / "key").read_text()
+        headers["X-RelayMind-Execution-Mode"] = plugin["config"]["executionMode"]
+        diagnostics = plugin["config"].get("diagnosticsPath")
+    else:
+        entry = config["models"]["providers"][provider]
+        base, key = entry["baseUrl"], entry["apiKey"]
+        assert entry["models"][0]["id"] == model
+    headers["Authorization"] = "Bearer " + key
+    mode = config.get("tools", {}).get("exec", {}).get("mode")
+    tools = [
+        {"type": "function", "function": {"name": n, "description": n, "parameters": {
+            "type": "object", "properties": {p: {"type": "string"}}}}}
+        for n, p in (("read", "path"), ("exec", "command"), ("write", "path"))
+    ]
+    messages = [
+        {"role": "system", "content": "You are OpenClaw (stub)."},
+        {"role": "user",
+         "content": "[Tue 2026-10-27 10:00 UTC] " + prompt + "\n\nRuntime: agent=main"},
+    ]
+    called, failures, final = [], 0, ""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    for turn in range(4):
+        body = {"model": model, "messages": messages, "stream": False, "tools": tools,
+                "tool_choice": "auto"}
+        request = urllib.request.Request(base + "/chat/completions",
+                                         data=json.dumps(body).encode(), headers=headers)
+        with opener.open(request, timeout=30) as response:
+            run_id = response.headers.get("X-RelayMind-Run-ID")
+            reply = json.loads(response.read())
+        message = reply["choices"][0]["message"]
+        if diagnostics:
+            with open(diagnostics, "a") as out:
+                out.write(json.dumps({"event": "relaymind.inference_attempt", "turn": "t",
+                    "attempt": 1, "runId": run_id or "unavailable",
+                    "outcome": "tool_call" if message.get("tool_calls") else "answer",
+                    "status": 200, "code": None, "retried": False, "usage": "unknown"}) + "\n")
+        if not message.get("tool_calls"):
+            final = message.get("content") or ""
+            break
+        call = message["tool_calls"][0]
+        name = call["function"]["name"]
+        arguments = json.loads(call["function"]["arguments"])
+        called.append(name)
+        if name == "read":
+            result = (cwd / arguments["path"]).read_text()
+        elif name == "exec" and mode == "full":
+            result = subprocess.run(arguments["command"], shell=True, cwd=cwd,
+                                    capture_output=True, text=True).stdout or "(no output)"
+        else:
+            failures += 1
+            result = json.dumps({"status": "error", "error": "exec denied"})
+        replayed = re.sub("[^A-Za-z0-9]", "", call["id"])
+        messages.append({"role": "assistant", "content": None, "tool_calls": [
+            {**call, "id": replayed}]})
+        messages.append({"role": "tool", "tool_call_id": replayed, "content": result})
+    print(json.dumps({"ok": True, "status": "ok", "final": final,
+        "usage": {"cacheRead": 0, "cacheWrite": 0}, "assistantTurns": len(called) + 1,
+        "toolSummary": {"calls": len(called), "tools": called, "failures": failures},
+        "provider": provider, "model": model}))
+else:
+    raise SystemExit("stub: unknown command " + " ".join(args))
+"""
+
+
+class TaskDouble(ScriptedAdapter):
+    """A model double that answers each frozen task by what the request holds."""
+
+    async def generate(self, request):
+        self.requests.append(request)
+        messages = request.messages
+        results = [m for m in messages if m.role == Role.TOOL]
+        user = next(m.content for m in messages if m.role == Role.USER)
+        if results:
+            text = results[-1].content or ""
+            turn = text_turn(f"The tool said: {text.strip()} second shelf, lantern.")
+        elif "notes.txt" in user:
+            turn = tool_turn("read", call_id="call_read_1", path="notes.txt")
+        elif "log.txt" in user:
+            turn = tool_turn("exec", call_id="call_exec_1", command="echo ready >> log.txt")
+        else:
+            turn = text_turn("lantern")
+        for item in turn:
+            yield item
+
+
+class DoublesBackend:
+    """The runner's backend over in-process doubles gateways (spec section 13)."""
+
+    MODES = frozenset({ExecutionMode.AUTO, ExecutionMode.EXTERNAL_ONLY})
+
+    def __init__(self, tmp_path: Path, *, local: bool = True):
+        self.tmp_path = tmp_path
+        self.local = local
+        self.provider = self._serve("provider", absent=True)
+
+    def _serve(self, name: str, *, absent: bool = False):
+        work = self.tmp_path / name
+        work.mkdir()
+        external = ConfiguredModel(adapter=TaskDouble(locality="external"), model_id="double-ext")
+        options = (
+            {"local_status": LocalStatus.absent()}
+            if absent
+            else {"local_model": ConfiguredModel(adapter=TaskDouble(), model_id="double-local")}
+        )
+        gateway = build_gateway(work, None, external_model=external, **options)
+        app = make_app(
+            gateway,
+            client_tools=ClientToolsChat(gateway.orchestrator),
+            settings=ChatSettings(allowed_modes=self.MODES),
+        )
+        server = RunningServer(app)
+        server.__enter__()
+        return gateway, app, server
+
+    def unavailable(self, arm: str) -> str | None:
+        if arm == "relaymind_no_local":
+            return "not part of this test"
+        return None
+
+    def direct(self):
+        _gateway, app, server = self.provider
+        return runner.DirectEndpoint(
+            base_url=server.base_url, model="relaymind-client-tools", api_key=token_of(app)
+        )
+
+    def start(self, arm: str, work: Path):
+        gateway, app, server = self._serve(arm)
+
+        def stop():
+            server.__exit__(None, None, None)
+            gateway.store.close()
+
+        return runner.GatewayHandle(
+            base_url=server.base_url,
+            token=token_of(app),
+            run_ids=lambda: [
+                r[0] for r in gateway.store._conn.execute("SELECT run_id FROM runs ORDER BY rowid")
+            ],
+            run_records=lambda ids: [
+                {
+                    "run_id": i,
+                    "state": gateway.store.get_run(i).state,
+                    "events": [e.to_json_object() for e in gateway.store.events(i)],
+                }
+                for i in ids
+            ],
+            stop=stop,
+            launch={"arm": arm, "local_model": arm != "relaymind_no_local"},
+        )
+
+    def secrets(self):
+        return [token_of(self.provider[1])]
+
+    def identity(self):
+        return {"backend": "doubles"}
+
+    def close(self):
+        gateway, _app, server = self.provider
+        server.__exit__(None, None, None)
+        gateway.store.close()
+
+
+@pytest.fixture
+def evaluated(tmp_path):
+    host = tmp_path / "openclaw_stub.py"
+    host.write_text(STUB_HOST, "utf-8")
+    tarball = tmp_path / "relaymind-openclaw-provider-0.1.0.tgz"
+    tarball.write_bytes(b"not a real tarball")
+    backend = DoublesBackend(tmp_path)
+    out = tmp_path / "out"
+    try:
+        document = runner.run_evaluation(
+            TASKS,
+            arms=ARMS,
+            host_command=[sys.executable, str(host)],
+            tarball=tarball,
+            backend=backend,
+            out=out,
+            evidence=EVIDENCE,
+            task_ids=SELECTED,
+        )
+    finally:
+        backend.close()
+    return document, out, backend
+
+
+def test_every_arm_runs_the_frozen_order_and_an_unavailable_arm_is_not_run(evaluated):
+    document, _out, _backend = evaluated
+    assert document["kind"] == "relaymind.openclaw_evaluation"
+    assert document["arms"]["relaymind_no_local"] == {
+        "status": "not_run",
+        "reason": "not part of this test",
+    }
+    ran = [a for a in ARMS if a != "relaymind_no_local"]
+    assert all(document["arms"][a]["status"] == "ran" for a in ran)
+    expected = [
+        (s.index, s.repeat, s.task_id, s.arm)
+        for s in sampling_order(TASKS)
+        if s.task_id in SELECTED and s.arm in ran
+    ]
+    got = [(a["index"], a["repeat"], a["task_id"], a["arm"]) for a in document["attempts"]]
+    assert got == expected
+    assert len(got) == len(SELECTED) * TASKS.repeats * len(ran)
+    assert document["tasks"]["sha256"] == TASKS.digest
+    assert document["tasks"]["selected"] == list(SELECTED)
+    assert document["tasks"]["full_set"] is False
+
+
+def test_every_attempt_is_graded_from_the_host_sandbox_and_trace(evaluated):
+    document, _out, _backend = evaluated
+    for attempt, grade in zip(document["attempts"], document["grades"], strict=True):
+        assert grade["arm"] == attempt["arm"] and grade["task_id"] == attempt["task_id"]
+        assert grade["success"] is True, (attempt["arm"], attempt["task_id"], grade["failures"])
+        if attempt["arm"] == "direct":
+            assert attempt["runs"] == [] and grade["inference_attempts"] is None
+        else:
+            assert grade["gateway_runs"] >= 1
+            assert grade["uncorrelated_runs"] == []
+            assert grade["gateway_tool_executions"] == 0
+    summary = document["summary"]["arms"]
+    assert summary["relaymind_auto"]["languages"]["en"]["successes"] == 2 * TASKS.repeats
+    # The execution mode reached the gateway: external_only never ran the local model.
+    external_only = summary["relaymind_external_only"]["languages"]["en"]
+    assert external_only["local_calls"] == 0 and external_only["external_calls"] > 0
+    auto = summary["relaymind_auto"]["languages"]["en"]
+    assert auto["local_calls"] > 0 and auto["local_turns"] > 0
+    assert summary["direct"]["languages"]["en"]["external_calls"] is None
+    # The host's tool runs reached the next request: a read task's runs end with its text.
+    read = [
+        a for a in document["attempts"] if a["task_id"] == "read-note-en" and a["arm"] != "direct"
+    ]
+    assert all(len(a["runs"]) == 2 for a in read)
+    assert summary["relaymind_auto"]["languages"]["zh"]["attempts"] == TASKS.repeats
+
+
+def test_each_task_runs_in_a_fresh_sandbox_under_its_frozen_policy(evaluated, tmp_path):
+    document, _out, _backend = evaluated
+    deny = [a for a in document["attempts"] if a["task_id"] == "exec-append-deny-zh"]
+    assert deny and all("log.txt" not in a["sandbox_after"] for a in deny)
+    reads = [a for a in document["attempts"] if a["task_id"] == "read-note-en"]
+    assert all(a["sandbox_after"] == TASKS.task("read-note-en").sandbox for a in reads)
+    assert all(
+        a["exec_policy"] == TASKS.task(a["task_id"]).exec_policy for a in document["attempts"]
+    )
+
+
+def test_the_host_gets_the_frozen_prompt_and_the_token_only_on_standard_input(evaluated):
+    document, _out, _backend = evaluated
+    for arm in ("relaymind_auto", "relaymind_external_only", "direct"):
+        setup = document["arms"][arm]["setup"]
+        names = [step["name"] for step in setup]
+        if arm == "direct":
+            assert names == ["version", "configure"]
+        else:
+            assert names == ["version", "install", "configure", "enable", "store-token"]
+            install = next(s for s in setup if s["name"] == "install")
+            assert "--accept-capabilities" in install["argv"]
+        assert all(step["exit_code"] == 0 for step in setup)
+    for attempt in document["attempts"]:
+        argv = attempt["host"]["argv"]
+        assert argv[:3] == ["agent", "exec", TASKS.task(attempt["task_id"]).prompt]
+        assert "--json" in argv
+
+
+def test_neither_secret_nor_a_host_home_path_reaches_the_exports(evaluated, tmp_path):
+    document, out, backend = evaluated
+    export = (out / "openclaw-eval.json").read_text("utf-8")
+    report = (out / "openclaw-eval.md").read_text("utf-8")
+    for secret in backend.secrets():
+        assert secret not in export and secret not in report
+    for attempt in document["attempts"]:
+        if attempt["arm"] != "direct":
+            assert attempt["runs"]
+    assert str(tmp_path) not in export
+    assert json.loads(export)["evidence"].startswith("not live")
+
+
+def test_the_plugin_is_configured_with_the_arms_mode_and_its_diagnostics(evaluated):
+    document, _out, _backend = evaluated
+    assert document["arms"]["relaymind_auto"]["plugin_config"]["executionMode"] == "auto"
+    assert (
+        document["arms"]["relaymind_external_only"]["plugin_config"]["executionMode"]
+        == "external_only"
+    )
+    for arm in ("relaymind_auto", "relaymind_external_only"):
+        config = document["arms"][arm]["plugin_config"]
+        assert config["diagnosticsPath"] == "<host-home>/diagnostics.jsonl"
+        assert config["baseUrl"].startswith("http://127.0.0.1:")
+
+
+def test_the_markdown_report_is_written_next_to_the_export(evaluated):
+    _document, out, _backend = evaluated
+    report = (out / "openclaw-eval.md").read_text("utf-8")
+    assert "relaymind_no_local" in report and "not_run" in report
+    assert "Linux" in report or "machine" in report.lower()
+
+
+def test_without_an_external_endpoint_or_a_local_model_the_arms_are_not_run():
+    reasons = runner.arm_availability(external=None, local_model=False, key_present=False)
+    assert set(reasons) == set(ARMS)
+    assert all(reason for reason in reasons.values())
+    reasons = runner.arm_availability(external=object(), local_model=False, key_present=True)
+    assert set(reasons) == {"relaymind_auto"}
+    assert runner.arm_availability(external=object(), local_model=True, key_present=True) == {}
+
+
+def test_the_cli_refuses_a_task_file_that_differs_from_its_lock(tmp_path, capsys):
+    changed = json.loads((REPO / "evaluation" / "openclaw_tasks.v1.json").read_text("utf-8"))
+    changed["tasks"][0]["prompt"] += "!"
+    tasks = tmp_path / "openclaw_tasks.v1.json"
+    tasks.write_text(json.dumps(changed), "utf-8")
+    with pytest.raises(SystemExit):
+        runner.main(
+            [
+                "--tasks",
+                str(tasks),
+                "--lock",
+                str(REPO / "evaluation" / "openclaw_tasks.v1.lock.json"),
+                "--tarball",
+                str(tmp_path / "x.tgz"),
+                "--out",
+                str(tmp_path / "out"),
+                "--",
+                "openclaw",
+            ]
+        )
+    assert "new version" in capsys.readouterr().err
