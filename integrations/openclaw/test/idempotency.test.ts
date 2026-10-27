@@ -84,6 +84,10 @@ describe("idempotencyKey", () => {
     expect(key({ context: next })).not.toBe(key());
   });
 
+  it("does not depend on the gateway's address: a key is scoped to the gateway that stores it", () => {
+    expect(key({ model: { baseUrl: "http://127.0.0.1:9090/v1" } })).toBe(key());
+  });
+
   it("does not depend on the credential, the signal, the host's hooks, or its headers", () => {
     // A gateway restart issues a new token; the key belongs to the caller, not the token (7.4).
     expect(

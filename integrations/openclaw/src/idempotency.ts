@@ -14,8 +14,9 @@
 //   the host's turn ID is different on every retry and cannot name one.
 //
 // The key is therefore the SHA-256 of the canonical JSON of what the body is
-// built from: the model entry (its ID, base URL, and the X-RelayMind-Execution-
-// Mode header), the host session, the system prompt, every message (with the
+// built from: the model entry (its ID and the X-RelayMind-Execution-Mode
+// header; not the base URL, since a key is scoped to the gateway that stores it
+// and a restart may move its port), the host session, the system prompt, every message (with the
 // host's timestamps), the tools, and the request options that change the body.
 // The same conversation sent again gives the same key; the next turn (a new
 // user message or a tool result) gives a new one by construction. The
@@ -36,12 +37,11 @@ type Options = Parameters<StreamFn>[2];
 export const IDEMPOTENCY_HEADER = "Idempotency-Key";
 const PREFIX = "relaymind-openclaw-v1-";
 
-/** The model fields that reach the request: the route, the mode header, the limits. */
+/** The model fields that shape the request: the route, the mode header, the limits. */
 const MODEL_FIELDS = [
   "id",
   "provider",
   "api",
-  "baseUrl",
   "headers",
   "compat",
   "maxTokens",
