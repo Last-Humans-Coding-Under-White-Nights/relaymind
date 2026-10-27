@@ -14,8 +14,8 @@ supported-platform qualification) against the gateway over model doubles
 install, enable, inspect, token setup, `models list --refresh`, a text turn
 through `agent exec`, the stale-token 401 line and recovery, and removal
 all worked with the command forms below. This package on macOS and Windows
-is `not_run`. The real host's approval prompt on a host tool has not been
-exercised yet: those are operator steps (below), not_run.
+is `not_run`. The host's tool policy has not run against this package yet:
+those are operator steps (below), not_run.
 
 What the plugin claims, and nothing more: text input; at most one function
 call per response, executed by OpenClaw under its own approvals; the answer is
@@ -352,7 +352,13 @@ host config needs `name`; `strictMessageKeys` must stay false (true strips
 the tool linkage); isolate the host with `OPENCLAW_HOME`,
 `OPENCLAW_STATE_DIR`, `OPENCLAW_CONFIG_PATH`, and `--config` (the host
 still writes its log to `/tmp/openclaw/`); the host removes underscores
-from a replayed tool call ID, so compare IDs with that in mind.
+from a replayed tool call ID (`call_probe_1` came back as `callprobe1`), so
+the harness never matches a later request to a proposal by the exact ID the
+gateway issued (`answers_call` in `scripts/openclaw_qualification.py`);
+headless `agent exec` cannot answer an approval (`ask` fails closed without a
+running Gateway), so the policy runs use `tools.exec.mode` `deny` and `full`;
+and the host's `"ok": true` is not task success (it says so for a denied
+tool).
 
 ### Host capture (operator)
 
@@ -469,15 +475,40 @@ only and never writes the token. A command that cannot start is `not_run`;
 one that runs past `--timeout` (900 s by default) is `timed_out`, and the
 export still holds the runs the gateway recorded.
 
-### Host tool approval (#137, operator, not run yet)
+### Host tool policy (#137, operator, not run yet)
 
-The `tool-deny` and `tool-approve` scenarios script one call to the mutating
-sandbox tool `relaymind_test_write`. Install the test host tools next to the
-provider (test only; never on a real workspace), then answer the host's
-approval prompt with deny in one run and allow-once in the other:
+Headless `openclaw agent exec` has no approval surface: on the macOS probe,
+`tools.exec.mode: "ask"` failed closed because approval registration needs a
+running Gateway (`ECONNREFUSED`), `deny` blocked the host's `exec` tool, and
+`full` ran it. The `exec-deny` and `exec-full` scenarios use that pair: the
+gateway proposes one call to the host's own `exec` tool,
+`echo written-by-the-host >> note.txt`, and the host decides. Run the host in
+the sandbox the harness creates, with a config whose `tools.exec.mode` is
+`deny` in one run and `full` in the other (the rest as above):
 
 ```bash
-openclaw plugins install integrations/openclaw/test/host-tool-plugin --force
+python scripts/openclaw_qualification.py host --scenario exec-deny \
+  --out docs/evidence/<date>-openclaw-exec-deny-<machine>.json \
+  -- sh -c 'openclaw agent exec --config <relaymind config, tools.exec.mode "deny"> \
+     --cwd "$RELAYMIND_TEST_SANDBOX" --json \
+     --model relaymind/relaymind-client-tools "Append a line to note.txt with exec"'
+python scripts/openclaw_qualification.py host --scenario exec-full \
+  --out docs/evidence/<date>-openclaw-exec-full-<machine>.json \
+  -- sh -c 'openclaw agent exec --config <relaymind config, tools.exec.mode "full"> \
+     --cwd "$RELAYMIND_TEST_SANDBOX" --json \
+     --model relaymind/relaymind-client-tools "Append a line to note.txt with exec"'
+```
+
+The `tool-deny` and `tool-approve` scenarios script one call to the mutating
+sandbox tool `relaymind_test_write` of the test host tools, whose
+`before_tool_call` hook asks the host for an approval. They need an approval
+surface (a running OpenClaw Gateway and an operator who answers deny in one
+run and allow-once in the other); headless, the pinned docs say a call with
+no approval route is blocked. Gating a plugin tool this way is read from the
+docs only, not_run:
+
+```bash
+openclaw plugins install integrations/openclaw/test/host-tool-plugin --force --accept-capabilities
 python scripts/openclaw_qualification.py host --scenario tool-deny \
   --out docs/evidence/<date>-openclaw-tool-deny-<machine>.json \
   -- openclaw agent exec --config <the relaymind config above> --json \
@@ -489,15 +520,16 @@ python scripts/openclaw_qualification.py host --scenario tool-approve \
 openclaw plugins uninstall relaymind-test-host-tools
 ```
 
-As above, the host command names follow the pinned documentation and are to
-be confirmed on the first run.
+The probe installed its plugin from an `npm-pack:` tarball; installing the
+test host tools from a directory is the documented form, not confirmed on a
+real host.
 
-The tool writes into `RELAYMIND_TEST_SANDBOX`, an empty directory the
+The tools write into `RELAYMIND_TEST_SANDBOX`, an empty directory the
 harness creates and passes in the command's environment. The export's
-`checks` read the sandbox and the trace: a denial left no line, an approval
-exactly one, the gateway executed nothing and proposed the call, and the
-host's result reached the next run; `passed` is false for a scenario that
-did not complete. How the pinned host answers an approval headlessly
-(`agent exec` with a permission mode, or an interactive prompt) is to be
-confirmed on the first run; if a plugin tool cannot be gated, the fallback
-is the host's own `exec` tool under an allowlist, recorded with the result.
+`checks` read the sandbox and the trace: a denial left no line, an allowed
+call exactly one, the gateway executed nothing and proposed the call, and
+the host's result reached the next run, matched through the host's ID
+rewrite. `checks.host_report` keeps the host's own JSON report (`ok`,
+`status`, tool calls and failures) as the host's statement: the pinned host
+ends a run whose tool was denied with exit 0 and `"ok": true`, so neither
+decides `passed`. `passed` is false for a scenario that did not complete.

@@ -11,6 +11,10 @@ never installed outside a test host.
   (`allow-once` or `deny`).
 
 OpenClaw executes both tools under its own policy; RelayMind only proposes
-the call. Status: the shape is unit-tested (`test/host-tool-plugin.test.ts`);
+the call. The approval needs an approval surface: headless `openclaw agent
+exec` has none (on the macOS probe an `ask` policy failed closed without a
+running Gateway), so the headless policy runs use the host's own `exec` tool
+(`--scenario exec-deny|exec-full`) instead. Gating a plugin tool through
+`before_tool_call` is read from the pinned docs only, not_run. Status: the shape is unit-tested (`test/host-tool-plugin.test.ts`);
 loading it into a real host is not run on this machine (operator or CI step,
 see `integrations/openclaw/README.md`).

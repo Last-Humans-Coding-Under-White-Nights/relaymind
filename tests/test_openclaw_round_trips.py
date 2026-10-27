@@ -13,9 +13,13 @@ host's permission policy), and sends the result in the next request, which is
 a new RelayMind run. The gateway runs over scripted model doubles on a
 loopback socket (spec section 13).
 
-The real host's approval prompt is the host CLI tier
-(``scripts/openclaw_qualification.py host --scenario tool-deny|tool-approve``),
-run by an operator or CI; it is not run here.
+The driver replays each call ID the way the pinned host does (underscores
+and the other non-alphanumerics removed, observed on the macOS host probe), so
+no test matches a later request to a proposal by the exact issued ID (spec
+section 7.5). The real host's policy is the host CLI tier
+(``scripts/openclaw_qualification.py host --scenario exec-deny|exec-full``, and
+``tool-deny|tool-approve`` with an approval surface), run by an operator or
+CI; it is not run here.
 
 Like the other OpenClaw tests these skip without Node and ``npm ci`` in
 ``integrations/openclaw``; with ``RELAYMIND_OPENCLAW_NODE=1`` they fail instead.

@@ -26,8 +26,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   early-header comments that are not content. The qualification harness's
   host mode gains `--scenario tool-deny|tool-approve` with checks read from
   the sandbox and the trace, and `test/host-tool-plugin/` holds the
-  test-only host tools. The real host's approval scenarios are not run. No
-  specification or gateway change.
+  test-only host tools. The macOS host probe's facts are applied: the host
+  rewrites the call IDs it replays (`call_probe_1` came back as
+  `callprobe1`), so the harness's host checks and the round-trip tests
+  match a result to its proposal through the host's rule
+  (`host_replayed_call_id`, `answers_call`), never by the exact issued ID,
+  and the plugin driver replays IDs the same way; headless `agent exec`
+  cannot answer an approval (`ask` fails closed without a Gateway), so the
+  host mode adds `--scenario exec-deny|exec-full` (the host's `exec` tool
+  under `tools.exec.mode` deny and full), and keeps the host's own JSON
+  report as `checks.host_report`, never deciding a pass (the host said
+  `"ok": true` for a denied tool). The real host's policy scenarios with
+  this plugin are not run; a plugin tool behind an approval is docs only.
+  No specification or gateway change.
 - OpenClaw provider plugin package (#136; RM08, RM12, RM19, RM26, RM33):
   `integrations/openclaw/` now has the plugin manifest
   (`openclaw.plugin.json`), the entry and the `relaymind` provider built on

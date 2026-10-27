@@ -794,10 +794,11 @@ This is planned integration, not a claim of a working or faster plugin.
   failure; text and host tool round trips, the host's deny and allow
   decisions on a sandbox mutation, tool_choice, validation, modes, fallback,
   absent-local operation, and an oversized catalog are covered through the
-  pinned transport over doubles (`tests/test_openclaw_round_trips.py`). The
-  real host's approval scenarios
-  (`scripts/openclaw_qualification.py host --scenario tool-deny|tool-approve`)
-  are not_run.
+  pinned transport over doubles (`tests/test_openclaw_round_trips.py`),
+  with call IDs replayed the way the real host rewrites them. The real
+  host's policy scenarios
+  (`scripts/openclaw_qualification.py host --scenario exec-deny|exec-full`,
+  and `tool-deny|tool-approve` with an approval surface) are not_run.
 - Cancellation, bounded retry behavior, errors, and trace correlation
   (#138; RM14, RM17, RM20, RM22, RM33; AC11, AC12, AC24), after #137.
 - Installable artifact, CI compatibility checks, platform qualification,

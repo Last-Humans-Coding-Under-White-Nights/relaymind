@@ -1142,22 +1142,37 @@ cd ../.. && pytest tests/test_openclaw_round_trips.py tests/test_openclaw_qualif
   forwarded; budgets as configured and no managed selection; early-header
   comments that are not content; the plugin's refusals before sending.
   Recorded at the pin: the host sends its tool catalog ordered by name.
-- `tests/test_openclaw_qualification_script.py`: the host mode's
-  `--scenario tool-deny|tool-approve` checks against a stub host: the
-  sandbox lines, no gateway tool execution, the proposed call, and the
-  host's result in the next run; a denial that wrote anyway and a scenario
-  that did not run never pass.
+  The driver replays each call ID the way the real host did on the macOS
+  probe (`call_echo_1` becomes `callecho1`), so the tests correlate the
+  proposal and the result through the host's rule, never by the exact
+  issued ID (section 7.5); a verbatim replay is accepted as well.
+- `tests/test_openclaw_qualification_script.py`: the host's ID rule
+  (`host_replayed_call_id`: the observed underscore removal, and the
+  pinned source's `[A-Za-z0-9]`, 40 characters) and `answers_call`; the
+  host mode's `--scenario exec-deny|exec-full|tool-deny|tool-approve`
+  checks against a stub host: the sandbox lines, no gateway tool
+  execution, the proposed call, and the host's result in the next run,
+  also when the host rewrote the call ID; the host's own JSON report kept
+  as `host_report` and never deciding a pass (a denied tool with
+  `"ok": true` does not pass an allow scenario); a denial that wrote or
+  ran anyway and a scenario that did not run never pass.
 
-The deny and allow decisions here come from the driver standing in for the
-host's policy. The real host's approval prompt on the test host tools is
-the host CLI tier, not run yet:
+The deny and allow decisions here come from the driver or a stub standing
+in for the host's policy. On the macOS probe the real host, headless,
+blocked its `exec` tool under `tools.exec.mode: "deny"`, ran it under
+`"full"`, and failed closed under `"ask"` (no Gateway to register the
+approval). The real host against the gateway is the host CLI tier, not run
+yet:
 
 ```bash
-python scripts/openclaw_qualification.py host --scenario tool-deny \
-  --out docs/evidence/<date>-openclaw-tool-deny.json -- openclaw agent exec ...
-python scripts/openclaw_qualification.py host --scenario tool-approve \
-  --out docs/evidence/<date>-openclaw-tool-approve.json -- openclaw agent exec ...
+python scripts/openclaw_qualification.py host --scenario exec-deny \
+  --out docs/evidence/<date>-openclaw-exec-deny.json -- sh -c 'openclaw agent exec ...'
+python scripts/openclaw_qualification.py host --scenario exec-full \
+  --out docs/evidence/<date>-openclaw-exec-full.json -- sh -c 'openclaw agent exec ...'
 ```
+
+`tool-deny` and `tool-approve` (the test host tools' approval hook) need
+an approval surface and are not run either.
 
 (the exact host command is in
 [`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
