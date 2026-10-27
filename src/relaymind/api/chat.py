@@ -33,7 +33,12 @@ from typing import Any, Protocol, runtime_checkable
 
 from relaymind.adapters import ToolCall, ToolSchema
 from relaymind.api.chat_request import CLIENT_TOOLS, MANAGED, ChatRequest
-from relaymind.api.errors import ApiError, error_from_exception, error_from_outcome
+from relaymind.api.errors import (
+    ApiError,
+    StreamFailure,
+    error_from_exception,
+    error_from_outcome,
+)
 from relaymind.orchestrator.client_loop import ToolOffer, accept_client_request, run_client_request
 from relaymind.orchestrator.local_loop import AcceptedRun, LocalOrchestrator, RunOutcome
 from relaymind.orchestrator.route_decision import ExecutionMode
@@ -72,20 +77,6 @@ class StreamAborted(Exception):
     to end the response without a finish chunk and without [DONE]
     (RM20, section 11).
     """
-
-
-class StreamFailure(Exception):
-    """A recorded stream-only terminal error, with no invented HTTP status."""
-
-    def __init__(self, run_id: str) -> None:
-        self.run_id = run_id
-        self.code = "predicate_unmet"
-        self.message = (
-            "the answer did not meet the skill's completion criteria; no answer was completed"
-        )
-
-    def body(self) -> dict[str, Any]:
-        return {"error": {"code": self.code, "message": self.message, "run_id": self.run_id}}
 
 
 @dataclass(frozen=True)

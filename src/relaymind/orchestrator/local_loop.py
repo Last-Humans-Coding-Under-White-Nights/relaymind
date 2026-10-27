@@ -3308,6 +3308,10 @@ class _Run:
         usage: Usage | None = None
         finish: str | None = None
         completed = False
+        # True while the gateway's own statement gate works, so an unexpected
+        # exception there ends the run as internal_error (section 5); only
+        # an exception from the provider is a failed generation (RM32).
+        gating = False
         failure: GenerationFailed | None = None
         exhausted: BudgetExceededError | None = None
         deadline_missed = False
@@ -3371,6 +3375,7 @@ class _Run:
                             generation.pieces.append(event.text)
                             if gate is not None:
                                 try:
+                                    gating = True
                                     for piece in gate.push(event.text):
                                         self._publish_live(
                                             generation,
@@ -3379,7 +3384,9 @@ class _Run:
                                             check_live,
                                             dispatch_role=dispatch_role,
                                         )
+                                    gating = False
                                 except StatementRejected:
+                                    gating = False
                                     generation.rejected = True
                                     failure = GenerationFailed(
                                         code="interrupted", message="statement rejected"
@@ -3415,6 +3422,7 @@ class _Run:
                         code="incomplete_output", message="answer generation did not complete"
                     )
                 if failure is None and not generation.rejected:
+                    gating = True
                     try:
                         tail = gate.finish()
                     except StatementRejected:
@@ -3429,6 +3437,7 @@ class _Run:
                             check_live,
                             dispatch_role=dispatch_role,
                         )
+                    gating = False
         except TimeoutError:
             # The trace names the limit that bounded this generation, local
             # or external, not always local time (RM03, RM16).
@@ -3456,7 +3465,7 @@ class _Run:
             self._cancel_call(call_id)
         except Exception as exc:
             failure = GenerationFailed(code="interrupted", message="model generation interrupted")
-            if gate is None or isinstance(exc, _PublicationFailure):
+            if gate is None or gating or isinstance(exc, _PublicationFailure):
                 raise
         except BaseException as exc:
             failure = GenerationFailed(
@@ -3524,6 +3533,11 @@ class _Run:
                 raise ExternalFailure(
                     f"external generation failed: {failure.code}", generation_error=failure.code
                 )
+            if gate is not None and generation.calls and not generation.published:
+                # A tool proposal where none was offered is invalid_output (section
+                # 4.1); before any statement was forwarded the caller escalates it
+                # exactly as under buffered (RM32).
+                return call_id, generation
             raise self._local_unavailable(f"local generation failed: {failure.code}")
         self.meter.check_time(on_external)
         return call_id, generation
@@ -4437,6 +4451,7 @@ class _Run:
             if piece
         ]
         self.o.store.append_events(self.run_id, drafts)
+        generation.published = True
         return published
 
 

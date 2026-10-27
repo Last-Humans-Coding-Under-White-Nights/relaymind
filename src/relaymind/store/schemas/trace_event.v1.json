@@ -173,7 +173,6 @@
                 ],
                 "additionalProperties": false,
                 "allOf": [
-
                   {
                     "if": {
                       "properties": {
@@ -557,8 +556,7 @@
     }
   },
   "allOf": [
-    {"if": {"properties": {"event_type": {"const": "answer.delta"}, "payload": {"required": ["call_id"]}}, "required": ["event_type"]},
-     "then": {"properties": {"payload": {"required": ["text", "model"], "properties": {"text": {"type": "string"}, "model": {"type": "string", "pattern": "\\S"}, "call_id": {"type": "string", "pattern": "\\S"}}}}}},
+    {"if": {"properties": {"event_type": {"const": "answer.delta"}, "payload": {"required": ["call_id"]}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"required": ["text", "model"], "properties": {"text": {"type": "string"}, "model": {"type": "string", "pattern": "\\S"}, "call_id": {"type": "string", "pattern": "\\S"}}}}}},
     {"if": {"properties": {"event_type": {"const": "model.started"}, "actor": {"const": "external"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"properties": {"role": {"const": "external"}}}}}}}},
     {"if": {"properties": {"event_type": {"const": "model.started"}, "actor": {"const": "local"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"properties": {"role": {"const": "local"}}}}}}}},
     {"if": {"properties": {"event_type": {"not": {"enum": ["model.started", "route.selected", "handoff.started", "run.failed"]}}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": false}}}}},

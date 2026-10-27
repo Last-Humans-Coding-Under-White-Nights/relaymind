@@ -916,3 +916,72 @@ def test_early_rejection_awaits_optional_iterator_cleanup_before_next_dispatch(t
         assert len(gateway.adapter.cancelled) == 1
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("answer_stream", ["buffered", "live"])
+def test_precommit_tool_proposal_in_local_answer_is_invalid_output(tmp_path, answer_stream):
+    """RM04/RM32, spec section 4.1 and the 14.2 stop table: a tool proposal in the
+    local answer generation, before any statement was forwarded, takes the
+    invalid_output route under live exactly as under buffered."""
+    from gateway_helpers import assert_needs_external, tool_turn
+
+    gateway = build_gateway(
+        tmp_path,
+        [
+            route_turn("check-service-health"),
+            *health_tail()[:-1],
+            tool_turn("get_service_health", call_id="call_2", service="staging-api"),
+        ],
+        performance=PerformanceSettings(answer_stream=answer_stream),
+    )
+    outcome, events = run(gateway)
+    assert_needs_external(gateway, outcome, events, "invalid_output")
+    assert len(of_type(events, "tool.started")) == 1
+
+
+def test_buffered_publication_marks_the_generation_published(tmp_path, monkeypatch):
+    """RM20: a buffered answer is published once; a second publish of the same
+    generation appends nothing and returns the same answer."""
+    from relaymind.orchestrator import local_loop
+
+    original = local_loop._Run._publish
+
+    def twice(self, generation, role):
+        first = original(self, generation, role)
+        assert generation.published
+        assert original(self, generation, role) == first
+        return first
+
+    monkeypatch.setattr(local_loop._Run, "_publish", twice)
+    gateway = build_gateway(tmp_path, [route_turn("check-service-health"), *health_tail()])
+    outcome, events = run(gateway)
+    assert outcome.state is RunState.COMPLETED
+    assert "".join(e.payload["text"] for e in of_type(events, "answer.delta")) == STAGING_OK
+
+
+@pytest.mark.parametrize("stage", ["push", "finish"])
+def test_a_gateway_fault_under_live_is_internal_not_a_provider_failure(
+    tmp_path, monkeypatch, stage
+):
+    """RM16/RM32, spec section 5: an unexpected exception in the gateway's own
+    statement gate ends the run as internal_error; it is never recorded as an
+    interrupted provider call that hands off or reads as an outage."""
+    from relaymind.skills.predicates import StatementGate
+    from test_local_loop import only_run_id
+
+    def broken(self, *args):
+        raise KeyError("gate bug")
+
+    monkeypatch.setattr(StatementGate, stage, broken)
+    gateway = build_gateway(
+        tmp_path,
+        [route_turn("check-service-health"), *health_tail()],
+        performance=PerformanceSettings(answer_stream="live"),
+        external_turns=[text_turn(STAGING_OK)],
+    )
+    with pytest.raises(KeyError):
+        asyncio.run(gateway.orchestrator.run_text("Is staging-api healthy right now?"))
+    run_id = only_run_id(gateway)
+    assert gateway.store.get_run(run_id).error_code == "internal_error"
+    assert gateway.external.requests == []
+    assert not of_type(gateway.store.events(run_id), "handoff.started")

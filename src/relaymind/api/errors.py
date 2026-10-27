@@ -12,6 +12,8 @@ errors get a fixed message: exception text, credentials, and secret
 values never reach a response (RM12).
 """
 
+from typing import Any
+
 from relaymind.orchestrator.local_loop import (
     APPROVAL_EXPIRED,
     CONTEXT_LIMIT_EXCEEDED,
@@ -109,6 +111,25 @@ class ApiError(Exception):
         return {"error": error}
 
 
+class StreamFailure(Exception):
+    """A recorded stream-only terminal error, with no invented HTTP status.
+
+    Its body is the mid-stream error event of section 7.3 (RM32). Should
+    it ever reach an ordinary HTTP response, before a stream started, it
+    is 409 run_terminal naming predicate_unmet, never a 500 (section 7.1).
+    """
+
+    def __init__(self, run_id: str) -> None:
+        self.run_id = run_id
+        self.code = PREDICATE_UNMET
+        self.message = (
+            "the answer did not meet the skill's completion criteria; no answer was completed"
+        )
+
+    def body(self) -> dict[str, Any]:
+        return {"error": {"code": self.code, "message": self.message, "run_id": self.run_id}}
+
+
 # Most specific first: TerminalStateError is an InvalidTransitionError.
 # Each exception also declares its http_status (and code, when it has
 # one); a test keeps them equal to this mapping.
@@ -134,6 +155,12 @@ def error_from_exception(exc: BaseException, *, run_id: str | None = None) -> Ap
     """
     if isinstance(exc, ApiError):
         return exc
+    if isinstance(exc, StreamFailure):
+        return ApiError(
+            "run_terminal",
+            f"run {exc.run_id} ended failed with {PREDICATE_UNMET}",
+            run_id=exc.run_id,
+        )
     aborted = aborted_run_id(exc)
     if aborted is not None:
         return ApiError("internal_error", INTERNAL_MESSAGE, run_id=aborted)
