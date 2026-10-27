@@ -196,6 +196,33 @@ def _final_attempt(index: dict, cell: str) -> str:
     return index["attempts"][cell][-1]["name"]
 
 
+def external_work(samples) -> dict:
+    """Per latency label: external calls per request and the median time of one call.
+
+    The mechanism behind the verdict: work a local stage leaves done is work the
+    external stage does not repeat (section 14.4.7).
+    """
+    groups: dict[str, list] = {}
+    for sample in samples:
+        calls = [
+            c
+            for c in sample.get("model_calls") or []
+            if c.get("actor") == "external" and c.get("phase", "measured") == "measured"
+        ]
+        groups.setdefault(sample["label"], []).append(calls)
+    result = {}
+    for label, requests in sorted(groups.items()):
+        durations = sorted(
+            c["duration_ms"] for calls in requests for c in calls if c.get("duration_ms")
+        )
+        result[label] = dict(
+            requests=len(requests),
+            external_calls_per_request=round(sum(map(len, requests)) / len(requests), 2),
+            median_external_call_ms=durations[len(durations) // 2] if durations else None,
+        )
+    return result
+
+
 def hypothesis(exports: dict) -> dict:
     """Section 12.3 as 14.4.7 defines it; the verdict code mirrors analyze_m8."""
     corpus = [
@@ -235,6 +262,10 @@ def hypothesis(exports: dict) -> dict:
         },
         latency=directions,
         latency_reliability=guard,
+        external_work={
+            side: external_work(exports[f"{name}-latency"]["samples"])
+            for side, name in (("control", CONTROL), ("candidate", CANDIDATE))
+        },
         limitations=[
             "The arms ran at different times on 25 and 26 October 2026; provider latency may"
             " have drifted between them.",
@@ -352,6 +383,13 @@ def render(report: dict) -> str:
         f" {g['B']['errors']}, {g['B']['unobserved_total']}; candidate worse:"
         f" {g['candidate_worse'] or 'no'}"
     )
+    lines += ["", "External work per latency request (calls, median call ms):", ""]
+    for side, labels in h["external_work"].items():
+        parts = [
+            f"{label} {w['external_calls_per_request']} calls, {w['median_external_call_ms']} ms"
+            for label, w in labels.items()
+        ]
+        lines.append(f"- {side}: " + "; ".join(parts))
     lines += ["", "Limitations:", ""] + [f"- {item}" for item in h["limitations"]]
     return "\n".join(lines) + "\n"
 
