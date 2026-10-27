@@ -715,6 +715,16 @@ selection) true for a third party.
   fire; prediction error, wasted local time, selection precision,
   recall, and Jaccard, external calls and tokens per completed task,
   the release record.
+- Unsuitable detection (#170; RM26, spec 0.48 section 14.4.7): the
+  phase 2 run kept the constrained configuration `ready` although its
+  local stages kept spending active_seconds. The startup check now holds
+  the routing-shaped and skill-shaped warm-ups to the stage budget
+  together, and a ready model whose three latest local stages ran out of
+  local time is unsuitable until that streak is older than
+  `probe_after_seconds`. The hypothesis is measured offline on the
+  recorded phase 2 cells (`scripts/analyze_unsuitable.py`), with a short
+  live check of the class on the constrained configuration; no matrix
+  rerun.
 - Closes: AC19, AC21, AC22.
 
 Exit: the unsuitable-machine hypothesis of section 12.3 is reported as

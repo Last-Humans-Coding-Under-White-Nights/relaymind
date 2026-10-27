@@ -54,7 +54,12 @@ from relaymind.store.model_timings import (
     TimingEstimate,
     timing_estimate,
 )
-from relaymind.store.outcomes import is_local_attempt, project_outcome
+from relaymind.store.outcomes import (
+    StageOutcome,
+    is_local_attempt,
+    project_outcome,
+    project_stage_outcome,
+)
 from relaymind.store.trace_event import (
     SCHEMA_VERSION,
     EventType,
@@ -242,6 +247,18 @@ MIGRATIONS: tuple[str, ...] = (
         projector_version INTEGER NOT NULL,
         PRIMARY KEY(source_digest, source_run_id)
     );
+    """,
+    # Spec 0.48 section 14.4.7 (RM26): one outcome per local stage, projected from
+    # the event that ends it; runs before this migration record none.
+    """
+    ALTER TABLE model_run_progress ADD COLUMN local_generation INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE local_stage_outcomes (
+        run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE CASCADE,
+        local_model TEXT NOT NULL,
+        ran_out_of_time INTEGER NOT NULL CHECK (ran_out_of_time IN (0, 1)),
+        ended_at TEXT NOT NULL
+    );
+    CREATE INDEX local_stage_outcomes_model ON local_stage_outcomes(local_model, ended_at);
     """,
 )
 
@@ -1308,10 +1325,14 @@ class RunStore:
                 # Spec 0.38.1: a parallel workflow branch call is not a local
                 # placement attempt, so its join or failure is no escalation.
                 attempt = is_local_attempt(payload)
+                # Spec 0.48: any local generation of the run's own, routing included,
+                # makes a local stage; a parallel branch is not one.
+                own = "branch" not in payload
                 self._conn.execute(
                     "UPDATE model_run_progress SET local_model = COALESCE(local_model, ?),"
-                    " local_attempt = MAX(local_attempt, ?) WHERE run_id = ?",
-                    (payload["model"], int(attempt), run_id),
+                    " local_attempt = MAX(local_attempt, ?),"
+                    " local_generation = MAX(local_generation, ?) WHERE run_id = ?",
+                    (payload["model"], int(attempt), int(own), run_id),
                 )
             elif event.actor == "external":
                 # A configured gateway has one external model for a run;
@@ -1322,10 +1343,13 @@ class RunStore:
                     (payload["model"], run_id),
                 )
         elif kind is EventType.HANDOFF_STARTED:
+            self._record_stage_outcome(event, progress)
             self._conn.execute(
                 "UPDATE model_run_progress SET handoff = 1 WHERE run_id = ?", (run_id,)
             )
         elif kind in (EventType.RUN_COMPLETED, EventType.RUN_FAILED, EventType.RUN_CANCELLED):
+            if not progress["handoff"]:
+                self._record_stage_outcome(event, progress)
             self._conn.execute(
                 "UPDATE model_run_progress SET terminal = 1 WHERE run_id = ?", (run_id,)
             )
@@ -1338,6 +1362,35 @@ class RunStore:
                 " external_model, external_generations) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (run_id, *outcome.values()),
             )
+
+    def _record_stage_outcome(self, event: TraceEvent, progress: sqlite3.Row) -> None:
+        """Spec 0.48 section 14.4.7: the outcome of the local stage this event ends, once."""
+        ran_out = project_stage_outcome(progress, event.event_type.value, event.payload)
+        if ran_out is None or progress["local_model"] is None:
+            return
+        self._conn.execute(
+            "INSERT OR IGNORE INTO local_stage_outcomes"
+            " (run_id, local_model, ran_out_of_time, ended_at) VALUES (?, ?, ?, ?)",
+            (event.run_id, progress["local_model"], int(ran_out), event.timestamp),
+        )
+
+    def latest_local_stage_outcomes(self, model: str, *, limit: int) -> list[StageOutcome]:
+        """The model's latest local stage outcomes, newest first (RM26, spec 0.48)."""
+        with self._lock:
+            self._check_open()
+            rows = self._conn.execute(
+                "SELECT run_id, ran_out_of_time, ended_at FROM local_stage_outcomes"
+                " WHERE local_model = ? ORDER BY ended_at DESC, rowid DESC LIMIT ?",
+                (model, limit),
+            ).fetchall()
+        return [
+            StageOutcome(
+                run_id=row["run_id"],
+                ran_out_of_time=bool(row["ran_out_of_time"]),
+                ended_at=_parse(row["ended_at"].replace("Z", "+00:00")),
+            )
+            for row in rows
+        ]
 
     # -- events ----------------------------------------------------------
 

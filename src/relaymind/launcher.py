@@ -118,7 +118,15 @@ _TABLES: dict[str, frozenset[str]] = {
     # Spec 0.31 section 14.1: the warm-up keys and the local model check (RM26). The
     # RM27: complete placement table; defaults retain baseline behavior.
     "placement": frozenset(
-        {"warmup", "warmup_seconds", "detect", "policy", "margin", "probe_after_seconds"}
+        {
+            "warmup",
+            "warmup_seconds",
+            "detect",
+            "detect_stages",
+            "policy",
+            "margin",
+            "probe_after_seconds",
+        }
     ),
     # Spec 0.32 section 14.1: the keys are the SelectionSettings fields (RM28).
     "selection": frozenset(f.name for f in fields(SelectionSettings)),
@@ -165,6 +173,8 @@ class LauncherConfig:
     warmup_seconds: float = DEFAULT_WARMUP_SECONDS
     # Spec 0.31 section 14.1: classify the local model at startup and in readiness (RM26).
     detect: bool = True
+    # Spec 0.48 section 14.4.7: the stage rule and the skill-shaped startup check (RM26).
+    detect_stages: bool = False
     # Spec 0.31 section 14.1: the selector chain; the default is model_router alone (RM28).
     selection: SelectionSettings = field(default_factory=SelectionSettings)
 
@@ -312,10 +322,12 @@ def load_config(path: Path | str) -> LauncherConfig:
     if not math.isfinite(warmup_seconds) or not warmup_seconds > 0:
         raise LaunchError("[placement] warmup_seconds must be a positive number")
     detect = _value(placement, "placement", "detect", bool, True)
+    # Spec 0.48 section 14.4.7: off by default, the spec 0.47 check (RM26).
+    detect_stages = _value(placement, "placement", "detect_stages", bool, False)
     placement_settings = _settings(
         "placement",
         lambda: PlacementSettings(
-            **{k: v for k, v in placement.items() if k not in ("warmup", "detect")}
+            **{k: v for k, v in placement.items() if k not in ("warmup", "detect", "detect_stages")}
         ),
     )
     selection = _selection(tables["selection"], has_local=has_local)
@@ -348,6 +360,7 @@ def load_config(path: Path | str) -> LauncherConfig:
         warmup=warmup,
         warmup_seconds=float(warmup_seconds),
         detect=detect,
+        detect_stages=detect_stages,
         selection=selection,
     )
 
@@ -521,6 +534,7 @@ def build_app(
             selection=config.selection,
             # RM26: readiness repeats the availability check when detection is on.
             detect=config.detect,
+            detect_stages=config.detect_stages,
             placement=config.placement,
         )
         report = orchestrator.recover_after_restart()

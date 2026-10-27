@@ -222,7 +222,12 @@ from relaymind.orchestrator.handoff import (
     measure_request,
     unsettled_operations,
 )
-from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
+from relaymind.orchestrator.local_status import (
+    STAGE_STREAK,
+    LocalModelClass,
+    LocalStatus,
+    stage_status,
+)
 from relaymind.orchestrator.performance import (
     PerformanceSettings,
     draft_in_language,
@@ -857,6 +862,7 @@ class LocalOrchestrator:
         selectors: Sequence[Selector] | None = None,
         local_status: LocalStatus | None = None,
         detect: bool = False,
+        detect_stages: bool = False,
         placement: PlacementSettings | None = None,
     ) -> None:
         """selection is the [selection] table (spec 0.31 section 14.1); its default is the
@@ -868,6 +874,9 @@ class LocalOrchestrator:
         later with ``set_local_status``. detect lets readiness repeat the availability
         check and change the class (placement.detect, section 14.1); off by default, so
         an unavailable model is only reported not ready, as before spec 0.31.
+        detect_stages (placement.detect_stages, spec 0.48) adds the skill-shaped
+        warm-up to the startup check and the local stage rule of section 14.4.7;
+        off by default, the spec 0.47 behavior.
         """
         self.model = model
         self._local_status = self._checked_status(local_status)
@@ -877,6 +886,7 @@ class LocalOrchestrator:
             self._local_status if self._local_status.status == LocalModelClass.UNSUITABLE else None
         )
         self.detect = detect
+        self.detect_stages = detect_stages
         # Spec 0.32 section 14.1: every default is the baseline behavior.
         self.performance = performance or PerformanceSettings()
         if self.performance.prefetch:
@@ -971,8 +981,25 @@ class LocalOrchestrator:
 
     @property
     def local_status(self) -> LocalStatus:
-        """The class of the local model now; each run keeps the one it was accepted under."""
-        return self._local_status
+        """The class of the local model now; each run keeps the one it was accepted under.
+
+        With detection and placement.detect_stages on, a ready model whose latest
+        local stages kept running out of local time is unsuitable (RM26, spec 0.48
+        section 14.4.7).
+        """
+        if (
+            not (self.detect and self.detect_stages)
+            or self.model is None
+            or not self._local_status.usable
+        ):
+            return self._local_status
+        measured = stage_status(
+            self.store.latest_local_stage_outcomes(self.model.model_id, limit=STAGE_STREAK),
+            now=self.store.clock.utc_now(),
+            probe_after_seconds=self.placement.settings.probe_after_seconds,
+            active_seconds=self.budgets.active_seconds,
+        )
+        return measured or self._local_status
 
     def set_local_status(self, status: LocalStatus) -> None:
         """Set the class startup detection measured (RM26)."""
@@ -1005,7 +1032,7 @@ class LocalOrchestrator:
 
     def mode_refusal(self, mode: ExecutionMode) -> str | None:
         """Why the class of the local model does not permit mode, or None (section 7.4)."""
-        return self._local_status.refusal(mode)
+        return self.local_status.refusal(mode)
 
     async def run_text(self, text: str, **options: Any) -> RunOutcome:
         """Run one user request given as plain text."""
@@ -2286,12 +2313,15 @@ class _Run:
         )
         # The first request is measured with the values message, if results exist (RM13).
         self._refresh_criteria(loop)
-        degraded = (
+        extra: dict[str, Any] = (
             {"degraded_mode": True, "local_failure": self.scrub(stop.detail)}
             if stop.degraded
             else {}
         )
-        return await self._hand_off(external, envelope, loop, stop, degraded, prefetch=first_stage)
+        if "budget" in stop.extra:
+            # Spec 0.48 section 8: the limit that stopped the local stage (section 14.4.7).
+            extra["budget"] = stop.extra["budget"]
+        return await self._hand_off(external, envelope, loop, stop, extra, prefetch=first_stage)
 
     def _handoff_blocked(
         self, stop: Escalation, operations: Sequence[Mapping[str, Any]]

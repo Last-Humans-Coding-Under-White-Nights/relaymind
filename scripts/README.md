@@ -636,6 +636,37 @@ such, never task success. Each section 12.3 hypothesis is met, not met or not me
 evidence cells and digests; hypotheses this matrix cannot measure name the
 external evidence they need. Defaults are not changed by this report.
 
+### Unsuitable detection on recorded evidence (#170)
+
+`analyze_unsuitable.py` reads the phase 2 evidence package (spec 0.48 section
+14.4.7; RM26, RM27). It unpacks each M8 corpus attempt into a temporary
+directory, replays the two detection rules of spec 0.48 with the gateway's own
+functions (`classify_warmup`, `project_stage_outcome`, `stage_status`) over the
+recorded run stores, and measures the section 12.3 unsuitable hypothesis from
+the recorded local-first constrained cells against the none-class cells with
+the pairing code of `analyze_m8.py`. It starts no model and writes only its
+output, which must not exist yet.
+
+```sh
+.venv/bin/python scripts/analyze_unsuitable.py \
+    --evidence docs/evidence/2026-10-26-phase2 \
+    --out docs/evidence/2026-10-27-unsuitable/analysis.json
+```
+
+`probes/probe_unsuitable_live.py` is the short live check of the class: it
+starts the pinned runtime constrained (cold, then warm on a new gateway) and
+normal, each gateway with `placement.detect_stages = true`, and records the
+launcher lines, readiness, and a few auto and local_only requests. It needs
+llama-server on PATH, the model artifact, and an external provider (the key is
+read from `RELAYMIND_EXTERNAL_API_KEY`).
+
+```sh
+.venv/bin/python scripts/probes/probe_unsuitable_live.py \
+    --out docs/evidence/2026-10-27-unsuitable/live-check-apple-m1.json \
+    --external-base-url "$RELAYMIND_EXTERNAL_BASE_URL" \
+    --external-model "$RELAYMIND_EXTERNAL_MODEL" --external-context-limit 128000
+```
+
 ### M7 metric completion and fixed experiment matrix
 
 `run_m7_matrix.py` plans the #128 experiments without reading credentials or

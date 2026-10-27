@@ -129,7 +129,13 @@ enabled_workflows = []
 # [budgets] active_seconds (otherwise it is unsuitable); it prints one line with
 # the class and the cause, and auto then runs on the external model. With
 # warmup = false only the first check runs. detect = false keeps the behavior
-# before spec 0.31. local_first records predictions without applying limits.
+# before spec 0.31. detect_stages = true (spec 0.48 section 14.4.7, off by
+# default) holds the routing-shaped and skill-shaped warm-ups to active_seconds
+# together, and makes a ready model unsuitable while its three latest local
+# stages all ran out of local time, until that streak is older than
+# probe_after_seconds. On the recorded Apple M1 evidence the unsuitable path
+# was not faster, because a local stage that runs out of time still does tool
+# work the external stage reuses; measure before you turn it on. local_first records predictions without applying limits.
 # device_aware adds hard caps, deadlines and idle probes; expected_wait adds
 # the experimental skill-success rule. A probe holds the execution slot: a valid
 # foreground attempt requests cancellation and returns 429 until cleanup ends.
@@ -140,6 +146,7 @@ enabled_workflows = []
 # warmup = true
 # warmup_seconds = 30
 # detect = true
+# detect_stages = false
 
 # Skill selection (RM28, spec 0.31 and 0.32 section 14.1). Every key is optional
 # and the values below are the defaults; each run records them in run.accepted.

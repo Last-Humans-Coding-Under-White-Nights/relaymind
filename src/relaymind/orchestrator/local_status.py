@@ -6,8 +6,9 @@ without a usable local model in three classes:
 - absent: the launch file has no local_model table;
 - unavailable: the configured model cannot run on this machine (the
   runtime does not answer, or the model did not load in time);
-- unsuitable: it runs, but the routing-shaped warm-up did not fit the
-  local per-stage active budget.
+- unsuitable: it runs, but the routing-shaped and skill-shaped warm-ups
+  did not fit the local per-stage active budget together, or (spec 0.48)
+  its latest local stages kept running out of local time.
 
 The class is a measurement, never a permanent label: startup detection
 sets it, and readiness repeats the availability check (section 7.4).
@@ -19,20 +20,29 @@ degraded mode, which stays for a usable model that failed mid-run
 (section 11).
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
 from relaymind.orchestrator.route_decision import ExecutionMode
+from relaymind.store.outcomes import StageOutcome
 
 __all__ = [
     "ABSENT_REASON",
+    "STAGE_STREAK",
     "LocalModelClass",
     "LocalStatus",
+    "stage_status",
 ]
 
 # The cause recorded for a gateway whose launch file has no local_model table.
 ABSENT_REASON = "no local model is configured"
+
+# Spec 0.48 section 14.4.7: this many latest local stages that all ran out of local
+# time make a ready model unsuitable.
+STAGE_STREAK = 3
 
 
 class LocalModelClass(StrEnum):
@@ -111,3 +121,30 @@ class LocalStatus:
             "local_model_status": self.status.value,
             "local_model_reason": self.reason,
         }
+
+
+def stage_status(
+    outcomes: Sequence[StageOutcome],
+    *,
+    now: datetime,
+    probe_after_seconds: float,
+    active_seconds: float,
+) -> LocalStatus | None:
+    """The class the latest local stages measured, or None when they say nothing (RM26).
+
+    outcomes are the model's latest stage outcomes, newest first (spec 0.48
+    section 14.4.7). Unsuitable needs STAGE_STREAK of them that all ran out of
+    local time, the latest ended less than probe_after_seconds ago; a stale
+    streak expires, so the next local stage measures the model again.
+    """
+    latest = list(outcomes[:STAGE_STREAK])
+    if len(latest) < STAGE_STREAK or not all(o.ran_out_of_time for o in latest):
+        return None
+    if (now - latest[0].ended_at).total_seconds() >= probe_after_seconds:
+        return None
+    return LocalStatus(
+        LocalModelClass.UNSUITABLE,
+        f"the last {STAGE_STREAK} local stages ran out of local time"
+        f" (active_seconds {active_seconds:g} s); the latest ended at"
+        f" {latest[0].ended_at.strftime('%Y-%m-%dT%H:%M:%SZ')}",
+    )

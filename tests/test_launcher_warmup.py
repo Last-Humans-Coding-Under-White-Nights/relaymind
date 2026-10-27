@@ -38,6 +38,7 @@ from relaymind.orchestrator.warmup import (
     WARMUP_TEXT,
     WarmupResult,
     WarmupSample,
+    classify_warmup,
     detect_local_model,
     warm_up,
 )
@@ -573,10 +574,10 @@ def test_a_failed_routing_warm_up_is_unavailable(tmp_path):
 
 
 def test_a_failed_skill_warm_up_after_a_fitting_routing_one_is_ready(tmp_path):
-    """RM26: the class is measured on the routing-shaped warm-up only.
+    """RM26 (spec 0.48): a skill-shaped warm-up that fails says nothing about speed.
 
-    The skill-shaped warm-up of section 6 is a timing sample; its failure is
-    the printed warm-up line, not a class.
+    Its failure is the printed warm-up line, not a class; the routing-shaped
+    warm-up fitted, so the model stays ready.
     """
     clock = FakeClock()
     adapter = ScriptedAdapter(
@@ -587,6 +588,92 @@ def test_a_failed_skill_warm_up_after_a_fitting_routing_one_is_ready(tmp_path):
 
     assert status == LocalStatus.ready()
     assert not result.ready and [s.purpose for s in result.samples] == ["routing"]
+
+
+STAGES = "\n[placement]\ndetect_stages = true\n"
+
+
+def test_routing_and_skill_warm_ups_over_the_stage_budget_together_are_unsuitable(tmp_path):
+    """RM26 (spec 0.48, #170): a local stage needs a routing and a skill generation.
+
+    Each warm-up fits active_seconds alone, but not both, so no local stage can
+    (with placement.detect_stages true).
+    """
+    clock = FakeClock()
+    adapter = ScriptedAdapter(turns=[answer(), answer()], on_generate=slow(clock, 2.5))
+    status, result, _ = detect_with(tmp_path, adapter, clock=clock, extra=STAGES)
+
+    assert status.status == LocalModelClass.UNSUITABLE
+    assert status.reason == (
+        "the routing and skill warm-ups took 2500 + 2500 = 5000 ms;"
+        " the local stage limit (active_seconds) is 4 s"
+    )
+    assert [s.purpose for s in result.samples] == ["routing", "skill"]
+
+
+def test_by_default_only_the_routing_warm_up_decides(tmp_path):
+    """Spec 0.48: detect_stages defaults to false, the spec 0.47 check."""
+    clock = FakeClock()
+    adapter = ScriptedAdapter(turns=[answer(), answer()], on_generate=slow(clock, 2.5))
+    status, _, _ = detect_with(tmp_path, adapter, clock=clock)
+    assert status == LocalStatus.ready()
+
+
+@pytest.mark.parametrize(("extra", "expected"), [(STAGES, True), ("", False)])
+def test_the_launcher_passes_detect_stages_to_the_orchestrator(tmp_path, extra, expected):
+    config, built = launch(tmp_path, extra)
+    try:
+        assert config.detect_stages is expected
+        assert built.orchestrator.detect_stages is expected
+    finally:
+        built.orchestrator.store.close()
+
+
+def warmup_result(routing_ms, skill_ms=None, **options):
+    samples = [WarmupSample("routing", routing_ms, None, 969, 2, 0)]
+    if skill_ms is not None:
+        samples.append(WarmupSample("skill", skill_ms, None, 568, 32, 0))
+    return WarmupResult(tuple(samples), **{"ready": True, **options})
+
+
+@pytest.mark.parametrize(
+    ("routing_ms", "skill_ms", "expected"),
+    [
+        # #170, the phase 2 run (spec 0.48 section 14.4.7): the cold warm-up of the
+        # constrained configuration (CPU, two threads) of the Apple M1 ...
+        (3315, 2281, LocalModelClass.UNSUITABLE),
+        # ... and of the normal one, recorded in the same matrix.
+        (745, 775, LocalModelClass.READY),
+        # A warm-up served from the runtime's prefix cache fits; the stage rule
+        # of section 14.4.7 classifies that configuration from its local stages.
+        (150, 444, LocalModelClass.READY),
+        # Without a skill-shaped request only the routing-shaped one decides.
+        (3315, None, LocalModelClass.READY),
+    ],
+)
+def test_the_recorded_phase_2_warm_ups(routing_ms, skill_ms, expected):
+    result = warmup_result(routing_ms, skill_ms)
+    status = classify_warmup(result, seconds=30, active_seconds=4, stages=True)
+    assert status.status == expected
+    # The spec 0.47 check (the default) never saw the constrained configuration.
+    assert classify_warmup(result, seconds=30, active_seconds=4) == LocalStatus.ready()
+
+
+def test_a_skill_warm_up_cut_off_at_or_after_the_stage_budget_is_unsuitable():
+    """Spec 0.48: routing fitted, then warmup_seconds ran out with the skill one unfinished."""
+    result = warmup_result(1200, ready=False, detail="no answer within 4 s", timed_out=True)
+    status = classify_warmup(result, seconds=4, active_seconds=4, stages=True)
+    assert status.status == LocalModelClass.UNSUITABLE
+    assert status.reason == (
+        "the skill warm-up did not finish within 4 s after the routing one;"
+        " the local stage limit (active_seconds) is 4 s"
+    )
+
+
+def test_a_skill_warm_up_cut_off_before_the_stage_budget_leaves_the_model_ready():
+    """Spec 0.48: shorter than the stage budget, a cut-off says nothing about speed."""
+    result = warmup_result(200, ready=False, detail="no answer within 2 s", timed_out=True)
+    assert classify_warmup(result, seconds=2, active_seconds=4, stages=True) == LocalStatus.ready()
 
 
 def silent_adapter():
