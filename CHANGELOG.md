@@ -19,8 +19,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `scripts/openclaw_qualification.py` captures the fixtures and runs an
   operator's real host against a doubles gateway;
   `scripts/openclaw_request_size.py` reports captured request sizes against
-  the local limit. The real-host run, the host capture, and the size
-  measurement are not run; no plugin exists yet (#136).
+  the local limit. The real-host probe on macOS (OpenClaw 2026.10.7,
+  `docs/evidence/2026-10-27-openclaw-mac-probe/`) captured the host's own
+  requests; `tests/test_openclaw_host_captures.py` checks them with the
+  gateway's validator. Their size is reported only as a UTF-8 upper bound
+  (about 37,500 bytes against the 8192-token local limit), which cannot
+  decide the fit, so the tokenizer count is still not run. The real host
+  against the doubles gateway is not run either; no plugin exists yet (#136).
 - Specification 0.49, OpenClaw host facts recorded on the wire (#135; RM33,
   section 7.5): at v2026.10.7 the host's defaults for a loopback URL send
   `stream_options` and, for a reasoning model, `reasoning_effort`; the
@@ -29,8 +34,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   keep the strict message keys, tool result name, and assistant-after-tool-result
   switches off. The host refuses a request over the advertised context window
   before sending it, so the window the plugin advertises is the larger limit
-  of the effective mode (external in auto and external_only). No gateway
-  contract change.
+  of the effective mode (external in auto and external_only). The real host
+  confirmed the loopback defaults and the switches on macOS, and showed that
+  it rewrites the tool call IDs it replays (underscores removed, the same in
+  the call and its result): nothing may match a later request to an earlier
+  proposal by the exact ID string. The host decorates the user message, and
+  a request over the UTF-8 byte bound is undecided, never needs_external,
+  until a tokenizer count. No gateway contract change.
 - Specification 0.48, unsuitable detection from local stages (#170; RM26, RM27;
   section 14.4.7): the run store records, for every local stage, whether it ran out of
   local time, and handoff.started names the budget that stopped the local stage.
