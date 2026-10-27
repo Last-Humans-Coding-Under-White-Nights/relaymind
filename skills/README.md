@@ -43,11 +43,9 @@ Each package contains:
 
 The parallel workflow that health-and-diagnostic-checklist joins runs
 in `parallel_demo` (#30, spec section 4.4). The `parallel_workflow`
-key keeps its fixed-workflow meaning (RM15). Phase 2 adds a distinct
-`workflow` key for a workflow package (RM30); a manifest sets at most
-one of these keys, and they are not aliases. Workflow packages under
-`workflows/` are not implemented yet, so packages do not use the key
-(see `docs/ROADMAP.md`, M9).
+key keeps its fixed-workflow meaning (RM15). Spec 0.47 retired the
+planned workflow packages (RM30), so there is no `workflow` manifest key
+and no `workflows/` root (see `docs/ROADMAP.md`, M9).
 
 ## Prefetch declarations (RM29)
 

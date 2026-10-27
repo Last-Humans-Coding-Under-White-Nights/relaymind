@@ -1034,7 +1034,8 @@ feature has a test of the default as well. Later pull requests append here.
   These source-domain measurements use the documented catalog caps and
   do not replace the ops correctness corpus. The built-in selectors do
   not produce strict nonempty tool subsets, so these runs do not establish
-  a narrowing benefit. Workflow-plan evaluation remains pending (#145).
+  a narrowing benefit. The workflow-plan track was retired with RM30
+  (spec 0.47, section 12.4).
 
 ### Required trace events (RM16, RM22, RM25)
 

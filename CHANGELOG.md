@@ -9,7 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Specification 0.47 redirects M9 from YAML workflows to OpenClaw
-  integration (#135 to #139, #145): retire the unimplemented RM30 and AC23
+  integration (#135 to #139, #145, #173): retire the unimplemented RM30 and AC23
   without reusing their identifiers; add RM33, AC24, the provider ownership
   and compatibility contract, and a separate host-tool evaluation protocol.
   Section 7.5 names the host compatibility switches the plugin declares,

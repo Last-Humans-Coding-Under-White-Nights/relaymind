@@ -871,8 +871,8 @@ listed here so the current order can be traced to its reason.
   RM33/AC24 for a provider plugin over the client-owned chat API. Reuse the
   six open M9 issues with revised scope and dependencies. Preserve the
   implemented fixed parallel demo and its historical evidence.
-  The revision is numbered 0.47 because 0.46 is reserved by the pending
-  M8 evidence stack (#171). The pinned OpenClaw source was read for the
+  The revision is numbered 0.47 because the M8 evidence stack took 0.46
+  (#171, merged before this revision). The pinned OpenClaw source was read for the
   host's request defaults and compatibility switches; section 7.5 names
   the ones the plugin declares, so that the first request to the
   loopback URL is not rejected for `stream_options` or a misplaced
