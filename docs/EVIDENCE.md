@@ -2860,7 +2860,7 @@ start of the first answer generation is not measured.
 | English simple tool proposals at least 95% | met | 12/12 model proposals |
 | No missed mandatory confirmation | met | zero in every corpus cell, mode and language |
 | p95 first model action at most 500 ms | not met | normal router p95 17465 ms (110 of 120 requests had an action) |
-| Draft pass raises local completion without lowering task success | not met under spec 0.45 | 6/12 local completion, auto 36/52 vs 39/52 |
+| Draft pass raises local completion without lowering task success | not met under spec 0.45 | 6/12 local completion, auto 36/52 vs 39/52; `m7-analysis.json` says met, from the English simple subset (11/12 vs 11/12) |
 | Prefetch and many calls lower complex generations | met; no default change | auto success 38/52 vs 39/52 for both |
 | Completion criteria lower corrections | met | C6 ablation |
 | Early headers before the first answer generation | not measured | header before first token only |

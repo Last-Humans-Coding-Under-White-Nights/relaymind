@@ -21,6 +21,14 @@ M7 C0 and C5 reuse M8 attempts (`calibration-normal-local_first-router-buffered-
 and `streaming-none-local_first-example-buffered-corpus`), so they have no
 archive under `m7/`.
 
+`analysis/m7-analysis.json` and `.md` record the draft pass hypothesis
+(`draft_local_completion`) as `met`. The analyzer at `074c0dd` judged task
+success on the English simple auto subset only (11/12 in both C0 and C1).
+Specification 0.45 judges it on the paired full auto cohort (section 12.3),
+where C1 had 36/52 against 39/52 (0 gains, 3 losses), so `docs/EVIDENCE.md`
+and section 14.4.6 of the specification record it as not met. The analysis
+files are kept as produced; their digests are in `manifest.json`.
+
 Each archive holds, for its attempt: `export.json`, `checkpoint.json`,
 `export.md`, `runner.log`, and from `checkpoint.work/` every `runs.sqlite3`
 with its `-wal` and `-shm` companions and every `sandbox_state.json`. The
