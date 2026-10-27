@@ -1049,10 +1049,15 @@ cd ../.. && pytest tests/test_openclaw_plugin.py
   readiness (an aggregate 503 with external_only ready stays usable); the
   host outcome of each.
 - `integrations/openclaw/test/provider.test.ts`: registration through
-  `definePluginEntry`, one provider with the api-key method and no dynamic
-  models, an invalid or missing configuration refused before registering,
-  the token handover and reconnect messages, the catalog hook with the host
-  credential and redacted logs, and the capability statement.
+  `definePluginEntry`, one provider with the api-key method, an invalid or
+  missing configuration refused before registering, `resolveDynamicModel`
+  (the alias entry only, with the catalog's switches, mode header, and
+  configured limits, synchronous, no request, no credential; the headless
+  `agent exec` path of the macOS host probe), the token handover (including
+  that `models auth login` needs a terminal) and reconnect messages, the
+  catalog hook with the host credential and redacted logs, the plugin's own
+  discovery timeout when the host gives no abort signal (as the probe
+  observed), and the capability statement.
 - `integrations/openclaw/test/redaction.test.ts`: the token and any bearer
   credential are scrubbed at every log level.
 - `npm run pack:check`: builds `dist/`, and checks that the packed tarball
@@ -1063,7 +1068,9 @@ cd ../.. && pytest tests/test_openclaw_plugin.py
   the plugin, runs its catalog hook against a gateway on a loopback socket,
   and sends one request through the pinned transport with the published
   entry: the default streamed request passes section 7.1 with no gateway
-  change, the copied limits are the advertised ones, a stale token after a
+  change, the dynamically resolved entry makes the same request without
+  any discovery request, a resolved alias the gateway does not serve fails
+  rather than answering empty, the copied limits are the advertised ones, a stale token after a
   restart is 401 with the reconnect line and the fresh token restores
   access, an unreachable gateway is not an auth failure, a gateway without
   client-owned execution publishes nothing, external_only runs without a
@@ -1073,8 +1080,10 @@ cd ../.. && pytest tests/test_openclaw_plugin.py
   external call, local_only makes no external call, and parallel_demo is
   refused before anything is sent.
 
-The real host loading the packed plugin, and the token setup after a real
-gateway restart, are operator steps, not run yet
+The real host loading the packed plugin, `agent exec` through the
+resolved alias (and whether the host honors this package's switches on the
+wire, section 7.5), and the token setup after a real gateway restart, are
+operator steps, not run yet
 ([`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
 
 The Node-dependent tests skip with the reason when `node` or

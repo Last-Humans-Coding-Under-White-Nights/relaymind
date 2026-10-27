@@ -28,6 +28,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   transport against the gateway over doubles. The transport fixtures were
   recaptured unchanged because `package.json` changed. The real-host load
   and token setup are not run. No specification or gateway change.
+  From the macOS host probe (OpenClaw 2026.10.7): the provider also
+  resolves the alias through `resolveDynamicModel` (synchronous, no
+  request, the catalog's entry), because headless `openclaw agent exec`
+  found a plugin model only that way; the catalog stays. Discovery keeps
+  its own 5 s timeout per request, since the host gave `catalog.run` no
+  abort signal. The README documents `--accept-capabilities` for the
+  install, `paste-api-key` for the token, the TTY that `models auth login`
+  needs, and what uninstall leaves behind. This package on a real host,
+  the env var token path, and the host's own bound on a slow catalog hook
+  are not_run.
 - OpenClaw compatibility qualification (#135; RM33, AC24):
   `integrations/openclaw/` pins `openclaw` and `@openclaw/ai` 2026.10.7
   and declares the host switches (`src/compat.ts`); a Node driver runs the

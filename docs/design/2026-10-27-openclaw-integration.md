@@ -78,7 +78,11 @@ the host probe decides.
 | Captured request sizes, UTF-8 upper bound | ran offline on the sanitized host captures (`--sanitized`): undecided, superseded by the tokenizer count | `docs/evidence/2026-10-27-openclaw-request-size-mac-probe-utf8.json` |
 | Captured request sizes, tokenizer count (pinned b11785 tokenizer, local limit 8192) | measured on macOS: 0 of 3 fresh host requests fit (10,513 to 10,577 tokens), 0 of 7 probe requests (10,500 to 10,548) | `docs/evidence/2026-10-27-openclaw-mac-qualification/request-size.json`, `request-size-probe-requests.json` |
 | Live AC24 turn, auto, no external model | ran on macOS: needs_external / context_limit, 0 model calls | `docs/evidence/2026-10-27-openclaw-mac-qualification/live/` |
-| Switches on a plugin-supplied model (catalog or `resolveDynamicModel`) | not_run; the probe's plugin model declared none | #136 |
+| Switches on a plugin-supplied model (catalog or `resolveDynamicModel`) | not_run on a real host; the probe's plugin model declared none. #136 supplies the switches on both paths, and the pinned transport with the resolved entry sends only section 7.1 fields (deterministic tier) | `tests/test_openclaw_plugin.py`; the real host is an operator step in `integrations/openclaw/README.md` |
+| Plugin model lookup in headless `agent exec` | ran on macOS with a probe plugin: only `resolveDynamicModel` worked (`catalog` and `staticCatalog` alone gave `Unknown model`). #136 implements `resolveDynamicModel` for the one alias next to the catalog; this package on a real host is not_run | REPORT.md "Making the plugin model resolvable"; `test/provider.test.ts` |
+| Plugin install of a local package | ran on macOS with a probe plugin: needs `--accept-capabilities` (exit 1 without it) | REPORT.md B1; `integrations/openclaw/README.md` |
+| Token storage | ran on macOS with a probe plugin: `models auth paste-api-key` took a 43-character token on stdin with no format check, and the catalog hook received it; `models auth login` needs a TTY (typing the token at its prompt: not_run); the env var path: not_run | REPORT.md B5 |
+| Catalog hook abort signal | ran on macOS with a probe plugin: `catalog.run` got no signal during `models list --refresh`. #136 bounds each discovery request with its own 5 s timeout; whether the host bounds a slow hook: not_run | REPORT.md B4; `test/provider.test.ts` |
 
 The transport tier is the host's own `openai-completions` stream function,
 `createOpenAICompletionsTransportStreamFn` from the public

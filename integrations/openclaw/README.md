@@ -34,13 +34,13 @@ baseline are in
 | --- | --- |
 | `openclaw.plugin.json` | The plugin manifest: provider `relaymind`, the token's env var `RELAYMIND_APP_TOKEN`, the api-key auth choice, the closed config schema |
 | `src/index.ts` | The plugin entry (`definePluginEntry`); refuses an invalid configuration by name before registering |
-| `src/provider.ts` | The provider: api-key token method, catalog hook, missing-token and reconnect messages; no dynamic models |
+| `src/provider.ts` | The provider: api-key token method, catalog hook, `resolveDynamicModel` for the one alias (the headless `agent exec` path), missing-token and reconnect messages |
 | `src/catalog.ts` | Discovery (`GET /v1/models`, `GET /readyz`), the diagnosis, the published entry and its limits, the host outcome |
 | `src/config.ts` | The plugin settings: loopback `baseUrl`, `executionMode`, copied `limits` |
 | `src/compat.ts` | `relaymindModelCompat()` (the per-model switches) and `relaymindModelEntry()` (#135) |
 | `src/diagnostics.ts`, `src/redaction.ts` | The capability statement and operator messages; the logger that scrubs the token |
 | `test/*.test.ts` | vitest: manifest, config, catalog, provider, redaction, the switches, the frozen fixtures |
-| `test/plugin-transport/drive-plugin.mjs` | plays the host around the plugin: register, catalog, one request through the pinned transport |
+| `test/plugin-transport/drive-plugin.mjs` | plays the host around the plugin: register, catalog (or `resolveDynamicModel`), one request through the pinned transport |
 | `test/host-transport/` | the #135 transport driver and recording proxy |
 | `test/fixtures/v2026.10.7/transport/` | the #135 deterministic transport fixtures, captured by `scripts/openclaw_qualification.py fixtures` |
 | `test/fixtures/v2026.10.7/host/` | reserved for captures made with `capture_host_requests.mjs`; the macOS host probe's captures are in `docs/evidence/2026-10-27-openclaw-mac-probe/` |
@@ -104,12 +104,39 @@ openclaw models auth paste-api-key --provider relaymind   # paste at the prompt
 printf "%s\n" "$TOKEN" | openclaw models auth paste-api-key --provider relaymind
 ```
 
-`RELAYMIND_APP_TOKEN` in the host's environment also works. After a gateway
+On the macOS host probe (OpenClaw 2026.10.7), `paste-api-key` took a
+43-character token on standard input with no format check, and the stored
+key reached the catalog hook. It may warn that the local Gateway could not
+refresh; a headless `agent exec` still reads the stored key.
+`openclaw models auth login --provider relaymind` asks for the token too,
+but only in an interactive terminal: without one it refuses, and typing the
+token at its prompt was not checked (`not_run`).
+`RELAYMIND_APP_TOKEN` in the host's environment is the provider's declared
+env var; reading it was not checked on a real host (`not_run`). After a gateway
 restart the stored token is stale: requests and discovery fail with 401
 `unauthenticated`, and the catalog logs the reconnect instruction (store the
 new token the same way). The plugin never logs, records, or forwards the
 token: every message goes through a redacting logger, discovery refuses
 redirects, and requests go only to the configured loopback URL.
+
+## How the host finds the model
+
+The provider publishes the alias two ways:
+
+- the catalog hook (`openclaw models list --refresh`) discovers it on the
+  gateway and logs the diagnosis below;
+- `resolveDynamicModel` resolves the same entry for the one ID
+  `relaymind-client-tools`, synchronously and without a request. The pinned
+  host needs it: on the macOS probe, headless `openclaw agent exec` never ran
+  the catalog hook and failed with `Unknown model` until the plugin had
+  `resolveDynamicModel` (a static catalog did not help either). Any other ID
+  resolves to nothing. When the gateway does not serve the alias, a request
+  fails with the gateway's own error, never an empty answer.
+
+The pinned host calls the catalog hook with no abort signal, so every
+discovery request has the plugin's own five-second timeout; a hung gateway
+is reported as unreachable. Whether the host also bounds the hook was not
+checked (`not_run`).
 
 ## Diagnostics
 
@@ -166,23 +193,30 @@ when a capture input changed after the recorded commit.
 
 ### Real host load and token setup (operator, not run yet)
 
-On a machine with OpenClaw v2026.10.7 and a running `relaymind serve`:
+On a machine with OpenClaw v2026.10.7 and a running `relaymind serve`. The
+command forms were confirmed on the macOS host probe with a probe plugin, not
+with this package; this package on a real host is `not_run`. Isolate the
+host's state with `OPENCLAW_HOME`, `OPENCLAW_STATE_DIR`,
+`OPENCLAW_CONFIG_PATH`, and `--config`, as the probe did.
 
 ```bash
 cd integrations/openclaw && npm ci && npm run build
 npm pack --pack-destination /tmp/rm-plugin
-openclaw plugins install npm-pack:/tmp/rm-plugin/relaymind-openclaw-provider-0.1.0.tgz --force
+# without --accept-capabilities the pinned host refuses a local package (exit 1)
+openclaw plugins install npm-pack:/tmp/rm-plugin/relaymind-openclaw-provider-0.1.0.tgz \
+  --force --accept-capabilities
 openclaw config set plugins.entries.relaymind.config.baseUrl http://127.0.0.1:8080/v1
 openclaw plugins inspect relaymind --runtime --json
-openclaw models auth paste-api-key --provider relaymind   # the token relaymind serve printed
-openclaw models list --json | grep relaymind
+openclaw models auth paste-api-key --provider relaymind   # the token relaymind serve printed, on stdin
+openclaw models list --refresh --provider relaymind       # runs the catalog hook
+openclaw agent exec "Say hello" --model relaymind/relaymind-client-tools --json
 # restart relaymind serve: the list reports the 401 reconnect line; paste the new token; it recovers
 ```
 
 Disable with `openclaw plugins disable relaymind`; remove with
-`openclaw plugins uninstall relaymind` (the full operator guide is #145).
-The command names follow the pinned host's documentation and are to be
-confirmed on the first run.
+`openclaw plugins uninstall relaymind`. On the probe, uninstall left the
+plugin's config entry, its stored credential, and older install folders
+behind; the full operator guide (#145) covers removing them.
 
 ## Operator runs
 
