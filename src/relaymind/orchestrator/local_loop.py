@@ -4430,6 +4430,7 @@ class _Run:
             if piece
         ]
         self.o.store.append_events(self.run_id, drafts)
+        generation.published = True
         return published
 
 

@@ -937,3 +937,23 @@ def test_precommit_tool_proposal_in_local_answer_is_invalid_output(tmp_path, ans
     outcome, events = run(gateway)
     assert_needs_external(gateway, outcome, events, "invalid_output")
     assert len(of_type(events, "tool.started")) == 1
+
+
+def test_buffered_publication_marks_the_generation_published(tmp_path, monkeypatch):
+    """RM20: a buffered answer is published once; a second publish of the same
+    generation appends nothing and returns the same answer."""
+    from relaymind.orchestrator import local_loop
+
+    original = local_loop._Run._publish
+
+    def twice(self, generation, role):
+        first = original(self, generation, role)
+        assert generation.published
+        assert original(self, generation, role) == first
+        return first
+
+    monkeypatch.setattr(local_loop._Run, "_publish", twice)
+    gateway = build_gateway(tmp_path, [route_turn("check-service-health"), *health_tail()])
+    outcome, events = run(gateway)
+    assert outcome.state is RunState.COMPLETED
+    assert "".join(e.payload["text"] for e in of_type(events, "answer.delta")) == STAGING_OK
