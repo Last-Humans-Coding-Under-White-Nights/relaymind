@@ -806,6 +806,19 @@ This is planned integration, not a claim of a working or faster plugin.
   Windows reruns are not_run.
 - Cancellation, bounded retry behavior, errors, and trace correlation
   (#138; RM14, RM17, RM20, RM22, RM33; AC11, AC12, AC24), after #137.
+  Status: the plugin passes the host's abort signal through, maps every
+  gateway error code to a named host error class with one sanitized
+  message (401 with the reconnect instruction), sends an Idempotency-Key
+  per inference payload (the host's turn ID changes on every call at the
+  pin, so the key is the payload's digest), retries only 429 and 504 before
+  any content and only with `maxRetries`, and records each attempt with
+  its run ID or `unavailable`. Aborts before sending, during a buffered or
+  early-header generation, during the replay, and after completion, every
+  error status, and replay and conflict cases are covered through the
+  pinned transport over doubles (`tests/test_openclaw_cancel_errors.py`).
+  The real host's interrupt
+  (`scripts/openclaw_qualification.py host --scenario abort`), its retries,
+  and its failover are not_run.
 - Installable artifact, CI compatibility checks, platform qualification,
   and operator documentation (#145; RM18, RM19, RM33; AC24): packaging
   and CI after #136, platform qualification and the guide after #138.
