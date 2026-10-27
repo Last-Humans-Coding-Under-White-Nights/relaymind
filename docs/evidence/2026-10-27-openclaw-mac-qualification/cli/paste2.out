@@ -1,0 +1,4 @@
+Warning: Model auth changes were saved, but the local Gateway could not refresh them. Run `openclaw gateway restart` to apply the saved changes.
+Updated config: <scratch>/qoc/config.json
+  Backup: <scratch>/qoc/config.json.bak
+Auth profile: relaymind:manual (relaymind/api_key)

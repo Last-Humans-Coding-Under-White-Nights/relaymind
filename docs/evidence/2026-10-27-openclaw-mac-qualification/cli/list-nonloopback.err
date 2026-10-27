@@ -1,0 +1,5 @@
+Gateway is not running. Refreshing the local model catalog.
+[plugins] RelayMind plugin configuration: baseUrl host 192.168.1.10 is not a loopback address; the gateway serves only localhost, 127.0.0.0/8, or [::1]
+[plugins] relaymind failed during register from <scratch>/qoc/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider/dist/index.js: RelayMindConfigError: RelayMind plugin configuration: baseUrl host 192.168.1.10 is not a loopback address; the gateway serves only localhost, 127.0.0.0/8, or [::1]
+[plugins] RelayMind plugin configuration: baseUrl host 192.168.1.10 is not a loopback address; the gateway serves only localhost, 127.0.0.0/8, or [::1]
+[plugins] relaymind failed during register from <scratch>/qoc/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider/dist/index.js: RelayMindConfigError: RelayMind plugin configuration: baseUrl host 192.168.1.10 is not a loopback address; the gateway serves only localhost, 127.0.0.0/8, or [::1]

@@ -1,0 +1,3 @@
+Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present
+Config (<scratch>/hoc/config.json): missing env var "RELAYMIND_BASE_URL" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable
+Updated plugins.entries.relaymind.config.baseUrl. Change will apply without restarting the gateway.

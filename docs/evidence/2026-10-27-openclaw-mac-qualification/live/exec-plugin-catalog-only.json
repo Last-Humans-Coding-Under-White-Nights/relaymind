@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "status": "error",
+  "final": "",
+  "payloads": [],
+  "model": null,
+  "provider": null,
+  "sessionId": "f45681a7-e652-4ec2-a56a-ee3d30e1b594",
+  "error": {
+    "message": "Unknown model: relaymind/relaymind-client-tools. Run `openclaw models list --refresh --provider relaymind` to inspect this provider's model choices, then retry with a model supported by your account.",
+    "kind": "exception"
+  }
+}

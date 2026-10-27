@@ -1,0 +1,6 @@
+WARNING - Installing plugin from local path: integrations/openclaw/test/host-tool-plugin
+This source is outside ClawHub review and trust metadata. Only continue if you trust the publisher, package contents, and install source.
+Plugin manifest id "relaymind-test-host-tools" differs from npm package name "@relaymind/openclaw-test-host-tools"; using manifest id as the config key.
+Installing to <scratch>/hoc/state/extensions/relaymind-test-host-tools…
+Linked peerDependency "openclaw" -> <scratch>/prefix/lib/node_modules/openclaw
+Plugin "relaymind-test-host-tools" requires capability consent. The plugin was not installed. Re-run the same "openclaw plugins install" or "openclaw plugins update" command with --accept-capabilities, keeping its source and other options. For Doctor or setup, complete the plugin command first, then retry Doctor or setup.

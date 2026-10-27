@@ -1,0 +1,8 @@
+OpenClaw config is invalid
+File: <scratch>/qoc/config.json
+Problem:
+  - plugins.entries.relaymind.config.executionMode: invalid config: must be equal to one of the allowed values (allowed: "auto", "local_only", "external_only")
+
+Fix: openclaw doctor --fix
+Inspect: openclaw config validate
+Audit, status, health, logs, and doctor commands still run with invalid config.

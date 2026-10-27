@@ -1,0 +1,5 @@
+Plugin: RelayMind (relaymind)
+Will remove: plugin settings, install record, directory: <scratch>/qoc/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1
+Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present
+Uninstalled plugin "relaymind". Removed: plugin settings, install record, directory.
+Saved for the next Gateway start.

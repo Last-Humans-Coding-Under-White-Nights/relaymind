@@ -1,0 +1,3 @@
+Config change declined. No settings were saved.
+Config validation failed: plugins.entries.relaymind.config.executionMode: invalid config: must be equal to one of the allowed values (allowed: "auto", "local_only", "external_only")
+Correct the setting above and retry. Run openclaw config schema to inspect supported settings and values.

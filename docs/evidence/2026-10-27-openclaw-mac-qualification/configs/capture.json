@@ -1,0 +1,24 @@
+{
+  "models": {
+    "providers": {
+      "relaymind-capture": {
+        "baseUrl": "http://127.0.0.1:8089/v1",
+        "api": "openai-completions",
+        "apiKey": "<redacted>",
+        "models": [{
+          "id": "relaymind-client-tools", "name": "RelayMind capture",
+          "reasoning": false, "input": ["text"],
+          "compat": {
+            "supportsUsageInStreaming": false, "supportsStrictMode": false,
+            "supportsReasoningEffort": false, "supportsDeveloperRole": false,
+            "maxTokensField": "max_completion_tokens",
+            "supportsJsonSchemaResponseFormat": false, "supportsPromptCacheKey": false,
+            "supportsStore": false, "strictMessageKeys": false,
+            "requiresToolResultName": false, "requiresAssistantAfterToolResult": false,
+            "requiresStringContent": false, "supportsTools": true
+          }
+        }]
+      }
+    }
+  }
+}

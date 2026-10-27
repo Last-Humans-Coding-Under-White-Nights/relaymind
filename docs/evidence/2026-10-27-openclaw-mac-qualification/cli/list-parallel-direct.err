@@ -1,0 +1,3 @@
+Gateway is not running. Refreshing the local model catalog.
+[plugins] relaymind invalid config: executionMode: must be equal to one of the allowed values (allowed: "auto", "local_only", "external_only")
+[plugins] relaymind invalid config: executionMode: must be equal to one of the allowed values (allowed: "auto", "local_only", "external_only")

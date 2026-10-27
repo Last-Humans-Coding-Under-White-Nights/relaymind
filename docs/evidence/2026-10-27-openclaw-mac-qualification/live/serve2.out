@@ -1,0 +1,3 @@
+Local warm-up finished: routing 130 ms (first token 96 ms, cached 968), skill 389 ms (first token 182 ms, cached 567).
+Serving on http://127.0.0.1:8080
+Application token: <redacted>

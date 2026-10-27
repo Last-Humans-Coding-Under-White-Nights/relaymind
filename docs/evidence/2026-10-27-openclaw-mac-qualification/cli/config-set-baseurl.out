@@ -1,0 +1,2 @@
+Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present
+Updated plugins.entries.relaymind.config.baseUrl. Change will apply without restarting the gateway.

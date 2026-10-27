@@ -1,0 +1,46 @@
+{
+  "kind": "openclaw-host-qualification",
+  "evidence": "deterministic gateway doubles; not live model evidence",
+  "scenario": "text-tool",
+  "status": "failed",
+  "command": [
+    "<scratch>/prefix/bin/openclaw",
+    "agent",
+    "exec",
+    "--config",
+    "<scratch>/hoc/config.json",
+    "--json",
+    "--cwd",
+    "<scratch>/qual/exec-cwd",
+    "--model",
+    "relaymind/relaymind-client-tools",
+    "Say hello"
+  ],
+  "exit_code": 1,
+  "stdout": "{\n  \"ok\": false,\n  \"status\": \"error\",\n  \"final\": \"\",\n  \"payloads\": [],\n  \"model\": null,\n  \"provider\": null,\n  \"sessionId\": \"14c0d810-1db0-45c9-b0db-e7a2e9ea062b\",\n  \"error\": {\n    \"message\": \"Unknown model: relaymind/relaymind-client-tools. Run `openclaw models list --refresh --provider relaymind` to inspect this provider's model choices, then retry with a model supported by your account.\",\n    \"kind\": \"exception\"\n  }\n}\n",
+  "stderr": "\u001b[35m[plugins]\u001b[39m \u001b[36mRelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\u001b[39m\n\u001b[35m[plugins]\u001b[39m \u001b[36mRelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\u001b[39m\n\u001b[31m[diagnostic]\u001b[39m \u001b[31mlane task error: lane=main durationMs=280 error=\"Unknown model: relaymind/relaymind-client-tools. Run `openclaw models list --refresh --provider relaymind` to inspect this provider's model choices, then retry with a model supported by your account.\" errorName=FailoverError taskKind=turn sessionKey=agent:main:explicit:14c0d810-1db0-45c9-b0db-e7a2e9ea062b runId=14c0d810-1db0-45c9-b0db-e7a2e9ea062b\u001b[39m\n\u001b[31m[diagnostic]\u001b[39m \u001b[31mlane task error: lane=session:agent:main:explicit:14c0d810-1db0-45c9-b0db-e7a2e9ea062b durationMs=289 error=\"Unknown model: relaymind/relaymind-client-tools. Run `openclaw models list --refresh --provider relaymind` to inspect this provider's model choices, then retry with a model supported by your account.\" errorName=FailoverError taskKind=turn sessionKey=agent:main:explicit:14c0d810-1db0-45c9-b0db-e7a2e9ea062b runId=14c0d810-1db0-45c9-b0db-e7a2e9ea062b\u001b[39m\n\u001b[34m[model-fallback/decision]\u001b[39m \u001b[33mmodel fallback decision: decision=candidate_failed requested=relaymind/relaymind-client-tools candidate=relaymind/relaymind-client-tools reason=model_not_found next=none detail=Unknown model: relaymind/relaymind-client-tools. Run `openclaw models list --refresh --provider relaymind` to inspect this provider's model choices, then retry with a model supported by your account.\u001b[39m\n\u001b[33m[state/agent-db]\u001b[39m \u001b[36magent database clean-close receipt: active-leases\u001b[39m\n\u001b[33m[state/agent-db]\u001b[39m \u001b[36magent database clean-close receipt: written\u001b[39m\nUnknown model: relaymind/relaymind-client-tools. Run `openclaw models list --refresh --provider relaymind` to inspect this provider's model choices, then retry with a model supported by your account.\n",
+  "token": "<not recorded>",
+  "base_url": "http://127.0.0.1:60498/v1",
+  "versions": {
+    "openclaw": "2026.10.7",
+    "@openclaw/ai": "2026.10.7",
+    "openai": "7.27.0",
+    "node": "v26.12.1",
+    "os": "Darwin 27.0.0",
+    "machine": "arm64",
+    "relaymind_revision": {
+      "head": "a52f8bf93f1e7a6a2ff37d21e259529f62221141",
+      "dirty": false
+    }
+  },
+  "runs": [],
+  "host_tool_executions_by_gateway": 0,
+  "checks": {
+    "sandbox_lines": 0,
+    "expected_sandbox_lines": null,
+    "gateway_tool_executions": 0,
+    "proposed": [],
+    "result_reached_next_run": false,
+    "passed": false
+  }
+}

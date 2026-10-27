@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "status": "error",
+  "final": "",
+  "payloads": [],
+  "model": null,
+  "provider": null,
+  "sessionId": "04391546-ff73-437a-bdf0-679440d81447",
+  "error": {
+    "message": "LLM request rejected: the task cannot complete under the effective execution mode",
+    "kind": "exception"
+  }
+}

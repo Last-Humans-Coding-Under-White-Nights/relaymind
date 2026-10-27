@@ -1,0 +1,14 @@
+.
+./home
+./state
+./state/extensions
+./state/extensions/relaymind-test-host-tools
+./state/extensions/relaymind-test-host-tools/node_modules
+./state/npm
+./state/npm/projects
+./state/npm/projects/relaymind-openclaw-provider-fcf0101bf1
+./state/plugin-skills
+./state/state
+./state/tmp
+./state/tmp/openclaw-501
+./state/tmp/plugin-captures
