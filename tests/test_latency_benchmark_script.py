@@ -184,7 +184,8 @@ def test_a_routing_prompt_under_early_headers_is_not_a_transport_error(bench, tm
     assert sample["error"] is None
     assert sample["stream_error_code"] == "needs_external"
     assert (sample["state"], sample["error_code"]) == ("failed", "needs_external")
-    assert isinstance(sample["completion_ms"], float)
+    assert sample["completion_ms"] is None
+    assert isinstance(sample["stream_duration_ms"], float)
     assert sample["first_answer_token_ms"] is None
 
 
@@ -497,6 +498,7 @@ def test_an_interrupted_benchmark_removes_its_work_dir(bench, tmp_path, monkeypa
         bench.harness, "check_runtime", lambda manifest, extra_args=(): _FakeRuntime()
     )
     monkeypatch.setattr(bench.harness, "application_revision", lambda: {})
+    monkeypatch.setattr(bench.session, "prior_configuration", lambda *args: {})
     monkeypatch.setattr(bench.harness, "_stop", stopped.append)
     monkeypatch.setattr(bench.tempfile, "mkdtemp", lambda prefix: str(work))
     monkeypatch.setattr(bench, "_props", interrupt)
@@ -559,3 +561,28 @@ def test_latency_trace_collection_retains_http_fallback_claims(bench):
     assert sample["selector_provenance"]["scope"] == "http_attempted"
     assert sample["selector_provenance"]["attempts"] == [attempt]
     assert sample["model_calls"] == []
+
+
+@pytest.mark.parametrize(
+    "local,warmup_disabled,expected",
+    [(True, False, True), (True, True, False), (False, False, False)],
+)
+def test_effective_configuration_keeps_checkpoint_settings_raw(
+    bench, local, warmup_disabled, expected
+):
+    """RM25: effective warm-up is shared without mutating raw checkpoint identity."""
+    argv = ["--out", "fixture.json", "--placement", "policy=expected_wait"]
+    if not local:
+        argv.append("--no-local-model")
+    if warmup_disabled:
+        argv.append("--no-startup-warmup")
+    args = bench.argument_parser().parse_args(argv)
+    configuration = bench.configuration_from_args(args)
+    raw = configuration.to_json_object()
+    effective = bench.effective_configuration(
+        configuration, no_startup_warmup=args.no_startup_warmup
+    )
+    assert effective["placement"]["warmup"] is expected
+    assert effective["placement"]["policy"] == "expected_wait"
+    assert configuration.to_json_object() == raw
+    assert "warmup" not in raw["placement"]

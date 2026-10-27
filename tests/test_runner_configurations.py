@@ -578,7 +578,14 @@ def test_corpus_label_drops_an_endpoint_it_cannot_call(monkeypatch, tmp_path):
     runner = load_script_module("run_corpus")
     monkeypatch.delenv(runner.harness.EXTERNAL_KEY_ENV, raising=False)
 
+    manifest_file, artifact_file = make_artifact(tmp_path)
+
     class FakeRuntime:
+        manifest_path = manifest_file
+        manifest = runner.harness.load_manifest(manifest_file)
+        artifact = artifact_file
+        server_argv = ["declared test fixture"]
+
         def launch(self, log):
             return object(), "http://127.0.0.1:1", 0.0
 
@@ -654,3 +661,30 @@ def test_configuration_errors_are_usage_errors_before_launch(
     with pytest.raises(SystemExit) as exc:
         runner.main(["--out", str(tmp_path / "out.json"), *arguments])
     assert exc.value.code == 2
+
+
+def test_placement_arguments_export_and_launch_match(settings):
+    """RM27: runner policy is validated and preserved in launch and evidence."""
+    config = parse(settings, "--placement", "policy=expected_wait", "margin=3")
+    assert config.to_json_object()["placement"]["policy"] == "expected_wait"
+    assert config.gateway_options()["placement"]["margin"] == 3
+    with pytest.raises(ValueError):
+        parse(settings, "--placement", "policy=invented")
+
+
+def test_benchmark_preserves_placement_with_warmup_setting(settings, tmp_path):
+    """RM27: latency warm-up control must not overwrite placement policy."""
+    runner = load_script_module("latency_benchmark")
+    config = parse(settings, "--placement", "policy=device_aware")
+    text = runner.benchmark_config(
+        work=tmp_path,
+        manifest=tmp_path / "model.json",
+        artifact=tmp_path / "model.gguf",
+        local_url="http://127.0.0.1:8081",
+        port=8099,
+        startup_warmup=False,
+        **config.gateway_options(),
+    )
+    raw = tomllib.loads(text)
+    assert raw["placement"]["policy"] == "device_aware"
+    assert raw["placement"]["warmup"] is False

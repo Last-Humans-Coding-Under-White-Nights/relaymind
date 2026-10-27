@@ -1030,6 +1030,15 @@ def _check_payload(event_type: EventType, payload: Mapping[str, Any], actor: str
         _check_clarification_payload(payload)
     if event_type is EventType.CLARIFICATION_ANSWERED:
         _check_answered_payload(payload)
+    if event_type in (
+        EventType.HANDOFF_STARTED,
+        EventType.RUN_COMPLETED,
+        EventType.RUN_FAILED,
+        EventType.RUN_CANCELLED,
+    ):
+        value = payload.get("local_active_ms")
+        if value is not None and not _is_count(value, 0):
+            raise TraceEventError("local_active_ms must be a non-negative integer or null")
     if event_type is EventType.HANDOFF_STARTED:
         _check_handoff_payload(payload)
     if event_type is EventType.CONFIRMATION_REQUIRED:

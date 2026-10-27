@@ -188,6 +188,7 @@ def test_usage_reports_every_counter_and_elapsed_time():
         "tool_calls": 1,
         "external_generations": 0,
         "active_ms": 250,
+        "local_active_ms": 250,
         "stages": 1,
     }
 

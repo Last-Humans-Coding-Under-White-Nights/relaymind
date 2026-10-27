@@ -295,6 +295,7 @@ def test_budget_usage_counts_routing_repair_and_tools(tmp_path):
         "tool_calls": 1,
         "external_generations": 0,
         "active_ms": 2500,
+        "local_active_ms": 2500,
         "stages": 1,
     }
 

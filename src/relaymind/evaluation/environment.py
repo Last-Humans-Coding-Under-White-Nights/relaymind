@@ -155,3 +155,36 @@ def application_revision(repo_root: Path) -> dict[str, Any]:
     head = _run("git", "-C", root, "rev-parse", "HEAD")
     status = _run("git", "-C", root, "status", "--porcelain")
     return {"head": head, "dirty": None if status is None else bool(status)}
+
+
+def checkout_environment(repo_root: Path, environ: dict[str, str]) -> dict[str, str]:
+    """Make every child import the measured checkout, including with a shared venv.
+
+    The checkout comes first; entries already on PYTHONPATH are kept after it.
+    """
+    paths = [str(repo_root / "src")]
+    if environ.get("PYTHONPATH"):
+        paths.append(environ["PYTHONPATH"])
+    return {**environ, "PYTHONPATH": os.pathsep.join(paths)}
+
+
+def source_fingerprint(repo_root: Path) -> dict[str, Any]:
+    """Record source bytes independently of the editable installation and Git labels."""
+    import hashlib
+
+    import relaymind
+    from relaymind.canonical import canonical_digest
+
+    files = {}
+    for directory in ("src", "scripts", "skills", "evaluation"):
+        for path in sorted((repo_root / directory).rglob("*")):
+            if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc":
+                files[str(path.relative_to(repo_root))] = hashlib.sha256(
+                    path.read_bytes()
+                ).hexdigest()
+    return {
+        **application_revision(repo_root),
+        "source_sha256": canonical_digest(files),
+        "files": files,
+        "package_path": str(Path(relaymind.__file__).resolve()),
+    }

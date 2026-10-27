@@ -450,3 +450,86 @@
       --selector-name example_keyword --selector-version 1 --seed 42 \
       --source-training neither --output /tmp/skills-example-keyword-http.json
   ```
+
+### M8 placement and streaming matrix (#134)
+
+`run_m8_matrix.py` writes a fixed offline execution plan unless `--execute` is
+present. The plan has 31 serial cells: two independent calibration corpora,
+12 placement corpus cells and 12 latency cells (normal/constrained × three
+policies × two selector chains), one local live corpus compared with the exact
+normal buffered control, and four no-local buffered/live corpus/latency cells.
+This is 2,548 corpus runs and 1,736 latency requests, including cold requests
+and warm-ups. The conservative external inference ceiling is 21,024 calls;
+there is no configured aggregate token ceiling. Actual failures and unknown
+usage remain visible. Calibration cost is separate from candidate cost.
+
+Run the offline plan from the reviewed checkout:
+
+```sh
+.venv/bin/python scripts/run_m8_matrix.py --out /tmp/relaymind-m8-measurements
+```
+
+After independent code review, the concrete execution command is:
+
+```sh
+.venv/bin/python scripts/run_m8_matrix.py \
+  --out /tmp/relaymind-m8-measurements \
+  --runtime /Users/dmitrykudryavtsev/llama-b11785-dl/x/llama-b11785/llama-server \
+  --provider-env /Users/dmitrykudryavtsev/.config/relaymind/external.env \
+  --execute
+```
+
+The optional provider file accepts literal assignments to the three
+`RELAYMIND_EXTERNAL_API_KEY`, `RELAYMIND_EXTERNAL_BASE_URL`, and
+`RELAYMIND_EXTERNAL_MODEL` environment variables. It is parsed without shell
+execution. The key is passed only in the child environment, never argv or the
+matrix index. Existing exported variables also work. Provider context remains
+128,000, provider options remain their defaults, and baseline budgets are
+unchanged. The runner checks the model artifact and runtime version before
+launch. A clean committed checkout is required; child gateway imports explicitly
+resolve that checkout's `src`, even with a shared virtualenv.
+
+Every export and retained SQLite/log directory stays outside the checkout.
+The matrix index records source bytes, runtime binary digest, settings, argv,
+run order, UTC boundaries, attempts, and export digests. Each runner's optional
+`--checkpoint FILE` writes fsynced request-start and request-result checkpoints.
+Before resuming, the matrix driver reconciles each retained runner checkpoint
+against its original CLI arguments, source, configuration, prior, request count,
+and export digest. A finalized runner result is promoted into the matrix index
+even if the driver was interrupted before publishing it; it never starts another
+attempt for that completed cell. Recovery also reads retained SQLite usage for
+older interrupted attempts, including crashes that bypassed exception handling.
+The full traces preserve actual usage; an unfinished request's retained database
+is evidence even when no client result was returned. Complete same-identity
+cells can be skipped on resume. A partial cell cannot resume its lost runtime
+or prefix-cache state: an explicit `--restart CELL=NEW_ATTEMPT` declares a new
+attempt before any new outcome. The original attempt remains incomplete and
+its costs remain in the retained evidence. Complete cells cannot be rerun for
+result selection. Source, provider, settings, seed, or retained-prior mismatch
+requires a separately labeled experiment; timestamps are never rebased.
+
+Both runners accept `--placement policy=local_first|device_aware|expected_wait`
+and `--timing-samples FILE`. The version-one `relaymind.placement_prior` bundle
+contains exact configuration partitions and source export byte digests/run IDs.
+It derives timings and terminal outcomes from validated actual traces through
+the shared live outcome projector; it creates no synthetic runs. Setting a
+partition's `include_outcomes` to false makes a timing-only prior, which cannot
+establish expected-wait applicability. Calibration bundles are frozen before
+candidate execution. Every case imports its same configuration's prior before
+startup; genuine startup warm-up samples are recorded separately. Latency uses
+one gateway and learns online after seeding.
+
+The exports include measured local phase time, prediction-error observations,
+selection set scores, generations per completed run, external usage per
+successful task (including failed-attempt cost), and missing-count denominators.
+Successful completion latency excludes clarification waits and failed streams;
+`stream_duration_ms` retains their transport duration. None of these deterministic
+checks is live model evidence or permission to change defaults.
+
+Generation summaries report measured and unobserved completed-run counts. If any
+completed run lacks generation observations, the overall generations-per-completed-run
+ratio is null; the separately labeled measured-only ratio and observed actor/purpose
+counts remain available. The prior importer validates every partition's structure
+and checks accepted/call model identities and recorded provider/answer options
+against its configuration. Legacy missing accepted local-model identity may use
+actual local calls; an explicit conflicting identity cannot use that fallback.

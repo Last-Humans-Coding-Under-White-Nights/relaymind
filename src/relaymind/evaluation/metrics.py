@@ -141,6 +141,16 @@ def _block(grades: Sequence[Mapping[str, Any]], routes: Mapping[str, str]) -> di
         "tokens": dict(sorted(tokens.items())),
         "rejections": dict(sorted(rejections.items())),
     }
+    if any("metrics" in g for g in grades):
+        from relaymind.evaluation.placement_metrics import summarize_placement
+
+        block["placement_metrics"] = summarize_placement(grades)
+        block["by_measured_class"] = {
+            name: summarize_placement(
+                [g for g in grades if g.get("metrics", {}).get("local_class", "unknown") == name]
+            )
+            for name in sorted({g.get("metrics", {}).get("local_class", "unknown") for g in grades})
+        }
     corrections = _corrections(grades)
     if corrections is not None:
         block["corrections"] = corrections
@@ -277,6 +287,25 @@ def render_corpus_markdown(summary: Mapping[str, Any], *, title: str) -> str:
                 lines.append(f"| {name} | " + " | ".join(cells) + " |")
             lines.append("")
             lines += _provenance_rows(data["all"].get("selector_provenance", {}), "runs")
+            if "placement_metrics" in data["all"]:
+                lines += ["| measured metric | n / eligible | p50 | p95 |", "|---|---|---|---|"]
+                measured = data["all"]["placement_metrics"]
+                for name in ("prediction_error_ms", "wasted_local_ms"):
+                    value = measured[name]
+                    lines.append(
+                        f"| {name} | {value['n']} / {value['eligible']} | "
+                        f"{_ms(value['p50'])} | {_ms(value['p95'])} |"
+                    )
+                cost = measured["external_cost"]
+                lines += [
+                    "",
+                    f"External calls: {cost['calls']} across all attempts; "
+                    f"successful tasks: {cost['completed_tasks']}; "
+                    f"unobserved runs: {cost['unobserved_runs']}. "
+                    "Unknown token counts stay null in the JSON export.",
+                    "",
+                ]
+
             lines += [
                 "| effective answer stream | runs | task success | predicate_unmet |",
                 "|---|---|---|---|",
@@ -309,7 +338,19 @@ def render_corpus_markdown(summary: Mapping[str, Any], *, title: str) -> str:
 def _latency_block(samples: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     metrics = {}
     for metric in LATENCY_METRICS:
-        values = [s[metric] for s in samples if s.get(metric) is not None]
+        values = [
+            s[metric]
+            for s in samples
+            if s.get(metric) is not None
+            and (
+                metric != "completion_ms"
+                or (
+                    s.get("state") == "completed"
+                    and s.get("error") is None
+                    and not s.get("timed_out")
+                )
+            )
+        ]
         metrics[metric] = {
             "n": len(values),
             "p50": nearest_rank(values, 0.5),
@@ -330,6 +371,15 @@ def summarize_latency(samples: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """Overall and per-label percentiles, and the 500 ms hypothesis (section 12.1)."""
     samples = list(samples)
     overall = _latency_block(samples)
+    if any("metrics" in s for s in samples):
+        from relaymind.evaluation.placement_metrics import summarize_placement
+
+        overall["placement_metrics"] = summarize_placement(
+            [
+                {**s, "success": s.get("state") == "completed" and s.get("error") is None}
+                for s in samples
+            ]
+        )
     labels = sorted({s["label"] for s in samples})
     by_label = {
         label: _latency_block([s for s in samples if s["label"] == label]) for label in labels
@@ -367,6 +417,14 @@ def summarize_latency(samples: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     return {
         "overall": overall,
         "by_label": by_label,
+        "by_measured_class": {
+            name: _latency_block(
+                [s for s in samples if s.get("metrics", {}).get("local_class", "unknown") == name]
+            )
+            for name in sorted(
+                {s.get("metrics", {}).get("local_class", "unknown") for s in samples}
+            )
+        },
         "hypothesis": hypothesis,
         "by_selector_provenance": scopes,
     }

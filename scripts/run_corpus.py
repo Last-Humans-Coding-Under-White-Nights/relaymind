@@ -49,8 +49,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import evaluation_session as session  # noqa: E402
 import live_acceptance as harness  # noqa: E402
 from evaluation_config import (  # noqa: E402
     ConfigurationError,
@@ -66,10 +68,13 @@ from relaymind.evaluation.corpus import (  # noqa: E402
     Case,
     Corpus,
     check_lock,
+    demo_skill_names,
     load_corpus,
+    load_skills_sidecar,
 )
 from relaymind.evaluation.environment import (  # noqa: E402
     application_revision,
+    checkout_environment,  # noqa: E402
     machine_manifest,
     runtime_devices,
 )
@@ -80,6 +85,8 @@ from relaymind.evaluation.grading import (  # noqa: E402
     terminal_event,
 )
 from relaymind.evaluation.metrics import render_corpus_markdown, summarize_corpus  # noqa: E402
+from relaymind.evaluation.placement_metrics import trace_metrics  # noqa: E402
+from relaymind.evaluation.prior import byte_digest  # noqa: E402
 from relaymind.orchestrator.performance import (  # noqa: E402
     draft_in_language,
     holds_tool_call_json,
@@ -90,6 +97,7 @@ from relaymind.tools.sandbox import MUTATING_DEMO_TOOLS  # noqa: E402
 REPO_ROOT = harness.REPO_ROOT
 CORPUS = REPO_ROOT / "evaluation" / "corpus.v1.json"
 LOCK = REPO_ROOT / "evaluation" / "corpus.v1.lock.json"
+SKILLS_SIDECAR = REPO_ROOT / "evaluation" / "corpus.v1.skills.json"
 SEED_DIR = REPO_ROOT / "tests" / "fixtures" / "sandbox"
 # A run that does not come to rest in this time is cancelled and graded as a timeout.
 RUN_TIMEOUT_SECONDS = 300.0
@@ -102,6 +110,13 @@ def load_frozen_corpus(path: Path = CORPUS) -> Corpus:
     corpus = load_corpus(path, seed_dir=SEED_DIR)
     check_lock(corpus, LOCK)
     return corpus
+
+
+def expected_skills(corpus: Corpus) -> dict[str, str | None]:
+    """The expected skill of every case, read once from the checked sidecar (RM28)."""
+    return load_skills_sidecar(
+        SKILLS_SIDECAR, corpus, skill_names=demo_skill_names(REPO_ROOT / "skills")
+    )
 
 
 def select_cases(
@@ -258,6 +273,7 @@ def _run_one(
     configuration: RunnerConfiguration,
     external: harness.ExternalEndpoint | None,
     work: Path,
+    prior=None,
 ) -> tuple[RunGrade, dict[str, Any], list[dict[str, Any]]]:
     """One gateway start for one case and mode; returns the grade, the record, and the trace."""
     plan_dir = work / f"{case.case_id}-{mode}"
@@ -276,7 +292,10 @@ def _run_one(
         ),
         encoding="utf-8",
     )
-    gateway = harness.GatewayProcess(config, plan_dir / "gateway.log", os.environ)
+    prior_report = session.seed_store(plan_dir, prior)
+    gateway = harness.GatewayProcess(
+        config, plan_dir / "gateway.log", checkout_environment(REPO_ROOT, dict(os.environ))
+    )
     gateway.start()
     api = harness.Api(gateway.output.url, gateway.output.token, sandbox_dir=plan_dir / "sandbox")
 
@@ -291,6 +310,8 @@ def _run_one(
         databases = api.sandbox()["databases"]
     finally:
         gateway.stop()
+    record["timing_prior"] = prior_report
+    record["timing_snapshot"] = session.snapshot_store(plan_dir)
     events = harness._traces(plan_dir / "runs.sqlite3", [record["run_id"]])[record["run_id"]]
     return (
         grade_record(
@@ -309,6 +330,7 @@ def _run_one(
 def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
     configuration = configuration_from_args(args)
     corpus = load_frozen_corpus()
+    skills = expected_skills(corpus)
     cases = select_cases(corpus, ids=args.cases, languages=args.languages)
     external = None
     if configuration.external is not None:
@@ -332,12 +354,21 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
         if configuration.local_model_configured
         else None
     )
-    application = harness.application_revision()
+    partition, prior, application, checkpoint = session.prepare(
+        args, REPO_ROOT, runtime, external, configuration
+    )
+    if (previous := session.existing_result(checkpoint, args.out)) is not None:
+        return previous
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
-    work = Path(tempfile.mkdtemp(prefix="relaymind-corpus-"))
+    work = (
+        Path(tempfile.mkdtemp(prefix="relaymind-corpus-"))
+        if checkpoint is None
+        else session.durable_work(args, "corpus", None)
+    )
     # The work dir goes on any exit, an interrupt included.
     with ExitStack() as cleanup:
-        cleanup.callback(shutil.rmtree, work, ignore_errors=True)
+        if checkpoint is None:
+            cleanup.callback(shutil.rmtree, work, ignore_errors=True)
         llama, local_url, cold_start = (
             runtime.launch(work / "llama-server.log") if runtime else (None, None, None)
         )
@@ -345,6 +376,9 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
         try:
             for case in cases:
                 for mode in modes:
+                    identity = f"{case.case_id}/{mode}"
+                    if checkpoint:
+                        checkpoint.start(identity)
                     print(f"{case.case_id} {mode}", flush=True)
                     try:
                         grade, record, events = _run_one(
@@ -355,8 +389,13 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
                             configuration=configuration,
                             external=external,
                             work=work,
+                            **({"prior": prior} if prior is not None else {}),
                         )
                     except Exception as exc:  # noqa: BLE001 - recorded and graded, never dropped
+                        if checkpoint:
+                            checkpoint.document["infrastructure_error"] = type(exc).__name__
+                            checkpoint._save()
+                            raise
                         record = {
                             "run_id": None,
                             "timed_out": False,
@@ -374,7 +413,15 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
                             None,
                             local_model_configured=configuration.local_model_configured,
                         )
-                    grades.append(grade.to_json_object())
+                    grade_json = grade.to_json_object()
+                    grade_json["metrics"] = trace_metrics(
+                        events, expected_skill=skills[case.case_id]
+                    )
+                    grades.append(grade_json)
+                    if checkpoint:
+                        checkpoint.finish(
+                            identity, {"grade": grade_json, "record": record, "events": events}
+                        )
                     records[f"{case.case_id}/{mode}"] = record
                     if record["run_id"] is not None:
                         traces[record["run_id"]] = events
@@ -386,6 +433,9 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
         document = {
             "kind": "relaymind.correctness_corpus",
             "configuration": configuration.to_json_object(),
+            "prior_configuration": partition,
+            "timing_prior": None if prior is None else prior.provenance,
+            "selection_sidecar_sha256": byte_digest(SKILLS_SIDECAR),
             "note": "Live runs of the frozen corpus (spec 0.28 section 12.2). Each case and mode "
             "ran in a new gateway from the case's seed. A failed grade is a finding, never "
             "dropped.",
@@ -438,6 +488,8 @@ def run_corpus(args: argparse.Namespace) -> dict[str, Any]:
         report = render_corpus_markdown(summary, title=f"Correctness corpus: {out.stem}")
         report = label_report(report, document.get("configuration"))
         out.with_suffix(".md").write_text(report, encoding="utf-8")
+        if checkpoint:
+            checkpoint.complete({"export_sha256": byte_digest(out), "grades": len(grades)})
         return document
 
 
@@ -886,7 +938,8 @@ def render_draft_pass_markdown(result: Mapping[str, Any]) -> str:
     return label_report("\n".join(lines), source.get("configuration"))
 
 
-def main(argv: Sequence[str] | None = None) -> None:
+def argument_parser() -> argparse.ArgumentParser:
+    """The same CLI schema is used for invocation and checkpoint reconciliation."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="the export file (JSON); the report is .md")
     parser.add_argument(
@@ -908,9 +961,20 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="grade the stored traces of EXPORT as if the skill-stage draft had been published "
         "(RM31): an offline counterfactual, written to --out and its .md, never to EXPORT",
     )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    parser = argument_parser()
     args = parser.parse_args(argv)
     if (args.regrade or args.regrade_draft_pass) and (
-        args.performance or args.budgets or args.selection_chain or args.no_local_model
+        args.performance
+        or args.budgets
+        or args.selection_chain
+        or args.no_local_model
+        or args.placement
+        or args.timing_samples
+        or args.checkpoint
     ):
         parser.error("offline regrading keeps the source configuration; omit configuration flags")
     if args.regrade_draft_pass:

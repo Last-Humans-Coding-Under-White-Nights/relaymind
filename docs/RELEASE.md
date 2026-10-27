@@ -107,3 +107,12 @@ Key measured numbers (x86-64 Windows, Intel i7-1165G7, CPU backend):
   section 9).
 - Monetary cost: not estimated (optional in section 12.2; no dated rate
   source was used).
+
+### M8 evaluation preparation (#134)
+
+The evaluation code adds exact-configuration imported timing/outcome priors,
+measured serial local active time, trace-derived placement/cost/selection metrics,
+and a durable fixed matrix driver. The live corpus/latency matrix, paired
+streaming comparison, and evidence-backed default decision remain pending.
+`local_first`, `model_router`, and buffered answer streaming remain defaults.
+No deterministic test establishes useful model performance or provider parity.
