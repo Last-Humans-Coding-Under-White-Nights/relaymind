@@ -2743,14 +2743,20 @@ Conditions that a reader should know:
 Every case of both configurations was measured `ready`; the constrained
 runtime did not produce an unsuitable cohort, so the device-aware hypothesis
 for unsuitable machines is **not measured**, not refuted. This is itself a
-finding: the constrained configuration completed no English or Chinese simple
-case locally in any of its six corpus cells (0/12 each), yet detection kept
-it `ready`. In its local_first/router cell, 21 of the 22 failed simple runs
-(auto and local_only) used two or three local generations; 18 of those 21
-spent the whole 4-second local active budget and the other three 3411 to
-3746 ms (median of all failed runs 4002 ms; normal: 2435 ms). Local work was
-too slow to help, yet the unsuitable-class detection did not fire. #170 tracks
-the detection change.
+finding: in auto mode the constrained configuration completed no English or
+Chinese simple case locally in any of its six corpus cells (0/12 each; in
+local_only mode, English 1/12 in the local_first/router cell, 2/12 in the
+local_first/example-router cell and 0/12 everywhere else), yet detection
+kept it `ready`. In its local_first/router cell, 22 of the 24 local_only
+simple runs failed with `needs_external` (the other two completed locally,
+one of them without task success). 21 of those 22 used three or four local
+generations (the routing generation, two skill generations and at most one
+final or repair generation); 18 of those 21 spent the whole 4-second local
+active budget and the other three 3411 to 3746 ms (median local active time
+of the 22: 4002 ms; of the 17 such runs in the normal local_first/router
+cell: 2435 ms). All 24 auto simple runs of the cell succeeded only through
+the external model. Local work was too slow to help, yet the
+unsuitable-class detection did not fire. #170 tracks the detection change.
 
 | Question | Configuration, chain | Control | Candidate | Gains/losses |
 |---|---|---|---|---|
