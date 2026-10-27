@@ -125,6 +125,67 @@ def test_the_catalog_entry_passes_gateway_validation_for_the_default_streamed_re
     assert accepted.payload["requested_execution_mode"] == "auto"
 
 
+def test_the_dynamically_resolved_entry_passes_gateway_validation(tmp_path):
+    """Section 7.5: the headless host path (agent exec) resolves the alias without the catalog.
+
+    The macOS host probe (OpenClaw 2026.10.7) found a plugin model in
+    ``openclaw agent exec`` only through ``resolveDynamicModel``; the catalog
+    hook was never called there. The resolved entry must make the same
+    request the catalog entry makes.
+    """
+    settings = ChatSettings(
+        allowed_modes=frozenset({ExecutionMode.AUTO, ExecutionMode.EXTERNAL_ONLY})
+    )
+    gateway, app = client_gateway(
+        tmp_path, [], settings=settings, external_turns=[text_turn("Hello ", "there.")]
+    )
+    with RunningServer(app) as running:
+        output = drive_plugin(
+            running.base_url,
+            token_of(app),
+            tmp_path,
+            prompt="Say hello.",
+            resolve="dynamic",
+            pluginConfig={"executionMode": "external_only"},
+        )
+    assert output["catalog"] is None
+    model = output["dynamic"]
+    assert model["id"] == "relaymind-client-tools"
+    assert model["api"] == "openai-completions"
+    assert model["provider"] == "relaymind"
+    assert "contextWindow" not in model and "maxTokens" not in model
+    # Only the inference request: dynamic resolution asks the gateway nothing.
+    (exchange,) = output["exchanges"]
+    assert exchange["request"]["path"].endswith("/chat/completions")
+    body = exchange["request"]["body"]
+    assert body_keys_outside_7_1(body) == set()
+    assert body["model"] == "relaymind-client-tools"
+    assert exchange["request"]["headers"][MODE_HEADER] == "external_only"
+    assert exchange["response"]["status"] == 200
+    assert output["results"] == [
+        {"stop_reason": "stop", "text": "Hello there.", "error_message": None}
+    ]
+    run_id = exchange["response"]["headers"][RUN_ID_HEADER.lower()]
+    (accepted,) = of_type(gateway.store.events(run_id), "run.accepted")
+    assert accepted.payload["requested_execution_mode"] == "external_only"
+
+
+def test_a_resolved_alias_the_gateway_does_not_serve_fails_and_never_answers_empty(tmp_path):
+    """RM08, section 7.5: resolution names only the alias; the gateway still decides."""
+    gateway = build_gateway(tmp_path, [text_turn("unused")], external_turns=[])
+    app = make_app(gateway)
+    with RunningServer(app) as running:
+        output = drive_plugin(
+            running.base_url, token_of(app), tmp_path, prompt="Say hello.", resolve="dynamic"
+        )
+    (exchange,) = output["exchanges"]
+    assert exchange["response"]["status"] >= 400
+    (result,) = output["results"]
+    assert result["stop_reason"] == "error"
+    assert result["error_message"]
+    assert result["text"] == ""
+
+
 def test_the_declared_limits_are_the_configured_ones_and_the_gateway_accepts_them(tmp_path):
     """Section 7.5: the window of auto is the external limit; the output limit is sent as is."""
     _, app = client_gateway(tmp_path, [text_turn("Hello.")], external_turns=[])

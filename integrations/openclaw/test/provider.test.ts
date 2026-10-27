@@ -3,8 +3,9 @@
 import { describe, expect, it } from "vitest";
 
 import entry from "../src/index.ts";
-import { MODEL_ID, PROVIDER_ID } from "../src/compat.ts";
-import { RelayMindConfigError } from "../src/config.ts";
+import { catalogModel, DISCOVERY_TIMEOUT_MS } from "../src/catalog.ts";
+import { MODEL_ID, PROVIDER_ID, relaymindModelCompat } from "../src/compat.ts";
+import { parsePluginConfig, RelayMindConfigError } from "../src/config.ts";
 import { CAPABILITIES, describeCapabilities } from "../src/diagnostics.ts";
 import { createRelayMindProvider } from "../src/provider.ts";
 
@@ -74,13 +75,21 @@ describe("the plugin entry (public SDK definePluginEntry)", () => {
   });
 });
 
-describe("the provider (RM33: one alias, no dynamic models)", () => {
+describe("the provider (RM33: one alias)", () => {
   const { logger } = recordingLogger();
   const provider = createRelayMindProvider({ pluginConfig: { baseUrl: BASE }, logger });
 
-  it("publishes no model it did not discover", () => {
-    expect(provider.resolveDynamicModel).toBeUndefined();
+  it("resolves no model id but the alias, and makes no async preparation", () => {
+    // Fact from the macOS host probe (OpenClaw 2026.10.7): headless `agent exec`
+    // finds a plugin model only through resolveDynamicModel (section 7.5).
+    expect(typeof provider.resolveDynamicModel).toBe("function");
     expect(provider.prepareDynamicModel).toBeUndefined();
+    expect(typeof provider.catalog?.run).toBe("function");
+    for (const modelId of ["relaymind", "gpt-4o", `${MODEL_ID}-2`, ""]) {
+      expect(provider.resolveDynamicModel!(dynamicContext(modelId))).toBeUndefined();
+    }
+    const other = { ...(dynamicContext(MODEL_ID) as object), provider: "openai" };
+    expect(provider.resolveDynamicModel!(other as never)).toBeUndefined();
   });
 
   it("tells the operator how to hand over the gateway token", () => {
@@ -92,6 +101,8 @@ describe("the provider (RM33: one alias, no dynamic models)", () => {
     expect(message).toMatch(/relaymind serve/);
     expect(message).toMatch(/openclaw models auth paste-api-key --provider relaymind/);
     expect(message).toMatch(/RELAYMIND_APP_TOKEN/);
+    // The pinned host's interactive login needs a terminal (macOS probe).
+    expect(message).toMatch(/models auth login.*terminal/);
   });
 
   it("gives the reconnect path after a gateway restart", async () => {
@@ -100,12 +111,79 @@ describe("the provider (RM33: one alias, no dynamic models)", () => {
   });
 });
 
+function dynamicContext(modelId: string) {
+  return {
+    provider: PROVIDER_ID,
+    modelId,
+    config: {},
+    modelRegistry: {
+      getAll: () => [],
+      getAvailable: () => [],
+      find: () => undefined,
+      hasConfiguredAuth: () => false,
+    },
+  } as never;
+}
+
+describe("resolveDynamicModel (the headless agent exec path; RM19, RM33, section 7.5)", () => {
+  function resolved(pluginConfig: Record<string, unknown>, fetch?: typeof globalThis.fetch) {
+    const { logger } = recordingLogger();
+    const provider = createRelayMindProvider({
+      pluginConfig: { baseUrl: BASE, ...pluginConfig },
+      logger,
+      ...(fetch ? { fetch } : {}),
+    });
+    return provider.resolveDynamicModel!(dynamicContext(MODEL_ID)) as Record<string, unknown> | undefined;
+  }
+
+  it("is the catalog's alias entry on the configured loopback URL, with the declared switches", () => {
+    const model = resolved({});
+    const expected = catalogModel(parsePluginConfig({ baseUrl: BASE }));
+    expect(model).toMatchObject({ ...expected, api: "openai-completions", provider: PROVIDER_ID });
+    expect(model!.compat).toEqual(relaymindModelCompat());
+    expect(model!.baseUrl).toBe(BASE);
+    expect(model!.reasoning).toBe(false);
+    expect(model!.input).toEqual(["text"]);
+    expect(model!.headers).toEqual({ "X-RelayMind-Execution-Mode": "auto" });
+  });
+
+  it("advertises only the configured limits, the same as the catalog", () => {
+    const none = resolved({});
+    expect(none).not.toHaveProperty("contextWindow");
+    expect(none).not.toHaveProperty("maxTokens");
+    const limits = { externalContextLimit: 128000, localContextLimit: 8192, maxCompletionTokens: 1024 };
+    expect(resolved({ limits })).toMatchObject({ contextWindow: 128000, maxTokens: 1024 });
+    expect(resolved({ limits, executionMode: "local_only" })).toMatchObject({
+      contextWindow: 8192,
+      headers: { "X-RelayMind-Execution-Mode": "local_only" },
+    });
+  });
+
+  it("states no price (the gateway reports none)", () => {
+    expect(resolved({})!.cost).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+  });
+
+  it("is synchronous and asks the gateway nothing", () => {
+    const fetch = (async () => {
+      throw new Error("must not be called");
+    }) as typeof globalThis.fetch;
+    const model = resolved({}, fetch);
+    expect(model).toBeDefined();
+    expect(model).not.toBeInstanceOf(Promise);
+  });
+
+  it("carries no credential", () => {
+    const text = JSON.stringify(resolved({}));
+    expect(text).not.toMatch(/authorization|apiKey|Bearer/i);
+  });
+});
+
 describe("catalog.run (the host hook)", () => {
-  function context(apiKey: string | undefined, discoveryApiKey?: string) {
+  function context(apiKey: string | undefined, discoveryApiKey?: string, withSignal = true) {
     return {
       config: {},
       env: {},
-      signal: new AbortController().signal,
+      ...(withSignal ? { signal: new AbortController().signal } : {}),
       resolveProviderApiKey: (id?: string) => {
         expect(id).toBe(PROVIDER_ID);
         return { apiKey, ...(discoveryApiKey ? { discoveryApiKey } : {}) };
@@ -142,6 +220,31 @@ describe("catalog.run (the host hook)", () => {
     const provider = createRelayMindProvider({ pluginConfig: { baseUrl: BASE }, logger, fetch });
     await provider.catalog!.run(context("secret-ref-marker", TOKEN) as never);
     expect(seen).toEqual([`Bearer ${TOKEN}`]);
+  });
+
+  it("bounds a hung gateway with its own timeout when the host gives no signal", async () => {
+    // macOS host probe: during `models list --refresh` the pinned host called
+    // catalog.run with no abort signal, so only the plugin's timeout ends a hang.
+    const fetch = ((_url: unknown, init: RequestInit = {}) =>
+      new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      })) as typeof globalThis.fetch;
+    const { lines, logger } = recordingLogger();
+    const provider = createRelayMindProvider({
+      pluginConfig: { baseUrl: BASE },
+      logger,
+      fetch,
+      discoveryTimeoutMs: 50,
+    });
+    const started = Date.now();
+    const result = await provider.catalog!.run(context(TOKEN, undefined, false) as never);
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(result).toMatchObject({ outcomes: [{ provider: PROVIDER_ID, status: "unavailable" }] });
+    expect(lines.some((l) => l.startsWith("warn") && l.includes("did not answer within"))).toBe(true);
+  });
+
+  it("uses a discovery timeout of five seconds by default", () => {
+    expect(DISCOVERY_TIMEOUT_MS).toBe(5_000);
   });
 
   it("returns nothing and warns how to store a token when none is set", async () => {

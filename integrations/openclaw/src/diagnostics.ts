@@ -38,7 +38,8 @@ export const TOKEN_HANDOVER =
   "token each time it starts. Store that token for OpenClaw with " +
   "`openclaw models auth paste-api-key --provider relaymind` (paste it at the prompt or pipe " +
   "it on standard input, never as a command-line argument), or set RELAYMIND_APP_TOKEN in the " +
-  "host's environment.";
+  "host's environment. `openclaw models auth login --provider relaymind` also asks for it, but " +
+  "only in an interactive terminal.";
 
 /** The reconnect path after a gateway restart: a stale token is 401 (section 7.5). */
 export const RECONNECT =

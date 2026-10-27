@@ -3,12 +3,12 @@
 // The catalog asks the configured loopback gateway, with the host credential,
 // for its aliases (GET /v1/models) and for the readiness of the configured mode
 // (GET /readyz). It publishes the one client-owned alias, relaymind-client-tools,
-// only when the gateway lists it; it never publishes the managed alias or a
-// dynamic model. The diagnosis tells apart: no stored token, an unreachable
-// gateway, a rejected token (with the reconnect path), another gateway error, an
-// absent alias, and the readiness of the configured mode alone, so an aggregate
-// /readyz 503 never reads as "every mode is unavailable" (an external_only setup
-// stays usable when the local model is absent).
+// only when the gateway lists it; it never publishes the managed alias. The
+// diagnosis tells apart: no stored token, an unreachable gateway, a rejected
+// token (with the reconnect path), another gateway error, an absent alias, and
+// the readiness of the configured mode alone, so an aggregate /readyz 503 never
+// reads as "every mode is unavailable" (an external_only setup stays usable when
+// the local model is absent).
 //
 // No redirect is followed: a redirect could carry the credential to another host.
 
@@ -17,7 +17,11 @@ import type { ExecutionMode, RelayMindPluginConfig } from "./config.ts";
 import { RECONNECT, TOKEN_HANDOVER } from "./diagnostics.ts";
 
 export const MODE_HEADER = "X-RelayMind-Execution-Mode";
-/** How long discovery waits for the gateway, inside the host's own deadline. */
+/**
+ * How long each discovery request waits for the gateway. The pinned host gives
+ * catalog.run no abort signal (macOS host probe, OpenClaw 2026.10.7), so this
+ * timeout is what ends a hung gateway; a host signal, when given, also applies.
+ */
 export const DISCOVERY_TIMEOUT_MS = 5_000;
 
 export type DiagnosisKind =
@@ -51,8 +55,10 @@ export interface DiscoverParams {
   /** The credential for the discovery requests; undefined when none is stored. */
   token: string | undefined;
   fetch?: typeof fetch;
-  /** The host's acquisition signal; its abort propagates. */
+  /** The host's acquisition signal, when it gives one; its abort propagates. */
   signal?: AbortSignal;
+  /** The per-request timeout; DISCOVERY_TIMEOUT_MS when not set (tests shorten it). */
+  timeoutMs?: number;
 }
 
 /**
@@ -104,13 +110,15 @@ function causeCode(error: unknown): string {
   return typeof code === "string" && /^[A-Z_]{2,40}$/.test(code) ? ` (${code})` : "";
 }
 
-async function get(
-  url: string,
-  token: string,
-  fetchImpl: typeof fetch,
-  outer: AbortSignal | undefined,
-): Promise<Response> {
-  const timeout = AbortSignal.timeout(DISCOVERY_TIMEOUT_MS);
+interface Requester {
+  token: string;
+  fetchImpl: typeof fetch;
+  outer: AbortSignal | undefined;
+  timeoutMs: number;
+}
+
+async function get(url: string, { token, fetchImpl, outer, timeoutMs }: Requester): Promise<Response> {
+  const timeout = AbortSignal.timeout(timeoutMs);
   const signal = outer ? AbortSignal.any([outer, timeout]) : timeout;
   try {
     return await fetchImpl(url, {
@@ -122,7 +130,7 @@ async function get(
   } catch (error) {
     if (outer?.aborted) throw error;
     if (timeout.aborted) {
-      throw new Unreachable(`did not answer within ${DISCOVERY_TIMEOUT_MS / 1000} s`);
+      throw new Unreachable(`did not answer within ${timeoutMs / 1000} s`);
     }
     throw new Unreachable(`connection failed${causeCode(error)}`);
   }
@@ -163,8 +171,7 @@ const nothing = (kind: DiagnosisKind, message: string): Discovery => ({ diagnosi
 
 /** Ask the gateway what it serves and whether the configured mode is ready. */
 export async function discoverRelayMind(params: DiscoverParams): Promise<Discovery> {
-  const { config, token, signal } = params;
-  const fetchImpl = params.fetch ?? fetch;
+  const { config, token } = params;
   const where = `RelayMind gateway at ${config.baseUrl}`;
   if (!token) {
     return nothing(
@@ -172,9 +179,15 @@ export async function discoverRelayMind(params: DiscoverParams): Promise<Discove
       `No RelayMind application token is stored for the relaymind provider. ${TOKEN_HANDOVER}`,
     );
   }
+  const requester: Requester = {
+    token,
+    fetchImpl: params.fetch ?? fetch,
+    outer: params.signal,
+    timeoutMs: params.timeoutMs ?? DISCOVERY_TIMEOUT_MS,
+  };
   let listing: Response;
   try {
-    listing = await get(`${config.baseUrl}/models`, token, fetchImpl, signal);
+    listing = await get(`${config.baseUrl}/models`, requester);
   } catch (error) {
     if (!(error instanceof Unreachable)) throw error;
     return nothing(
@@ -208,15 +221,10 @@ export async function discoverRelayMind(params: DiscoverParams): Promise<Discove
         "that gateway.",
     );
   }
-  return { diagnosis: await readiness(config, token, fetchImpl, signal), models: [catalogModel(config)] };
+  return { diagnosis: await readiness(config, requester), models: [catalogModel(config)] };
 }
 
-async function readiness(
-  config: RelayMindPluginConfig,
-  token: string,
-  fetchImpl: typeof fetch,
-  signal: AbortSignal | undefined,
-): Promise<CatalogDiagnosis> {
+async function readiness(config: RelayMindPluginConfig, requester: Requester): Promise<CatalogDiagnosis> {
   const mode = config.executionMode;
   const readyzUrl = `${new URL(config.baseUrl).origin}/readyz`;
   const unknown = (why: string): CatalogDiagnosis => ({
@@ -227,7 +235,7 @@ async function readiness(
   });
   let response: Response;
   try {
-    response = await get(readyzUrl, token, fetchImpl, signal);
+    response = await get(readyzUrl, requester);
   } catch (error) {
     // get() rethrows only the host's abort; everything else is Unreachable.
     if (!(error instanceof Unreachable)) throw error;
