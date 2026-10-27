@@ -3225,3 +3225,48 @@ Not shown: other error codes on the real host (403, 409, 422, 429, 504, a
 stream error event), aborts under early headers or before sending, the
 host's turn ID across its retries, a failover to another model, and any
 macOS or Windows run at this commit (not_run).
+
+## OpenClaw plugin platforms (#145)
+
+Section 12.5: each platform is qualified on its own, with the actual
+OpenClaw runtime, and a missing run stays `not_run`. The gateway in every
+host run below answered from model doubles, so none of them is live model
+evidence (#139 holds the live evaluation). The pinned host is OpenClaw
+2026.10.7, whose engine range is `>=24.22.1 <25 || >=26.12.1`.
+
+| Platform | Machine and runtime | Node vs host range | Revision | Result | Export |
+| --- | --- | --- | --- | --- | --- |
+| macOS (target) | Apple M1, 8 GiB, macOS 27.0.1 (26A434) arm64; OpenClaw 2026.10.7 (157d8c2), native, npm prefix install | v26.12.1, in `>=26.12.1` | `a52f8bf` (#137, before `resolveDynamicModel` and the test tools' `contracts.tools`) | partial: package checks, install, enable, inspect, token, 401 reconnect and recovery, and an interrupt (exit 130, run `cancelled`) passed; `agent exec` gave `Unknown model`; the tool policy scenarios failed (the test host tools never registered). Request size: 0 of 10 requests fit 8192 (10,500 to 10,577 tokens) | branch `devnull.exile/m9-mac-qual`, commit `b575c01`, `docs/evidence/2026-10-27-openclaw-mac-qualification/REPORT.md` |
+| macOS (target) | the same | | this revision | `not_run` (no Mac access): the install check, the tool policy, and the interrupt at this revision | none |
+| Windows native (target) | OpenClaw 2026.10.7 documents a native Windows CLI and Gateway, WSL2 optional (`docs/platforms/windows.md` in the package) | `not_run` | any | `not_run`: no Windows machine | none |
+| Windows WSL2 | | `not_run` | any | `not_run`; a WSL2 run is never recorded as native Windows | none |
+| Linux x86_64 (not a target platform) | VPS, Ubuntu 26.04.1; OpenClaw 2026.10.7 (157d8c2) from the package's devDependency | v24.22.1, in `>=24.22.1 <25` | `2f35664` | install check passed, all 14 steps: functional check over doubles, not a supported-platform qualification | [`2026-10-27-openclaw-install-check-linux-vps.json`](evidence/2026-10-27-openclaw-install-check-linux-vps.json) |
+| GitHub Actions runners | ubuntu, macOS, Windows; the devDependency host | 24.22.1 | each pull request | the `openclaw-plugin` job; its result is on the pull request, not recorded here | the job's uploaded artifact |
+
+The Linux VPS install check, in detail (`scripts/openclaw_install_check.py`,
+artifact `relaymind-openclaw-provider-0.1.0.tgz`, sha256
+`95062471463d0da11e266dc14e7de8a6a6d6f4150dbe783745030c5ac2736e06`, built at
+`2f35664`; the README is packed, so a later commit's artifact has another
+hash):
+
+- install with `--accept-capabilities` (30.5 s), `baseUrl`, enable, and
+  inspect: `status: loaded`, enabled, version 0.1.0, provider `relaymind`,
+  no diagnostics;
+- `paste-api-key` on standard input stored the token, and
+  `models list --refresh` listed `relaymind/relaymind-client-tools`;
+- text exchange: one run, completed, "Hello from RelayMind." in the host's
+  output. Headless `agent exec` found the model through
+  `resolveDynamicModel`, read the stored credential with no token in its
+  environment, and the gateway executed no tool;
+- tool exchange: the gateway proposed the host's `read` tool for
+  `notes.txt` (`call_read_1`); the host ran it once and replayed the ID as
+  `callread1`. The next run received the file's text, and the host printed
+  the final answer;
+- after `plugins uninstall --force`: the config entry, the
+  `relaymind:manual` profile, and the token in the host's state database
+  remained. After `config unset plugins.entries.relaymind` and
+  `models auth logout relaymind:manual --yes`, none remained anywhere in
+  the host home, `.bak` files included;
+- outside the isolation, `agent exec` wrote its log to `/tmp/openclaw/`
+  despite `logging.file`, and its run state went to an OS temp directory,
+  which it removed.
