@@ -2876,7 +2876,7 @@ start of the first answer generation is not measured.
 |---|---|---|---|---|---|
 | M8 calibration | 2 | 455 | 678956 (9) | 56151 (9) | 2.68 (170 task successes) |
 | M8 candidate corpus | 16 | 3832 | 5512771 (117) | 411620 (117) | 3.08 (1243 task successes) |
-| M8 candidate latency | 14 | 3242 | 5070673 (27) | 274238 (27) | 3.17 per successful final answer |
+| M8 candidate latency | 14 | 3242 | 5070673 (27) | 274238 (27) | 3.17 (1024 successful final answers) |
 | M7 (shared attempts once) | 9 | 998 | 1383719 (60) | 108549 (60) | 2.20 (454 task successes) |
 
 Token rates per task stay null where any call's usage is unknown. No monetary
