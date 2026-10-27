@@ -174,9 +174,13 @@ def test_the_dynamically_resolved_entry_passes_gateway_validation(tmp_path):
     assert body["model"] == "relaymind-client-tools"
     assert exchange["request"]["headers"][MODE_HEADER] == "external_only"
     assert exchange["response"]["status"] == 200
-    assert output["results"] == [
-        {"stop_reason": "stop", "text": "Hello there.", "error_message": None}
-    ]
+    (result,) = output["results"]
+    assert (result["stop_reason"], result["text"], result["error_message"]) == (
+        "stop",
+        "Hello there.",
+        None,
+    )
+    assert result["tool_calls"] == []
     run_id = exchange["response"]["headers"][RUN_ID_HEADER.lower()]
     (accepted,) = of_type(gateway.store.events(run_id), "run.accepted")
     assert accepted.payload["requested_execution_mode"] == "external_only"
