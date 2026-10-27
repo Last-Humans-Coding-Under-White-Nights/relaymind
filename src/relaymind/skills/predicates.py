@@ -22,6 +22,7 @@ free text (RM12).
 
 import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -819,8 +820,6 @@ class StatementGate:
     def __init__(
         self, predicate_id: str, results: Sequence[ToolResult], *, hold: bool = False
     ) -> None:
-        from copy import deepcopy
-
         self.predicate_id = predicate_id
         self.results = deepcopy(tuple(results))
         self.raw = ""
