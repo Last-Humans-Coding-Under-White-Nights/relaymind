@@ -1009,14 +1009,15 @@ def test_relocated_complete_matrix_produces_accepted_comparisons_and_retains_pro
     assert report["reporting_accepted"] is True
     assert report["inventory"]["complete"] == [c["id"] for c in module.driver.matrix_cells()]
     provenance = report["provenance"]
-    # The fixture records its matrix paths in the host's own spelling.
-    assert provenance["matrix_root_recorded"] == str(Path(RECORDED))
+    # The fixture records its matrix paths as a POSIX machine wrote them, on every host.
+    assert provenance["matrix_root_recorded"] == RECORDED
     assert provenance["matrix_root_actual"] == str(fixture_matrix.resolve())
     assert provenance["measurement_checkout_recorded"] == CHECKOUT
     assert provenance["measured_revision"] == "f" * 40
     cell = report["cells"]["placement-normal-local_first-router-buffered-corpus"]
     assert cell["attempts"][-1]["argv"][3] == str(
-        Path(RECORDED) / "placement-normal-local_first-router-buffered-corpus/initial/export.json"
+        PurePosixPath(RECORDED)
+        / "placement-normal-local_first-router-buffered-corpus/initial/export.json"
     )
     assert (
         cell["export"] == "placement-normal-local_first-router-buffered-corpus/initial/export.json"
