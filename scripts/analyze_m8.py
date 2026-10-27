@@ -1167,7 +1167,9 @@ def hypotheses(views: dict) -> dict:
             }
             lower = [d and d["lower_p95"] for d in directions.values()]
             # No measured unsuitable cohort means the hypothesis was not tested here,
-            # whatever the full-population reliability shows.
+            # whatever the full-population reliability shows. Spec 12.3 states this
+            # target "at equal task success" (live streaming says "at task-success
+            # parity"), so gain must equal loss; a gain is reported, not a pass.
             value = (
                 None
                 if unsuitable is None or None in lower
