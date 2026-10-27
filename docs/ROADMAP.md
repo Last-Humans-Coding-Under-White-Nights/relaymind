@@ -770,6 +770,15 @@ This is planned integration, not a claim of a working or faster plugin.
   (#173; RM23, AC14). Independent of the plugin; can start now.
 - Provider package, model catalog, configuration, and token handover
   (#136; RM12, RM19, RM26, RM33), after #135.
+  Status: the package registers the `relaymind` provider through the
+  public SDK, publishes `relaymind-client-tools` from the gateway's
+  listing, maps the plugin's execution mode to the header, advertises only
+  copied limits, and tells an unreachable gateway, a stale token (with the
+  reconnect instruction), an absent alias, and the configured mode's
+  readiness apart; deterministic tests drive it against the gateway over
+  doubles (`tests/test_openclaw_plugin.py`). The real-host load and the
+  token setup after a real gateway restart are not_run (operator steps in
+  `integrations/openclaw/README.md`).
 - Text and host-owned tool round trips, request compatibility, and
   buffered SSE (#137; RM08, RM09, RM19, RM20, RM33; AC10, AC24), after #136.
 - Cancellation, bounded retry behavior, errors, and trace correlation

@@ -1025,6 +1025,56 @@ cd ../.. && pytest tests/test_openclaw_host_transport.py \
   needs_external / context_limit with 0 model calls, and the evidence
   record and design doc cite the measured report. No Node needed.
 
+### OpenClaw provider plugin (#136; RM08, RM12, RM19, RM26, RM33)
+
+```bash
+cd integrations/openclaw && npm run typecheck && npm test && npm run pack:check
+cd ../.. && pytest tests/test_openclaw_plugin.py
+```
+
+- `integrations/openclaw/test/manifest.test.ts`: the plugin manifest (provider,
+  token env var, api-key choice, closed config schema matching the plugin's
+  checks), the package pins and compatibility range, the built entry, and
+  that the sources import only published `openclaw/plugin-sdk` subpaths.
+- `integrations/openclaw/test/config.test.ts`: loopback-only `baseUrl`
+  (localhost, 127.0.0.0/8, `[::1]`; no credentials, query, or other path),
+  `executionMode` (auto by default; parallel_demo and unknown values refused
+  by name, a value that may be a secret not echoed), positive integer limits,
+  and the closed key set.
+- `integrations/openclaw/test/catalog.test.ts`: discovery with the token and
+  no redirect; the published entry (switches, mode header, the window of the
+  mode from the copied limits, the output limit, or none); the diagnoses for
+  no token, an unreachable gateway, a 401 with the reconnect instruction, a
+  redirect, another error, an absent alias, and the configured mode's
+  readiness (an aggregate 503 with external_only ready stays usable); the
+  host outcome of each.
+- `integrations/openclaw/test/provider.test.ts`: registration through
+  `definePluginEntry`, one provider with the api-key method and no dynamic
+  models, an invalid or missing configuration refused before registering,
+  the token handover and reconnect messages, the catalog hook with the host
+  credential and redacted logs, and the capability statement.
+- `integrations/openclaw/test/redaction.test.ts`: the token and any bearer
+  credential are scrubbed at every log level.
+- `npm run pack:check`: builds `dist/`, and checks that the packed tarball
+  holds only the built entry, the manifest, the README, and `package.json`,
+  and that the built code imports only public SDK subpaths.
+- `tests/test_openclaw_plugin.py`: the plugin driver
+  (`integrations/openclaw/test/plugin-transport/drive-plugin.mjs`) registers
+  the plugin, runs its catalog hook against a gateway on a loopback socket,
+  and sends one request through the pinned transport with the published
+  entry: the default streamed request passes section 7.1 with no gateway
+  change, the copied limits are the advertised ones, a stale token after a
+  restart is 401 with the reconnect line and the fresh token restores
+  access, an unreachable gateway is not an auth failure, a gateway without
+  client-owned execution publishes nothing, external_only runs without a
+  local model, local_only without one is refused by the gateway's policy,
+  local_only makes no external call, and parallel_demo is refused before
+  anything is sent.
+
+The real host loading the packed plugin, and the token setup after a real
+gateway restart, are operator steps, not run yet
+([`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
+
 The Node-dependent tests skip with the reason when `node` or
 `integrations/openclaw/node_modules` is missing; `RELAYMIND_OPENCLAW_NODE=1`
 makes that a failure. This tier runs the host's transport, not its agent

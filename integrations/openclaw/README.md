@@ -1,26 +1,127 @@
-# RelayMind provider for OpenClaw (qualification stage)
+# RelayMind provider for OpenClaw
 
-Status: qualification only (#135; RM33, AC24, spec section 7.5). This
-package holds the declared host compatibility switches, the host transport
-driver, and the frozen wire fixtures for OpenClaw v2026.10.7. The provider
-plugin itself (registration, catalog, configuration, token setup) is #136;
-the operator guide is #145. Nothing here is a working plugin yet.
+Status: provider package (#136; RM08, RM12, RM19, RM26, RM33, spec section
+7.5), on top of the #135 qualification. The plugin registers the `relaymind`
+provider through the public plugin SDK of OpenClaw v2026.10.7, publishes the
+client-owned alias `relaymind/relaymind-client-tools` when the gateway serves
+it, and holds the gateway's application token in the host's credential store.
+Round trips with host tools are #137, cancellation, error mapping, and retries
+#138, the installable artifact, CI, and the operator guide #145. The real host
+has not loaded this package yet: that is an operator step (below), not_run.
+
+What the plugin claims, and nothing more: text input; at most one function
+call per response, executed by OpenClaw under its own approvals; the answer is
+buffered by the gateway and delivered whole (no live token streaming); no
+parallel tool calls, vision, audio, or Responses API; no managed skill
+selection, prefetch, or skill stage, and no managed device-aware placement
+(client-owned execution has none, section 7.5); usage is unknown. The
+gateway's run trace is authoritative for the model calls.
 
 The compatibility table, the SDK seams found at the pin, and the frozen
-baseline for #136 to #138 are in
+baseline are in
 [`docs/design/2026-10-27-openclaw-integration.md`](../../docs/design/2026-10-27-openclaw-integration.md#compatibility-qualification-135).
 
 ## Layout
 
 | Path | Purpose |
 | --- | --- |
-| `src/compat.ts` | `relaymindModelCompat()` (the per-model switches) and `relaymindModelEntry()` (the client-owned alias entry; limits copied, never estimated) |
-| `test/compat.test.ts`, `test/fixtures.test.ts` | vitest: the switches, and the frozen fixtures (pins, no credential, 7.1 fields only) |
-| `test/host-transport/drive.mjs` | runs the pinned `openai-completions` transport against a gateway and plays the host |
-| `test/host-transport/recorder.mjs` | the recording loopback proxy and scripted endpoint |
-| `test/fixtures/v2026.10.7/transport/` | deterministic transport fixtures, captured by `scripts/openclaw_qualification.py fixtures` |
+| `openclaw.plugin.json` | The plugin manifest: provider `relaymind`, the token's env var `RELAYMIND_APP_TOKEN`, the api-key auth choice, the closed config schema |
+| `src/index.ts` | The plugin entry (`definePluginEntry`); refuses an invalid configuration by name before registering |
+| `src/provider.ts` | The provider: api-key token method, catalog hook, missing-token and reconnect messages; no dynamic models |
+| `src/catalog.ts` | Discovery (`GET /v1/models`, `GET /readyz`), the diagnosis, the published entry and its limits, the host outcome |
+| `src/config.ts` | The plugin settings: loopback `baseUrl`, `executionMode`, copied `limits` |
+| `src/compat.ts` | `relaymindModelCompat()` (the per-model switches) and `relaymindModelEntry()` (#135) |
+| `src/diagnostics.ts`, `src/redaction.ts` | The capability statement and operator messages; the logger that scrubs the token |
+| `test/*.test.ts` | vitest: manifest, config, catalog, provider, redaction, the switches, the frozen fixtures |
+| `test/plugin-transport/drive-plugin.mjs` | plays the host around the plugin: register, catalog, one request through the pinned transport |
+| `test/host-transport/` | the #135 transport driver and recording proxy |
+| `test/fixtures/v2026.10.7/transport/` | the #135 deterministic transport fixtures, captured by `scripts/openclaw_qualification.py fixtures` |
 | `test/fixtures/v2026.10.7/host/` | reserved for captures made with `capture_host_requests.mjs`; the macOS host probe's captures are in `docs/evidence/2026-10-27-openclaw-mac-probe/` |
 | `scripts/capture_host_requests.mjs` | the controlled endpoint a real host is pointed at |
+| `scripts/pack-check.mjs` | checks the packed tarball: built entry, manifest, README, and public SDK imports only |
+
+## Configuration
+
+The plugin's settings live under `plugins.entries.relaymind.config` in the
+host configuration; the schema is closed (an unknown key is refused by name):
+
+```json5
+{
+  plugins: {
+    entries: {
+      relaymind: {
+        enabled: true,
+        config: {
+          baseUrl: "http://127.0.0.1:8080/v1",   // required; loopback only
+          executionMode: "auto",                   // auto | local_only | external_only
+          limits: {                                // optional copies, never estimated
+            externalContextLimit: 128000,          // external_model.context_limit
+            localContextLimit: 8192,               // ctx_size of the model manifest
+            maxCompletionTokens: 1024              // chat.max_completion_tokens
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+- `baseUrl` is the gateway's `/v1` root on `localhost`, `127.0.0.0/8`, or
+  `[::1]`; another host, credentials in the URL, a query, or another path is
+  refused. The gateway is started separately (`relaymind serve --config
+  <file>`); the plugin never starts it.
+- `executionMode` is sent on every request as `X-RelayMind-Execution-Mode`
+  (auto is sent too). `parallel_demo` and unknown values are refused, never
+  changed. The gateway's policy keeps its meaning: a mode it does not permit
+  is 403 `execution_mode_forbidden`, and the catalog says so. An
+  `external_only` setup needs no local model.
+- `limits` are copied by hand from the gateway's configuration: no gateway
+  endpoint reports them (section 7.5). The host refuses a request over the
+  advertised window before sending it, so the advertised window is the
+  external limit in `auto` and `external_only` and the local limit in
+  `local_only`; a limit not set for the mode is not advertised. The model
+  name states the mode, and the catalog log line states which limit the
+  window is.
+- An operator `parallel_tool_calls: true` model parameter stays refused by
+  the gateway (400 `unsupported_parameter`); the plugin does not rewrite it.
+
+## Token handover and reconnect
+
+`relaymind serve` generates a new application token at every start and prints
+it once. Store it in the host's credential store (never as a command-line
+argument, never in the plugin config):
+
+```bash
+openclaw models auth paste-api-key --provider relaymind   # paste at the prompt
+# or, in automation:
+printf "%s\n" "$TOKEN" | openclaw models auth paste-api-key --provider relaymind
+```
+
+`RELAYMIND_APP_TOKEN` in the host's environment also works. After a gateway
+restart the stored token is stale: requests and discovery fail with 401
+`unauthenticated`, and the catalog logs the reconnect instruction (store the
+new token the same way). The plugin never logs, records, or forwards the
+token: every message goes through a redacting logger, discovery refuses
+redirects, and requests go only to the configured loopback URL.
+
+## Diagnostics
+
+Each catalog run logs one line, and reports the host outcome:
+
+| Diagnosis | Host outcome | Published |
+| --- | --- | --- |
+| no stored token | none (the catalog returns nothing) | no |
+| gateway unreachable at `<baseUrl>` | `unavailable` | no |
+| token rejected (401), with the reconnect instruction | `auth-rejected` | no |
+| other gateway error or a redirect | `unavailable` | no |
+| the gateway does not serve `relaymind-client-tools` | `ready` (empty) | no |
+| the configured mode is ready, with the advertised limits | `ready` | yes |
+| the configured mode is not ready, with the gateway's reason | `ready` | yes |
+| the gateway's policy does not permit the configured mode | `ready` | yes |
+| readiness unknown | `ready` | yes |
+
+Only the configured mode is read from `/readyz`: its aggregate 503 (some
+permitted mode is not ready) never hides a usable `external_only` mode.
 
 ## Checks
 
@@ -31,14 +132,16 @@ cd integrations/openclaw
 npm ci
 npm run typecheck
 npm test
+npm run pack:check     # builds dist/ and checks the packed tarball
 ```
 
-From the repository root, the Python tier runs the transport against the
-real gateway over model doubles (it skips without `npm ci`; set
+From the repository root, the Python tier runs the transport and the plugin
+against the real gateway over model doubles (it skips without `npm ci`; set
 `RELAYMIND_OPENCLAW_NODE=1` to make a missing dependency fail):
 
 ```bash
-pytest tests/test_openclaw_host_transport.py tests/test_openclaw_qualification_script.py
+pytest tests/test_openclaw_host_transport.py tests/test_openclaw_plugin.py \
+  tests/test_openclaw_qualification_script.py
 ```
 
 To recapture the transport fixtures (they must not change on the same pins):
@@ -53,6 +156,26 @@ driver, and the fixtures, then commit `VERSIONS.json` on its own: it records
 that commit as its provenance, and
 `tests/test_openclaw_qualification_script.py` fails when the tree was dirty or
 when a capture input changed after the recorded commit.
+
+### Real host load and token setup (operator, not run yet)
+
+On a machine with OpenClaw v2026.10.7 and a running `relaymind serve`:
+
+```bash
+cd integrations/openclaw && npm ci && npm run build
+npm pack --pack-destination /tmp/rm-plugin
+openclaw plugins install npm-pack:/tmp/rm-plugin/relaymind-openclaw-provider-0.1.0.tgz --force
+openclaw config set plugins.entries.relaymind.config.baseUrl http://127.0.0.1:8080/v1
+openclaw plugins inspect relaymind --runtime --json
+openclaw models auth paste-api-key --provider relaymind   # the token relaymind serve printed
+openclaw models list --json | grep relaymind
+# restart relaymind serve: the list reports the 401 reconnect line; paste the new token; it recovers
+```
+
+Disable with `openclaw plugins disable relaymind`; remove with
+`openclaw plugins uninstall relaymind` (the full operator guide is #145).
+The command names follow the pinned host's documentation and are to be
+confirmed on the first run.
 
 ## Operator runs
 

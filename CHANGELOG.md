@@ -8,6 +8,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- OpenClaw provider plugin package (#136; RM08, RM12, RM19, RM26, RM33):
+  `integrations/openclaw/` now has the plugin manifest
+  (`openclaw.plugin.json`), the entry and the `relaymind` provider built on
+  the public plugin SDK of v2026.10.7, the api-key method that holds the
+  gateway's application token (`RELAYMIND_APP_TOKEN`), and a catalog that
+  publishes `relaymind-client-tools` only when the gateway lists it. The
+  settings are a loopback-only `baseUrl`, `executionMode` (auto,
+  local_only, external_only, sent as `X-RelayMind-Execution-Mode`;
+  parallel_demo refused), and limits copied from the gateway configuration
+  (the window of the mode, never estimated). Diagnostics tell an
+  unreachable gateway, a stale token (401, with the reconnect
+  instruction), an absent alias, and the configured mode's readiness
+  apart, and never log the token. `npm run pack:check` checks the packed
+  tarball. `tests/test_openclaw_plugin.py` drives the plugin and the pinned
+  transport against the gateway over doubles. The transport fixtures were
+  recaptured unchanged because `package.json` changed. The real-host load
+  and token setup are not run. No specification or gateway change.
 - OpenClaw compatibility qualification (#135; RM33, AC24):
   `integrations/openclaw/` pins `openclaw` and `@openclaw/ai` 2026.10.7
   and declares the host switches (`src/compat.ts`); a Node driver runs the
