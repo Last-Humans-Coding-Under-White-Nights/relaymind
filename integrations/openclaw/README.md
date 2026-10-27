@@ -749,8 +749,9 @@ operator guide is #145.
 
 `scripts/openclaw_install_check.py` runs the operator guide's lifecycle with
 the pinned host against a gateway over model doubles, in a fresh host home
-(`OPENCLAW_HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_CONFIG_PATH`; the host's
-file log moved into it with `logging.file`):
+(`OPENCLAW_HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_CONFIG_PATH`; `logging.file`
+points the host's file log into it, but on the Linux VPS `agent exec` still
+wrote to the documented default `/tmp/openclaw/`, outside the isolation):
 
 1. version;
 2. install with `--accept-capabilities`;

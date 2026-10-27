@@ -9,7 +9,8 @@ release artifact, in a fresh host home (``OPENCLAW_HOME``,
 ``OPENCLAW_STATE_DIR``, ``OPENCLAW_CONFIG_PATH``; the operator's
 ``~/.openclaw`` is never touched):
 
-1. ``--version``; the host's file log moved into the host home;
+1. ``--version``; ``logging.file`` set inside the host home (on the Linux VPS
+   ``agent exec`` still wrote to the default ``/tmp/openclaw/``);
 2. ``plugins install npm-pack:<artifact> --force --accept-capabilities``;
 3. the plugin's ``baseUrl`` set to the gateway, ``plugins enable relaymind``;
 4. ``plugins inspect relaymind --runtime --json``: loaded, enabled, the
