@@ -49,6 +49,17 @@ describe("openclaw.plugin.json", () => {
     }
   });
 
+  it("leaves parallel_demo out of the executionMode enum, so the host refuses it first (section 7.5)", () => {
+    // The pinned host validates plugins.entries.relaymind.config against this
+    // schema before any plugin code runs: `config set ... executionMode
+    // parallel_demo` is declined by the host's own validation, and the
+    // plugin's own refusal (src/config.ts) is the second line only.
+    const mode = manifest.configSchema.properties.executionMode;
+    expect(mode.type).toBe("string");
+    expect(mode.enum).not.toContain("parallel_demo");
+    expect(mode.enum).toEqual(["auto", "local_only", "external_only"]);
+  });
+
   it("names no credential field in the config schema (RM12)", () => {
     expect(JSON.stringify(manifest.configSchema)).not.toMatch(/apiKey|appToken|secret|password/i);
   });
