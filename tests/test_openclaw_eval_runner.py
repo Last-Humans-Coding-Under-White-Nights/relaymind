@@ -14,6 +14,8 @@ measurement itself is an operator run.
 """
 
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -380,7 +382,8 @@ def test_the_plugin_is_configured_with_the_arms_mode_and_its_diagnostics(evaluat
     )
     for arm in ("relaymind_auto", "relaymind_external_only"):
         config = document["arms"][arm]["plugin_config"]
-        assert config["diagnosticsPath"] == "<host-home>/diagnostics.jsonl"
+        # The plugin gets the host's native path; the export scrubs its home prefix.
+        assert config["diagnosticsPath"] == f"<host-home>{os.sep}diagnostics.jsonl"
         assert config["baseUrl"].startswith("http://127.0.0.1:")
 
 
@@ -616,21 +619,43 @@ def test_the_export_records_the_node_identity(evaluated):
         assert node["version"] and node["version"].startswith("v")
 
 
-def test_the_node_identity_is_the_node_that_runs_the_host(tmp_path):
-    fake = tmp_path / "bin" / "node"
+def test_the_node_identity_is_the_node_that_runs_the_host(tmp_path, monkeypatch):
+    """Section 12.5: the export names the Node that runs the host and its version.
+
+    The fake node is only a file named as the platform names Node (node.exe on
+    Windows); its --version call is answered here, so the test runs the same on
+    every platform without a script interpreter for the fake.
+    """
+    fake = tmp_path / "bin" / ("node.exe" if os.name == "nt" else "node")
     fake.parent.mkdir()
-    fake.write_text(f"#!{sys.executable}\nprint('v26.12.1')\n", "utf-8")
+    fake.write_text("", "utf-8")
     fake.chmod(0o755)
     env = {"PATH": str(fake.parent)}
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append((list(argv), kwargs["env"]))
+        return subprocess.CompletedProcess(argv, 0, stdout="v26.12.1\n", stderr="")
+
+    monkeypatch.setattr(runner.subprocess, "run", run)
     # The host started by an explicit node binary, and through a shebang on PATH.
     explicit = runner.node_identity([str(fake), "openclaw.mjs"], env)
     assert explicit == {"executable": str(fake), "version": "v26.12.1"}
     on_path = runner.node_identity(["node_modules/.bin/openclaw"], env)
-    assert on_path == {"executable": str(fake), "version": "v26.12.1"}
+    assert Path(on_path["executable"]) == fake and on_path["version"] == "v26.12.1"
+    assert calls == [([str(fake), "--version"], env)] + [
+        ([on_path["executable"], "--version"], env)
+    ]
     assert runner.node_identity(["openclaw"], {"PATH": str(tmp_path / "none")}) == {
         "executable": None,
         "version": None,
     }
+
+    def fails(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1, stdout="", stderr="no")
+
+    monkeypatch.setattr(runner.subprocess, "run", fails)
+    assert runner.node_identity([str(fake)], env) == {"executable": str(fake), "version": None}
 
 
 def test_the_direct_host_reaches_the_provider_through_the_operators_proxy(tmp_path, monkeypatch):
