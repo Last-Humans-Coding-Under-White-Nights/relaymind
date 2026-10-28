@@ -724,6 +724,36 @@ except urllib.error.HTTPError as error:
 print(json.dumps({"ok": True}))
 """
 
+# A host that retries the same model after a server error, as the pinned host did
+# in the Linux VPS functional check (7 same-model retries, each with a rewritten
+# conversation, so each a new gateway run), and logs the plugin's attempt record.
+STUB_RETRYING_ERROR_HOST = """
+import json, os, sys, urllib.error, urllib.request
+base = os.environ["RELAYMIND_BASE_URL"]
+token = os.environ["RELAYMIND_APP_TOKEN"]
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+for attempt in range(8):
+    body = {"model": "relaymind-client-tools",
+            "messages": [{"role": "system", "content": "x" * 40000},
+                         {"role": "user", "content": "Say hello." + " Continue." * attempt}]}
+    request = urllib.request.Request(
+        base + "/chat/completions", data=json.dumps(body).encode(), method="POST",
+        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+    try:
+        opener.open(request).read()
+    except urllib.error.HTTPError as error:
+        detail = json.loads(error.read())["error"]
+        record = {"event": "relaymind.inference_attempt", "attempt": 1,
+                  "runId": detail["run_id"], "outcome": "failed", "status": error.code,
+                  "code": detail["code"], "retried": False}
+        sys.stderr.write("\\x1b[36mRelayMind inference attempt " + json.dumps(record)
+                         + "\\x1b[39m\\n")
+        last = (f"RelayMind {detail['code']} (HTTP {error.code}): failed. "
+                f"Gateway run {detail['run_id']}.")
+sys.stderr.write(last + "\\n")
+raise SystemExit(1)
+"""
+
 
 def test_the_external_failed_scenario_checks_the_failed_run_and_the_host_message(tmp_path):
     """RM16, AC24, section 11: both models fail, the host gets 503 external_failed,
@@ -783,3 +813,22 @@ def test_the_main_entry_accepts_a_failed_host_for_the_error_scenario(tmp_path, m
     monkeypatch.setattr(qualification, "run_host", fake_run_host)
     argv = ["host", "--out", str(tmp_path / "x.json"), "--scenario", "external-failed"]
     assert qualification.main([*argv, "--", "true"]) == 0
+
+
+def test_an_external_failed_scenario_survives_the_host_s_same_model_retries(tmp_path):
+    """Every host retry is a new gateway run that fails the same way, never an
+    unscripted double (internal_error); the plugin's attempt records name them."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_RETRYING_ERROR_HOST],
+        tmp_path / "export.json",
+        scenario="external-failed",
+        timeout=60,
+    )
+    check = export["checks"]
+    assert len(export["runs"]) == 8
+    assert {f["error_code"] for f in check["failed_runs"]} == {"external_failed"}
+    recorded = {run["run_id"] for run in export["runs"]}
+    assert [a["status"] for a in check["attempts"]] == [503] * 8
+    assert {a["runId"] for a in check["attempts"]} == recorded
+    assert check["attempt_runs_recorded"] is True
+    assert check["passed"] is True

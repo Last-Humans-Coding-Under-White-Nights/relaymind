@@ -93,8 +93,14 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from api_helpers import RunningServer, make_app, token_of  # noqa: E402
-from gateway_helpers import build_gateway, text_turn, tool_turn  # noqa: E402
-from helpers import make_capabilities  # noqa: E402
+from gateway_helpers import (  # noqa: E402
+    EXTERNAL_MODEL_ID,
+    LOCAL_MODEL_ID,
+    build_gateway,
+    text_turn,
+    tool_turn,
+)
+from helpers import ScriptedAdapter, make_capabilities  # noqa: E402
 from native_helpers import GatedAdapter  # noqa: E402
 from relaymind.api.chat import ClientToolsChat  # noqa: E402
 from relaymind.evaluation.environment import application_revision  # noqa: E402
@@ -273,7 +279,7 @@ def node_binary() -> str:
     return node
 
 
-# The fixed token count of the gated and external doubles (build_gateway's
+# The fixed token count of the gated and error-scenario doubles (build_gateway's
 # default local double uses the same).
 DOUBLE_INPUT_TOKENS = 800
 
@@ -591,8 +597,8 @@ HOST_SCENARIOS: dict[str, tuple[Callable[[Path], list], int | None]] = {
     # #138: the local double never answers; the harness interrupts the host mid-turn.
     "abort": (lambda _sandbox: [text_turn("never")], None),
     # #138: both models propose a call to a tool nobody offered, so the run fails
-    # with 503 external_failed (ERROR_SCENARIOS).
-    "external-failed": (lambda _sandbox: [unknown_call()] * ERROR_TURNS, None),
+    # with 503 external_failed; its doubles are in ERROR_SCENARIOS.
+    "external-failed": (lambda _sandbox: [], None),
 }
 # How long the harness lets the generation run before it interrupts the host.
 ABORT_AFTER_SECONDS = 0.5
@@ -600,9 +606,6 @@ ABORT_AFTER_SECONDS = 0.5
 
 # A tool no host offers: the gateway refuses the call from either model.
 UNKNOWN_TOOL = "relaymind_test_not_offered"
-# Turns per model for the error scenario: one failed run takes two from each
-# (a generation and its repair); the rest leave room for host retries.
-ERROR_TURNS = 6
 
 
 def unknown_call(call_id: str = "call_unknown_1") -> list:
@@ -611,20 +614,61 @@ def unknown_call(call_id: str = "call_unknown_1") -> list:
 
 @dataclass(frozen=True)
 class ErrorScenario:
-    """A host scenario that must end in one named gateway error (section 11)."""
+    """A host scenario that must end in one named gateway error (section 11).
+
+    Both doubles answer every generation with ``events``, never running out:
+    the pinned host retried the same model 7 times after a server error in
+    the Linux VPS functional check, each retry a new gateway run.
+    """
 
     code: str
     status: int
-    external_turns: Callable[[], list]
+    events: Callable[[], list]
 
 
 ERROR_SCENARIOS: dict[str, ErrorScenario] = {
-    "external-failed": ErrorScenario(
-        "external_failed", 503, lambda: [unknown_call()] * ERROR_TURNS
-    ),
+    "external-failed": ErrorScenario("external_failed", 503, unknown_call),
 }
 # The run the plugin's error message names (integrations/openclaw/src/errors.ts).
 NAMED_RUN = re.compile(r"Gateway run (run_[0-9a-f]+)")
+# The plugin's attempt record on the host's log (integrations/openclaw/src/attempts.ts).
+ATTEMPT_RECORD = re.compile(r"RelayMind inference attempt (\{.*\})")
+
+
+def attempt_records(output: str) -> list[dict]:
+    """The plugin's attempt records in the host's output, in order (section 7.5)."""
+    records = []
+    for match in ATTEMPT_RECORD.findall(output):
+        try:
+            record = json.loads(match)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict):
+            records.append(
+                {
+                    k: record.get(k)
+                    for k in ("runId", "runIdSource", "outcome", "status", "code", "retried")
+                }
+            )
+    return records
+
+
+def _error_gateway(work: Path, error: ErrorScenario):
+    """A gateway whose doubles answer every generation the same way."""
+    return build_gateway(
+        work,
+        None,
+        local_model=ConfiguredModel(
+            adapter=ScriptedAdapter(error.events(), input_tokens=DOUBLE_INPUT_TOKENS),
+            model_id=LOCAL_MODEL_ID,
+        ),
+        external_model=ConfiguredModel(
+            adapter=ScriptedAdapter(
+                error.events(), input_tokens=DOUBLE_INPUT_TOKENS, locality="external"
+            ),
+            model_id=EXTERNAL_MODEL_ID,
+        ),
+    )
 
 
 def error_checks(
@@ -655,11 +699,17 @@ def error_checks(
     named = [i for i in dict.fromkeys(NAMED_RUN.findall(output)) if i in recorded]
     deltas = sum(1 for run in runs for e in run["events"] if e["type"] == "answer.delta")
     executions = sum(1 for run in runs for e in run["events"] if e["type"] == "tool.started")
+    attempts = attempt_records(output)
     checks: dict[str, Any] = {
         "expected": {"code": expected.code, "status": expected.status},
         "failed_runs": failed,
         "host_message": f"RelayMind {expected.code} (HTTP {expected.status}): " in output,
         "named_runs": named,
+        "attempts": attempts,
+        # Every run an attempt record names is one the gateway recorded (never invented).
+        "attempt_runs_recorded": all(
+            a["runId"] in recorded for a in attempts if a["runId"] != "unavailable"
+        ),
         "answer_deltas": deltas,
         "gateway_tool_executions": executions,
         "host_report": host_report(stdout),
@@ -671,6 +721,7 @@ def error_checks(
         and all(f["error_code"] == expected.code for f in failed)
         and checks["host_message"]
         and bool(named)
+        and checks["attempt_runs_recorded"]
         and deltas == 0
         and executions == 0
     )
@@ -845,11 +896,10 @@ def run_host(
             adapter, gateway = _gated_gateway(Path(tmp), turns(sandbox))
         else:
             error = ERROR_SCENARIOS.get(scenario)
-            external = [] if error is None else error.external_turns()
-            gateway = build_gateway(Path(tmp), turns(sandbox), external_turns=external)
-            # A fixed count, as for the local double: by character the real
-            # host's request would not fit the external double's limit either.
-            gateway.external.input_tokens = DOUBLE_INPUT_TOKENS
+            if error is None:
+                gateway = build_gateway(Path(tmp), turns(sandbox), external_turns=[])
+            else:
+                gateway = _error_gateway(Path(tmp), error)
         app = make_app(gateway, client_tools=ClientToolsChat(gateway.orchestrator))
         signal_sent = False
         token = token_of(app)
