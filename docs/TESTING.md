@@ -1520,8 +1520,10 @@ the measurement has run.
   with a host-sized request (10,510 tokens, the count of the macOS live
   AC24 turn) sends every turn external: the attempts pass and the export
   and report show 0 local turns with reason context_limit. An operator
-  interrupt during an attempt keeps the attempts that ended, writes the
-  export and report marked aborted with the slots not run, and the CLI
+  interrupt during an attempt, during the grading of one that ended, or
+  during an arm's setup keeps the attempts that ended (graded), writes the
+  export and report marked aborted with the slots not run (an interrupted
+  setup marks that arm not_run and every slot not run), and the CLI
   exits 130. The grading never reads the user text the gateway received,
   which the host decorates (a timestamp before the prompt and a runtime
   line after it); the prompt's identity is the frozen task text the

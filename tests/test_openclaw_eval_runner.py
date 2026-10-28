@@ -460,6 +460,7 @@ def test_an_operator_interrupt_still_writes_the_export_marked_aborted(tmp_path, 
     )
     stopped = calls[2]
     assert document["aborted"] == {
+        "stage": "attempt",
         "index": stopped.index,
         "repeat": stopped.repeat,
         "task_id": stopped.task_id,
@@ -475,6 +476,86 @@ def test_an_operator_interrupt_still_writes_the_export_marked_aborted(tmp_path, 
     report = (out / "openclaw-eval.md").read_text("utf-8")
     assert "Aborted by the operator at slot" in report
     assert "1 slot(s) not run" in report
+
+
+def test_an_interrupt_during_arm_setup_still_writes_the_export_marked_aborted(tmp_path):
+    """Spec 0.50: Ctrl-C while a gateway starts or the plugin is set up keeps the record.
+
+    The arm set up before is kept with its setup steps; the arm whose setup was
+    stopped and every slot are not run, never failures.
+    """
+
+    class InterruptedStart(DoublesBackend):
+        def start(self, arm, work):
+            if arm == "relaymind_auto":
+                raise KeyboardInterrupt
+            return super().start(arm, work)
+
+    backend = InterruptedStart(tmp_path)
+    document, out = run_with(
+        tmp_path,
+        backend,
+        arms=["relaymind_external_only", "relaymind_auto"],
+        task_ids=["text-reply-en"],
+    )
+    planned = [
+        s
+        for s in sampling_order(TASKS)
+        if s.task_id == "text-reply-en" and s.arm in {"relaymind_external_only", "relaymind_auto"}
+    ]
+    assert document["aborted"] == {
+        "stage": "setup",
+        "index": None,
+        "repeat": None,
+        "task_id": None,
+        "arm": "relaymind_auto",
+        "slots_not_run": len(planned),
+    }
+    assert document["attempts"] == [] and document["grades"] == []
+    arms = document["arms"]
+    assert arms["relaymind_external_only"]["status"] == "ran"
+    assert arms["relaymind_external_only"]["setup"]
+    assert arms["relaymind_auto"]["status"] == "not_run"
+    assert "interrupted" in arms["relaymind_auto"]["reason"]
+    saved = json.loads((out / "openclaw-eval.json").read_text("utf-8"))
+    assert saved["aborted"] == document["aborted"]
+    report = (out / "openclaw-eval.md").read_text("utf-8")
+    assert "Aborted by the operator during the setup of relaymind_auto" in report
+    assert f"{len(planned)} slot(s) not run" in report
+
+
+def test_an_interrupt_while_grading_keeps_the_attempt_that_ended_graded(tmp_path, monkeypatch):
+    """Spec 0.50: the attempts that ended are graded, even when Ctrl-C hit the grading."""
+    real = runner.grade_attempt
+    calls = []
+
+    def interrupted(task, attempt):
+        calls.append(attempt)
+        if len(calls) == 2:
+            raise KeyboardInterrupt
+        return real(task, attempt)
+
+    monkeypatch.setattr(runner, "grade_attempt", interrupted)
+    backend = DoublesBackend(tmp_path)
+    document, _out = run_with(
+        tmp_path, backend, arms=["relaymind_external_only"], task_ids=["text-reply-en"]
+    )
+    slots = [
+        s
+        for s in sampling_order(TASKS)
+        if s.task_id == "text-reply-en" and s.arm == "relaymind_external_only"
+    ]
+    assert len(document["attempts"]) == len(document["grades"]) == 2
+    assert all(g["success"] for g in document["grades"])
+    stopped = slots[2]
+    assert document["aborted"] == {
+        "stage": "attempt",
+        "index": stopped.index,
+        "repeat": stopped.repeat,
+        "task_id": stopped.task_id,
+        "arm": stopped.arm,
+        "slots_not_run": len(slots) - 2,
+    }
 
 
 def test_a_run_without_an_abort_says_so(evaluated):

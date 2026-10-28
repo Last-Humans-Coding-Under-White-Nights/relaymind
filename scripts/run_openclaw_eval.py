@@ -470,6 +470,25 @@ def _sanitize(text: str, secrets: Sequence[str], places: Sequence[tuple[Path, st
     return text
 
 
+def _aborted_line(aborted: Mapping[str, Any] | None) -> str:
+    """The report's line for an evaluation the operator interrupted (spec 0.50)."""
+    if not aborted:
+        return ""
+    if aborted["stage"] == "setup":
+        where = f"during the setup of {aborted['arm']}"
+    elif aborted["index"] is None:
+        where = "after the last attempt"
+    else:
+        where = (
+            f"at slot {aborted['index']} ({aborted['arm']}, {aborted['task_id']}, "
+            f"repeat {aborted['repeat']})"
+        )
+    return (
+        f"\nAborted by the operator {where}: {aborted['slots_not_run']} slot(s) not run; "
+        "the counts cover the attempts that ended.\n"
+    )
+
+
 def run_evaluation(
     tasks: TaskSet,
     *,
@@ -507,47 +526,55 @@ def run_evaluation(
     direct = None
     aborted: dict[str, Any] | None = None
     places: list[tuple[Path, str]] = []
+    # The slots of every arm still to be set up: an interrupt in setup leaves them all not run.
+    planned = [s for s in sampling_order(tasks) if s.task_id in selected and s.arm not in not_run]
+    slots: list[Any] = []
+    setting_up: str | None = None
     try:
-        for arm in ARMS:
-            if arm in not_run:
-                continue
-            host = Host(host_command, work / arm / "host", provider_network=arm == "direct")
-            places.append((host.home, HOST_HOME))
-            record: dict[str, Any] = {
-                "status": "ran",
-                "host_model_ref": None,
-                "expected_host_model": None,
-            }
-            try:
-                if arm in RELAYMIND_ARMS:
-                    handle = backend.start(arm, work / arm / "gateway")
-                    handles[arm] = handle
-                    secrets.append(handle.token)
-                    steps, config, ok = setup_relaymind(arm, host, handle, tarball, limits or {})
-                    record.update(plugin_config=config, launch=handle.launch)
+        try:
+            for arm in ARMS:
+                if arm in not_run:
+                    continue
+                setting_up = arm
+                host = Host(host_command, work / arm / "host", provider_network=arm == "direct")
+                places.append((host.home, HOST_HOME))
+                record: dict[str, Any] = {
+                    "status": "ran",
+                    "host_model_ref": None,
+                    "expected_host_model": None,
+                }
+                try:
+                    if arm in RELAYMIND_ARMS:
+                        handle = backend.start(arm, work / arm / "gateway")
+                        handles[arm] = handle
+                        secrets.append(handle.token)
+                        steps, config, ok = setup_relaymind(
+                            arm, host, handle, tarball, limits or {}
+                        )
+                        record.update(plugin_config=config, launch=handle.launch)
+                    else:
+                        direct = backend.direct()
+                        secrets.append(direct.api_key)
+                        steps, ok = setup_direct(host, direct)
+                except Exception as error:  # noqa: BLE001 - a setup failure is recorded, never hidden
+                    steps, ok = [], False
+                    record["setup_error"] = f"{type(error).__name__}: {error}"
+                record["setup"] = steps
+                record["host_version"] = steps[0]["stdout_tail"].strip() if steps else None
+                record["host_model_ref"] = model_ref(arm, direct)
+                record["expected_host_model"] = expected_host_model(arm, direct)
+                if not ok:
+                    failed = next((s["name"] for s in steps if s["status"] != "completed"), "start")
+                    not_run[arm] = f"setup failed at {failed}"
+                    record.update(status="not_run", reason=not_run[arm])
                 else:
-                    direct = backend.direct()
-                    secrets.append(direct.api_key)
-                    steps, ok = setup_direct(host, direct)
-            except Exception as error:  # noqa: BLE001 - a setup failure is recorded, never hidden
-                steps, ok = [], False
-                record["setup_error"] = f"{type(error).__name__}: {error}"
-            record["setup"] = steps
-            record["host_version"] = steps[0]["stdout_tail"].strip() if steps else None
-            record["host_model_ref"] = model_ref(arm, direct)
-            record["expected_host_model"] = expected_host_model(arm, direct)
-            if not ok:
-                failed = next((s["name"] for s in steps if s["status"] != "completed"), "start")
-                not_run[arm] = f"setup failed at {failed}"
-                record.update(status="not_run", reason=not_run[arm])
-            else:
-                hosts[arm] = host
-            arm_records[arm] = record
-        slots = [s for s in sampling_order(tasks) if s.task_id in selected and s.arm in hosts]
-        for done, slot in enumerate(slots):
-            task = tasks.task(slot.task_id)
-            print(f"{slot.index} {slot.arm} {slot.task_id} r{slot.repeat}", flush=True)
-            try:
+                    hosts[arm] = host
+                arm_records[arm] = record
+                setting_up = None
+            slots = [s for s in planned if s.arm in hosts]
+            for slot in slots:
+                task = tasks.task(slot.task_id)
+                print(f"{slot.index} {slot.arm} {slot.task_id} r{slot.repeat}", flush=True)
                 attempt = run_attempt(
                     slot,
                     task,
@@ -556,21 +583,34 @@ def run_evaluation(
                     direct,
                     tasks.time_limit_seconds,
                 )
-            except KeyboardInterrupt:
-                # Spec 0.50: the attempts that ended are kept; the rest are not run.
-                aborted = {
-                    "index": slot.index,
-                    "repeat": slot.repeat,
-                    "task_id": slot.task_id,
-                    "arm": slot.arm,
-                    "slots_not_run": len(slots) - done,
-                }
-                print(f"aborted at slot {slot.index}", file=sys.stderr, flush=True)
-                break
-            attempts.append(attempt)
-            grade = grade_attempt(task, attempt)
-            grades.append(grade)
-            print(f"  {'pass' if grade['success'] else 'fail'} {grade['failures']}", flush=True)
+                attempts.append(attempt)
+                grade = grade_attempt(task, attempt)
+                grades.append(grade)
+                print(f"  {'pass' if grade['success'] else 'fail'} {grade['failures']}", flush=True)
+        except KeyboardInterrupt:
+            # Spec 0.50: an operator interrupt, wherever it lands (arm setup, an attempt,
+            # its grading). The attempts that ended are kept and graded; the rest are
+            # not run, never failures.
+            for ended in attempts[len(grades) :]:
+                grades.append(grade_attempt(tasks.task(ended["task_id"]), ended))
+            if setting_up is not None:
+                # No slot ran: every planned slot of an arm whose setup did not fail.
+                stopped = None
+                not_started = sum(1 for s in planned if s.arm not in not_run)
+                not_run[setting_up] = "setup interrupted by the operator"
+                arm_records[setting_up] = {"status": "not_run", "reason": not_run[setting_up]}
+            else:
+                stopped = slots[len(attempts)] if len(attempts) < len(slots) else None
+                not_started = len(slots) - len(attempts)
+            aborted = {
+                "stage": "setup" if setting_up is not None else "attempt",
+                "index": stopped.index if stopped else None,
+                "repeat": stopped.repeat if stopped else None,
+                "task_id": stopped.task_id if stopped else None,
+                "arm": setting_up if setting_up is not None else (stopped.arm if stopped else None),
+                "slots_not_run": not_started,
+            }
+            print(f"aborted ({aborted['stage']})", file=sys.stderr, flush=True)
     finally:
         for handle in handles.values():
             handle.stop()
@@ -623,13 +663,7 @@ def run_evaluation(
     text = _sanitize(json.dumps(document, indent=2, ensure_ascii=False), secrets, places)
     report = _sanitize(
         render_markdown(summary, title="OpenClaw integration evaluation")
-        + (
-            f"\nAborted by the operator at slot {aborted['index']} ({aborted['arm']}, "
-            f"{aborted['task_id']}, repeat {aborted['repeat']}): {aborted['slots_not_run']} "
-            "slot(s) not run; the counts cover the attempts that ended.\n"
-            if aborted
-            else ""
-        )
+        + _aborted_line(aborted)
         + f"\nEvidence: {evidence}. Machine: {json.dumps(document['machine'])}\n",
         secrets,
         places,

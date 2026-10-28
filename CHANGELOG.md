@@ -298,7 +298,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   without a local turn says so; a host that exits 130 or dies of SIGINT is a
   host interrupt, apart from other exit statuses; an evaluation the operator
   interrupts still writes its export, marked aborted, with the remaining
-  slots not run. No gateway contract change.
+  slots not run, also when the interrupt lands in an arm's setup (the arm
+  and every slot not run) or in the grading of an attempt that ended (the
+  attempt is kept and graded). No gateway contract change.
 - Specification 0.49, OpenClaw host facts recorded on the wire (#135; RM33,
   section 7.5): at v2026.10.7 the host's defaults for a loopback URL send
   `stream_options` and, for a reasoning model, `reasoning_effort`; the
