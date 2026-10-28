@@ -1363,15 +1363,34 @@ What runs where:
   host that says ok without running the tool, a tool exchange whose gateway
   run did not complete or did not send the answer, and a missing host
   (not_run) never pass; no `OPENCLAW_*` setting, Gateway, or proxy of the
-  operator reaches the host; the export is written even when the temporary
+  operator reaches the host, and the closed local Gateway port is set as
+  `gateway.port` in the isolated config before the install (the stub, like
+  the pinned host, refuses `models list` when `OPENCLAW_GATEWAY_PORT` is
+  set); the export is written even when the temporary
   host home cannot be removed; the label keeps "not live model
   evidence" and "not a supported-platform qualification".
 
-The install check with the pinned host passed once on a Linux VPS
-(`docs/evidence/2026-10-27-openclaw-install-check-linux-vps.json`; see
-`docs/EVIDENCE.md`), as a functional check over gateway doubles. It is not
-a platform qualification: macOS and Windows runs of this revision on a
-user's machine are not_run.
+- `tests/test_openclaw_vps_functional_install.py`: reads the Linux VPS
+  functional check (not a supported-platform qualification) of the install
+  check on the real pinned host
+  (`docs/evidence/2026-10-28-openclaw-vps-functional-145/`): every step
+  passed in order with the release build it names; the text and the host
+  `read` round trips went through the gateway, which executed nothing;
+  the host used the operator guide's install, enable, refresh, and
+  `uninstall --force` forms; uninstall left the config entry, the profile,
+  and the token, and the guide's removal cleared them; the host state was
+  isolated with no Gateway port in its environment; no token or machine
+  path is in the files; `docs/RELEASE.md` and `docs/EVIDENCE.md` keep
+  macOS and Windows `not_run` as support gaps, with the native Windows
+  note.
+
+The install check with the pinned host passed on a Linux VPS twice, as a
+functional check over gateway doubles: at `2f35664`
+(`docs/evidence/2026-10-27-openclaw-install-check-linux-vps.json`) and,
+after the restack and the Gateway port fix, at `393a6bf`
+(`docs/evidence/2026-10-28-openclaw-vps-functional-145/`; see
+`docs/EVIDENCE.md`). It is not a platform qualification: macOS and Windows
+runs of this revision on a user's machine are not_run.
 
 ### What is not covered yet
 

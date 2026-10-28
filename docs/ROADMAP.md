@@ -834,8 +834,9 @@ This is planned integration, not a claim of a working or faster plugin.
   runs the artifact through the host's lifecycle (install, enable, inspect,
   token, discovery, a text and a host-tool exchange, disable, uninstall, and
   removal of what uninstall leaves). It passed against the pinned host on a
-  Linux VPS over gateway doubles, as a functional check, not a
-  supported-platform qualification. The CI job `openclaw-plugin` runs the
+  Linux VPS over gateway doubles, as a Linux VPS functional check (not a
+  supported-platform qualification), last at `393a6bf`
+  (`docs/evidence/2026-10-28-openclaw-vps-functional-145/`). The CI job `openclaw-plugin` runs the
   package checks, every OpenClaw pytest tier, and the install check on
   ubuntu, macOS, and Windows runners. The operator guide is in
   `integrations/openclaw/README.md`. macOS and Windows runs of this

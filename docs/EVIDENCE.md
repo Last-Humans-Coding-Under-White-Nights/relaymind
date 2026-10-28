@@ -3241,6 +3241,7 @@ evidence (#139 holds the live evaluation). The pinned host is OpenClaw
 | Windows native (target) | OpenClaw 2026.10.7 documents a native Windows CLI and Gateway, WSL2 optional (`docs/platforms/windows.md` in the package) | `not_run` | any | `not_run`: no Windows machine | none |
 | Windows WSL2 | | `not_run` | any | `not_run`; a WSL2 run is never recorded as native Windows | none |
 | Linux x86_64 (not a target platform) | VPS, Ubuntu 26.04.1; OpenClaw 2026.10.7 (157d8c2) from the package's devDependency | v24.22.1, in `>=24.22.1 <25` | `2f35664` | install check passed, all 14 steps: functional check over doubles, not a supported-platform qualification | [`2026-10-27-openclaw-install-check-linux-vps.json`](evidence/2026-10-27-openclaw-install-check-linux-vps.json) |
+| Linux x86_64 (not a target platform) | the same | v24.22.1, in `>=24.22.1 <25` | `393a6bf` (after the restack onto #138) | Linux VPS functional check (not a supported-platform qualification): install check passed, all 15 steps (pack, install, enable, inspect, token, discovery, a text and a host tool round trip, disable, uninstall, removal), over doubles | [`2026-10-28-openclaw-vps-functional-145/`](evidence/2026-10-28-openclaw-vps-functional-145/REPORT.md) |
 | GitHub Actions runners | ubuntu, macOS, Windows; the devDependency host | 24.22.1 | each pull request | the `openclaw-plugin` job; its result is on the pull request, not recorded here | the job's uploaded artifact |
 
 The Linux VPS install check, in detail (`scripts/openclaw_install_check.py`,
@@ -3270,3 +3271,19 @@ hash):
 - outside the isolation, `agent exec` wrote its log to `/tmp/openclaw/`
   despite `logging.file`, and its run state went to an OS temp directory,
   which it removed.
+
+The rerun at `393a6bf` (artifact sha256
+`4c11884a368eb360d9d6ecab1da3157428917fb26abe38f2ac7e9bc471dcae6d`; checked
+by `tests/test_openclaw_vps_functional_install.py`) passed the same way,
+with the same leftovers after uninstall and none after the removal steps.
+Its first try at the restacked tip failed `models list --refresh` ("gateway
+models.list requires credentials before opening a websocket"): the check
+had put its closed Gateway port in `OPENCLAW_GATEWAY_PORT`, which the
+pinned host takes as an explicit Gateway target. The check now sets
+`gateway.port` in the isolated config instead (`393a6bf`).
+
+Support gaps: there is no Mac or Windows access, so the macOS row of this
+revision and both Windows rows stay `not_run`. Native Windows is the target,
+since the pinned host documents native Windows support; a WSL2 run would be
+recorded as WSL2. Each row stays a gap until an export from that machine is
+recorded here (`docs/RELEASE.md`, "Support gaps").

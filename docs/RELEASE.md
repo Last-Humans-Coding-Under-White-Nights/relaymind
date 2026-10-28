@@ -182,13 +182,15 @@ model evidence for the plugin exists yet (#139).
 | macOS 27.0.1 arm64, Apple M1 (user's machine) | 2026.10.7 (157d8c2), npm prefix install | v26.12.1, in `>=26.12.1` | an earlier revision (`a52f8bf`) only: package checks, install, inspect, token, 401 reconnect, and interrupt passed; `agent exec` could not find the model, and the tool policy scenarios failed. This revision: `not_run` |
 | Windows, native | 2026.10.7 documents a native Windows CLI and Gateway, WSL2 optional | `not_run` | `not_run`: no Windows machine. Support gap |
 | Windows, WSL2 | not checked | `not_run` | `not_run`. Never reported as native Windows |
-| Linux x86_64 VPS, Ubuntu 26.04.1 (not a target platform of section 1) | 2026.10.7 (157d8c2), the package's devDependency | v24.22.1, in `>=24.22.1 <25` | install check passed: a functional check over doubles, not a supported-platform qualification |
+| Linux x86_64 VPS, Ubuntu 26.04.1 (not a target platform of section 1) | 2026.10.7 (157d8c2), the package's devDependency | v24.22.1, in `>=24.22.1 <25` | install check passed at `393a6bf` (pack, install, enable, inspect, token, discovery, a text and a host tool round trip, disable, uninstall, removal; `docs/evidence/2026-10-28-openclaw-vps-functional-145/`): a Linux VPS functional check (not a supported-platform qualification) over doubles |
 | GitHub Actions runners (ubuntu, macOS, Windows) | 2026.10.7, the devDependency | 24.22.1 | the `openclaw-plugin` job; its result is on the pull request, not recorded here |
 
-Support gaps: no qualification of this revision on macOS or Windows exists.
-The macOS qualification needs a rerun of the install check, the host tool
-policy, and the interrupt at this revision. Windows (native, and WSL2 if
-used) has never run the host. Each stays a gap until an export is recorded
+Support gaps: no qualification of this revision on macOS or Windows exists,
+and none is planned now (no Mac or Windows machine is available). The macOS
+qualification needs a rerun of the install check, the host tool policy, and
+the interrupt at this revision; the `resolveDynamicModel` fix for `agent
+exec` is verified on the Linux VPS only. Windows (native, which the pinned
+host documents, and WSL2 if used) has never run the host. Each stays a gap until an export is recorded
 in [`EVIDENCE.md`](EVIDENCE.md#openclaw-plugin-platforms-145), with the OS
 build, the host version, the Node version against the host's range, and
 whether Windows was native or WSL2. The operator commands are in

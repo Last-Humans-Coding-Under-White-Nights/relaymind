@@ -52,8 +52,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `pack-check.mjs` spawns npm through node, so the Windows `npm.cmd` shim
   needs no shell; `release-pack.mjs` treats a child folder named like
   `..release` as inside the package. macOS and Windows runs of this revision on a user's
-  machine are not_run (`docs/RELEASE.md` support gaps). No spec, gateway,
-  budget, or default change.
+  machine are not_run (`docs/RELEASE.md` support gaps). The install check
+  ran again at `393a6bf` as a Linux VPS functional check (not a
+  supported-platform qualification) over doubles and passed every step
+  (`docs/evidence/2026-10-28-openclaw-vps-functional-145/`, read by
+  `tests/test_openclaw_vps_functional_install.py`). The operator guide
+  states the macOS qualification's install, enable, refresh, and
+  `uninstall --force` forms (Q4) and removes what uninstall leaves: the
+  config entry, the `relaymind:manual` profile, and the stored token (Q12).
+  `docs/RELEASE.md` and `docs/EVIDENCE.md` list macOS and Windows, native
+  and WSL2, as `not_run` support gaps. No spec, gateway, budget, or
+  default change.
 - OpenClaw cancellation, errors, retries, and run trace correlation (#138;
   RM12, RM14, RM16, RM17, RM20, RM21, RM22, RM25, RM33; AC11, AC12, AC24):
   the plugin maps every gateway error code to the host's error class
