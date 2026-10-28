@@ -30,6 +30,19 @@ describe("the test host tool plugin", () => {
     expect(hooks).toEqual(["before_tool_call"]);
   });
 
+  it("declares in its manifest every tool it registers (contracts.tools)", () => {
+    // The pinned host refuses registerTool from a plugin whose manifest lacks
+    // contracts.tools: "plugin must declare contracts.tools before registering
+    // agent tools" (macOS qualification at a52f8bf, Q9).
+    const manifest = JSON.parse(readFileSync(new URL("openclaw.plugin.json", ROOT), "utf8"));
+    const tools: { name: string }[] = [];
+    plugin.register({
+      registerTool: (tool: { name: string }) => tools.push(tool),
+      on: () => undefined,
+    });
+    expect(manifest.contracts?.tools).toEqual(tools.map((t) => t.name));
+  });
+
   it("puts every write behind the host's approval and leaves echo alone", () => {
     const request = beforeToolCall({ toolName: "relaymind_test_write", params: { name: "n" } });
     expect(request.requireApproval.allowedDecisions).toEqual(["allow-once", "deny"]);

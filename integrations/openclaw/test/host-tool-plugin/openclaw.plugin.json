@@ -3,5 +3,6 @@
   "name": "RelayMind test host tools",
   "description": "Test only: relaymind_test_echo (read-only) and relaymind_test_write (appends one line in RELAYMIND_TEST_SANDBOX, behind the host's approval) for the RelayMind host qualification.",
   "activation": { "onStartup": true },
+  "contracts": { "tools": ["relaymind_test_echo", "relaymind_test_write"] },
   "configSchema": { "type": "object", "additionalProperties": false, "properties": {} }
 }
