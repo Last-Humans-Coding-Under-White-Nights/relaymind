@@ -6,7 +6,7 @@
   "os": "Linux 7.0.0-38-generic",
   "machine": "x86_64",
   "relaymind_revision": {
-    "head": "238524dbd417ec6ac827aaf24ac7e32d18f760ae",
+    "head": "8c0f458fc2945b7d94b39d1b3afdbc4028b8343b",
     "dirty": false
   }
 }
