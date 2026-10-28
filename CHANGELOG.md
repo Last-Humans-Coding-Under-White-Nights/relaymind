@@ -12,9 +12,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   RM12, RM14, RM16, RM17, RM20, RM21, RM22, RM25, RM33; AC11, AC12, AC24):
   the plugin maps every gateway error code to the host's error class
   through `matchesContextOverflowError` and `classifyFailoverReason`
-  (`context_limit_exceeded` a context overflow, `needs_external` and
-  `external_failed` failures of this provider, 429 an overload, 504 a
-  timeout, 401 authentication) and gives each failure one sanitized,
+  (`context_limit_exceeded` a context overflow; `needs_external`,
+  `execution_mode_forbidden`, `idempotency_conflict`, and `run_terminal`
+  the request format class `format`, which the pinned host does not retry
+  on the same model; `internal_error`, `workflow_unavailable`,
+  `external_failed`, and `predicate_unmet` failures of this provider,
+  `server_error`; 429 an overload, 504 a timeout, 401 authentication) and gives each failure one sanitized,
   actionable message with the gateway run (401 carries the reconnect
   instruction); errors that are not RelayMind's keep the host's own
   classification (`integrations/openclaw/src/errors.ts`). Every request
@@ -187,7 +190,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   proposal by the exact ID string. The host decorates the user message, and
   a request over the UTF-8 byte bound is undecided, never needs_external,
   until a tokenizer count; a count of sanitized captures is a lower bound and
-  never proves a fit. No gateway contract change.
+  never proves a fit. Amended by #138: section 7.5 names the host class of
+  each gateway error code with its retry consequence. The pinned host
+  retries the same model only for rate_limit, overloaded, server_error,
+  timeout, and output_limit, so a refusal that follows from the
+  configuration and the request (needs_external, execution_mode_forbidden,
+  idempotency_conflict, run_terminal) is the host's `format` class, and
+  internal_error, workflow_unavailable, external_failed, and predicate_unmet
+  stay `server_error` (external_failed's reason_code cannot tell a refused
+  external output from a transient provider failure). No gateway contract
+  change.
 - Specification 0.48, unsuitable detection from local stages (#170; RM26, RM27;
   section 14.4.7): the run store records, for every local stage, whether it ran out of
   local time, and handoff.started names the budget that stopped the local stage.
