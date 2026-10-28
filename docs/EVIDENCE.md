@@ -3365,10 +3365,21 @@ OpenClaw release and the Node version against the host's engine range, the
 plugin artifact's SHA-256, the RelayMind revision, the external model and
 endpoint host, the local model manifest and runtime banner, the task file
 digest, and per arm and language the exact success count over all attempts,
-host failovers, timeouts, interrupts, errors by code, needs_external and
-context_limit_exceeded runs, local turns, external calls, completion and
+host failovers, timeouts, host interrupts (exit 130 or SIGINT), errors by
+code, needs_external and context_limit_exceeded runs, local turns with the
+reasons the runs left the local stage, external calls, completion and
 first useful content p50 and p95, and tokens per model with unknown counts
-apart. Chinese rows are best-effort and kept apart. The expectation that
-relaymind_auto sends every turn external at the 8192-token local context is
-not a result until a run shows it.
+apart. Chinese rows are best-effort and kept apart. An export marked
+aborted (an operator interrupt) is recorded with its slots not run.
+
+Expected at the 8192-token local context, which stays (user decision): 0
+of 10 OpenClaw requests counted on macOS fit it (10,500 to 10,577 tokens,
+pinned tokenizer), and the live AC24 turn in auto without an external
+model ended needs_external / context_limit with 0 model calls ("OpenClaw
+request size by tokenizer and live AC24 turn (#135)" above). relaymind_auto is therefore expected to show 0
+local turns, every run handed off with reason context_limit. A run that
+shows this records 0 local turns as the relaymind_auto result, with its
+reasons, and its comparison with relaymind_external_only as one without
+local inference; it is never left out. Until a run shows it, it is an
+expectation, not a result.
 

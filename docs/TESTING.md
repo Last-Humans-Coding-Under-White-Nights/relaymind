@@ -1482,8 +1482,9 @@ the measurement has run.
   failed tool is not a success (and is counted as ok but failed); a proposed
   call the host did not run is not a completed task; a denied exec passes
   only when nothing was written; a gateway tool execution, an uncorrelated
-  run, a mismatched proposal, a timeout, and exit 130 (a host interrupt)
-  fail or are counted; a host failover is counted apart and never an arm
+  run, a mismatched proposal, a timeout, and exit 130 or death by SIGINT
+  (a host interrupt, with its own failure label apart from other exit
+  statuses) fail or are counted; a host failover is counted apart and never an arm
   success, and a host error report that names no provider or model is a
   failed attempt, not a failover; a completed run with no external call
   (also one with no model call) is a local turn; first useful content comes only from an answer or a proposal in
@@ -1491,7 +1492,11 @@ the measurement has run.
   gateway measures and keeps the host's statements; retries and failed
   attempts are counted, a record without a run ID stays unavailable;
   needs_external, context_limit_exceeded, and cancellations are counted;
-  unknown usage stays unknown and two models are never merged. The summary
+  the reason codes of each handoff.started and each needs_external stop
+  are kept (none in direct), so a turn over the local limit is 0 local
+  turns with reason context_limit, and the report's local stage section
+  and a local-inference comparison without a local turn say so; unknown
+  usage stays unknown and two models are never merged. The summary
   has exact counts per arm and language (Chinese best-effort and apart),
   not_run arms with their reason, nearest-rank p50 and p95, and paired
   comparisons only on pairs both arms completed; the Markdown report states
@@ -1511,6 +1516,16 @@ the measurement has run.
   host named in the export, the direct arm's host keeping the operator's
   proxy variables the way a gateway does (a RelayMind arm's host keeps
   none), and a task file that differs from its lock refused by the CLI.
+  A dry run of the auto arm over a local double at the 8192-token context
+  with a host-sized request (10,510 tokens, the count of the macOS live
+  AC24 turn) sends every turn external: the attempts pass and the export
+  and report show 0 local turns with reason context_limit. An operator
+  interrupt during an attempt keeps the attempts that ended, writes the
+  export and report marked aborted with the slots not run, and the CLI
+  exits 130. The grading never reads the user text the gateway received,
+  which the host decorates (a timestamp before the prompt and a runtime
+  line after it); the prompt's identity is the frozen task text the
+  runner passes to `agent exec`.
 
 The measurement itself (section 12.5) needs a real host, the external
 provider's credential, and the pinned local model, and is an operator run:
@@ -1524,10 +1539,19 @@ python scripts/run_openclaw_eval.py \
     -- node integrations/openclaw/node_modules/openclaw/openclaw.mjs
 ```
 
-It is not_run. With the local context at 8192 tokens (no change, #139),
-every OpenClaw request measured so far was over the local limit, so
-relaymind_auto is expected to send every turn external; the run records
-what happens, never this expectation.
+It is not_run: there is no Mac or Windows access and no external
+provider credential for it, and the VPS runs no live model. The local
+context stays at 8192 tokens (user decision, no runtime, manifest, or spec
+change). With the pinned tokenizer 0 of the 10 OpenClaw requests measured
+on macOS fit it (10,500 to 10,577 tokens), and a live AC24 turn in auto
+without an external model ended needs_external / context_limit with 0
+model calls (`docs/evidence/2026-10-27-openclaw-mac-qualification/`). So
+relaymind_auto is expected to show 0 local turns, every turn handed off
+with reason context_limit, and relaymind_auto against
+relaymind_external_only then compares no local inference. When a run
+shows that, it is the arm's result and is reported with its reasons,
+never hidden or dropped; until a run shows it, it is an expectation, not
+a result.
 
 ### What is not covered yet
 

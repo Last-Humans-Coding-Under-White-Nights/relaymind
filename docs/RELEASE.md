@@ -218,12 +218,16 @@ machine with a real host, the external provider's credential, and the
 pinned local model; the operator command is in `docs/TESTING.md` and
 `integrations/openclaw/README.md` ("M9 evaluation").
 
-Limits known before measurement: the local context stays at 8192 tokens,
-and every OpenClaw request measured so far (10,500 to 10,577 tokens with
-the pinned tokenizer) is over it. relaymind_auto is therefore expected to
-send every OpenClaw turn to the external model, and local_only would answer
-needs_external; the run reports what it observes, with the local turns
-counted, never this expectation as a result. The direct arm's host provider
+Limits known before measurement: the local context stays at 8192 tokens
+(user decision), and every OpenClaw request measured so far (0 of 10 fit;
+10,500 to 10,577 tokens with the pinned tokenizer, macOS qualification) is
+over it; the live AC24 turn in auto without an external model ended
+needs_external / context_limit with 0 model calls. relaymind_auto is
+therefore expected to send every OpenClaw turn to the external model (0
+local turns, reason context_limit), and local_only would answer
+needs_external. When the run shows 0 local turns, that is reported as the
+result, with the reasons and the local-inference comparison marked as one
+without local inference; until then it is an expectation, not a result. The direct arm's host provider
 entry and the `write` tool's argument names are not verified on a real host
 (the task accepts any arguments for `write`). The issue's done-when checks
 stay open until the run is recorded.

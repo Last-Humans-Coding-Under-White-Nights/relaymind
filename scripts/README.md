@@ -45,7 +45,9 @@
   sandbox under the task's exec policy. The export holds every attempt raw,
   the grades and summary of `relaymind.evaluation.openclaw`, and a Markdown
   report; an arm without its endpoint, credential, or local model is
-  not_run (`relaymind_auto` needs both models). The export names the Node
+  not_run (`relaymind_auto` needs both models). An interrupt keeps the
+  attempts that ended: the export is written marked aborted, and the
+  runner exits 130. The export names the Node
   that ran the host and the proxy variables the direct arm's host kept. Live evidence only when run with a real host and models
   (operator step, not run here).
 

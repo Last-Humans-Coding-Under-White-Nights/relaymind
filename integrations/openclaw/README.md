@@ -1180,7 +1180,13 @@ python scripts/run_openclaw_eval.py \
 An arm without its endpoint, credential, or local model is recorded as
 not_run; `relaymind_auto` needs both the external model and the local
 model. The host's `"ok": true` never counts as a success; a host failover
-(a reported provider or model other than the arm's) is counted apart. The
+(a reported provider or model other than the arm's) is counted apart, and
+so is a host interrupt (exit 130 or SIGINT). Interrupting the runner keeps
+the attempts that ended: the export is written marked aborted and the
+runner exits 130. At the 8192-token local context an OpenClaw request does
+not fit the local model (macOS qualification), so `relaymind_auto` is
+expected to show 0 local turns with reason `context_limit`; the report
+states that as the result when it happens. The
 direct arm's host keeps the operator's proxy variables, as the gateways
 do, so both reach the provider the same way; the export names the
 variables (not their values) and the Node that ran the host. The direct arm writes the provider's key into the
