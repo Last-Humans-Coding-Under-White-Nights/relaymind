@@ -124,10 +124,29 @@ Local context limit: an OpenClaw turn carries the host's ~30,000-character
 system prompt and its tool catalog. With the pinned tokenizer that is
 10,500 to 10,577 tokens per request (macOS qualification, branch
 `devnull.exile/m9-mac-qual`, commit `b575c01`), over the local model's 8192.
-So in `auto` every OpenClaw turn goes to the external model, and in
-`local_only` it is `needs_external` (`context_limit`); without an external
-model an OpenClaw turn cannot run. The local context stays 8192 (no runtime,
-manifest, or spec change).
+So in `auto` every OpenClaw turn goes to the external model, and with the
+pinned host and the 8192 local context `local_only` cannot serve an OpenClaw
+turn; without an external model an OpenClaw turn cannot run. What the
+operator sees in `local_only` depends on `limits.localContextLimit`
+("Configuration"):
+
+- copied as the example shows (8192, with `maxCompletionTokens`): the plugin
+  advertises 8192 as the window, and the host's transport refuses the turn
+  itself before sending it, with its own context error ("Context window
+  exceeded: estimated input ... within the 8192-token context."). There is
+  no gateway run and no `X-RelayMind-Run-ID`; the plugin's attempt record
+  has no run (`unavailable`) and no status (fixture
+  `advertised-window-host-refusal`, captured with a smaller window). The
+  transport checks only a request with a max-token budget; without one the
+  turn is sent as below. What the host's agent does after that error was
+  not checked;
+- not set: no window is advertised, so the host sends the turn and the
+  gateway answers 422 `needs_external` (`context_limit`) with a run ID. The
+  plugin classes it `format`, so the host does not retry it on the same
+  model and it is not sent again as a new run ("Cancellation, errors, and
+  retries").
+
+The local context stays 8192 (no runtime, manifest, or spec change).
 
 ### 3. Get the release artifact
 
@@ -223,7 +242,8 @@ Troubleshooting:
 | `Unknown model: relaymind/relaymind-client-tools` | the plugin is not enabled or not loaded (`plugins inspect relaymind --runtime --json`), or it is a package older than `resolveDynamicModel` (#136) |
 | catalog line `RelayMind gateway unreachable at ...` | the gateway is not running at `baseUrl`: start it, check the port |
 | `RelayMind rejected the stored application token (HTTP 401 unauthenticated)` | stale token after a gateway restart: step 5 |
-| `RelayMind needs_external (HTTP 422)`, reason `context_limit` | the turn is over the local limit in `local_only`, or no external model is configured (step 2) |
+| `RelayMind needs_external (HTTP 422)`, reason `context_limit` | the turn is over the local limit in `local_only` (with `localContextLimit` not set), or no external model is configured; `local_only` cannot serve an OpenClaw turn at the 8192 local context, so use `auto` with an external model (step 2) |
+| `Context window exceeded: estimated input ... within the 8192-token context.` | the host's own refusal before sending, in `local_only` with `localContextLimit` 8192: no gateway run, no run ID; `local_only` cannot serve an OpenClaw turn at that context, so use `auto` with an external model (step 2) |
 | `RelayMind execution_mode_forbidden (HTTP 403)` | the gateway's `allowed_modes` does not permit the plugin's `executionMode` |
 | `RelayMind overloaded (HTTP 429)` | another run holds the gateway's execution slot; retry, or set `maxRetries` |
 | install exit 1, "requires capability consent" | add `--accept-capabilities` |
@@ -344,7 +364,11 @@ host configuration; the schema is closed (an unknown key is refused by name):
   endpoint reports them (section 7.5). The host refuses a request over the
   advertised window before sending it, so the advertised window is the
   external limit in `auto` and `external_only` and the local limit in
-  `local_only`; a limit not set for the mode is not advertised. The model
+  `local_only`; a limit not set for the mode is not advertised. With
+  `localContextLimit` 8192 in `local_only`, every OpenClaw turn (10,500 tokens
+  or more) ends at the host with "Context window exceeded" and never reaches
+  the gateway; without it, the gateway answers 422 `needs_external`
+  (step 2, "Local context limit"). The model
   name states the mode, and the catalog log line states which limit the
   window is.
 - `maxRetries` is the plugin's own retries of one request: 0 by default (one

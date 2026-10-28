@@ -84,7 +84,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   user-machine macOS and Windows rows stay `not_run`. The Windows runner's
   artifact had CRLF text files, so the release build is the same bytes per
   checkout, not across platforms. `docs/TESTING.md` says how to refresh the
-  exports from a later run. No spec, gateway, budget, or default change.
+  exports from a later run. The operator guide's local context limit,
+  `limits` bullet, and troubleshooting table (and `docs/TESTING.md`) state
+  that with the pinned host and the 8192 local context `local_only` cannot
+  serve an OpenClaw turn (decision D1), and what the operator sees: with
+  `localContextLimit` copied, the host's own "Context window exceeded" before
+  sending and no gateway run; without it, 422 `needs_external`
+  (`context_limit`), classed `format` and not sent again
+  (`tests/test_openclaw_mac_qualification.py`). No spec, gateway, budget, or
+  default change.
 - OpenClaw cancellation, errors, retries, and run trace correlation (#138;
   RM12, RM14, RM16, RM17, RM20, RM21, RM22, RM25, RM33; AC11, AC12, AC24):
   the plugin maps every gateway error code to the host's error class

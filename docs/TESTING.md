@@ -1023,7 +1023,10 @@ cd ../.. && pytest tests/test_openclaw_host_transport.py \
   tokenizer no host request fits the 8192 local limit, the live AC24 turn
   in auto without an external model (config-row workaround, #136) ended
   needs_external / context_limit with 0 model calls, and the evidence
-  record and design doc cite the measured report. No Node needed.
+  record and design doc cite the measured report; the host transport's own
+  refusal over the advertised window has no gateway run, and the operator
+  guide names both `local_only` outcomes at the 8192 context. No Node
+  needed.
 
 ### OpenClaw provider plugin (#136; RM08, RM12, RM19, RM26, RM33)
 
@@ -1434,6 +1437,17 @@ after the restack and the Gateway port fix, at `393a6bf`
 in CI run 40652444733 (the exports above). None of these is a platform
 qualification: macOS and Windows runs of this revision on a user's machine
 are not_run.
+
+What an operator sees at the 8192 local context (decision D1; the operator
+guide's "Local context limit"): every measured OpenClaw request is 10,500
+tokens or more, so with the pinned host `local_only` cannot serve an
+OpenClaw turn. With `limits.localContextLimit` copied (and
+`maxCompletionTokens`), the host's transport refuses the turn before sending
+it with its own "Context window exceeded" error, and there is no gateway run
+(fixture `advertised-window-host-refusal`, checked by
+`tests/test_openclaw_mac_qualification.py`). Without it, the gateway answers
+422 `needs_external` (`context_limit`), which the plugin classes `format`,
+so the host does not send it again. Use `auto` with an external model.
 
 ### What is not covered yet
 
