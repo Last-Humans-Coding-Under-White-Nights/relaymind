@@ -68,7 +68,14 @@ on macOS (`docs/evidence/2026-10-27-openclaw-mac-qualification/`, recorded
 in `docs/EVIDENCE.md`): 0 of 3 fresh host requests and 0 of 7 probe requests
 fit the 8192 local limit (10,500 to 10,577 tokens). The local context stays
 8192, so in practice every OpenClaw turn goes external in auto and gets
-needs_external in local_only.
+needs_external in local_only. One live turn in auto without an external
+model ended needs_external / context_limit with 0 model calls; it used a
+config-row workaround (a `models.providers` row, not the plugin's model,
+#136). The real host against the gateway over doubles ran on the same Mac
+at `a52f8bf` and failed: the harness host scenarios 4a to 4c ended with
+`checks.passed` false (the plugin's model was unknown to `agent exec`, and
+the test host tools never registered; REPORT.md step 4). The fixes belong
+to #136 and #137; Linux and Windows host runs are not_run.
 
 Host facts from that probe that the steps below rely on: a model in the
 host config needs `name`; `strictMessageKeys` must stay false (true strips
@@ -180,6 +187,12 @@ python scripts/openclaw_qualification.py host \
      RELAYMIND_BASE_URL and RELAYMIND_APP_TOKEN> --json \
      --model relaymind/relaymind-client-tools "Say hello"
 ```
+
+Result so far: the one run, on macOS at `a52f8bf`
+(`docs/evidence/2026-10-27-openclaw-mac-qualification/REPORT.md`, step 4),
+failed: the default, tool-deny, and tool-approve scenarios ended with
+`checks.passed` false, and only the abort scenario passed. The fixes belong
+to #136 and #137 (`docs/EVIDENCE.md`).
 
 The harness passes the gateway URL and token in the command's environment
 only and never writes the token. A command that cannot start is `not_run`;

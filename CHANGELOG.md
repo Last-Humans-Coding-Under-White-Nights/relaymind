@@ -27,8 +27,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `a52f8bf`) counted them with the pinned tokenizer: 0 of 3 fresh host
   requests and 0 of 7 probe requests fit the 8192-token local limit
   (10,500 to 10,577 tokens), and a live AC24 turn in auto without an
-  external model ended needs_external / context_limit with 0 model calls
-  (`tests/test_openclaw_mac_qualification.py`). The local context stays
+  external model (config-row workaround, #136: a `models.providers` row,
+  not the plugin's model) ended needs_external / context_limit with 0 model
+  calls (`tests/test_openclaw_mac_qualification.py`). The harness host
+  scenarios against the gateway over doubles failed at `a52f8bf` (#136,
+  #137). The local context stays
   8192, so in practice OpenClaw turns go external in auto and get
   needs_external in local_only. The plugin itself is #136's.
 - Specification 0.49, OpenClaw host facts recorded on the wire (#135; RM33,

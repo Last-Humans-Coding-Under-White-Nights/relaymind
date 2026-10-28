@@ -4,7 +4,10 @@ The real-host qualification on macOS
 (``docs/evidence/2026-10-27-openclaw-mac-qualification/``, OpenClaw 2026.10.7,
 pinned llama-server b11785 with ``qwen3-0.6b-q8_0`` at ``ctx_size`` 8192)
 counted the host's requests with the pinned tokenizer and ran one live AC24
-turn in auto with no external model. These tests read the stored reports, so
+turn in auto with no external model. That turn used a config-row workaround
+(a ``models.providers`` row, not the plugin's model, because at ``a52f8bf``
+``agent exec`` could not resolve the plugin's model; #136), so it is not a
+turn through the plugin as packaged. These tests read the stored reports, so
 the size the design doc and ``docs/EVIDENCE.md`` state rests on the measured
 files, not on the UTF-8 bound:
 

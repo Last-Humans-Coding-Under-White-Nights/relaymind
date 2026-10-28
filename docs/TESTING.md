@@ -1021,9 +1021,9 @@ cd ../.. && pytest tests/test_openclaw_host_transport.py \
 - `tests/test_openclaw_mac_qualification.py`: the measured macOS reports
   (`docs/evidence/2026-10-27-openclaw-mac-qualification/`): by the pinned
   tokenizer no host request fits the 8192 local limit, the live AC24 turn
-  in auto without an external model ended needs_external / context_limit
-  with 0 model calls, and the evidence record and design doc cite the
-  measured report. No Node needed.
+  in auto without an external model (config-row workaround, #136) ended
+  needs_external / context_limit with 0 model calls, and the evidence
+  record and design doc cite the measured report. No Node needed.
 
 The Node-dependent tests skip with the reason when `node` or
 `integrations/openclaw/node_modules` is missing; `RELAYMIND_OPENCLAW_NODE=1`
@@ -1093,8 +1093,8 @@ probe), and its requests are checked offline by
   A real host ran on macOS against a capture server (the host probe), and
   the tokenizer count on macOS measured 0 of 10 host requests within the
   8192 local limit; one live AC24 turn in auto without an external model
-  ended needs_external / context_limit with 0 model calls. The harness host
-  scenarios at `a52f8bf` failed (#136, #137); Linux and Windows host runs
+  (config-row workaround, #136) ended needs_external / context_limit with
+  0 model calls. The harness host scenarios at `a52f8bf` failed (#136, #137); Linux and Windows host runs
   are not_run. The plugin itself is #136's.
   YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are

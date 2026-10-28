@@ -758,10 +758,14 @@ This is planned integration, not a claim of a working or faster plugin.
   measured on macOS with the pinned tokenizer: 0 of 3 fresh host requests
   and 0 of 7 probe requests fit the 8192 local limit (10,500 to 10,577
   tokens), and a live AC24 turn in auto without an external model ended
-  needs_external / context_limit with 0 model calls
+  needs_external / context_limit with 0 model calls (config-row
+  workaround, #136: a `models.providers` row, not the plugin's model)
   (`docs/evidence/2026-10-27-openclaw-mac-qualification/`). The local
   context stays 8192: in practice OpenClaw turns go external in auto and
-  get needs_external in local_only, and #139 reports that.
+  get needs_external in local_only, and #139 reports that. The real host
+  against the gateway over doubles ran on the same Mac at `a52f8bf` and
+  failed (harness host scenarios 4a to 4c, `checks.passed` false; the
+  fixes belong to #136 and #137). Linux and Windows host runs are not_run.
 - Remove the retired workflow steps placeholder from the demo UI
   (#173; RM23, AC14). Independent of the plugin; can start now.
 - Provider package, model catalog, configuration, and token handover
