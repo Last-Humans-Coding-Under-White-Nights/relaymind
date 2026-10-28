@@ -183,14 +183,17 @@ model evidence for the plugin exists yet (#139).
 | Windows, native | 2026.10.7 documents a native Windows CLI and Gateway, WSL2 optional | `not_run` | `not_run`: no Windows machine. Support gap |
 | Windows, WSL2 | not checked | `not_run` | `not_run`. Never reported as native Windows |
 | Linux x86_64 VPS, Ubuntu 26.04.1 (not a target platform of section 1) | 2026.10.7 (157d8c2), the package's devDependency | v24.22.1, in `>=24.22.1 <25` | artifact packed with `npm run pack:release` at `393a6bf`, then the install check passed all 15 recorded steps (version, the log and Gateway port isolation, install, configure, enable, inspect, token, discovery, a text and a host tool round trip, disable, uninstall, removal of the config entry and the credential; `docs/evidence/2026-10-28-openclaw-vps-functional-145/`): a Linux VPS functional check (not a supported-platform qualification) over doubles |
-| GitHub Actions runners (ubuntu, macOS, Windows) | 2026.10.7, the devDependency | 24.22.1 | the `openclaw-plugin` job; its result is on the pull request, not recorded here |
+| GitHub Actions `ubuntu-latest`, `macos-latest`, `windows-latest` runners (not a user's machine) | 2026.10.7, the devDependency | v24.22.1, in `>=24.22.1 <25` | CI run 40652444733 at PR #182's merge commit `78fc94d`: the install check passed all 15 recorded steps on Linux 6.17.0-1022-azure x86_64, Darwin 25.6.0 arm64, and native Windows 2025Server AMD64 (`docs/evidence/2026-10-28-openclaw-install-check-github-runners/`): a GitHub-hosted runner functional check over doubles (not a user-machine qualification). Later runs are on their pull requests |
 
 Support gaps: no qualification of this revision on macOS or Windows exists,
 and none is planned now (no Mac or Windows machine is available). The macOS
 qualification needs a rerun of the install check, the host tool policy, and
-the interrupt at this revision; the `resolveDynamicModel` fix for `agent
-exec` is verified on the Linux VPS only. Windows (native, which the pinned
-host documents, and WSL2 if used) has never run the host. Each stays a gap until an export is recorded
+the interrupt at this revision on a user's Mac; the `resolveDynamicModel`
+fix for `agent exec` is verified on the Linux VPS and the GitHub-hosted
+runners only. Windows on a user's machine (native, which the pinned host
+documents, and WSL2 if used) has never run the host; the native
+`windows-latest` runner ran the install check, which is not a user-machine
+qualification. Each stays a gap until an export is recorded
 in [`EVIDENCE.md`](EVIDENCE.md#openclaw-plugin-platforms-145), with the OS
 build, the host version, the Node version against the host's range, and
 whether Windows was native or WSL2. The operator commands are in

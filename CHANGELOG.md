@@ -73,8 +73,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `agent exec` failed deleting its own temporary state directory (`EBUSY`
   on a SQLite file it still held) after an answered turn, so the install
   check gives each exchange a fresh `--state-dir` in the host home, and
-  the operator guide says to do the same on Windows. No spec, gateway,
-  budget, or default change.
+  the operator guide says to do the same on Windows. The `openclaw-plugin`
+  job's install check exports of CI run 40652444733 (PR #182) are kept in
+  `docs/evidence/2026-10-28-openclaw-install-check-github-runners/` and read
+  by `tests/test_openclaw_ci_runner_install.py`: all 15 steps passed on the
+  `ubuntu-latest` (Linux 6.17.0-1022-azure), `macos-latest` (Darwin 25.6.0
+  arm64), and native `windows-latest` (Windows 2025Server) runners, recorded
+  in `docs/EVIDENCE.md` and `docs/RELEASE.md` as a GitHub-hosted runner
+  functional check over doubles (not a user-machine qualification); the
+  user-machine macOS and Windows rows stay `not_run`. The Windows runner's
+  artifact had CRLF text files, so the release build is the same bytes per
+  checkout, not across platforms. `docs/TESTING.md` says how to refresh the
+  exports from a later run. No spec, gateway, budget, or default change.
 - OpenClaw cancellation, errors, retries, and run trace correlation (#138;
   RM12, RM14, RM16, RM17, RM20, RM21, RM22, RM25, RM33; AC11, AC12, AC24):
   the plugin maps every gateway error code to the host's error class

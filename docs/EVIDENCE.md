@@ -3237,12 +3237,15 @@ evidence (#139 holds the live evaluation). The pinned host is OpenClaw
 | Platform | Machine and runtime | Node vs host range | Revision | Result | Export |
 | --- | --- | --- | --- | --- | --- |
 | macOS (target) | Apple M1, 8 GiB, macOS 27.0.1 (26A434) arm64; OpenClaw 2026.10.7 (157d8c2), native, npm prefix install | v26.12.1, in `>=26.12.1` | `a52f8bf` (#137, before `resolveDynamicModel` and the test tools' `contracts.tools`) | partial: package checks, install, enable, inspect, token, 401 reconnect and recovery, and an interrupt (exit 130, run `cancelled`) passed; `agent exec` gave `Unknown model`; the tool policy scenarios failed (the test host tools never registered). Request size: 0 of 10 requests fit 8192 (10,500 to 10,577 tokens) | branch `devnull.exile/m9-mac-qual`, commit `b575c01`, `docs/evidence/2026-10-27-openclaw-mac-qualification/REPORT.md` |
-| macOS (target) | the same | | this revision | `not_run` (no Mac access): the install check, the tool policy, and the interrupt at this revision | none |
-| Windows native (target) | OpenClaw 2026.10.7 documents a native Windows CLI and Gateway, WSL2 optional (`docs/platforms/windows.md` in the package) | `not_run` | any | `not_run`: no Windows machine | none |
+| macOS (target) | the same | | this revision | `not_run` (no Mac access): the install check, the tool policy, and the interrupt at this revision on a user's Mac; the `macos-latest` runner row below is not one | none |
+| Windows native (target) | OpenClaw 2026.10.7 documents a native Windows CLI and Gateway, WSL2 optional (`docs/platforms/windows.md` in the package) | `not_run` | any | `not_run`: no Windows machine of a user; the `windows-latest` runner row below is not one | none |
 | Windows WSL2 | | `not_run` | any | `not_run`; a WSL2 run is never recorded as native Windows | none |
 | Linux x86_64 (not a target platform) | VPS, Ubuntu 26.04.1; OpenClaw 2026.10.7 (157d8c2) from the package's devDependency | v24.22.1, in `>=24.22.1 <25` | `2f35664` | install check passed, all 14 steps: functional check over doubles, not a supported-platform qualification | [`2026-10-27-openclaw-install-check-linux-vps.json`](evidence/2026-10-27-openclaw-install-check-linux-vps.json) |
 | Linux x86_64 (not a target platform) | the same | v24.22.1, in `>=24.22.1 <25` | `393a6bf` (after the restack onto #138) | Linux VPS functional check (not a supported-platform qualification): artifact packed with `npm run pack:release` first, then the install check passed all 15 recorded steps (version, isolate-log, isolate-gateway, install, configure, enable, inspect, store-token, discover, text-exchange, tool-exchange, disable, uninstall, remove-config, remove-credential), over doubles | [`2026-10-28-openclaw-vps-functional-145/`](evidence/2026-10-28-openclaw-vps-functional-145/REPORT.md) |
-| GitHub Actions runners | ubuntu, macOS, Windows; the devDependency host | 24.22.1 | each pull request | the `openclaw-plugin` job; its result is on the pull request, not recorded here | the job's uploaded artifact |
+| GitHub Actions `ubuntu-latest` (not a user's machine) | runner OS Linux 6.17.0-1022-azure x86_64 (from the export); OpenClaw 2026.10.7 (157d8c2) from the devDependency | v24.22.1, in `>=24.22.1 <25` | `78fc94d` (PR #182 merge commit, head `b7021d5`) | GitHub-hosted runner functional check over doubles (not a user-machine qualification): CI run 40652444733, all 15 recorded steps passed (version to remove-credential), the text and host `read` round trips went through the gateway, which executed nothing | [`2026-10-28-openclaw-install-check-github-runners/`](evidence/2026-10-28-openclaw-install-check-github-runners/ubuntu-latest/install-check.json) |
+| GitHub Actions `macos-latest` (not a user's machine) | runner OS Darwin 25.6.0 arm64 (from the export); the same host | v24.22.1, in `>=24.22.1 <25` | `78fc94d` (the same) | GitHub-hosted runner functional check over doubles (not a user-machine qualification): CI run 40652444733, all 15 recorded steps passed (version to remove-credential), the text and host `read` round trips went through the gateway, which executed nothing | [`2026-10-28-openclaw-install-check-github-runners/`](evidence/2026-10-28-openclaw-install-check-github-runners/macos-latest/install-check.json) |
+| GitHub Actions `windows-latest` (not a user's machine) | runner OS Windows 2025Server AMD64, native, not WSL2 (from the export); the same host | v24.22.1, in `>=24.22.1 <25` | `78fc94d` (the same) | GitHub-hosted runner functional check over doubles (not a user-machine qualification): CI run 40652444733, all 15 recorded steps passed (version to remove-credential), the text and host `read` round trips went through the gateway, which executed nothing; the artifact's text files had CRLF line ends (below) | [`2026-10-28-openclaw-install-check-github-runners/`](evidence/2026-10-28-openclaw-install-check-github-runners/windows-latest/install-check.json) |
+| GitHub Actions runners, later runs | ubuntu, macOS, Windows | 24.22.1 | each pull request | the `openclaw-plugin` job; a later run is on its pull request and is recorded here only when its exports are kept as above | the job's uploaded artifact |
 
 The Linux VPS install check, in detail (`scripts/openclaw_install_check.py`,
 artifact `relaymind-openclaw-provider-0.1.0.tgz`, sha256
@@ -3283,7 +3286,61 @@ pinned host takes as an explicit Gateway target. The check now sets
 `gateway.port` in the isolated config instead (`393a6bf`).
 
 Support gaps: there is no Mac or Windows access, so the macOS row of this
-revision and both Windows rows stay `not_run`. Native Windows is the target,
+revision and both Windows rows stay `not_run`. The GitHub-hosted runner rows
+do not close them: a runner is a VM image GitHub picks and changes, not a
+user's machine. Native Windows is the target,
 since the pinned host documents native Windows support; a WSL2 run would be
 recorded as WSL2. Each row stays a gap until an export from that machine is
 recorded here (`docs/RELEASE.md`, "Support gaps").
+
+### OpenClaw install check on GitHub-hosted runners (#145)
+
+**GitHub-hosted runner functional check over doubles (not a user-machine qualification).** These are the exports the `openclaw-plugin` job uploaded
+in CI run 40652444733 (the `pull_request` event of PR #182, 28 October
+2026, all three jobs passed), kept in
+[`docs/evidence/2026-10-28-openclaw-install-check-github-runners/`](evidence/2026-10-28-openclaw-install-check-github-runners/)
+with each job's `SHA256SUMS` and `release.json` (the tarball is not kept).
+The only change is line ends: the Windows job wrote its export with CRLF,
+which `.gitattributes` stores as LF (`docs/evidence/**/*.json text
+eol=lf`); the table gives both digests.
+`scripts/openclaw_install_check.py` took the release artifact the job had
+just built through the pinned host
+(`OpenClaw 2026.10.7 (157d8c2)`, from `integrations/openclaw/node_modules`)
+against the real gateway over model doubles. It is not live model evidence.
+The commit tested is the pull request's merge commit
+`78fc94dd74811724a19b42a36ddfcd9382741a8f` (PR head
+`b7021d51b4d7d500bc8cee9496cf8de8f6b4303e` merged onto its base at the
+time), clean. Node was v24.22.1 on every runner. The OS and machine are the
+export's `versions` (Python's `platform` on the runner), checked by
+`tests/test_openclaw_ci_runner_install.py`.
+
+| Runner | OS and machine (export) | Steps | Sum of steps | Install | Artifact sha256 | Export sha256 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `ubuntu-latest` | Linux 6.17.0-1022-azure, x86_64 | 15 of 15 passed | 67.4 s | 15.3 s | `64d5530eb3ab4f7642fcd788eadfec5ca22674ea5288ea58c75f955d1cfe6e29` | `c447372290b03803fb5ee737cc60dc9b72c7d53051edfbedec98d96ca5624801` |
+| `macos-latest` | Darwin 25.6.0, arm64 | 15 of 15 passed | 131.2 s | 31.6 s | `64d5530eb3ab4f7642fcd788eadfec5ca22674ea5288ea58c75f955d1cfe6e29` | `da8872e43eee43f807c1a31ede656d10076b4784c95c737116c089382d38456a` |
+| `windows-latest` | Windows 2025Server, AMD64 (the host's log: Windows_NT 10.0.26100) | 15 of 15 passed | 257.3 s | 138.8 s | `5585ffa598325b585dae06172bfbbea62dd1efbae69a7c55dd50c712b78d7b8e` | `cdd2b49036d38082f53b145ddbcb27bddfb6a4038e526da14b22dcd8d3166266` (CRLF line ends as uploaded: `fdf3d78448e4569f086fc0f3a0bcaa74706482a10a0eb847c566fc9c32468ee5`) |
+
+On each runner, as on the Linux VPS: install with
+`--force --accept-capabilities`, `plugins inspect` `loaded` with provider
+`relaymind` and no diagnostics, the token through `paste-api-key` on
+standard input (`<not recorded>` in the export), `models list --refresh`
+listing `relaymind/relaymind-client-tools`, a text round trip ("Hello from
+RelayMind."), and a host `read` round trip (`call_read_1` replayed as
+`callread1`, the file's text in the next run). The gateway executed no host
+tool, and all three runs completed. Uninstall left the config entry, the
+`relaymind:manual` profile, and the token; the guide's removal steps
+cleared them. The host paths were in a temp host home, and `gateway.port`
+was a closed loopback port set in its config.
+
+Also seen: the `windows-latest` artifact is 40,712 bytes, against 40,410 on
+the other two. Its `README.md`, `package.json`, and `openclaw.plugin.json`
+have CRLF line ends: the runner's checkout converted line ends, and
+`.gitattributes` does not pin `integrations/openclaw/` to LF. So the release
+build is the same bytes per checkout, not across platforms. The host
+installed and loaded it the same way.
+
+Not shown: macOS on a user's machine at this revision stays `not_run` (no
+Mac access); Windows on a user's machine, native and WSL2, stays `not_run`
+(no Windows machine). Neither do these runs cover the stale-token
+reconnect, the interrupt, the tool policy scenarios, a host update or
+rollback, or any live model.

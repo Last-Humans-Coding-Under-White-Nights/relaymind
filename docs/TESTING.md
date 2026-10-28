@@ -1389,13 +1389,51 @@ What runs where:
   macOS and Windows `not_run` as support gaps, with the native Windows
   note.
 
+- `tests/test_openclaw_ci_runner_install.py`: reads the GitHub-hosted
+  runner functional check over doubles (not a user-machine qualification)
+  of the install check (`docs/evidence/2026-10-28-openclaw-install-check-github-runners/`,
+  the `openclaw-plugin` job's exports of CI run 40652444733): on
+  `ubuntu-latest`, `macos-latest`, and `windows-latest`, each export names
+  its runner, Node v24.22.1, the pinned host, the runner's OS and machine,
+  and the clean merge commit; all 15 steps passed in order with the release
+  build its job uploaded; the round trips went through the gateway, which
+  executed nothing; uninstall's leftovers were cleared by the removal
+  steps; no token or machine path (POSIX, Windows, or `~/`) is in the
+  export; `docs/EVIDENCE.md` and `docs/RELEASE.md` carry one labeled row
+  per runner with its OS version, and the user-machine macOS and Windows
+  rows stay `not_run`.
+
+To refresh the runner exports from a later CI run (the job uploads them as
+`openclaw-plugin-<runner>` artifacts, kept 90 days by default):
+
+```bash
+gh run download <run-id> -D <empty-dir>
+for r in ubuntu-latest macos-latest windows-latest; do
+  mkdir -p docs/evidence/<date>-openclaw-install-check-github-runners/$r
+  cp <empty-dir>/openclaw-plugin-$r/ci-evidence/openclaw-install-check-$r.json \
+    docs/evidence/<date>-openclaw-install-check-github-runners/$r/install-check.json
+  cp <empty-dir>/openclaw-plugin-$r/release/openclaw/{SHA256SUMS,release.json} \
+    docs/evidence/<date>-openclaw-install-check-github-runners/$r/
+done
+```
+
+Copy them unedited (git stores a CRLF export with LF line ends; record both
+digests), then update the runner rows and the runner section in
+`docs/EVIDENCE.md` (run ID, merge commit, each export's `versions.os`, and
+the export and artifact SHA-256s), the runner row in `docs/RELEASE.md`, and
+the constants at the top of `tests/test_openclaw_ci_runner_install.py`. A
+runner row never replaces a user-machine row: those stay `not_run` until an
+export from that machine is recorded.
+
 The install check with the pinned host passed on a Linux VPS twice, as a
 functional check over gateway doubles: at `2f35664`
 (`docs/evidence/2026-10-27-openclaw-install-check-linux-vps.json`) and,
 after the restack and the Gateway port fix, at `393a6bf`
 (`docs/evidence/2026-10-28-openclaw-vps-functional-145/`; see
-`docs/EVIDENCE.md`). It is not a platform qualification: macOS and Windows
-runs of this revision on a user's machine are not_run.
+`docs/EVIDENCE.md`). It also passed on the three GitHub-hosted runners
+in CI run 40652444733 (the exports above). None of these is a platform
+qualification: macOS and Windows runs of this revision on a user's machine
+are not_run.
 
 ### What is not covered yet
 
