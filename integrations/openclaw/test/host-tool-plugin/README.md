@@ -11,10 +11,18 @@ never installed outside a test host.
   (`allow-once` or `deny`).
 
 OpenClaw executes both tools under its own policy; RelayMind only proposes
-the call. The approval needs an approval surface: headless `openclaw agent
-exec` has none (on the macOS probe an `ask` policy failed closed without a
-running Gateway), so the headless policy runs use the host's own `exec` tool
-(`--scenario exec-deny|exec-full`) instead. Gating a plugin tool through
-`before_tool_call` is read from the pinned docs only, not_run. Status: the shape is unit-tested (`test/host-tool-plugin.test.ts`);
-loading it into a real host is not run on this machine (operator or CI step,
-see `integrations/openclaw/README.md`).
+the call. The manifest declares both tools in `contracts.tools`: without it
+the pinned host refuses to register them (macOS run at `a52f8bf`). The host
+offers them to the model only with `tools.toolSearch false` and the two
+names in `tools.alsoAllow` (or `tools.profile full`).
+
+The approval needs an approval surface. Headless `openclaw agent exec` has
+none: in the Linux VPS functional check (not a supported-platform
+qualification,
+`docs/evidence/2026-10-28-openclaw-vps-functional-137/`) the host blocked
+every write with "Plugin approval unavailable: non-interactive CLI runs have
+no approval-capable initiating surface", so the headless allow path uses the
+host's own `exec` tool (`--scenario exec-full`). An approval answered by an
+operator at a running OpenClaw Gateway is not_run. The shape is unit-tested
+in `test/host-tool-plugin.test.ts`; install and remove steps are in
+`integrations/openclaw/README.md`.
