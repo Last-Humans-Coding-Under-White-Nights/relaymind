@@ -1080,10 +1080,25 @@ cd ../.. && pytest tests/test_openclaw_plugin.py
   external call, local_only makes no external call, and parallel_demo is
   refused before anything is sent.
 
-The real host loading the packed plugin, `agent exec` through the
-resolved alias (and whether the host honors this package's switches on the
-wire, section 7.5), and the token setup after a real gateway restart, are
-operator steps, not run yet
+- `tests/test_openclaw_vps_functional.py`: reads the Linux VPS functional
+  check (not a supported-platform qualification) of this package on the
+  real pinned host against the gateway over doubles
+  (`docs/evidence/2026-10-28-openclaw-vps-functional-136/`): `agent exec`
+  found the alias before any catalog refresh (`resolveDynamicModel`), the
+  host honored the plugin-supplied model's switches on the wire (no
+  `stream_options`, section 7.5), the stale-token 401 line and recovery,
+  the host's schema refusing parallel_demo, the command forms (Q4), and
+  what uninstall leaves until `models auth logout` and `config unset`
+  remove it. It also checks that the README gives those forms.
+- `integrations/openclaw/test/manifest.test.ts` also checks that the
+  `configSchema` enum leaves parallel_demo out, which is what makes the
+  host refuse it before any plugin code runs.
+
+The check itself is rerun with
+`docs/evidence/2026-10-28-openclaw-vps-functional-136/scaffold/vps_functional.py`
+(the pinned host from `integrations/openclaw/node_modules`, host state in a
+temp dir; a few minutes, no model). The same steps on macOS and Windows for
+this package are not_run
 ([`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
 
 The Node-dependent tests skip with the reason when `node` or

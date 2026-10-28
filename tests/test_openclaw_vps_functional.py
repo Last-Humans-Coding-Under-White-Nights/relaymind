@@ -25,6 +25,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 RUN = ROOT / "docs" / "evidence" / "2026-10-28-openclaw-vps-functional-136"
+README = ROOT / "integrations" / "openclaw" / "README.md"
 LABEL = "Linux VPS functional check (not a supported-platform qualification)"
 # Fields section 7.1 rejects or the plugin's switches turn off.
 SWITCHED_OFF = (
@@ -158,3 +159,20 @@ def test_uninstall_leaves_the_credential_until_logout_removes_it():
     assert cleaned["plugins.entries.relaymind"] is None
     assert cleaned["auth.profiles"] == []
     assert cleaned["files_holding_token"] == []
+
+
+def test_the_readme_gives_the_working_command_forms_and_the_removal_steps():
+    """Q4, Q12: the operator steps match what the pinned host accepted."""
+    text = README.read_text("utf-8")
+    for form in (
+        "--force --accept-capabilities",
+        "openclaw plugins enable relaymind",
+        "openclaw models list --refresh",
+        "openclaw plugins uninstall relaymind --force",
+        "openclaw models auth logout relaymind:manual",
+        "openclaw config unset plugins.entries.relaymind",
+        LABEL,
+        "2026-10-28-openclaw-vps-functional-136",
+    ):
+        assert form in text, form
+    assert "(operator, not run yet)" not in text

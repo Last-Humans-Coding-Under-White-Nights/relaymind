@@ -6,8 +6,14 @@ provider through the public plugin SDK of OpenClaw v2026.10.7, publishes the
 client-owned alias `relaymind/relaymind-client-tools` when the gateway serves
 it, and holds the gateway's application token in the host's credential store.
 Round trips with host tools are #137, cancellation, error mapping, and retries
-#138, the installable artifact, CI, and the operator guide #145. The real host
-has not loaded this package yet: that is an operator step (below), not_run.
+#138, the installable artifact, CI, and the operator guide #145. The real
+pinned host loaded this package once, in a Linux VPS functional check (not a
+supported-platform qualification) against the gateway over model doubles
+([`docs/evidence/2026-10-28-openclaw-vps-functional-136/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-136/REPORT.md)):
+install, enable, inspect, token setup, `models list --refresh`, a text turn
+through `agent exec`, the stale-token 401 line and recovery, and removal
+all worked with the command forms below. This package on macOS and Windows
+is `not_run`.
 
 What the plugin claims, and nothing more: text input; at most one function
 call per response, executed by OpenClaw under its own approvals; the answer is
@@ -79,7 +85,14 @@ host configuration; the schema is closed (an unknown key is refused by name):
   <file>`); the plugin never starts it.
 - `executionMode` is sent on every request as `X-RelayMind-Execution-Mode`
   (auto is sent too). `parallel_demo` and unknown values are refused, never
-  changed. The gateway's policy keeps its meaning: a mode it does not permit
+  changed. The host refuses them first: it validates the entry against the
+  manifest's `configSchema`, whose enum is `auto`, `local_only`,
+  `external_only`, before any plugin code runs. `openclaw config set
+  ... executionMode parallel_demo` exits 1 with `Config change declined`
+  and `must be equal to one of the allowed values`, so the plugin's own
+  parallel_demo message does not show (macOS run at `a52f8bf`, and the
+  Linux VPS functional check). A value written straight into the config
+  file makes the host leave the plugin out (macOS run). The gateway's policy keeps its meaning: a mode it does not permit
   is 403 `execution_mode_forbidden`, and the catalog says so. An
   `external_only` setup needs no local model.
 - `limits` are copied by hand from the gateway's configuration: no gateway
@@ -106,16 +119,23 @@ printf "%s\n" "$TOKEN" | openclaw models auth paste-api-key --provider relaymind
 
 On the macOS host probe (OpenClaw 2026.10.7), `paste-api-key` took a
 43-character token on standard input with no format check, and the stored
-key reached the catalog hook. It may warn that the local Gateway could not
-refresh; a headless `agent exec` still reads the stored key.
+key reached the catalog hook; the Linux VPS functional check saw the same
+with this package (`Auth profile: relaymind:manual (relaymind/api_key)`).
+It warns that the local Gateway could not refresh; a headless `agent exec`
+still reads the stored key. The host keeps the key in its state database
+(`$OPENCLAW_STATE_DIR/state/openclaw.sqlite`), not in the config file.
 `openclaw models auth login --provider relaymind` asks for the token too,
 but only in an interactive terminal: without one it refuses, and typing the
 token at its prompt was not checked (`not_run`).
 `RELAYMIND_APP_TOKEN` in the host's environment is the provider's declared
 env var; reading it was not checked on a real host (`not_run`). After a gateway
 restart the stored token is stale: requests and discovery fail with 401
-`unauthenticated`, and the catalog logs the reconnect instruction (store the
-new token the same way). The plugin never logs, records, or forwards the
+`unauthenticated`, and `models list --refresh` logs the reconnect instruction
+(store the new token the same way). `agent exec` with the stale token exits 1
+with the host's own message (`Couldn't sign in to the AI service`, logged as
+`401 a valid application token is required`), not the plugin's line. After
+`paste-api-key` with the new token, both recover (Linux VPS functional check
+and macOS run). The plugin never logs, records, or forwards the
 token: every message goes through a redacting logger, discovery refuses
 redirects, and requests go only to the configured loopback URL.
 
@@ -131,7 +151,21 @@ The provider publishes the alias two ways:
   the catalog hook and failed with `Unknown model` until the plugin had
   `resolveDynamicModel` (a static catalog did not help either). Any other ID
   resolves to nothing. When the gateway does not serve the alias, a request
-  fails with the gateway's own error, never an empty answer.
+  fails with the gateway's own error, never an empty answer. With this
+  package, `agent exec` answered through the alias before any catalog
+  refresh, sending no discovery request (Linux VPS functional check).
+
+`openclaw models list` without `--refresh` shows only the cached catalog
+when no host Gateway is running, so it has no relaymind row; use
+`--refresh` to run the catalog hook. The host shows a 128000 context window
+for the row when the plugin advertises none: that is the host's default,
+not a RelayMind limit.
+
+On the wire, the host honored the plugin-supplied model's switches on both
+paths (Linux VPS functional check, spec 0.49): no `stream_options`, no
+`max_tokens` (it sent `max_completion_tokens` when the limit was copied), no
+`reasoning_effort`, `store`, `prompt_cache_key`, `parallel_tool_calls`, or
+tool `strict`, and no developer message.
 
 The pinned host calls the catalog hook with no abort signal, so every
 discovery request has the plugin's own five-second timeout; a hung gateway
@@ -144,7 +178,7 @@ Each catalog run logs one line, and reports the host outcome:
 
 | Diagnosis | Host outcome | Published |
 | --- | --- | --- |
-| no stored token | none (the catalog returns nothing) | no |
+| no stored token (the pinned host did not call the hook without a stored credential, so no line showed) | none (the catalog returns nothing) | no |
 | gateway unreachable at `<baseUrl>` | `unavailable` | no |
 | token rejected (401), with the reconnect instruction | `auth-rejected` | no |
 | other gateway error or a redirect | `unavailable` | no |
@@ -191,13 +225,15 @@ that commit as its provenance, and
 `tests/test_openclaw_qualification_script.py` fails when the tree was dirty or
 when a capture input changed after the recorded commit.
 
-### Real host load and token setup (operator, not run yet)
+### Real host load and token setup
 
-On a machine with OpenClaw v2026.10.7 and a running `relaymind serve`. The
-command forms were confirmed on the macOS host probe with a probe plugin, not
-with this package; this package on a real host is `not_run`. Isolate the
-host's state with `OPENCLAW_HOME`, `OPENCLAW_STATE_DIR`,
-`OPENCLAW_CONFIG_PATH`, and `--config`, as the probe did.
+On a machine with OpenClaw v2026.10.7 and a running `relaymind serve`.
+These forms worked with this package in the
+Linux VPS functional check (not a supported-platform qualification)
+([`docs/evidence/2026-10-28-openclaw-vps-functional-136/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-136/REPORT.md)),
+and match the macOS run at `a52f8bf`. Isolate the host's state with
+`OPENCLAW_HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_CONFIG_PATH`, and
+`--config`.
 
 ```bash
 cd integrations/openclaw && npm ci && npm run build
@@ -206,17 +242,41 @@ npm pack --pack-destination /tmp/rm-plugin
 openclaw plugins install npm-pack:/tmp/rm-plugin/relaymind-openclaw-provider-0.1.0.tgz \
   --force --accept-capabilities
 openclaw config set plugins.entries.relaymind.config.baseUrl http://127.0.0.1:8080/v1
-openclaw plugins inspect relaymind --runtime --json
-openclaw models auth paste-api-key --provider relaymind   # the token relaymind serve printed, on stdin
-openclaw models list --refresh --provider relaymind       # runs the catalog hook
-openclaw agent exec "Say hello" --model relaymind/relaymind-client-tools --json
-# restart relaymind serve: the list reports the 401 reconnect line; paste the new token; it recovers
+# the install leaves the plugin disabled until it is configured
+openclaw plugins enable relaymind
+openclaw plugins inspect relaymind --runtime --json         # status: loaded
+printf "%s\n" "$TOKEN" | openclaw models auth paste-api-key --provider relaymind
+openclaw models list --refresh --json                       # runs the catalog hook
+openclaw agent exec --config "$OPENCLAW_CONFIG_PATH" --json \
+  --model relaymind/relaymind-client-tools "Say hello"
+# restart relaymind serve: models list --refresh logs the 401 reconnect line;
+# paste the new token the same way, and both list and exec recover
 ```
 
-Disable with `openclaw plugins disable relaymind`; remove with
-`openclaw plugins uninstall relaymind`. On the probe, uninstall left the
-plugin's config entry, its stored credential, and older install folders
-behind; the full operator guide (#145) covers removing them.
+### Disable and remove
+
+```bash
+openclaw plugins disable relaymind
+# without a terminal, uninstall asks for confirmation and exits 1; --force skips it
+openclaw plugins uninstall relaymind --force
+```
+
+Uninstall removes the plugin's install record, directory, and settings, but
+the host keeps three things (macOS run, and the Linux VPS functional check):
+`plugins.entries.relaymind: {"enabled": false}` in the config, the auth
+profile `relaymind:manual`, and the gateway token in the host state database.
+Remove the credential and the entry explicitly:
+
+```bash
+openclaw models auth list                                  # shows relaymind:manual
+openclaw models auth logout relaymind:manual --yes          # removes the profile and the stored token
+openclaw config unset plugins.entries.relaymind
+```
+
+After these two commands no file under the isolated host home held the
+token (Linux VPS functional check). The host also leaves `config.json.bak*`
+files from each config change; they did not hold the token. The full
+operator guide is #145.
 
 ## Operator runs
 
@@ -239,7 +299,11 @@ config-row workaround (a `models.providers` row, not the plugin's model,
 at `a52f8bf` and failed: the harness host scenarios 4a to 4c ended with
 `checks.passed` false (the plugin's model was unknown to `agent exec`, and
 the test host tools never registered; REPORT.md step 4). The fixes belong
-to #136 and #137; Linux and Windows host runs are not_run.
+to #136 and #137. The Linux VPS functional check (not a supported-platform
+qualification) then ran this package's load, token setup, and text turn on
+the real pinned host against the gateway over doubles, with the fix of the
+`Unknown model` failure seen on the wire; the harness host scenarios, and
+any Windows run, are not_run.
 
 Host facts from that probe that the steps below rely on: a model in the
 host config needs `name`; `strictMessageKeys` must stay false (true strips

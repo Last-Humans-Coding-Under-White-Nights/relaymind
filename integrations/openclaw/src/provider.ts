@@ -103,8 +103,8 @@ export function createRelayMindProvider(options: RelayMindProviderOptions): Prov
     },
     // Sync and cheap, as the host requires: no request, no credential. maxTokens
     // and contextWindow are omitted when not configured (section 7.5: never
-    // estimated). A real host resolving the entry without limits is not_run:
-    // the probe's plugin model set both.
+    // estimated). The pinned host resolved the entry without limits in the
+    // Linux VPS functional check (docs/evidence/2026-10-28-openclaw-vps-functional-136/).
     resolveDynamicModel: (ctx: ProviderResolveDynamicModelContext) =>
       ctx.provider === PROVIDER_ID && ctx.modelId === MODEL_ID ? (runtimeModel(config) as never) : undefined,
     buildMissingAuthMessage: () => `No RelayMind application token is stored. ${TOKEN_HANDOVER}`,

@@ -777,10 +777,15 @@ This is planned integration, not a claim of a working or faster plugin.
   copied limits, and tells an unreachable gateway, a stale token (with the
   reconnect instruction), an absent alias, and the configured mode's
   readiness apart; deterministic tests drive it against the gateway over
-  doubles (`tests/test_openclaw_plugin.py`). The real-host load and the
-  token setup after a real gateway restart, and whether the real host
-  honors the plugin's switches on the wire, are not_run (operator steps in
-  `integrations/openclaw/README.md`).
+  doubles (`tests/test_openclaw_plugin.py`). A Linux VPS functional check
+  (not a supported-platform qualification) ran the package on the real
+  pinned host against the gateway over doubles
+  (`docs/evidence/2026-10-28-openclaw-vps-functional-136/`): install,
+  enable, inspect, token setup, `models list --refresh`, `agent exec`
+  through `resolveDynamicModel` with no catalog refresh, the stale-token
+  401 line and recovery, and removal (`models auth logout`, `config unset`)
+  worked, and the host honored the plugin's switches on the wire (no
+  `stream_options`). macOS and Windows runs of this package are not_run.
 - Text and host-owned tool round trips, request compatibility, and
   buffered SSE (#137; RM08, RM09, RM19, RM20, RM33; AC10, AC24), after #136.
 - Cancellation, bounded retry behavior, errors, and trace correlation
