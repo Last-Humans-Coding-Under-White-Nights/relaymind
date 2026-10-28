@@ -27,6 +27,7 @@ from api_helpers import RUN_ID_HEADER, RunningServer, make_app, token_of
 from gateway_helpers import build_gateway, text_turn, tool_turn
 from helpers import ScriptedAdapter, make_capabilities, of_type
 from native_helpers import GatedAdapter
+from relaymind.adapters import GenerationFailed
 from relaymind.api.app import ChatSettings, NativeSettings
 from relaymind.api.chat import ClientToolsChat
 from relaymind.orchestrator.budgets import LocalBudgets
@@ -145,10 +146,9 @@ def in_background(fn):
 HOST_SAME_MODEL_RETRIED = {"rate_limit", "overloaded", "server_error", "timeout", "output_limit"}
 
 
-def host_class(output, key=None):
-    """The class the pinned host's own classifier gives the failed message (section 7.5)."""
-    result = output[key] if key else output["results"][0]
-    return result["host_failover_reason"]
+def host_class(output):
+    """The class the pinned host's own classifier gives the first failed message (section 7.5)."""
+    return output["results"][0]["host_failover_reason"]
 
 
 def failure_of(output, index=0):
@@ -371,6 +371,36 @@ def test_needs_external_is_422_a_refusal_the_host_does_not_retry(tmp_path):
     )
     assert host_class(output) == "format"
     assert host_class(output) not in HOST_SAME_MODEL_RETRIED
+
+
+def test_needs_external_after_a_failed_local_generation_is_a_provider_failure(tmp_path):
+    """local_only: the local runtime fails the generation (capability_missing).
+
+    Spec 0.49 section 7.5: that reason depends on the local runtime's health, not
+    on the configuration and the request, so it is server_error, which the pinned
+    host retries on the same model, and the message never calls it a refusal.
+    """
+    gateway, app = client_gateway(
+        tmp_path,
+        [[GenerationFailed(code="connection_error", message="x")]],
+        external_turns=[text_turn("unused")],
+    )
+    with RunningServer(app) as running:
+        output = drive(
+            running,
+            app,
+            tmp_path,
+            prompt="Say hello.",
+            maxRequests=1,
+            pluginConfig={"executionMode": "local_only"},
+        )
+    message = failure_of(output)
+    assert message.startswith("RelayMind needs_external (HTTP 422): ")
+    assert "reason capability_missing." in message
+    assert "refused this request" not in message
+    assert gateway.external.requests == []
+    assert host_class(output) == "server_error"
+    assert host_class(output) in HOST_SAME_MODEL_RETRIED
 
 
 @pytest.mark.parametrize("early_headers", [False, True], ids=["http_503", "stream_event"])

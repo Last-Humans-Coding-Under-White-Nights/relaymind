@@ -255,7 +255,10 @@ describe("the host's failover hooks (section 7.5, #138)", () => {
   const provider = createRelayMindProvider({ pluginConfig: { baseUrl: BASE }, logger });
   const overflow =
     "RelayMind context_limit_exceeded (HTTP 400): The conversation does not fit. Gateway run run_1.";
-  const local = "RelayMind needs_external (HTTP 422): The request cannot complete. Gateway run run_1.";
+  const local =
+    "RelayMind needs_external (HTTP 422): The request cannot complete. Gateway run run_1, reason context_limit.";
+  const blip =
+    "RelayMind needs_external (HTTP 422): The local stage could not finish. Gateway run run_1, reason capability_missing.";
 
   it("matchesContextOverflowError is true only for context_limit_exceeded", () => {
     expect(provider.matchesContextOverflowError?.({ errorMessage: overflow })).toBe(true);
@@ -265,8 +268,10 @@ describe("the host's failover hooks (section 7.5, #138)", () => {
 
   it("classifyFailoverReason names the class and leaves other errors to the host", () => {
     expect(provider.classifyFailoverReason?.({ errorMessage: overflow })).toBe("context_overflow");
-    // Spec 0.49: needs_external is format, which the pinned host does not retry on the same model.
+    // Spec 0.49: needs_external over the local context is format, which the pinned
+    // host does not retry on the same model; a failed local generation is server_error.
     expect(provider.classifyFailoverReason?.({ errorMessage: local })).toBe("format");
+    expect(provider.classifyFailoverReason?.({ errorMessage: blip })).toBe("server_error");
     expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "external_failed" })).toBe("server_error");
     expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "overloaded" })).toBe("overloaded");
     expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "deadline_exceeded" })).toBe("timeout");

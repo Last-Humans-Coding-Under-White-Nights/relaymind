@@ -1208,10 +1208,12 @@ cd ../.. && pytest tests/test_openclaw_cancel_errors.py tests/test_openclaw_qual
   host's class (`context_limit_exceeded` the only context overflow,
   `needs_external` with a local context limit not one, 429 overload, 504
   timeout, 401 authentication with the exact reconnect instruction,
-  `needs_external` with any reason code, `execution_mode_forbidden`,
-  `idempotency_conflict`, and `run_terminal` the request format class, the
-  rest failures of this provider, `external_failed` whatever its reason
-  code), read back from the message alone and kept by the pinned host's own
+  `needs_external` with reason code `context_limit`, `execution_mode`, or
+  `invalid_output`, `execution_mode_forbidden`, `idempotency_conflict`, and
+  `run_terminal` the request format class, the rest failures of this
+  provider, `needs_external` with a load- or runtime-dependent reason code
+  such as `capability_missing` and `external_failed` whatever its reason
+  code, and never a configuration refusal in their message), read back from the message alone and kept by the pinned host's own
   classifier, with the pinned host's same-model retry classes read from its
   build (`test/pinned-host.ts`; spec 0.49 section 7.5); the
   message is one line, bounded, without a known token or a bearer value;
@@ -1267,8 +1269,10 @@ cd ../.. && pytest tests/test_openclaw_cancel_errors.py tests/test_openclaw_qual
   the slot is free, and 504 are named failures, never empty answers, with
   the run ID where one exists and usage unknown; the pinned host's own
   classifier keeps the plugin's class: `format` for 403, 422
-  `needs_external`, and both 409s (not a class it retries on the same
-  model), `server_error` for `external_failed`. A host retry of the same
+  `needs_external` after refused local output, and both 409s (not a class
+  it retries on the same model), `server_error` for `external_failed` and
+  for a 422 `needs_external` after a failed local generation
+  (`capability_missing`, which the message does not call a refusal). A host retry of the same
   request replays the completed run with the same run ID and no model call;
   the tool-result turn gets a new key and run in the same turn; a retry of
   the follow-up after an allowed write replays the answer and the host

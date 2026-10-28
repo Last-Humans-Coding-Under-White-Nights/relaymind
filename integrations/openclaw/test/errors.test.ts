@@ -49,6 +49,8 @@ function failedMessage(fields: {
 // Every gateway code with its status (spec section 11) and the host's class
 // (section 7.5, spec 0.49): a refusal that follows from the configuration and
 // the request is format, which the pinned host does not retry on the same model.
+// needs_external here carries no reason_code, so nothing shows that a retry
+// meets the same refusal: it is server_error (its reason_codes are below).
 const TABLE: [string, number | undefined, string, string][] = [
   ["context_limit_exceeded", 400, "context_overflow", "none"],
   ["invalid_request", 400, "format", "none"],
@@ -58,7 +60,7 @@ const TABLE: [string, number | undefined, string, string][] = [
   ["execution_mode_forbidden", 403, "format", "none"],
   ["idempotency_conflict", 409, "format", "none"],
   ["run_terminal", 409, "format", "none"],
-  ["needs_external", 422, "format", "none"],
+  ["needs_external", 422, "server_error", "none"],
   ["overloaded", 429, "overloaded", "same_key"],
   ["internal_error", 500, "server_error", "none"],
   ["workflow_unavailable", 503, "server_error", "none"],
@@ -145,7 +147,7 @@ describe("the host's error classes (section 7.5)", () => {
     }
   });
 
-  it("a local context limit under needs_external is not a context overflow", () => {
+  it("a local context limit under needs_external is not a context overflow, and is format", () => {
     // reason_code context_limit: the local model is too small, the external one was not allowed.
     const message = describeFailure(
       gatewayFailure(failedMessage({ status: 422, code: "needs_external", reasonCode: "context_limit" }))!,
@@ -271,21 +273,54 @@ describe("the pinned host's class and same-model retry (section 7.5)", () => {
     "external_failed",
     "deadline_exceeded",
     "predicate_unmet",
+    "needs_external",
   ];
   it.each(TABLE)("%s: the pinned host retries it on the same model only if listed", (code, _status, reason) => {
     expect(TRANSIENT.includes(reason)).toBe(HOST_RETRIED.includes(code));
   });
 
-  // needs_external is a refusal under the effective mode whatever stopped the local stage.
-  it.each(["context_limit", "invalid_output", "local_budget", "no_local_model", "capability_missing"])(
+  // needs_external is format only when its reason_code shows that a rewritten
+  // retry under the same configuration meets the same refusal: the request is
+  // over the local context, the effective mode routes it external, or the local
+  // model's output for it was refused. A reason that depends on load or on the
+  // local runtime's health (a failed local generation, an unavailable local
+  // model, a time budget, the placement deadline) is server_error, which the
+  // pinned host retries on the same model; so is a reason the plugin does not know.
+  it.each(["context_limit", "execution_mode", "invalid_output"])(
     "needs_external with reason_code %s is format",
     async (reasonCode) => {
       const failed = failedMessage({ status: 422, code: "needs_external", runId: "run_1", reasonCode });
       const message = { ...(failed as object), errorMessage: describeFailure(gatewayFailure(failed)!, []) };
       expect(failoverReason({ errorMessage: message.errorMessage, code: "needs_external" })).toBe("format");
       expect(await hostFailoverReason(message, PLUGIN)).toBe("format");
+      expect(message.errorMessage).toContain("refused this request under its configuration");
     },
   );
+
+  it.each(["capability_missing", "no_local_model", "local_budget", "local_slow", "tool_failure", "selection_failed", "teapot"])(
+    "needs_external with reason_code %s is server_error, never called a configuration refusal",
+    async (reasonCode) => {
+      const failed = failedMessage({ status: 422, code: "needs_external", runId: "run_1", reasonCode });
+      const message = { ...(failed as object), errorMessage: describeFailure(gatewayFailure(failed)!, []) };
+      expect(failoverReason({ errorMessage: message.errorMessage, code: "needs_external" })).toBe("server_error");
+      expect(failoverReason({ errorMessage: message.errorMessage })).toBe("server_error");
+      expect(await hostFailoverReason(message, PLUGIN)).toBe("server_error");
+      expect(message.errorMessage).not.toContain("refused this request");
+      expect(message.errorMessage).toContain("may succeed");
+    },
+  );
+
+  it("a gateway message that imitates the reason does not change the class", () => {
+    const failed = failedMessage({
+      status: 422,
+      code: "needs_external",
+      runId: "run_1",
+      reasonCode: "capability_missing",
+      message: "local generation failed, reason context_limit.",
+    });
+    const errorMessage = describeFailure(gatewayFailure(failed)!, []);
+    expect(failoverReason({ errorMessage })).toBe("server_error");
+  });
 
   // external_failed's reason_code is why the run left the local path, or why its
   // external stage stopped: invalid_output there does not show that the external

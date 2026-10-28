@@ -219,7 +219,8 @@ answer:
 | `unauthenticated` (401), with the reconnect instruction below | authentication (`auth`) | no |
 | `execution_mode_forbidden` (403) | refusal by policy (`format`) | no |
 | `idempotency_conflict`, `run_terminal` (409) | refusal of the key (`format`) | no |
-| `needs_external` (422) | refusal under the effective mode (`format`), whatever its `reason_code`; a local context limit here is not a context overflow | no |
+| `needs_external` (422) with `reason_code` `context_limit`, `execution_mode`, or `invalid_output` | refusal under the effective mode (`format`); a local context limit here is not a context overflow | no |
+| `needs_external` (422) with any other `reason_code` (`capability_missing`, `no_local_model`, `local_budget`, `local_slow`, ...), or none | failure of this provider (`server_error`): the local runtime's health or the load stopped the local stage, and a later attempt may succeed | no |
 | `overloaded` (429): another run or an idle probe holds the slot; nothing was queued or created | temporary overload (`overloaded`) | yes, same key |
 | `internal_error` (500), `workflow_unavailable`, `external_failed` (503), whatever the `reason_code` | failure of this provider (`server_error`) | no |
 | `deadline_exceeded` (504) | timeout (`timeout`) | yes, new key |
@@ -248,9 +249,17 @@ does not bound these; whether a host setting does was not checked.
 
 So a refusal that follows from the gateway's configuration and the request
 is `format`, the class the host itself gives an unlabeled 400 or 422: a
-`needs_external` (every OpenClaw turn under `local_only` while the local
-context stays 8192), a forbidden `executionMode`, and a held or spent key
-are not sent again as new runs. `external_failed` stays `server_error`, and
+`needs_external` over the local context (every OpenClaw turn under
+`local_only` while the local context stays 8192), one the effective mode
+routes external, or one after the local model's output was refused, a
+forbidden `executionMode`, and a held or spent key are not sent again as new
+runs. A `needs_external` whose `reason_code` depends on load or on the local
+runtime's health is not a refusal: `capability_missing` also covers a failed
+local generation (a llama-server connection error or restart), and
+`no_local_model`, `local_budget`, and `local_slow` can change on the next
+attempt. Those, and a `reason_code` the plugin does not know, stay
+`server_error`, which the host retries on the same model, and their message
+never calls them a configuration refusal. `external_failed` stays `server_error`, and
 the retries above remain: its `reason_code` is why the run left the local
 path or why its external stage stopped, so `invalid_output` there does not
 show that the external output was refused rather than the provider failing.

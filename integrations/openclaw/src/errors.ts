@@ -9,10 +9,14 @@
 // actionable message that starts with "RelayMind <code> (...)", so the class
 // can be read back from the message alone. The classes follow section 7.5:
 // context_limit_exceeded is a context overflow; a refusal that follows from
-// the gateway's configuration and the request (needs_external,
-// execution_mode_forbidden, idempotency_conflict, run_terminal) is format;
-// internal_error, workflow_unavailable, external_failed, and predicate_unmet
-// are failures of this provider (server_error); 429 overloaded is a temporary
+// the gateway's configuration and the request (execution_mode_forbidden,
+// idempotency_conflict, run_terminal, and needs_external whose reason_code is
+// context_limit, execution_mode, or invalid_output) is format; internal_error,
+// workflow_unavailable, external_failed, predicate_unmet, and needs_external
+// with any other reason_code (a failed local generation, an unavailable local
+// model, a time budget, the placement deadline: load and the local runtime's
+// health, not the configuration) are failures of this provider (server_error),
+// so a transient local failure is never reported as a refusal; 429 overloaded is a temporary
 // overload, 504 deadline_exceeded is a timeout, and 401 is an authentication
 // failure with the reconnect instruction. The pinned host retries the same
 // model only for rate_limit, overloaded, server_error, timeout, and
@@ -106,11 +110,13 @@ const RULES: Record<string, CodeRule> = {
       "failed or cancelled; RelayMind does not start it again under that key.",
   },
   needs_external: {
-    reason: "format",
+    reason: "server_error",
     retry: "none",
     explain:
-      "The request cannot complete under the effective execution mode without the external " +
-      `model (for example executionMode local_only). ${REFUSAL}`,
+      "The local stage could not finish (the local runtime, a time limit, or the load stopped " +
+      "it) and the effective execution mode does not permit the external model (for example " +
+      "executionMode local_only); a later attempt may succeed. " +
+      PROVIDER_FAILURE,
   },
   overloaded: {
     reason: "overloaded",
@@ -152,10 +158,31 @@ const UNKNOWN: CodeRule = {
   explain: `RelayMind returned an error the plugin does not know. ${PROVIDER_FAILURE}`,
 };
 
-const ruleOf = (code: string): CodeRule => RULES[code] ?? UNKNOWN;
+/**
+ * The needs_external reasons that a rewritten retry under the same configuration
+ * meets again (section 7.5, spec 0.49): the request is over the local context,
+ * the effective mode routes it external, or the local model's output for it was
+ * refused. Every other reason depends on load or the local runtime's health.
+ */
+const REPEATED_NEEDS_EXTERNAL = new Set(["context_limit", "execution_mode", "invalid_output"]);
+
+const NEEDS_EXTERNAL_REFUSAL: CodeRule = {
+  reason: "format",
+  retry: "none",
+  explain:
+    "The request cannot complete under the effective execution mode without the external " +
+    `model (for example executionMode local_only). ${REFUSAL}`,
+};
+
+const ruleOf = (code: string, reasonCode: string | null = null): CodeRule =>
+  code === "needs_external" && reasonCode !== null && REPEATED_NEEDS_EXTERNAL.has(reasonCode)
+    ? NEEDS_EXTERNAL_REFUSAL
+    : (RULES[code] ?? UNKNOWN);
 
 /** The prefix of every message the plugin writes for a gateway failure. */
 const PREFIX = /^RelayMind ([a-z_]{1,64}) \((?:HTTP \d{3}|stream error event)\): /;
+/** The run and reason that end every such message (describeFailure). */
+const SUFFIX = /(?:Gateway run [A-Za-z0-9_-]{1,128}|Gateway run unavailable), reason ([a-z_]{1,64})\.$/;
 /** The plugin's own empty-answer failure (src/stream.ts). */
 const EMPTY_ANSWER = /^RelayMind returned an empty answer/;
 const MAX_GATEWAY_TEXT = 300;
@@ -215,7 +242,7 @@ export function describeFailure(
   failure: GatewayFailure,
   secrets: readonly (string | undefined)[],
 ): string {
-  const rule = ruleOf(failure.code);
+  const rule = ruleOf(failure.code, failure.reasonCode);
   const where = failure.status === null ? "stream error event" : `HTTP ${failure.status}`;
   const parts = [`RelayMind ${failure.code} (${where}): ${rule.explain}`];
   if (failure.gatewayMessage) parts.push(`Gateway: "${oneLine(failure.gatewayMessage, secrets)}".`);
@@ -235,6 +262,11 @@ interface HookContext {
   status?: number;
 }
 
+/** The reason code the plugin's own message ends with; null when it names none. */
+function reasonOf(ctx: HookContext): string | null {
+  return SUFFIX.exec(ctx.errorMessage ?? "")?.[1] ?? null;
+}
+
 function codeOf(ctx: HookContext): string | undefined {
   const fromMessage = PREFIX.exec(ctx.errorMessage ?? "")?.[1];
   if (fromMessage) return fromMessage;
@@ -246,7 +278,7 @@ export function failoverReason(ctx: HookContext): RelayMindFailoverReason | unde
   if (EMPTY_ANSWER.test(ctx.errorMessage ?? "")) return "empty_response";
   const code = codeOf(ctx);
   if (code === undefined) return undefined;
-  return ruleOf(code).reason;
+  return ruleOf(code, reasonOf(ctx)).reason;
 }
 
 /** matchesContextOverflowError: true only for context_limit_exceeded; undefined for other errors. */
