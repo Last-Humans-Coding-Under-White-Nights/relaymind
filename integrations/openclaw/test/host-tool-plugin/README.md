@@ -13,8 +13,10 @@ never installed outside a test host.
 OpenClaw executes both tools under its own policy; RelayMind only proposes
 the call. The manifest declares both tools in `contracts.tools`: without it
 the pinned host refuses to register them (macOS run at `a52f8bf`). The host
-offers them to the model only with `tools.toolSearch false` and the two
-names in `tools.alsoAllow` (or `tools.profile full`).
+offers them to the model with `tools.toolSearch false` and the two names
+in `tools.alsoAllow`, the form the recorded Linux VPS functional check used.
+That `tools.profile full` also exposes them was observed in exploratory runs
+that were not recorded.
 
 The approval needs an approval surface. Headless `openclaw agent exec` has
 none: in the Linux VPS functional check (not a supported-platform

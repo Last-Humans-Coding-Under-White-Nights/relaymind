@@ -532,8 +532,11 @@ sandbox tool `relaymind_test_write` of the test host tools, whose
 `before_tool_call` hook asks the host for a plugin approval. The host
 exposes a plugin's tools to the model only when they are allowed and sent
 directly: set `tools.toolSearch false` and name both tools in
-`tools.alsoAllow` (`tools.profile full` also works). Without them the host
-offered none of the test tools, and the gateway repaired the scripted call.
+`tools.alsoAllow`. That is the form the recorded Linux VPS functional check
+used. Two more results were observed in exploratory runs that were not
+recorded (see the check's `REPORT.md`): `tools.profile full` also exposed
+the test tools, and without `tools.alsoAllow`, or with tool search on, the
+host offered neither test tool and the gateway repaired the scripted call.
 
 ```bash
 # without --accept-capabilities the host refuses the directory (exit 1);

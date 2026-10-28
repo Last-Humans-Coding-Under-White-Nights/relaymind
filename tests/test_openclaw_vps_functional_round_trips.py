@@ -132,3 +132,17 @@ def test_the_command_forms_behaved_as_the_readme_says():
     assert "tools.alsoAllow" in readme
     assert "tools.toolSearch false" in readme
     assert '"Echo lantern with the test echo tool"' in readme
+
+
+def test_unrecorded_tool_exposure_runs_are_labeled_in_both_readmes():
+    """AGENTS.md invariant 9 (honest evidence): the recorded run covers only
+    `tools.toolSearch false` plus `tools.alsoAllow`. The `tools.profile full`
+    and tool-search-on observations were not kept, so neither README may
+    state them as recorded host behavior (RM33, AC24)."""
+    plugin_readme = README.parent / "test" / "host-tool-plugin" / "README.md"
+    for path in (README, plugin_readme):
+        text = " ".join(path.read_text("utf-8").split())
+        assert "tools.profile full" in text
+        assert "observed in exploratory runs that were not recorded" in text, path
+    text = " ".join(README.read_text("utf-8").split())
+    assert "Without them the host offered none" not in text
