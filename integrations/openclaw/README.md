@@ -753,7 +753,7 @@ the pinned host against a gateway over model doubles, in a fresh host home
 points the host's file log into it, but on the Linux VPS `agent exec` still
 wrote to the documented default `/tmp/openclaw/`, outside the isolation):
 
-1. version;
+1. version, the host's file log, and the closed Gateway port;
 2. install with `--accept-capabilities`;
 3. `baseUrl`, enable, and inspect (loaded, the `relaymind` provider, no
    diagnostics);
@@ -768,9 +768,13 @@ wrote to the documented default `/tmp/openclaw/`, outside the isolation):
 
 The token is never an argument, never in the host's environment, and never
 written to the export. The host inherits none of the shell's `OPENCLAW_*`
-settings (profile, Gateway URL, token) and no proxy, and its local Gateway
-port points at a closed loopback port, so a running OpenClaw Gateway of
-yours is never reached. The gateway trace and the sandbox decide a pass;
+settings (profile, Gateway URL, token, port) and no proxy. Its local Gateway
+port is set to a closed loopback port in the isolated config
+(`config set gateway.port`), so a running OpenClaw Gateway of yours is never
+reached. The port is never passed as `OPENCLAW_GATEWAY_PORT`: the pinned host
+takes an explicit port as a Gateway target, and `models list --refresh` then
+fails with "gateway models.list requires credentials" instead of refreshing
+the local catalog (Linux VPS functional check, 28 October 2026). The gateway trace and the sandbox decide a pass;
 the host's `"ok": true` does not: both exchanges need completed gateway runs
 and the gateway's own answer. A removal passes only when the config reads as
 strict JSON without the entry and profile and no host file a host could read

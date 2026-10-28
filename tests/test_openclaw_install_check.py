@@ -141,6 +141,12 @@ elif args[:3] == ["models", "auth", "logout"]:
         config.get("auth", {}).get("profiles", {}).pop(args[3], None)
         save(config)
     print("Removed auth profile: " + args[3])
+elif args[:2] == ["models", "list"] and os.environ.get("OPENCLAW_GATEWAY_PORT"):
+    # The pinned host treats an explicit port as a Gateway target and never
+    # falls back to the local catalog (Linux VPS functional check, 28 October 2026).
+    print("gateway models.list requires credentials before opening a websocket",
+          file=sys.stderr)
+    raise SystemExit(1)
 elif args[:2] == ["models", "list"]:
     base = entries(config)["relaymind"]["config"]["baseUrl"]
     served = call(base, stored_key(), "/models")
@@ -441,18 +447,38 @@ def test_the_host_inherits_no_openclaw_gateway_profile_or_proxy(tmp_path, monkey
         assert name not in env
     assert not {k for k in env if k.upper() in {"ALL_PROXY", "HTTPS_PROXY", "HTTP_PROXY"}}
     assert not any(k.startswith("RELAYMIND_") for k in env)
+    # No OPENCLAW_GATEWAY_PORT either: the pinned host takes an explicit port
+    # as a Gateway target, and `models list --refresh` then needs Gateway
+    # credentials instead of refreshing the local catalog.
     assert {k for k in env if k.startswith("OPENCLAW_")} == {
         "OPENCLAW_HOME",
         "OPENCLAW_STATE_DIR",
         "OPENCLAW_CONFIG_PATH",
-        "OPENCLAW_GATEWAY_PORT",
     }
-    # The local Gateway port is one nothing listens on, never the default 18789.
-    port = int(env["OPENCLAW_GATEWAY_PORT"])
+
+
+def test_the_isolated_config_points_the_local_gateway_at_a_closed_port(
+    stub_host, tarball, tmp_path
+):
+    """Section 12.5: before the install, gateway.port names a port nothing listens on.
+
+    The host reads ``gateway.port`` from its config when no port is in the
+    environment, so an operator's OpenClaw Gateway on the default 18789 is
+    never reached, and the local catalog refresh still runs.
+    """
+    home = tmp_path / "host"
+    export = run(stub_host, tarball, tmp_path, host_home=home)
+    assert export["passed"] is True, export["steps"]
+    argv = [c["args"] for c in calls(home)]
+    port_set = next(i for i, a in enumerate(argv) if a[:3] == ["config", "set", "gateway.port"])
+    install = next(i for i, a in enumerate(argv) if a[:2] == ["plugins", "install"])
+    assert port_set < install
+    port = int(argv[port_set][3])
     assert port != 18789
     with socket.socket() as probe, pytest.raises(OSError):
         probe.settimeout(1)
         probe.connect(("127.0.0.1", port))
+    assert export["isolation"]["gateway_port"] == port
 
 
 def test_a_host_that_stops_starting_after_install_still_lists_and_cleans_up(
@@ -472,7 +498,8 @@ def test_a_host_that_stops_starting_after_install_still_lists_and_cleans_up(
     status = {s["name"]: s["status"] for s in export["steps"]}
     assert status["install"] == "passed"
     assert status["text-exchange"] == "not_run"
-    assert "Argument list too long" in export["steps"][8]["stderr"]
+    text = next(s for s in export["steps"] if s["name"] == "text-exchange")
+    assert "Argument list too long" in text["stderr"]
     assert status["tool-exchange"] == "not_run"
     for name in install_check.CLEANUP_STEPS:
         assert status[name] == "passed"

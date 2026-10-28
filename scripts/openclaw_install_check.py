@@ -10,7 +10,11 @@ release artifact, in a fresh host home (``OPENCLAW_HOME``,
 ``~/.openclaw`` is never touched):
 
 1. ``--version``; ``logging.file`` set inside the host home (on the Linux VPS
-   ``agent exec`` still wrote to the default ``/tmp/openclaw/``);
+   ``agent exec`` still wrote to the default ``/tmp/openclaw/``), and
+   ``gateway.port`` set to a closed loopback port (in the config, never in
+   ``OPENCLAW_GATEWAY_PORT``: the pinned host takes an explicit port as a
+   Gateway target, and ``models list --refresh`` then needs Gateway
+   credentials);
 2. ``plugins install npm-pack:<artifact> --force --accept-capabilities``;
 3. the plugin's ``baseUrl`` set to the gateway, ``plugins enable relaymind``;
 4. ``plugins inspect relaymind --runtime --json``: loaded, enabled, the
@@ -92,6 +96,7 @@ OUTPUT_TAIL = 4000
 STEPS = (
     "version",
     "isolate-log",
+    "isolate-gateway",
     "install",
     "configure",
     "enable",
@@ -120,6 +125,7 @@ class Context:
     token: str
     sandbox: Path
     gateway: Any
+    gateway_port: int
 
     @property
     def config_path(self) -> Path:
@@ -141,10 +147,14 @@ def host_environment(home: Path) -> dict[str, str]:
     """The host's environment: an isolated home, no proxy, no RelayMind token.
 
     None of the operator's OPENCLAW_* settings (profile, Gateway URL, token,
-    port) is inherited, and the local Gateway port points at a closed loopback
-    port, so the host cannot reach an operator's running OpenClaw Gateway on
-    the default 18789 (headless approval then fails closed, as the macOS probe
-    saw with no Gateway).
+    port) is inherited. The local Gateway port is not set here: the pinned
+    host takes an explicit ``OPENCLAW_GATEWAY_PORT`` as a Gateway target, so
+    ``models list --refresh`` asks for Gateway credentials instead of
+    refreshing the local catalog (Linux VPS functional check, 28 October
+    2026). The ``isolate-gateway`` step sets ``gateway.port`` in the isolated
+    config to a closed loopback port instead, so the host cannot reach an
+    operator's running OpenClaw Gateway on the default 18789 (headless
+    approval then fails closed, as the macOS probe saw with no Gateway).
     """
     env = qualification.loopback_environment(
         lambda name: name.upper().startswith(("RELAYMIND_", "OPENCLAW_"))
@@ -154,7 +164,6 @@ def host_environment(home: Path) -> dict[str, str]:
             "OPENCLAW_HOME": str(home / "home"),
             "OPENCLAW_STATE_DIR": str(home / "state"),
             "OPENCLAW_CONFIG_PATH": str(home / "openclaw.json"),
-            "OPENCLAW_GATEWAY_PORT": str(_closed_port()),
         }
     )
     return env
@@ -361,6 +370,7 @@ def _argv(ctx: Context) -> dict[str, tuple[list[str], str | None]]:
             ["config", "set", "logging.file", str(ctx.home / "openclaw.log")],
             None,
         ),
+        "isolate-gateway": (["config", "set", "gateway.port", str(ctx.gateway_port)], None),
         "install": (
             ["plugins", "install", f"npm-pack:{ctx.tarball}", "--force", "--accept-capabilities"],
             None,
@@ -556,6 +566,7 @@ def run_install_check(
                     token=token,
                     sandbox=sandbox,
                     gateway=gateway,
+                    gateway_port=_closed_port(),
                 )
                 steps, exchanges, status = run_steps(command, ctx, timeout)
                 found = exchanges.pop("_leftovers", {})
@@ -572,8 +583,15 @@ def run_install_check(
                     "host_version": version or None,
                     "artifact": _artifact(tarball),
                     "isolation": {
-                        k: _sanitize(ctx.env[k], ctx)
-                        for k in ("OPENCLAW_HOME", "OPENCLAW_STATE_DIR", "OPENCLAW_CONFIG_PATH")
+                        **{
+                            k: _sanitize(ctx.env[k], ctx)
+                            for k in (
+                                "OPENCLAW_HOME",
+                                "OPENCLAW_STATE_DIR",
+                                "OPENCLAW_CONFIG_PATH",
+                            )
+                        },
+                        "gateway_port": ctx.gateway_port,
                     },
                     "token": NOT_RECORDED,
                     "steps": steps,

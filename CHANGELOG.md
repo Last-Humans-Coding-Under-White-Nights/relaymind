@@ -32,7 +32,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a deleted row's bytes in free space or WAL do not count), and anything
   unreadable is unknown, never clean. The host inherits no `OPENCLAW_*`
   setting or proxy of the shell and its local Gateway port is a closed
-  loopback port; a host that stops starting mid-run leaves the rest
+  loopback port, set as `gateway.port` in the isolated config (an
+  `OPENCLAW_GATEWAY_PORT` made the pinned host's `models list --refresh`
+  demand Gateway credentials, found in the Linux VPS functional check); a host that stops starting mid-run leaves the rest
   not_run and still cleans up; the export is written even when the
   temporary host home cannot be removed. The npm and pack-report helpers
   (`scripts/npm.mjs`) and the run records, proposals, tool executions, and
