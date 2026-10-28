@@ -21,7 +21,7 @@ import pytest
 
 from api_helpers import RunningServer, make_app, token_of
 from gateway_helpers import build_gateway, text_turn, tool_turn
-from helpers import ScriptedAdapter, load_script_module
+from helpers import ScriptedAdapter, load_script_module, make_capabilities
 from relaymind.adapters import Role
 from relaymind.api.app import ChatSettings
 from relaymind.api.chat import ClientToolsChat
@@ -173,9 +173,12 @@ class DoublesBackend:
 
     MODES = frozenset({ExecutionMode.AUTO, ExecutionMode.EXTERNAL_ONLY})
 
-    def __init__(self, tmp_path: Path, *, local: bool = True):
+    def __init__(self, tmp_path: Path, *, local: bool = True, local_request_tokens=None):
         self.tmp_path = tmp_path
         self.local = local
+        # A host-sized request at the local model's 8192-token context (Q1: 10,500
+        # to 10,577 tokens with the pinned tokenizer); None keeps the double's count.
+        self.local_request_tokens = local_request_tokens
         self.provider = self._serve("provider", absent=True)
 
     def _serve(self, name: str, *, absent: bool = False):
@@ -185,7 +188,7 @@ class DoublesBackend:
         options = (
             {"local_status": LocalStatus.absent()}
             if absent
-            else {"local_model": ConfiguredModel(adapter=TaskDouble(), model_id="double-local")}
+            else {"local_model": ConfiguredModel(adapter=self._local(), model_id="double-local")}
         )
         gateway = build_gateway(work, None, external_model=external, **options)
         app = make_app(
@@ -196,6 +199,14 @@ class DoublesBackend:
         server = RunningServer(app)
         server.__enter__()
         return gateway, app, server
+
+    def _local(self):
+        if self.local_request_tokens is None:
+            return TaskDouble()
+        return TaskDouble(
+            capabilities=make_capabilities(context_limit=8192),
+            input_tokens=self.local_request_tokens,
+        )
 
     def unavailable(self, arm: str) -> str | None:
         if arm == "relaymind_no_local":
@@ -378,6 +389,116 @@ def test_the_markdown_report_is_written_next_to_the_export(evaluated):
     report = (out / "openclaw-eval.md").read_text("utf-8")
     assert "relaymind_no_local" in report and "not_run" in report
     assert "Linux" in report or "machine" in report.lower()
+
+
+def run_with(tmp_path, backend, **options):
+    host = tmp_path / "openclaw_stub.py"
+    host.write_text(STUB_HOST, "utf-8")
+    tarball = tmp_path / "relaymind-openclaw-provider-0.1.0.tgz"
+    tarball.write_bytes(b"not a real tarball")
+    out = tmp_path / "out"
+    try:
+        document = runner.run_evaluation(
+            TASKS,
+            host_command=[sys.executable, str(host)],
+            tarball=tarball,
+            backend=backend,
+            out=out,
+            evidence=EVIDENCE,
+            **options,
+        )
+    finally:
+        backend.close()
+    return document, out
+
+
+def test_auto_at_the_8192_local_context_reports_zero_local_turns_as_a_result(tmp_path):
+    """D1 and the macOS qualification (Q1, Q2): the local context stays 8192.
+
+    A host-sized request (10,510 tokens, the live AC24 turn's count) is over the
+    local limit, so every auto turn goes to the external model. The attempts
+    still pass, and the export and report show 0 local turns with the reason,
+    context_limit, never a blank or a dropped arm.
+    """
+    backend = DoublesBackend(tmp_path, local_request_tokens=10510)
+    document, out = run_with(
+        tmp_path,
+        backend,
+        arms=["relaymind_external_only", "relaymind_auto"],
+        task_ids=["text-reply-en", "read-note-en"],
+    )
+    auto = document["summary"]["arms"]["relaymind_auto"]["languages"]["en"]
+    assert auto["successes"] == auto["attempts"] == 2 * TASKS.repeats
+    assert auto["local_turns"] == 0 and auto["local_calls"] == 0
+    assert auto["external_calls"] == auto["gateway_runs"] > 0
+    assert auto["escalation_reasons"] == {"context_limit": auto["gateway_runs"]}
+    assert auto["needs_external"] == 0
+    external_only = document["summary"]["arms"]["relaymind_external_only"]["languages"]["en"]
+    assert external_only["escalation_reasons"] == {"execution_mode": external_only["gateway_runs"]}
+    comparison = document["summary"]["comparisons"]["local_inference_auto"]["languages"]["en"]
+    assert comparison["local_turns"] == 0
+    report = (out / "openclaw-eval.md").read_text("utf-8")
+    assert f"relaymind_auto, en: 0 local turns of {auto['gateway_runs']} gateway runs" in report
+    assert "compares no local inference" in report
+
+
+def test_an_operator_interrupt_still_writes_the_export_marked_aborted(tmp_path, monkeypatch):
+    """Spec 0.50: the attempts that ended are kept; the rest are not run, never failures."""
+    real = runner.run_attempt
+    calls = []
+
+    def interrupted(slot, *args, **kwargs):
+        calls.append(slot)
+        if len(calls) == 3:
+            raise KeyboardInterrupt
+        return real(slot, *args, **kwargs)
+
+    monkeypatch.setattr(runner, "run_attempt", interrupted)
+    backend = DoublesBackend(tmp_path)
+    document, out = run_with(
+        tmp_path, backend, arms=["relaymind_external_only"], task_ids=["text-reply-en"]
+    )
+    stopped = calls[2]
+    assert document["aborted"] == {
+        "index": stopped.index,
+        "repeat": stopped.repeat,
+        "task_id": stopped.task_id,
+        "arm": stopped.arm,
+        "slots_not_run": 1,
+    }
+    assert len(document["attempts"]) == len(document["grades"]) == 2
+    assert all(g["success"] for g in document["grades"])
+    summary = document["summary"]["arms"]["relaymind_external_only"]["languages"]["en"]
+    assert summary["attempts"] == 2 and summary["host_interrupts"] == 0
+    saved = json.loads((out / "openclaw-eval.json").read_text("utf-8"))
+    assert saved["aborted"] == document["aborted"]
+    report = (out / "openclaw-eval.md").read_text("utf-8")
+    assert "Aborted by the operator at slot" in report
+    assert "1 slot(s) not run" in report
+
+
+def test_a_run_without_an_abort_says_so(evaluated):
+    document, _out, _backend = evaluated
+    assert document["aborted"] is None
+
+
+def test_the_cli_exits_130_after_an_aborted_evaluation(tmp_path, monkeypatch):
+    class Harness:
+        ExternalEndpoint = None
+
+    monkeypatch.setitem(sys.modules, "live_acceptance", Harness)
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "openclaw-eval.md").write_text("report\n", "utf-8")
+    monkeypatch.setattr(
+        runner,
+        "run_evaluation",
+        lambda *a, **k: {"grades": [{}], "aborted": {"index": 3}},
+    )
+    argv = ["--no-local-model", "--tarball", str(tmp_path / "x.tgz"), "--out", str(out)]
+    assert runner.main([*argv, "--", "openclaw"]) == 130
+    monkeypatch.setattr(runner, "run_evaluation", lambda *a, **k: {"grades": [{}], "aborted": None})
+    assert runner.main([*argv, "--", "openclaw"]) == 0
 
 
 def test_without_an_external_endpoint_or_a_local_model_the_arms_are_not_run():

@@ -505,6 +505,7 @@ def run_evaluation(
     hosts: dict[str, Host] = {}
     handles: dict[str, GatewayHandle] = {}
     direct = None
+    aborted: dict[str, Any] | None = None
     places: list[tuple[Path, str]] = []
     try:
         for arm in ARMS:
@@ -542,19 +543,30 @@ def run_evaluation(
             else:
                 hosts[arm] = host
             arm_records[arm] = record
-        for slot in sampling_order(tasks):
-            if slot.task_id not in selected or slot.arm not in hosts:
-                continue
+        slots = [s for s in sampling_order(tasks) if s.task_id in selected and s.arm in hosts]
+        for done, slot in enumerate(slots):
             task = tasks.task(slot.task_id)
             print(f"{slot.index} {slot.arm} {slot.task_id} r{slot.repeat}", flush=True)
-            attempt = run_attempt(
-                slot,
-                task,
-                hosts[slot.arm],
-                handles.get(slot.arm),
-                direct,
-                tasks.time_limit_seconds,
-            )
+            try:
+                attempt = run_attempt(
+                    slot,
+                    task,
+                    hosts[slot.arm],
+                    handles.get(slot.arm),
+                    direct,
+                    tasks.time_limit_seconds,
+                )
+            except KeyboardInterrupt:
+                # Spec 0.50: the attempts that ended are kept; the rest are not run.
+                aborted = {
+                    "index": slot.index,
+                    "repeat": slot.repeat,
+                    "task_id": slot.task_id,
+                    "arm": slot.arm,
+                    "slots_not_run": len(slots) - done,
+                }
+                print(f"aborted at slot {slot.index}", file=sys.stderr, flush=True)
+                break
             attempts.append(attempt)
             grade = grade_attempt(task, attempt)
             grades.append(grade)
@@ -599,6 +611,7 @@ def run_evaluation(
         "attempts": attempts,
         "grades": grades,
         "summary": summary,
+        "aborted": aborted,
     }
     places += [
         (work, "<work>"),
@@ -610,6 +623,13 @@ def run_evaluation(
     text = _sanitize(json.dumps(document, indent=2, ensure_ascii=False), secrets, places)
     report = _sanitize(
         render_markdown(summary, title="OpenClaw integration evaluation")
+        + (
+            f"\nAborted by the operator at slot {aborted['index']} ({aborted['arm']}, "
+            f"{aborted['task_id']}, repeat {aborted['repeat']}): {aborted['slots_not_run']} "
+            "slot(s) not run; the counts cover the attempts that ended.\n"
+            if aborted
+            else ""
+        )
         + f"\nEvidence: {evidence}. Machine: {json.dumps(document['machine'])}\n",
         secrets,
         places,
@@ -812,6 +832,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         command=" ".join(["python", "scripts/run_openclaw_eval.py", *(argv or sys.argv[1:])]),
     )
     print((args.out / REPORT_NAME).read_text("utf-8"))
+    if document.get("aborted"):
+        return 130
     return 0 if document["grades"] else 1
 
 
