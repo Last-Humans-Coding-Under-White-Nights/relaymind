@@ -349,6 +349,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Documentation brought up to date with M9 at #139: the spec version and
+  M9 status in `AGENTS.md` (and the OpenClaw scripts in its map), the
+  OpenClaw row and the #139 evaluation pieces in `docs/ARCHITECTURE.md`,
+  the M9 issue status and exit criteria in `docs/ROADMAP.md`, an OpenClaw
+  entry in `README.md`, the M9 gaps in `docs/TESTING.md`, the run record
+  in `integrations/openclaw/README.md`, the status line of the OpenClaw
+  design note, and the status word in the spec's section 7.5 heading. What
+  ran over doubles, in Linux VPS functional checks, and on GitHub-hosted
+  runners stays apart from what is not_run (macOS and Windows
+  qualification, a plugin approval on a real host, the #139 measurement).
+  No behavior change.
 - Specification 0.47 redirects M9 from YAML workflows to OpenClaw
   integration (#135 to #139, #145, #173): retire the unimplemented RM30 and AC23
   without reusing their identifiers; add RM33, AC24, the provider ownership

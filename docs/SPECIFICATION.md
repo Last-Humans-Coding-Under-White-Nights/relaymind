@@ -446,7 +446,7 @@ A key is stored only when a run is created, in the same store transaction as the
 
 Keys leave with their run: the seven-day retention (section 5) and explicit deletion remove the key with the run, and after that the key is unknown and a request that carries it creates a new run. A reused key never authorizes a repeated side effect: a duplicate never reaches the orchestrator, and a completed operation is replayed from its record by the executor in any case (RM10). Resume and cancel do not read the header: expected_version already makes a retry of them safe (RM17).
 
-### 7.5 OpenClaw provider integration (spec 0.47, planned M9)
+### 7.5 OpenClaw provider integration (spec 0.47, M9)
 
 **RM33** RelayMind MUST provide an installable OpenClaw provider plugin using the host's public plugin SDK and the authenticated loopback chat API of sections 7.1 to 7.3. The plugin MUST use relaymind-client-tools. OpenClaw owns conversation state, tool execution, and its tool permissions and approval policy; RelayMind owns bounded inference, proposal validation, fallback before output is committed, and its run trace. The plugin MUST NOT execute host tools, import them into the managed registry, approve actions, or claim that RelayMind certified caller-reported tool results. No fork of OpenClaw is required. [S12, S13]
 

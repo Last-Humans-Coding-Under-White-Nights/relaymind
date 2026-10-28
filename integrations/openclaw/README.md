@@ -34,7 +34,11 @@ the whole install check of the release artifact
 Linux VPS, as a functional check over gateway doubles, not a
 supported-platform qualification
 ([`docs/evidence/2026-10-28-openclaw-vps-functional-145/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-145/REPORT.md)). macOS and Windows runs of this revision
-are `not_run`; the CI job runs the same check on GitHub's runners.
+are `not_run`; the CI job runs the same check on GitHub-hosted runners,
+recorded at `78fc94d` as a functional check over doubles, not a
+user-machine qualification. The M9 evaluation runner and grading (#139,
+[M9 evaluation](#m9-evaluation-139-operator-not-run-yet)) are tested over
+a stub host and doubles; the measurement is `not_run`.
 
 What the plugin claims, and nothing more: text input; at most one function
 call per response, executed by OpenClaw under its own approvals; the answer is
@@ -885,8 +889,12 @@ the real pinned host against the gateway over doubles, with the fix of the
 scenarios there (`docs/evidence/2026-10-28-openclaw-vps-functional-137/`):
 `text-tool`, `tool-deny`, `exec-deny`, and `exec-full` passed, and
 `tool-approve` failed, correctly, because headless `agent exec` has no
-route for a plugin approval and nothing was written. Any macOS rerun and
-any Windows run are not_run.
+route for a plugin approval and nothing was written. A third ran the
+`abort` and `external-failed` host scenarios
+(`docs/evidence/2026-10-28-openclaw-vps-functional-138/`), and the install
+check of the release artifact passed there
+(`docs/evidence/2026-10-28-openclaw-vps-functional-145/`). Any macOS rerun
+and any Windows run are not_run.
 
 Host facts from that probe that the steps below rely on: a model in the
 host config needs `name`; `strictMessageKeys` must stay false (true strips

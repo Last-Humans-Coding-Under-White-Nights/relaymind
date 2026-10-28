@@ -15,6 +15,8 @@ started with `relaymind serve --config` (see
 [README](../README.md#use) shows the requests to send it.
 The manual JSON steps below target the llama-server endpoint that the
 `LlamaCppAdapter` talks to.
+The phase 2 suites (M7 to M9, including the OpenClaw plugin and its
+evaluation) are listed after the M1 to M5 ones.
 
 ## Automated suites
 
@@ -1609,7 +1611,7 @@ a result.
   issues in [`ROADMAP.md`](ROADMAP.md) carry the tests. The offline
   spikes (#115, #118, #119) and the timing probes (#114, #116, #117) test
   their own scripts, not the gateway.
-- M9 OpenClaw integration (spec 0.47, RM33, AC24): #135 runs the pinned
+- M9 OpenClaw integration (spec 0.47, revised in 0.49 and 0.50; RM33, AC24): #135 runs the pinned
   host transport against the gateway over model doubles
   ([OpenClaw host transport](#openclaw-host-transport-135-rm33-ac24)).
   A real host ran on macOS against a capture server (the host probe), and
@@ -1622,9 +1624,13 @@ a result.
   and a Linux VPS functional check (not a supported-platform qualification)
   ran the harness host scenarios on the real pinned host over doubles; a
   plugin approval answered by an operator, a macOS rerun, and any Windows
-  host run are not_run, and no live result is claimed. The release artifact
-  and its install check (#145) passed against the pinned host on a Linux VPS
-  over doubles, a functional check; macOS and Windows qualifications of this
+  host run are not_run, and no live result is claimed. The cancellation and
+  error mapping (#138) are covered over doubles, and a third Linux VPS
+  functional check ran the `abort` and `external-failed` host scenarios.
+  The release artifact and its install check (#145) passed against the
+  pinned host on a Linux VPS over doubles (Linux VPS functional check, not
+  a supported-platform qualification) and on GitHub-hosted runners (a
+  functional check over doubles); macOS and Windows qualifications of this
   revision are not_run.
   The M9 evaluation (#139, spec 0.50) has its frozen tasks,
   grading, and runner tested over a stub host and doubles
