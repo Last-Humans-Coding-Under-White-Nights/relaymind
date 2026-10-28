@@ -583,16 +583,21 @@ def host_checks(
     ]
     executions = sum(1 for run in runs for e in run["events"] if e["type"] == "tool.started")
     ids = [p["proposal_id"] for p in proposed if p["proposal_id"]]
-    reached = any(
-        m.role.value == "tool" and any(answers_call(i, m.tool_call_id or "") for i in ids)
+    # The IDs the host sent back in its tool results, as it sent them: the
+    # export shows the host's rewrite instead of only whether it matched.
+    replayed = [
+        m.tool_call_id or ""
         for request in requests[1:]
         for m in request.messages
-    )
+        if m.role.value == "tool"
+    ]
+    reached = any(answers_call(i, r) for i in ids for r in replayed)
     checks: dict[str, Any] = {
         "sandbox_lines": lines,
         "expected_sandbox_lines": expected,
         "gateway_tool_executions": executions,
         "proposed": proposed,
+        "replayed_call_ids": list(dict.fromkeys(replayed)),
         "result_reached_next_run": reached,
         "host_report": host_report(stdout),
     }

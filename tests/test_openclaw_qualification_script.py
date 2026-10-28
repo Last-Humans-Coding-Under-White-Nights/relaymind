@@ -399,6 +399,8 @@ def test_a_host_that_rewrites_the_call_id_still_reaches_the_next_run(tmp_path):
     assert export["status"] == "completed", export["stderr"]
     check = export["checks"]
     assert [p["proposal_id"] for p in check["proposed"]] == ["call_write_1"]
+    # The ID as the host sent it back, so an export shows the rewrite (Q6).
+    assert check["replayed_call_ids"] == ["callwrite1"]
     assert check["result_reached_next_run"] is True
     assert check["passed"] is True
 
