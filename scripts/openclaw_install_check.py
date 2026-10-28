@@ -386,8 +386,8 @@ def _argv(ctx: Context) -> dict[str, tuple[list[str], str | None]]:
             ctx.token + "\n",
         ),
         "discover": (["models", "list", "--refresh", "--provider", PLUGIN_ID, "--json"], None),
-        "text-exchange": (_exec(ctx, TEXT_PROMPT), None),
-        "tool-exchange": (_exec(ctx, TOOL_PROMPT), None),
+        "text-exchange": (_exec(ctx, "text-exchange", TEXT_PROMPT), None),
+        "tool-exchange": (_exec(ctx, "tool-exchange", TOOL_PROMPT), None),
         "disable": (["plugins", "disable", PLUGIN_ID], None),
         "uninstall": (["plugins", "uninstall", PLUGIN_ID, "--force"], None),
         "remove-config": (["config", "unset", f"plugins.entries.{PLUGIN_ID}"], None),
@@ -395,7 +395,22 @@ def _argv(ctx: Context) -> dict[str, tuple[list[str], str | None]]:
     }
 
 
-def _exec(ctx: Context, prompt: str) -> list[str]:
+def exec_state_dir(ctx: Context, step: str) -> Path:
+    """The fresh state directory one exchange's ``agent exec`` runs in.
+
+    Without ``--state-dir`` the pinned host makes a temporary state directory
+    per ``agent exec`` and deletes it after the turn. On Windows that delete
+    fails on a SQLite file the host still holds (EBUSY; GitHub windows-latest
+    runner, 28 October 2026), and a turn the gateway answered ends ``ok:
+    false``, exit 1. With ``--state-dir`` the host uses an existing directory
+    and never deletes it; this one is empty, like the host's own temporary
+    one, sits in the isolated host home (so the credential scan covers it),
+    and goes with the host home.
+    """
+    return ctx.home / "agent-exec" / step
+
+
+def _exec(ctx: Context, step: str, prompt: str) -> list[str]:
     return [
         "agent",
         "exec",
@@ -407,6 +422,8 @@ def _exec(ctx: Context, prompt: str) -> list[str]:
         str(ctx.config_path),
         "--cwd",
         str(ctx.sandbox),
+        "--state-dir",
+        str(exec_state_dir(ctx, step)),
     ]
 
 
@@ -479,6 +496,8 @@ def run_steps(command: Sequence[str], ctx: Context, timeout: float) -> tuple[lis
         steps.append(step)
         if (stopped and name not in CLEANUP_STEPS) or (name in CLEANUP_STEPS and not installed):
             continue
+        if name in ("text-exchange", "tool-exchange"):
+            exec_state_dir(ctx, name).mkdir(parents=True, exist_ok=True)
         before = set(qualification._run_ids(ctx.gateway))
         requests_before = len(ctx.gateway.adapter.requests)
         try:

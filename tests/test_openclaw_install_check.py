@@ -155,6 +155,19 @@ elif args[:2] == ["models", "list"]:
     print(json.dumps({"count": len(models), "models": models}))
 elif args[:2] == ["agent", "exec"]:
     prompt = args[2]
+    if "--state-dir" in args:
+        # The host uses an existing state directory and never deletes it.
+        if not Path(args[args.index("--state-dir") + 1]).is_dir():
+            print("State directory does not exist", file=sys.stderr)
+            raise SystemExit(1)
+    elif os.environ.get("STUB_EXEC_CLEANUP_LOCKED"):
+        # The pinned host on Windows (GitHub runner, 28 October 2026): the turn
+        # answers, then deleting its own temporary state directory fails on a
+        # SQLite file it still holds, and the run reports ok false, exit 1.
+        error = {"message": "Agent exec cleanup failed: EBUSY: resource busy or locked",
+                 "kind": "cleanup"}
+        print(json.dumps({"ok": False, "status": "error", "error": error}))
+        raise SystemExit(1)
     cwd = Path(args[args.index("--cwd") + 1])
     base = entries(config)["relaymind"]["config"]["baseUrl"]
     key = stored_key()
@@ -572,3 +585,31 @@ def test_a_tool_exchange_passes_only_on_completed_runs_with_the_gateway_answer()
     checks = install_check.tool_checks(stdout, no_answer, requests)
     assert checks["gateway_answer"] == ""
     assert checks["passed"] is False
+
+
+def test_each_exchange_runs_in_its_own_state_directory_inside_the_host_home(
+    stub_host, tarball, tmp_path, monkeypatch
+):
+    """Section 12.5: the exchanges never depend on the host deleting its own temporary state.
+
+    Without ``--state-dir`` the pinned host makes a temporary state directory
+    for each ``agent exec`` and deletes it after the turn; on Windows that
+    delete fails on a SQLite file the host still holds (EBUSY), so a turn the
+    gateway answered ends ``ok: false``. Each exchange gets a fresh, empty
+    state directory inside the isolated host home instead, which the host
+    keeps and the check removes with the host home; the credential scan
+    after removal covers it.
+    """
+    monkeypatch.setenv("STUB_EXEC_CLEANUP_LOCKED", "1")
+    home = tmp_path / "host"
+    export = run(stub_host, tarball, tmp_path, host_home=home)
+    assert export["passed"] is True, export["steps"]
+    execs = [c["args"] for c in calls(home) if c["args"][:2] == ["agent", "exec"]]
+    assert len(execs) == 2
+    dirs = [Path(a[a.index("--state-dir") + 1]) for a in execs]
+    assert len(set(dirs)) == 2
+    assert all(home in d.parents for d in dirs)
+    assert all(home / "sandbox" not in d.parents for d in dirs)
+    step = next(s for s in export["steps"] if s["name"] == "text-exchange")
+    shown = step["argv"][step["argv"].index("--state-dir") + 1]
+    assert shown.startswith(install_check.HOST_HOME)

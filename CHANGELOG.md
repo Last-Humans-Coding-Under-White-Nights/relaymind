@@ -65,8 +65,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `uninstall --force` forms (Q4) and removes what uninstall leaves: the
   config entry, the `relaymind:manual` profile, and the stored token (Q12).
   `docs/RELEASE.md` and `docs/EVIDENCE.md` list macOS and Windows, native
-  and WSL2, as `not_run` support gaps. No spec, gateway, budget, or
-  default change.
+  and WSL2, as `not_run` support gaps. The CI job on the windows-latest
+  runner found two portability bugs: the transport and plugin drivers
+  built a `file://` URL from `process.argv[1]` by hand, which never matches
+  `import.meta.url` on Windows, so they exited 0 without running a
+  scenario (they now compare with `pathToFileURL`); and the pinned host's
+  `agent exec` failed deleting its own temporary state directory (`EBUSY`
+  on a SQLite file it still held) after an answered turn, so the install
+  check gives each exchange a fresh `--state-dir` in the host home, and
+  the operator guide says to do the same on Windows. No spec, gateway,
+  budget, or default change.
 - OpenClaw cancellation, errors, retries, and run trace correlation (#138;
   RM12, RM14, RM16, RM17, RM20, RM21, RM22, RM25, RM33; AC11, AC12, AC24):
   the plugin maps every gateway error code to the host's error class

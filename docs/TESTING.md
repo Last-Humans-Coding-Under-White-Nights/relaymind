@@ -1350,7 +1350,10 @@ What runs where:
   `"ok": true` whatever happened, the config entry and credential left
   after uninstall): every step in order in one isolated host home, the
   token only on standard input; the text and the `read` tool exchanges
-  through the gateway, the gateway executing nothing, the host's result
+  through the gateway, each `agent exec` in its own fresh `--state-dir`
+  inside the host home (the stub fails a run without one the way the pinned
+  host did on Windows: an answered turn, then `EBUSY` deleting its
+  temporary state), the gateway executing nothing, the host's result
   holding the file's text and matched through the rewrite; the token, the
   host home, the artifact folder, the checkout, and the user's home never
   in the export, in their absolute or the host's `~/...` form; what uninstall leaves recorded and the removal steps

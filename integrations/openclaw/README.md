@@ -194,6 +194,13 @@ config. The plugin serves this one client-owned alias and nothing else.
 Headless `agent exec` finds it through `resolveDynamicModel` ("How the host
 finds the model").
 
+On Windows, give `agent exec` an existing, empty state directory with
+`--state-dir <dir>`. Without it the pinned host makes a temporary one and
+deletes it after the turn, and on the GitHub windows-latest runner that
+delete failed on a SQLite file the host still held (`EBUSY`): the answer
+arrived, but the run ended `"ok": false`, exit 1 (28 October 2026). The
+host keeps a directory given with `--state-dir`; remove it yourself.
+
 ### 7. Host permissions and approvals
 
 They are OpenClaw's. The gateway proposes at most one call per response and
@@ -777,7 +784,10 @@ wrote to the documented default `/tmp/openclaw/`, outside the isolation):
    diagnostics);
 4. the token through `paste-api-key` on standard input;
 5. `models list --refresh` listing the alias;
-6. a text exchange and a host-tool exchange (`agent exec`). In the tool
+6. a text exchange and a host-tool exchange (`agent exec`, each with
+   `--state-dir` on a fresh, empty directory in the host home, so the run
+   never depends on the host deleting its own temporary state, which fails
+   on Windows; see step 6 of the guide). In the tool
    exchange the doubles propose the host's own `read` tool for `notes.txt`
    in a sandbox, and the host's result must reach the next run with the
    file's text, matched through the host's call ID rewrite;
