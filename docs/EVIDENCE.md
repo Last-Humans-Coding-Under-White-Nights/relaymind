@@ -3318,7 +3318,7 @@ export's `versions` (Python's `platform` on the runner), checked by
 | --- | --- | --- | --- | --- | --- | --- |
 | `ubuntu-latest` | Linux 6.17.0-1022-azure, x86_64 | 15 of 15 passed | 67.4 s | 15.3 s | `64d5530eb3ab4f7642fcd788eadfec5ca22674ea5288ea58c75f955d1cfe6e29` | `c447372290b03803fb5ee737cc60dc9b72c7d53051edfbedec98d96ca5624801` |
 | `macos-latest` | Darwin 25.6.0, arm64 | 15 of 15 passed | 131.2 s | 31.6 s | `64d5530eb3ab4f7642fcd788eadfec5ca22674ea5288ea58c75f955d1cfe6e29` | `da8872e43eee43f807c1a31ede656d10076b4784c95c737116c089382d38456a` |
-| `windows-latest` | Windows 2025Server, AMD64 (the host's log: Windows_NT 10.0.26100) | 15 of 15 passed | 257.3 s | 138.8 s | `5585ffa598325b585dae06172bfbbea62dd1efbae69a7c55dd50c712b78d7b8e` | `cdd2b49036d38082f53b145ddbcb27bddfb6a4038e526da14b22dcd8d3166266` (CRLF line ends as uploaded: `fdf3d78448e4569f086fc0f3a0bcaa74706482a10a0eb847c566fc9c32468ee5`) |
+| `windows-latest` | Windows 2025Server, AMD64 (the host's runtime line in the recorded request: Windows_NT 10.0.26100) | 15 of 15 passed | 257.3 s | 138.8 s | `5585ffa598325b585dae06172bfbbea62dd1efbae69a7c55dd50c712b78d7b8e` | `cdd2b49036d38082f53b145ddbcb27bddfb6a4038e526da14b22dcd8d3166266` (CRLF line ends as uploaded: `fdf3d78448e4569f086fc0f3a0bcaa74706482a10a0eb847c566fc9c32468ee5`) |
 
 On each runner, as on the Linux VPS: install with
 `--force --accept-capabilities`, `plugins inspect` `loaded` with provider
