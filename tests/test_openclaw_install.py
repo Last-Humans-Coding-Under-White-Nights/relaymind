@@ -302,3 +302,23 @@ def test_ci_builds_tests_and_runs_the_artifact_through_the_pinned_host_on_each_p
     tests = Path(__file__).resolve().parent
     for module in sorted(tests.glob("test_openclaw_*.py")):
         assert f"tests/{module.name}" in runs, module.name
+
+
+DRIVERS = (
+    PACKAGE / "test" / "host-transport" / "drive.mjs",
+    PACKAGE / "test" / "plugin-transport" / "drive-plugin.mjs",
+)
+
+
+@pytest.mark.parametrize("driver", DRIVERS, ids=lambda p: p.name)
+def test_a_driver_knows_it_is_the_entry_point_on_every_supported_platform(driver):
+    """The pinned host supports native Windows (#145; section 7.5).
+
+    A driver that builds its own ``file://`` URL from ``process.argv[1]`` never
+    matches ``import.meta.url`` on Windows (``file:///C:/...`` against
+    ``file://C:\\...``), so it exits 0 without running the scenario or writing
+    its output. The entry check compares the URL Node itself builds.
+    """
+    source = driver.read_text("utf-8")
+    assert "file://${process.argv[1]}" not in source
+    assert "import.meta.url === pathToFileURL(process.argv[1]).href" in source
