@@ -265,7 +265,9 @@ describe("the host's failover hooks (section 7.5, #138)", () => {
 
   it("classifyFailoverReason names the class and leaves other errors to the host", () => {
     expect(provider.classifyFailoverReason?.({ errorMessage: overflow })).toBe("context_overflow");
-    expect(provider.classifyFailoverReason?.({ errorMessage: local })).toBe("server_error");
+    // Spec 0.49: needs_external is format, which the pinned host does not retry on the same model.
+    expect(provider.classifyFailoverReason?.({ errorMessage: local })).toBe("format");
+    expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "external_failed" })).toBe("server_error");
     expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "overloaded" })).toBe("overloaded");
     expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "deadline_exceeded" })).toBe("timeout");
     expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "unauthenticated" })).toBe("auth");

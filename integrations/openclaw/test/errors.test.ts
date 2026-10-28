@@ -18,6 +18,7 @@ import {
   isContextOverflow,
   retryRule,
 } from "../src/errors.ts";
+import { hostFailoverReason, transientRetryReasons } from "./pinned-host.ts";
 
 const TOKEN = "rm-app-token-4f9c2a7e1b3d5c6a8e0f2b4d6c8a0e1f";
 
@@ -45,17 +46,19 @@ function failedMessage(fields: {
   } as never;
 }
 
-// Every gateway code with its status (spec section 11) and the host's class.
+// Every gateway code with its status (spec section 11) and the host's class
+// (section 7.5, spec 0.49): a refusal that follows from the configuration and
+// the request is format, which the pinned host does not retry on the same model.
 const TABLE: [string, number | undefined, string, string][] = [
   ["context_limit_exceeded", 400, "context_overflow", "none"],
   ["invalid_request", 400, "format", "none"],
   ["unsupported_parameter", 400, "format", "none"],
   ["invalid_execution_mode", 400, "format", "none"],
   ["unauthenticated", 401, "auth", "none"],
-  ["execution_mode_forbidden", 403, "server_error", "none"],
-  ["idempotency_conflict", 409, "server_error", "none"],
-  ["run_terminal", 409, "server_error", "none"],
-  ["needs_external", 422, "server_error", "none"],
+  ["execution_mode_forbidden", 403, "format", "none"],
+  ["idempotency_conflict", 409, "format", "none"],
+  ["run_terminal", 409, "format", "none"],
+  ["needs_external", 422, "format", "none"],
   ["overloaded", 429, "overloaded", "same_key"],
   ["internal_error", 500, "server_error", "none"],
   ["workflow_unavailable", 503, "server_error", "none"],
@@ -149,7 +152,7 @@ describe("the host's error classes (section 7.5)", () => {
       [],
     );
     expect(isContextOverflow({ errorMessage: message, code: "needs_external" })).toBe(false);
-    expect(failoverReason({ errorMessage: message, code: "needs_external" })).toBe("server_error");
+    expect(failoverReason({ errorMessage: message, code: "needs_external" })).toBe("format");
   });
 
   it("the plugin's own empty-answer failure is an empty response", () => {
@@ -240,5 +243,61 @@ describe("sanitized, actionable messages", () => {
 describe("what may be retried (section 7.5 bounded retry rule)", () => {
   it.each(TABLE)("%s: %s", (code, _status, _reason, rule) => {
     expect(retryRule(code)).toBe(rule);
+  });
+});
+
+// The class as the pinned host itself derives it and what it then retries
+// (spec section 7.5, spec 0.49; the #138 Linux VPS check saw 7 same-model
+// retries of a 503 external_failed under server_error).
+describe("the pinned host's class and same-model retry (section 7.5)", () => {
+  const PLUGIN = { id: "relaymind", classifyFailoverReason: failoverReason, matchesContextOverflowError: isContextOverflow };
+  const TRANSIENT = ["output_limit", "overloaded", "rate_limit", "server_error", "timeout"];
+
+  it("retries only rate_limit, overloaded, server_error, timeout, and output_limit on the same model", () => {
+    expect(transientRetryReasons()).toEqual(TRANSIENT);
+  });
+
+  it.each(TABLE)("%s (HTTP %s): the host keeps the plugin's class %s", async (code, status, reason) => {
+    const failed = failedMessage({ status, code, runId: "run_1" });
+    const message = { ...(failed as object), errorMessage: describeFailure(gatewayFailure(failed)!, []) };
+    expect(await hostFailoverReason(message, PLUGIN)).toBe(reason);
+  });
+
+  // The codes whose class the pinned host retries on the same model, up to its own bound.
+  const HOST_RETRIED = [
+    "overloaded",
+    "internal_error",
+    "workflow_unavailable",
+    "external_failed",
+    "deadline_exceeded",
+    "predicate_unmet",
+  ];
+  it.each(TABLE)("%s: the pinned host retries it on the same model only if listed", (code, _status, reason) => {
+    expect(TRANSIENT.includes(reason)).toBe(HOST_RETRIED.includes(code));
+  });
+
+  // needs_external is a refusal under the effective mode whatever stopped the local stage.
+  it.each(["context_limit", "invalid_output", "local_budget", "no_local_model", "capability_missing"])(
+    "needs_external with reason_code %s is format",
+    async (reasonCode) => {
+      const failed = failedMessage({ status: 422, code: "needs_external", runId: "run_1", reasonCode });
+      const message = { ...(failed as object), errorMessage: describeFailure(gatewayFailure(failed)!, []) };
+      expect(failoverReason({ errorMessage: message.errorMessage, code: "needs_external" })).toBe("format");
+      expect(await hostFailoverReason(message, PLUGIN)).toBe("format");
+    },
+  );
+
+  // external_failed's reason_code is why the run left the local path, or why its
+  // external stage stopped: invalid_output there does not show that the external
+  // output was refused rather than the provider failing, so it stays server_error.
+  it.each([
+    [503, "invalid_output"],
+    [503, "context_limit"],
+    [503, undefined],
+    [undefined, "invalid_output"],
+  ])("external_failed (HTTP %s) with reason_code %s stays server_error", async (status, reasonCode) => {
+    const failed = failedMessage({ status, code: "external_failed", runId: "run_1", reasonCode });
+    const message = { ...(failed as object), errorMessage: describeFailure(gatewayFailure(failed)!, []) };
+    expect(await hostFailoverReason(message, PLUGIN)).toBe("server_error");
   });
 });

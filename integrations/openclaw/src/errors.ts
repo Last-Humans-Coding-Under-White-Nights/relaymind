@@ -8,12 +8,21 @@
 // error event. The plugin reads those fields and writes one sanitized,
 // actionable message that starts with "RelayMind <code> (...)", so the class
 // can be read back from the message alone. The classes follow section 7.5:
-// context_limit_exceeded is a context overflow, needs_external and
-// external_failed are failures of this provider, 429 overloaded is a temporary
+// context_limit_exceeded is a context overflow; a refusal that follows from
+// the gateway's configuration and the request (needs_external,
+// execution_mode_forbidden, idempotency_conflict, run_terminal) is format;
+// internal_error, workflow_unavailable, external_failed, and predicate_unmet
+// are failures of this provider (server_error); 429 overloaded is a temporary
 // overload, 504 deadline_exceeded is a timeout, and 401 is an authentication
-// failure with the reconnect instruction. A class is a truthful answer to the
-// host's own failover hooks; whether the host then fails over is host policy,
-// which the plugin neither triggers nor hides.
+// failure with the reconnect instruction. The pinned host retries the same
+// model only for rate_limit, overloaded, server_error, timeout, and
+// output_limit (spec 0.49), so a format refusal is not sent again up to 8
+// times as new runs. external_failed stays server_error whatever its
+// reason_code: that is why the run left the local path, or why its external
+// stage stopped, and cannot tell a refused output from a provider failure. A
+// class is a truthful answer to the host's own failover hooks; whether the
+// host then fails over is host policy, which the plugin neither triggers nor
+// hides.
 import { RECONNECT } from "./diagnostics.ts";
 import { redact } from "./redaction.ts";
 
@@ -49,6 +58,7 @@ interface CodeRule {
 }
 
 const PROVIDER_FAILURE = "This is a failure of the RelayMind provider, not an answer.";
+const REFUSAL = "RelayMind refused this request under its configuration; this is not an answer.";
 
 const RULES: Record<string, CodeRule> = {
   context_limit_exceeded: {
@@ -75,32 +85,32 @@ const RULES: Record<string, CodeRule> = {
   },
   unauthenticated: { reason: "auth", retry: "none", explain: RECONNECT },
   execution_mode_forbidden: {
-    reason: "server_error",
+    reason: "format",
     retry: "none",
     explain:
       "The gateway's policy does not permit the configured executionMode. Change the plugin's " +
-      `executionMode or the gateway's policy. ${PROVIDER_FAILURE}`,
+      `executionMode or the gateway's policy. ${REFUSAL}`,
   },
   idempotency_conflict: {
-    reason: "server_error",
+    reason: "format",
     retry: "none",
     explain:
       "The gateway already holds this Idempotency-Key for a run that has not finished, for a " +
       "different request, or for a response it cannot replay; nothing new was started.",
   },
   run_terminal: {
-    reason: "server_error",
+    reason: "format",
     retry: "none",
     explain:
       "This identical request already ran under the same Idempotency-Key and that run ended " +
       "failed or cancelled; RelayMind does not start it again under that key.",
   },
   needs_external: {
-    reason: "server_error",
+    reason: "format",
     retry: "none",
     explain:
       "The request cannot complete under the effective execution mode without the external " +
-      `model (for example executionMode local_only). ${PROVIDER_FAILURE}`,
+      `model (for example executionMode local_only). ${REFUSAL}`,
   },
   overloaded: {
     reason: "overloaded",

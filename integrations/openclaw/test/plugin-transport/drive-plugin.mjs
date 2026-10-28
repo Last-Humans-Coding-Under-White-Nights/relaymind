@@ -39,6 +39,8 @@
 // gives every message timestamp 1, so two driver runs build the same
 // conversation. scenario.hostIdempotencyKey sets the host's own key on every
 // request. output.attempts holds the plugin's attempt records, read from its log.
+// A failed result's host_failover_reason is the class the pinned host's own
+// classifier gives the failed message with this provider (../pinned-host.ts).
 import "openclaw/plugin-sdk/provider-transport-runtime";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -47,6 +49,7 @@ import { createOpenAICompletionsTransportStreamFn } from "@openclaw/ai/transport
 
 import entry from "../../src/index.ts";
 import { startRecorder } from "../host-transport/recorder.mjs";
+import { hostFailoverReason } from "../pinned-host.ts";
 
 export const HOST_TOOLS = {
   relaymind_test_echo: {
@@ -205,7 +208,7 @@ function abortFor(scenario, index) {
   return { controller, abort, clear: () => clearTimeout(timer) };
 }
 
-async function send(stream, fullModel, context, scenario, apiKey, index) {
+async function send(stream, fullModel, context, scenario, apiKey, index, provider) {
   const { controller, abort, clear } = abortFor(scenario, index);
   const events = await stream(fullModel, context, {
     apiKey,
@@ -227,7 +230,17 @@ async function send(stream, fullModel, context, scenario, apiKey, index) {
   const message = await events.result();
   clear();
   if (abort === "afterResult") controller.abort();
-  return { message, result: { ...summarize(message), text_deltas: deltas.join(""), events: [...new Set(seen)] } };
+  const host_failover_reason =
+    message.stopReason === "error" ? await hostFailoverReason(message, provider) : null;
+  return {
+    message,
+    result: {
+      ...summarize(message),
+      text_deltas: deltas.join(""),
+      events: [...new Set(seen)],
+      host_failover_reason,
+    },
+  };
 }
 
 /**
@@ -258,7 +271,7 @@ async function converse(provider, fullModel, scenario, apiKey, output) {
   const maxRequests = scenario.maxRequests ?? (scenario.hostTools ? 3 : 1);
   for (let index = 0; index < maxRequests; index++) {
     sent.push({ ...context, messages: [...context.messages] });
-    const { message, result } = await send(stream, fullModel, context, scenario, apiKey, index);
+    const { message, result } = await send(stream, fullModel, context, scenario, apiKey, index, provider);
     output.results.push(result);
     if (message.stopReason !== "toolUse") break;
     context.messages.push(replayedAssistant(scenario, message));
@@ -280,7 +293,7 @@ async function converse(provider, fullModel, scenario, apiKey, output) {
   if (scenario.repeat) {
     // A host retry: the same request again, unchanged; the host executes nothing for it.
     const again = scenario.repeat === "first" ? sent[0] : sent[sent.length - 1];
-    const { result } = await send(stream, fullModel, again, scenario, apiKey, -1);
+    const { result } = await send(stream, fullModel, again, scenario, apiKey, -1, provider);
     output.repeated = result;
   }
   output.host_tool_executions = executions;

@@ -140,6 +140,17 @@ def in_background(fn):
     return join
 
 
+# The classes the pinned host retries on the same model (maybeRetryTransient,
+# openclaw@2026.10.7; pinned by integrations/openclaw/test/errors.test.ts).
+HOST_SAME_MODEL_RETRIED = {"rate_limit", "overloaded", "server_error", "timeout", "output_limit"}
+
+
+def host_class(output, key=None):
+    """The class the pinned host's own classifier gives the failed message (section 7.5)."""
+    result = output[key] if key else output["results"][0]
+    return result["host_failover_reason"]
+
+
 def failure_of(output, index=0):
     result = output["results"][index]
     assert result["stop_reason"] == "error"
@@ -323,10 +334,16 @@ def test_a_mode_the_policy_forbids_is_403_named(tmp_path):
     message = failure_of(output)
     assert message.startswith("RelayMind execution_mode_forbidden (HTTP 403): ")
     assert all_run_ids(gateway) == []
+    # Spec 0.49 section 7.5: a refusal by policy is format, never retried on the same model.
+    assert host_class(output) == "format"
 
 
-def test_needs_external_is_422_a_failure_of_this_provider(tmp_path):
-    """local_only: the local model cannot complete, and RelayMind never goes external."""
+def test_needs_external_is_422_a_refusal_the_host_does_not_retry(tmp_path):
+    """local_only: the local model cannot complete, and RelayMind never goes external.
+
+    Spec 0.49 section 7.5: needs_external is the host's format class, so the
+    pinned host does not retry it on the same model (no retry storm of new runs).
+    """
     gateway, app = client_gateway(
         tmp_path, [text_turn("x"), text_turn("x")], external_turns=[text_turn("unused")]
     )
@@ -352,6 +369,8 @@ def test_needs_external_is_422_a_failure_of_this_provider(tmp_path):
         "error_body",
         "needs_external",
     )
+    assert host_class(output) == "format"
+    assert host_class(output) not in HOST_SAME_MODEL_RETRIED
 
 
 @pytest.mark.parametrize("early_headers", [False, True], ids=["http_503", "stream_event"])
@@ -391,6 +410,9 @@ def test_an_external_failure_is_a_failure_with_its_run_id(tmp_path, early_header
     assert attempt["usage"] == "unknown"
     # Never mixed owners: no answer text from any actor.
     assert not of_type(events, "answer.delta")
+    # Spec 0.49 section 7.5: still a failure of this provider, which the pinned
+    # host retries on the same model (its reason_code cannot show a permanent refusal).
+    assert host_class(output) == "server_error"
 
 
 def test_a_held_slot_is_429_overloaded_with_nothing_created(tmp_path):
@@ -569,6 +591,7 @@ def test_a_changed_payload_under_the_host_s_own_key_is_409_idempotency_conflict(
     message = failure_of(second)
     assert message.startswith("RelayMind idempotency_conflict (HTTP 409): ")
     assert len(all_run_ids(gateway)) == 1
+    assert host_class(second) == "format"
 
 
 def test_a_redacted_tool_call_is_not_replayed(tmp_path):
@@ -621,6 +644,8 @@ def test_a_cancelled_runs_key_sent_again_is_409_run_terminal(tmp_path):
     assert failure_of(again).startswith("RelayMind run_terminal (HTTP 409): ")
     assert f"Gateway run {run_id}" in failure_of(again)
     assert all_run_ids(gateway) == [run_id]
+    # A key the gateway never runs again: format, not a same-model retry.
+    assert host_class(again) == "format"
 
 
 def test_a_host_retry_of_a_cancelled_request_is_a_new_run_under_a_new_key(tmp_path):
