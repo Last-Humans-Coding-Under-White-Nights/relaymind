@@ -217,11 +217,11 @@ answer:
 | `context_limit_exceeded` (400) | context overflow (`context_overflow`) | no |
 | `invalid_request`, `unsupported_parameter`, `invalid_execution_mode` (400) | request format (`format`) | no |
 | `unauthenticated` (401), with the reconnect instruction below | authentication (`auth`) | no |
-| `execution_mode_forbidden` (403) | failure of this provider (`server_error`) | no |
-| `idempotency_conflict`, `run_terminal` (409) | failure of this provider (`server_error`) | no |
-| `needs_external` (422) | failure of this provider (`server_error`); a local context limit here is not a context overflow | no |
+| `execution_mode_forbidden` (403) | refusal by policy (`format`) | no |
+| `idempotency_conflict`, `run_terminal` (409) | refusal of the key (`format`) | no |
+| `needs_external` (422) | refusal under the effective mode (`format`), whatever its `reason_code`; a local context limit here is not a context overflow | no |
 | `overloaded` (429): another run or an idle probe holds the slot; nothing was queued or created | temporary overload (`overloaded`) | yes, same key |
-| `internal_error` (500), `workflow_unavailable`, `external_failed` (503) | failure of this provider (`server_error`) | no |
+| `internal_error` (500), `workflow_unavailable`, `external_failed` (503), whatever the `reason_code` | failure of this provider (`server_error`) | no |
 | `deadline_exceeded` (504) | timeout (`timeout`) | yes, new key |
 | `predicate_unmet` (stream error event) | failure of this provider (`server_error`) | no |
 | the plugin's own empty-answer failure | `empty_response` | no |
@@ -232,15 +232,31 @@ then fails over to another provider or model is host policy: the plugin
 neither triggers nor hides it, and section 12.5 records it as a host
 decision, never as a RelayMind answer.
 
-The pinned host retries the same model after a failure of this provider:
-in the Linux VPS functional check, a 503 `external_failed` got 7 same-model
-retries (`transient same-model retry 1/8` to `7/8`, delays from 0.6 s to
-26.5 s, about 100 s in all) before the host stopped and surfaced the error.
-Each retry rewrote the conversation (the host added `[Earlier unanswered
-user message. ...]` and similar text), so each had a new turn and a new
-`Idempotency-Key` and was a new gateway run with its own external calls: 8
-runs for one `agent exec`. The plugin's `maxRetries` (0) does not bound
-these; whether a host setting does was not checked.
+The class decides the pinned host's own same-model retry (spec 0.49,
+section 7.5): its `maybeRetryTransient` retries only `rate_limit`,
+`overloaded`, `server_error`, `timeout`, and `output_limit`, up to 8 times
+in about 90 s, and rejects every other class as `non_transient`
+(`test/errors.test.ts` reads that list and the class the host derives from
+the pinned build). In the Linux VPS functional check, a 503 `external_failed`
+got 7 same-model retries (`transient same-model retry 1/8` to `7/8`, delays
+from 0.6 s to 26.5 s, about 100 s in all) before the host stopped and
+surfaced the error. Each retry rewrote the conversation (the host added
+`[Earlier unanswered user message. ...]` and similar text), so each had a
+new turn and a new `Idempotency-Key` and was a new gateway run with its own
+external calls: 8 runs for one `agent exec`. The plugin's `maxRetries` (0)
+does not bound these; whether a host setting does was not checked.
+
+So a refusal that follows from the gateway's configuration and the request
+is `format`, the class the host itself gives an unlabeled 400 or 422: a
+`needs_external` (every OpenClaw turn under `local_only` while the local
+context stays 8192), a forbidden `executionMode`, and a held or spent key
+are not sent again as new runs. `external_failed` stays `server_error`, and
+the retries above remain: its `reason_code` is why the run left the local
+path or why its external stage stopped, so `invalid_output` there does not
+show that the external output was refused rather than the provider failing.
+A `format` class leaves the host's credential health alone; whether the
+host fails over to another configured model after it is still host policy.
+The real host's retry count for a `format` refusal was not run.
 
 **Idempotency keys.** Every request carries an `Idempotency-Key`: the SHA-256
 of what the pinned transport builds the body from (the model entry with its
