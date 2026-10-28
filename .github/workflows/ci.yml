@@ -94,7 +94,9 @@ jobs:
           tests/test_openclaw_round_trips.py tests/test_openclaw_cancel_errors.py
           tests/test_openclaw_qualification_script.py tests/test_openclaw_host_captures.py
           tests/test_openclaw_request_size.py tests/test_openclaw_install.py
-          tests/test_openclaw_install_check.py
+          tests/test_openclaw_install_check.py tests/test_openclaw_mac_qualification.py
+          tests/test_openclaw_vps_functional.py tests/test_openclaw_vps_functional_round_trips.py
+          tests/test_openclaw_vps_functional_cancel_errors.py
 
       - name: Pinned host lifecycle (install, inspect, round trips, removal)
         run: |
