@@ -284,9 +284,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `relaymind_auto`, and `relaymind_no_local`, in a seeded paired order; an
   attempt succeeds on the host's exit status, its final answer, its tool
   calls, the sandbox, and the gateway trace, never on the host's `"ok"`; a
-  host failover is counted apart; the report gives exact counts per arm and
-  language, the two clocks apart, and tokens per model with unknown counts
-  kept unknown. No gateway contract change.
+  host failover is counted apart, and only a reported provider or model
+  other than the arm's is one (an error report naming neither is a failed
+  attempt); `relaymind_auto` needs the external model and a local model,
+  and is not_run without either; a host tool call is graded from the host's
+  tool report and the sandbox, never by comparing call IDs (the trace holds
+  no host result); the report gives exact counts per arm and language, the
+  two clocks apart, and tokens per model with unknown counts kept unknown,
+  and the export names the Node that ran the host. No gateway contract
+  change.
 - Specification 0.49, OpenClaw host facts recorded on the wire (#135; RM33,
   section 7.5): at v2026.10.7 the host's defaults for a loopback URL send
   `stream_options` and, for a reasoning model, `reasoning_effort`; the

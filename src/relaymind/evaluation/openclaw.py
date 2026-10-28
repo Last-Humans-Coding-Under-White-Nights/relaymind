@@ -522,8 +522,11 @@ def grade_attempt(task: Task, attempt: Mapping[str, Any]) -> dict[str, Any]:
     host_tools = [t for t in summary.get("tools") or [] if isinstance(t, str)]
     final = report.get("final") if isinstance(report.get("final"), str) else ""
 
-    failover = bool(report) and (
-        report.get("provider") != expected["provider"] or report.get("model") != expected["model"]
+    # A failover is a reported identity other than the arm's; the pinned host's
+    # error report names none (provider and model null), which is a failed attempt.
+    failover = any(
+        report.get(key) is not None and report.get(key) != expected[key]
+        for key in ("provider", "model")
     )
     timed_out = host["status"] == "timed_out"
     proposals = [e["payload"] for run in runs for e in _events(run, "tool.proposed")]
@@ -592,9 +595,7 @@ def grade_attempt(task: Task, attempt: Mapping[str, Any]) -> dict[str, Any]:
     local_turns = sum(
         1
         for run, of_run in calls_by_run
-        if run["state"] == "completed"
-        and of_run
-        and all(call["actor"] == "local" for call in of_run)
+        if run["state"] == "completed" and not any(call["actor"] == "external" for call in of_run)
     )
     success = not failures
     return {

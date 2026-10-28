@@ -1178,8 +1178,12 @@ python scripts/run_openclaw_eval.py \
 ```
 
 An arm without its endpoint, credential, or local model is recorded as
-not_run. The host's `"ok": true` never counts as a success; a host failover
-is counted apart. The direct arm writes the provider's key into the
+not_run; `relaymind_auto` needs both the external model and the local
+model. The host's `"ok": true` never counts as a success; a host failover
+(a reported provider or model other than the arm's) is counted apart. The
+direct arm's host keeps the operator's proxy variables, as the gateways
+do, so both reach the provider the same way; the export names the
+variables (not their values) and the Node that ran the host. The direct arm writes the provider's key into the
 temporary host home's config file (removed at the end, never exported);
 whether the pinned host accepts that provider entry as written is not
 verified. Record the result in `docs/EVIDENCE.md` ("M9 OpenClaw

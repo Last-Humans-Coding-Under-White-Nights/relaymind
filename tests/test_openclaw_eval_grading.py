@@ -322,6 +322,47 @@ def test_a_host_failover_is_counted_apart_and_never_an_arm_success():
     assert grade["failures"] == ["host_failover"]
 
 
+def test_a_host_error_report_with_no_provider_is_a_failed_attempt_not_a_failover():
+    """The pinned host's error JSON names no provider or model (macOS probe runs/out-p2.json).
+
+    A failover needs a reported provider or model that differs from the arm's;
+    a null one is the host saying nothing, so the attempt is graded as failed.
+    """
+    error = {
+        "ok": False,
+        "status": "error",
+        "model": None,
+        "provider": None,
+        "error": {"message": "Unknown model: relaymind/relaymind-client-tools"},
+    }
+    grade = grade_attempt(
+        TEXT,
+        attempt(TEXT, host=error, exit_code=1, status="failed", runs=[], diagnostics=[]),
+    )
+    assert grade["host_failover"] is False
+    assert "host_failover" not in grade["failures"]
+    assert "exit_status" in grade["failures"] and "answer" in grade["failures"]
+    summary = summarize([grade])
+    assert summary["arms"]["relaymind_auto"]["languages"]["en"]["host_failovers"] == 0
+
+
+def test_a_completed_run_without_any_model_call_is_a_local_turn():
+    """Spec 0.50 section 12.5: local turns are completed runs without an external call."""
+    replay = {
+        "run_id": "run_a",
+        "state": "completed",
+        "events": [
+            event("run.accepted"),
+            event("answer.delta", elapsed=3, text=evidence_text(TEXT)),
+            event("run.completed", elapsed=4, external_calls=0, model_calls=[]),
+        ],
+    }
+    external = text_run("run_b", model="ext", actor="external")
+    grade = grade_attempt(TEXT, attempt(TEXT, host=report(TEXT), runs=[replay, external]))
+    assert grade["local_turns"] == 1
+    assert grade["external_calls"] == 1
+
+
 def test_first_useful_content_comes_from_the_trace_never_from_a_header_or_keep_alive():
     """A run with headers sent but no answer or proposal has no first useful content."""
     run = {

@@ -1484,7 +1484,9 @@ the measurement has run.
   only when nothing was written; a gateway tool execution, an uncorrelated
   run, a mismatched proposal, a timeout, and exit 130 (a host interrupt)
   fail or are counted; a host failover is counted apart and never an arm
-  success; first useful content comes only from an answer or a proposal in
+  success, and a host error report that names no provider or model is a
+  failed attempt, not a failover; a completed run with no external call
+  (also one with no model call) is a local turn; first useful content comes only from an answer or a proposal in
   the trace, never from a header or keep-alive; the direct arm has unknown
   gateway measures and keeps the host's statements; retries and failed
   attempts are counted, a record without a run ID stays unavailable;
@@ -1504,8 +1506,11 @@ the measurement has run.
   local ones, a fresh sandbox per attempt under the task's policy, the
   install with `--accept-capabilities`, the token only on standard input,
   the plugin's mode and diagnostics path, neither secret nor a host path
-  in the export or report, the arm availability rules, and a task file that
-  differs from its lock refused by the CLI.
+  in the export or report, the arm availability rules (relaymind_auto
+  needs the external model and a local model), the Node that runs the
+  host named in the export, the direct arm's host keeping the operator's
+  proxy variables the way a gateway does (a RelayMind arm's host keeps
+  none), and a task file that differs from its lock refused by the CLI.
 
 The measurement itself (section 12.5) needs a real host, the external
 provider's credential, and the pinned local model, and is an operator run:

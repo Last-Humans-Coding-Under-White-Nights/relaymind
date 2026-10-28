@@ -138,13 +138,15 @@ class GatewayHandle:
 
 def arm_availability(*, external: Any, local_model: bool, key_present: bool) -> dict[str, str]:
     """The arms that cannot run, each with its reason (section 12.5: recorded as not_run)."""
-    reasons: dict[str, str] = {}
+    # relaymind_auto is the external model and the local model together: without
+    # either, its gateway is not the spec's auto arm, so it does not run.
+    missing: dict[str, list[str]] = {}
     if external is None or not key_present:
-        for arm in ("direct", "relaymind_external_only", "relaymind_no_local"):
-            reasons[arm] = NO_EXTERNAL
+        for arm in ARMS:
+            missing.setdefault(arm, []).append(NO_EXTERNAL)
     if not local_model:
-        reasons["relaymind_auto"] = NO_LOCAL
-    return {arm: reasons[arm] for arm in ARMS if arm in reasons}
+        missing.setdefault("relaymind_auto", []).append(NO_LOCAL)
+    return {arm: "; ".join(missing[arm]) for arm in ARMS if arm in missing}
 
 
 def expected_host_model(arm: str, direct: DirectEndpoint | None) -> dict[str, str]:
@@ -169,14 +171,55 @@ def _merge(target: dict, patch: Mapping) -> dict:
     return target
 
 
+def proxy_variables() -> dict[str, str]:
+    """The operator's proxy variables (either case), as a gateway inherits them."""
+    return {
+        k: v
+        for k, v in os.environ.items()
+        if k.upper() in install_check.qualification.PROXY_VARIABLES
+    }
+
+
+def node_identity(host_command: Sequence[str], env: Mapping[str, str]) -> dict[str, str | None]:
+    """The Node that runs the host: an explicit node in the command, else node on PATH."""
+    first = host_command[0] if host_command else ""
+    if Path(first).name.lower() in ("node", "node.exe"):
+        node: str | None = first
+    else:
+        node = shutil.which("node", path=env.get("PATH"))
+    if node is None:
+        return {"executable": None, "version": None}
+    try:
+        done = subprocess.run(
+            [node, "--version"], env=dict(env), capture_output=True, text=True, timeout=30
+        )
+        version = (done.stdout.strip() or None) if done.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired):
+        version = None
+    return {"executable": node, "version": version}
+
+
 class Host:
     """One isolated host home and the host command run in it."""
 
-    def __init__(self, command: Sequence[str], home: Path) -> None:
+    def __init__(
+        self, command: Sequence[str], home: Path, *, provider_network: bool = False
+    ) -> None:
+        """provider_network: this host calls the external provider (the direct arm).
+
+        It then keeps the operator's proxy variables, the way a gateway does, so
+        the direct arm and the RelayMind arms reach the provider by the same
+        network path; loopback still never goes through a proxy.
+        """
         self.command = list(command)
         self.home = home
         home.mkdir(parents=True, exist_ok=True)
         self.env = install_check.host_environment(home)
+        if provider_network:
+            self.env.update(proxy_variables())
+            operator = os.environ.get("NO_PROXY") or os.environ.get("no_proxy")
+            if operator:
+                self.env["NO_PROXY"] = f"{operator},{self.env['NO_PROXY']}"
 
     @property
     def config_path(self) -> Path:
@@ -457,6 +500,8 @@ def run_evaluation(
     attempts: list[dict] = []
     grades: list[dict] = []
     work = Path(tempfile.mkdtemp(prefix="relaymind-openclaw-eval-"))
+    # The hosts' environment, so the Node on its PATH is the one that runs them.
+    node = node_identity(host_command, install_check.host_environment(work / "node"))
     hosts: dict[str, Host] = {}
     handles: dict[str, GatewayHandle] = {}
     direct = None
@@ -465,7 +510,7 @@ def run_evaluation(
         for arm in ARMS:
             if arm in not_run:
                 continue
-            host = Host(host_command, work / arm / "host")
+            host = Host(host_command, work / arm / "host", provider_network=arm == "direct")
             places.append((host.home, HOST_HOME))
             record: dict[str, Any] = {
                 "status": "ran",
@@ -542,6 +587,8 @@ def run_evaluation(
             "full_set": len(selected) == len(tasks.tasks),
         },
         "host_command": list(host_command),
+        "node": node,
+        "proxy_variables": sorted(proxy_variables()),
         "plugin_artifact": {"file": tarball.name, "sha256": _sha256(tarball)},
         "backend": backend.identity(),
         "machine": machine_manifest(),

@@ -389,6 +389,66 @@ def test_without_an_external_endpoint_or_a_local_model_the_arms_are_not_run():
     assert runner.arm_availability(external=object(), local_model=True, key_present=True) == {}
 
 
+def test_relaymind_auto_without_the_external_model_is_not_run():
+    """Section 12.5: the auto arm's gateway has the same external model and the local model.
+
+    With only the local model, a gateway would be local-only, which is not the
+    spec's auto arm, so the arm is not_run with the missing external model as
+    its reason, never "ran" with zero successes.
+    """
+    for external, key in ((None, False), (object(), False), (None, True)):
+        reasons = runner.arm_availability(external=external, local_model=True, key_present=key)
+        assert set(reasons) == set(ARMS)
+        assert runner.NO_EXTERNAL in reasons["relaymind_auto"]
+    both = runner.arm_availability(external=None, local_model=False, key_present=False)
+    assert runner.NO_EXTERNAL in both["relaymind_auto"]
+    assert runner.NO_LOCAL in both["relaymind_auto"]
+
+
+def test_the_export_records_the_node_identity(evaluated):
+    """Section 12.5: the export holds the host, Node, plugin, and model identities."""
+    document, _out, _backend = evaluated
+    node = document["node"]
+    assert set(node) == {"executable", "version"}
+    if node["executable"] is not None:
+        assert node["version"] and node["version"].startswith("v")
+
+
+def test_the_node_identity_is_the_node_that_runs_the_host(tmp_path):
+    fake = tmp_path / "bin" / "node"
+    fake.parent.mkdir()
+    fake.write_text(f"#!{sys.executable}\nprint('v26.12.1')\n", "utf-8")
+    fake.chmod(0o755)
+    env = {"PATH": str(fake.parent)}
+    # The host started by an explicit node binary, and through a shebang on PATH.
+    explicit = runner.node_identity([str(fake), "openclaw.mjs"], env)
+    assert explicit == {"executable": str(fake), "version": "v26.12.1"}
+    on_path = runner.node_identity(["node_modules/.bin/openclaw"], env)
+    assert on_path == {"executable": str(fake), "version": "v26.12.1"}
+    assert runner.node_identity(["openclaw"], {"PATH": str(tmp_path / "none")}) == {
+        "executable": None,
+        "version": None,
+    }
+
+
+def test_the_direct_host_reaches_the_provider_through_the_operators_proxy(tmp_path, monkeypatch):
+    """The direct arm and the gateways reach the external provider the same way.
+
+    A gateway inherits the operator's environment, proxies included; the direct
+    arm's host is the one that calls the provider, so it keeps the proxy
+    variables too. A RelayMind arm's host talks only to the loopback gateway and
+    keeps none. Loopback never goes through a proxy.
+    """
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:3128")
+    monkeypatch.setenv("NO_PROXY", "corp.invalid")
+    direct = runner.Host(["openclaw"], tmp_path / "direct", provider_network=True)
+    plugin = runner.Host(["openclaw"], tmp_path / "plugin")
+    assert direct.env["HTTPS_PROXY"] == "http://proxy.invalid:3128"
+    assert {"127.0.0.1", "localhost", "corp.invalid"} <= set(direct.env["NO_PROXY"].split(","))
+    assert "HTTPS_PROXY" not in plugin.env
+    assert plugin.env["NO_PROXY"] == "127.0.0.1,localhost,::1"
+
+
 def test_the_cli_refuses_a_task_file_that_differs_from_its_lock(tmp_path, capsys):
     changed = json.loads((REPO / "evaluation" / "openclaw_tasks.v1.json").read_text("utf-8"))
     changed["tasks"][0]["prompt"] += "!"
