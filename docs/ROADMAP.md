@@ -754,12 +754,14 @@ This is planned integration, not a claim of a working or faster plugin.
   (2026.10.7, macOS) ran against a capture server; its requests are in
   `docs/evidence/2026-10-27-openclaw-mac-probe/` and stay inside section
   7.1 with the switches on a config-file provider; the switches on a
-  plugin-supplied model are not_run (#136 must show them). Their size is known only as a UTF-8 upper bound
-  (about 37,500 bytes against 8192 tokens, undecided). The real host
-  against the gateway and the tokenizer count (on fresh, unsanitized
-  captures) are not_run (operator steps
-  in `integrations/openclaw/README.md`), so the size report that bounds
-  #139 is still to be recorded before #136 starts.
+  plugin-supplied model are not_run (#136 must show them). Their size is
+  measured on macOS with the pinned tokenizer: 0 of 3 fresh host requests
+  and 0 of 7 probe requests fit the 8192 local limit (10,500 to 10,577
+  tokens), and a live AC24 turn in auto without an external model ended
+  needs_external / context_limit with 0 model calls
+  (`docs/evidence/2026-10-27-openclaw-mac-qualification/`). The local
+  context stays 8192: in practice OpenClaw turns go external in auto and
+  get needs_external in local_only, and #139 reports that.
 - Remove the retired workflow steps placeholder from the demo UI
   (#173; RM23, AC14). Independent of the plugin; can start now.
 - Provider package, model catalog, configuration, and token handover

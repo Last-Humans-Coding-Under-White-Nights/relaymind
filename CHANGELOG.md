@@ -22,10 +22,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the local limit. The real-host probe on macOS (OpenClaw 2026.10.7,
   `docs/evidence/2026-10-27-openclaw-mac-probe/`) captured the host's own
   requests; `tests/test_openclaw_host_captures.py` checks them with the
-  gateway's validator. Their size is reported only as a UTF-8 upper bound
-  (about 37,500 bytes against the 8192-token local limit), which cannot
-  decide the fit, so the tokenizer count is still not run. The real host
-  against the doubles gateway is not run either; no plugin exists yet (#136).
+  gateway's validator. The macOS real-host qualification
+  (`docs/evidence/2026-10-27-openclaw-mac-qualification/`, commit tested
+  `a52f8bf`) counted them with the pinned tokenizer: 0 of 3 fresh host
+  requests and 0 of 7 probe requests fit the 8192-token local limit
+  (10,500 to 10,577 tokens), and a live AC24 turn in auto without an
+  external model ended needs_external / context_limit with 0 model calls
+  (`tests/test_openclaw_mac_qualification.py`). The local context stays
+  8192, so in practice OpenClaw turns go external in auto and get
+  needs_external in local_only. The plugin itself is #136's.
 - Specification 0.49, OpenClaw host facts recorded on the wire (#135; RM33,
   section 7.5): at v2026.10.7 the host's defaults for a loopback URL send
   `stream_options` and, for a reasoning model, `reasoning_effort`; the

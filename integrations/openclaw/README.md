@@ -63,8 +63,12 @@ with tokenizer counts needs `llama-server` with the pinned model
 
 Status: a host capture ran on macOS with the probe's own capture server
 (`docs/evidence/2026-10-27-openclaw-mac-probe/REPORT.md`, checked by
-`tests/test_openclaw_host_captures.py`). The tokenizer size count and the
-real host against the gateway are not run.
+`tests/test_openclaw_host_captures.py`). The tokenizer size count then ran
+on macOS (`docs/evidence/2026-10-27-openclaw-mac-qualification/`, recorded
+in `docs/EVIDENCE.md`): 0 of 3 fresh host requests and 0 of 7 probe requests
+fit the 8192 local limit (10,500 to 10,577 tokens). The local context stays
+8192, so in practice every OpenClaw turn goes external in auto and gets
+needs_external in local_only.
 
 Host facts from that probe that the steps below rely on: a model in the
 host config needs `name`; `strictMessageKeys` must stay false (true strips
@@ -164,7 +168,8 @@ request over the bound is undecided, never needs_external. With
 provably fit the external limit. The offline run on the stored captures is
 recorded in
 `docs/evidence/2026-10-27-openclaw-request-size-mac-probe-utf8.json`
-(`--sanitized`; 0 of 7 proved to fit, 7 undecided).
+(`--sanitized`; 0 of 7 proved to fit, 7 undecided); the tokenizer count on
+macOS superseded it (`docs/evidence/2026-10-27-openclaw-mac-qualification/request-size.json`).
 
 ### Real host against the gateway over doubles
 

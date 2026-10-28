@@ -1018,13 +1018,20 @@ cd ../.. && pytest tests/test_openclaw_host_transport.py \
   request is undecided, a sanitized capture's size is a lower bound that
   never proves a fit, and a byte bound under the external limit still
   counts as an external fit.
+- `tests/test_openclaw_mac_qualification.py`: the measured macOS reports
+  (`docs/evidence/2026-10-27-openclaw-mac-qualification/`): by the pinned
+  tokenizer no host request fits the 8192 local limit, the live AC24 turn
+  in auto without an external model ended needs_external / context_limit
+  with 0 model calls, and the evidence record and design doc cite the
+  measured report. No Node needed.
 
 The Node-dependent tests skip with the reason when `node` or
 `integrations/openclaw/node_modules` is missing; `RELAYMIND_OPENCLAW_NODE=1`
 makes that a failure. This tier runs the host's transport, not its agent
 loop: the real-host run against the gateway
-(`scripts/openclaw_qualification.py host`) is an operator step, not run
-yet ([`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
+(`scripts/openclaw_qualification.py host`) is an operator step
+([`integrations/openclaw/README.md`](../integrations/openclaw/README.md));
+its one macOS run at `a52f8bf` failed (`docs/EVIDENCE.md`, #136, #137).
 The host request capture ran on macOS against a capture server (the host
 probe), and its requests are checked offline by
 `tests/test_openclaw_host_captures.py`.
@@ -1083,10 +1090,12 @@ probe), and its requests are checked offline by
 - M9 OpenClaw integration (spec 0.47, RM33, AC24): #135 runs the pinned
   host transport against the gateway over model doubles
   ([OpenClaw host transport](#openclaw-host-transport-135-rm33-ac24)).
-  A real host ran on macOS against a capture server (the host probe);
-  the real host against the gateway and the tokenizer size count are
-  not_run, and the UTF-8 bound leaves the request size undecided. No plugin
-  exists yet (#136), and no live result is claimed.
+  A real host ran on macOS against a capture server (the host probe), and
+  the tokenizer count on macOS measured 0 of 10 host requests within the
+  8192 local limit; one live AC24 turn in auto without an external model
+  ended needs_external / context_limit with 0 model calls. The harness host
+  scenarios at `a52f8bf` failed (#136, #137); Linux and Windows host runs
+  are not_run. The plugin itself is #136's.
   YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are
   implemented (#143, #144), with frozen SkillsBench/ToolRet inputs and
