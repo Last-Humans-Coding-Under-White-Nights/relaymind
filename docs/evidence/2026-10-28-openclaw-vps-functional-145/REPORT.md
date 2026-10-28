@@ -21,7 +21,7 @@ there is no Mac or Windows access, and both are support gaps
 | Gateway | the real FastAPI app (`ClientToolsChat`) on 127.0.0.1 over the model doubles of `tests/` (three scripted turns: a text answer, a `read` call, the answer after it) |
 | Commit tested | `393a6bfd36b14f21332a27215b1644c2b6fc81cb`, clean (`versions.relaymind_revision.dirty` is false) |
 | Artifact | `relaymind-openclaw-provider-0.1.0.tgz`, 39,846 bytes, sha256 `4c11884a368eb360d9d6ecab1da3157428917fb26abe38f2ac7e9bc471dcae6d`, built at that commit with `npm run pack:release` (`SHA256SUMS`, `release.json` here) |
-| Export | `install-check.json`, sha256 `618033af2d68c39296f4d2f9cd17054686e53a89f04d178eb80b0f57bc5be228` |
+| Export | `install-check.json`, sha256 `5d147e6f40ff9c622b17c1fb5cc5a50f0992f19fb377464b040085e9eb84ee8b`, after the path redaction below (as written by the run: `618033af2d68c39296f4d2f9cd17054686e53a89f04d178eb80b0f57bc5be228`) |
 | Date | 28 October 2026 |
 
 Isolation: every host command ran with `OPENCLAW_HOME`, `OPENCLAW_STATE_DIR`
@@ -88,6 +88,18 @@ path when the variable is set.) The fix is commit `393a6bf`, test first in
 way, and the check sets the closed port with `config set gateway.port`
 before the install. The removal steps still ran and passed on that first
 run.
+
+## Redacted after the run
+
+The host prints a path under the user's home in its home-relative form, a
+tilde for the home. The run's sanitizer replaced only the absolute forms, so three
+host prompts in the export kept the checkout's place under the home in
+their skill `<location>` entries (PR #182 review). Those were replaced
+after the run with the fixed sanitizer of `scripts/openclaw_install_check.py`
+(the checkout's home-relative form becomes `<repo>`, any other
+home-relative path starts with `<home>`). Nothing else in the export changed. The same three entries of
+`docs/evidence/2026-10-27-openclaw-install-check-linux-vps.json` were
+replaced the same way, and its host home path became `<host-home>`.
 
 ## Also seen
 

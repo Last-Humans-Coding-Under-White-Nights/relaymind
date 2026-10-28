@@ -1353,7 +1353,7 @@ What runs where:
   through the gateway, the gateway executing nothing, the host's result
   holding the file's text and matched through the rewrite; the token, the
   host home, the artifact folder, the checkout, and the user's home never
-  in the export; what uninstall leaves recorded and the removal steps
+  in the export, in their absolute or the host's `~/...` form; what uninstall leaves recorded and the removal steps
   clearing it (the stub's SQLite runs with secure_delete off and WAL, so a
   deleted row's bytes stay on disk and must not count); a credential left
   after removal, a config strict JSON cannot read (unknown), an unreadable
@@ -1378,9 +1378,11 @@ What runs where:
   `read` round trips went through the gateway, which executed nothing;
   the host used the operator guide's install, enable, refresh, and
   `uninstall --force` forms; uninstall left the config entry, the profile,
-  and the token, and the guide's removal cleared them; the host state was
-  isolated with no Gateway port in its environment; no token or machine
-  path is in the files; `docs/RELEASE.md` and `docs/EVIDENCE.md` keep
+  and the token, and the guide's removal cleared them; the host state
+  paths were in the temp host home and the closed Gateway port was set in
+  its config (the export records no environment: that the check passes no
+  `OPENCLAW_*` setting is tested in `tests/test_openclaw_install_check.py`);
+  no token or machine path, absolute or `~/`, is in the files; `docs/RELEASE.md` and `docs/EVIDENCE.md` keep
   macOS and Windows `not_run` as support gaps, with the native Windows
   note.
 

@@ -419,10 +419,18 @@ def _sanitize(text: str, ctx: Context) -> str:
         (ROOT, REPO),
         (Path.home(), USER_HOME),
     )
+    home = Path.home()
     for path, placeholder in places:
-        for form in {str(path), str(path.resolve()), json.dumps(str(path))[1:-1]}:
+        forms = {str(path), str(path.resolve()), json.dumps(str(path))[1:-1]}
+        # The host prints a path under the user's home as ``~/...`` (its skill
+        # locations in the prompt), so the home-relative form goes too.
+        for candidate in (path, path.resolve()):
+            if candidate != home and candidate.is_relative_to(home):
+                forms.add(f"~/{candidate.relative_to(home).as_posix()}")
+        for form in sorted(forms, key=len, reverse=True):
             text = text.replace(form, placeholder)
-    return text
+    # Whatever else the host printed under the user's home.
+    return text.replace("~/", f"{USER_HOME}/")
 
 
 def _run(command: Sequence[str], args: list[str], stdin: str | None, env, timeout: float):

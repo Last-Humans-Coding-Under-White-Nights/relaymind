@@ -56,7 +56,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   ran again at `393a6bf` as a Linux VPS functional check (not a
   supported-platform qualification) over doubles and passed every step
   (`docs/evidence/2026-10-28-openclaw-vps-functional-145/`, read by
-  `tests/test_openclaw_vps_functional_install.py`). The operator guide
+  `tests/test_openclaw_vps_functional_install.py`): the artifact was packed
+  first, then all 15 recorded steps passed. The install check's sanitizer
+  also replaces the home-relative `~/...` form the host prints, and the
+  three such skill locations left in each of the two Linux VPS exports were
+  redacted after the run (recorded in the run's `REPORT.md`). The operator guide
   states the macOS qualification's install, enable, refresh, and
   `uninstall --force` forms (Q4) and removes what uninstall leaves: the
   config entry, the `relaymind:manual` profile, and the stored token (Q12).

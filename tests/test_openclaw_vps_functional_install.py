@@ -3,9 +3,11 @@
 A Linux VPS functional check (not a supported-platform qualification):
 ``docs/evidence/2026-10-28-openclaw-vps-functional-145/`` ran
 ``scripts/openclaw_install_check.py`` with the pinned ``openclaw@2026.10.7``
-against the release artifact and the real gateway over model doubles: pack,
-install, enable, inspect, the token, discovery, a text and a host-tool round
-trip, disable, uninstall, and the removal of what uninstall leaves. These
+against the release artifact (packed before the check with
+``npm run pack:release``) and the real gateway over model doubles: its 15
+steps are the host version, the log and Gateway port isolation, install,
+configure, enable, inspect, the token, discovery, a text and a host-tool
+round trip, disable, uninstall, and the removal of what uninstall leaves. These
 tests read that export, so the operator guide, ``docs/RELEASE.md``, and
 ``docs/EVIDENCE.md`` rest on it:
 
@@ -65,7 +67,11 @@ def test_the_export_is_labeled_and_never_live_model_evidence():
 
 
 def test_every_step_of_the_lifecycle_passed_on_the_pinned_host():
-    """Pack, install, enable, inspect, one round trip, disable, uninstall, removal."""
+    """The 15 recorded steps of ``install_check.STEPS``, version to removal.
+
+    The artifact was packed before them (``npm run pack:release``); the pack is
+    not a step of the export.
+    """
     data = export()
     assert (data["status"], data["passed"]) == ("completed", True)
     assert [s["name"] for s in data["steps"]] == list(install_check.STEPS)
@@ -151,8 +157,15 @@ def test_uninstall_left_the_credential_until_the_guide_removal_cleared_it():
         assert form in text, form
 
 
-def test_the_host_state_was_isolated_and_no_gateway_port_was_in_its_environment():
-    """Section 12.5: a fresh host home; the closed Gateway port came from the config."""
+def test_the_host_state_paths_were_isolated_and_the_closed_port_was_set_in_the_config():
+    """Section 12.5: the host paths are in the temp host home; the closed Gateway
+    port was set with ``config set gateway.port``, not the default 18789.
+
+    The export records no environment, so this does not show what the host's
+    environment held. That the check passes no ``OPENCLAW_*`` setting (no
+    ``OPENCLAW_GATEWAY_PORT`` either) is the script's code, tested in
+    ``tests/test_openclaw_install_check.py``.
+    """
     data = export()
     isolation = data["isolation"]
     assert all(isolation[k].startswith("<host-home>") for k in isolation if k != "gateway_port")
@@ -167,8 +180,15 @@ def test_the_export_holds_no_token_and_no_machine_path():
     assert export()["token"] == install_check.NOT_RECORDED
     assert "/home/" not in raw
     assert "/tmp/claude" not in raw
+    # The host prints paths under the user's home as ``~/...``; none is left,
+    # and the checkout's place under the home is not either (PR #182 review).
+    assert "~/" not in raw
+    if ROOT.is_relative_to(Path.home()):
+        assert ROOT.relative_to(Path.home()).as_posix() not in raw
+    assert "<repo>/integrations/openclaw/node_modules/openclaw/skills/" in raw
     for name in ("REPORT.md", "release.json"):
-        assert "/home/" not in (RUN / name).read_text("utf-8"), name
+        text = (RUN / name).read_text("utf-8")
+        assert "/home/" not in text and "~/" not in text, name
 
 
 def test_the_report_states_the_label_and_the_platform_gaps():

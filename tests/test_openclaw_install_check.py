@@ -278,6 +278,23 @@ def test_the_token_and_the_host_home_never_reach_the_export(stub_host, tarball, 
     assert len(export["artifact"]["sha256"]) == 64
 
 
+def test_the_home_relative_form_the_host_prints_is_a_placeholder_too(tmp_path):
+    """RM12: the host prints paths under the user's home as ``~/...`` (its skill
+    locations); those are placeholders like the absolute forms (PR #182 review)."""
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    home = Path.home()
+    repo = install_check.ROOT
+    lines = [f"{repo}/skills/a/SKILL.md", f"{home}/elsewhere/b"]
+    if repo.is_relative_to(home):
+        lines.append(f"~/{repo.relative_to(home)}/skills/a/SKILL.md")
+    lines.append("~/elsewhere/b")
+    text = install_check._sanitize("\n".join(lines), ctx)
+    assert "~/" not in text
+    assert str(home) not in text
+    for line in text.splitlines():
+        assert line in ("<repo>/skills/a/SKILL.md", "<home>/elsewhere/b"), line
+
+
 def test_what_uninstall_leaves_is_recorded_and_the_removal_steps_clear_it(
     stub_host, tarball, tmp_path
 ):
