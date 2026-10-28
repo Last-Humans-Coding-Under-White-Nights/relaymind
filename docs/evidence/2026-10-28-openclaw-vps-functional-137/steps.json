@@ -1,0 +1,371 @@
+[
+  {
+    "name": "npm run build",
+    "argv": [
+      "npm",
+      "--prefix",
+      "<repo>/integrations/openclaw",
+      "run",
+      "build"
+    ],
+    "exit_code": 0,
+    "seconds": 0.96,
+    "stdout": "\n> @relaymind/openclaw-provider@0.1.0 build\n> node scripts/clean-dist.mjs && tsc -p tsconfig.build.json\n\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "npm pack",
+    "argv": [
+      "npm",
+      "pack",
+      "<repo>/integrations/openclaw",
+      "--json",
+      "--pack-destination",
+      "<scratch>/pack"
+    ],
+    "exit_code": 0,
+    "seconds": 0.92,
+    "stdout": "[\n  {\n    \"id\": \"@relaymind/openclaw-provider@0.1.0\",\n    \"name\": \"@relaymind/openclaw-provider\",\n    \"version\": \"0.1.0\",\n    \"size\": 20930,\n    \"unpackedSize\": 67132,\n    \"shasum\": \"d960ca0d8e61bdff53b4bbc8c6fa5ae014ed9bd8\",\n    \"integrity\": \"sha512-IYXM9a3LqIRJYd5nQD+pYHC2t/c4ruARJhA+k0/BC/0En0S43m3ltfoMVxUUhkIoFLm6qgkgpswFkN9UEbz2Mg==\",\n    \"filename\": \"relaymind-openclaw-provider-0.1.0.tgz\",\n    \"files\": [\n      {\n        \"path\": \"README.md\",\n        \"size\": 28765,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/catalog.js\",\n        \"size\": 10133,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/compat.js\",\n        \"size\": 3191,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/config.js\",\n        \"size\": 4893,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/diagnostics.js\",\n        \"size\": 2531,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/index.js\",\n        \"size\": 1122,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/input-guard.js\",\n        \"size\": 3437,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/provider.js\",\n        \"size\": 4788,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/redaction.js\",\n        \"size\": 1103,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/stream.js\",\n        \"size\": 3390,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"openclaw.plugin.json\",\n        \"size\": 2609,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"package.json\",\n        \"size\": 1170,\n        \"mode\": 420\n      }\n    ],\n    \"entryCount\": 12,\n    \"bundled\": []\n  }\n]\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "install provider",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "install",
+      "npm-pack:<scratch>/pack/relaymind-openclaw-provider-0.1.0.tgz",
+      "--force",
+      "--accept-capabilities"
+    ],
+    "exit_code": 0,
+    "seconds": 28.05,
+    "stdout": "WARNING - Installing plugin from local npm-pack archive: npm-pack:<scratch>/pack/relaymind-openclaw-provider-0.1.0.tgz\nThis source is outside ClawHub review and trust metadata. Only continue if you trust the publisher, package contents, and install source.\nInstalling to <scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1\u2026\nInstalling <scratch>/pack/relaymind-openclaw-provider-0.1.0.tgz into <scratch>/home/state/npm/projects/.openclaw-install-stage-ffZhef\u2026\nLinked peerDependency \"openclaw\" -> <repo>/integrations/openclaw/node_modules/openclaw\nPlugin manifest id \"relaymind\" differs from npm package name \"@relaymind/openclaw-provider\"; using manifest id as the config key.\nInstalled plugin \"relaymind\" without enabling it because it requires configuration first. Configure it, then run `openclaw plugins enable relaymind`.\nInstalled plugin: relaymind\nSaved for the next Gateway start.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "config set baseUrl",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "config",
+      "set",
+      "plugins.entries.relaymind.config.baseUrl",
+      "${RELAYMIND_BASE_URL}"
+    ],
+    "exit_code": 0,
+    "seconds": 7.3,
+    "stdout": "Updated plugins.entries.relaymind.config.baseUrl. Change will apply without restarting the gateway.\n",
+    "stderr": "Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present\nConfig (<scratch>/home/config.json): missing env var \"RELAYMIND_BASE_URL\" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "enable provider",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "enable",
+      "relaymind"
+    ],
+    "exit_code": 0,
+    "seconds": 7.72,
+    "stdout": "Enabled plugin \"relaymind\". Saved for the next Gateway start.\n",
+    "stderr": "Config (<scratch>/home/config.json): missing env var \"RELAYMIND_BASE_URL\" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "install host tools without --accept-capabilities",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "install",
+      "<repo>/integrations/openclaw/test/host-tool-plugin",
+      "--force"
+    ],
+    "exit_code": 1,
+    "seconds": 6.88,
+    "stdout": "WARNING - Installing plugin from local path: <repo>/integrations/openclaw/test/host-tool-plugin\nThis source is outside ClawHub review and trust metadata. Only continue if you trust the publisher, package contents, and install source.\nPlugin manifest id \"relaymind-test-host-tools\" differs from npm package name \"@relaymind/openclaw-test-host-tools\"; using manifest id as the config key.\nInstalling to <scratch>/home/state/extensions/relaymind-test-host-tools\u2026\nLinked peerDependency \"openclaw\" -> <repo>/integrations/openclaw/node_modules/openclaw\n",
+    "stderr": "Plugin \"relaymind-test-host-tools\" requires capability consent. The plugin was not installed. Re-run the same \"openclaw plugins install\" or \"openclaw plugins update\" command with --accept-capabilities, keeping its source and other options. For Doctor or setup, complete the plugin command first, then retry Doctor or setup.\n"
+  },
+  {
+    "name": "install host tools",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "install",
+      "<repo>/integrations/openclaw/test/host-tool-plugin",
+      "--force",
+      "--accept-capabilities"
+    ],
+    "exit_code": 0,
+    "seconds": 9.65,
+    "stdout": "WARNING - Installing plugin from local path: <repo>/integrations/openclaw/test/host-tool-plugin\nThis source is outside ClawHub review and trust metadata. Only continue if you trust the publisher, package contents, and install source.\nPlugin manifest id \"relaymind-test-host-tools\" differs from npm package name \"@relaymind/openclaw-test-host-tools\"; using manifest id as the config key.\nInstalling to <scratch>/home/state/extensions/relaymind-test-host-tools\u2026\nLinked peerDependency \"openclaw\" -> <repo>/integrations/openclaw/node_modules/openclaw\nInstalled plugin: relaymind-test-host-tools\nSaved for the next Gateway start.\n",
+    "stderr": "Config (<scratch>/home/config.json): missing env var \"RELAYMIND_BASE_URL\" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "inspect host tools",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "inspect",
+      "relaymind-test-host-tools",
+      "--runtime",
+      "--json"
+    ],
+    "exit_code": 0,
+    "seconds": 6.41,
+    "stdout": "{\n  \"workspaceDir\": \"<scratch>/home/state/workspace\",\n  \"plugin\": {\n    \"id\": \"relaymind-test-host-tools\",\n    \"name\": \"RelayMind test host tools\",\n    \"description\": \"Test only: disposable sandbox tools for the RelayMind host qualification\",\n    \"packageVersion\": \"0.1.0\",\n    \"version\": \"0.1.0\",\n    \"builtWithOpenClawVersion\": \"2026.10.7\",\n    \"packageName\": \"@relaymind/openclaw-test-host-tools\",\n    \"format\": \"openclaw\",\n    \"source\": \"<scratch>/home/state/extensions/relaymind-test-host-tools/index.js\",\n    \"rootDir\": \"<scratch>/home/state/extensions/relaymind-test-host-tools\",\n    \"origin\": \"global\",\n    \"workspaceDir\": \"<scratch>/home/state/workspace\",\n    \"trust\": {\n      \"reason\": \"origin-path\",\n      \"registryPath\": \"<scratch>/home/state/state/openclaw.sqlite\",\n      \"origin\": \"global\",\n      \"installSource\": \"path\"\n    },\n    \"enabled\": true,\n    \"compat\": [],\n    \"explicitlyEnabled\": true,\n    \"activated\": true,\n    \"activationSource\": \"explicit\",\n    \"activationReason\": \"enabled in config\",\n    \"syntheticAuthRefs\": [],\n    \"status\": \"loaded\",\n    \"toolNames\": [\n      \"relaymind_test_echo\",\n      \"relaymind_test_write\"\n    ],\n    \"hookNames\": [],\n    \"channelIds\": [],\n    \"cliBackendIds\": [],\n    \"providerIds\": [],\n    \"embeddingProviderIds\": [],\n    \"speechProviderIds\": [],\n    \"realtimeTranscriptionProviderIds\": [],\n    \"realtimeVoiceProviderIds\": [],\n    \"mediaUnderstandingProviderIds\": [],\n    \"transcriptSourceProviderIds\": [],\n    \"imageGenerationProviderIds\": [],\n    \"videoGenerationProviderIds\": [],\n    \"musicGenerationProviderIds\": [],\n    \"webFetchProviderIds\": [],\n    \"webSearchProviderIds\": [],\n    \"migrationProviderIds\": [],\n    \"contextEngineIds\": [],\n    \"agentHarnessIds\": [],\n    \"cliCommands\": [],\n    \"services\": [],\n    \"gatewayDiscoveryServiceIds\": [],\n    \"commands\": [],\n    \"httpRoutes\": 0,\n    \"hookCount\": 1,\n    \"configSchema\": true,\n    \"configJsonSchema\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": {}\n    },\n    \"contracts\": {\n      \"tools\": [\n        \"relaymind_test_echo\",\n        \"relaymind_test_write\"\n      ]\n    },\n    \"imported\": true,\n    \"dependencyStatus\": {\n      \"hasDependencies\": false,\n      \"installed\": true,\n      \"requiredInstalled\": true,\n      \"optionalInstalled\": true,\n      \"missing\": [],\n      \"missingOptional\": [],\n      \"dependencies\": [],\n      \"optionalDependencies\": []\n    }\n  },\n  \"shape\": \"non-capability\",\n  \"capabilityMode\": \"none\",\n  \"capabilityCount\": 0,\n  \"capabilities\": [],\n  \"typedHooks\": [\n    {\n      \"name\": \"before_tool_call\"\n    }\n  ],\n  \"customHooks\": [],\n  \"tools\": [\n    {\n      \"names\": [\n        \"relaymind_test_echo\"\n      ],\n      \"optional\": false\n    },\n    {\n      \"names\": [\n        \"relaymind_test_write\"\n      ],\n      \"optional\": false\n    }\n  ],\n  \"commands\": [],\n  \"cliCommands\": [],\n  \"services\": [],\n  \"decisions\": [],\n  \"gatewayDiscoveryServices\": [],\n  \"gatewayMethods\": [],\n  \"mcpServers\": [],\n  \"lspServers\": [],\n  \"httpRouteCount\": 0,\n  \"bundleCapabilities\": [],\n  \"diagnostics\": [],\n  \"policy\": {\n    \"allowedModels\": [],\n    \"hasAllowedModelsConfig\": false\n  },\n  \"compatibility\": [],\n  \"install\": {\n    \"source\": \"path\",\n    \"sourcePath\": \"<repo>/integrations/openclaw/test/host-tool-plugin\",\n    \"installPath\": \"<scratch>/home/state/extensions/relaymind-test-host-tools\",\n    \"version\": \"0.1.0\",\n    \"installedAt\": \"2026-10-28T02:32:42.532Z\",\n    \"acceptedSurface\": {\n      \"channels\": [],\n      \"providers\": [],\n      \"tools\": [\n        \"relaymind_test_echo\",\n        \"relaymind_test_write\"\n      ],\n      \"contracts\": [\n        \"tools: relaymind_test_echo\",\n        \"tools: relaymind_test_write\"\n      ],\n      \"hooks\": [],\n      \"mcpServers\": [],\n      \"cliCommands\": [],\n      \"cliBackends\": [],\n      \"skills\": [],\n      \"dangerousConfigFlags\": []\n    },\n    \"acceptedSurfaceHash\": \"aa3fc37c69da5cddfd5e6352bd56aca112364a01b6e1a4b57a0ae66be00e24a2\",\n    \"acceptedSurfaceAt\": \"2026-10-28T02:32:42.529Z\"\n  }\n}\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "config set toolSearch false",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "config",
+      "set",
+      "tools.toolSearch",
+      "false"
+    ],
+    "exit_code": 0,
+    "seconds": 7.35,
+    "stdout": "Updated tools.toolSearch. Change will apply without restarting the gateway.\n",
+    "stderr": "Config (<scratch>/home/config.json): missing env var \"RELAYMIND_BASE_URL\" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "config set alsoAllow",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "config",
+      "set",
+      "tools.alsoAllow",
+      "[\"relaymind_test_echo\",\"relaymind_test_write\"]",
+      "--strict-json"
+    ],
+    "exit_code": 0,
+    "seconds": 7.29,
+    "stdout": "Updated tools.alsoAllow. Change will apply without restarting the gateway.\n",
+    "stderr": "Config (<scratch>/home/config.json): missing env var \"RELAYMIND_BASE_URL\" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "harness text-tool",
+    "argv": [
+      "<home>/.venvs/relaymind/bin/python",
+      "<repo>/scripts/openclaw_qualification.py",
+      "host",
+      "--scenario",
+      "text-tool",
+      "--timeout",
+      "240",
+      "--out",
+      "<scratch>/raw/exports/text-tool.json",
+      "--",
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "agent",
+      "exec",
+      "--config",
+      "<scratch>/home/config.json",
+      "--json",
+      "--model",
+      "relaymind/relaymind-client-tools",
+      "Echo lantern with the test echo tool"
+    ],
+    "exit_code": 0,
+    "seconds": 28.08,
+    "stdout": "{\"status\": \"completed\", \"runs\": 2, \"passed\": true}\n",
+    "stderr": ""
+  },
+  {
+    "name": "config set exec mode deny",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "config",
+      "set",
+      "tools.exec.mode",
+      "deny"
+    ],
+    "exit_code": 0,
+    "seconds": 7.26,
+    "stdout": "Updated tools.exec.mode. Change will apply without restarting the gateway.\n",
+    "stderr": "Config (<scratch>/home/config.json): missing env var \"RELAYMIND_BASE_URL\" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "harness tool-deny",
+    "argv": [
+      "<home>/.venvs/relaymind/bin/python",
+      "<repo>/scripts/openclaw_qualification.py",
+      "host",
+      "--scenario",
+      "tool-deny",
+      "--timeout",
+      "240",
+      "--out",
+      "<scratch>/raw/exports/tool-deny.json",
+      "--",
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "agent",
+      "exec",
+      "--config",
+      "<scratch>/home/config.json",
+      "--json",
+      "--model",
+      "relaymind/relaymind-client-tools",
+      "Write a note with the test write tool"
+    ],
+    "exit_code": 0,
+    "seconds": 27.47,
+    "stdout": "{\"status\": \"completed\", \"runs\": 2, \"passed\": true}\n",
+    "stderr": ""
+  },
+  {
+    "name": "config set exec mode full",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "config",
+      "set",
+      "tools.exec.mode",
+      "full"
+    ],
+    "exit_code": 0,
+    "seconds": 7.32,
+    "stdout": "Updated tools.exec.mode. Change will apply without restarting the gateway.\n",
+    "stderr": "Config (<scratch>/home/config.json): missing env var \"RELAYMIND_BASE_URL\" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "harness tool-approve",
+    "argv": [
+      "<home>/.venvs/relaymind/bin/python",
+      "<repo>/scripts/openclaw_qualification.py",
+      "host",
+      "--scenario",
+      "tool-approve",
+      "--timeout",
+      "240",
+      "--out",
+      "<scratch>/raw/exports/tool-approve.json",
+      "--",
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "agent",
+      "exec",
+      "--config",
+      "<scratch>/home/config.json",
+      "--json",
+      "--model",
+      "relaymind/relaymind-client-tools",
+      "Write a note with the test write tool"
+    ],
+    "exit_code": 1,
+    "seconds": 26.64,
+    "stdout": "{\"status\": \"completed\", \"runs\": 2, \"passed\": false}\n",
+    "stderr": ""
+  },
+  {
+    "name": "config set exec mode deny",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "config",
+      "set",
+      "tools.exec.mode",
+      "deny"
+    ],
+    "exit_code": 0,
+    "seconds": 7.29,
+    "stdout": "Updated tools.exec.mode. Change will apply without restarting the gateway.\n",
+    "stderr": "Config (<scratch>/home/config.json): missing env var \"RELAYMIND_BASE_URL\" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "harness exec-deny",
+    "argv": [
+      "<home>/.venvs/relaymind/bin/python",
+      "<repo>/scripts/openclaw_qualification.py",
+      "host",
+      "--scenario",
+      "exec-deny",
+      "--timeout",
+      "240",
+      "--out",
+      "<scratch>/raw/exports/exec-deny.json",
+      "--",
+      "sh",
+      "-c",
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw agent exec --config <scratch>/home/config.json --json --model relaymind/relaymind-client-tools --cwd \"$RELAYMIND_TEST_SANDBOX\" \"Append a line to note.txt with exec\""
+    ],
+    "exit_code": 0,
+    "seconds": 25.66,
+    "stdout": "{\"status\": \"completed\", \"runs\": 2, \"passed\": true}\n",
+    "stderr": ""
+  },
+  {
+    "name": "config set exec mode full",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "config",
+      "set",
+      "tools.exec.mode",
+      "full"
+    ],
+    "exit_code": 0,
+    "seconds": 7.34,
+    "stdout": "Updated tools.exec.mode. Change will apply without restarting the gateway.\n",
+    "stderr": "Config (<scratch>/home/config.json): missing env var \"RELAYMIND_BASE_URL\" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "harness exec-full",
+    "argv": [
+      "<home>/.venvs/relaymind/bin/python",
+      "<repo>/scripts/openclaw_qualification.py",
+      "host",
+      "--scenario",
+      "exec-full",
+      "--timeout",
+      "240",
+      "--out",
+      "<scratch>/raw/exports/exec-full.json",
+      "--",
+      "sh",
+      "-c",
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw agent exec --config <scratch>/home/config.json --json --model relaymind/relaymind-client-tools --cwd \"$RELAYMIND_TEST_SANDBOX\" \"Append a line to note.txt with exec\""
+    ],
+    "exit_code": 0,
+    "seconds": 27.05,
+    "stdout": "{\"status\": \"completed\", \"runs\": 2, \"passed\": true}\n",
+    "stderr": ""
+  },
+  {
+    "name": "uninstall host tools without --force",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "uninstall",
+      "relaymind-test-host-tools"
+    ],
+    "exit_code": 1,
+    "seconds": 6.23,
+    "stdout": "Plugin: RelayMind test host tools (relaymind-test-host-tools)\nWill remove: plugin settings, install record, directory: $OPENCLAW_HOME/state/extensions/relaymind-test-host-tools\nUninstall plugin \"relaymind-test-host-tools\"? [y/N] ",
+    "stderr": "Error: plugins uninstall requires confirmation input. Re-run in an interactive TTY or pass --force.\n"
+  },
+  {
+    "name": "uninstall host tools --force",
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "uninstall",
+      "relaymind-test-host-tools",
+      "--force"
+    ],
+    "exit_code": 0,
+    "seconds": 10.45,
+    "stdout": "Plugin: RelayMind test host tools (relaymind-test-host-tools)\nWill remove: plugin settings, install record, directory: $OPENCLAW_HOME/state/extensions/relaymind-test-host-tools\nUninstalled plugin \"relaymind-test-host-tools\". Removed: plugin settings, install record, directory.\nSaved for the next Gateway start.\n",
+    "stderr": "Config (<scratch>/home/config.json): missing env var \"RELAYMIND_BASE_URL\" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable\nConfig (<scratch>/home/config.json): missing env var \"RELAYMIND_BASE_URL\" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable\n",
+    "expected_exit": 0
+  }
+]

@@ -36,8 +36,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   host mode adds `--scenario exec-deny|exec-full` (the host's `exec` tool
   under `tools.exec.mode` deny and full), and keeps the host's own JSON
   report as `checks.host_report`, never deciding a pass (the host said
-  `"ok": true` for a denied tool). The real host's policy scenarios with
-  this plugin are not run; a plugin tool behind an approval is docs only.
+  `"ok": true` for a denied tool). The macOS run at `a52f8bf` is applied
+  too: the test host tools' manifest declares `contracts.tools` (the host
+  refused to register them without it, Q9); the default `text-tool`
+  scenario scripts the echo call before the closing text, so one
+  `agent exec` covers it (it could not pass before, Q8); and the checks
+  keep the replayed IDs as `replayed_call_ids`. A Linux VPS functional check
+  (not a supported-platform qualification,
+  `docs/evidence/2026-10-28-openclaw-vps-functional-137/`, read by
+  `tests/test_openclaw_vps_functional_round_trips.py`) ran the scenarios on
+  the pinned host over doubles: `text-tool`, `tool-deny`, `exec-deny`, and
+  `exec-full` passed, `tool-approve` failed with no line written (a
+  headless plugin approval has no route), and the host rewrote every call
+  ID again. The host offers a plugin's tools only with
+  `tools.toolSearch false` and the names in `tools.alsoAllow`. An approval
+  answered by an operator is not run.
   No specification or gateway change.
 - OpenClaw provider plugin package (#136; RM08, RM12, RM19, RM26, RM33):
   `integrations/openclaw/` now has the plugin manifest

@@ -1105,7 +1105,8 @@ this package are not_run
 
 ```bash
 cd integrations/openclaw && npm run typecheck && npm test
-cd ../.. && pytest tests/test_openclaw_round_trips.py tests/test_openclaw_qualification_script.py
+cd ../.. && pytest tests/test_openclaw_round_trips.py tests/test_openclaw_qualification_script.py \
+  tests/test_openclaw_vps_functional_round_trips.py
 ```
 
 - `integrations/openclaw/test/input-guard.test.ts`: the guard refuses, by
@@ -1126,7 +1127,9 @@ cd ../.. && pytest tests/test_openclaw_round_trips.py tests/test_openclaw_qualif
   host's stream and turns an empty success into a failure.
 - `integrations/openclaw/test/host-tool-plugin.test.ts`: the test-only
   host tool plugin (`test/host-tool-plugin/`): the echo and write tools,
-  the approval hook on every write, and a write that stays in the sandbox.
+  the approval hook on every write, a write that stays in the sandbox, and
+  a manifest whose `contracts.tools` names every tool it registers (the
+  pinned host refuses the tools otherwise, Q9).
 - `tests/test_openclaw_round_trips.py`: the plugin driver sends the host's
   conversation through the pinned transport wrapped by the plugin, and
   plays the host's tool execution and approval policy. Text and a host tool
@@ -1149,32 +1152,34 @@ cd ../.. && pytest tests/test_openclaw_round_trips.py tests/test_openclaw_qualif
 - `tests/test_openclaw_qualification_script.py`: the host's ID rule
   (`host_replayed_call_id`: the observed underscore removal, and the
   pinned source's `[A-Za-z0-9]`, 40 characters) and `answers_call`; the
-  host mode's `--scenario exec-deny|exec-full|tool-deny|tool-approve`
+  default `text-tool` scenario passing in one host turn (the echo call,
+  then the closing text; a text-only turn does not pass, Q8); the host
+  mode's `--scenario exec-deny|exec-full|tool-deny|tool-approve`
   checks against a stub host: the sandbox lines, no gateway tool
   execution, the proposed call, and the host's result in the next run,
-  also when the host rewrote the call ID; the host's own JSON report kept
+  also when the host rewrote the call ID (kept as `replayed_call_ids`);
+  the host's own JSON report kept
   as `host_report` and never deciding a pass (a denied tool with
   `"ok": true` does not pass an allow scenario); a denial that wrote or
   ran anyway and a scenario that did not run never pass.
 
-The deny and allow decisions here come from the driver or a stub standing
-in for the host's policy. On the macOS probe the real host, headless,
-blocked its `exec` tool under `tools.exec.mode: "deny"`, ran it under
-`"full"`, and failed closed under `"ask"` (no Gateway to register the
-approval). The real host against the gateway is the host CLI tier, not run
-yet:
+- `tests/test_openclaw_vps_functional_round_trips.py`: reads the Linux VPS
+  functional check (not a supported-platform qualification) of the harness
+  host scenarios on the real pinned host against the gateway over doubles
+  (`docs/evidence/2026-10-28-openclaw-vps-functional-137/`): the test host
+  tools registered, `text-tool` passed in one `agent exec`, the headless
+  plugin approval failed closed (`tool-deny` passed, `tool-approve` failed
+  with no line written though the host said `ok`), `exec-deny` and
+  `exec-full` passed, and every call ID came back without underscores. It
+  also checks that the README gives the command forms that worked.
 
-```bash
-python scripts/openclaw_qualification.py host --scenario exec-deny \
-  --out docs/evidence/<date>-openclaw-exec-deny.json -- sh -c 'openclaw agent exec ...'
-python scripts/openclaw_qualification.py host --scenario exec-full \
-  --out docs/evidence/<date>-openclaw-exec-full.json -- sh -c 'openclaw agent exec ...'
-```
-
-`tool-deny` and `tool-approve` (the test host tools' approval hook) need
-an approval surface and are not run either.
-
-(the exact host command is in
+The deny and allow decisions in the first five come from the driver or a
+stub standing in for the host's policy. The real host's decisions are in the
+Linux VPS functional check, rerun with
+`docs/evidence/2026-10-28-openclaw-vps-functional-137/scaffold/vps_functional.py`
+(a few minutes, no model). A plugin approval answered by an operator at a
+running OpenClaw Gateway, and these scenarios on macOS and Windows, are
+not_run (the exact host commands are in
 [`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
 
 The Node-dependent tests skip with the reason when `node` or
@@ -1183,7 +1188,8 @@ makes that a failure. This tier runs the host's transport, not its agent
 loop: the real-host run against the gateway
 (`scripts/openclaw_qualification.py host`) is an operator step
 ([`integrations/openclaw/README.md`](../integrations/openclaw/README.md));
-its one macOS run at `a52f8bf` failed (`docs/EVIDENCE.md`, #136, #137).
+its one macOS run at `a52f8bf` failed (`docs/EVIDENCE.md`, #136, #137),
+and the Linux VPS functional check ran it on the pinned host (above).
 The host request capture ran on macOS against a capture server (the host
 probe), and its requests are checked offline by
 `tests/test_openclaw_host_captures.py`.
@@ -1246,11 +1252,13 @@ probe), and its requests are checked offline by
   the tokenizer count on macOS measured 0 of 10 host requests within the
   8192 local limit; one live AC24 turn in auto without an external model
   (config-row workaround, #136) ended needs_external / context_limit with
-  0 model calls. The harness host scenarios at `a52f8bf` failed (#136, #137); Linux and Windows host runs
-  are not_run. The plugin (#136) and its round trips (#137) are covered over doubles
-  ([OpenClaw round trips](#openclaw-round-trips-137-rm01-rm03-rm04-rm08-rm09-rm12-rm19-rm20-rm26-rm33-ac10-ac24));
-  the real host's tool approval scenarios with this plugin are not_run,
-  and no live result is claimed.
+  0 model calls. The harness host scenarios at `a52f8bf` failed (#136, #137).
+  The plugin (#136) and its round trips (#137) are covered over doubles
+  ([OpenClaw round trips](#openclaw-round-trips-137-rm01-rm03-rm04-rm08-rm09-rm12-rm19-rm20-rm26-rm33-ac10-ac24)),
+  and a Linux VPS functional check (not a supported-platform qualification)
+  ran the harness host scenarios on the real pinned host over doubles; a
+  plugin approval answered by an operator, a macOS rerun, and any Windows
+  host run are not_run, and no live result is claimed.
   YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are
   implemented (#143, #144), with frozen SkillsBench/ToolRet inputs and

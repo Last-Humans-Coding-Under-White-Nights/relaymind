@@ -796,9 +796,14 @@ This is planned integration, not a claim of a working or faster plugin.
   absent-local operation, and an oversized catalog are covered through the
   pinned transport over doubles (`tests/test_openclaw_round_trips.py`),
   with call IDs replayed the way the real host rewrites them. The real
-  host's policy scenarios
-  (`scripts/openclaw_qualification.py host --scenario exec-deny|exec-full`,
-  and `tool-deny|tool-approve` with an approval surface) are not_run.
+  host's harness scenarios ran in a Linux VPS functional check (not a
+  supported-platform qualification) on the pinned host against the gateway
+  over doubles (`docs/evidence/2026-10-28-openclaw-vps-functional-137/`):
+  `text-tool` (one `agent exec`, Q8), `tool-deny`, `exec-deny`, and
+  `exec-full` passed; `tool-approve` failed, correctly, because headless
+  `agent exec` has no route for a plugin approval and nothing was
+  written. A plugin approval answered by an operator and the macOS and
+  Windows reruns are not_run.
 - Cancellation, bounded retry behavior, errors, and trace correlation
   (#138; RM14, RM17, RM20, RM22, RM33; AC11, AC12, AC24), after #137.
 - Installable artifact, CI compatibility checks, platform qualification,
