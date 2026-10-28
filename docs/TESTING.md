@@ -1198,7 +1198,8 @@ probe), and its requests are checked offline by
 
 ```bash
 cd integrations/openclaw && npm run typecheck && npm test
-cd ../.. && pytest tests/test_openclaw_cancel_errors.py tests/test_openclaw_qualification_script.py
+cd ../.. && pytest tests/test_openclaw_cancel_errors.py tests/test_openclaw_qualification_script.py \
+  tests/test_openclaw_vps_functional_cancel_errors.py
 ```
 
 - `integrations/openclaw/test/errors.test.ts`: every gateway code of
@@ -1272,19 +1273,35 @@ cd ../.. && pytest tests/test_openclaw_cancel_errors.py tests/test_openclaw_qual
   harness interrupts it once the generation started, the run is cancelled,
   no answer text, `passed`; a host that ended before the interrupt does
   not pass; a host that logs more than a pipe holds before its request is
-  still interrupted (its output goes to files).
+  still interrupted (its output goes to files); a host-sized request (a
+  40,000-character system prompt) still reaches the held generation (the
+  gated double's count is fixed). `--scenario external-failed` against stub
+  hosts: every run fails with 503 `external_failed`, the host's message
+  names a recorded run, and the plugin's attempt records are kept, also
+  across 7 host retries (the doubles never run out); a host that showed no
+  message or made no request does not pass, and a failed host exit does
+  not decide.
+- `tests/test_openclaw_vps_functional_cancel_errors.py`: reads the Linux
+  VPS functional check (not a supported-platform qualification) of the
+  `abort` and `external-failed` host scenarios on the real pinned host
+  against the gateway over doubles
+  (`docs/evidence/2026-10-28-openclaw-vps-functional-138/`): SIGINT
+  mid-generation cancelled the run (`cancel_requested`, exit 130, no
+  report, as Q11 on macOS); the 503 failed every run with
+  `external_failed`; the host retried the same model 7 times with a
+  rewritten conversation, so 8 attempt records, keys, turns, and runs; the
+  plugin's message reached the host's log while its final text was the
+  host's generic one.
 
-The aborts here come from the driver's abort signal and a stub's SIGINT.
-The real host's interrupt against the gateway is the host CLI tier, not run
-yet:
-
-```bash
-python scripts/openclaw_qualification.py host --scenario abort \
-  --out docs/evidence/<date>-openclaw-abort.json -- openclaw agent exec ...
-```
-
-A real host's retry, its failover after a RelayMind failure, and its turn
-ID across a retry are not checked.
+The aborts in the first tests come from the driver's abort signal and a
+stub's SIGINT. The real host's interrupt and a 503 ran in the Linux VPS
+functional check, rerun with
+`docs/evidence/2026-10-28-openclaw-vps-functional-138/scaffold/vps_functional.py`
+(about three minutes, no model). Other error codes, aborts under early
+headers or before sending, the host's turn ID across its retries, its
+failover to another model, and macOS and Windows at this commit are not_run
+(the exact host commands are in
+[`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
 
 ### What is not covered yet
 

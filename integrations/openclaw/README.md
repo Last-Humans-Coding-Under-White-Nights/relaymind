@@ -20,8 +20,11 @@ closed headless) then ran on the same pinned host in a second Linux VPS
 functional check
 ([`docs/evidence/2026-10-28-openclaw-vps-functional-137/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-137/REPORT.md)).
 A plugin approval answered by an operator, and these scenarios on macOS and
-Windows, are `not_run`. The host's interrupt (SIGINT) against this package
-is an operator step (below).
+Windows, are `not_run`. The `abort` (SIGINT mid-turn) and `external-failed`
+(503) host scenarios ran in a third Linux VPS functional check
+([`docs/evidence/2026-10-28-openclaw-vps-functional-138/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-138/REPORT.md)):
+the run was cancelled, and the 503 was a named failure that the host
+retried 7 times; on macOS and Windows at this commit they are `not_run`.
 
 What the plugin claims, and nothing more: text input; at most one function
 call per response, executed by OpenClaw under its own approvals; the answer is
@@ -174,7 +177,12 @@ Section 7.5; RM14, RM16, RM17, RM20, RM21, RM33; AC11, AC12, AC24.
 transport unchanged, so closing the host's request closes the HTTP request,
 and the gateway cancels the run that request owns (section 7.4). On the macOS
 probe, SIGINT on `openclaw agent exec` closed the upstream connection about
-150 ms later (exit 130, no JSON report). What that means for a run:
+150 ms later (exit 130, no JSON report). In the Linux VPS functional check
+(not a supported-platform qualification) SIGINT during a buffered local
+generation ended the gateway's run `cancelled` (`cancel_requested`), the
+adapter asked to cancel, with exit 130, no JSON report, and no attempt
+record (the host process ended first), as on macOS (Q11). What that means
+for a run:
 
 | When the host aborts | The gateway's run | The run ID in the plugin's record |
 | --- | --- | --- |
@@ -195,7 +203,12 @@ sees one message that starts with `RelayMind <code> (HTTP <status>)` (or
 `(stream error event)` for an error event inside a 200 stream), says what to
 do, quotes the gateway's own message on one line with any token removed, and
 names the gateway run (`Gateway run <id>` or `Gateway run unavailable`). The
-gateway's code stays the message's `errorCode`. The class is what the
+gateway's code stays the message's `errorCode`. Whether the host shows that
+message is the host's choice: in the Linux VPS functional check a context
+overflow's message was the host's final error text, but after a 503
+`external_failed` the host's final text was its own `⚠️ The AI service is
+having trouble. Please try again in a moment.`, and the plugin's message
+was only in the host's log (`rawError=`, `detail=`) with the run ID. The class is what the
 plugin's `matchesContextOverflowError` and `classifyFailoverReason` hooks
 answer:
 
@@ -219,6 +232,16 @@ then fails over to another provider or model is host policy: the plugin
 neither triggers nor hides it, and section 12.5 records it as a host
 decision, never as a RelayMind answer.
 
+The pinned host retries the same model after a failure of this provider:
+in the Linux VPS functional check, a 503 `external_failed` got 7 same-model
+retries (`transient same-model retry 1/8` to `7/8`, delays from 0.6 s to
+26.5 s, about 100 s in all) before the host stopped and surfaced the error.
+Each retry rewrote the conversation (the host added `[Earlier unanswered
+user message. ...]` and similar text), so each had a new turn and a new
+`Idempotency-Key` and was a new gateway run with its own external calls: 8
+runs for one `agent exec`. The plugin's `maxRetries` (0) does not bound
+these; whether a host setting does was not checked.
+
 **Idempotency keys.** Every request carries an `Idempotency-Key`: the SHA-256
 of what the pinned transport builds the body from (the model entry with its
 `X-RelayMind-Execution-Mode` header, the host session, the system prompt,
@@ -231,8 +254,9 @@ passes `resolveTransportTurnState` a new random `turnId` and `attempt: 1` on
 every call (`@openclaw/ai` 2026.10.7), so it differs on every retry; whether
 the real host keeps it across retries was not checked on the probe. So:
 
-- the host sending the same conversation again (a retry) sends the key that
-  payload last used: a completed run is replayed (`Idempotent-Replayed: true`,
+- the host sending the same conversation again sends the key that payload
+  last used (the pinned host's own same-model retries did not: they rewrote
+  the conversation, above, so each was a new key and run): a completed run is replayed (`Idempotent-Replayed: true`,
   the same run ID, no model call, no tool proposal repeated), including one
   that completed under a plugin retry key; a run still active is 409
   `idempotency_conflict`; a stored call whose arguments were redacted is
@@ -734,7 +758,7 @@ macOS). `checks.host_report` keeps the host's own JSON report (`ok`,
 ends a run whose tool was denied with exit 0 and `"ok": true`, so neither
 decides `passed`. `passed` is false for a scenario that did not complete.
 
-### Host interrupt (#138, operator, not run yet)
+### Host interrupt and error mapping (#138, operator)
 
 The `abort` scenario holds the gateway's generation open over a gated double
 and interrupts the host command once the generation has started (SIGINT, as
@@ -751,9 +775,31 @@ python scripts/openclaw_qualification.py host --scenario abort \
      --model relaymind/relaymind-client-tools "Say hello"
 ```
 
-A stale token on a real host request (401 with the reconnect instruction),
-a host retry, the host's failover after a RelayMind failure, and the turn ID
-across a real host retry were not checked on a real host (`not_run`). The
-stale token and a retry of an unchanged request are covered over doubles by
-`tests/test_openclaw_cancel_errors.py`; the host's failover is host policy and
-is not exercised here.
+The `external-failed` scenario scripts both doubles to call a tool no host
+offers, on every generation, so each run fails with 503 `external_failed`.
+It passes when every recorded run failed with that code and no answer text,
+the gateway executed no tool, and the host's output (its log lines
+included) holds `RelayMind external_failed (HTTP 503): ...` naming a
+recorded run. `checks.attempts` keeps the plugin's attempt records, and
+every run they name must be recorded. The host's exit code is recorded, not
+judged (1 here):
+
+```bash
+python scripts/openclaw_qualification.py host --scenario external-failed \
+  --out docs/evidence/<date>-openclaw-external-failed-<machine>.json \
+  -- openclaw agent exec --config <the relaymind config above> --json \
+     --model relaymind/relaymind-client-tools "Say hello"
+```
+
+Both ran in the Linux VPS functional check (not a supported-platform
+qualification) on the pinned host
+([`docs/evidence/2026-10-28-openclaw-vps-functional-138/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-138/REPORT.md)):
+`abort` passed (one run, `cancelled`, exit 130) and `external-failed`
+passed (8 runs, all `external_failed`: the request and 7 same-model
+retries by the host, about 100 s). The stale-token 401 line ran in the
+#136 check. Other error codes, aborts under early headers or before the
+request is sent, the host's turn ID across its retries, and a failover to
+another model were not run on a real host (`not_run`); they are covered
+over doubles by `tests/test_openclaw_cancel_errors.py`, and failover is
+host policy. On macOS (Q11, at `a52f8bf`, through a config-file provider
+row) the abort passed; macOS and Windows at this commit are `not_run`.

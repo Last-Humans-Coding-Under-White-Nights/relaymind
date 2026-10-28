@@ -1,0 +1,285 @@
+{
+  "kind": "openclaw-host-qualification",
+  "evidence": "deterministic gateway doubles; not live model evidence",
+  "scenario": "abort",
+  "status": "interrupted",
+  "command": [
+    "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+    "agent",
+    "exec",
+    "--config",
+    "<scratch>/home/config.json",
+    "--json",
+    "--model",
+    "relaymind/relaymind-client-tools",
+    "Say hello"
+  ],
+  "exit_code": 130,
+  "stdout": "",
+  "stderr": "[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[agent/embedded] tool-search: cataloged 40 tools behind compact prompt surface\n[state/agent-db] agent database clean-close receipt: active-leases\n",
+  "token": "<not recorded>",
+  "base_url": "http://127.0.0.1:<port>/v1",
+  "versions": {
+    "openclaw": "2026.10.7",
+    "@openclaw/ai": "2026.10.7",
+    "openai": "7.27.0",
+    "node": "v24.22.1",
+    "os": "Linux 7.0.0-38-generic",
+    "machine": "x86_64",
+    "relaymind_revision": {
+      "head": "aabcece75b173a0239b262b98ebe4dbc9ec66a6a",
+      "dirty": false
+    }
+  },
+  "runs": [
+    {
+      "run_id": "run_3154fad5fbcb4f55b031c79fa08840f6",
+      "state": "cancelled",
+      "events": [
+        {
+          "type": "run.accepted",
+          "payload": {
+            "answer_options": {},
+            "answer_pass": "final",
+            "answer_stream": "buffered",
+            "answer_stream_effective": "buffered",
+            "budgets": {
+              "active_seconds": 4.0,
+              "clarification_rounds": 2,
+              "external_generations": 6,
+              "external_seconds": 30.0,
+              "local_generations": 3,
+              "placement.margin": 2,
+              "placement.probe_after_seconds": 600,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "routing_input_tokens": 2048,
+              "routing_output_tokens": 128,
+              "run_active_seconds": 60.0,
+              "run_generations": 8,
+              "run_tool_executions": 6,
+              "selection.timeout_seconds": 2.0,
+              "tool_calls": 2,
+              "waiting_seconds": 300.0
+            },
+            "calls_per_generation": "one",
+            "early_headers": false,
+            "effective_execution_mode": "auto",
+            "example_match_margin": 0.1,
+            "example_match_score": 0.5,
+            "local_model": "gated",
+            "local_model_reason": null,
+            "local_model_status": "ready",
+            "model_alias": "relaymind-client-tools",
+            "original_messages": [
+              {
+                "content": {
+                  "omitted_chars": 45442
+                },
+                "role": "system"
+              },
+              {
+                "content": "[Wed 2026-10-28 03:53 UTC] Say hello\n\nRuntime: agent=main | session=agent:main:explicit:a01859b2-a41c-40ac-a798-60420b1c9d03 | host=<hostname> | repo=<repo> | os=Linux 7.0.0-38-generic (x64) | node=v24.22.1 | active_node=unknown | active_node_identity=unknown | model=relaymind/relaymind-client-tools | default_model=openai/gpt-6-astra | shell=bash",
+                "role": "user"
+              }
+            ],
+            "placement_policy": "local_first",
+            "prefetch": false,
+            "prefetch_declarations": {
+              "check-service-health": [
+                {
+                  "arguments": {
+                    "service": {
+                      "from": "request"
+                    }
+                  },
+                  "tool": "get_service_health"
+                }
+              ],
+              "delete-demo-database": [],
+              "health-and-diagnostic-checklist": [],
+              "investigate-performance": [
+                {
+                  "arguments": {
+                    "service": {
+                      "from": "request"
+                    }
+                  },
+                  "tool": "get_latest_deployment"
+                },
+                {
+                  "arguments": {
+                    "limit": {
+                      "constant": 50
+                    },
+                    "service": {
+                      "from": "request"
+                    }
+                  },
+                  "tool": "get_recent_logs"
+                }
+              ],
+              "lookup-latest-deployment": [
+                {
+                  "arguments": {
+                    "service": {
+                      "from": "request"
+                    }
+                  },
+                  "tool": "get_latest_deployment"
+                }
+              ],
+              "summarize-incident-counts": []
+            },
+            "requested_execution_mode": "auto",
+            "selection": [
+              "model_router"
+            ],
+            "skill_roots": [
+              "<repo>/skills"
+            ],
+            "skills_offered": []
+          }
+        },
+        {
+          "type": "route.selected",
+          "payload": {
+            "decision": {
+              "clarification": null,
+              "language": "en",
+              "reason_code": "simple_skill",
+              "route": "local",
+              "schema_version": 1,
+              "skill_id": null
+            },
+            "mechanism": "client_owned",
+            "placement": {
+              "deadline_ms": null,
+              "inputs": {
+                "cache_class": "unknown",
+                "decode_tokens_per_ms": null,
+                "expected_external_ms": null,
+                "expected_output_tokens": null,
+                "input_source": "none",
+                "input_tokens": null,
+                "local_success_rate": null,
+                "model": null,
+                "output_source": "unavailable",
+                "prefill_tokens_per_ms": null,
+                "purpose": null,
+                "sample_count": 0,
+                "sample_recorded_at": null
+              },
+              "predicted_ms": null,
+              "reason": "no_generation",
+              "role": "none"
+            }
+          }
+        },
+        {
+          "type": "model.started",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_3154fad5fbcb4f55b031c79fa08840f6_gen1_skill",
+            "model": "gated",
+            "placement": {
+              "deadline_ms": null,
+              "inputs": {
+                "cache_class": "unknown",
+                "decode_tokens_per_ms": null,
+                "expected_external_ms": null,
+                "expected_output_tokens": null,
+                "input_source": "tokenizer",
+                "input_tokens": 800,
+                "local_success_rate": null,
+                "model": "gated",
+                "output_source": "unavailable",
+                "prefill_tokens_per_ms": null,
+                "purpose": "skill",
+                "sample_count": 0,
+                "sample_recorded_at": null
+              },
+              "predicted_ms": null,
+              "reason": "local_first",
+              "role": "local"
+            },
+            "purpose": "skill",
+            "tools_offered": [
+              "apply_patch",
+              "edit",
+              "exec",
+              "ls",
+              "process",
+              "read",
+              "sessions_yield",
+              "tool_call",
+              "tool_describe",
+              "tool_search",
+              "write"
+            ]
+          }
+        },
+        {
+          "type": "model.finished",
+          "payload": {
+            "call_id": "run_3154fad5fbcb4f55b031c79fa08840f6_gen1_skill",
+            "deadline_missed": false,
+            "deadline_ms": null,
+            "duration_ms": 0,
+            "error": {
+              "code": "cancelled",
+              "message": "model generation interrupted"
+            },
+            "finish_reason": null,
+            "first_token_ms": null,
+            "model": "gated",
+            "predicted_ms": null,
+            "proposed_calls": [],
+            "purpose": "skill",
+            "text": null,
+            "tool_calls": 0,
+            "usage": null
+          }
+        },
+        {
+          "type": "run.cancelled",
+          "payload": {
+            "active_ms": 0,
+            "budget_usage": {
+              "active_ms": 0,
+              "external_generations": 0,
+              "local_active_ms": 0,
+              "local_generations": 1,
+              "repair_generations": 0,
+              "routing_generations": 0,
+              "stages": 1,
+              "tool_calls": 0
+            },
+            "external_calls": 0,
+            "local_active_ms": 0,
+            "model_calls": [
+              {
+                "actor": "local",
+                "call_id": "run_3154fad5fbcb4f55b031c79fa08840f6_gen1_skill",
+                "model": "gated",
+                "purpose": "skill"
+              }
+            ],
+            "reason": "cancel_requested",
+            "waiting_ms": 0
+          }
+        }
+      ]
+    }
+  ],
+  "host_tool_executions_by_gateway": 0,
+  "checks": {
+    "signal_sent": true,
+    "cancelled_runs": [
+      "run_3154fad5fbcb4f55b031c79fa08840f6"
+    ],
+    "answer_deltas": 0,
+    "adapter_cancel_requested": true,
+    "passed": true
+  }
+}

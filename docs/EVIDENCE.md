@@ -3191,5 +3191,37 @@ The macOS default-scenario failure at `a52f8bf` (Q8) was the harness: it
 scripted a text turn before the call, which one exec could not get past.
 
 Not shown: a plugin approval answered by an operator at a running OpenClaw
-Gateway, abort (#138), request size, and any macOS or Windows run of these
-scenarios (not_run).
+Gateway, abort (#138, next entry), request size, and any macOS or Windows
+run of these scenarios (not_run).
+
+## 2026-10-28 — OpenClaw abort and error mapping on the real pinned host (#138), Linux VPS functional check
+
+Linux VPS functional check (not a supported-platform qualification). One
+run of the `abort` and `external-failed` harness host scenarios
+(`scripts/openclaw_qualification.py host`) with the pinned
+`OpenClaw 2026.10.7 (157d8c2)` (from `integrations/openclaw/node_modules`,
+Node v24.22.1, `Linux 7.0.0-38-generic x86_64`) against the real gateway
+over model doubles, with host state isolated in a temp dir. Commit tested
+`aabcece75b173a0239b262b98ebe4dbc9ec66a6a` (clean). Not live model
+evidence. Recorded in
+[`docs/evidence/2026-10-28-openclaw-vps-functional-138/`](evidence/2026-10-28-openclaw-vps-functional-138/REPORT.md)
+and checked by `tests/test_openclaw_vps_functional_cancel_errors.py`.
+
+| Scenario | Host | Gateway | `checks.passed` |
+| --- | --- | --- | --- |
+| `abort` (SIGINT 0.5 s into the local generation) | exit 130, no JSON report, no attempt record | 1 run `cancelled` (`cancel_requested`), adapter asked to cancel, no answer text | true |
+| `external-failed` (both doubles call a tool nobody offered) | exit 1; 7 same-model retries (`server_error`), then its own `The AI service is having trouble` message; the plugin's `RelayMind external_failed (HTTP 503)` message only in its log | 8 runs, all `failed` / `external_failed` / `invalid_output`, 16 local and 16 external generations on doubles | true |
+
+The abort matches Q11, the macOS run at `a52f8bf` (exit 130 0.14 s after
+SIGINT, run `cancelled` with `cancel_requested`, through a config-file
+provider row). Each host retry rewrote the conversation, so the plugin sent
+8 different `Idempotency-Key` values and the gateway made 8 runs, none
+replayed (section 7.5). Two harness defects were found and fixed before the
+recorded run: the gated double counted the host-sized request by character
+(the abort run failed with `context_limit_exceeded` before any generation),
+and the error scenario's scripted turns ran out under the host's retries.
+
+Not shown: other error codes on the real host (403, 409, 422, 429, 504, a
+stream error event), aborts under early headers or before sending, the
+host's turn ID across its retries, a failover to another model, and any
+macOS or Windows run at this commit (not_run).

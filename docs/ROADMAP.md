@@ -816,9 +816,14 @@ This is planned integration, not a claim of a working or faster plugin.
   early-header generation, during the replay, and after completion, every
   error status, and replay and conflict cases are covered through the
   pinned transport over doubles (`tests/test_openclaw_cancel_errors.py`).
-  The real host's interrupt
-  (`scripts/openclaw_qualification.py host --scenario abort`), its retries,
-  and its failover are not_run.
+  A Linux VPS functional check (not a supported-platform qualification)
+  ran the `abort` and `external-failed` host scenarios on the pinned host
+  over doubles (`docs/evidence/2026-10-28-openclaw-vps-functional-138/`):
+  SIGINT mid-generation cancelled the run (as Q11 on macOS), and the 503
+  was a named failure that the host retried 7 times with a rewritten
+  conversation, each retry a new key and run. Other error codes on the
+  real host, its failover, and macOS and Windows at this commit are
+  not_run.
 - Installable artifact, CI compatibility checks, platform qualification,
   and operator documentation (#145; RM18, RM19, RM33; AC24): packaging
   and CI after #136, platform qualification and the guide after #138.

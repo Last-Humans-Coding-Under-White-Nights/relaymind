@@ -42,8 +42,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   cancelled run's key, and a token change. The qualification harness's host
   mode gains `--scenario abort` (SIGINT once the generation started; the
   host's output goes to files, so a verbose host cannot block on a full
-  pipe). The
-  real host's interrupt, retries, and failover are not run.
+  pipe; the gated double's count is fixed, so a host-sized request reaches
+  the held generation) and `--scenario external-failed` (both doubles call
+  a tool no host offers on every generation: 503 `external_failed`, checked
+  from the runs, the host's message, and the plugin's attempt records). A
+  Linux VPS functional check (not a supported-platform qualification,
+  `docs/evidence/2026-10-28-openclaw-vps-functional-138/`, read by
+  `tests/test_openclaw_vps_functional_cancel_errors.py`) ran both on the
+  pinned host over doubles: SIGINT cancelled the run (`cancel_requested`,
+  exit 130, as Q11 on macOS); the 503 failed every run, and the host
+  retried the same model 7 times with a rewritten conversation, so 8 keys
+  and 8 runs, and showed its own generic message with the plugin's in its
+  log. Other error codes on the real host and the host's failover are not
+  run.
 - OpenClaw text and host-owned tool round trips (#137; RM01, RM03, RM04,
   RM08, RM09, RM12, RM19, RM20, RM26, RM33; AC10, AC24): the provider's
   `wrapStreamFn` (`integrations/openclaw/src/stream.ts`) refuses, by field
