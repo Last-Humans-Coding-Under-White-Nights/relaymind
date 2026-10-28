@@ -291,8 +291,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   tool report and the sandbox, never by comparing call IDs (the trace holds
   no host result); the report gives exact counts per arm and language, the
   two clocks apart, and tokens per model with unknown counts kept unknown,
-  and the export names the Node that ran the host. No gateway contract
-  change.
+  and the export names the Node that ran the host; the report gives the
+  reason codes of the runs that left the local stage, so 0 local turns (what
+  the 8192-token local context gives an OpenClaw turn, macOS qualification)
+  is reported as a result with its reasons, and a local-inference comparison
+  without a local turn says so; a host that exits 130 or dies of SIGINT is a
+  host interrupt, apart from other exit statuses; an evaluation the operator
+  interrupts still writes its export, marked aborted, with the remaining
+  slots not run. No gateway contract change.
 - Specification 0.49, OpenClaw host facts recorded on the wire (#135; RM33,
   section 7.5): at v2026.10.7 the host's defaults for a loopback URL send
   `stream_options` and, for a reasoning model, `reasoning_effort`; the
