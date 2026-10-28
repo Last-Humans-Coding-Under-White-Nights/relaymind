@@ -19,6 +19,9 @@ No host or model runs here; the export is data.
 """
 
 import json
+import re
+import secrets
+import shutil
 from pathlib import Path
 
 import pytest
@@ -62,13 +65,45 @@ def test_the_report_is_labeled_and_names_the_host_and_commit():
     assert "not_run" in text
 
 
+# A gateway token is secrets.token_urlsafe(32): 43 base64url characters. Any
+# run of 40 or more base64url characters in the export must have one of the
+# known non-secret shapes: a lowercase hex digest or commit, a run ID (also
+# inside a chatcmpl- ID or a skill-stage ID), or a W3C traceparent.
+LONG_RUN = re.compile(r"[A-Za-z0-9_-]{40,}")
+KNOWN_SHAPES = (
+    re.compile(r"[0-9a-f]{40,}"),
+    re.compile(r"(chatcmpl-)?run_[0-9a-f]{32}(_gen\d+_[a-z_]+)?"),
+    re.compile(r"00-[0-9a-f]{32}-[0-9a-f]{16}-0[0-9a-f]"),
+)
+
+
+def token_shaped_values(root: Path) -> list:
+    found = []
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        for value in LONG_RUN.findall(path.read_text("utf-8")):
+            if not any(shape.fullmatch(value) for shape in KNOWN_SHAPES):
+                found.append((path.relative_to(root).as_posix(), value))
+    return found
+
+
 def test_the_export_holds_no_credential():
-    """RM12: the proxy never records Authorization; the driver replaced every token."""
+    """RM12: no exported file holds a token-shaped value, wherever it would sit."""
     for request in [x["request"] for x in load("wire.json")]:
         assert request["headers"].get("authorization") == "<redacted>"
     for step in load("steps.json"):
         if step["stdin"] is not None:
             assert step["stdin"] == "<the gateway token>"
+    assert token_shaped_values(RUN) == []
+
+
+def test_the_credential_scan_finds_a_planted_token(tmp_path):
+    """RM12: the scan is not vacuous; a token left in any field is caught."""
+    copy = tmp_path / "export"
+    shutil.copytree(RUN, copy)
+    token = secrets.token_urlsafe(32)
+    runs = copy / "gateway-runs.json"
+    runs.write_text(runs.read_text("utf-8") + "\n" + token + "\n", "utf-8")
+    assert ("gateway-runs.json", token) in token_shaped_values(copy)
 
 
 def test_agent_exec_found_the_plugin_model_before_any_catalog_refresh():

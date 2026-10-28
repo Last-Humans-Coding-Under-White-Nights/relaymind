@@ -92,9 +92,10 @@ host configuration; the schema is closed (an unknown key is refused by name):
   and `must be equal to one of the allowed values`, so the plugin's own
   parallel_demo message does not show (macOS run at `a52f8bf`, and the
   Linux VPS functional check). A value written straight into the config
-  file makes the host leave the plugin out (macOS run). The gateway's policy keeps its meaning: a mode it does not permit
-  is 403 `execution_mode_forbidden`, and the catalog says so. An
-  `external_only` setup needs no local model.
+  file makes the host leave the plugin out (macOS run). The gateway's
+  policy keeps its meaning: a mode it does not permit is 403
+  `execution_mode_forbidden`, and the catalog says so. An `external_only`
+  setup needs no local model.
 - `limits` are copied by hand from the gateway's configuration: no gateway
   endpoint reports them (section 7.5). The host refuses a request over the
   advertised window before sending it, so the advertised window is the

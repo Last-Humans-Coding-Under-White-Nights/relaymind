@@ -65,7 +65,14 @@ class Gateway:
         return self
 
     def runs(self) -> list:
-        ids = [r[0] for r in self.gateway.store._conn.execute("SELECT run_id FROM runs")]
+        # In the order the gateway created them (an unordered SELECT returns
+        # run_id order); the committed export predates this ORDER BY.
+        ids = [
+            r[0]
+            for r in self.gateway.store._conn.execute(
+                "SELECT run_id FROM runs ORDER BY created_at, rowid"
+            )
+        ]
         return [
             {
                 "run_id": run_id,

@@ -70,6 +70,15 @@ Gateway trace: three runs completed, each with `run.accepted`,
 characters, such as the host's prompt, is kept by size only). The
 stale-token request never became a run.
 
+The committed `gateway-runs.json` lists each gateway's runs in `run_id`
+order, not the order they were recorded: the driver's query had no
+`ORDER BY` when this export was made (it now orders by `created_at`). For
+`gateway1` the first listed run, `run_09c7…`, is the second chat request
+(`run.accepted` `answer_options.max_completion_tokens` 512, after the
+limits were copied), and `run_cbd4…` is the first (`answer_options` `{}`,
+the dynamic-resolution request). Match a run to its `wire.json` exchange
+by its `chatcmpl-run_…` response ID, not by position.
+
 ## Plugin-supplied model switches on the wire (spec 0.49, section 7.5)
 
 The proxy recorded all four host chat requests (`wire.json`: exchanges 0,
