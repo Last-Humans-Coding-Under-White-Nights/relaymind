@@ -288,8 +288,9 @@ def _gated_gateway(work: Path, turns: list):
     """A gateway whose local model holds every generation open until cancelled.
 
     The double's count is fixed, as for the default double of build_gateway:
-    counted by character, the real host's request (a system prompt of about
-    30,000 characters) fit neither model and failed before any generation.
+    counted by character, the real host's request (a system prompt of 45,442
+    characters in the Linux VPS functional check) fit neither model and failed
+    before any generation.
     """
     adapter = GatedAdapter(turns=turns, input_tokens=DOUBLE_INPUT_TOKENS)
     gateway = build_gateway(
