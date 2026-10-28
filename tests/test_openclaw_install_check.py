@@ -408,9 +408,45 @@ def test_the_label_names_what_the_run_is(stub_host, tarball, tmp_path):
     default = run(stub_host, tarball, tmp_path)
     assert "not a supported-platform qualification" in default["evidence"]
     assert "not live model evidence" in default["evidence"]
+    assert default["platform_qualification"] is False
     labeled = run(stub_host, tarball, tmp_path, label="GitHub runner ubuntu-latest")
     assert labeled["evidence"].startswith("GitHub runner ubuntu-latest")
     assert "not live model evidence" in labeled["evidence"]
+    assert "not a supported-platform qualification" in labeled["evidence"]
+    assert labeled["platform_qualification"] is False
+
+
+def test_a_target_platform_run_is_recorded_as_the_platform_qualification(
+    stub_host, tarball, tmp_path
+):
+    """RM33, AC24, section 12.5: a run on a target platform of section 1 is the
+    platform qualification of the install lifecycle, still never live model evidence."""
+    label = "macOS 27.0.1 arm64, Apple M1 (user's machine), Node v26.12.1"
+    export = run(stub_host, tarball, tmp_path, label=label, target_platform=True)
+    assert export["evidence"].startswith(label)
+    assert "platform qualification" in export["evidence"]
+    assert "not live model evidence" in export["evidence"]
+    assert "not a supported-platform qualification" not in export["evidence"]
+    assert export["platform_qualification"] is True
+    keys = list(export)
+    assert keys[keys.index("evidence") + 1] == "platform_qualification"
+
+
+def test_a_target_platform_run_must_name_its_machine(tarball, tmp_path, monkeypatch, capsys):
+    """RM33, AC24, section 12.5: a target-platform run without a label is refused
+    before any host or gateway starts."""
+
+    def no_run(*args, **kwargs):
+        raise AssertionError("the install check must not start")
+
+    monkeypatch.setattr(install_check, "run_install_check", no_run)
+    out = tmp_path / "x.json"
+    argv = ["--tarball", str(tarball), "--out", str(out), "--target-platform", "--", "openclaw"]
+    with pytest.raises(SystemExit) as raised:
+        install_check.main(argv)
+    assert raised.value.code == 2
+    assert "--target-platform needs --label" in capsys.readouterr().err
+    assert not out.exists()
 
 
 def test_the_main_entry_exits_by_the_result(stub_host, tarball, tmp_path, monkeypatch):

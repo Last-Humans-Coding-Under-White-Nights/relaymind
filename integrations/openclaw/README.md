@@ -854,7 +854,11 @@ events, the host's report, and what was left after uninstall and after
 removal. The gateway answers from doubles, so a pass is never live model
 evidence. It is a platform qualification only when the label and
 `docs/EVIDENCE.md` record it as one, with the OS, the host, Node, and, on
-Windows, native or WSL2 (section 12.5).
+Windows, native or WSL2 (section 12.5). An operator on a macOS or Windows
+machine passes `--target-platform` with a `--label` naming the machine and
+runtime, and the export then says it is the platform qualification of the
+install lifecycle (`"platform_qualification": true`, still not live model
+evidence); runs on the Linux VPS and the GitHub-hosted runners do not pass it.
 
 A stale token on a running host (restart `relaymind serve`; `models list
 --refresh` reports the 401 reconnect line; paste the new token; it recovers)

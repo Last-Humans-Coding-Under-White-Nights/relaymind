@@ -1333,6 +1333,12 @@ What runs where:
 | install check with the pinned host | CI runners; an operator's machine | `python scripts/openclaw_install_check.py --tarball ... --out ... -- <openclaw>` |
 | live model, platform qualification | an operator's machine only | not part of any automated suite |
 
+An operator on a macOS or Windows machine adds `--target-platform` and a
+`--label` naming the machine and runtime to the install check command, so the
+export records the run as the section 12.5 platform qualification of the
+install lifecycle; runs on the Linux VPS and the GitHub-hosted runners do not
+pass it.
+
 - `tests/test_openclaw_install.py`: the lockfile (version 3) pins
   `openclaw` and `@openclaw/ai` at 2026.10.7 with integrity, matches
   `package.json`, and every build dependency is exact; two
@@ -1376,7 +1382,9 @@ What runs where:
   the pinned host, refuses `models list` when `OPENCLAW_GATEWAY_PORT` is
   set); the export is written even when the temporary
   host home cannot be removed; the label keeps "not live model
-  evidence" and "not a supported-platform qualification".
+  evidence" and "not a supported-platform qualification", and only
+  `--target-platform` (refused without `--label`) records the run as the
+  platform qualification of the install lifecycle.
 
 - `tests/test_openclaw_vps_functional_install.py`: reads the Linux VPS
   functional check (not a supported-platform qualification) of the install
