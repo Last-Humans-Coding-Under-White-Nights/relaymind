@@ -55,8 +55,9 @@ HOST_TOOLS = frozenset(
 )
 ANY_VALUE = "*"
 MATCHERS = ("exact", "suffix", "contains")
-# The host's exit status after SIGINT (macOS probe and qualification).
-HOST_INTERRUPT_EXIT = 130
+# The host's exit status after SIGINT (macOS probe and qualification), and the
+# runner's return code for a host that died of the signal itself.
+HOST_INTERRUPT_EXITS = frozenset({130, -2})
 COMPARISONS = {
     "integration_overhead": ("relaymind_external_only", "direct"),
     "local_inference_auto": ("relaymind_auto", "relaymind_external_only"),
@@ -529,6 +530,7 @@ def grade_attempt(task: Task, attempt: Mapping[str, Any]) -> dict[str, Any]:
         for key in ("provider", "model")
     )
     timed_out = host["status"] == "timed_out"
+    interrupted = host["exit_code"] in HOST_INTERRUPT_EXITS
     proposals = [e["payload"] for run in runs for e in _events(run, "tool.proposed")]
     if not relaymind or not task.expected_tools:
         proposals_match = None
@@ -557,6 +559,8 @@ def grade_attempt(task: Task, attempt: Mapping[str, Any]) -> dict[str, Any]:
     else:
         if timed_out:
             failures.append("timed_out")
+        elif interrupted:
+            failures.append("host_interrupted")
         elif host["exit_code"] != 0:
             failures.append("exit_status")
         if not all(any(_evidence(final, p) for p in group) for group in task.required_evidence) or (
@@ -590,6 +594,18 @@ def grade_attempt(task: Task, attempt: Mapping[str, Any]) -> dict[str, Any]:
         if record.get("outcome") == "failed" and record.get("runId") in ("unavailable", None):
             if record.get("code"):
                 error_codes[record["code"]] += 1
+    # Why each run left the local stage: its handoff, or its needs_external stop.
+    escalations = Counter(
+        e["payload"].get("reason_code")
+        for run in runs
+        for e in _events(run, "handoff.started")
+        + [
+            f
+            for f in _events(run, "run.failed")
+            if f["payload"].get("error_code") == "needs_external"
+        ]
+    )
+    escalations.pop(None, None)
     calls_by_run = [(run, _model_calls(run)) for run in runs]
     calls = [call for _, of_run in calls_by_run for call in of_run]
     local_turns = sum(
@@ -609,7 +625,7 @@ def grade_attempt(task: Task, attempt: Mapping[str, Any]) -> dict[str, Any]:
         "failures": failures,
         "timed_out": timed_out,
         "host_exit_code": host["exit_code"],
-        "host_interrupted": host["exit_code"] == HOST_INTERRUPT_EXIT,
+        "host_interrupted": interrupted,
         "host_ok": report.get("ok") if report else None,
         "host_ok_but_failed": report.get("ok") is True and not success,
         "host_failover": failover,
@@ -636,6 +652,7 @@ def grade_attempt(task: Task, attempt: Mapping[str, Any]) -> dict[str, Any]:
         "needs_external": failed_codes.get("needs_external", 0),
         "context_limit_exceeded": failed_codes.get("context_limit_exceeded", 0),
         "local_turns": local_turns if relaymind else None,
+        "escalation_reasons": dict(sorted(escalations.items())) if relaymind else None,
         "local_calls": sum(c["actor"] == "local" for c in calls) if relaymind else None,
         "external_calls": sum(c["actor"] == "external" for c in calls) if relaymind else None,
         "proposals": [
@@ -664,6 +681,15 @@ def _sum(grades: Sequence[Mapping], key: str) -> int | None:
     if any(v is None for v in values):
         return None
     return sum(values)
+
+
+def _reasons(grades: Sequence[Mapping]) -> dict[str, int] | None:
+    if any(g["escalation_reasons"] is None for g in grades):
+        return None
+    total: Counter = Counter()
+    for grade in grades:
+        total.update(grade["escalation_reasons"])
+    return dict(sorted(total.items()))
 
 
 def _tokens(grades: Iterable[Mapping]) -> dict[str, dict]:
@@ -697,6 +723,7 @@ def _language_metrics(grades: Sequence[Mapping], language: str) -> dict[str, Any
         "needs_external": sum(g["needs_external"] for g in grades),
         "context_limit_exceeded": sum(g["context_limit_exceeded"] for g in grades),
         "local_turns": _sum(grades, "local_turns"),
+        "escalation_reasons": _reasons(grades),
         "local_calls": _sum(grades, "local_calls"),
         "external_calls": _sum(grades, "external_calls"),
         "gateway_tool_executions": sum(g["gateway_tool_executions"] for g in grades),
@@ -714,7 +741,9 @@ def _language_metrics(grades: Sequence[Mapping], language: str) -> dict[str, Any
     }
 
 
-def _comparison(grades: Sequence[Mapping], first: str, second: str) -> dict[str, Any]:
+def _comparison(
+    grades: Sequence[Mapping], first: str, second: str, *, local: bool = False
+) -> dict[str, Any]:
     languages: dict[str, Any] = {}
     for language in LANGUAGES:
         of = {
@@ -740,6 +769,9 @@ def _comparison(grades: Sequence[Mapping], first: str, second: str) -> dict[str,
             },
             "attempts": {arm: len(of[arm]) for arm in (first, second)},
         }
+        if local:
+            # A local-inference comparison without a local turn compares no local inference.
+            languages[language]["local_turns"] = _sum(list(of[first].values()), "local_turns")
     return {"arms": [first, second], "languages": languages}
 
 
@@ -770,7 +802,7 @@ def summarize(
     return {
         "arms": result,
         "comparisons": {
-            name: _comparison(grades, first, second)
+            name: _comparison(grades, first, second, local=name.startswith("local_inference"))
             for name, (first, second) in COMPARISONS.items()
         },
     }
@@ -809,7 +841,9 @@ def render_markdown(summary: Mapping[str, Any], *, title: str) -> str:
         "content is the gateway's clock; the two are never subtracted. Tokens are per model, "
         "summed only over calls that reported a count, with unknown calls beside the sum; "
         "host-reported usage is never added to them. Chinese results are best-effort and "
-        "reported apart.",
+        "reported apart. 0 local turns is a result, reported with the reasons the runs left "
+        "the local stage; a local-inference comparison whose RelayMind arm had no local turn "
+        "compares no local inference.",
         "",
         "| Arm | Language | Successes | Host failovers | Timeouts | Interrupts | ok but failed "
         "| Gateway runs | Inference attempts | Errors | needs_external | context_limit_exceeded "
@@ -835,6 +869,18 @@ def render_markdown(summary: Mapping[str, Any], *, title: str) -> str:
                 f"| {_cell(done['p50'])}/{_cell(done['p95'])} (n={done['count']}) "
                 f"| {_cell(first['p50'])}/{_cell(first['p95'])} (n={first['count']}) |"
             )
+    lines += ["", "## Local stage (gateway runs, all attempts)", ""]
+    for arm, entry in summary["arms"].items():
+        for language, m in entry["languages"].items():
+            if m["local_turns"] is None:
+                continue
+            reasons = m["escalation_reasons"] or {}
+            why = ", ".join(f"{k}: {v}" for k, v in reasons.items()) or "none"
+            lines.append(
+                f"- {arm}, {language}: {m['local_turns']} local turns of "
+                f"{_cell(m['gateway_runs'])} gateway runs, {_cell(m['local_calls'])} local "
+                f"calls; left the local stage by reason: {why}"
+            )
     lines += ["", "## Tokens per model (gateway usage, successful attempts)", ""]
     for arm, entry in summary["arms"].items():
         for language, m in entry["languages"].items():
@@ -850,5 +896,10 @@ def render_markdown(summary: Mapping[str, Any], *, title: str) -> str:
                 f"completion difference {_cell(c['median_completion_ms_difference'])} ms; "
                 f"successes {c['successes'][first]}/{c['attempts'][first]} against "
                 f"{c['successes'][second]}/{c['attempts'][second]}"
+                + (
+                    f"; no local turn in {first}: compares no local inference"
+                    if c.get("local_turns") == 0
+                    else ""
+                )
             )
     return "\n".join(lines) + "\n"

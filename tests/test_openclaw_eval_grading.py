@@ -617,6 +617,134 @@ def test_the_markdown_report_states_its_limits_and_counts():
     assert "never" in text  # the clocks are never subtracted, ok is never success
 
 
+# -- the local stage at the 8192-token local context (D1; macOS qualification Q1, Q2) ---
+
+
+def handed_off_run(run_id, reason="context_limit", *, text="answer", elapsed=60):
+    """A run that skipped the local stage and was answered by the external model."""
+    calls = [{"actor": "external", "call_id": f"{run_id}_c1", "model": "provider-model"}]
+    return {
+        "run_id": run_id,
+        "state": "completed",
+        "events": [
+            event("run.accepted"),
+            event("route.selected", route="external", reason_code=reason),
+            event("handoff.started", reason_code=reason, model="provider-model"),
+            *model_events(f"{run_id}_c1", "provider-model", "external"),
+            event("answer.delta", "external", elapsed, text=text),
+            event(
+                "run.completed",
+                elapsed=elapsed + 1,
+                answer=text,
+                external_calls=1,
+                model_calls=calls,
+            ),
+        ],
+    }
+
+
+def test_a_turn_over_the_local_limit_is_zero_local_turns_with_its_reason():
+    """Spec 0.50 section 12.5: why the runs left the local stage is reported.
+
+    At the 8192-token local context every measured OpenClaw request is over the
+    local limit (10,500 to 10,577 tokens, macOS qualification Q1), so the auto
+    arm hands every turn off with reason context_limit. That is a result: the
+    grade keeps the reason, so 0 local turns is never an unexplained blank.
+    """
+    grade = grade_attempt(TEXT, attempt(TEXT, host=report(TEXT), runs=[handed_off_run("run_a")]))
+    assert grade["success"] is True, grade["failures"]
+    assert grade["local_turns"] == 0
+    assert grade["local_calls"] == 0
+    assert grade["external_calls"] == 1
+    assert grade["escalation_reasons"] == {"context_limit": 1}
+
+
+def test_needs_external_runs_keep_their_reason():
+    """Without an external model the same turn ends needs_external / context_limit (Q2)."""
+    runs = [failed_run("run_a", "needs_external", "context_limit")]
+    grade = grade_attempt(TEXT, attempt(TEXT, host=None, exit_code=1, status="failed", runs=runs))
+    assert grade["needs_external"] == 1
+    assert grade["escalation_reasons"] == {"context_limit": 1}
+    assert grade["local_turns"] == 0
+
+
+def test_the_direct_arm_has_no_escalation_reasons():
+    grade = grade_attempt(
+        TEXT,
+        attempt(TEXT, "direct", host=report(TEXT, **DIRECT), runs=[], diagnostics=[], window=[]),
+    )
+    assert grade["escalation_reasons"] is None
+
+
+def test_the_report_states_zero_local_turns_and_their_reasons():
+    grades = [
+        grade_attempt(TEXT, attempt(TEXT, host=report(TEXT), runs=[handed_off_run("a")], repeat=r))
+        for r in range(3)
+    ]
+    summary = summarize(grades, arms=("relaymind_auto",))
+    auto = summary["arms"]["relaymind_auto"]["languages"]["en"]
+    assert auto["local_turns"] == 0
+    assert auto["escalation_reasons"] == {"context_limit": 3}
+    text = render_markdown(summary, title="OpenClaw evaluation")
+    assert "relaymind_auto, en: 0 local turns of 3 gateway runs" in text
+    assert "context_limit: 3" in text
+    assert "0 local turns is a result" in text
+
+
+def test_a_local_inference_comparison_without_a_local_turn_says_so():
+    grades = []
+    for r in range(2):
+        grades.append(
+            grade_attempt(
+                TEXT, attempt(TEXT, host=report(TEXT), runs=[handed_off_run("a")], repeat=r)
+            )
+        )
+        grades.append(
+            grade_attempt(
+                TEXT,
+                attempt(
+                    TEXT,
+                    "relaymind_external_only",
+                    host=report(TEXT),
+                    runs=[handed_off_run("b", "execution_mode")],
+                    repeat=r,
+                ),
+            )
+        )
+    summary = summarize(grades, arms=("relaymind_external_only", "relaymind_auto"))
+    local = summary["comparisons"]["local_inference_auto"]["languages"]["en"]
+    assert local["pairs"] == 2
+    assert local["local_turns"] == 0
+    text = render_markdown(summary, title="OpenClaw evaluation")
+    line = next(x for x in text.splitlines() if x.startswith("- local_inference_auto"))
+    assert "no local turn in relaymind_auto: compares no local inference" in line
+    overhead = next(x for x in text.splitlines() if x.startswith("- integration_overhead"))
+    assert "local turn" not in overhead
+
+
+# -- host interrupts -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("exit_code", [130, -2])
+def test_a_host_interrupt_is_counted_apart_from_other_exit_statuses(exit_code):
+    """Exit 130, or a host that died of SIGINT (-2 from the runner), is an interrupt."""
+    grade = grade_attempt(
+        TEXT,
+        attempt(TEXT, host=None, exit_code=exit_code, status="failed", runs=[], window=[]),
+    )
+    assert grade["host_interrupted"] is True
+    assert "host_interrupted" in grade["failures"]
+    assert "exit_status" not in grade["failures"]
+
+
+def test_another_exit_status_is_not_an_interrupt():
+    grade = grade_attempt(
+        TEXT, attempt(TEXT, host=None, exit_code=1, status="failed", runs=[], window=[])
+    )
+    assert grade["host_interrupted"] is False
+    assert "exit_status" in grade["failures"]
+
+
 @pytest.mark.parametrize("missing", ["host", "sandbox_after", "runs"])
 def test_an_incomplete_attempt_record_is_refused(missing):
     record = attempt(TEXT, host=report(TEXT), runs=[text_run("r")])
