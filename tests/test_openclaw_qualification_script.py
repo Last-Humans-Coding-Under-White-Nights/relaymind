@@ -46,7 +46,9 @@ def test_host_mode_runs_the_command_and_exports_the_runs_without_the_token(tmp_p
     assert export["status"] == "completed"
     assert export["token"] == "<not recorded>"
     assert "token was <not recorded>" in export["stdout"]
-    assert "Hello from RelayMind." in export["stdout"]
+    # The stub offers no tools, so the gateway repairs the scripted echo call
+    # and the closing text is the answer.
+    assert "The tool said: echo: lantern." in export["stdout"]
     (run,) = export["runs"]
     assert run["state"] == "completed"
     assert any(e["type"] == "run.completed" for e in run["events"])
@@ -423,6 +425,70 @@ def test_a_host_report_that_is_not_json_is_recorded_as_absent(tmp_path):
         [sys.executable, "-c", STUB_HOST], tmp_path / "export.json", scenario="text-tool"
     )
     assert export["checks"]["host_report"] is None
+
+
+# -- the default scenario in one host turn (#137; RM08, RM33, AC24) -----------------------
+
+# A stand-in for one `openclaw agent exec`: the echo call, the host runs it, and
+# the result goes back in a second request of the same turn.
+STUB_ECHO_HOST = """
+import json, os, sys, urllib.request
+base = os.environ["RELAYMIND_BASE_URL"]
+token = os.environ["RELAYMIND_APP_TOKEN"]
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+echo = {"type": "function", "function": {"name": "relaymind_test_echo", "parameters": {
+    "type": "object", "properties": {"text": {"type": "string"}},
+    "required": ["text"], "additionalProperties": False}}}
+def post(messages):
+    body = {"model": "relaymind-client-tools", "messages": messages, "tools": [echo]}
+    request = urllib.request.Request(
+        base + "/chat/completions", data=json.dumps(body).encode(), method="POST",
+        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+    with opener.open(request) as response:
+        return json.loads(response.read())["choices"][0]["message"]
+messages = [{"role": "user", "content": "Echo lantern with the test echo tool."}]
+reply = post(messages)
+calls = reply.get("tool_calls") or []
+if not calls:
+    print(json.dumps({"ok": True, "final": reply["content"]}))
+    raise SystemExit(0)
+(call,) = calls
+arguments = json.loads(call["function"]["arguments"])
+replayed = "".join(c for c in call["id"] if c.isascii() and c.isalnum())[:40]
+reply = {**reply, "tool_calls": [{**call, "id": replayed}]}
+messages += [reply, {"role": "tool", "tool_call_id": replayed,
+                     "content": "echo: " + arguments["text"]}]
+print(json.dumps({"ok": True, "final": post(messages)["content"]}))
+"""
+
+
+def test_the_default_scenario_passes_in_one_host_turn(tmp_path):
+    """Q8: the documented command is one `agent exec`; the default scenario must fit it.
+
+    On macOS at a52f8bf one exec got the scenario's opening text turn, ended,
+    and could never show a proposed call, so ``checks.passed`` was false even
+    though the host printed the scripted text.
+    """
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_ECHO_HOST], tmp_path / "export.json", scenario="text-tool"
+    )
+    assert export["status"] == "completed", export["stderr"]
+    check = export["checks"]
+    assert [p["tool_name"] for p in check["proposed"]] == ["relaymind_test_echo"]
+    assert check["result_reached_next_run"] is True
+    assert check["gateway_tool_executions"] == 0
+    assert check["passed"] is True
+    assert json.loads(export["stdout"])["final"] == "The tool said: echo: lantern."
+
+
+def test_a_text_only_host_turn_does_not_pass_the_default_scenario(tmp_path):
+    """Section 12.5: a host that never sent the tool result has no round trip to show."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_HOST], tmp_path / "export.json", scenario="text-tool"
+    )
+    assert export["status"] == "completed"
+    assert export["checks"]["result_reached_next_run"] is False
+    assert export["checks"]["passed"] is False
 
 
 # -- the host exec policy scenarios (#137; RM08, RM33, AC24) -------------------------------

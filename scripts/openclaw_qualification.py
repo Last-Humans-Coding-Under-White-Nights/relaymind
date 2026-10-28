@@ -27,8 +27,8 @@ Two modes:
     written. This mode needs a real OpenClaw install; it is run by an
     operator and CI, not by the deterministic suite.
 
-    Scenarios (#137): ``text-tool`` (the default: a text turn, the sandbox
-    echo call, a final text turn); ``exec-deny`` and ``exec-full`` (a call
+    Scenarios (#137): ``text-tool`` (the default, in one host turn: the
+    sandbox echo call, then a final text turn); ``exec-deny`` and ``exec-full`` (a call
     to the host's own ``exec`` tool that appends one line to the sandbox's
     ``note.txt`` by absolute path, so the host's working directory cannot hide
     a run, then a final text turn), for the host's ``tools.exec.mode`` ``deny``
@@ -538,12 +538,10 @@ def host_report(stdout: str) -> dict | None:
 # The scripted turns of each host scenario (built for its sandbox), and the
 # sandbox lines it must leave.
 HOST_SCENARIOS: dict[str, tuple[Callable[[Path], list], int | None]] = {
+    # One host turn (one `agent exec`): the echo call, then the closing text.
+    # A scripted opening text turn would end that turn before any call (Q8).
     "text-tool": (
-        lambda _sandbox: [
-            text_turn("Hello from RelayMind."),
-            echo_call(),
-            text_turn("The tool said: echo: lantern."),
-        ],
+        lambda _sandbox: [echo_call(), text_turn("The tool said: echo: lantern.")],
         None,
     ),
     "tool-deny": (
