@@ -3367,9 +3367,10 @@ endpoint host, the local model manifest and runtime banner, the task file
 digest, and per arm and language the exact success count over all attempts,
 host failovers, timeouts, host interrupts (exit 130 or SIGINT), errors by
 code, needs_external and context_limit_exceeded runs, local turns with the
-reasons the runs left the local stage, external calls, completion and
-first useful content p50 and p95, and tokens per model with unknown counts
-apart. Chinese rows are best-effort and kept apart. An export marked
+reasons the runs left the local stage, external calls, unexpected host
+tools and proposals (reported, never a failure, so the arms share one
+success rule), completion and first useful content p50 and p95, and
+tokens per model with unknown counts apart. Chinese rows are best-effort and kept apart. An export marked
 aborted (an operator interrupt) is recorded with its slots not run.
 
 Expected at the 8192-token local context, which stays (user decision): 0

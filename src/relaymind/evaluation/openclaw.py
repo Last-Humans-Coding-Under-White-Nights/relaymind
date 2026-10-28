@@ -532,24 +532,33 @@ def grade_attempt(task: Task, attempt: Mapping[str, Any]) -> dict[str, Any]:
     timed_out = host["status"] == "timed_out"
     interrupted = host["exit_code"] in HOST_INTERRUPT_EXITS
     proposals = [e["payload"] for run in runs for e in _events(run, "tool.proposed")]
+    acceptable = [c for group in task.expected_tools for c in group]
+    # The failure rule is the one the host's tool report gets in every arm: each
+    # expected group needs a proposal of one of its tools. Arguments and calls
+    # outside the expected ones are reported, never a failure, because the direct
+    # arm has no gateway trace to hold them against; failing them only in RelayMind
+    # would bias every paired comparison (spec 0.50 section 12.5).
+    proposed = {p["tool_name"] for p in proposals}
+    proposals_missing = relaymind and not all(
+        any(c["tool"] in proposed for c in group) for group in task.expected_tools
+    )
+    unexpected_proposals = [
+        p["tool_name"]
+        for p in proposals
+        if not any(call_matches(c, p["tool_name"], p.get("arguments")) for c in acceptable)
+    ]
+    expected_names = {c["tool"] for c in acceptable}
+    unexpected_host_tools = [t for t in host_tools if t not in expected_names]
     if not relaymind or not task.expected_tools:
         proposals_match = None
     else:
-        acceptable = [c for group in task.expected_tools for c in group]
-        proposals_match = (
-            bool(proposals)
-            and all(
-                any(call_matches(c, p["tool_name"], p.get("arguments")) for c in acceptable)
+        proposals_match = all(
+            any(
+                call_matches(c, p["tool_name"], p.get("arguments"))
+                for c in group
                 for p in proposals
             )
-            and all(
-                any(
-                    call_matches(c, p["tool_name"], p.get("arguments"))
-                    for c in group
-                    for p in proposals
-                )
-                for group in task.expected_tools
-            )
+            for group in task.expected_tools
         )
     executions = sum(len(_events(run, "tool.started")) for run in runs)
 
@@ -580,7 +589,7 @@ def grade_attempt(task: Task, attempt: Mapping[str, Any]) -> dict[str, Any]:
                 failures.append("correlation")
             if executions:
                 failures.append("gateway_tool_execution")
-            if proposals_match is False:
+            if proposals_missing:
                 failures.append("proposals")
 
     states = Counter(run["state"] for run in runs)
@@ -659,6 +668,8 @@ def grade_attempt(task: Task, attempt: Mapping[str, Any]) -> dict[str, Any]:
             {"tool_name": p["tool_name"], "arguments": p.get("arguments")} for p in proposals
         ],
         "proposals_match": proposals_match,
+        "unexpected_proposals": unexpected_proposals if relaymind else None,
+        "unexpected_host_tools": unexpected_host_tools,
         "gateway_tool_executions": executions,
         "tokens": run_tokens(runs) if relaymind else {},
     }
@@ -681,6 +692,13 @@ def _sum(grades: Sequence[Mapping], key: str) -> int | None:
     if any(v is None for v in values):
         return None
     return sum(values)
+
+
+def _count(grades: Sequence[Mapping], key: str) -> int | None:
+    """The total length of a per-attempt list, unknown when an attempt has none."""
+    if any(g[key] is None for g in grades):
+        return None
+    return sum(len(g[key]) for g in grades)
 
 
 def _reasons(grades: Sequence[Mapping]) -> dict[str, int] | None:
@@ -727,6 +745,8 @@ def _language_metrics(grades: Sequence[Mapping], language: str) -> dict[str, Any
         "local_calls": _sum(grades, "local_calls"),
         "external_calls": _sum(grades, "external_calls"),
         "gateway_tool_executions": sum(g["gateway_tool_executions"] for g in grades),
+        "unexpected_proposals": _count(grades, "unexpected_proposals"),
+        "unexpected_host_tools": _count(grades, "unexpected_host_tools"),
         "failures": dict(sorted(Counter(f for g in grades for f in g["failures"]).items())),
         "completion_ms": {
             "all": _distribution([g["completion_ms"] for g in grades]),
@@ -843,18 +863,19 @@ def render_markdown(summary: Mapping[str, Any], *, title: str) -> str:
         "host-reported usage is never added to them. Chinese results are best-effort and "
         "reported apart. 0 local turns is a result, reported with the reasons the runs left "
         "the local stage; a local-inference comparison whose RelayMind arm had no local turn "
-        "compares no local inference.",
+        "compares no local inference. A tool call that matches none of the task's expected "
+        "calls is counted (unexpected host tools in every arm, unexpected proposals in RelayMind), "
+        "never a failure, so both arms of a comparison share one success rule.",
         "",
         "| Arm | Language | Successes | Host failovers | Timeouts | Interrupts | ok but failed "
         "| Gateway runs | Inference attempts | Errors | needs_external | context_limit_exceeded "
-        "| Local turns | External calls | Completion p50/p95 ms (successful) "
-        "| First useful p50/p95 ms (gateway) |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- "
-        "| --- | --- |",
+        "| Local turns | External calls | Unexpected host tools | Unexpected proposals "
+        "| Completion p50/p95 ms (successful) | First useful p50/p95 ms (gateway) |",
+        "|" + " --- |" * 18,
     ]
     for arm, entry in summary["arms"].items():
         if entry["status"] == "not_run":
-            lines.append(f"| {arm} | all | not_run: {entry['reason']} |" + " |" * 13)
+            lines.append(f"| {arm} | all | not_run: {entry['reason']} |" + " |" * 15)
             continue
         for language, m in entry["languages"].items():
             label = f"{language} (best-effort)" if m["best_effort"] else language
@@ -866,6 +887,7 @@ def render_markdown(summary: Mapping[str, Any], *, title: str) -> str:
                 f"| {_cell(m['gateway_runs'])} | {_cell(m['inference_attempts'])} "
                 f"| {_cell(m['errors'])} | {m['needs_external']} | {m['context_limit_exceeded']} "
                 f"| {_cell(m['local_turns'])} | {_cell(m['external_calls'])} "
+                f"| {m['unexpected_host_tools']} | {_cell(m['unexpected_proposals'])} "
                 f"| {_cell(done['p50'])}/{_cell(done['p95'])} (n={done['count']}) "
                 f"| {_cell(first['p50'])}/{_cell(first['p95'])} (n={first['count']}) |"
             )

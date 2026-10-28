@@ -299,17 +299,129 @@ def test_a_gateway_tool_execution_fails_the_attempt():
     assert grade["success"] is False and "gateway_tool_execution" in grade["failures"]
 
 
-def test_a_proposal_with_other_arguments_is_recorded_as_a_mismatch():
+def test_a_proposal_with_other_arguments_is_reported_the_same_way_in_both_arms():
+    """Spec 0.50 section 12.5 (RM25, RM33; AC24): the arguments are reported, not graded.
+
+    Under the deny policy the host refuses the call whatever its command, and the
+    direct arm's host report names only the tool. A RelayMind arm whose model ran
+    another command grades the same as the direct arm; its mismatch is reported.
+    """
+    runs = [tool_run("run_a", "exec", {"command": "ls"}), text_run("run_b")]
+    host = {"tools": ["exec"], "failures": 1}
+    relaymind = grade_attempt(
+        EXEC_DENY, attempt(EXEC_DENY, host=report(EXEC_DENY, **host), runs=runs)
+    )
+    direct = grade_attempt(
+        EXEC_DENY,
+        attempt(
+            EXEC_DENY,
+            "direct",
+            host=report(EXEC_DENY, **host, **DIRECT),
+            runs=[],
+            diagnostics=[],
+            window=[],
+        ),
+    )
+    assert relaymind["success"] is direct["success"] is True, relaymind["failures"]
+    assert relaymind["proposals_match"] is False
+    assert relaymind["unexpected_proposals"] == ["exec"]
+    assert direct["proposals_match"] is None
+
+
+def test_an_expected_tool_without_a_gateway_proposal_fails_a_relaymind_arm():
+    """The host reports a call no gateway run of the attempt proposed: not RelayMind's call."""
+    grade = grade_attempt(
+        READ,
+        attempt(READ, host=report(READ, tools=["read"]), runs=[text_run("run_a")]),
+    )
+    assert grade["proposals_match"] is False
+    assert grade["success"] is False and grade["failures"] == ["proposals"]
+
+
+WRITE = task("host_tool", tool="write")
+
+
+def write_sandbox():
+    return {**WRITE.sandbox, "done.txt": "ready\n"}
+
+
+def test_an_extra_proposal_is_reported_not_failed_the_same_way_in_both_arms():
+    """Spec 0.50 section 12.5 (RM25, RM33; AC24): extra calls never bias the comparison.
+
+    A model that looks around with ``read`` before it calls ``write`` completes the
+    task. The direct arm has no gateway trace to hold the extra call against, so a
+    RelayMind arm is not failed for it either: both arms grade the same, and the
+    extra call is reported, as a host tool in both arms and as a proposal in RelayMind.
+    """
+    host = {"tools": ["read", "write"], "final": "done"}
+    relaymind = grade_attempt(
+        WRITE,
+        attempt(
+            WRITE,
+            "relaymind_external_only",
+            host=report(WRITE, **host),
+            runs=[
+                tool_run("run_a", "read", {"path": "done.txt"}),
+                tool_run("run_b", "write", {"path": "done.txt", "content": "ready"}),
+                text_run("run_c"),
+            ],
+            sandbox=write_sandbox(),
+        ),
+    )
+    direct = grade_attempt(
+        WRITE,
+        attempt(
+            WRITE,
+            "direct",
+            host=report(WRITE, **host, **DIRECT),
+            runs=[],
+            diagnostics=[],
+            window=[],
+            sandbox=write_sandbox(),
+        ),
+    )
+    assert relaymind["success"] is True, relaymind["failures"]
+    assert direct["success"] is True, direct["failures"]
+    assert relaymind["failures"] == direct["failures"] == []
+    assert relaymind["proposals_match"] is True
+    assert relaymind["unexpected_proposals"] == ["read"]
+    assert direct["unexpected_proposals"] is None
+    assert relaymind["unexpected_host_tools"] == direct["unexpected_host_tools"] == ["read"]
+
+
+def test_a_retry_after_a_mismatching_proposal_completes_the_group():
+    """A wrong path then the right one: the group has its call, the first is reported."""
     grade = grade_attempt(
         READ,
         attempt(
             READ,
             host=report(READ, tools=["read"]),
-            runs=[tool_run("run_a", "read", {"path": "other.txt"}), text_run("run_b")],
+            runs=[
+                tool_run("run_a", "read", {"path": "other.txt"}),
+                tool_run("run_b", "read", {"path": "notes.txt"}, proposal="call_2"),
+                text_run("run_c"),
+            ],
         ),
     )
-    assert grade["proposals_match"] is False
-    assert "proposals" in grade["failures"]
+    assert grade["success"] is True, grade["failures"]
+    assert grade["proposals_match"] is True
+    assert grade["unexpected_proposals"] == ["read"]
+    assert grade["unexpected_host_tools"] == []
+
+
+def test_a_proposal_on_a_text_task_is_reported_as_unexpected():
+    grade = grade_attempt(
+        TEXT,
+        attempt(
+            TEXT,
+            host=report(TEXT, tools=["ls"]),
+            runs=[tool_run("run_a", "ls", {"path": "."}), text_run("run_b")],
+        ),
+    )
+    assert grade["success"] is True, grade["failures"]
+    assert grade["proposals_match"] is None
+    assert grade["unexpected_proposals"] == ["ls"]
+    assert grade["unexpected_host_tools"] == ["ls"]
 
 
 def test_a_host_failover_is_counted_apart_and_never_an_arm_success():
@@ -615,6 +727,49 @@ def test_the_markdown_report_states_its_limits_and_counts():
     assert "host failover" in text.lower()
     assert "best-effort" in text
     assert "never" in text  # the clocks are never subtracted, ok is never success
+
+
+def test_the_summary_and_report_count_unexpected_calls_in_both_arms():
+    """Spec 0.50 section 12.5: extra calls are counted per arm, never hidden in a failure."""
+    host = {"tools": ["read", "write"], "final": "done"}
+    grades = [
+        grade_attempt(
+            WRITE,
+            attempt(
+                WRITE,
+                "relaymind_external_only",
+                host=report(WRITE, **host),
+                runs=[
+                    tool_run("run_a", "read", {"path": "done.txt"}),
+                    tool_run("run_b", "write", {"path": "done.txt"}, proposal="call_2"),
+                ],
+                sandbox=write_sandbox(),
+            ),
+        ),
+        grade_attempt(
+            WRITE,
+            attempt(
+                WRITE,
+                "direct",
+                host=report(WRITE, **host, **DIRECT),
+                runs=[],
+                diagnostics=[],
+                window=[],
+                sandbox=write_sandbox(),
+            ),
+        ),
+    ]
+    summary = summarize(grades, arms=("direct", "relaymind_external_only"))
+    relay = summary["arms"]["relaymind_external_only"]["languages"]["en"]
+    direct = summary["arms"]["direct"]["languages"]["en"]
+    assert relay["successes"] == direct["successes"] == 1
+    assert relay["unexpected_proposals"] == 1
+    assert direct["unexpected_proposals"] is None
+    assert relay["unexpected_host_tools"] == direct["unexpected_host_tools"] == 1
+    assert summary["comparisons"]["integration_overhead"]["languages"]["en"]["pairs"] == 1
+    text = render_markdown(summary, title="OpenClaw evaluation")
+    assert "Unexpected host tools" in text and "Unexpected proposals" in text
+    assert "| direct | en | 1/1 |" in text
 
 
 # -- the local stage at the 8192-token local context (D1; macOS qualification Q1, Q2) ---

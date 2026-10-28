@@ -1482,11 +1482,14 @@ the measurement has run.
   failed tool is not a success (and is counted as ok but failed); a proposed
   call the host did not run is not a completed task; a denied exec passes
   only when nothing was written; a gateway tool execution, an uncorrelated
-  run, a mismatched proposal, a timeout, and exit 130 or death by SIGINT
+  run, an expected tool no gateway run proposed, a timeout, and exit 130 or death by SIGINT
   (a host interrupt, with its own failure label apart from other exit
   statuses) fail or are counted; a host failover is counted apart and never an arm
   success, and a host error report that names no provider or model is a
-  failed attempt, not a failover; a completed run with no external call
+  failed attempt, not a failover; a proposal with other arguments, an extra
+  call before the expected one, and a call on a text task are reported as
+  unexpected (host tools in both arms, proposals in RelayMind) and grade the
+  same in a RelayMind arm and in direct; a completed run with no external call
   (also one with no model call) is a local turn; first useful content comes only from an answer or a proposal in
   the trace, never from a header or keep-alive; the direct arm has unknown
   gateway measures and keeps the host's statements; retries and failed

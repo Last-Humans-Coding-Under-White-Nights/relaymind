@@ -286,7 +286,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   calls, the sandbox, and the gateway trace, never on the host's `"ok"`; a
   host failover is counted apart, and only a reported provider or model
   other than the arm's is one (an error report naming neither is a failed
-  attempt); `relaymind_auto` needs the external model and a local model,
+  attempt); both arms of a paired comparison share one success rule, so
+  a call's arguments and a call outside the expected ones are reported
+  (unexpected host tools in every arm, unexpected proposals in RelayMind),
+  never a failure; `relaymind_auto` needs the external model and a local model,
   and is not_run without either; a host tool call is graded from the host's
   tool report and the sandbox, never by comparing call IDs (the trace holds
   no host result); the report gives exact counts per arm and language, the
