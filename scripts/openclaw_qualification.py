@@ -266,9 +266,18 @@ def node_binary() -> str:
     return node
 
 
+# The gated double's fixed token count (build_gateway's default double uses the same).
+GATED_INPUT_TOKENS = 800
+
+
 def _gated_gateway(work: Path, turns: list):
-    """A gateway whose local model holds every generation open until cancelled."""
-    adapter = GatedAdapter(turns=turns)
+    """A gateway whose local model holds every generation open until cancelled.
+
+    The double's count is fixed, as for the default double of build_gateway:
+    counted by character, the real host's request (a system prompt of about
+    30,000 characters) fit neither model and failed before any generation.
+    """
+    adapter = GatedAdapter(turns=turns, input_tokens=GATED_INPUT_TOKENS)
     gateway = build_gateway(
         work,
         None,

@@ -662,3 +662,33 @@ def test_the_abort_scenario_reads_a_verbose_host_output_while_it_waits(tmp_path)
     assert export["checks"]["signal_sent"] is True
     assert export["checks"]["passed"] is True
     assert export["stderr"].endswith("log line\n")
+
+
+# A host request the size of the pinned host's: a system prompt of about 30,000
+# characters (macOS probe, fact 5) and 56 KB on the wire in the Linux VPS check.
+# The doubles count one unit per character unless their count is fixed.
+STUB_LARGE_INTERRUPTED_HOST = STUB_INTERRUPTED_HOST.replace(
+    '"messages": [{"role": "user", "content": "Hi"}]',
+    '"messages": [{"role": "system", "content": "x" * 40000}, {"role": "user", "content": "Hi"}]',
+)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stub host handles POSIX SIGINT")
+def test_the_abort_scenario_holds_a_host_sized_request_in_the_local_generation(tmp_path):
+    """RM14, AC12: the real host's request must reach the held generation to be aborted.
+
+    In the Linux VPS functional check the gated double counted the host's
+    request by character, so it fit neither model's limit and the run failed
+    with context_limit_exceeded before any generation started.
+    """
+    assert '"x" * 40000' in STUB_LARGE_INTERRUPTED_HOST
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_LARGE_INTERRUPTED_HOST],
+        tmp_path / "export.json",
+        scenario="abort",
+        timeout=30,
+    )
+    assert export["status"] == "interrupted", export["stderr"][-500:]
+    (run,) = export["runs"]
+    assert run["state"] == "cancelled"
+    assert export["checks"]["passed"] is True
