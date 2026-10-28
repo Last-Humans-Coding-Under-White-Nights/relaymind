@@ -32,7 +32,8 @@ What has run on a real host, and what has not (details in
 the whole install check of the release artifact
 (`scripts/openclaw_install_check.py`) passed against the pinned host on a
 Linux VPS, as a functional check over gateway doubles, not a
-supported-platform qualification. macOS and Windows runs of this revision
+supported-platform qualification
+([`docs/evidence/2026-10-28-openclaw-vps-functional-145/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-145/REPORT.md)). macOS and Windows runs of this revision
 are `not_run`; the CI job runs the same check on GitHub's runners.
 
 What the plugin claims, and nothing more: text input; at most one function
@@ -84,7 +85,12 @@ baseline are in
 
 RM12, RM18, RM19, RM33; AC24; spec sections 7.5, 12.5, and 14. The steps use
 the command forms the pinned host (OpenClaw 2026.10.7) accepted on the macOS
-qualification and in the Linux VPS install check; the sections after this one
+qualification at `a52f8bf` (its install, enable, refresh, and uninstall
+corrections, and what uninstall leaves behind) and in the Linux VPS install
+check of the release artifact, a Linux VPS functional check (not a
+supported-platform qualification) over model doubles
+([`docs/evidence/2026-10-28-openclaw-vps-functional-145/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-145/REPORT.md)).
+This revision on macOS and Windows is `not_run`. The sections after this one
 hold the details. OpenClaw owns its sessions, tools, permissions, and
 approvals; RelayMind owns the inference, its checks, and its run trace.
 
@@ -149,9 +155,11 @@ openclaw plugins inspect relaymind --runtime --json   # status loaded, providerI
 ```
 
 Without `--accept-capabilities` the host refuses a local package (exit 1).
-It installs the plugin disabled until it is configured, so `plugins enable`
-is needed. Other settings (`executionMode`, `limits`, `maxRetries`,
-`diagnosticsPath`) are in "Configuration" below. A value outside the
+It installs the plugin disabled until it is configured, so the explicit
+`plugins enable` is needed (the host warns "plugin disabled ... but config is
+present" at the `config set` before it; that is expected). Other settings
+(`executionMode`, `limits`, `maxRetries`, `diagnosticsPath`) are in
+"Configuration" below. A value outside the
 schema is refused by the host before the plugin runs (for example
 `executionMode: parallel_demo`); a non-loopback `baseUrl` is refused by the
 plugin at register (`plugins inspect` shows `status: error` with the reason).
@@ -169,7 +177,11 @@ token at every start, so after a restart the stored one is stale. Requests
 and discovery then fail with 401 `unauthenticated` and the reconnect line
 ("Token handover and reconnect" below). Store the new token the same way.
 That is the rotation: there is no other token to rotate. `models list` needs
-`--refresh` when no OpenClaw Gateway is running.
+`--refresh` when no OpenClaw Gateway is running: without it the host shows
+its cached catalog, which does not hold the alias yet. `paste-api-key` warns
+that "the local Gateway could not refresh" the change when no OpenClaw
+Gateway runs; the stored token is still used. To refresh the catalog after
+storing a new token, run the same `models list --refresh` again.
 
 ### 6. Select the model
 
@@ -244,18 +256,24 @@ either is gone.
 
 ```bash
 openclaw plugins disable relaymind                  # keeps the install, config, and token
+# without a terminal, uninstall asks for confirmation and exits 1; --force skips it
 openclaw plugins uninstall relaymind --force
 openclaw config unset plugins.entries.relaymind     # uninstall leaves {"enabled": false}
-openclaw models auth logout relaymind:manual --yes  # uninstall leaves the stored token
+openclaw models auth logout relaymind:manual --yes  # uninstall leaves the profile and the stored token
+openclaw models auth list                           # relaymind:manual is gone
 ```
 
 Uninstall removes the package, its install record, and its directory. On
-the pinned host it leaves the config entry and the `relaymind:manual` auth
-profile, and the token stays in the host's state database. The last two
-commands remove them. The install check verifies that afterwards no config
-entry, no profile, and no copy of the token remain in the host home. The
-host's `openclaw.json.bak*` backups hold no token. On the macOS probe an
-earlier install's folders were also left; remove them by hand if
+the pinned host it leaves the config entry `plugins.entries.relaymind:
+{"enabled": false}` and the `relaymind:manual` auth profile, and the live
+gateway token stays in the host's state database (macOS qualification, and
+every Linux VPS functional check). `config unset` and `models auth logout`
+remove them. Without them a token that still works stays on disk until the
+gateway restarts (the gateway makes a new token at every start). The install
+check verifies that afterwards no config entry, no profile, and no copy of
+the token remain in the host home. The host's `openclaw.json.bak*` backups
+hold no token. On the macOS probe an earlier install's folders were also
+left (the macOS qualification left none); remove them by hand if
 `plugins list` no longer shows the plugin.
 
 ### 12. What the integration does not do
@@ -742,8 +760,8 @@ openclaw config unset plugins.entries.relaymind
 
 After these two commands no file under the isolated host home held the
 token (Linux VPS functional check). The host also leaves `config.json.bak*`
-files from each config change; they did not hold the token. The full
-operator guide is #145.
+files from each config change; they did not hold the token. The operator
+guide's step 11 gives the same removal.
 
 ### Install check: the release artifact through a real host
 
