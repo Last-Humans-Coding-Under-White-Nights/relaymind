@@ -126,7 +126,8 @@ def test_the_command_forms_behaved_as_the_readme_says():
     assert s["uninstall host tools without --force"]["exit_code"] == 1
     assert s["uninstall host tools --force"]["exit_code"] == 0
     readme = README.read_text("utf-8")
-    assert "plugins install integrations/openclaw/test/host-tool-plugin --force --accept-capabilities" in readme
+    install = "plugins install integrations/openclaw/test/host-tool-plugin"
+    assert f"{install} --force --accept-capabilities" in readme
     assert "openclaw plugins uninstall relaymind-test-host-tools --force" in readme
     assert "tools.alsoAllow" in readme
     assert "tools.toolSearch false" in readme
