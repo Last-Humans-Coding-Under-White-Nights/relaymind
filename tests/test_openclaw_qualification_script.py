@@ -692,3 +692,94 @@ def test_the_abort_scenario_holds_a_host_sized_request_in_the_local_generation(t
     (run,) = export["runs"]
     assert run["state"] == "cancelled"
     assert export["checks"]["passed"] is True
+
+
+# -- the host error scenario (#138; RM16, RM33, AC24, section 11) --------------------------
+
+# A stand-in for a host that reports a gateway error the way the plugin's message
+# does: "RelayMind <code> (HTTP <status>): ... Gateway run <id>, ..." (errors.ts).
+# With "silent" it prints nothing about the error.
+STUB_ERROR_HOST = """
+import json, os, sys, urllib.error, urllib.request
+base = os.environ["RELAYMIND_BASE_URL"]
+token = os.environ["RELAYMIND_APP_TOKEN"]
+echo = {"type": "function", "function": {"name": "relaymind_test_echo", "parameters": {
+    "type": "object", "properties": {}}}}
+body = {"model": "relaymind-client-tools", "tools": [echo],
+        "messages": [{"role": "system", "content": "x" * 40000},
+                     {"role": "user", "content": "Say hello."}]}
+request = urllib.request.Request(
+    base + "/chat/completions", data=json.dumps(body).encode(), method="POST",
+    headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+try:
+    opener.open(request).read()
+except urllib.error.HTTPError as error:
+    detail = json.loads(error.read())["error"]
+    if sys.argv[1:] != ["silent"]:
+        sys.stderr.write(f"RelayMind {detail['code']} (HTTP {error.code}): failed. "
+                         f"Gateway run {detail['run_id']}, reason {detail['reason_code']}.\\n")
+    print(json.dumps({"ok": False, "status": "error"}))
+    raise SystemExit(1)
+print(json.dumps({"ok": True}))
+"""
+
+
+def test_the_external_failed_scenario_checks_the_failed_run_and_the_host_message(tmp_path):
+    """RM16, AC24, section 11: both models fail, the host gets 503 external_failed,
+    and the message it shows names the gateway's failed run."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_ERROR_HOST],
+        tmp_path / "export.json",
+        scenario="external-failed",
+        timeout=30,
+    )
+    assert export["status"] == "failed", export["stderr"][-500:]
+    assert export["exit_code"] == 1
+    check = export["checks"]
+    (run,) = export["runs"]
+    assert run["state"] == "failed"
+    assert check["failed_runs"] == [
+        {"run_id": run["run_id"], "error_code": "external_failed", "reason_code": "invalid_output"}
+    ]
+    assert check["expected"] == {"code": "external_failed", "status": 503}
+    assert check["host_message"] is True
+    assert check["named_runs"] == [run["run_id"]]
+    assert check["answer_deltas"] == 0
+    assert check["gateway_tool_executions"] == 0
+    assert check["host_report"]["ok"] is False
+    assert check["passed"] is True
+
+
+def test_an_external_failed_scenario_without_the_host_message_does_not_pass(tmp_path):
+    """The run failed, but the host never showed the plugin's named failure."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_ERROR_HOST, "silent"],
+        tmp_path / "export.json",
+        scenario="external-failed",
+        timeout=30,
+    )
+    assert export["runs"][0]["state"] == "failed"
+    assert export["checks"]["host_message"] is False
+    assert export["checks"]["named_runs"] == []
+    assert export["checks"]["passed"] is False
+
+
+def test_an_external_failed_scenario_whose_host_answered_does_not_pass(tmp_path):
+    """A host that got no error (here: no request at all) shows no failed run."""
+    export = qualification.run_host(
+        [sys.executable, "-c", "print('{}')"], tmp_path / "export.json", scenario="external-failed"
+    )
+    assert export["runs"] == []
+    assert export["checks"]["passed"] is False
+
+
+def test_the_main_entry_accepts_a_failed_host_for_the_error_scenario(tmp_path, monkeypatch):
+    """The host's exit status is recorded, not judged: an error scenario's host fails."""
+
+    def fake_run_host(command, out, *, timeout, scenario):
+        return {"status": "failed", "runs": [{}], "checks": {"passed": True}}
+
+    monkeypatch.setattr(qualification, "run_host", fake_run_host)
+    argv = ["host", "--out", str(tmp_path / "x.json"), "--scenario", "external-failed"]
+    assert qualification.main([*argv, "--", "true"]) == 0
