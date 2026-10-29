@@ -1,0 +1,577 @@
+[
+  {
+    "name": "npm run build",
+    "wire_exchanges": [
+      0,
+      0
+    ],
+    "argv": [
+      "npm",
+      "run",
+      "build"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 1.45,
+    "stdout": "\n> @relaymind/openclaw-provider@0.1.0 build\n> node scripts/clean-dist.mjs && tsc -p tsconfig.build.json\n\n",
+    "stderr": ""
+  },
+  {
+    "name": "npm pack",
+    "wire_exchanges": [
+      0,
+      0
+    ],
+    "argv": [
+      "npm",
+      "pack",
+      "--json",
+      "--pack-destination",
+      "<scratch>/pack"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 1.1,
+    "stdout": "[\n  {\n    \"id\": \"@relaymind/openclaw-provider@0.1.0\",\n    \"name\": \"@relaymind/openclaw-provider\",\n    \"version\": \"0.1.0\",\n    \"size\": 15560,\n    \"unpackedSize\": 48746,\n    \"shasum\": \"943f60d943bdd8178a3febb89027043454f73998\",\n    \"integrity\": \"sha512-Aopc6u0Nk9ouRdgvGk3dM+IzjnDev2smvMwNfTjcAjHKQ2q+sYucU00+DLz+nOFj9feYgQj+j9/J0lWqUpEI0Q==\",\n    \"filename\": \"relaymind-openclaw-provider-0.1.0.tgz\",\n    \"files\": [\n      {\n        \"path\": \"README.md\",\n        \"size\": 18305,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/catalog.js\",\n        \"size\": 10133,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/compat.js\",\n        \"size\": 3191,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/config.js\",\n        \"size\": 4893,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/diagnostics.js\",\n        \"size\": 2531,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/index.js\",\n        \"size\": 1122,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/provider.js\",\n        \"size\": 3689,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"dist/redaction.js\",\n        \"size\": 1103,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"openclaw.plugin.json\",\n        \"size\": 2609,\n        \"mode\": 420\n      },\n      {\n        \"path\": \"package.json\",\n        \"size\": 1170,\n        \"mode\": 420\n      }\n    ],\n    \"entryCount\": 10,\n    \"bundled\": []\n  }\n]\n",
+    "stderr": ""
+  },
+  {
+    "name": "install without --accept-capabilities",
+    "wire_exchanges": [
+      0,
+      0
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "install",
+      "npm-pack:<scratch>/pack/relaymind-openclaw-provider-0.1.0.tgz",
+      "--force"
+    ],
+    "stdin": null,
+    "exit_code": 1,
+    "seconds": 24.58,
+    "stdout": "WARNING - Installing plugin from local npm-pack archive: npm-pack:<scratch>/pack/relaymind-openclaw-provider-0.1.0.tgz\nThis source is outside ClawHub review and trust metadata. Only continue if you trust the publisher, package contents, and install source.\nInstalling to <scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1\u2026\nInstalling <scratch>/pack/relaymind-openclaw-provider-0.1.0.tgz into <scratch>/home/state/npm/projects/.openclaw-install-stage-Ad9Qrw\u2026\nLinked peerDependency \"openclaw\" -> <repo>/integrations/openclaw/node_modules/openclaw\nPlugin manifest id \"relaymind\" differs from npm package name \"@relaymind/openclaw-provider\"; using manifest id as the config key.\n",
+    "stderr": "Plugin \"relaymind\" requires capability consent. The plugin was not installed. Re-run the same \"openclaw plugins install\" or \"openclaw plugins update\" command with --accept-capabilities, keeping its source and other options. For Doctor or setup, complete the plugin command first, then retry Doctor or setup.\n",
+    "expected_exit": 1
+  },
+  {
+    "name": "install",
+    "wire_exchanges": [
+      0,
+      0
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "install",
+      "npm-pack:<scratch>/pack/relaymind-openclaw-provider-0.1.0.tgz",
+      "--force",
+      "--accept-capabilities"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 23.83,
+    "stdout": "WARNING - Installing plugin from local npm-pack archive: npm-pack:<scratch>/pack/relaymind-openclaw-provider-0.1.0.tgz\nThis source is outside ClawHub review and trust metadata. Only continue if you trust the publisher, package contents, and install source.\nInstalling to <scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1\u2026\nInstalling <scratch>/pack/relaymind-openclaw-provider-0.1.0.tgz into <scratch>/home/state/npm/projects/.openclaw-install-stage-1rNiRm\u2026\nLinked peerDependency \"openclaw\" -> <repo>/integrations/openclaw/node_modules/openclaw\nPlugin manifest id \"relaymind\" differs from npm package name \"@relaymind/openclaw-provider\"; using manifest id as the config key.\nInstalled plugin \"relaymind\" without enabling it because it requires configuration first. Configure it, then run `openclaw plugins enable relaymind`.\nInstalled plugin: relaymind\nSaved for the next Gateway start.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "config set baseUrl",
+    "wire_exchanges": [
+      0,
+      0
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "config",
+      "set",
+      "plugins.entries.relaymind.config.baseUrl",
+      "http://127.0.0.1:<port>/v1"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 7.63,
+    "stdout": "Updated plugins.entries.relaymind.config.baseUrl. Change will apply without restarting the gateway.\n",
+    "stderr": "Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "inspect before enable",
+    "wire_exchanges": [
+      0,
+      0
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "inspect",
+      "relaymind",
+      "--runtime",
+      "--json"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 5.4,
+    "stdout": "{\n  \"workspaceDir\": \"<scratch>/home/state/workspace\",\n  \"plugin\": {\n    \"id\": \"relaymind\",\n    \"name\": \"RelayMind\",\n    \"description\": \"RelayMind local gateway as an OpenClaw model provider: the client-owned alias relaymind-client-tools over the loopback chat API; OpenClaw keeps its sessions, tools, and approvals.\",\n    \"packageVersion\": \"0.1.0\",\n    \"version\": \"0.1.0\",\n    \"builtWithOpenClawVersion\": \"2026.10.7\",\n    \"packageName\": \"@relaymind/openclaw-provider\",\n    \"format\": \"openclaw\",\n    \"source\": \"<scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider/dist/index.js\",\n    \"rootDir\": \"<scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider\",\n    \"origin\": \"global\",\n    \"workspaceDir\": \"<scratch>/home/state/workspace\",\n    \"trust\": {\n      \"reason\": \"origin-path\",\n      \"registryPath\": \"<scratch>/home/state/state/openclaw.sqlite\",\n      \"origin\": \"global\",\n      \"installSource\": \"npm\",\n      \"installSpec\": \"@relaymind/openclaw-provider@0.1.0\"\n    },\n    \"enabled\": false,\n    \"compat\": [],\n    \"explicitlyEnabled\": false,\n    \"activated\": false,\n    \"activationSource\": \"disabled\",\n    \"activationReason\": \"disabled in config\",\n    \"syntheticAuthRefs\": [],\n    \"status\": \"disabled\",\n    \"toolNames\": [],\n    \"hookNames\": [],\n    \"channelIds\": [],\n    \"cliBackendIds\": [],\n    \"providerIds\": [\n      \"relaymind\"\n    ],\n    \"embeddingProviderIds\": [],\n    \"speechProviderIds\": [],\n    \"realtimeTranscriptionProviderIds\": [],\n    \"realtimeVoiceProviderIds\": [],\n    \"mediaUnderstandingProviderIds\": [],\n    \"transcriptSourceProviderIds\": [],\n    \"imageGenerationProviderIds\": [],\n    \"videoGenerationProviderIds\": [],\n    \"musicGenerationProviderIds\": [],\n    \"webFetchProviderIds\": [],\n    \"webSearchProviderIds\": [],\n    \"migrationProviderIds\": [],\n    \"contextEngineIds\": [],\n    \"agentHarnessIds\": [],\n    \"cliCommands\": [],\n    \"services\": [],\n    \"gatewayDiscoveryServiceIds\": [],\n    \"commands\": [],\n    \"httpRoutes\": 0,\n    \"hookCount\": 0,\n    \"configSchema\": true,\n    \"configJsonSchema\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"required\": [\n        \"baseUrl\"\n      ],\n      \"properties\": {\n        \"baseUrl\": {\n          \"type\": \"string\",\n          \"description\": \"The gateway's loopback /v1 URL, such as http://127.0.0.1:8080/v1 (localhost, 127.0.0.0/8, or [::1] only).\"\n        },\n        \"executionMode\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"auto\",\n            \"local_only\",\n            \"external_only\"\n          ],\n          \"default\": \"auto\",\n          \"description\": \"Sent as X-RelayMind-Execution-Mode on every request. parallel_demo is not a mode of this alias.\"\n        },\n        \"limits\": {\n          \"type\": \"object\",\n          \"additionalProperties\": false,\n          \"description\": \"Copies of the gateway's configured limits; a limit not set is not advertised.\",\n          \"properties\": {\n            \"externalContextLimit\": {\n              \"type\": \"integer\",\n              \"minimum\": 1,\n              \"description\": \"external_model.context_limit of the gateway's launch file; the window advertised in auto and external_only.\"\n            },\n            \"localContextLimit\": {\n              \"type\": \"integer\",\n              \"minimum\": 1,\n              \"description\": \"The local context of the pinned model manifest's launch settings; the window advertised in local_only.\"\n            },\n            \"maxCompletionTokens\": {\n              \"type\": \"integer\",\n              \"minimum\": 1,\n              \"description\": \"chat.max_completion_tokens of the gateway's launch file; the advertised output limit.\"\n            }\n          }\n        }\n      }\n    },\n    \"error\": \"disabled in config\",\n    \"imported\": false,\n    \"dependencyStatus\": {\n      \"hasDependencies\": false,\n      \"installed\": true,\n      \"requiredInstalled\": true,\n      \"optionalInstalled\": true,\n      \"missing\": [],\n      \"missingOptional\": [],\n      \"dependencies\": [],\n      \"optionalDependencies\": []\n    }\n  },\n  \"shape\": \"plain-capability\",\n  \"capabilityMode\": \"plain\",\n  \"capabilityCount\": 1,\n  \"capabilities\": [\n    {\n      \"kind\": \"text-inference\",\n      \"ids\": [\n        \"relaymind\"\n      ]\n    }\n  ],\n  \"typedHooks\": [],\n  \"customHooks\": [],\n  \"tools\": [],\n  \"commands\": [],\n  \"cliCommands\": [],\n  \"services\": [],\n  \"decisions\": [],\n  \"gatewayDiscoveryServices\": [],\n  \"gatewayMethods\": [],\n  \"mcpServers\": [],\n  \"lspServers\": [],\n  \"httpRouteCount\": 0,\n  \"bundleCapabilities\": [],\n  \"diagnostics\": [],\n  \"policy\": {\n    \"allowedModels\": [],\n    \"hasAllowedModelsConfig\": false\n  },\n  \"compatibility\": [],\n  \"install\": {\n    \"source\": \"npm\",\n    \"spec\": \"@relaymind/openclaw-provider@0.1.0\",\n    \"sourcePath\": \"<scratch>/pack/relaymind-openclaw-provider-0.1.0.tgz\",\n    \"installPath\": \"<scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider\",\n    \"version\": \"0.1.0\",\n    \"resolvedName\": \"@relaymind/openclaw-provider\",\n    \"resolvedVersion\": \"0.1.0\",\n    \"resolvedSpec\": \"@relaymind/openclaw-provider@0.1.0\",\n    \"integrity\": \"sha512-Aopc6u0Nk9ouRdgvGk3dM+IzjnDev2smvMwNfTjcAjHKQ2q+sYucU00+DLz+nOFj9feYgQj+j9/J0lWqUpEI0Q==\",\n    \"shasum\": \"943f60d943bdd8178a3febb89027043454f73998\",\n    \"resolvedAt\": \"2026-10-28T01:01:35.782Z\",\n    \"installedAt\": \"2026-10-28T01:01:51.402Z\",\n    \"artifactKind\": \"npm-pack\",\n    \"artifactFormat\": \"tgz\",\n    \"npmIntegrity\": \"sha512-Aopc6u0Nk9ouRdgvGk3dM+IzjnDev2smvMwNfTjcAjHKQ2q+sYucU00+DLz+nOFj9feYgQj+j9/J0lWqUpEI0Q==\",\n    \"npmShasum\": \"943f60d943bdd8178a3febb89027043454f73998\",\n    \"npmTarballName\": \"relaymind-openclaw-provider-0.1.0.tgz\",\n    \"acceptedSurface\": {\n      \"channels\": [],\n      \"providers\": [\n        \"relaymind\"\n      ],\n      \"tools\": [],\n      \"contracts\": [],\n      \"hooks\": [],\n      \"mcpServers\": [],\n      \"cliCommands\": [],\n      \"cliBackends\": [],\n      \"skills\": [],\n      \"dangerousConfigFlags\": []\n    },\n    \"acceptedSurfaceHash\": \"d0b287698c3b4c4a5272c29b514431ff392e1940a8c1c1252466888420e1669d\",\n    \"acceptedSurfaceAt\": \"2026-10-28T01:01:51.399Z\",\n    \"acceptedSurfaceIntegrity\": \"sha512-Aopc6u0Nk9ouRdgvGk3dM+IzjnDev2smvMwNfTjcAjHKQ2q+sYucU00+DLz+nOFj9feYgQj+j9/J0lWqUpEI0Q==\"\n  }\n}\n",
+    "stderr": ""
+  },
+  {
+    "name": "enable",
+    "wire_exchanges": [
+      0,
+      0
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "enable",
+      "relaymind"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 7.83,
+    "stdout": "Enabled plugin \"relaymind\". Saved for the next Gateway start.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "inspect",
+    "wire_exchanges": [
+      0,
+      0
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "inspect",
+      "relaymind",
+      "--runtime",
+      "--json"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 6.77,
+    "stdout": "{\n  \"workspaceDir\": \"<scratch>/home/state/workspace\",\n  \"plugin\": {\n    \"id\": \"relaymind\",\n    \"name\": \"RelayMind\",\n    \"description\": \"RelayMind local gateway as an OpenClaw model provider (relaymind-client-tools; OpenClaw keeps its tools)\",\n    \"packageVersion\": \"0.1.0\",\n    \"version\": \"0.1.0\",\n    \"builtWithOpenClawVersion\": \"2026.10.7\",\n    \"packageName\": \"@relaymind/openclaw-provider\",\n    \"format\": \"openclaw\",\n    \"source\": \"<scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider/dist/index.js\",\n    \"rootDir\": \"<scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider\",\n    \"origin\": \"global\",\n    \"workspaceDir\": \"<scratch>/home/state/workspace\",\n    \"trust\": {\n      \"reason\": \"origin-path\",\n      \"registryPath\": \"<scratch>/home/state/state/openclaw.sqlite\",\n      \"origin\": \"global\",\n      \"installSource\": \"npm\",\n      \"installSpec\": \"@relaymind/openclaw-provider@0.1.0\"\n    },\n    \"enabled\": true,\n    \"compat\": [],\n    \"explicitlyEnabled\": true,\n    \"activated\": true,\n    \"activationSource\": \"explicit\",\n    \"activationReason\": \"enabled in config\",\n    \"syntheticAuthRefs\": [],\n    \"status\": \"loaded\",\n    \"toolNames\": [],\n    \"hookNames\": [],\n    \"channelIds\": [],\n    \"cliBackendIds\": [],\n    \"providerIds\": [\n      \"relaymind\"\n    ],\n    \"embeddingProviderIds\": [],\n    \"speechProviderIds\": [],\n    \"realtimeTranscriptionProviderIds\": [],\n    \"realtimeVoiceProviderIds\": [],\n    \"mediaUnderstandingProviderIds\": [],\n    \"transcriptSourceProviderIds\": [],\n    \"imageGenerationProviderIds\": [],\n    \"videoGenerationProviderIds\": [],\n    \"musicGenerationProviderIds\": [],\n    \"webFetchProviderIds\": [],\n    \"webSearchProviderIds\": [],\n    \"migrationProviderIds\": [],\n    \"contextEngineIds\": [],\n    \"agentHarnessIds\": [],\n    \"cliCommands\": [],\n    \"services\": [],\n    \"gatewayDiscoveryServiceIds\": [],\n    \"commands\": [],\n    \"httpRoutes\": 0,\n    \"hookCount\": 0,\n    \"configSchema\": true,\n    \"configJsonSchema\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"required\": [\n        \"baseUrl\"\n      ],\n      \"properties\": {\n        \"baseUrl\": {\n          \"type\": \"string\",\n          \"description\": \"The gateway's loopback /v1 URL, such as http://127.0.0.1:8080/v1 (localhost, 127.0.0.0/8, or [::1] only).\"\n        },\n        \"executionMode\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"auto\",\n            \"local_only\",\n            \"external_only\"\n          ],\n          \"default\": \"auto\",\n          \"description\": \"Sent as X-RelayMind-Execution-Mode on every request. parallel_demo is not a mode of this alias.\"\n        },\n        \"limits\": {\n          \"type\": \"object\",\n          \"additionalProperties\": false,\n          \"description\": \"Copies of the gateway's configured limits; a limit not set is not advertised.\",\n          \"properties\": {\n            \"externalContextLimit\": {\n              \"type\": \"integer\",\n              \"minimum\": 1,\n              \"description\": \"external_model.context_limit of the gateway's launch file; the window advertised in auto and external_only.\"\n            },\n            \"localContextLimit\": {\n              \"type\": \"integer\",\n              \"minimum\": 1,\n              \"description\": \"The local context of the pinned model manifest's launch settings; the window advertised in local_only.\"\n            },\n            \"maxCompletionTokens\": {\n              \"type\": \"integer\",\n              \"minimum\": 1,\n              \"description\": \"chat.max_completion_tokens of the gateway's launch file; the advertised output limit.\"\n            }\n          }\n        }\n      }\n    },\n    \"imported\": true,\n    \"dependencyStatus\": {\n      \"hasDependencies\": false,\n      \"installed\": true,\n      \"requiredInstalled\": true,\n      \"optionalInstalled\": true,\n      \"missing\": [],\n      \"missingOptional\": [],\n      \"dependencies\": [],\n      \"optionalDependencies\": []\n    }\n  },\n  \"shape\": \"plain-capability\",\n  \"capabilityMode\": \"plain\",\n  \"capabilityCount\": 1,\n  \"capabilities\": [\n    {\n      \"kind\": \"text-inference\",\n      \"ids\": [\n        \"relaymind\"\n      ]\n    }\n  ],\n  \"typedHooks\": [],\n  \"customHooks\": [],\n  \"tools\": [],\n  \"commands\": [],\n  \"cliCommands\": [],\n  \"services\": [],\n  \"decisions\": [],\n  \"gatewayDiscoveryServices\": [],\n  \"gatewayMethods\": [],\n  \"mcpServers\": [],\n  \"lspServers\": [],\n  \"httpRouteCount\": 0,\n  \"bundleCapabilities\": [],\n  \"diagnostics\": [],\n  \"policy\": {\n    \"allowedModels\": [],\n    \"hasAllowedModelsConfig\": false\n  },\n  \"compatibility\": [],\n  \"install\": {\n    \"source\": \"npm\",\n    \"spec\": \"@relaymind/openclaw-provider@0.1.0\",\n    \"sourcePath\": \"<scratch>/pack/relaymind-openclaw-provider-0.1.0.tgz\",\n    \"installPath\": \"<scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider\",\n    \"version\": \"0.1.0\",\n    \"resolvedName\": \"@relaymind/openclaw-provider\",\n    \"resolvedVersion\": \"0.1.0\",\n    \"resolvedSpec\": \"@relaymind/openclaw-provider@0.1.0\",\n    \"integrity\": \"sha512-Aopc6u0Nk9ouRdgvGk3dM+IzjnDev2smvMwNfTjcAjHKQ2q+sYucU00+DLz+nOFj9feYgQj+j9/J0lWqUpEI0Q==\",\n    \"shasum\": \"943f60d943bdd8178a3febb89027043454f73998\",\n    \"resolvedAt\": \"2026-10-28T01:01:35.782Z\",\n    \"installedAt\": \"2026-10-28T01:01:51.402Z\",\n    \"artifactKind\": \"npm-pack\",\n    \"artifactFormat\": \"tgz\",\n    \"npmIntegrity\": \"sha512-Aopc6u0Nk9ouRdgvGk3dM+IzjnDev2smvMwNfTjcAjHKQ2q+sYucU00+DLz+nOFj9feYgQj+j9/J0lWqUpEI0Q==\",\n    \"npmShasum\": \"943f60d943bdd8178a3febb89027043454f73998\",\n    \"npmTarballName\": \"relaymind-openclaw-provider-0.1.0.tgz\",\n    \"acceptedSurface\": {\n      \"channels\": [],\n      \"providers\": [\n        \"relaymind\"\n      ],\n      \"tools\": [],\n      \"contracts\": [],\n      \"hooks\": [],\n      \"mcpServers\": [],\n      \"cliCommands\": [],\n      \"cliBackends\": [],\n      \"skills\": [],\n      \"dangerousConfigFlags\": []\n    },\n    \"acceptedSurfaceHash\": \"d0b287698c3b4c4a5272c29b514431ff392e1940a8c1c1252466888420e1669d\",\n    \"acceptedSurfaceAt\": \"2026-10-28T01:01:51.399Z\",\n    \"acceptedSurfaceIntegrity\": \"sha512-Aopc6u0Nk9ouRdgvGk3dM+IzjnDev2smvMwNfTjcAjHKQ2q+sYucU00+DLz+nOFj9feYgQj+j9/J0lWqUpEI0Q==\"\n  }\n}\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "config set executionMode parallel_demo",
+    "wire_exchanges": [
+      0,
+      0
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "config",
+      "set",
+      "plugins.entries.relaymind.config.executionMode",
+      "parallel_demo"
+    ],
+    "stdin": null,
+    "exit_code": 1,
+    "seconds": 6.45,
+    "stdout": "",
+    "stderr": "Config change declined. No settings were saved.\nConfig validation failed: plugins.entries.relaymind.config.executionMode: invalid config: must be equal to one of the allowed values (allowed: \"auto\", \"local_only\", \"external_only\")\nCorrect the setting above and retry. Run openclaw config schema to inspect supported settings and values.\n",
+    "expected_exit": 1
+  },
+  {
+    "name": "models list before token",
+    "wire_exchanges": [
+      0,
+      0
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "models",
+      "list",
+      "--refresh",
+      "--json"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 9.06,
+    "stdout": "{\n  \"count\": 10,\n  \"models\": [\n    {\n      \"key\": \"claude-cli/claude-haiku-5-5\",\n      \"name\": \"Claude Haiku 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-5-5\",\n      \"name\": \"Claude Opus 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-5\",\n      \"name\": \"Claude Opus 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-5-5\",\n      \"name\": \"Claude Sonnet 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-5\",\n      \"name\": \"Claude Sonnet 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-fable-5-1\",\n      \"name\": \"Claude Fable 5.1 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-fable-5\",\n      \"name\": \"Claude Fable 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-4-7\",\n      \"name\": \"Claude Opus 4.7 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-4-6\",\n      \"name\": \"Claude Sonnet 4.6 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-4-6\",\n      \"name\": \"Claude Opus 4.6 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    }\n  ]\n}\n",
+    "stderr": "Gateway is not running. Refreshing the local model catalog.\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n"
+  },
+  {
+    "name": "paste-api-key",
+    "wire_exchanges": [
+      0,
+      0
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "models",
+      "auth",
+      "paste-api-key",
+      "--provider",
+      "relaymind"
+    ],
+    "stdin": "<the gateway token>",
+    "exit_code": 0,
+    "seconds": 8.96,
+    "stdout": "Updated config: $OPENCLAW_HOME/config.json\n  Backup: $OPENCLAW_HOME/config.json.bak\nAuth profile: relaymind:manual (relaymind/api_key)\n",
+    "stderr": "Warning: Model auth changes were saved, but the local Gateway could not refresh them. Run `openclaw gateway restart` to apply the saved changes.\nAPI key saved, but the Gateway has not confirmed applying the provider settings. Run `openclaw gateway restart` to apply them.\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "models list without --refresh",
+    "wire_exchanges": [
+      0,
+      0
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "models",
+      "list",
+      "--json"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 5.15,
+    "stdout": "{\n  \"count\": 0,\n  \"models\": []\n}\n",
+    "stderr": "Gateway is not running. Showing the local cached model catalog. Use --refresh to discover provider models.\n"
+  },
+  {
+    "name": "agent exec text before any catalog refresh",
+    "wire_exchanges": [
+      0,
+      1
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "agent",
+      "exec",
+      "--config",
+      "<scratch>/home/config.json",
+      "--json",
+      "--cwd",
+      "<scratch>",
+      "--model",
+      "relaymind/relaymind-client-tools",
+      "Say hello"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 23.73,
+    "stdout": "{\n  \"ok\": true,\n  \"status\": \"ok\",\n  \"final\": \"Hello from RelayMind.\",\n  \"payloads\": [\n    {\n      \"text\": \"Hello from RelayMind.\",\n      \"mediaUrl\": null\n    }\n  ],\n  \"usage\": {\n    \"cacheRead\": 0,\n    \"cacheWrite\": 0,\n    \"cost\": {\n      \"total\": 0\n    }\n  },\n  \"codeModeEngaged\": false,\n  \"assistantTurns\": 1,\n  \"bridgeCalls\": {\n    \"search\": 0,\n    \"describe\": 0,\n    \"call\": 0\n  },\n  \"model\": \"relaymind-client-tools\",\n  \"provider\": \"relaymind\",\n  \"sessionId\": \"bd9787e4-1308-4cf1-80a1-c899a5b41930\"\n}\n",
+    "stderr": "[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[agent/embedded] tool-search: cataloged 40 tools behind compact prompt surface\n[agent/embedded] post-run auth-profile success bookkeeping failed: runId=bd9787e4-1308-4cf1-80a1-c899a5b41930 sessionId=bd9787e4-1308-4cf1-80a1-c899a5b41930 provider=relaymind profileId=sha256:2e0940f3a786 error=Agent database disappeared before publication\n[agents/agent-command] [agent] run bd9787e4-1308-4cf1-80a1-c899a5b41930 ended with stopReason=stop\n[state/agent-db] agent database clean-close receipt: active-leases\n[state/agent-db] agent database clean-close receipt: written\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "models list --refresh",
+    "wire_exchanges": [
+      1,
+      3
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "models",
+      "list",
+      "--refresh",
+      "--json"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 10.64,
+    "stdout": "{\n  \"count\": 11,\n  \"models\": [\n    {\n      \"key\": \"claude-cli/claude-haiku-5-5\",\n      \"name\": \"Claude Haiku 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-5-5\",\n      \"name\": \"Claude Opus 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-5\",\n      \"name\": \"Claude Opus 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-5-5\",\n      \"name\": \"Claude Sonnet 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-5\",\n      \"name\": \"Claude Sonnet 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-fable-5-1\",\n      \"name\": \"Claude Fable 5.1 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-fable-5\",\n      \"name\": \"Claude Fable 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-4-7\",\n      \"name\": \"Claude Opus 4.7 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-4-6\",\n      \"name\": \"Claude Sonnet 4.6 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-4-6\",\n      \"name\": \"Claude Opus 4.6 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"relaymind/relaymind-client-tools\",\n      \"name\": \"RelayMind client-owned tools (auto)\",\n      \"input\": \"text\",\n      \"contextWindow\": 128000,\n      \"local\": true,\n      \"available\": true,\n      \"tags\": []\n    }\n  ],\n  \"providerOutcomes\": [\n    {\n      \"provider\": \"relaymind\",\n      \"status\": \"ready\"\n    }\n  ]\n}\n",
+    "stderr": "Gateway is not running. Refreshing the local model catalog.\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind gateway at http://127.0.0.1:<port>/v1 serves relaymind-client-tools; mode auto is ready; no context window advertised (no external limit configured for mode auto); no output limit advertised.\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "config set limits",
+    "wire_exchanges": [
+      3,
+      3
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "config",
+      "set",
+      "plugins.entries.relaymind.config.limits",
+      "{\"externalContextLimit\":128000,\"maxCompletionTokens\":512}",
+      "--strict-json"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 7.61,
+    "stdout": "Updated plugins.entries.relaymind.config.limits. Change will apply without restarting the gateway.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "models list --refresh with limits",
+    "wire_exchanges": [
+      3,
+      5
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "models",
+      "list",
+      "--refresh",
+      "--json"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 10.39,
+    "stdout": "{\n  \"count\": 11,\n  \"models\": [\n    {\n      \"key\": \"claude-cli/claude-haiku-5-5\",\n      \"name\": \"Claude Haiku 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-5-5\",\n      \"name\": \"Claude Opus 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-5\",\n      \"name\": \"Claude Opus 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-5-5\",\n      \"name\": \"Claude Sonnet 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-5\",\n      \"name\": \"Claude Sonnet 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-fable-5-1\",\n      \"name\": \"Claude Fable 5.1 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-fable-5\",\n      \"name\": \"Claude Fable 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-4-7\",\n      \"name\": \"Claude Opus 4.7 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-4-6\",\n      \"name\": \"Claude Sonnet 4.6 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-4-6\",\n      \"name\": \"Claude Opus 4.6 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"relaymind/relaymind-client-tools\",\n      \"name\": \"RelayMind client-owned tools (auto)\",\n      \"input\": \"text\",\n      \"contextWindow\": 128000,\n      \"local\": true,\n      \"available\": true,\n      \"tags\": []\n    }\n  ],\n  \"providerOutcomes\": [\n    {\n      \"provider\": \"relaymind\",\n      \"status\": \"ready\"\n    }\n  ]\n}\n",
+    "stderr": "Gateway is not running. Refreshing the local model catalog.\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind gateway at http://127.0.0.1:<port>/v1 serves relaymind-client-tools; mode auto is ready; context window 128000 (external limit, mode auto); output limit 512 (chat.max_completion_tokens).\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "agent exec text with limits",
+    "wire_exchanges": [
+      5,
+      6
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "agent",
+      "exec",
+      "--config",
+      "<scratch>/home/config.json",
+      "--json",
+      "--cwd",
+      "<scratch>",
+      "--model",
+      "relaymind/relaymind-client-tools",
+      "Say hello"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 22.97,
+    "stdout": "{\n  \"ok\": true,\n  \"status\": \"ok\",\n  \"final\": \"Hello from RelayMind.\",\n  \"payloads\": [\n    {\n      \"text\": \"Hello from RelayMind.\",\n      \"mediaUrl\": null\n    }\n  ],\n  \"usage\": {\n    \"cacheRead\": 0,\n    \"cacheWrite\": 0,\n    \"cost\": {\n      \"total\": 0\n    }\n  },\n  \"codeModeEngaged\": false,\n  \"assistantTurns\": 1,\n  \"bridgeCalls\": {\n    \"search\": 0,\n    \"describe\": 0,\n    \"call\": 0\n  },\n  \"model\": \"relaymind-client-tools\",\n  \"provider\": \"relaymind\",\n  \"sessionId\": \"16924ea5-d1f0-45fc-bff4-fb6a5c732b93\"\n}\n",
+    "stderr": "[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[agent/embedded] tool-search: cataloged 40 tools behind compact prompt surface\n[agent/embedded] post-run auth-profile success bookkeeping failed: runId=16924ea5-d1f0-45fc-bff4-fb6a5c732b93 sessionId=16924ea5-d1f0-45fc-bff4-fb6a5c732b93 provider=relaymind profileId=sha256:2e0940f3a786 error=Agent database disappeared before publication\n[agents/agent-command] [agent] run 16924ea5-d1f0-45fc-bff4-fb6a5c732b93 ended with stopReason=stop\n[state/agent-db] agent database clean-close receipt: active-leases\n[state/agent-db] agent database clean-close receipt: written\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "models list --refresh with the stale token",
+    "wire_exchanges": [
+      6,
+      7
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "models",
+      "list",
+      "--refresh",
+      "--json"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 10.54,
+    "stdout": "{\n  \"count\": 10,\n  \"models\": [\n    {\n      \"key\": \"claude-cli/claude-haiku-5-5\",\n      \"name\": \"Claude Haiku 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-5-5\",\n      \"name\": \"Claude Opus 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-5\",\n      \"name\": \"Claude Opus 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-5-5\",\n      \"name\": \"Claude Sonnet 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-5\",\n      \"name\": \"Claude Sonnet 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-fable-5-1\",\n      \"name\": \"Claude Fable 5.1 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-fable-5\",\n      \"name\": \"Claude Fable 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-4-7\",\n      \"name\": \"Claude Opus 4.7 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-4-6\",\n      \"name\": \"Claude Sonnet 4.6 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-4-6\",\n      \"name\": \"Claude Opus 4.6 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    }\n  ],\n  \"providerOutcomes\": [\n    {\n      \"provider\": \"relaymind\",\n      \"status\": \"auth-rejected\"\n    }\n  ]\n}\n",
+    "stderr": "Gateway is not running. Refreshing the local model catalog.\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind rejected the stored application token (HTTP 401 unauthenticated). The gateway generates a new application token every time it starts, so a restart makes the stored one stale. Copy the token the running `relaymind serve` printed and store it with `openclaw models auth paste-api-key --provider relaymind`.\nModel discovery authentication was rejected for relaymind. Open Models in the Control UI to check sign-in and catalog access, then retry with --refresh.\n"
+  },
+  {
+    "name": "agent exec with the stale token",
+    "wire_exchanges": [
+      7,
+      8
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "agent",
+      "exec",
+      "--config",
+      "<scratch>/home/config.json",
+      "--json",
+      "--cwd",
+      "<scratch>",
+      "--model",
+      "relaymind/relaymind-client-tools",
+      "Say hello"
+    ],
+    "stdin": null,
+    "exit_code": 1,
+    "seconds": 23.68,
+    "stdout": "{\n  \"ok\": false,\n  \"status\": \"error\",\n  \"final\": \"\",\n  \"payloads\": [],\n  \"model\": null,\n  \"provider\": null,\n  \"sessionId\": \"7fa5f794-016e-45e4-afc1-40bbc9901885\",\n  \"error\": {\n    \"message\": \"\u26a0\ufe0f Couldn't sign in to the AI service. Sign in again under Models in the Control UI or run `openclaw configure`.\",\n    \"kind\": \"exception\"\n  }\n}\n",
+    "stderr": "[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[agent/embedded] tool-search: cataloged 40 tools behind compact prompt surface\n[provider-transport-fetch] [model-fetch] response provider=relaymind api=openai-completions model=relaymind-client-tools status=401 elapsedMs=35 dispatcher=new contentType=application/json\n[agent/embedded] embedded run agent end: runId=7fa5f794-016e-45e4-afc1-40bbc9901885 isError=true model=relaymind-client-tools provider=relaymind error=\u26a0\ufe0f Couldn't sign in to the AI service. Sign in again under Models in the Control UI or run `openclaw configure`. rawError=401 a valid application token is required\n[agent/embedded] profile failure mark failed: Error: Agent database disappeared before publication\n[agent/embedded] embedded run failover decision: runId=7fa5f794-016e-45e4-afc1-40bbc9901885 stage=assistant decision=surface_error reason=auth attempt=1 retry=0 rotations=0 from=relaymind/relaymind-client-tools profile=sha256:2e0940f3a786 rawError=401 a valid application token is required\n[diagnostic] lane task error: lane=main durationMs=3555 error=\"\u26a0\ufe0f Couldn't sign in to the AI service. Sign in again under Models in the Control UI or run `openclaw configure`.\" errorName=FailoverError taskKind=turn sessionKey=agent:main:explicit:7fa5f794-016e-45e4-afc1-40bbc9901885 runId=7fa5f794-016e-45e4-afc1-40bbc9901885\n[diagnostic] lane task error: lane=session:agent:main:explicit:7fa5f794-016e-45e4-afc1-40bbc9901885 durationMs=3565 error=\"\u26a0\ufe0f Couldn't sign in to the AI service. Sign in again under Models in the Control UI or run `openclaw configure`.\" errorName=FailoverError taskKind=turn sessionKey=agent:main:explicit:7fa5f794-016e-45e4-afc1-40bbc9901885 runId=7fa5f794-016e-45e4-afc1-40bbc9901885\n[model-fallback/decision] model fallback decision: decision=candidate_failed requested=relaymind/relaymind-client-tools candidate=relaymind/relaymind-client-tools reason=auth next=none detail=401 a valid application token is required\n[state/agent-db] agent database clean-close receipt: active-leases\n[state/agent-db] agent database clean-close receipt: written\n\u26a0\ufe0f Couldn't sign in to the AI service. Sign in again under Models in the Control UI or run `openclaw configure`.\n"
+  },
+  {
+    "name": "paste-api-key (new token)",
+    "wire_exchanges": [
+      8,
+      8
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "models",
+      "auth",
+      "paste-api-key",
+      "--provider",
+      "relaymind"
+    ],
+    "stdin": "<the gateway token>",
+    "exit_code": 0,
+    "seconds": 8.87,
+    "stdout": "Updated config: $OPENCLAW_HOME/config.json\n  Backup: $OPENCLAW_HOME/config.json.bak\nAuth profile: relaymind:manual (relaymind/api_key)\n",
+    "stderr": "Warning: Model auth changes were saved, but the local Gateway could not refresh them. Run `openclaw gateway restart` to apply the saved changes.\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "models list --refresh after recovery",
+    "wire_exchanges": [
+      8,
+      10
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "models",
+      "list",
+      "--refresh",
+      "--json"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 10.75,
+    "stdout": "{\n  \"count\": 11,\n  \"models\": [\n    {\n      \"key\": \"claude-cli/claude-haiku-5-5\",\n      \"name\": \"Claude Haiku 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-5-5\",\n      \"name\": \"Claude Opus 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-5\",\n      \"name\": \"Claude Opus 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-5-5\",\n      \"name\": \"Claude Sonnet 5.5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-5\",\n      \"name\": \"Claude Sonnet 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-fable-5-1\",\n      \"name\": \"Claude Fable 5.1 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-fable-5\",\n      \"name\": \"Claude Fable 5 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 1000000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-4-7\",\n      \"name\": \"Claude Opus 4.7 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-sonnet-4-6\",\n      \"name\": \"Claude Sonnet 4.6 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"claude-cli/claude-opus-4-6\",\n      \"name\": \"Claude Opus 4.6 (Claude CLI)\",\n      \"input\": \"text+image\",\n      \"contextWindow\": 200000,\n      \"local\": null,\n      \"available\": true,\n      \"tags\": []\n    },\n    {\n      \"key\": \"relaymind/relaymind-client-tools\",\n      \"name\": \"RelayMind client-owned tools (auto)\",\n      \"input\": \"text\",\n      \"contextWindow\": 128000,\n      \"local\": true,\n      \"available\": true,\n      \"tags\": []\n    }\n  ],\n  \"providerOutcomes\": [\n    {\n      \"provider\": \"relaymind\",\n      \"status\": \"ready\"\n    }\n  ]\n}\n",
+    "stderr": "Gateway is not running. Refreshing the local model catalog.\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind gateway at http://127.0.0.1:<port>/v1 serves relaymind-client-tools; mode auto is ready; context window 128000 (external limit, mode auto); output limit 512 (chat.max_completion_tokens).\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "agent exec after recovery",
+    "wire_exchanges": [
+      10,
+      11
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "agent",
+      "exec",
+      "--config",
+      "<scratch>/home/config.json",
+      "--json",
+      "--cwd",
+      "<scratch>",
+      "--model",
+      "relaymind/relaymind-client-tools",
+      "Say hello"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 24.07,
+    "stdout": "{\n  \"ok\": true,\n  \"status\": \"ok\",\n  \"final\": \"Hello again after the restart.\",\n  \"payloads\": [\n    {\n      \"text\": \"Hello again after the restart.\",\n      \"mediaUrl\": null\n    }\n  ],\n  \"usage\": {\n    \"cacheRead\": 0,\n    \"cacheWrite\": 0,\n    \"cost\": {\n      \"total\": 0\n    }\n  },\n  \"codeModeEngaged\": false,\n  \"assistantTurns\": 1,\n  \"bridgeCalls\": {\n    \"search\": 0,\n    \"describe\": 0,\n    \"call\": 0\n  },\n  \"model\": \"relaymind-client-tools\",\n  \"provider\": \"relaymind\",\n  \"sessionId\": \"946b0ea1-ddfc-49e2-a172-72f8b6e9d45d\"\n}\n",
+    "stderr": "[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[agent/embedded] tool-search: cataloged 40 tools behind compact prompt surface\n[agent/embedded] post-run auth-profile success bookkeeping failed: runId=946b0ea1-ddfc-49e2-a172-72f8b6e9d45d sessionId=946b0ea1-ddfc-49e2-a172-72f8b6e9d45d provider=relaymind profileId=sha256:2e0940f3a786 error=Agent database disappeared before publication\n[agents/agent-command] [agent] run 946b0ea1-ddfc-49e2-a172-72f8b6e9d45d ended with stopReason=stop\n[state/agent-db] agent database clean-close receipt: active-leases\n[state/agent-db] agent database clean-close receipt: written\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "disable",
+    "wire_exchanges": [
+      11,
+      11
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "disable",
+      "relaymind"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 8.27,
+    "stdout": "Disabled plugin \"relaymind\". Saved for the next Gateway start.\n",
+    "stderr": "Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "uninstall without --force",
+    "wire_exchanges": [
+      11,
+      11
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "uninstall",
+      "relaymind"
+    ],
+    "stdin": null,
+    "exit_code": 1,
+    "seconds": 6.52,
+    "stdout": "Plugin: RelayMind (relaymind)\nWill remove: plugin settings, install record, directory: $OPENCLAW_HOME/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1\nUninstall plugin \"relaymind\"? [y/N] ",
+    "stderr": "Error: plugins uninstall requires confirmation input. Re-run in an interactive TTY or pass --force.\n",
+    "expected_exit": 1
+  },
+  {
+    "name": "uninstall --force",
+    "wire_exchanges": [
+      11,
+      11
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "plugins",
+      "uninstall",
+      "relaymind",
+      "--force"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 10.67,
+    "stdout": "Plugin: RelayMind (relaymind)\nWill remove: plugin settings, install record, directory: $OPENCLAW_HOME/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1\nUninstalled plugin \"relaymind\". Removed: plugin settings, install record, directory.\nSaved for the next Gateway start.\n",
+    "stderr": "Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "models auth list",
+    "wire_exchanges": [
+      11,
+      11
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "models",
+      "auth",
+      "list"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 6.82,
+    "stdout": "Agent: main\nAuth state store: $OPENCLAW_HOME/state/state/openclaw.sqlite\nProfiles:\n- relaymind:manual [relaymind/api_key]\n",
+    "stderr": ""
+  },
+  {
+    "name": "models auth logout",
+    "wire_exchanges": [
+      11,
+      11
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "models",
+      "auth",
+      "logout",
+      "relaymind:manual",
+      "--yes"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 10.34,
+    "stdout": "Updated config: $OPENCLAW_HOME/config.json\n  Backup: $OPENCLAW_HOME/config.json.bak\nAgent: main\nRemoved auth profile: relaymind:manual (relaymind/api_key)\nNo auth profiles remain for relaymind. Run openclaw models auth login --provider relaymind to sign in again.\n[state/agent-db] agent database clean-close receipt: written\n",
+    "stderr": "Warning: Model auth changes were saved, but the local Gateway could not refresh them. Run `openclaw gateway restart` to apply the saved changes.\nCredentials were removed, but the Gateway has not confirmed applying the change. Run `openclaw gateway restart` to apply it.\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "config unset plugins.entries.relaymind",
+    "wire_exchanges": [
+      11,
+      11
+    ],
+    "argv": [
+      "<repo>/integrations/openclaw/node_modules/.bin/openclaw",
+      "config",
+      "unset",
+      "plugins.entries.relaymind"
+    ],
+    "stdin": null,
+    "exit_code": 0,
+    "seconds": 7.86,
+    "stdout": "Removed plugins.entries.relaymind. Change will apply without restarting the gateway.\n",
+    "stderr": "",
+    "expected_exit": 0
+  }
+]

@@ -33,12 +33,12 @@ so that the dependency direction below stays true:
 | Selector transport (RM28) | `src/relaymind/selection/` | The loopback HTTP transport for an out-of-process selector (#133). The interface, the chain, and the two built-in selectors exist; see the component map and the dependency direction below. It executes nothing. |
 | Placement policy (RM27) | `src/relaymind/orchestrator/placement.py` | Predicts where a generation runs from the timing samples the store keeps; never changes a budget. |
 | Timing samples (RM27) | `src/relaymind/store/` | A table of per-generation and warm-up samples, read by placement, written by the orchestrator. The figures it will hold (first-token time, cached and reasoning tokens) are already recorded in every `model.finished` event (#120). |
-| OpenClaw provider plugin (RM33, planned) | `integrations/openclaw/` | A TypeScript package using the public host SDK and the loopback client-owned chat API. OpenClaw owns sessions, tools, and approvals; RelayMind owns inference and its trace. |
+| OpenClaw provider plugin (RM33, in progress) | `integrations/openclaw/` | A TypeScript package using the public host SDK and the loopback client-owned chat API. OpenClaw owns sessions, tools, and approvals; RelayMind owns inference and its trace. #136: the plugin entry, the `relaymind` provider with the api-key token method, catalog discovery of `relaymind-client-tools` (`/v1/models`, the configured mode's `/readyz` entry), loopback-only settings, the execution mode header, and limits copied from the gateway's configuration. |
 | Gated answer streaming (RM32) | `src/relaymind/orchestrator/local_loop.py`, `src/relaymind/api/chat.py` | The per-statement holdback of the live answer stream. Not implemented: `performance.answer_stream = live` stops startup. The draft answer pass (RM31, #121) and early response headers (RM32, #140) are implemented; see the orchestrator and API rows above. |
 
 The YAML workflow package expansion is retired (spec 0.47, RM30). The
 implemented fixed parallel demo remains in the orchestrator (RM15, AC14).
-The OpenClaw package holds the #135 qualification (declared host switches, the pinned transport driver, and frozen wire fixtures); no plugin or live qualification exists yet.
+The OpenClaw package holds the #135 qualification (declared host switches, the pinned transport driver, and frozen wire fixtures) and the #136 provider plugin. The pinned host loaded the plugin in a Linux VPS functional check over gateway doubles (`docs/evidence/2026-10-28-openclaw-vps-functional-136/`; not a supported-platform qualification); the macOS and Windows runs of this package and any live model qualification are not_run.
 
 Demo skill packages (SKILL.md plus `skill.manifest.json`, spec sections
 4.2 and 9) live in `skills/` at the repository root, one directory per

@@ -1,0 +1,26 @@
+{
+  "after_paste": {
+    "token_in_state_db": true,
+    "files_holding_token": [
+      "state/state/openclaw.sqlite"
+    ]
+  },
+  "after_uninstall": {
+    "plugins.entries.relaymind": {
+      "enabled": false
+    },
+    "auth.profiles": [
+      "relaymind:manual"
+    ],
+    "token_in_state_db": null,
+    "files_holding_token": [
+      "state/state/openclaw.sqlite"
+    ]
+  },
+  "after_logout_and_unset": {
+    "plugins.entries.relaymind": null,
+    "auth.profiles": [],
+    "token_in_state_db": null,
+    "files_holding_token": []
+  }
+}

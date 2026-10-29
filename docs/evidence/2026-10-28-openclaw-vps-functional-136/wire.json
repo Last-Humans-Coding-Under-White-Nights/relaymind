@@ -1,0 +1,1389 @@
+[
+  {
+    "request": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "headers": {
+        "host": "127.0.0.1:<port>",
+        "connection": "keep-alive",
+        "accept": "application/json",
+        "authorization": "<redacted>",
+        "content-type": "application/json",
+        "traceparent": "00-c53dbdf208d4c2dd0118cc6b71aa0ac2-365a8462ddf7348c-01",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-relaymind-execution-mode": "auto",
+        "x-stainless-arch": "x64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "Linux",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v24.22.1",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+        "accept-encoding": "gzip, deflate",
+        "content-length": "38897"
+      },
+      "body": {
+        "model": "relaymind-client-tools",
+        "messages": [
+          {
+            "role": "system",
+            "keys": [
+              "content",
+              "role"
+            ],
+            "content_chars": 28480
+          },
+          {
+            "role": "user",
+            "keys": [
+              "content",
+              "role"
+            ],
+            "content_chars": 334
+          }
+        ],
+        "stream": true,
+        "tools": [
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "apply_patch"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "edit"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "exec"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "ls"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "process"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "read"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "sessions_yield"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "tool_call"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "tool_describe"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "tool_search"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "write"
+          }
+        ],
+        "tool_choice": "auto"
+      },
+      "body_summarized": true
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "date": "Wed, 28 Oct 2026 01:03:19 GMT",
+        "server": "uvicorn",
+        "x-relaymind-run-id": "run_cbd4349a0bc14dadba62c5ee9049ffc2",
+        "cache-control": "no-cache",
+        "content-type": "text/event-stream; charset=utf-8",
+        "transfer-encoding": "chunked"
+      },
+      "body": {
+        "sse": [
+          {
+            "id": "chatcmpl-run_cbd4349a0bc14dadba62c5ee9049ffc2",
+            "object": "chat.completion.chunk",
+            "created": 1793149399,
+            "model": "relaymind-client-tools",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "role": "assistant",
+                  "content": ""
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-run_cbd4349a0bc14dadba62c5ee9049ffc2",
+            "object": "chat.completion.chunk",
+            "created": 1793149399,
+            "model": "relaymind-client-tools",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": "Hello from RelayMind."
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-run_cbd4349a0bc14dadba62c5ee9049ffc2",
+            "object": "chat.completion.chunk",
+            "created": 1793149399,
+            "model": "relaymind-client-tools",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {},
+                "finish_reason": "stop"
+              }
+            ]
+          },
+          "[DONE]"
+        ]
+      }
+    },
+    "client_closed_early": false
+  },
+  {
+    "request": {
+      "method": "GET",
+      "path": "/v1/models",
+      "headers": {
+        "host": "127.0.0.1:<port>",
+        "connection": "keep-alive",
+        "authorization": "<redacted>",
+        "accept": "application/json",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "accept-encoding": "gzip, deflate"
+      },
+      "body": null
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "date": "Wed, 28 Oct 2026 01:03:30 GMT",
+        "server": "uvicorn",
+        "content-length": "199",
+        "content-type": "application/json"
+      },
+      "body": {
+        "object": "list",
+        "data": [
+          {
+            "id": "relaymind",
+            "object": "model",
+            "created": 1793149352,
+            "owned_by": "relaymind"
+          },
+          {
+            "id": "relaymind-client-tools",
+            "object": "model",
+            "created": 1793149352,
+            "owned_by": "relaymind"
+          }
+        ]
+      }
+    },
+    "client_closed_early": false
+  },
+  {
+    "request": {
+      "method": "GET",
+      "path": "/readyz",
+      "headers": {
+        "host": "127.0.0.1:<port>",
+        "connection": "keep-alive",
+        "authorization": "<redacted>",
+        "accept": "application/json",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "accept-encoding": "gzip, deflate"
+      },
+      "body": null
+    },
+    "response": {
+      "status": 503,
+      "headers": {
+        "date": "Wed, 28 Oct 2026 01:03:30 GMT",
+        "server": "uvicorn",
+        "content-length": "963",
+        "content-type": "application/json"
+      },
+      "body": {
+        "ready": false,
+        "modes": {
+          "auto": {
+            "ready": true,
+            "reason": null
+          },
+          "local_only": {
+            "ready": true,
+            "reason": null
+          },
+          "external_only": {
+            "ready": true,
+            "reason": null
+          },
+          "parallel_demo": {
+            "ready": false,
+            "reason": "no workflow is enabled"
+          }
+        },
+        "models": {
+          "local": {
+            "available": true,
+            "warm": true,
+            "detail": "scripted"
+          },
+          "external": {
+            "available": true,
+            "warm": true,
+            "detail": "scripted"
+          }
+        },
+        "placement": {
+          "policy": "local_first",
+          "representative": true,
+          "routing": {
+            "role": "local",
+            "reason": "local_first",
+            "predicted_ms": null,
+            "deadline_ms": null,
+            "inputs": {
+              "model": "double-qwen3-0.6b",
+              "purpose": "routing",
+              "input_tokens": null,
+              "input_source": "none",
+              "expected_output_tokens": 128,
+              "output_source": "purpose_cap",
+              "cache_class": "unknown",
+              "sample_count": 0,
+              "sample_recorded_at": null,
+              "prefill_tokens_per_ms": null,
+              "decode_tokens_per_ms": null,
+              "local_success_rate": null,
+              "expected_external_ms": null
+            }
+          },
+          "routing_fits": null,
+          "auto_model": "double-qwen3-0.6b"
+        },
+        "local_model": {
+          "model_id": "double-qwen3-0.6b",
+          "status": "ready",
+          "reason": null
+        }
+      }
+    },
+    "client_closed_early": false
+  },
+  {
+    "request": {
+      "method": "GET",
+      "path": "/v1/models",
+      "headers": {
+        "host": "127.0.0.1:<port>",
+        "connection": "keep-alive",
+        "authorization": "<redacted>",
+        "accept": "application/json",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "accept-encoding": "gzip, deflate"
+      },
+      "body": null
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "date": "Wed, 28 Oct 2026 01:03:49 GMT",
+        "server": "uvicorn",
+        "content-length": "199",
+        "content-type": "application/json"
+      },
+      "body": {
+        "object": "list",
+        "data": [
+          {
+            "id": "relaymind",
+            "object": "model",
+            "created": 1793149352,
+            "owned_by": "relaymind"
+          },
+          {
+            "id": "relaymind-client-tools",
+            "object": "model",
+            "created": 1793149352,
+            "owned_by": "relaymind"
+          }
+        ]
+      }
+    },
+    "client_closed_early": false
+  },
+  {
+    "request": {
+      "method": "GET",
+      "path": "/readyz",
+      "headers": {
+        "host": "127.0.0.1:<port>",
+        "connection": "keep-alive",
+        "authorization": "<redacted>",
+        "accept": "application/json",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "accept-encoding": "gzip, deflate"
+      },
+      "body": null
+    },
+    "response": {
+      "status": 503,
+      "headers": {
+        "date": "Wed, 28 Oct 2026 01:03:49 GMT",
+        "server": "uvicorn",
+        "content-length": "963",
+        "content-type": "application/json"
+      },
+      "body": {
+        "ready": false,
+        "modes": {
+          "auto": {
+            "ready": true,
+            "reason": null
+          },
+          "local_only": {
+            "ready": true,
+            "reason": null
+          },
+          "external_only": {
+            "ready": true,
+            "reason": null
+          },
+          "parallel_demo": {
+            "ready": false,
+            "reason": "no workflow is enabled"
+          }
+        },
+        "models": {
+          "local": {
+            "available": true,
+            "warm": true,
+            "detail": "scripted"
+          },
+          "external": {
+            "available": true,
+            "warm": true,
+            "detail": "scripted"
+          }
+        },
+        "placement": {
+          "policy": "local_first",
+          "representative": true,
+          "routing": {
+            "role": "local",
+            "reason": "local_first",
+            "predicted_ms": null,
+            "deadline_ms": null,
+            "inputs": {
+              "model": "double-qwen3-0.6b",
+              "purpose": "routing",
+              "input_tokens": null,
+              "input_source": "none",
+              "expected_output_tokens": 128,
+              "output_source": "purpose_cap",
+              "cache_class": "unknown",
+              "sample_count": 0,
+              "sample_recorded_at": null,
+              "prefill_tokens_per_ms": null,
+              "decode_tokens_per_ms": null,
+              "local_success_rate": null,
+              "expected_external_ms": null
+            }
+          },
+          "routing_fits": null,
+          "auto_model": "double-qwen3-0.6b"
+        },
+        "local_model": {
+          "model_id": "double-qwen3-0.6b",
+          "status": "ready",
+          "reason": null
+        }
+      }
+    },
+    "client_closed_early": false
+  },
+  {
+    "request": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "headers": {
+        "host": "127.0.0.1:<port>",
+        "connection": "keep-alive",
+        "accept": "application/json",
+        "authorization": "<redacted>",
+        "content-type": "application/json",
+        "traceparent": "00-08479fa02760b0ae4ec8dbc944f15e3a-d201a7485c63b817-01",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-relaymind-execution-mode": "auto",
+        "x-stainless-arch": "x64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "Linux",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v24.22.1",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+        "accept-encoding": "gzip, deflate",
+        "content-length": "38925"
+      },
+      "body": {
+        "model": "relaymind-client-tools",
+        "messages": [
+          {
+            "role": "system",
+            "keys": [
+              "content",
+              "role"
+            ],
+            "content_chars": 28480
+          },
+          {
+            "role": "user",
+            "keys": [
+              "content",
+              "role"
+            ],
+            "content_chars": 334
+          }
+        ],
+        "stream": true,
+        "tools": [
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "apply_patch"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "edit"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "exec"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "ls"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "process"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "read"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "sessions_yield"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "tool_call"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "tool_describe"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "tool_search"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "write"
+          }
+        ],
+        "tool_choice": "auto",
+        "max_completion_tokens": 512
+      },
+      "body_summarized": true
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "date": "Wed, 28 Oct 2026 01:04:12 GMT",
+        "server": "uvicorn",
+        "x-relaymind-run-id": "run_09c7b13a51f94e52aea14b92bcb339c1",
+        "cache-control": "no-cache",
+        "content-type": "text/event-stream; charset=utf-8",
+        "transfer-encoding": "chunked"
+      },
+      "body": {
+        "sse": [
+          {
+            "id": "chatcmpl-run_09c7b13a51f94e52aea14b92bcb339c1",
+            "object": "chat.completion.chunk",
+            "created": 1793149453,
+            "model": "relaymind-client-tools",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "role": "assistant",
+                  "content": ""
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-run_09c7b13a51f94e52aea14b92bcb339c1",
+            "object": "chat.completion.chunk",
+            "created": 1793149453,
+            "model": "relaymind-client-tools",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": "Hello from RelayMind."
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-run_09c7b13a51f94e52aea14b92bcb339c1",
+            "object": "chat.completion.chunk",
+            "created": 1793149453,
+            "model": "relaymind-client-tools",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {},
+                "finish_reason": "stop"
+              }
+            ]
+          },
+          "[DONE]"
+        ]
+      }
+    },
+    "client_closed_early": false
+  },
+  {
+    "request": {
+      "method": "GET",
+      "path": "/v1/models",
+      "headers": {
+        "host": "127.0.0.1:<port>",
+        "connection": "keep-alive",
+        "authorization": "<redacted>",
+        "accept": "application/json",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "accept-encoding": "gzip, deflate"
+      },
+      "body": null
+    },
+    "response": {
+      "status": 401,
+      "headers": {
+        "date": "Wed, 28 Oct 2026 01:04:24 GMT",
+        "server": "uvicorn",
+        "www-authenticate": "Bearer",
+        "content-length": "100",
+        "content-type": "application/json"
+      },
+      "body": {
+        "error": {
+          "code": "unauthenticated",
+          "message": "a valid application token is required",
+          "run_id": null
+        }
+      }
+    },
+    "client_closed_early": false
+  },
+  {
+    "request": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "headers": {
+        "host": "127.0.0.1:<port>",
+        "connection": "keep-alive",
+        "accept": "application/json",
+        "authorization": "<redacted>",
+        "content-type": "application/json",
+        "traceparent": "00-2b696f16170b754293faf0ad1c22cd06-eb7482078f784679-01",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-relaymind-execution-mode": "auto",
+        "x-stainless-arch": "x64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "Linux",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v24.22.1",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+        "accept-encoding": "gzip, deflate",
+        "content-length": "38925"
+      },
+      "body": {
+        "model": "relaymind-client-tools",
+        "messages": [
+          {
+            "role": "system",
+            "keys": [
+              "content",
+              "role"
+            ],
+            "content_chars": 28480
+          },
+          {
+            "role": "user",
+            "keys": [
+              "content",
+              "role"
+            ],
+            "content_chars": 334
+          }
+        ],
+        "stream": true,
+        "tools": [
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "apply_patch"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "edit"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "exec"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "ls"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "process"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "read"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "sessions_yield"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "tool_call"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "tool_describe"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "tool_search"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "write"
+          }
+        ],
+        "tool_choice": "auto",
+        "max_completion_tokens": 512
+      },
+      "body_summarized": true
+    },
+    "response": {
+      "status": 401,
+      "headers": {
+        "date": "Wed, 28 Oct 2026 01:04:48 GMT",
+        "server": "uvicorn",
+        "www-authenticate": "Bearer",
+        "content-length": "100",
+        "content-type": "application/json"
+      },
+      "body": {
+        "error": {
+          "code": "unauthenticated",
+          "message": "a valid application token is required",
+          "run_id": null
+        }
+      }
+    },
+    "client_closed_early": false
+  },
+  {
+    "request": {
+      "method": "GET",
+      "path": "/v1/models",
+      "headers": {
+        "host": "127.0.0.1:<port>",
+        "connection": "keep-alive",
+        "authorization": "<redacted>",
+        "accept": "application/json",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "accept-encoding": "gzip, deflate"
+      },
+      "body": null
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "date": "Wed, 28 Oct 2026 01:05:09 GMT",
+        "server": "uvicorn",
+        "content-length": "199",
+        "content-type": "application/json"
+      },
+      "body": {
+        "object": "list",
+        "data": [
+          {
+            "id": "relaymind",
+            "object": "model",
+            "created": 1793149455,
+            "owned_by": "relaymind"
+          },
+          {
+            "id": "relaymind-client-tools",
+            "object": "model",
+            "created": 1793149455,
+            "owned_by": "relaymind"
+          }
+        ]
+      }
+    },
+    "client_closed_early": false
+  },
+  {
+    "request": {
+      "method": "GET",
+      "path": "/readyz",
+      "headers": {
+        "host": "127.0.0.1:<port>",
+        "connection": "keep-alive",
+        "authorization": "<redacted>",
+        "accept": "application/json",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "accept-encoding": "gzip, deflate"
+      },
+      "body": null
+    },
+    "response": {
+      "status": 503,
+      "headers": {
+        "date": "Wed, 28 Oct 2026 01:05:09 GMT",
+        "server": "uvicorn",
+        "content-length": "963",
+        "content-type": "application/json"
+      },
+      "body": {
+        "ready": false,
+        "modes": {
+          "auto": {
+            "ready": true,
+            "reason": null
+          },
+          "local_only": {
+            "ready": true,
+            "reason": null
+          },
+          "external_only": {
+            "ready": true,
+            "reason": null
+          },
+          "parallel_demo": {
+            "ready": false,
+            "reason": "no workflow is enabled"
+          }
+        },
+        "models": {
+          "local": {
+            "available": true,
+            "warm": true,
+            "detail": "scripted"
+          },
+          "external": {
+            "available": true,
+            "warm": true,
+            "detail": "scripted"
+          }
+        },
+        "placement": {
+          "policy": "local_first",
+          "representative": true,
+          "routing": {
+            "role": "local",
+            "reason": "local_first",
+            "predicted_ms": null,
+            "deadline_ms": null,
+            "inputs": {
+              "model": "double-qwen3-0.6b",
+              "purpose": "routing",
+              "input_tokens": null,
+              "input_source": "none",
+              "expected_output_tokens": 128,
+              "output_source": "purpose_cap",
+              "cache_class": "unknown",
+              "sample_count": 0,
+              "sample_recorded_at": null,
+              "prefill_tokens_per_ms": null,
+              "decode_tokens_per_ms": null,
+              "local_success_rate": null,
+              "expected_external_ms": null
+            }
+          },
+          "routing_fits": null,
+          "auto_model": "double-qwen3-0.6b"
+        },
+        "local_model": {
+          "model_id": "double-qwen3-0.6b",
+          "status": "ready",
+          "reason": null
+        }
+      }
+    },
+    "client_closed_early": false
+  },
+  {
+    "request": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "headers": {
+        "host": "127.0.0.1:<port>",
+        "connection": "keep-alive",
+        "accept": "application/json",
+        "authorization": "<redacted>",
+        "content-type": "application/json",
+        "traceparent": "00-03d80aa32f008cb9495f5829bde23fb4-d074a1b3c7aa5c56-01",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-relaymind-execution-mode": "auto",
+        "x-stainless-arch": "x64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "Linux",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v24.22.1",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+        "accept-encoding": "gzip, deflate",
+        "content-length": "38925"
+      },
+      "body": {
+        "model": "relaymind-client-tools",
+        "messages": [
+          {
+            "role": "system",
+            "keys": [
+              "content",
+              "role"
+            ],
+            "content_chars": 28480
+          },
+          {
+            "role": "user",
+            "keys": [
+              "content",
+              "role"
+            ],
+            "content_chars": 334
+          }
+        ],
+        "stream": true,
+        "tools": [
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "apply_patch"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "edit"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "exec"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "ls"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "process"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "read"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "sessions_yield"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "tool_call"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "tool_describe"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "tool_search"
+          },
+          {
+            "keys": [
+              "function",
+              "type"
+            ],
+            "function_keys": [
+              "description",
+              "name",
+              "parameters"
+            ],
+            "name": "write"
+          }
+        ],
+        "tool_choice": "auto",
+        "max_completion_tokens": 512
+      },
+      "body_summarized": true
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "date": "Wed, 28 Oct 2026 01:05:33 GMT",
+        "server": "uvicorn",
+        "x-relaymind-run-id": "run_3f08e4ded8f04966af7b2ea82f10ad7a",
+        "cache-control": "no-cache",
+        "content-type": "text/event-stream; charset=utf-8",
+        "transfer-encoding": "chunked"
+      },
+      "body": {
+        "sse": [
+          {
+            "id": "chatcmpl-run_3f08e4ded8f04966af7b2ea82f10ad7a",
+            "object": "chat.completion.chunk",
+            "created": 1793149534,
+            "model": "relaymind-client-tools",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "role": "assistant",
+                  "content": ""
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-run_3f08e4ded8f04966af7b2ea82f10ad7a",
+            "object": "chat.completion.chunk",
+            "created": 1793149534,
+            "model": "relaymind-client-tools",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": "Hello again after the restart."
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-run_3f08e4ded8f04966af7b2ea82f10ad7a",
+            "object": "chat.completion.chunk",
+            "created": 1793149534,
+            "model": "relaymind-client-tools",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {},
+                "finish_reason": "stop"
+              }
+            ]
+          },
+          "[DONE]"
+        ]
+      }
+    },
+    "client_closed_early": false
+  }
+]

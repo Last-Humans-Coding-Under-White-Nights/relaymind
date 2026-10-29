@@ -8,6 +8,51 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- OpenClaw provider plugin package (#136; RM08, RM12, RM19, RM26, RM33):
+  `integrations/openclaw/` now has the plugin manifest
+  (`openclaw.plugin.json`), the entry and the `relaymind` provider built on
+  the public plugin SDK of v2026.10.7, the api-key method that holds the
+  gateway's application token (`RELAYMIND_APP_TOKEN`), and a catalog that
+  publishes `relaymind-client-tools` only when the gateway lists it. The
+  settings are a loopback-only `baseUrl`, `executionMode` (auto,
+  local_only, external_only, sent as `X-RelayMind-Execution-Mode`;
+  parallel_demo refused), and limits copied from the gateway configuration
+  (the window of the mode, never estimated). Diagnostics tell an
+  unreachable gateway, a stale token (401, with the reconnect
+  instruction), an absent alias, and the configured mode's readiness
+  apart, and never log the token. `npm run pack:check` checks the packed
+  tarball. The declared compatibility is exactly the qualified release
+  (`openclaw.compat.pluginApi` and the `openclaw` peer dependency are
+  `2026.10.7`), so the host refuses to load it on an unqualified release.
+  `tests/test_openclaw_plugin.py` drives the plugin and the pinned
+  transport against the gateway over doubles. The transport fixtures were
+  recaptured unchanged because `package.json` changed. No specification
+  or gateway change.
+  From the macOS host probe (OpenClaw 2026.10.7): the provider also
+  resolves the alias through `resolveDynamicModel` (synchronous, no
+  request, the catalog's entry), because headless `openclaw agent exec`
+  found a plugin model only that way; the catalog stays. Discovery keeps
+  its own 5 s timeout per request, since the host gave `catalog.run` no
+  abort signal. The README documents `--accept-capabilities` for the
+  install, `paste-api-key` for the token, the TTY that `models auth login`
+  needs, and what uninstall leaves behind. From the macOS run at
+  `a52f8bf` and a Linux VPS functional check (not a supported-platform
+  qualification) of this package on the real pinned host against the
+  gateway over doubles (`docs/evidence/2026-10-28-openclaw-vps-functional-136/`):
+  the README gives the working forms (`--accept-capabilities`, `plugins
+  enable relaymind` after the install, `models list --refresh`, `plugins
+  uninstall --force` without a TTY), says the host's own `configSchema`
+  validation refuses parallel_demo before plugin code runs (a manifest test
+  keeps it out of the enum), and removes the credential and the entry that
+  uninstall leaves (`models auth logout relaymind:manual --yes`, `config
+  unset plugins.entries.relaymind`). On that check `agent exec` answered
+  through `resolveDynamicModel` with no catalog refresh (the `Unknown
+  model` fix), the host sent no `stream_options` or other switched-off
+  field for the plugin's model (spec 0.49, section 7.5), and a stale token
+  gave the 401 reconnect line and recovered after a new paste
+  (`tests/test_openclaw_vps_functional.py`). This package on macOS and
+  Windows, the env var token path, and the host's own bound on a slow
+  catalog hook are not_run.
 - OpenClaw compatibility qualification (#135; RM33, AC24):
   `integrations/openclaw/` pins `openclaw` and `@openclaw/ai` 2026.10.7
   and declares the host switches (`src/compat.ts`); a Node driver runs the

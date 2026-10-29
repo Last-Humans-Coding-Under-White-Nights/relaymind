@@ -3135,3 +3135,29 @@ this context. The same report records the plugin and harness runs at
 `a52f8bf` (install, token setup, abort passed; the harness host scenarios
 failed); those belong to #136 to #138 and are not claimed here. No Linux or
 Windows run of these steps exists; they stay not_run.
+
+## 2026-10-28 — OpenClaw provider package on the real pinned host (#136), Linux VPS functional check
+
+Linux VPS functional check (not a supported-platform qualification). One
+run of the pinned `OpenClaw 2026.10.7 (157d8c2)` (from
+`integrations/openclaw/node_modules`, Node v24.22.1, `Linux 7.0.0-38-generic
+x86_64`) against the real gateway over model doubles, through a recording
+loopback proxy, with host state isolated in a temp dir. Commit tested
+`edf87ccdbe290414db9ece2af301550f167ccac5`. Not live model evidence.
+Recorded in
+[`docs/evidence/2026-10-28-openclaw-vps-functional-136/`](evidence/2026-10-28-openclaw-vps-functional-136/REPORT.md)
+and checked by `tests/test_openclaw_vps_functional.py`.
+
+| Item | Result |
+| --- | --- |
+| Install, enable, inspect | `plugins install npm-pack:<tgz> --force --accept-capabilities` (exit 1 without the flag), `plugins enable relaymind`, `inspect --runtime --json`: `status: loaded` |
+| parallel_demo | refused by the host's `configSchema` validation before plugin code runs |
+| Token setup | `paste-api-key` on stdin; `models list --refresh` lists `relaymind/relaymind-client-tools` (without `--refresh`: the empty cached catalog) |
+| `agent exec` text turn | answered through `resolveDynamicModel` before any catalog refresh, with no discovery request (the `Unknown model` failure at `a52f8bf` is gone on this host) |
+| Switches on the wire | 4 of 4 chat requests had no `stream_options`, `max_tokens`, `reasoning_effort`, `store`, `prompt_cache_key`, `parallel_tool_calls`, tool `strict`, or developer message; `max_completion_tokens` when copied (spec 0.49, section 7.5) |
+| Stale token | `models list --refresh` logs the 401 reconnect line; `agent exec` exits 1 with the host's sign-in message; a re-pasted token recovers both |
+| Removal | `plugins uninstall --force` (exit 1 without a TTY) left the config entry, the `relaymind:manual` profile, and the token in the host state DB; `models auth logout relaymind:manual --yes` and `config unset plugins.entries.relaymind` removed them |
+
+Not shown: host tool round trips, approvals, and abort (#137, #138), the
+harness host scenarios, request size against the local limit (the doubles
+count no tokens), and any macOS or Windows run of this package (not_run).
