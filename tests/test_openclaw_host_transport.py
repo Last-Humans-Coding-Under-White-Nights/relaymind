@@ -24,7 +24,7 @@ import pytest
 
 from api_helpers import RUN_ID_HEADER, RunningServer, make_app, token_of
 from gateway_helpers import build_gateway, text_turn, tool_turn
-from helpers import make_capabilities, of_type
+from helpers import load_script_module, make_capabilities, of_type
 from native_helpers import GatedAdapter
 from relaymind.api.chat import ClientToolsChat
 from relaymind.orchestrator.local_loop import ConfiguredModel
@@ -33,6 +33,8 @@ ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "integrations" / "openclaw"
 DRIVER = PACKAGE / "test" / "host-transport" / "drive.mjs"
 REQUIRED = os.environ.get("RELAYMIND_OPENCLAW_NODE") == "1"
+# The harness builds the driver's environment; the tests use the same one.
+qualification = load_script_module("openclaw_qualification")
 
 # The fields section 7.1 lists, plus the API defaults it accepts.
 SECTION_7_1_FIELDS = {
@@ -92,14 +94,8 @@ def drive(running, app, tmp_path, token=None, **scenario):
     path = tmp_path / f"scenario-{len(list(tmp_path.glob('scenario-*')))}.json"
     scenario.setdefault("systemPrompt", SYSTEM_PROMPT)
     path.write_text(json.dumps(scenario), "utf-8")
-    env = {
-        **os.environ,
-        "RELAYMIND_BASE_URL": running.base_url,
-        "RELAYMIND_APP_TOKEN": token or token_of(app),
-        "NO_PROXY": "127.0.0.1,localhost",
-    }
-    env.pop("HTTP_PROXY", None)
-    env.pop("HTTPS_PROXY", None)
+    token = token or token_of(app)
+    env = qualification.child_environment(running.base_url, token)
     out = path.with_suffix(".out.json")
     completed = subprocess.run(
         [_node(), str(DRIVER), str(path), str(out)],
@@ -112,8 +108,9 @@ def drive(running, app, tmp_path, token=None, **scenario):
     assert completed.returncode == 0, completed.stderr
     text = out.read_text("utf-8")
     # The token never reaches the captured exchanges or the host log (RM12, section 7.5).
-    assert token_of(app) not in text
-    assert token_of(app) not in completed.stdout + completed.stderr
+    for secret in {token_of(app), token}:
+        assert secret not in text
+        assert secret not in completed.stdout + completed.stderr
     output = json.loads(text)
     return output
 
@@ -523,7 +520,7 @@ def test_an_abort_during_a_buffered_generation_cancels_the_owned_run(tmp_path):
 
 
 def only_run_ids(gateway):
-    return [row[0] for row in gateway.store._conn.execute("SELECT run_id FROM runs")]
+    return qualification._run_ids(gateway)
 
 
 def _wait_for_terminal(gateway, run_id, timeout=10.0):
