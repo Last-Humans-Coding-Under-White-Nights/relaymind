@@ -45,9 +45,14 @@ def _npm_cli(node: Path) -> Path | None:
 
 
 def _npm() -> list[str]:
-    """npm through node, so a Windows npm.cmd shim never needs a shell."""
+    """npm through node, so a Windows npm.cmd shim never needs a shell; on POSIX
+    an npm that is not a link to npm-cli.js runs directly."""
     node = Path(_node())
     cli = _npm_cli(node)
+    npm = shutil.which("npm")
+    if cli is None and npm is not None and sys.platform != "win32":
+        # A POSIX npm that is a wrapper script or a native shim runs directly.
+        return [npm]
     if cli is None:
         reason = f"no npm-cli.js found for {node}: npm is not a link to it (a native shim?)"
         if REQUIRED:
@@ -262,13 +267,26 @@ def test_a_child_folder_named_like_a_parent_is_still_inside(node_dependencies):
 
 
 def test_an_npm_that_is_a_native_shim_gives_a_clear_reason(tmp_path, monkeypatch):
-    """No npm-cli.js beside node: None, so the fixture skips or fails with a reason."""
+    """No npm-cli.js beside node: None; on Windows the fixture then skips or fails
+    with a reason, and on POSIX npm runs directly."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     (bin_dir / "node").write_text("")
     (bin_dir / "npm").write_text("#!/bin/sh\n")
     monkeypatch.setattr(shutil, "which", lambda name: str(bin_dir / name))
     assert _npm_cli(bin_dir / "node") is None
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX runs npm without a shell")
+def test_a_posix_npm_that_is_a_wrapper_script_runs_directly(tmp_path, monkeypatch):
+    """No npm-cli.js beside node on POSIX: npm itself runs, no shell needed (PR #182 review)."""
+    module = sys.modules[__name__]
+    wrapper = tmp_path / "npm"
+    wrapper.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(module, "_node", lambda: str(tmp_path / "node"))
+    monkeypatch.setattr(module, "_npm_cli", lambda node: None)
+    monkeypatch.setattr(shutil, "which", lambda name: str(wrapper) if name == "npm" else None)
+    assert module._npm() == [str(wrapper)]
 
 
 # -- CI (issue #145 item 2) -----------------------------------------------------------------
