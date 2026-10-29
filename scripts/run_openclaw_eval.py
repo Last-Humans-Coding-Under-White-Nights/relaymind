@@ -476,6 +476,11 @@ def _sha256(path: Path) -> str | None:
         return None
 
 
+def _command_dirs(host_command: Sequence[str]) -> list[Path]:
+    """The directories the host command names (either slash, as Path reads it)."""
+    return [Path(part).parent for part in host_command if Path(part).parent != Path(".")]
+
+
 def _sanitize(text: str, secrets: Sequence[str], places: Sequence[tuple[Path, str]]) -> str:
     for secret in secrets:
         if secret:
@@ -689,7 +694,7 @@ def run_evaluation(
     places += [
         (work, "<work>"),
         (tarball.parent, "<artifact-dir>"),
-        *((Path(part).parent, "<host-command-dir>") for part in host_command if os.sep in part),
+        *((path, "<host-command-dir>") for path in _command_dirs(host_command)),
         (ROOT, "<repo>"),
         (Path.home(), "<home>"),
     ]

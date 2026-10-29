@@ -470,6 +470,15 @@ def test_a_relative_place_is_replaced_by_its_absolute_forms_only(tmp_path, monke
     assert json.loads(cleaned) == {"log": f"wrote <dir>{os.sep}host.log"}
 
 
+def test_the_host_commands_directory_is_found_with_either_slash(monkeypatch):
+    """``node integrations/openclaw/.../openclaw.mjs`` names a directory on Windows
+    too, where the separator is a backslash but Path also reads a forward slash."""
+    monkeypatch.setattr(runner.os, "sep", "\\")
+    command = ["node", "integrations/openclaw/node_modules/openclaw/openclaw.mjs"]
+    assert runner._command_dirs(command) == [Path("integrations/openclaw/node_modules/openclaw")]
+    assert runner._command_dirs(["openclaw", "--flag"]) == []
+
+
 def test_the_plugin_is_configured_with_the_arms_mode_and_its_diagnostics(evaluated):
     document, _out, _backend = evaluated
     assert document["arms"]["relaymind_auto"]["plugin_config"]["executionMode"] == "auto"
