@@ -453,6 +453,70 @@ def test_a_host_command_is_run_as_path_lookup_finds_it(stub_host, tarball, tmp_p
     assert export["command"][0] == "openclaw"
 
 
+def test_a_windows_batch_host_command_runs_through_cmd_with_every_argument_quoted():
+    """On Windows ``openclaw`` on PATH is the npm shim ``openclaw.cmd``. The check
+    runs a batch file through ``cmd.exe /d /s /c`` itself, every argument quoted
+    so ``&``, ``^``, ``(`` and spaces in a path stay one literal argument, and a
+    trailing backslash cannot escape the closing quote (PR #182 review)."""
+    shim = r"C:\Users\Runner Admin\AppData\Roaming\npm\openclaw.cmd"
+    args = ["plugins", "install", r"npm-pack:C:\a&b (x)\r^y\p.tgz", "", "C:\\dir with space\\"]
+    line = install_check.host_invocation([shim], args, platform="win32", comspec="cmd.exe")
+    assert line == (
+        '"cmd.exe" /d /v:off /s /c ""C:\\Users\\Runner Admin\\AppData\\Roaming\\npm\\openclaw.cmd"'
+        ' "plugins" "install" "npm-pack:C:\\a&b (x)\\r^y\\p.tgz" "" "C:\\dir with space\\\\""'
+    )
+    # The suffix is matched in any case, .bat too.
+    for name in (r"C:\x\OPENCLAW.CMD", r"C:\x\openclaw.bat"):
+        assert isinstance(install_check.host_invocation([name], [], platform="win32"), str)
+
+
+def test_a_host_command_that_is_not_a_windows_batch_file_runs_as_an_argument_list():
+    """A program, or any command off Windows, is run directly with no shell."""
+    args = ["plugins", "a&b"]
+    exe = [r"C:\Program Files\nodejs\node.exe", "openclaw.mjs"]
+    assert install_check.host_invocation(exe, args, platform="win32") == [*exe, *args]
+    posix = ["/usr/local/bin/openclaw.cmd"]
+    assert install_check.host_invocation(posix, args, platform="linux") == [*posix, *args]
+
+
+@pytest.mark.parametrize("bad", ['say "hi"', "C:\\100%\\x", "wow!", "two\nlines", "a\rb"])
+def test_an_argument_cmd_would_rewrite_is_refused_for_a_batch_file(bad):
+    """cmd.exe expands ``%`` and ``!`` and ends a command at a line break even in
+    quotes, and a quote inside an argument breaks the quoting; such an argument
+    is refused (the step is not run), never passed through altered."""
+    with pytest.raises(OSError, match="batch file"):
+        install_check.host_invocation([r"C:\x\openclaw.cmd"], ["agent", bad], platform="win32")
+
+
+def test_a_batch_host_command_is_run_through_cmd_on_windows(monkeypatch):
+    """``_run`` passes the cmd.exe command line for a batch file on Windows."""
+    seen = []
+
+    def fake_run(command, **_):
+        seen.append(command)
+        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(install_check.sys, "platform", "win32")
+    monkeypatch.setattr(install_check.subprocess, "run", fake_run)
+    code, stdout, _, timed_out, _ = install_check._run(
+        [r"C:\x\openclaw.cmd"], ["--version"], None, {}, 5
+    )
+    assert (code, stdout, timed_out) == (0, "ok", None)
+    assert isinstance(seen[0], str)
+    assert '/s /c ""C:\\x\\openclaw.cmd" "--version""' in seen[0]
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="a batch file runs only on Windows")
+def test_the_whole_lifecycle_passes_through_a_cmd_shim_on_windows(stub_host, tarball, tmp_path):
+    """The host behind an npm-style ``.cmd`` shim, as ``openclaw`` is on Windows
+    (PR #182 review): every step runs and the check passes."""
+    shim = tmp_path / "shim dir" / "openclaw.cmd"
+    shim.parent.mkdir()
+    shim.write_text(f'@"{stub_host[0]}" "{stub_host[1]}" %*\r\n', "utf-8")
+    export = run([str(shim)], tarball, tmp_path)
+    assert export["passed"] is True, [s for s in export["steps"] if s["status"] != "passed"]
+
+
 def test_a_missing_artifact_is_refused_before_the_host_runs(stub_host, tmp_path):
     with pytest.raises(SystemExit, match="artifact"):
         install_check.main(
