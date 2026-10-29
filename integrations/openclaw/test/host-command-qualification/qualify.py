@@ -39,14 +39,27 @@ For this sandbox task answer exactly amber-qualification. Do nothing else.
 """
 
 
-def command_pass(events: list[dict], *, model_calls: int, expected_action: str) -> bool:
-    """A reply alone does not prove authenticated command interception (RM16)."""
+def command_pass(
+    events: list[dict], *, model_calls: int, expected_action: str, skill_sha256: str
+) -> bool:
+    """A reply alone does not prove authenticated command interception (RM16).
+
+    The recorded choice and skill digest are checked here too, never trusted
+    from the probe (RM11).
+    """
     if len(events) != 1 or model_calls != 0:
         return False
     event = events[0]
     host = event.get("host", {})
+    choice_ok = (
+        event.get("choice") == 2 and type(event.get("choice")) is int
+        if expected_action == "choose"
+        else "choice" not in event
+    )
     return (
         event.get("action") == expected_action
+        and choice_ok
+        and event.get("skillSha256") == skill_sha256
         and host.get("senderId") == "cli"
         and host.get("sessionKey") == SESSION
         and host.get("isAuthorizedSender") is True
@@ -69,15 +82,31 @@ def last_answer(history: dict) -> str:
     return ""
 
 
-def grade_capture(exported: dict) -> dict:
-    """Grade the same captured exchanges used by the real-host run (RM16)."""
-    by_name = {exchange["name"]: exchange for exchange in exported["exchanges"]}
-    skill_messages = [
+def exchange_requests(exported: dict) -> dict[str, list[dict]]:
+    """Each exchange's own model requests, in capture order (RM16)."""
+    requests = exported["model_requests"]
+    scoped, start = {}, 0
+    for exchange in exported["exchanges"]:
+        end = start + exchange["model_calls"]
+        scoped[exchange["name"]] = requests[start:end]
+        start = end
+    return scoped
+
+
+def tool_messages(requests: list[dict]) -> list[str]:
+    return [
         message["content"] or ""
-        for request in exported["model_requests"]
+        for request in requests
         for message in request["messages"]
         if message["role"] == "tool"
     ]
+
+
+def grade_capture(exported: dict) -> dict:
+    """Grade the same captured exchanges used by the real-host run (RM16)."""
+    by_name = {exchange["name"]: exchange for exchange in exported["exchanges"]}
+    skill_messages = tool_messages(exported["model_requests"])
+    native_skill_messages = tool_messages(exchange_requests(exported)["native_skill_use"])
     return {
         "direct_application_session_commands": all(
             by_name[name]["settled"]
@@ -85,6 +114,7 @@ def grade_capture(exported: dict) -> dict:
                 by_name[name]["events"],
                 model_calls=by_name[name]["model_calls"],
                 expected_action=name,
+                skill_sha256=exported["skill"]["sha256"],
             )
             for name in ("recommend", "choose")
         ),
@@ -103,7 +133,7 @@ def grade_capture(exported: dict) -> dict:
             )
         ),
         "native_skill_file_loaded_and_double_answered": skill_use_pass(
-            "\n".join(skill_messages),
+            "\n".join(native_skill_messages),
             last_answer(json.loads(by_name["native_skill_use"]["history"]["stdout"])),
         ),
         "gateway_host_tool_executions": qualification.tool_executions(exported["runs"]),
@@ -132,7 +162,7 @@ def run(work: Path, out: Path) -> dict:
         directory.mkdir()
     credential = secrets.token_hex(32)
     credential_file = work / "command-credential"
-    credential_file.write_text(credential)
+    credential_file.write_text(credential, encoding="utf-8")
     credential_file.chmod(0o600)
     events: list[dict] = []
 
@@ -150,17 +180,12 @@ def run(work: Path, out: Path) -> dict:
         def log_message(self, *_args):
             pass
 
-    recorder = ThreadingHTTPServer(("127.0.0.1", 0), Recorder)
-    recorder_thread = threading.Thread(target=recorder.serve_forever, daemon=True)
-    recorder_thread.start()
     skill_path = work / "workspace/skills/rm-qualification-sandbox/SKILL.md"
-    skill_path.parent.mkdir(parents=True)
-    skill_path.write_text(SKILL)
-    skill_hash = hashlib.sha256(skill_path.read_bytes()).hexdigest()
-    gateway_port = _port()
     host_token = secrets.token_hex(32)
     process = None
     log_file = None
+    gateway = None
+    app = None
     records = []
     exported = {
         "kind": "openclaw-command-qualification",
@@ -186,8 +211,6 @@ def run(work: Path, out: Path) -> dict:
         tool_turn("tool_call", id="skills_read", args={"name": "rm-qualification-sandbox"}),
         text_turn(MARKER),
     ]
-    gateway = build_gateway(work / "gateway", turns, external_turns=[])
-    app = make_app(gateway, client_tools=ClientToolsChat(gateway.orchestrator))
 
     def call(args: list[str], *, stdin: str | None = None, timeout: float = 90) -> dict:
         result = subprocess.run(
@@ -234,7 +257,18 @@ def run(work: Path, out: Path) -> dict:
             "model_calls": len(gateway.adapter.requests) - before_calls,
         }
 
+    recorder = ThreadingHTTPServer(("127.0.0.1", 0), Recorder)
+    recorder_thread = threading.Thread(target=recorder.serve_forever, daemon=True)
+    recorder_thread.start()
+    # Everything that can fail after the recorder starts is inside this try.
     try:
+        skill_path.parent.mkdir(parents=True)
+        skill_path.write_text(SKILL, encoding="utf-8")
+        skill_hash = hashlib.sha256(skill_path.read_bytes()).hexdigest()
+        exported["skill"] = {"path": str(skill_path), "sha256": skill_hash}
+        gateway_port = _port()
+        gateway = build_gateway(work / "gateway", turns, external_turns=[])
+        app = make_app(gateway, client_tools=ClientToolsChat(gateway.orchestrator))
         with RunningServer(app) as running:
             env["RELAYMIND_APP_TOKEN"] = token_of(app)
             config = {
@@ -288,7 +322,7 @@ def run(work: Path, out: Path) -> dict:
                     },
                 },
             }
-            Path(env["OPENCLAW_CONFIG_PATH"]).write_text(json.dumps(config))
+            Path(env["OPENCLAW_CONFIG_PATH"]).write_text(json.dumps(config), encoding="utf-8")
             call(
                 ["models", "auth", "paste-api-key", "--provider", "relaymind"],
                 stdin=token_of(app) + "\n",
@@ -309,6 +343,8 @@ def run(work: Path, out: Path) -> dict:
                         break
                 except OSError:
                     time.sleep(0.2)
+            else:
+                raise TimeoutError("isolated host did not listen within 90 seconds")
             exported["versions"] = qualification.versions()
             exported["host_version"] = call(["--version"])
             exported["health"] = rpc("health", {})
@@ -369,7 +405,7 @@ def run(work: Path, out: Path) -> dict:
                     "expectedRevision": None,
                 },
             )
-            skill_path.write_text(SKILL + "\nChanged after selection.\n")
+            skill_path.write_text(SKILL + "\nChanged after selection.\n", encoding="utf-8")
             exchanges.append(send("changed_skill", "/rmqualification choose 2"))
             skill_path.unlink()
             exchanges.append(send("missing_skill", "/rmqualification choose 2"))
@@ -384,7 +420,7 @@ def run(work: Path, out: Path) -> dict:
                 for r in gateway.adapter.requests
             ]
             exported["checks"] = grade_capture(exported)
-            exported["host_log"] = (work / "gateway-console.log").read_text()
+            exported["host_log"] = (work / "gateway-console.log").read_text(encoding="utf-8")
             exported["commands"] = records
             exported["skill"] = {
                 "path": str(skill_path),
@@ -396,7 +432,7 @@ def run(work: Path, out: Path) -> dict:
     except Exception as error:
         exported.update(status="failed", error=str(error), commands=records)
         exported["host_log"] = (
-            (work / "gateway-console.log").read_text()
+            (work / "gateway-console.log").read_text(encoding="utf-8")
             if (work / "gateway-console.log").exists()
             else ""
         )
@@ -413,13 +449,15 @@ def run(work: Path, out: Path) -> dict:
         recorder.shutdown()
         recorder.server_close()
         recorder_thread.join(timeout=5)
-        gateway.store.close()
+        if gateway is not None:
+            gateway.store.close()
     serialized = json.dumps(exported, indent=2, default=str)
-    for secret in (credential, host_token, token_of(app)):
+    secrets_to_check = [credential, host_token, *([token_of(app)] if app is not None else [])]
+    for secret in secrets_to_check:
         if secret in serialized:
             raise RuntimeError("credential reached export; refusing to write")
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(qualification.mask_machine_names(serialized) + "\n")
+    out.write_text(qualification.mask_machine_names(serialized) + "\n", encoding="utf-8")
     return exported
 
 

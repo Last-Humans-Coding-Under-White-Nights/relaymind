@@ -320,34 +320,44 @@
       "bytes": 31957,
       "uncompressed_sha256": "4b944e90d56b3ad63f815239d0ab044e3d84228d050293305c5f4619b1e343bc",
       "uncompressed_bytes": 132862
+    },
+    "capture-summary.json": {
+      "sha256": "c1f74ca80909bf177f4bd5908a01b04a2346ee24ae8e66f201326a961b4df317",
+      "bytes": 48718
     }
   },
   "validation": {
-    "targeted_pytest": "4 passed after R1",
-    "vitest": "367 passed in 17 files",
+    "targeted_pytest": "11 passed after R2",
+    "vitest": "369 passed in 17 files",
     "typecheck": "passed",
     "pack_check": "passed; fixture excluded from provider tarball",
     "ruff_check": "passed",
     "ruff_format_check": "299 files unchanged",
-    "full_pytest": "Original run interrupted after3036passed1skipped13deselected; corrected-tree run pending."
+    "full_pytest": "5446 passed, 2 skipped, 13 deselected after R2 (macOS, Python 3.14.9; 368 s)"
   },
   "secret_scan": {
     "artifacts_scanned": 2,
     "known_gateway_and_action_values_checked": 2,
     "credential_value_hits": 0,
     "raw_authentication_header_fields": 0,
-    "application_token_scan": "Performed before export in both runtime drivers,0hits.",
+    "application_token_scan": "Performed before export in both runtime drivers, 0 hits.",
     "disposable_paths": "All runtime state/skill/sandbox/credential paths under task /tmp directories; checkout paths are harness/provider source identities."
   },
   "source_sha256_scope": "Historical host capture and original reviewed harness. Changed grader/tests are identified separately in regrade.json; these historical hashes are preserved.",
   "offline_regrade": {
     "artifact": "regrade.json",
-    "sha256": "b140d909233b1802adb554b32ffe780db236b22ae99235c6f624e1c6c6f8f82e",
+    "sha256": "742288e4e587b09bb7c9ac8724690b61bc16898a31a2dbaaadf4b517aa060f84",
     "current_grader_sources_sha256": {
-      "integrations/openclaw/test/host-command-qualification/qualify.py": "492b8833bbb7f34b70f82251e38b88479a2409cf05842afd10ac67efc3037e51",
-      "tests/test_openclaw_command_qualification.py": "cafc7f793ad75dcd71257cdb71026177040f5291b2131f414ddf7a887c1121a9"
+      "integrations/openclaw/test/host-command-qualification/qualify.py": "b75d5f68f4e1d3aef69c931c43efb7a7392dfde6bf0ab4553d446117da675a95",
+      "tests/test_openclaw_command_qualification.py": "67fc92e9a51813a6ff007574051a0612cc6aee9e77cceb7337a34d5f55ddf3c3"
     },
     "captured_native_skill_use_passed": true,
-    "wrong_final_assistant_rejected": true
+    "wrong_final_assistant_rejected": true,
+    "revisions": [
+      "R1",
+      "R2"
+    ],
+    "r2_marker_outside_native_skill_exchange_rejected": true,
+    "r2_changed_choice_or_digest_rejected": true
   }
 }
