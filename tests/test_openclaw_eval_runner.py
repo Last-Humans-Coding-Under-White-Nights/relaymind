@@ -13,6 +13,7 @@ direct arm is a doubles gateway too. Nothing here is live evidence; the
 measurement itself is an operator run.
 """
 
+import hashlib
 import json
 import os
 import subprocess
@@ -40,18 +41,33 @@ SELECTED = ("text-reply-en", "read-note-en", "exec-append-deny-zh")
 EVIDENCE = "not live evidence: a stub host over gateway doubles"
 
 # The host stand-in: config in OPENCLAW_CONFIG_PATH, the stored key under
-# OPENCLAW_STATE_DIR, a log of every call, and the plugin's diagnostics
-# records written the way the plugin writes them.
+# OPENCLAW_STATE_DIR, a log of every call (calls.jsonl beside the stub, so it
+# outlives the runner's work directory; the token itself is never logged, only
+# whether the environment held it and a hash of what standard input gave), and
+# the plugin's diagnostics records written the way the plugin writes them.
 STUB_HOST = r"""
-import json, os, re, subprocess, sys, urllib.request
+import hashlib, json, os, re, subprocess, sys, urllib.request
 from pathlib import Path
 
 args = sys.argv[1:]
 state = Path(os.environ["OPENCLAW_STATE_DIR"])
 state.mkdir(parents=True, exist_ok=True)
 config_path = Path(os.environ["OPENCLAW_CONFIG_PATH"])
-with open(state / "calls.jsonl", "a") as log:
-    log.write(json.dumps({"args": args, "env_token": "RELAYMIND_APP_TOKEN" in os.environ}) + "\n")
+call = {"args": args, "home": os.environ["OPENCLAW_HOME"], "stdin_sha256": None}
+if args[:3] == ["models", "auth", "paste-api-key"]:
+    pasted = sys.stdin.readline().strip()
+    call["stdin_sha256"] = hashlib.sha256(pasted.encode()).hexdigest()
+    (state / "key").write_text(pasted)
+stored = (state / "key").read_text() if (state / "key").exists() else None
+call["env_token"] = "RELAYMIND_APP_TOKEN" in os.environ or bool(
+    stored and any(stored in value for value in os.environ.values())
+)
+if "--state-dir" in args:
+    exec_state = Path(args[args.index("--state-dir") + 1])
+    call["state_dir"] = {"exists": exec_state.is_dir(),
+                         "empty": exec_state.is_dir() and not any(exec_state.iterdir())}
+with open(Path(__file__).with_name("calls.jsonl"), "a") as log:
+    log.write(json.dumps(call) + "\n")
 
 def load():
     return json.loads(config_path.read_text()) if config_path.exists() else {}
@@ -72,7 +88,7 @@ elif args[:2] == ["plugins", "enable"]:
     entries.setdefault(args[2], {})["enabled"] = True
     save(config)
 elif args[:3] == ["models", "auth", "paste-api-key"]:
-    (state / "key").write_text(sys.stdin.readline().strip())
+    pass  # the key was read from standard input and stored above
 elif args[:2] == ["agent", "exec"]:
     prompt = args[2]
     ref = args[args.index("--model") + 1]
@@ -182,6 +198,8 @@ class DoublesBackend:
         # to 10,577 tokens with the pinned tokenizer); None keeps the double's count.
         self.local_request_tokens = local_request_tokens
         self.provider = self._serve("provider", absent=True)
+        # Each RelayMind arm's gateway token, so a test can follow where it went.
+        self.tokens: dict[str, str] = {}
 
     def _serve(self, name: str, *, absent: bool = False):
         work = self.tmp_path / name
@@ -223,6 +241,7 @@ class DoublesBackend:
 
     def start(self, arm: str, work: Path):
         gateway, app, server = self._serve(arm)
+        self.tokens[arm] = token_of(app)
 
         def stop():
             server.__exit__(None, None, None)
@@ -256,6 +275,17 @@ class DoublesBackend:
         gateway, _app, server = self.provider
         server.__exit__(None, None, None)
         gateway.store.close()
+
+
+def host_calls(tmp_path: Path) -> list[dict]:
+    """Every call the stub host logged, in order (calls.jsonl beside the stub)."""
+    lines = (tmp_path / "calls.jsonl").read_text("utf-8").splitlines()
+    return [json.loads(line) for line in lines]
+
+
+def arm_of(call: dict) -> str:
+    """The arm a logged call ran in: OPENCLAW_HOME is <work>/<arm>/host/home."""
+    return Path(call["home"]).parents[1].name
 
 
 @pytest.fixture
@@ -342,8 +372,32 @@ def test_each_task_runs_in_a_fresh_sandbox_under_its_frozen_policy(evaluated, tm
     )
 
 
-def test_the_host_gets_the_frozen_prompt_and_the_token_only_on_standard_input(evaluated):
-    document, _out, _backend = evaluated
+def test_the_host_gets_the_frozen_prompt_and_the_token_only_on_standard_input(evaluated, tmp_path):
+    """RM12, section 12.5: the gateway token reaches the host only on standard input.
+
+    The stub host's own log (taken before the export is sanitized) shows the
+    token in no argument and in no call's environment, and the store-token
+    call of each RelayMind arm got that arm's token on standard input.
+    """
+    document, _out, backend = evaluated
+    calls = host_calls(tmp_path)
+    assert set(backend.tokens) == {"relaymind_auto", "relaymind_external_only"}
+    secrets = [*backend.tokens.values(), *backend.secrets()]
+    for call in calls:
+        assert not any(secret in arg for secret in secrets for arg in call["args"]), call["args"]
+        assert call["env_token"] is False, call["args"]
+    for arm, token in backend.tokens.items():
+        pasted = [
+            c
+            for c in calls
+            if arm_of(c) == arm and c["args"][:3] == ["models", "auth", "paste-api-key"]
+        ]
+        assert len(pasted) == 1
+        assert pasted[0]["stdin_sha256"] == hashlib.sha256(token.encode()).hexdigest()
+    # The export's host arguments needed no redaction: no secret was ever in them.
+    for arm in ("relaymind_auto", "relaymind_external_only", "direct"):
+        assert runner.NOT_RECORDED not in json.dumps(document["arms"][arm]["setup"])
+    assert runner.NOT_RECORDED not in json.dumps([a["host"]["argv"] for a in document["attempts"]])
     for arm in ("relaymind_auto", "relaymind_external_only", "direct"):
         setup = document["arms"][arm]["setup"]
         names = [step["name"] for step in setup]
