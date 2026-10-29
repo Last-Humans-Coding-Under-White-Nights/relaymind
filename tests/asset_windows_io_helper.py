@@ -201,17 +201,25 @@ def capture_oplock(root, db):
                 expected_revision=before.catalog_revision,
             )
         except SourceFailure as exc:
-            catalog.record_failure("example", exc)
+            catalog.record_failure(
+                "example", rejected_count=exc.rejected_count, exclusions=exc.exclusions
+            )
         else:
             raise AssertionError("held oplock was admitted as an ordinary capture")
         after = catalog.snapshot()
-        assert after.catalog_revision == before.catalog_revision == 1
-        assert [a.content_hash for a in after.assets] == [a.content_hash for a in before.assets]
+        assert before.catalog_revision == 1
+        assert after.catalog_revision == before.catalog_revision + 1
+        content_retained = [a.content_hash for a in after.assets] == [
+            a.content_hash for a in before.assets
+        ]
+        assert content_retained
         assert catalog.inventory("example").tombstones == frozenset()
     return dict(
         completed=True,
         elapsed_seconds=time.monotonic() - started,
-        retained_revision=after.catalog_revision,
+        previous_catalog_revision=before.catalog_revision,
+        observed_catalog_revision=after.catalog_revision,
+        content_retained=content_retained,
         native_statuses=statuses,
     )
 

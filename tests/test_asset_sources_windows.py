@@ -148,7 +148,9 @@ def test_native_io_oplock_and_cancellation_with_external_watchdog(tmp_path, scen
     assert evidence["completed"]
     assert evidence["elapsed_seconds"] < 2
     if scenario == "oplock-capture":
-        assert evidence["retained_revision"] == 1
+        assert evidence["previous_catalog_revision"] == 1
+        assert evidence["observed_catalog_revision"] == 2
+        assert evidence["content_retained"]
         assert evidence["ordinary_open_pended"]
     else:
         assert evidence["reason"] == ("deadline" if scenario.endswith("deadline") else "cancelled")
