@@ -3065,7 +3065,7 @@ The tokenizer count and one live AC24 turn were measured later on the same Mac
 | Item | Status | Evidence or command |
 | --- | --- | --- |
 | Real host request capture (system prompt, tool catalog, history) | ran (macOS, capture server) | `docs/evidence/2026-10-27-openclaw-mac-probe/requests/` |
-| Real OpenClaw host against the gateway over doubles (text, host tool) | ran on macOS at `a52f8bf` and failed (`checks.passed` false; next entry); fixes in #136 and #137 | `scripts/openclaw_qualification.py host` (see `integrations/openclaw/README.md`) |
+| Real OpenClaw host against the gateway over doubles (text, host tool) | ran on macOS at `a52f8bf` and failed (`checks.passed` false; next entry); fixes in #136 and #137, then ran in the Linux VPS functional check of #137 (below) | `scripts/openclaw_qualification.py host` (see `integrations/openclaw/README.md`) |
 | Captured request sizes, UTF-8 upper bound | ran offline on the sanitized captures (`--sanitized`): 7 measured, 0 proved to fit, 7 undecided; superseded by the tokenizer count | `docs/evidence/2026-10-27-openclaw-request-size-mac-probe-utf8.json` |
 | Captured request sizes, tokenizer count against the local limit (8192, `qwen3-0.6b-q8_0`), share that fits in auto and local_only | measured (macOS, next entry): 0 of 3 fresh host requests and 0 of 7 probe requests fit | `docs/evidence/2026-10-27-openclaw-mac-qualification/request-size.json` |
 | Switches on a plugin-supplied model (catalog or `resolveDynamicModel`) | not_run: the switch runs used a config-file provider; the one plugin-model run declared none and sent `stream_options` | #136 |
@@ -3161,3 +3161,35 @@ and checked by `tests/test_openclaw_vps_functional.py`.
 Not shown: host tool round trips, approvals, and abort (#137, #138), the
 harness host scenarios, request size against the local limit (the doubles
 count no tokens), and any macOS or Windows run of this package (not_run).
+
+## 2026-10-28 — OpenClaw round trips on the real pinned host (#137), Linux VPS functional check
+
+Linux VPS functional check (not a supported-platform qualification). One
+run of the harness host scenarios (`scripts/openclaw_qualification.py
+host`) with the pinned `OpenClaw 2026.10.7 (157d8c2)` (from
+`integrations/openclaw/node_modules`, Node v24.22.1, `Linux 7.0.0-38-generic
+x86_64`) against the real gateway over model doubles, with host state
+isolated in a temp dir. Commit tested
+`fd6aca1e7a9c6ac60b6b47d74d23f3e35c51cd1c` (clean). Not live model evidence.
+Recorded in
+[`docs/evidence/2026-10-28-openclaw-vps-functional-137/`](evidence/2026-10-28-openclaw-vps-functional-137/REPORT.md)
+and checked by `tests/test_openclaw_vps_functional_round_trips.py`.
+
+| Scenario | Host decision | `checks.passed` |
+| --- | --- | --- |
+| `text-tool` (default, one `agent exec`) | ran `relaymind_test_echo` | true |
+| `tool-deny` (`tools.exec.mode` deny) | blocked the write: no route for the plugin approval | true (0 lines) |
+| `tool-approve` (`tools.exec.mode` full) | blocked the write: no route for the plugin approval; the host still said `ok: true` | **false** (0 of 1 lines), correctly |
+| `exec-deny` | `exec denied: host=gateway security=deny` | true (0 lines) |
+| `exec-full` | ran the host's `exec` | true (1 line) |
+
+The test host tools registered once their manifest declared
+`contracts.tools` (Q9), and the host offered them only with
+`tools.toolSearch false` and both names in `tools.alsoAllow`. The host sent
+every call ID back without underscores (`call_echo_1` as `callecho1`, Q6).
+The macOS default-scenario failure at `a52f8bf` (Q8) was the harness: it
+scripted a text turn before the call, which one exec could not get past.
+
+Not shown: a plugin approval answered by an operator at a running OpenClaw
+Gateway, abort (#138), request size, and any macOS or Windows run of these
+scenarios (not_run).

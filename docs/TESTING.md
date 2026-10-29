@@ -1103,13 +1103,95 @@ temp dir; a few minutes, no model). The same steps on macOS and Windows for
 this package are not_run
 ([`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
 
+### OpenClaw round trips (#137; RM01, RM03, RM04, RM08, RM09, RM12, RM19, RM20, RM26, RM33; AC10, AC24)
+
+```bash
+cd integrations/openclaw && npm run typecheck && npm test
+cd ../.. && pytest tests/test_openclaw_round_trips.py tests/test_openclaw_qualification_script.py \
+  tests/test_openclaw_vps_functional_round_trips.py
+```
+
+- `integrations/openclaw/test/input-guard.test.ts`: the guard refuses, by
+  field, an image part in a user message or a tool result (the pinned host
+  would replace it with "(image omitted: ...)" text), a structured response
+  format, `parallel_tool_calls: true` (quoting `unsupported_parameter`), a
+  strict tool, `n` other than 1, a non-text content part, and a payload
+  that lost a host tool; a text and tools request passes unchanged.
+- `integrations/openclaw/test/stream.test.ts`: the provider's stream
+  wrapper over the pinned transport, against scripted gateway replies
+  (the #135 fixtures and synthetic streams): a text replay, a non-streamed
+  answer, one complete call, keep-alive comments that are not content, an
+  error event after content or before any (early headers), a stream with no
+  finish chunk, malformed JSON, and an HTTP error are failures; an empty or
+  blank answer and two calls in one response are failures the plugin adds;
+  refused input sends no request; the host's own payload hook still runs.
+- `integrations/openclaw/test/provider.test.ts`: `wrapStreamFn` wraps the
+  host's stream and turns an empty success into a failure.
+- `integrations/openclaw/test/host-tool-plugin.test.ts`: the test-only
+  host tool plugin (`test/host-tool-plugin/`): the echo and write tools,
+  the approval hook on every write, a write that stays in the sandbox, and
+  a manifest whose `contracts.tools` names every tool it registers (the
+  pinned host refuses the tools otherwise, Q9).
+- `tests/test_openclaw_round_trips.py`: the plugin driver sends the host's
+  conversation through the pinned transport wrapped by the plugin, and
+  plays the host's tool execution and approval policy. Text and a host tool
+  round trip, streamed and buffered; tool_choice none, required, and named;
+  arguments that break the schema never reach the host; matching call and
+  result IDs; one call exposed of two; a host tool named like a gateway tool
+  that the gateway never runs; a sandbox mutation the host denies (no side
+  effect) and allows (exactly one line); a tool result passed as data and a
+  secret argument redacted in the trace; auto fallback before output with
+  one answer owner, local_only with zero external calls, external_only
+  without a local model, an oversized catalog in auto (external) and
+  local_only (needs_external, no external call), with every host tool
+  forwarded; budgets as configured and no managed selection; early-header
+  comments that are not content; the plugin's refusals before sending.
+  Recorded at the pin: the host sends its tool catalog ordered by name.
+  The driver replays each call ID the way the real host did on the macOS
+  probe (`call_echo_1` becomes `callecho1`), so the tests correlate the
+  proposal and the result through the host's rule, never by the exact
+  issued ID (section 7.5); a verbatim replay is accepted as well.
+- `tests/test_openclaw_qualification_script.py`: the host's ID rule
+  (`host_replayed_call_id`: the observed underscore removal, and the
+  pinned source's `[A-Za-z0-9]`, 40 characters) and `answers_call`; the
+  default `text-tool` scenario passing in one host turn (the echo call,
+  then the closing text; a text-only turn does not pass, Q8); the host
+  mode's `--scenario exec-deny|exec-full|tool-deny|tool-approve`
+  checks against a stub host: the sandbox lines, no gateway tool
+  execution, the proposed call, and the host's result in the next run,
+  also when the host rewrote the call ID (kept as `replayed_call_ids`);
+  the host's own JSON report kept
+  as `host_report` and never deciding a pass (a denied tool with
+  `"ok": true` does not pass an allow scenario); a denial that wrote or
+  ran anyway and a scenario that did not run never pass.
+
+- `tests/test_openclaw_vps_functional_round_trips.py`: reads the Linux VPS
+  functional check (not a supported-platform qualification) of the harness
+  host scenarios on the real pinned host against the gateway over doubles
+  (`docs/evidence/2026-10-28-openclaw-vps-functional-137/`): the test host
+  tools registered, `text-tool` passed in one `agent exec`, the headless
+  plugin approval failed closed (`tool-deny` passed, `tool-approve` failed
+  with no line written though the host said `ok`), `exec-deny` and
+  `exec-full` passed, and every call ID came back without underscores. It
+  also checks that the README gives the command forms that worked.
+
+The deny and allow decisions in the first five come from the driver or a
+stub standing in for the host's policy. The real host's decisions are in the
+Linux VPS functional check, rerun with
+`docs/evidence/2026-10-28-openclaw-vps-functional-137/scaffold/vps_functional.py`
+(a few minutes, no model). A plugin approval answered by an operator at a
+running OpenClaw Gateway, and these scenarios on macOS and Windows, are
+not_run (the exact host commands are in
+[`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
+
 The Node-dependent tests skip with the reason when `node` or
 `integrations/openclaw/node_modules` is missing; `RELAYMIND_OPENCLAW_NODE=1`
 makes that a failure. This tier runs the host's transport, not its agent
 loop: the real-host run against the gateway
 (`scripts/openclaw_qualification.py host`) is an operator step
 ([`integrations/openclaw/README.md`](../integrations/openclaw/README.md));
-its one macOS run at `a52f8bf` failed (`docs/EVIDENCE.md`, #136, #137).
+its one macOS run at `a52f8bf` failed (`docs/EVIDENCE.md`, #136, #137),
+and the Linux VPS functional check ran it on the pinned host (above).
 The host request capture ran on macOS against a capture server (the host
 probe), and its requests are checked offline by
 `tests/test_openclaw_host_captures.py`.
@@ -1172,8 +1254,13 @@ probe), and its requests are checked offline by
   the tokenizer count on macOS measured 0 of 10 host requests within the
   8192 local limit; one live AC24 turn in auto without an external model
   (config-row workaround, #136) ended needs_external / context_limit with
-  0 model calls. The harness host scenarios at `a52f8bf` failed (#136, #137); Linux and Windows host runs
-  are not_run. The plugin itself is #136's.
+  0 model calls. The harness host scenarios at `a52f8bf` failed (#136, #137).
+  The plugin (#136) and its round trips (#137) are covered over doubles
+  ([OpenClaw round trips](#openclaw-round-trips-137-rm01-rm03-rm04-rm08-rm09-rm12-rm19-rm20-rm26-rm33-ac10-ac24)),
+  and a Linux VPS functional check (not a supported-platform qualification)
+  ran the harness host scenarios on the real pinned host over doubles; a
+  plugin approval answered by an operator, a macOS rerun, and any Windows
+  host run are not_run, and no live result is claimed.
   YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are
   implemented (#143, #144), with frozen SkillsBench/ToolRet inputs and

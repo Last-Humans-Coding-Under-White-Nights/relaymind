@@ -17,19 +17,39 @@ Two modes:
     committed set).
 
 ``host``
-    Starts one gateway with a text turn, a sandbox host tool call, and a
-    final text turn scripted, runs an operator command (for example a real
-    ``openclaw agent exec``) with ``RELAYMIND_BASE_URL`` and
-    ``RELAYMIND_APP_TOKEN`` in its environment only, and writes one export:
-    the command's exit status (``timed_out`` past ``--timeout``), every run
-    the gateway recorded with its trace events, and the versions. The token
-    is never written. This mode needs a real OpenClaw install; it is run by
-    an operator and CI, not by the deterministic suite.
+    Starts one gateway with the scripted turns of ``--scenario``, runs an
+    operator command (for example a real ``openclaw agent exec``) with
+    ``RELAYMIND_BASE_URL``, ``RELAYMIND_APP_TOKEN``, and
+    ``RELAYMIND_TEST_SANDBOX`` (a fresh empty directory) in its environment
+    only, and writes one export: the command's exit status (``timed_out``
+    past ``--timeout``), every run the gateway recorded with its trace
+    events, the versions, and the scenario's checks. The token is never
+    written. This mode needs a real OpenClaw install; it is run by an
+    operator and CI, not by the deterministic suite.
+
+    Scenarios (#137): ``text-tool`` (the default, in one host turn: the
+    sandbox echo call, then a final text turn); ``exec-deny`` and ``exec-full`` (a call
+    to the host's own ``exec`` tool that appends one line to the sandbox's
+    ``note.txt`` by absolute path, so the host's working directory cannot hide
+    a run, then a final text turn), for the host's ``tools.exec.mode`` ``deny``
+    and ``full``, the headless policy pair the macOS probe observed;
+    ``tool-deny`` and ``tool-approve`` (a call to the mutating sandbox tool
+    ``relaymind_test_write``, then a final text turn), which need an
+    approval surface: headless ``agent exec`` has none, and an approval
+    there fails closed. The host's own policy decides; the export checks,
+    from the sandbox and the trace, that a denial wrote nothing, that an
+    allowed call wrote exactly one line, that the gateway executed no tool
+    and proposed the call, and that the host's result reached the next run,
+    matching the call ID the way the host rewrites it
+    (``host_replayed_call_id``). The host's exit status and its own JSON
+    report (``host_report``: it says ``"ok": true`` for a denied tool) never
+    decide a pass. A scenario that did not complete never passes.
 
 Usage:
     python scripts/openclaw_qualification.py fixtures \\
         --out-dir integrations/openclaw/test/fixtures/v2026.10.7/transport
-    python scripts/openclaw_qualification.py host --out <export.json> -- <command> [args...]
+    python scripts/openclaw_qualification.py host --out <export.json> \\
+        [--scenario text-tool|exec-deny|exec-full|tool-deny|tool-approve] -- <command> [args...]
 
 Deterministic transport fixtures are not live evidence (section 12.5).
 """
@@ -40,6 +60,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -445,26 +466,175 @@ def _text(output: bytes | str | None) -> str:
     return output.decode("utf-8", "replace") if isinstance(output, bytes) else output
 
 
-def run_host(command: Sequence[str], out: Path, *, timeout: float = 900) -> dict:
+WRITE_TOOL = "relaymind_test_write"
+WRITE_FILE = "note.txt"
+# The host's own shell tool, under its tools.exec.mode policy (macOS probe, C2).
+EXEC_TOOL = "exec"
+# The pinned host's replay rule for a tool call ID (section 7.5).
+HOST_CALL_ID_LIMIT = 40
+
+
+def write_call(call_id: str = "call_write_1") -> list:
+    return tool_turn(WRITE_TOOL, call_id=call_id, name=WRITE_FILE, line="written by the host")
+
+
+def exec_command(sandbox: Path) -> str:
+    """The shell command the exec scenarios propose: one line into the sandbox file.
+
+    The path is absolute, so the line lands in the sandbox whatever working
+    directory the host's exec uses: a deny the host ignored, or ran outside
+    ``--cwd``, still shows up in ``sandbox_lines`` and never passes.
+    """
+    return f"echo written-by-the-host >> {shlex.quote(str(sandbox / WRITE_FILE))}"
+
+
+def exec_call(sandbox: Path, call_id: str = "call_exec_1") -> list:
+    return tool_turn(
+        EXEC_TOOL, call_id=call_id, title="relaymind note", command=exec_command(sandbox)
+    )
+
+
+def host_replayed_call_id(call_id: str) -> str:
+    """The ID the pinned host sends back for a call ID it received (section 7.5).
+
+    Observed on the macOS probe (OpenClaw 2026.10.7): ``call_probe_1`` was
+    replayed as ``callprobe1``, in the assistant call and the tool message
+    alike. The rest of the rule is read from the pinned source
+    (``src/agents/tool-call-id.ts``, "strict" mode, applied to an
+    openai-completions model whose provider declares no replay policy): only
+    ``[A-Za-z0-9]`` is kept, at most 40 characters. The source's extra hash
+    for two IDs that collide after that is not reproduced; such a reply does
+    not match here and is reported, never guessed.
+    """
+    kept = "".join(c for c in call_id if c.isascii() and c.isalnum())
+    return kept[:HOST_CALL_ID_LIMIT]
+
+
+def answers_call(issued: str, replayed: str) -> bool:
+    """Whether a later request's ID refers to a call the gateway issued.
+
+    Never an exact-string match alone: the host rewrites the IDs it replays.
+    """
+    return bool(replayed) and replayed in {issued, host_replayed_call_id(issued)}
+
+
+def host_report(stdout: str) -> dict | None:
+    """The host's own JSON report (``agent exec --json``), kept apart from the checks.
+
+    On the macOS probe the host reported ``"ok": true`` for a run whose tool
+    was denied; only ``toolSummary.failures`` showed it. The report is
+    recorded as the host's statement, never as task success (section 12.5).
+    """
+    try:
+        report = json.loads(stdout.strip())
+    except ValueError:
+        return None
+    if not isinstance(report, dict):
+        return None
+    summary = report.get("toolSummary") if isinstance(report.get("toolSummary"), dict) else {}
+    return {
+        "ok": report.get("ok"),
+        "status": report.get("status"),
+        "tool_calls": summary.get("calls"),
+        "tool_failures": summary.get("failures"),
+    }
+
+
+# The scripted turns of each host scenario (built for its sandbox), and the
+# sandbox lines it must leave.
+HOST_SCENARIOS: dict[str, tuple[Callable[[Path], list], int | None]] = {
+    # One host turn (one `agent exec`): the echo call, then the closing text.
+    # A scripted opening text turn would end that turn before any call (Q8).
+    "text-tool": (
+        lambda _sandbox: [echo_call(), text_turn("The tool said: echo: lantern.")],
+        None,
+    ),
+    "tool-deny": (
+        lambda _sandbox: [write_call(), text_turn("The host did not allow the write.")],
+        0,
+    ),
+    "tool-approve": (lambda _sandbox: [write_call(), text_turn("The note was written.")], 1),
+    "exec-deny": (
+        lambda sandbox: [exec_call(sandbox), text_turn("The host did not allow the command.")],
+        0,
+    ),
+    "exec-full": (lambda sandbox: [exec_call(sandbox), text_turn("The note was written.")], 1),
+}
+
+
+def host_checks(
+    scenario: str,
+    status: str,
+    runs: Sequence[Mapping],
+    requests: Sequence,
+    sandbox: Path,
+    stdout: str = "",
+) -> dict:
+    """What the scenario must show, read from the sandbox and the gateway (section 12.5).
+
+    The call ID is matched the way the host rewrites it, never by the exact
+    string the gateway issued (section 7.5). The host's exit status and its
+    own report do not decide a pass: the pinned host ends a run whose tool
+    was denied with exit 0 and ``"ok": true`` (macOS probe, C2).
+    """
+    expected = HOST_SCENARIOS[scenario][1]
+    note = sandbox / WRITE_FILE
+    lines = len(note.read_text("utf-8").splitlines()) if note.exists() else 0
+    proposed = [
+        {"run_id": run["run_id"], **{k: e["payload"].get(k) for k in ("tool_name", "proposal_id")}}
+        for run in runs
+        for e in run["events"]
+        if e["type"] == "tool.proposed"
+    ]
+    executions = sum(1 for run in runs for e in run["events"] if e["type"] == "tool.started")
+    ids = [p["proposal_id"] for p in proposed if p["proposal_id"]]
+    # The IDs the host sent back in its tool results, as it sent them: the
+    # export shows the host's rewrite instead of only whether it matched.
+    replayed = [
+        m.tool_call_id or ""
+        for request in requests[1:]
+        for m in request.messages
+        if m.role.value == "tool"
+    ]
+    reached = any(answers_call(i, r) for i in ids for r in replayed)
+    checks: dict[str, Any] = {
+        "sandbox_lines": lines,
+        "expected_sandbox_lines": expected,
+        "gateway_tool_executions": executions,
+        "proposed": proposed,
+        "replayed_call_ids": list(dict.fromkeys(replayed)),
+        "result_reached_next_run": reached,
+        "host_report": host_report(stdout),
+    }
+    checks["passed"] = (
+        status == "completed"
+        and executions == 0
+        and bool(proposed)
+        and reached
+        and (expected is None or lines == expected)
+    )
+    return checks
+
+
+def run_host(
+    command: Sequence[str], out: Path, *, timeout: float = 900, scenario: str = "text-tool"
+) -> dict:
     """Serve one doubles gateway, run the operator command against it, export the runs."""
+    turns, _ = HOST_SCENARIOS[scenario]
     with tempfile.TemporaryDirectory(prefix="openclaw-host-") as tmp:
-        gateway = build_gateway(
-            Path(tmp),
-            [
-                text_turn("Hello from RelayMind."),
-                echo_call(),
-                text_turn("The tool said: echo: lantern."),
-            ],
-            external_turns=[],
-        )
+        sandbox = Path(tmp) / "host-sandbox"
+        sandbox.mkdir()
+        gateway = build_gateway(Path(tmp), turns(sandbox), external_turns=[])
         app = make_app(gateway, client_tools=ClientToolsChat(gateway.orchestrator))
         token = token_of(app)
         try:
             with RunningServer(app) as running:
+                env = child_environment(running.base_url, token)
+                env["RELAYMIND_TEST_SANDBOX"] = str(sandbox)
                 try:
                     completed = subprocess.run(
                         list(command),
-                        env=child_environment(running.base_url, token),
+                        env=env,
                         capture_output=True,
                         text=True,
                         timeout=timeout,
@@ -500,6 +670,7 @@ def run_host(command: Sequence[str], out: Path, *, timeout: float = 900) -> dict
                 export = {
                     "kind": "openclaw-host-qualification",
                     "evidence": "deterministic gateway doubles; not live model evidence",
+                    "scenario": scenario,
                     "status": status,
                     "command": list(command),
                     "exit_code": exit_code,
@@ -511,6 +682,9 @@ def run_host(command: Sequence[str], out: Path, *, timeout: float = 900) -> dict
                     "runs": runs,
                     "host_tool_executions_by_gateway": sum(
                         1 for run in runs for e in run["events"] if e["type"] == "tool.started"
+                    ),
+                    "checks": host_checks(
+                        scenario, status, runs, gateway.adapter.requests, sandbox, stdout
                     ),
                 }
         finally:
@@ -532,6 +706,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     host = sub.add_parser("host", help="run an operator command against a doubles gateway")
     host.add_argument("--out", type=Path, required=True)
     host.add_argument("--timeout", type=float, default=900)
+    host.add_argument("--scenario", choices=sorted(HOST_SCENARIOS), default="text-tool")
     host.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if args.mode == "fixtures":
@@ -544,9 +719,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         command = command[1:]
     if not command:
         parser.error("host needs a command after --")
-    export = run_host(command, args.out, timeout=args.timeout)
-    print(json.dumps({"status": export["status"], "runs": len(export["runs"])}))
-    return 0 if export["status"] == "completed" else 1
+    export = run_host(command, args.out, timeout=args.timeout, scenario=args.scenario)
+    passed = export["checks"]["passed"]
+    print(json.dumps({"status": export["status"], "runs": len(export["runs"]), "passed": passed}))
+    return 0 if export["status"] == "completed" and passed else 1
 
 
 if __name__ == "__main__":

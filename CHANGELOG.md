@@ -8,6 +8,50 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- OpenClaw text and host-owned tool round trips (#137; RM01, RM03, RM04,
+  RM08, RM09, RM12, RM19, RM20, RM26, RM33; AC10, AC24): the provider's
+  `wrapStreamFn` (`integrations/openclaw/src/stream.ts`) refuses, by field
+  and before sending, input the pinned host would change silently (an image
+  part becomes "(image omitted: ...)" text) or the gateway refuses
+  (a structured response format, `parallel_tool_calls: true`, a strict
+  tool, `n` other than 1, a dropped host tool), and turns an answer with no
+  text and no call, or a response with more than one call, into a failure;
+  it never trims or rewrites. `tests/test_openclaw_round_trips.py` drives
+  the plugin's wrapped transport against the gateway over doubles: text and
+  a host tool round trip, streamed and buffered; tool_choice; schema
+  validation; matching IDs; the host's deny and allow decisions on a
+  sandbox mutation (no side effect, then exactly one); tool results as data
+  and redacted secrets; fallback, local_only, external_only without a local
+  model, an oversized catalog; budgets and no managed selection;
+  early-header comments that are not content. The qualification harness's
+  host mode gains `--scenario tool-deny|tool-approve` with checks read from
+  the sandbox and the trace, and `test/host-tool-plugin/` holds the
+  test-only host tools. The macOS host probe's facts are applied: the host
+  rewrites the call IDs it replays (`call_probe_1` came back as
+  `callprobe1`), so the harness's host checks and the round-trip tests
+  match a result to its proposal through the host's rule
+  (`host_replayed_call_id`, `answers_call`), never by the exact issued ID,
+  and the plugin driver replays IDs the same way; headless `agent exec`
+  cannot answer an approval (`ask` fails closed without a Gateway), so the
+  host mode adds `--scenario exec-deny|exec-full` (the host's `exec` tool
+  under `tools.exec.mode` deny and full), and keeps the host's own JSON
+  report as `checks.host_report`, never deciding a pass (the host said
+  `"ok": true` for a denied tool). The macOS run at `a52f8bf` is applied
+  too: the test host tools' manifest declares `contracts.tools` (the host
+  refused to register them without it, Q9); the default `text-tool`
+  scenario scripts the echo call before the closing text, so one
+  `agent exec` covers it (it could not pass before, Q8); and the checks
+  keep the replayed IDs as `replayed_call_ids`. A Linux VPS functional check
+  (not a supported-platform qualification,
+  `docs/evidence/2026-10-28-openclaw-vps-functional-137/`, read by
+  `tests/test_openclaw_vps_functional_round_trips.py`) ran the scenarios on
+  the pinned host over doubles: `text-tool`, `tool-deny`, `exec-deny`, and
+  `exec-full` passed, `tool-approve` failed with no line written (a
+  headless plugin approval has no route), and the host rewrote every call
+  ID again. The host offers a plugin's tools only with
+  `tools.toolSearch false` and the names in `tools.alsoAllow`. An approval
+  answered by an operator is not run.
+  No specification or gateway change.
 - OpenClaw provider plugin package (#136; RM08, RM12, RM19, RM26, RM33):
   `integrations/openclaw/` now has the plugin manifest
   (`openclaw.plugin.json`), the entry and the `relaymind` provider built on

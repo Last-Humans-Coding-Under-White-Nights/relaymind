@@ -1,19 +1,26 @@
 # RelayMind provider for OpenClaw
 
 Status: provider package (#136; RM08, RM12, RM19, RM26, RM33, spec section
-7.5), on top of the #135 qualification. The plugin registers the `relaymind`
+7.5) with text and host-owned tool round trips (#137), on top of the #135
+qualification. The plugin registers the `relaymind`
 provider through the public plugin SDK of OpenClaw v2026.10.7, publishes the
 client-owned alias `relaymind/relaymind-client-tools` when the gateway serves
 it, and holds the gateway's application token in the host's credential store.
-Round trips with host tools are #137, cancellation, error mapping, and retries
-#138, the installable artifact, CI, and the operator guide #145. The real
+Cancellation, error mapping, and retries are #138, the installable artifact,
+CI, and the operator guide #145. The real
 pinned host loaded this package once, in a Linux VPS functional check (not a
 supported-platform qualification) against the gateway over model doubles
 ([`docs/evidence/2026-10-28-openclaw-vps-functional-136/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-136/REPORT.md)):
 install, enable, inspect, token setup, `models list --refresh`, a text turn
 through `agent exec`, the stale-token 401 line and recovery, and removal
 all worked with the command forms below. This package on macOS and Windows
-is `not_run`.
+is `not_run`. The harness host scenarios (a host tool round trip, the
+host's exec policy pair, and the test write tool's approval, which fails
+closed headless) then ran on the same pinned host in a second Linux VPS
+functional check
+([`docs/evidence/2026-10-28-openclaw-vps-functional-137/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-137/REPORT.md)).
+A plugin approval answered by an operator, and these scenarios on macOS and
+Windows, are `not_run`.
 
 What the plugin claims, and nothing more: text input; at most one function
 call per response, executed by OpenClaw under its own approvals; the answer is
@@ -44,9 +51,12 @@ baseline are in
 | `src/catalog.ts` | Discovery (`GET /v1/models`, `GET /readyz`), the diagnosis, the published entry and its limits, the host outcome |
 | `src/config.ts` | The plugin settings: loopback `baseUrl`, `executionMode`, copied `limits` |
 | `src/compat.ts` | `relaymindModelCompat()` (the per-model switches) and `relaymindModelEntry()` (#135) |
+| `src/stream.ts` | The provider's `wrapStreamFn`: the input guard before sending, and an empty answer or more than one call made a failure (#137) |
+| `src/input-guard.ts` | Unsupported input refused by field, never removed (#137) |
 | `src/diagnostics.ts`, `src/redaction.ts` | The capability statement and operator messages; the logger that scrubs the token |
 | `test/*.test.ts` | vitest: manifest, config, catalog, provider, redaction, the switches, the frozen fixtures |
-| `test/plugin-transport/drive-plugin.mjs` | plays the host around the plugin: register, catalog (or `resolveDynamicModel`), one request through the pinned transport |
+| `test/plugin-transport/drive-plugin.mjs` | plays the host around the plugin: register, catalog (or `resolveDynamicModel`), the conversation through the pinned transport wrapped by the plugin, and the host's sandbox tools and approval decision |
+| `test/host-tool-plugin/` | test only, never packed: the `relaymind_test_echo` and `relaymind_test_write` host tools, every write behind the host's approval |
 | `test/host-transport/` | the #135 transport driver and recording proxy |
 | `test/fixtures/v2026.10.7/transport/` | the #135 deterministic transport fixtures, captured by `scripts/openclaw_qualification.py fixtures` |
 | `test/fixtures/v2026.10.7/host/` | reserved for captures made with `capture_host_requests.mjs`; the macOS host probe's captures are in `docs/evidence/2026-10-27-openclaw-mac-probe/` |
@@ -103,8 +113,44 @@ host configuration; the schema is closed (an unknown key is refused by name):
   `local_only`; a limit not set for the mode is not advertised. The model
   name states the mode, and the catalog log line states which limit the
   window is.
-- An operator `parallel_tool_calls: true` model parameter stays refused by
-  the gateway (400 `unsupported_parameter`); the plugin does not rewrite it.
+- An operator `parallel_tool_calls: true` model parameter stays refused: the
+  plugin refuses the request before sending it, by name and with the
+  gateway's code (`unsupported_parameter`), and never rewrites the value
+  (see "What the plugin refuses and why").
+
+## Round trips and host tools (#137)
+
+The host sends the whole conversation and its tool catalog on every request;
+the plugin forwards them unchanged (the pinned host orders the catalog by
+name). A response is a text answer or exactly one function call. OpenClaw
+executes the call under its own permissions and approvals, and sends the
+result in the next request, which is a new RelayMind run: RelayMind records
+`tool.proposed` and never starts, finishes, approves, or certifies a host
+tool. A tool result reaches the model as data, unchanged; it grants nothing.
+The gateway's answer is buffered: a streamed response is a replay of a
+finished run (keep-alive comments under early headers are never content),
+so there is no token-by-token generation.
+
+### What the plugin refuses and why
+
+The pinned host adapts input a model cannot take instead of failing; each
+of these would change the question, so the plugin refuses the request
+before sending it and names the field (it never trims, summarizes, or
+drops a message or a tool):
+
+| Input | Field named | Why |
+| --- | --- | --- |
+| an image part in a user message or a tool result | `messages[i].content[j].type` | the host would replace it with "(image omitted: ...)" text; the alias is text only |
+| a structured response format | `response_format` | section 7.1 refuses it (`unsupported_parameter`); the switches turn structured output off |
+| `parallel_tool_calls: true` (an operator model parameter) | `parallel_tool_calls` | the gateway refuses it (`unsupported_parameter`): one call per response |
+| a strict tool | `tools[i].function.strict` | section 7.1 has no strict schemas |
+| `n` other than 1 | `n` | one choice per response |
+| a payload that lost a host tool | `tools` | the plugin never drops a tool |
+
+After the response, an answer with no text and no call, and a response with
+more than one call, are failures, never an empty success. The pinned
+transport already fails a stream without a finish chunk, an `{"error": ...}`
+data event, malformed JSON, a malformed call, and an HTTP error.
 
 ## Token handover and reconnect
 
@@ -129,7 +175,10 @@ still reads the stored key. The host keeps the key in its state database
 but only in an interactive terminal: without one it refuses, and typing the
 token at its prompt was not checked (`not_run`).
 `RELAYMIND_APP_TOKEN` in the host's environment is the provider's declared
-env var; reading it was not checked on a real host (`not_run`). After a gateway
+env var. In the #137 Linux VPS functional check no token was stored, and the
+host read it in every harness host scenario
+([report](../../docs/evidence/2026-10-28-openclaw-vps-functional-137/REPORT.md));
+the macOS probe did not check it. After a gateway
 restart the stored token is stale: requests and discovery fail with 401
 `unauthenticated`, and `models list --refresh` logs the reconnect instruction
 (store the new token the same way). `agent exec` with the stale token exits 1
@@ -210,7 +259,7 @@ against the real gateway over model doubles (it skips without `npm ci`; set
 
 ```bash
 pytest tests/test_openclaw_host_transport.py tests/test_openclaw_plugin.py \
-  tests/test_openclaw_qualification_script.py
+  tests/test_openclaw_round_trips.py tests/test_openclaw_qualification_script.py
 ```
 
 To recapture the transport fixtures (they must not change on the same pins):
@@ -303,15 +352,25 @@ the test host tools never registered; REPORT.md step 4). The fixes belong
 to #136 and #137. The Linux VPS functional check (not a supported-platform
 qualification) then ran this package's load, token setup, and text turn on
 the real pinned host against the gateway over doubles, with the fix of the
-`Unknown model` failure seen on the wire; the harness host scenarios, and
-any Windows run, are not_run.
+`Unknown model` failure seen on the wire. A second one ran the harness host
+scenarios there (`docs/evidence/2026-10-28-openclaw-vps-functional-137/`):
+`text-tool`, `tool-deny`, `exec-deny`, and `exec-full` passed, and
+`tool-approve` failed, correctly, because headless `agent exec` has no
+route for a plugin approval and nothing was written. Any macOS rerun and
+any Windows run are not_run.
 
 Host facts from that probe that the steps below rely on: a model in the
 host config needs `name`; `strictMessageKeys` must stay false (true strips
 the tool linkage); isolate the host with `OPENCLAW_HOME`,
 `OPENCLAW_STATE_DIR`, `OPENCLAW_CONFIG_PATH`, and `--config` (the host
 still writes its log to `/tmp/openclaw/`); the host removes underscores
-from a replayed tool call ID, so compare IDs with that in mind.
+from a replayed tool call ID (`call_probe_1` came back as `callprobe1`), so
+the harness never matches a later request to a proposal by the exact ID the
+gateway issued (`answers_call` in `scripts/openclaw_qualification.py`);
+headless `agent exec` cannot answer an approval (`ask` fails closed without a
+running Gateway), so the policy runs use `tools.exec.mode` `deny` and `full`;
+and the host's `"ok": true` is not task success (it says so for a denied
+tool).
 
 ### Host capture (operator)
 
@@ -409,21 +468,115 @@ macOS superseded it (`docs/evidence/2026-10-27-openclaw-mac-qualification/reques
 
 ### Real host against the gateway over doubles
 
+The default scenario, `text-tool`, fits one `agent exec`: the gateway
+proposes one call to the test echo tool, the host runs it, and the next
+request gets the closing text. The test host tools must be installed and
+offered to the model (next section).
+
 ```bash
 python scripts/openclaw_qualification.py host \
   --out docs/evidence/<date>-openclaw-host-qualification-<machine>.json \
-  -- openclaw agent exec --config <a config whose relaymind provider reads
-     RELAYMIND_BASE_URL and RELAYMIND_APP_TOKEN> --json \
-     --model relaymind/relaymind-client-tools "Say hello"
+  -- openclaw agent exec --config <a config whose relaymind plugin baseUrl is
+     "${RELAYMIND_BASE_URL}"> --json \
+     --model relaymind/relaymind-client-tools "Echo lantern with the test echo tool"
 ```
 
-Result so far: the one run, on macOS at `a52f8bf`
-(`docs/evidence/2026-10-27-openclaw-mac-qualification/REPORT.md`, step 4),
-failed: the default, tool-deny, and tool-approve scenarios ended with
-`checks.passed` false, and only the abort scenario passed. The fixes belong
-to #136 and #137 (`docs/EVIDENCE.md`).
+The token comes from `RELAYMIND_APP_TOKEN`, which the harness puts in the
+command's environment; no paste is needed. Set the URL once with
+`openclaw config set plugins.entries.relaymind.config.baseUrl '${RELAYMIND_BASE_URL}'`
+(the host fills the variable in when it runs).
+
+Results so far: on macOS at `a52f8bf`
+(`docs/evidence/2026-10-27-openclaw-mac-qualification/REPORT.md`, step 4)
+the default, tool-deny, and tool-approve scenarios ended with
+`checks.passed` false and only the abort scenario passed. The default
+scenario then scripted a text turn before the echo call, so one exec could
+never show the call (Q8), and the test host tools never registered (Q9).
+Both are fixed; in the Linux VPS functional check (not a supported-platform
+qualification) at `fd6aca1`
+([`docs/evidence/2026-10-28-openclaw-vps-functional-137/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-137/REPORT.md))
+`text-tool`, `tool-deny`, `exec-deny`, and `exec-full` passed and
+`tool-approve` failed with no line written (below). macOS and Windows
+reruns are not_run.
 
 The harness passes the gateway URL and token in the command's environment
 only and never writes the token. A command that cannot start is `not_run`;
 one that runs past `--timeout` (900 s by default) is `timed_out`, and the
 export still holds the runs the gateway recorded.
+
+### Host tool policy (#137, operator)
+
+Headless `openclaw agent exec` has no approval surface: on the macOS probe,
+`tools.exec.mode: "ask"` failed closed because approval registration needs a
+running Gateway (`ECONNREFUSED`), `deny` blocked the host's `exec` tool, and
+`full` ran it. The `exec-deny` and `exec-full` scenarios use that pair: the
+gateway proposes one call to the host's own `exec` tool,
+`echo written-by-the-host >> '<sandbox>/note.txt'`, and the host decides. The
+path is absolute, so a command the host ran in another working directory still
+lands in the sandbox, and a deny that did not hold never passes. Run the host in
+the sandbox the harness creates, with a config whose `tools.exec.mode` is
+`deny` in one run and `full` in the other (the rest as above). The proposed
+command and the forms below are POSIX shell (`sh`, a single-quoted path); on
+Windows these scenarios are `not_run`:
+
+```bash
+python scripts/openclaw_qualification.py host --scenario exec-deny \
+  --out docs/evidence/<date>-openclaw-exec-deny-<machine>.json \
+  -- sh -c 'openclaw agent exec --config <relaymind config, tools.exec.mode "deny"> \
+     --cwd "$RELAYMIND_TEST_SANDBOX" --json \
+     --model relaymind/relaymind-client-tools "Append a line to note.txt with exec"'
+python scripts/openclaw_qualification.py host --scenario exec-full \
+  --out docs/evidence/<date>-openclaw-exec-full-<machine>.json \
+  -- sh -c 'openclaw agent exec --config <relaymind config, tools.exec.mode "full"> \
+     --cwd "$RELAYMIND_TEST_SANDBOX" --json \
+     --model relaymind/relaymind-client-tools "Append a line to note.txt with exec"'
+```
+
+The `tool-deny` and `tool-approve` scenarios script one call to the mutating
+sandbox tool `relaymind_test_write` of the test host tools, whose
+`before_tool_call` hook asks the host for a plugin approval. The host
+exposes a plugin's tools to the model only when they are allowed and sent
+directly: set `tools.toolSearch false` and name both tools in
+`tools.alsoAllow`. That is the form the recorded Linux VPS functional check
+used. Two more results were observed in exploratory runs that were not
+recorded (see the check's `REPORT.md`): `tools.profile full` also exposed
+the test tools, and without `tools.alsoAllow`, or with tool search on, the
+host offered neither test tool and the gateway repaired the scripted call.
+
+```bash
+# without --accept-capabilities the host refuses the directory (exit 1);
+# the plugin is enabled at install, no plugins enable needed
+openclaw plugins install integrations/openclaw/test/host-tool-plugin --force --accept-capabilities
+openclaw config set tools.toolSearch false
+openclaw config set tools.alsoAllow '["relaymind_test_echo","relaymind_test_write"]' --strict-json
+python scripts/openclaw_qualification.py host --scenario tool-deny \
+  --out docs/evidence/<date>-openclaw-tool-deny-<machine>.json \
+  -- openclaw agent exec --config <the relaymind config above> --json \
+     --model relaymind/relaymind-client-tools "Write a note with the test write tool"
+python scripts/openclaw_qualification.py host --scenario tool-approve \
+  --out docs/evidence/<date>-openclaw-tool-approve-<machine>.json \
+  -- openclaw agent exec --config <the relaymind config above> --json \
+     --model relaymind/relaymind-client-tools "Write a note with the test write tool"
+# without a terminal, uninstall asks for confirmation and exits 1; --force skips it
+openclaw plugins uninstall relaymind-test-host-tools --force
+```
+
+Headless, the approval has no route: in the Linux VPS functional check the
+host logged `Plugin approval unavailable: non-interactive CLI runs have no
+approval-capable initiating surface` for both write scenarios and wrote
+nothing, whatever `tools.exec.mode` was (that mode governs the host's `exec`
+tool only). So `tool-deny` passes headless and `tool-approve` cannot: it
+needs a running OpenClaw Gateway and an operator who answers allow-once,
+not_run. The headless allow path is `exec-full`.
+
+The tools write into `RELAYMIND_TEST_SANDBOX`, an empty directory the
+harness creates and passes in the command's environment. The export's
+`checks` read the sandbox and the trace: a denial left no line, an allowed
+call exactly one, the gateway executed nothing and proposed the call, and
+the host's result reached the next run, matched through the host's ID
+rewrite. `checks.replayed_call_ids` keeps each ID as the host sent it back
+(the Linux VPS functional check saw `callecho1` for `call_echo_1`, as on
+macOS). `checks.host_report` keeps the host's own JSON report (`ok`,
+`status`, tool calls and failures) as the host's statement: the pinned host
+ends a run whose tool was denied with exit 0 and `"ok": true`, so neither
+decides `passed`. `passed` is false for a scenario that did not complete.

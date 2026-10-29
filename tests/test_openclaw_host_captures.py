@@ -22,6 +22,7 @@ No model or host runs here; the captures are data.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -180,3 +181,19 @@ def test_no_capture_holds_a_credential():
     for path in REQUESTS.rglob("*.json"):
         request = json.loads(path.read_text("utf-8"))
         assert request["headers"].get("authorization") in (None, "Bearer <redacted>"), path
+
+
+def test_no_probe_file_holds_a_local_scratch_path():
+    """Section 12.5: the committed probe evidence is sanitized.
+
+    A scratch directory under the macOS temp root (``/private/tmp/<name>-<uid>``)
+    is a local path; a CLI table that cuts it short still must not leak it.
+    """
+    scratch = re.compile(r"/(private/)?tmp/[A-Za-z]+-\d+")
+    leaks = [
+        path.relative_to(PROBE).as_posix()
+        for path in PROBE.rglob("*")
+        if path.is_file() and path.name != "sanitize-copy.mjs"
+        if scratch.search(path.read_text("utf-8", "replace"))
+    ]
+    assert leaks == []
