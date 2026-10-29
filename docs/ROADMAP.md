@@ -1050,10 +1050,24 @@ local worker. `[recommendations]` defaults disabled; enabled catalog work starts
 in the application lifespan. This is development on the explicitly authorized
 reviewed-spec stack while #187's merge remains pending. No recommendation API,
 useful lexical readiness, pre-warmup serving change, qualified external refresh
-or current host availability is claimed. #193/#194/#196 own selection/API/startup
-behavior. The AC25 live host/source subcases, full 300-asset measurements,
+or current host availability is claimed. #194/#196 own API/startup behavior; #193 selection is recorded below. The AC25 live host/source subcases, full 300-asset measurements,
 Windows/macOS qualification and Matrix rights/cohort/refresh remain open; these
 deterministic catalog tests do not close #191 or #192's qualified adapter gates.
+
+The #193 selection component implements RM35/AC26: separate closed selection
+v2 and recommendation-result schemas, projection-only lexical ranking, strict
+loopback HTTP replacement and example, bounded primary/floor coordination,
+cancellation, current admission and observed-versus-reported cost evidence.
+The configuration factory is available without recommendation API attachment.
+All lexical matches require user choice; no calibrated confidence or retrieval
+quality is claimed. Managed v1/AC22 and provider/host AC24 remain unchanged.
+Spec 0.52 also revisions effective stale changes atomically with stored offered
+record bytes; capture-only observations retain the prior projection through
+restart. Current revision equality applies to computing recommendations,
+including abstentions and empty offers. This does not change later choice
+semantics, which retain their exact-candidate/current-policy checks.
+Lifecycle/API persistence (#194), operational readiness/measurements (#196),
+qualified host/source adapters and the final corpus/whole-task gates remain open.
 
 Specification 0.51 freezes the independent M10 recommendation core (spec
 section 1); every full-milestone gate stays. The

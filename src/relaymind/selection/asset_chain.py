@@ -1,0 +1,387 @@
+"""One primary and one distinct lexical floor under one absolute clock (RM35)."""
+
+import asyncio
+import inspect
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
+
+from relaymind.assets.catalog import CatalogSnapshot
+from relaymind.schema_util import freeze_json
+from relaymind.selection.asset_admission import AssetPolicy, admit_current, validate_against_offer
+from relaymind.selection.asset_contract import (
+    AssetSelectionError,
+    AssetSelectionRequest,
+    AssetSelector,
+    AttemptFailure,
+    RecommendationSelectionResult,
+    SelectorContext,
+    SelectorIdentity,
+    parse_asset_result,
+    parse_recommendation_result,
+)
+from relaymind.selection.asset_lexical import LexicalAssetSelector
+from relaymind.store.asset_catalog import CatalogUnavailable
+from relaymind.store.run_store import TraceClock, utc_iso
+
+
+class RecommendationFailure(Exception):
+    """An internal lifecycle failure, with immutable prior attempt evidence."""
+
+    def __init__(self, code: str, reason: str, attempts=()):
+        super().__init__(reason)
+        self.code, self.reason = code, reason
+        self.attempts = tuple(freeze_json(a) for a in attempts)
+
+
+class SelectionBudget:
+    def __init__(
+        self,
+        total_ms: int = 500,
+        *,
+        clock: TraceClock | None = None,
+        cancelled: Callable[[], bool] = lambda: False,
+        sleep: Callable[[float], Awaitable] = asyncio.sleep,
+    ):
+        if type(total_ms) is not int or total_ms <= 0:
+            raise ValueError("total_ms must be a positive integer")
+        self.clock = clock or TraceClock()
+        self.started = self.clock.monotonic()
+        self.deadline = self.started + total_ms / 1000
+        self._cancelled, self.sleep = cancelled, sleep
+        self._cancel_event = asyncio.Event()
+        self._terminal = False
+        self._owned: set[asyncio.Task] = set()
+
+    def cancel(self) -> None:
+        self._cancel_event.set()
+
+    def check(self) -> None:
+        if self._cancel_event.is_set() or self._cancelled() or self._terminal:
+            raise RecommendationFailure("cancelled", "cancelled")
+        if self.clock.monotonic() >= self.deadline:
+            raise RecommendationFailure("deadline_exceeded", "deadline_exceeded")
+
+    def remaining_ms(self) -> float:
+        self.check()
+        return max(0, (self.deadline - self.clock.monotonic()) * 1000)
+
+    def check_before_commit(self) -> None:
+        self.check()
+
+    def fence_terminal(self) -> None:
+        """The lifecycle owner calls this after a terminal atomic transition."""
+        self._terminal = True
+        self.cancel()
+
+    def elapsed_ms(self) -> float:
+        return max(0, (self.clock.monotonic() - self.started) * 1000)
+
+    def own(self, task: asyncio.Task) -> None:
+        self._owned.add(task)
+
+        def finished(done):
+            self._owned.discard(done)
+            if not done.cancelled():
+                done.exception()
+
+        task.add_done_callback(finished)
+
+    async def drain(self, timeout: float) -> None:
+        """Bounded owner cleanup; resistant tasks stay tracked until completion."""
+        if self._owned:
+            await asyncio.wait(tuple(self._owned), timeout=timeout)
+
+    async def wait_cancelled(self) -> None:
+        while True:
+            if self._cancel_event.is_set() or self._cancelled() or self._terminal:
+                return
+            try:
+                await asyncio.wait_for(self._cancel_event.wait(), timeout=0.01)
+            except TimeoutError:
+                pass
+
+
+@dataclass(frozen=True)
+class AttemptStarted:
+    attempt: int
+    selector: SelectorIdentity
+    mechanism: str
+    remaining_ms: float
+
+
+@dataclass(frozen=True)
+class AttemptFinished:
+    attempt_record: object
+
+
+AttemptObserver = Callable[[AttemptStarted | AttemptFinished], object]
+
+
+async def _invoke(selector, request, context):
+    try:
+        return await selector.select(request, context)
+    except (AttemptFailure, RecommendationFailure, asyncio.CancelledError):
+        raise
+    except Exception:
+        if isinstance(selector, LexicalAssetSelector):
+            raise AttemptFailure("unavailable", "selector_unavailable") from None
+        raise
+
+
+async def _bounded(work: Awaitable, budget: SelectionBudget, deadline: float) -> Any:
+    task = asyncio.create_task(work)
+    budget.own(task)
+    timer = asyncio.create_task(budget.sleep(max(0, deadline - budget.clock.monotonic())))
+    cancel = asyncio.create_task(budget.wait_cancelled())
+    try:
+        done, _ = await asyncio.wait((task, timer, cancel), return_when=asyncio.FIRST_COMPLETED)
+        budget.check()  # Cancellation always wins ties with result/timeout.
+        if budget.clock.monotonic() >= deadline or task not in done:
+            raise AttemptFailure("timeout", "deadline_exceeded")
+        return task.result()
+    finally:
+        # Do not await cancellation-resistant selector cleanup past service time.
+        for pending in (task, timer, cancel):
+            if not pending.done():
+                pending.cancel()
+        await asyncio.gather(timer, cancel, return_exceptions=True)
+
+
+async def _observe(observer, event, budget):
+    if observer is not None:
+        value = observer(event)
+        if inspect.isawaitable(value):
+            await _bounded(value, budget, budget.deadline)
+
+
+def _attempt(selector, ordinal, mechanism, outcome, reason, started, budget, parsed):
+    data = None if parsed is None else parsed.to_json_object()
+    costs = []
+    if isinstance(selector, LexicalAssetSelector):
+        costs.append(
+            {
+                "provenance": "observed",
+                "value": {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "cached_tokens": 0,
+                    "reasoning_tokens": 0,
+                    "calls": 0,
+                    "cpu_ms": None,
+                    "peak_bytes": None,
+                },
+            }
+        )
+    if data is not None and data["usage_claims"] is not None:
+        costs.append(data["usage_claims"])
+    return dict(
+        attempt=ordinal,
+        selector={"name": selector.name, "version": selector.version},
+        mechanism=mechanism,
+        outcome=outcome,
+        reason=reason,
+        observed_ms=max(0, (budget.clock.monotonic() - started) * 1000),
+        reported_ms=None if data is None else data["elapsed_ms"],
+        index_revision=None if data is None else data["index_revision"],
+        cost_observations=costs,
+        result=data,
+    )
+
+
+async def select_assets(
+    request: AssetSelectionRequest,
+    *,
+    primary: AssetSelector,
+    lexical_floor: LexicalAssetSelector | None,
+    budget: SelectionBudget,
+    primary_ms: int,
+    fallback_enabled: bool,
+    current_catalog: Callable[[], CatalogSnapshot],
+    policy: AssetPolicy,
+    trusted_scope: Mapping[str, str],
+    trusted_permissions: Sequence[str],
+    observe: AttemptObserver | None = None,
+) -> RecommendationSelectionResult:
+    attempts = []
+    fallback_reason = None
+    try:
+        budget.check()
+        if request.data["scope"] != dict(trusted_scope) or set(request.data["permissions"]) != set(
+            trusted_permissions
+        ):
+            raise RecommendationFailure("invalid_request", "invalid_request")
+        if type(primary_ms) is not int or primary_ms <= 0:
+            raise ValueError
+        if request.data["selection_scope"] != "discovery":
+            raise RecommendationFailure("recommendation_unavailable", "selector_unavailable")
+        if not request.data["catalog"]:
+            current = current_catalog()
+            budget.check()
+            if current.catalog_revision != request.data["catalog_revision"]:
+                raise RecommendationFailure("recommendation_unavailable", "stale_result")
+            return _ready(
+                request, attempts, None, [], "empty_catalog", None, current.catalog_revision, budget
+            )
+        selectors = [primary]
+        if (
+            fallback_enabled
+            and not isinstance(primary, LexicalAssetSelector)
+            and lexical_floor is not None
+        ):
+            selectors.append(lexical_floor)
+        for ordinal, selector in enumerate(selectors, 1):
+            budget.check()
+            started = budget.clock.monotonic()
+            deadline = (
+                min(budget.deadline, started + primary_ms / 1000)
+                if ordinal == 1
+                else budget.deadline
+            )
+
+            def check_attempt(deadline=deadline):
+                budget.check()
+                if budget.clock.monotonic() >= deadline:
+                    raise AttemptFailure("timeout", "deadline_exceeded")
+
+            context = SelectorContext(budget.clock.monotonic, check_attempt)
+            mechanism = (
+                "gateway_lexical_fallback"
+                if ordinal == 2
+                else getattr(selector, "mechanism", "selector")
+            )
+            parsed = None
+            outcome = reason = admission = None
+            terminal_failure = None
+            # Observers/persistence belong to the gateway, never selector fallback.
+            await _observe(
+                observe,
+                AttemptStarted(
+                    ordinal,
+                    SelectorIdentity(selector.name, selector.version),
+                    mechanism,
+                    max(0, (deadline - started) * 1000),
+                ),
+                budget,
+            )
+            budget.check()
+            try:
+                check_attempt()
+                raw = await _bounded(
+                    _invoke(
+                        selector,
+                        request.with_deadline((deadline - budget.clock.monotonic()) * 1000),
+                        context,
+                    ),
+                    budget,
+                    deadline,
+                )
+                check_attempt()
+                try:
+                    parsed = parse_asset_result(raw)
+                except AssetSelectionError:
+                    raise AttemptFailure("invalid", "invalid_result") from None
+                check_attempt()
+                validate_against_offer(
+                    parsed,
+                    request,
+                    SelectorIdentity(selector.name, selector.version),
+                    fallback=ordinal == 2,
+                    http=getattr(selector, "transport", None) == "http",
+                )
+                check_attempt()
+                if ordinal == 1:
+                    mechanism = parsed.data["mechanism"]
+                outcome = parsed.data["outcome"]
+                if outcome in ("not_ready", "unavailable"):
+                    reason = (
+                        "selector_not_ready" if outcome == "not_ready" else "selector_unavailable"
+                    )
+                else:
+                    checked_admission = admit_current(parsed, request, current_catalog(), policy)
+                    check_attempt()
+                    # Only a fully fenced attempt may supply the ready result.
+                    admission = checked_admission
+            except CatalogUnavailable:
+                outcome, reason = "unavailable", "selector_unavailable"
+                terminal_failure = ("recommendation_unavailable", "corrupt_catalog")
+            except AttemptFailure as failure:
+                outcome, reason = failure.outcome, failure.reason
+                if failure.result is not None:
+                    parsed = failure.result
+            except RecommendationFailure as failure:
+                outcome = "cancelled" if failure.code == "cancelled" else "timeout"
+                reason = "cancelled" if outcome == "cancelled" else "deadline_exceeded"
+            except asyncio.CancelledError:
+                budget.cancel()
+                outcome, reason = "cancelled", "cancelled"
+            except Exception:
+                # Only a built-in dependency failure is a declared unavailable
+                # selector. Policy/store/admission infrastructure must be terminal.
+                raise RecommendationFailure("internal_error", "internal_error", attempts) from None
+            record = _attempt(
+                selector, ordinal, mechanism, outcome, reason, started, budget, parsed
+            )
+            attempts.append(record)
+            await _observe(observe, AttemptFinished(freeze_json(record)), budget)
+            budget.check()
+            if terminal_failure is not None:
+                raise RecommendationFailure(*terminal_failure, attempts)
+            if admission is not None:
+                return _ready(
+                    request,
+                    attempts,
+                    0,
+                    parsed.data["candidates"],
+                    parsed.data["decision"],
+                    fallback_reason,
+                    admission.rechecked_catalog_revision,
+                    budget,
+                )
+            if ordinal == 1:
+                fallback_reason = reason
+        raise RecommendationFailure(
+            "recommendation_unavailable", fallback_reason or "selector_unavailable", attempts
+        )
+    except CatalogUnavailable:
+        raise RecommendationFailure(
+            "recommendation_unavailable", "corrupt_catalog", attempts
+        ) from None
+    except RecommendationFailure as failure:
+        raise RecommendationFailure(failure.code, failure.reason, attempts) from None
+    except asyncio.CancelledError:
+        budget.cancel()
+        raise RecommendationFailure("cancelled", "cancelled", attempts) from None
+    except Exception:
+        raise RecommendationFailure("internal_error", "internal_error", attempts) from None
+
+
+def _ready(
+    request, attempts, primary_attempt, candidates, decision, fallback_reason, revision, budget
+):
+    budget.check_before_commit()
+    value = dict(
+        schema_version=1,
+        decision=decision,
+        catalog_revision=request.data["catalog_revision"],
+        host_snapshot_revision=None,
+        attempts=attempts,
+        primary_attempt=primary_attempt,
+        base_candidates=candidates,
+        base_decision=decision,
+        final_candidates=candidates,
+        final_decision=decision,
+        fallback_reason=fallback_reason,
+        adaptation=None,
+        admission={
+            "outcome": "accepted",
+            "rechecked_catalog_revision": revision,
+            "checked_at": utc_iso(budget.clock.utc_now()),
+        },
+        observed_ms=budget.elapsed_ms(),
+        embeddings=[],
+        host_run_ids=[],
+    )
+    result = parse_recommendation_result(value)
+    budget.check_before_commit()
+    return result

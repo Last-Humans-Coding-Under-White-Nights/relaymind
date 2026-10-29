@@ -2162,3 +2162,85 @@ qualifies that Windows Server/CPU environment, not every Windows desktop
 or GPU configuration. Repeat the same smoke file on Apple Silicon and
 record both results in `EVIDENCE.md` before claiming runtime qualification.
 The smoke suite is separate from the AC15/M6 benchmark.
+
+## Recommendation selector v2 (#193; RM35/AC26)
+
+`tests/test_asset_selection.py` and `tests/test_asset_http_selector.py` exercise
+closed v2 requests/results, deterministic projection-only lexical ranking,
+HTTP replacement, current-catalog admission, cancellation and one separately
+attributed gateway lexical floor. These are deterministic tests over disposable
+fixtures and loopback servers. They do not measure retrieval quality, calibrated
+confidence, source rights, host use or multilingual acceptance.
+
+The published schemas are
+[`selection_request.v2.json`](../src/relaymind/selection/schemas/selection_request.v2.json),
+[`selection_result.v2.json`](../src/relaymind/selection/schemas/selection_result.v2.json)
+and [`recommendation_result.v1.json`](../src/relaymind/store/schemas/recommendation_result.v1.json).
+The internal selector factory is separate from managed `[selection]` v1.
+Recommendation lifecycle endpoints remain #194; useful readiness, startup order
+and measured update/rebuild/resource gates remain #196. Runtime binding is
+unavailable, and discovery availability remains unknown without qualified host
+evidence.
+
+Start the deterministic protocol example with the installed development package:
+
+```bash
+python scripts/example_asset_selector.py --port 8913
+```
+
+Its optional recommendation configuration is:
+
+```toml
+[recommendations]
+enabled = true
+user_id = "local-user"
+workspace_id = "workspace"
+primary = "http"
+name = "example_lexical"
+version = "1"
+url = "http://127.0.0.1:8913/select"
+fallback = true
+```
+
+Enabled configuration also requires explicit `[assets]` sources and the existing
+model-table requirement. This constructs the selector; it does not expose a new
+API in #193. Static URL validation makes no connection. Each dispatched HTTP
+attempt sends the same full eligible projection, uses one fresh isolated client,
+never follows redirects or retries, and accepts only one bounded UTF-8 JSON
+object with `application/json` media type (optional `charset=utf-8`).
+
+The lexical implementation searches descriptions and skill/MCP display identity
+fields, using NFC/casefold word tokens and Han bigrams. It ignores conversation
+for ranking, private SKILL bodies, IDs, hashes, source URLs and language labels.
+Scores count unique overlapping tokens and are not probabilities. Every match
+requires a choice; `no_match` is a valid abstention that does not trigger fallback
+or claim the task needs no asset. A failure permits at most one distinct lexical
+floor within the original total clock; cancellation forbids later dispatch.
+
+Attempt evidence separates gateway-observed elapsed time from selector-reported
+time/cost. The known local lexical implementation records observed zero
+inference calls; unknown CPU/memory counts remain null. HTTP cost claims remain
+reported, and unobserved third-party inference remains unknown. The example
+uses the production contract and lexical rule; it is not a new corpus or a
+benchmark quality result. Managed-v1 and OpenClaw provider/host behavior are
+unchanged.
+
+Spec 0.52 ties offered stale, availability and effective eligibility changes to
+public catalog revisions. Capture-time-only refresh keeps the published record
+bytes and captured_at, including after restart. The cache assembles kind variants
+from stored record bytes; kinds are a set. Any current revision mismatch refuses
+computation admission, even an unrelated addition, `no_match` or empty output.
+Both primary and floor keep the original offer. The cache rejects changed
+same-revision policy/availability publication; live policy update wiring is not
+enabled in this component.
+
+The #194 service must create one `SelectionBudget` before envelope preparation,
+pin a compatible `OfferCache` generation before idempotency lookup, and pass
+`trusted_scope` and `trusted_permissions` to `select_assets`. These are trusted
+internal keyword arguments, not request authority. Observer events and immutable
+attempts are for its separate lifecycle store. The service must recheck current
+revision/admission and call that same budget's `check_before_commit()` inside its
+atomic ready transition; a returned selection object is not a durable ready
+commit. Call `fence_terminal()` on terminal lifecycle commit and retain ownership
+of resistant work until bounded cleanup observes completion. API lifecycle,
+readiness and startup publication remain #194/#196.

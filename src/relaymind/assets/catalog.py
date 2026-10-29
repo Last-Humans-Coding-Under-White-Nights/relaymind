@@ -185,6 +185,8 @@ class CatalogSnapshot:
     published_at: str
     sources: tuple[Mapping[str, Any], ...]
     assets: tuple[AssetRecord, ...]
+    # Internal committed bytes; never accepted from an untrusted wire snapshot.
+    record_bytes: tuple[bytes, ...] = field(default=(), repr=False, compare=False)
 
     def to_json_object(self) -> dict[str, Any]:
         return {

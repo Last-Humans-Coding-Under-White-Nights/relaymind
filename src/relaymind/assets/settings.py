@@ -4,10 +4,14 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from relaymind.assets.catalog import text
 from relaymind.selection.http import validate_url
+
+if TYPE_CHECKING:
+    from relaymind.selection.asset_contract import AssetSelector
+    from relaymind.selection.asset_lexical import LexicalIndex
 
 
 @dataclass(frozen=True)
@@ -148,3 +152,21 @@ def parse_recommendation_settings(
     if raw["url"] is not None:
         validate_url(raw["url"])
     return RecommendationSettings(**raw)
+
+
+def build_asset_selector(
+    settings: RecommendationSettings, *, index: "LexicalIndex | None" = None
+) -> "AssetSelector":
+    """Construct the separate v2 primary without contacting a service (RM35).
+
+    A missing lexical generation remains explicitly not_ready. #194/#196 own
+    API attachment and operational compatible-publication readiness.
+    """
+    from relaymind.selection.asset_http import HttpAssetSelector
+    from relaymind.selection.asset_lexical import LexicalAssetSelector
+
+    if settings.primary == "lexical":
+        return LexicalAssetSelector(index)
+    if settings.primary == "http":
+        return HttpAssetSelector(name=settings.name, version=settings.version, url=settings.url)
+    raise ValueError("hybrid artifacts are not qualified; choose lexical or http")
