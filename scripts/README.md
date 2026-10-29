@@ -2,6 +2,19 @@
 
 ## Current
 
+- `probes/qualify_matrix.py` — offline Matrix capture integrity probe (#188;
+  RM07, RM12, RM16, RM25). Reads an operator manifest and opaque original files;
+  checks IDs, hashes, UTC capture metadata, size bounds and path containment.
+  It never downloads, extracts, installs or executes a skill, and never infers
+  license permission. Missing licensing remains unknown. The probe-only format,
+  documented acquisition command and qualification limits are in the
+  [Matrix evidence note](../docs/evidence/2026-10-29-matrix-qualification/README.md).
+
+  ```bash
+  python scripts/probes/qualify_matrix.py --manifest <capture.json> \
+      --capture-root <original-files-directory> --output <integrity.json>
+  ```
+
 - `openclaw_qualification.py` — the OpenClaw qualification harness
   (#135; RM33, AC24). It serves the real gateway over the model doubles
   of `tests/`. `fixtures` runs every scenario through the pinned host
