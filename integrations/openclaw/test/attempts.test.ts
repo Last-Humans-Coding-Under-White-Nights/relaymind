@@ -7,7 +7,7 @@
 // RelayMind run IDs. A run ID unavailable before cancellation is recorded as
 // unavailable, never invented. Missing usage is unknown, not zero.
 import "openclaw/plugin-sdk/provider-transport-runtime";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createOpenAICompletionsTransportStreamFn } from "@openclaw/ai/transports";
@@ -165,12 +165,17 @@ describe("createAttemptLog", () => {
   });
 
   it("appends one JSON line per attempt to diagnosticsPath", () => {
-    const path = join(mkdtempSync(join(tmpdir(), "rm-diag-")), "attempts.jsonl");
-    const log = createAttemptLog({ logger: { info: () => {}, warn: () => {}, error: () => {} }, path });
-    log(record);
-    log({ ...record, attempt: 2 });
-    const lines = readFileSync(path, "utf8").trim().split("\n").map((l) => JSON.parse(l));
-    expect(lines.map((l) => l.attempt)).toEqual([1, 2]);
+    const dir = mkdtempSync(join(tmpdir(), "rm-diag-"));
+    try {
+      const path = join(dir, "attempts.jsonl");
+      const log = createAttemptLog({ logger: { info: () => {}, warn: () => {}, error: () => {} }, path });
+      log(record);
+      log({ ...record, attempt: 2 });
+      const lines = readFileSync(path, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+      expect(lines.map((l) => l.attempt)).toEqual([1, 2]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("a file it cannot write is one warning, never a failed request", () => {
