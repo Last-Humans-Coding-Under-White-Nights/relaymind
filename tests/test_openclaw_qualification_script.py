@@ -267,3 +267,29 @@ def test_the_driver_knows_it_is_the_entry_point_on_every_platform():
     source = qualification.DRIVER.read_text("utf-8")
     assert "file://${process.argv[1]}" not in source
     assert "import.meta.url === pathToFileURL(process.argv[1]).href" in source
+
+
+def test_the_driver_can_be_imported_where_node_has_no_script_path():
+    """``node -e`` and the REPL leave ``process.argv[1]`` unset (#135).
+
+    Importing the driver there (for its ``versions()``) must not throw from
+    the entry check.
+    """
+    import shutil
+    import subprocess
+
+    missing = qualification_missing()
+    if missing:
+        pytest.skip(missing)
+    code = (
+        f"const m = await import({json.dumps(qualification.DRIVER.as_uri())});"
+        "console.log(JSON.stringify(m.versions()));"
+    )
+    completed = subprocess.run(
+        [shutil.which("node"), "--input-type=module", "-e", code],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout)["node"].startswith("v")

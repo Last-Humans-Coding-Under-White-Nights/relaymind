@@ -162,7 +162,8 @@ export function versions() {
   };
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+// process.argv[1] is unset under node -e and in the REPL, where the driver is only imported.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const scenario = JSON.parse(readFileSync(process.argv[2], "utf8"));
   const output = await runScenario(scenario);
   const document = { versions: versions(), scenario, ...output };
