@@ -481,7 +481,12 @@ def _sanitize(text: str, secrets: Sequence[str], places: Sequence[tuple[Path, st
         if secret:
             text = text.replace(secret, NOT_RECORDED)
     for path, placeholder in places:
-        for form in {str(path), str(path.resolve()), json.dumps(str(path))[1:-1]}:
+        # Only absolute forms: a relative one (``.`` for ``--tarball x.tgz``) would
+        # rewrite unrelated text, and the working directory names nothing of its own.
+        if path == Path("."):
+            continue
+        names = {str(p) for p in (path, path.resolve()) if p.is_absolute()}
+        for form in {*names, *(json.dumps(name)[1:-1] for name in names)}:
             text = text.replace(form, placeholder)
     return text
 

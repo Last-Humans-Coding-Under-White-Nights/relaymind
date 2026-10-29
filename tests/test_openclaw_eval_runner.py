@@ -453,6 +453,23 @@ def test_neither_secret_nor_a_host_home_path_reaches_the_exports(evaluated, tmp_
     assert json.loads(export)["evidence"].startswith("not live")
 
 
+def test_a_relative_place_is_replaced_by_its_absolute_forms_only(tmp_path, monkeypatch):
+    """A relative path given to the runner (``--tarball x.tgz``, ``-- ./openclaw.mjs``)
+    has parent ``.``: replacing that text would rewrite every period of the export.
+    A place is replaced in its absolute forms, raw and JSON-escaped (on Windows the
+    export holds ``C:\\\\Users``); the working directory itself names nothing."""
+    monkeypatch.chdir(tmp_path)
+    document = {"version": "3.14", "file": "tasks.v1.json", "at": "2026-10-29T10:00:00"}
+    text = json.dumps(document)
+    assert runner._sanitize(text, [], [(Path("x.tgz").parent, "<artifact-dir>")]) == text
+    # A backslash in a POSIX name stands in for a Windows separator: JSON escapes it.
+    odd = tmp_path / "rel\\dir"
+    odd.mkdir()
+    text = json.dumps({"log": f"wrote {odd.resolve() / 'host.log'}"})
+    cleaned = runner._sanitize(text, [], [(Path("rel\\dir"), "<dir>")])
+    assert json.loads(cleaned) == {"log": f"wrote <dir>{os.sep}host.log"}
+
+
 def test_the_plugin_is_configured_with_the_arms_mode_and_its_diagnostics(evaluated):
     document, _out, _backend = evaluated
     assert document["arms"]["relaymind_auto"]["plugin_config"]["executionMode"] == "auto"
