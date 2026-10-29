@@ -767,7 +767,10 @@ This is planned integration, not a claim of a working or faster plugin.
   failed (harness host scenarios 4a to 4c, `checks.passed` false; the
   fixes belong to #136 and #137). Linux and Windows host runs are not_run.
 - Remove the retired workflow steps placeholder from the demo UI
-  (#173; RM23, AC14). Independent of the plugin; can start now.
+  (#173; RM23, AC14). Independent of the plugin. Implemented with model
+  doubles (`tests/test_demo_ui_trace.py`): the trace has no Workflow steps
+  section, the fixed parallel demo keeps its summary, and a stored trace
+  with the reserved `workflow` tool mechanism still renders.
 - Provider package, model catalog, configuration, and token handover
   (#136; RM12, RM19, RM26, RM33), after #135.
   Status: the package registers the `relaymind` provider through the
