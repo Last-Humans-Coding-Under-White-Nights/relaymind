@@ -38,7 +38,7 @@ for (const entry of pkg.openclaw.extensions) {
 const exported = new Set(Object.keys(host.exports));
 for (const file of files.filter((f) => f.startsWith("dist/"))) {
   const text = readFileSync(new URL(file, root), "utf8");
-  for (const [, specifier] of text.matchAll(/(?:from|import)\s*\(?\s*"([^"]+)"/g)) {
+  for (const [, , specifier] of text.matchAll(/(?:from|import)\s*\(?\s*(["'])([^"']+)\1/g)) {
     if (specifier.startsWith("node:")) continue;
     if (specifier.startsWith("./") || specifier.startsWith("../")) {
       if (!specifier.endsWith(".js")) problems.push(`${file} imports ${specifier} (not built JavaScript)`);

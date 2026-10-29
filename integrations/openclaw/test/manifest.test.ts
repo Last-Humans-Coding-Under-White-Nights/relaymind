@@ -122,7 +122,7 @@ describe("source imports (public SDK only)", () => {
 
   it.each(sources)("%s imports openclaw only through published plugin-sdk subpaths", (file) => {
     const text = readFileSync(new URL(`src/${file}`, root), "utf8");
-    const specifiers = [...text.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]!);
+    const specifiers = [...text.matchAll(/(?:from|import)\s*\(?\s*(["'])([^"']+)\1/g)].map((m) => m[2]!);
     for (const specifier of specifiers) {
       expect(specifier).not.toMatch(/node_modules|\/dist\//);
       if (specifier === "openclaw" || specifier.startsWith("openclaw/")) {
