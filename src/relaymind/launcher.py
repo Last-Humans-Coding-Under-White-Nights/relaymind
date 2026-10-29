@@ -47,6 +47,13 @@ from relaymind.api.app import ChatSettings, NativeSettings, create_app
 from relaymind.api.chat import ClientToolsChat
 from relaymind.api.chat_request import SAMPLING_OPTIONS
 from relaymind.api.server import serve, validate_bind_host
+from relaymind.assets.service import AssetCatalogService
+from relaymind.assets.settings import (
+    AssetSettings,
+    RecommendationSettings,
+    parse_asset_settings,
+    parse_recommendation_settings,
+)
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
 from relaymind.orchestrator.local_status import LocalStatus
@@ -62,6 +69,7 @@ from relaymind.selection import EXAMPLE_MATCH, MODEL_ROUTER, SelectionSettings
 from relaymind.skills import SkillConfigError, SkillRegistry, default_skill_roots
 from relaymind.skills.predicates import COMPLETION_PREDICATES
 from relaymind.store import RunStore
+from relaymind.store.asset_catalog import AssetCatalogStore
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry
 from relaymind.tools.sandbox import (
     DEMO_TOOL_NAMES,
@@ -88,6 +96,13 @@ NO_LOCAL_MODES = (ExecutionMode.AUTO, ExecutionMode.EXTERNAL_ONLY)
 KNOWN_PERMISSIONS = frozenset(DEFAULT_PERMISSIONS)
 
 _TABLES: dict[str, frozenset[str]] = {
+    "recommendations": frozenset(RecommendationSettings.__dataclass_fields__),
+    "assets": frozenset({"sources"}),
+    "asset_refresh": frozenset(
+        {"local_scan_seconds", "remote_seconds", "backoff_initial_seconds", "backoff_max_seconds"}
+    ),
+    "asset_hybrid": frozenset({"manifest", "config"}),
+    "asset_adaptation": frozenset({"enabled", "config"}),
     "server": frozenset({"host", "port"}),
     "store": frozenset({"path"}),
     "skills": frozenset({"roots"}),
@@ -177,6 +192,8 @@ class LauncherConfig:
     detect_stages: bool = False
     # Spec 0.31 section 14.1: the selector chain; the default is model_router alone (RM28).
     selection: SelectionSettings = field(default_factory=SelectionSettings)
+    assets: AssetSettings = field(default_factory=AssetSettings)
+    recommendations: RecommendationSettings = field(default_factory=RecommendationSettings)
 
 
 @dataclass(frozen=True)
@@ -194,6 +211,7 @@ class Launched:
     recovered: int
     new_local_adapter: Callable[[], ModelAdapter] | None = None
     warmup: WarmupResult | None = None
+    asset_catalog: AssetCatalogService | None = None
 
 
 # -- reading the file ---------------------------------------------------------------
@@ -272,6 +290,21 @@ def load_config(path: Path | str) -> LauncherConfig:
     if unknown:
         raise LaunchError(f"unknown table: {', '.join(unknown)}")
     tables = {name: _table(raw, name) for name in _TABLES}
+    assets = _settings(
+        "assets",
+        lambda: parse_asset_settings(
+            tables["assets"], tables["asset_refresh"], config_dir=path.absolute().parent
+        ),
+    )
+    recommendations = _settings(
+        "recommendations",
+        lambda: parse_recommendation_settings(
+            tables["recommendations"],
+            source_count=len(assets.sources),
+            hybrid=tables["asset_hybrid"],
+            adaptation=tables["asset_adaptation"],
+        ),
+    )
     server, local = tables["server"], tables["local_model"]
     policy, chat, native = tables["policy"], tables["chat"], tables["native"]
     # Section 14.1 (RM26): the local_model table is optional, but one model table is needed.
@@ -357,6 +390,8 @@ def load_config(path: Path | str) -> LauncherConfig:
         budgets=budgets,
         performance=performance,
         placement=placement_settings,
+        assets=assets,
+        recommendations=recommendations,
         warmup=warmup,
         warmup_seconds=float(warmup_seconds),
         detect=detect,
@@ -538,6 +573,15 @@ def build_app(
             placement=config.placement,
         )
         report = orchestrator.recover_after_restart()
+        catalog = None
+        if config.recommendations.enabled:
+            catalog = AssetCatalogService(
+                config.assets,
+                AssetCatalogStore(store),
+                busy=lambda: (
+                    store.active_run_id() is not None or store.probe_reservation() is not None
+                ),
+            )
         ui = None if config.ui is None else replace(config.ui, fixtures=sandbox)
         app = create_app(
             orchestrator=orchestrator,
@@ -545,12 +589,14 @@ def build_app(
             settings=config.chat,
             native=config.native,
             ui=ui,
+            asset_catalog=catalog,
         )
         return Launched(
             app=app,
             orchestrator=orchestrator,
             recovered=len(report.runs),
             new_local_adapter=new_local_adapter,
+            asset_catalog=catalog,
         )
     except RecoveryError as exc:
         store.close()
@@ -609,7 +655,13 @@ def warm_up_gateway(
             if owned:
                 await adapter.aclose()
 
-    status, result = asyncio.run(work())
+    if launched.asset_catalog is not None:
+        launched.asset_catalog.warmup_busy = True
+    try:
+        status, result = asyncio.run(work())
+    finally:
+        if launched.asset_catalog is not None:
+            launched.asset_catalog.warmup_busy = False
     if status is not None:
         launched.orchestrator.set_local_status(status)
     return replace(launched, warmup=result)

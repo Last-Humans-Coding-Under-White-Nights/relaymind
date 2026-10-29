@@ -83,6 +83,7 @@ from relaymind.api.native import (
     run_view,
     sweep_expired_waits,
 )
+from relaymind.assets.service import AssetCatalogService
 from relaymind.orchestrator.local_loop import LocalOrchestrator, StartedRun
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
@@ -135,6 +136,7 @@ def create_app(
     settings: ChatSettings | None = None,
     native: NativeSettings | None = None,
     ui: UiSettings | None = None,
+    asset_catalog: "AssetCatalogService | None" = None,
 ) -> FastAPI:
     """The compatible API over one orchestrator.
 
@@ -162,13 +164,18 @@ def create_app(
         probe = IdleProbe(orchestrator, cancel_wait_seconds=native.cancel_wait_seconds)
         app.state.idle_probe = probe
         probe.start()
+        if asset_catalog is not None:
+            asset_catalog.start()
         try:
             yield
         finally:
+            if asset_catalog is not None:
+                await asset_catalog.stop()
             await probe.stop()
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.application_token = token
+    app.state.asset_catalog = asset_catalog
 
     @app.get("/v1/models")
     @_guarded

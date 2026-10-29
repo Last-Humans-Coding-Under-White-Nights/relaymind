@@ -1042,6 +1042,19 @@ listed here so the current order can be traced to its reason.
 
 ## M10 — Multilingual asset recommendations (spec 0.51)
 
+The #192 implementation supplies independent catalog discovery: closed records
+and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
+imports, safe internal searchable bodies, atomic shared-SQLite publication,
+source-owned tombstones, retained stale observations, recovery and one bounded
+local worker. `[recommendations]` defaults disabled; enabled catalog work starts
+in the application lifespan. This is development on the explicitly authorized
+reviewed-spec stack while #187's merge remains pending. No recommendation API,
+useful lexical readiness, pre-warmup serving change, qualified external refresh
+or current host availability is claimed. #193/#194/#196 own selection/API/startup
+behavior. The AC25 live host/source subcases, full 300-asset measurements,
+Windows/macOS qualification and Matrix rights/cohort/refresh remain open; these
+deterministic catalog tests do not close #191 or #192's qualified adapter gates.
+
 Specification 0.51 freezes the independent M10 recommendation core (spec
 section 1); every full-milestone gate stays. The
 [published design](design/2026-10-29-multilingual-asset-routing.md) reconciles

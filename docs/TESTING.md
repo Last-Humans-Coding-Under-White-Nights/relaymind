@@ -2009,6 +2009,125 @@ that on the wire `function.arguments` is a JSON-encoded **string**
 the Chat Completions protocol, not a bug. RelayMind's adapters parse
 it before any tool call exists (RM09).
 
+## Independent asset catalog discovery (#192; RM34/AC25)
+
+Run the deterministic catalog checks with disposable files and model doubles:
+
+```bash
+pytest tests/test_asset_catalog.py tests/test_asset_sources.py tests/test_asset_catalog_store.py tests/test_asset_catalog_service.py tests/test_asset_sources_windows.py
+```
+
+Native Windows capture uses lazily loaded system APIs to open one component
+under each pinned directory handle. Reparse points, alternate streams and
+manifest aliases are rejected; opened read handles stay pinned until staging
+ends. POSIX capture uses descriptor-relative no-follow opens. The Windows file
+runs against actual native APIs in the existing Windows CI matrix, with explicit
+skips on other systems; local layout/buffer/controller checks do not qualify Windows. Real withheld
+oplock and pending create/read cancellation/deadline tests run in disposable
+subprocess trees under external watchdogs. A watchdog timeout fails before the
+fixture tree is terminated; termination is never counted as a successful drain.
+
+These checks exercise discovery, integrity and publication. They do not qualify
+Matrix acquisition rights/language/cohort/refresh, a production host adapter,
+useful recommendation readiness, full-scale performance or live platform gates.
+The reviewed-spec PR stack is the implementation basis pending #187's merge.
+
+An ordinary local source needs no managed RelayMind manifest. For example,
+`ordinary-skills/greeting/SKILL.md` may contain:
+
+```markdown
+---
+name: Greeting Helper
+description: Help write a short greeting in English or Chinese
+metadata:
+  version: "1.0"
+  languages: [en, zh-CN]
+  dependencies: []
+---
+Write a greeting in the requested language.
+```
+
+Set a `local_directory` source in `relaymind.example.toml` as shown in its
+commented configuration. The path resolves from the configuration file's
+parent. A root SKILL.md entry takes precedence, including when invalid;
+otherwise only immediate child folders are inspected in UTF-8 name order.
+Names need not be lowercase or match folder names. No scripts, dependencies,
+resources or instructions execute. Manual host installation/setup is separate,
+and every admitted asset has availability `unknown`.
+
+For an explicit metadata import, put the five ASCII bytes `hello`, with no
+newline, in `asset-import/originals/hello.txt`. The following
+`asset-import/import.json` is an **example**, not acquired Matrix evidence:
+
+```json
+{
+  "schema_version": 1,
+  "source_id": "example",
+  "source_version": null,
+  "captured_at": "2026-10-29T00:00:00Z",
+  "complete": false,
+  "records": [{
+    "record": {
+      "asset_id": "example:skill:hello",
+      "kind": "skill",
+      "source_locator": "https://example.invalid/skills/hello",
+      "source_version": null,
+      "captured_at": "2026-10-29T00:00:00Z",
+      "content_hash": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+      "description": "Example greeting skill",
+      "language_tags": ["en"],
+      "dependencies": [],
+      "identity": {"package_id": "hello", "package_version": null}
+    },
+    "original_path": "originals/hello.txt"
+  }],
+  "removed_asset_ids": []
+}
+```
+
+A `metadata_import` source reads this one document with its parent as capture
+root. It verifies the original bytes and never fetches source_locator or
+unpacks an archive. Snapshot/status/host fields are refused. Partial imports
+retain omitted records as stale and cannot remove anything. Complete imports
+must account for every retained asset; deletion requires an explicit owned
+`removed_asset_ids` tombstone. A verified complete local scan may tombstone a
+previous package only after confirming ordinary absence. Missing roots,
+invalid replacements, failed/partial reads and cancellation retain the last
+committed generation with stale/exclusion evidence. Identical captures are
+content revision no-ops. Search metadata, bodies and provenance digests publish
+atomically in the existing SQLite store; raw originals stay under operator
+control, and known metadata secret values are scrubbed from projections.
+
+Catalog work starts in the application lifespan only when recommendations are
+enabled with user/workspace scope and explicit sources. There is one worker;
+`AssetCatalogService.rescan(source_id)` is the internal explicit rescan boundary,
+not a new command or HTTP endpoint. Local sources are checked every configured
+30 seconds by default; metadata documents are read initially or explicitly,
+with bounded failed-job backoff (60 seconds doubling to 3600). Work pauses before
+dispatch while execution, idle probes or warm-up are busy. Shutdown signals
+cancellation and retains ownership until in-flight capture actually completes; cancelled or deadline-exhausted work cannot publish.
+Native Windows opens use FILE_COMPLETE_IF_OPLOCKED and reject an incomplete
+oplock break. A capture-owned monitor requests CancelSynchronousIo independently
+of the blocked worker, fences all subsequent source work, and joins before that
+thread can return to the pool. Cancellation is a request: an uncooperative
+filesystem/filter/network driver can prevent actual completion. Such an
+operation remains owned and unusable; shutdown does not claim it drained or
+start replacement work. Native watchdog tests measure the supported local
+filesystem cases; this is not a universal kernel-I/O termination guarantee. Batch elapsed
+samples (25 records per full import batch), observed overlap and drain duration
+are stored as measurements; the 50 ms CPU batch target is not a preemption or
+performance success claim.
+
+Fixed caps are 1000 entries/packages or distinct records per source job;
+1000 combined import upserts/removals; 100 MiB staged bytes/job; 10 MiB/original;
+4 MiB import/optional manifest/frontmatter; 256 KiB body before/after
+normalization; 1 MiB read chunks; 60 seconds/job; YAML depth 16. Projections
+also enforce the exact field/repetition/offer limits in specification §14.5.
+The first exhausted limit fails staging without partial publication. There is
+no permitted remote adapter, automatic installation, MCP client, inference,
+recommendation endpoint or useful readiness claim in this catalog component.
+The separate pre-warmup serving order remains #196 work.
+
 ## What manual checks do not replace
 
 Manual terminal checks are for exploration and platform qualification

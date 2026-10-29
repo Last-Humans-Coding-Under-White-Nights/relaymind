@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Independent asset catalog discovery (#192; RM34/AC25): ordinary local
+  `SKILL.md` folders and closed, hash-verified metadata imports; bounded safe
+  projections, durable atomic SQLite generations, source ownership/tombstones,
+  stale failure observations, restart recovery, and one cancellable background
+  worker. Configuration remains disabled by default. Assets have unknown host
+  availability; no recommendation endpoint, execution, installation, remote
+  adapter, useful lexical readiness or live M10 acceptance is delivered here.
+  Development follows the explicitly authorized reviewed-spec PR stack while
+  #187's merge remains pending; later specification changes must be reconciled.
+
 - Specification 0.50 → 0.51 (#187): adds M10 multilingual skill and MCP
   recommendations as RM34–RM44 and AC25–AC37 (new sections 4.6, 5.1, 7.6,
   8.1, 11.1, 12.6 and 14.5) and amends RM02 and sections 3, 10 and 14.1.

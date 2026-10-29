@@ -260,6 +260,70 @@ MIGRATIONS: tuple[str, ...] = (
     );
     CREATE INDEX local_stage_outcomes_model ON local_stage_outcomes(local_model, ended_at);
     """,
+    # RM34/AC25: independent catalog/job storage; existing run/event tables are unchanged.
+    """
+    CREATE TABLE asset_catalog_meta (
+        singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+        revision INTEGER NOT NULL CHECK(revision>=0),
+        published_at TEXT NOT NULL
+    );
+    INSERT INTO asset_catalog_meta VALUES(1, 0, '1970-01-01T00:00:00.000000Z');
+    CREATE TABLE asset_catalog_sources (
+        source_id TEXT PRIMARY KEY,
+        source_version TEXT,
+        content_hash TEXT,
+        captured_at TEXT,
+        last_success_at TEXT,
+        stale INTEGER NOT NULL DEFAULT 1,
+        complete INTEGER NOT NULL DEFAULT 0,
+        accepted_count INTEGER NOT NULL DEFAULT 0,
+        rejected_count INTEGER NOT NULL DEFAULT 0,
+        exclusions_json TEXT NOT NULL DEFAULT '[]',
+        config_digest TEXT,
+        consecutive_failures INTEGER NOT NULL DEFAULT 0,
+        next_attempt_at TEXT
+    );
+    CREATE TABLE asset_catalog_assets (
+        asset_id TEXT PRIMARY KEY,
+        source_id TEXT NOT NULL REFERENCES asset_catalog_sources(source_id),
+        record_json TEXT NOT NULL,
+        search_json TEXT NOT NULL,
+        projection_digest TEXT NOT NULL,
+        relative_package_path TEXT,
+        stale INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX asset_catalog_assets_source ON asset_catalog_assets(source_id);
+    CREATE TABLE asset_catalog_provenance (
+        source_id TEXT NOT NULL REFERENCES asset_catalog_sources(source_id),
+        relative_path TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        PRIMARY KEY(source_id, relative_path)
+    );
+    CREATE TABLE asset_catalog_tombstones (
+        asset_id TEXT PRIMARY KEY,
+        source_id TEXT NOT NULL REFERENCES asset_catalog_sources(source_id),
+        removed_at TEXT NOT NULL
+    );
+    CREATE TABLE asset_catalog_jobs (
+        job_id TEXT PRIMARY KEY,
+        source_id TEXT NOT NULL REFERENCES asset_catalog_sources(source_id),
+        config_digest TEXT NOT NULL,
+        state TEXT NOT NULL CHECK(
+            state IN ('running','succeeded','failed','cancelled','interrupted')
+        ),
+        started_at TEXT NOT NULL,
+        finished_at TEXT,
+        reason TEXT,
+        duration_ms REAL,
+        received_bytes INTEGER NOT NULL DEFAULT 0,
+        batch_ms_json TEXT NOT NULL DEFAULT '[]',
+        overlap_observed INTEGER NOT NULL DEFAULT 0,
+        drain_ms REAL
+    );
+    CREATE UNIQUE INDEX asset_catalog_running_source ON asset_catalog_jobs(source_id)
+        WHERE state='running';
+    """,
 )
 
 
@@ -668,6 +732,16 @@ class RunStore:
         """
         with self._write():
             yield
+
+    @contextmanager
+    def sql_transaction(self) -> Iterator[sqlite3.Connection]:
+        """Storage facades share this connection, lock and rollback boundary (RM17).
+
+        This internal storage boundary does not reserve the execution/probe slot.
+        Existing transaction() callers continue to receive None.
+        """
+        with self._write():
+            yield self._conn
 
     # -- idle maintenance slot (RM17, RM27) ---------------------------------
 
