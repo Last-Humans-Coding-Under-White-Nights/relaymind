@@ -2,11 +2,11 @@
   "openclaw": "2026.10.7",
   "@openclaw/ai": "2026.10.7",
   "openai": "7.27.0",
-  "node": "v24.22.1",
-  "os": "Linux 7.0.0-38-generic",
-  "machine": "x86_64",
+  "node": "v26.12.1",
+  "os": "Darwin 27.0.0",
+  "machine": "arm64",
   "relaymind_revision": {
-    "head": "ac6acd3359b4734fdfc5bba1bd951d2718c7982d",
+    "head": "b39ff69d72b6a07ca2e26e2ecfcc03b84b74a985",
     "dirty": false
   }
 }
