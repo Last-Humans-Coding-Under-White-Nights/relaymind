@@ -8,11 +8,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Specification 0.51 → 0.52 (RM34, RM38): clarify cached offer invalidation
-  for observed freshness, effective policy and requested-kind variants. Public
-  catalog content revisions and wire schemas stay unchanged. This clarification
-  claims no cache implementation or measured startup performance.
-
 - Independent asset catalog discovery (#192; RM34/AC25): ordinary local
   `SKILL.md` folders and closed, hash-verified metadata imports; bounded safe
   projections, durable atomic SQLite generations, source ownership/tombstones,
@@ -427,6 +422,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   still runs the tool work the external stage reuses. No default changes.
 
 ### Changed
+
+- Specification 0.51 → 0.52 (#187; RM24, RM34, RM38): section 14.5 defines the
+  offer projection cache. A stale, availability or eligibility change increments
+  catalog_revision (section 4.6), so a result on an older offer is stale; a
+  capture-time-only observation keeps the revision. Projections key
+  selection_scope and the requested_kinds set (section 10), and a missing usable
+  generation fails create before the idempotency claim (section 7.6). Wire schemas
+  are unchanged. Specification change only; no product code.
 
 - Documentation brought up to date with M9 at #139: the spec version and
   M9 status in `AGENTS.md` (and the OpenClaw scripts in its map), the
