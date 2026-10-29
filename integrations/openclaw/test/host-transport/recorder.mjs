@@ -36,7 +36,8 @@ function parseBody(text) {
 /** The SSE data lines of a response body, or null when it is not an event stream. */
 export function sseData(text) {
   const out = [];
-  for (const block of text.split("\n\n")) {
+  // SSE ends a line with CRLF, LF, or CR; read them all as LF.
+  for (const block of text.replace(/\r\n?/g, "\n").split("\n\n")) {
     for (const line of block.split("\n")) {
       if (line.startsWith("data: ")) {
         const data = line.slice("data: ".length);
