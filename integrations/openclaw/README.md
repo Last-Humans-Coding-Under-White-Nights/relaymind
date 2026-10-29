@@ -465,11 +465,13 @@ sees one message that starts with `RelayMind <code> (HTTP <status>)` (or
 do, quotes the gateway's own message on one line with any token removed, and
 names the gateway run (`Gateway run <id>` or `Gateway run unavailable`). The
 gateway's code stays the message's `errorCode`. Whether the host shows that
-message is the host's choice: in the Linux VPS functional check a context
-overflow's message was the host's final error text, but after a 503
-`external_failed` the host's final text was its own `⚠️ The AI service is
+message is the host's choice: in the Linux VPS functional check, after a
+503 `external_failed` the host's final text was its own `⚠️ The AI service is
 having trouble. Please try again in a moment.`, and the plugin's message
-was only in the host's log (`rawError=`, `detail=`) with the run ID. The class is what the
+was only in the host's log (`rawError=`, `detail=`) with the run ID. A
+context overflow's message was seen as the host's error text only in a
+first try of the abort scenario that was not kept, so it is not recorded
+evidence. The class is what the
 plugin's `matchesContextOverflowError` and `classifyFailoverReason` hooks
 answer:
 
