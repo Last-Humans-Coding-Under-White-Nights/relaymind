@@ -260,6 +260,51 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   #137). The local context stays
   8192, so in practice OpenClaw turns go external in auto and get
   needs_external in local_only. The plugin itself is #136's.
+- OpenClaw evaluation tasks, grading, and runner (#139; RM16, RM18, RM25,
+  RM26, RM33; AC24; spec 0.50 section 12.5): `evaluation/openclaw_tasks.v1.json`
+  (6 English and 6 best-effort Chinese tasks: text, host `read`, `write`, and
+  `exec` under `deny` and `full`; 3 repeats, seed 139) with its digest and
+  order digest in `evaluation/openclaw_tasks.v1.lock.json`;
+  `relaymind.evaluation.openclaw` loads and checks them, derives the paired
+  sampling order from SHA-256 ranks, grades an attempt from the host's exit
+  status, answer, tool report, sandbox, the plugin's diagnostics, and the
+  gateway runs, and summarizes the arms with exact counts and unknown usage
+  kept unknown; `scripts/run_openclaw_eval.py` runs the four arms through a
+  real host, each in its own host home and gateway, and writes the raw
+  export and a Markdown report without the token or the credential. Tests:
+  `tests/test_openclaw_eval_fixtures.py`, `tests/test_openclaw_eval_grading.py`,
+  and `tests/test_openclaw_eval_runner.py` (stub host, gateway doubles), also
+  in the CI `openclaw-plugin` job. The measurement is not run: every arm is
+  not_run in `docs/EVIDENCE.md` and `docs/RELEASE.md`.
+- Specification 0.50, the OpenClaw evaluation files, arms, and grading (#139;
+  RM16, RM18, RM25, RM26, RM33; AC24; section 12.5): the tasks are
+  `evaluation/openclaw_tasks.v1.json`, frozen by its digest in
+  `evaluation/openclaw_tasks.v1.lock.json`, apart from the managed-skill
+  corpus; the four arms are `direct`, `relaymind_external_only`,
+  `relaymind_auto`, and `relaymind_no_local`, in a seeded paired order; an
+  attempt succeeds on the host's exit status, its final answer, its tool
+  calls, the sandbox, and the gateway trace, never on the host's `"ok"`; a
+  host failover is counted apart, and only a reported provider or model
+  other than the arm's is one (an error report naming neither is a failed
+  attempt); both arms of a paired comparison share one success rule, so
+  a call's arguments and a call outside the expected ones are reported
+  (unexpected host tools in every arm, unexpected proposals in RelayMind),
+  never a failure; `relaymind_auto` needs the external model and a local model,
+  and is not_run without either; a host tool call is graded from the host's
+  tool report and the sandbox, never by comparing call IDs (the trace holds
+  no host result); the report gives exact counts per arm and language, the
+  two clocks apart, and tokens per model with unknown counts kept unknown,
+  and the export names the Node that ran the host; the report gives the
+  reason codes of the runs that left the local stage, so 0 local turns (what
+  the 8192-token local context gives an OpenClaw turn, macOS qualification)
+  is reported as a result with its reasons, and a local-inference comparison
+  without a local turn says so; a host that exits 130 or dies of SIGINT (on
+  Windows, ends with STATUS_CONTROL_C_EXIT) is a host interrupt, apart from
+  other exit statuses; an evaluation the operator
+  interrupts still writes its export, marked aborted, with the remaining
+  slots not run, also when the interrupt lands in an arm's setup (the arm
+  and every slot not run) or in the grading of an attempt that ended (the
+  attempt is kept and graded). No gateway contract change.
 - Specification 0.49, OpenClaw host facts recorded on the wire (#135; RM33,
   section 7.5): at v2026.10.7 the host's defaults for a loopback URL send
   `stream_options` and, for a reasoning model, `reasoning_effort`; the
@@ -305,6 +350,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Documentation brought up to date with M9 at #139: the spec version and
+  M9 status in `AGENTS.md` (and the OpenClaw scripts in its map), the
+  OpenClaw row and the #139 evaluation pieces in `docs/ARCHITECTURE.md`,
+  the M9 issue status and exit criteria in `docs/ROADMAP.md`, an OpenClaw
+  entry in `README.md`, the M9 gaps in `docs/TESTING.md`, the run record
+  in `integrations/openclaw/README.md`, the status line of the OpenClaw
+  design note, and the status word in the spec's section 7.5 heading. What
+  ran over doubles, in Linux VPS functional checks, and on GitHub-hosted
+  runners stays apart from what is not_run (macOS and Windows
+  qualification, a plugin approval on a real host, the #139 measurement).
+  No behavior change.
 - Specification 0.47 redirects M9 from YAML workflows to OpenClaw
   integration (#135 to #139, #145, #173): retire the unimplemented RM30 and AC23
   without reusing their identifiers; add RM33, AC24, the provider ownership

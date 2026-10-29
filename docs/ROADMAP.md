@@ -732,14 +732,15 @@ met or not met with exact numbers in the constrained configuration; a
 selector swap by configuration, including an HTTP selector, leaves the
 orchestrator and the packages unchanged.
 
-## M9 — OpenClaw integration (spec 0.47, P1)
+## M9 — OpenClaw integration (spec 0.47, revised in 0.49 and 0.50; P1)
 
 Ship an installable provider plugin that lets OpenClaw use RelayMind's
 bounded local/external inference through `relaymind-client-tools`.
 OpenClaw owns sessions, tool execution, and approvals; the Python gateway
 remains a separate loopback service. The feasibility analysis and alternatives
 are in [`design/2026-10-27-openclaw-integration.md`](design/2026-10-27-openclaw-integration.md).
-This is planned integration, not a claim of a working or faster plugin.
+The plugin and the evaluation runner are implemented and tested over model
+doubles; this is not a claim of a live-qualified or faster plugin.
 
 - Compatibility qualification and captured protocol fixtures (#135;
   RM08, RM19, RM20, RM33; AC24). Pin the host/SDK and check its actual
@@ -765,7 +766,9 @@ This is planned integration, not a claim of a working or faster plugin.
   get needs_external in local_only, and #139 reports that. The real host
   against the gateway over doubles ran on the same Mac at `a52f8bf` and
   failed (harness host scenarios 4a to 4c, `checks.passed` false; the
-  fixes belong to #136 and #137). Linux and Windows host runs are not_run.
+  fixes belong to #136 and #137, and the Linux VPS functional checks of
+  #136 to #138 and #145 below ran the real host after them). Windows host
+  runs and a macOS rerun are not_run.
 - Remove the retired workflow steps placeholder from the demo UI
   (#173; RM23, AC14). Independent of the plugin. Implemented with model
   doubles (`tests/test_demo_ui_trace.py`): the trace has no Workflow steps
@@ -841,13 +844,23 @@ This is planned integration, not a claim of a working or faster plugin.
   supported-platform qualification), last at `393a6bf`
   (`docs/evidence/2026-10-28-openclaw-vps-functional-145/`). The CI job `openclaw-plugin` runs the
   package checks, every OpenClaw pytest tier, and the install check on
-  ubuntu, macOS, and Windows runners. The operator guide is in
+  ubuntu, macOS, and Windows runners; its install check exports at `78fc94d`
+  are recorded as a GitHub-hosted runner functional check over doubles (not
+  a user-machine qualification). The operator guide is in
   `integrations/openclaw/README.md`. macOS and Windows runs of this
   revision on a user's machine are not_run and listed as support gaps in
   `docs/RELEASE.md`.
 - M9 live evaluation (#139; RM16, RM25, RM26, RM33; section 12.5), after
   #145: direct external versus RelayMind external_only versus auto, plus
   a separate no-local setup; exact success, latency, calls, and usage.
+  Status (spec 0.50): the frozen bilingual tasks and their lock
+  (`evaluation/openclaw_tasks.v1.json`), grading and the arm summary
+  (`relaymind.evaluation.openclaw`), and the runner
+  (`scripts/run_openclaw_eval.py`) are implemented and tested over a stub
+  host and doubles, including a dry run of auto at the 8192 context with a
+  host-sized request (0 local turns, reason context_limit). The measurement
+  in all four arms is not_run; the issue stays open until it is recorded in
+  `docs/EVIDENCE.md`.
 - Closes: AC24. Existing AC10 to AC12 and AC14 remain regression gates.
 
 The first milestone version supports text and one host-owned function call
@@ -859,6 +872,18 @@ Exit: the pinned plugin installs and runs through OpenClaw without a core
 fork; AC24 passes with the actual host transport over model doubles; live
 evidence and platform results are recorded separately. Performance gains
 are measured hypotheses, not acceptance claims inferred from compatibility.
+
+Exit status: met over model doubles: the plugin installs and runs through
+the pinned host without a core fork, and AC24's parts (text and host tool
+round trips, local, external, absent-local, an oversized request,
+cancellation, errors, restart authentication) pass through the actual host
+transport over doubles. The real host ran them in Linux VPS functional
+checks and the install check on GitHub-hosted runners, neither a
+supported-platform qualification. Open: the macOS and Windows
+qualifications of this revision, a plugin approval answered on a real host,
+and the live #139 measurement (all not_run). The local context stays 8192:
+OpenClaw requests (about 10.5k tokens with the pinned tokenizer) do not fit
+it, so auto goes external and local_only gets needs_external.
 
 The unimplemented YAML workflow expansion and plan benchmark are removed
 from M9 (RM30 and AC23 retired). The implemented fixed parallel demo remains

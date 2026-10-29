@@ -34,6 +34,29 @@
       --out <export.json> [--label "<machine and runtime>"] \
       -- node integrations/openclaw/node_modules/openclaw/openclaw.mjs
   ```
+- `run_openclaw_eval.py` — the M9 OpenClaw evaluation (#139; RM16, RM25,
+  RM26, RM33; AC24; spec 0.50 section 12.5). It checks
+  `evaluation/openclaw_tasks.v1.json` against its lock and runs every slot
+  of the frozen order through a real host (`openclaw agent exec --json`) in
+  four arms: `direct` (the host's own entry for the external model),
+  `relaymind_external_only`, `relaymind_auto`, and `relaymind_no_local`
+  (the plugin from the release artifact against its own `relaymind serve`
+  gateway). Each arm has its own isolated host home; each attempt a fresh
+  sandbox under the task's exec policy. The export holds every attempt raw,
+  the grades and summary of `relaymind.evaluation.openclaw`, and a Markdown
+  report; an arm without its endpoint, credential, or local model is
+  not_run (`relaymind_auto` needs both models). An interrupt, in an arm's
+  setup or an attempt, keeps the attempts that ended: the export is written
+  marked aborted, and the runner exits 130. The export names the Node
+  that ran the host and the proxy variables the direct arm's host kept. Live evidence only when run with a real host and models
+  (operator step, not run here).
+
+  ```bash
+  RELAYMIND_EXTERNAL_API_KEY=... python scripts/run_openclaw_eval.py \
+      --tarball release/openclaw/relaymind-openclaw-provider-0.1.0.tgz \
+      --external-base-url <url> --external-model <model> --external-context-limit <n> \
+      --out <dir> -- node integrations/openclaw/node_modules/openclaw/openclaw.mjs
+  ```
 - `openclaw_request_size.py` — the size of captured OpenClaw requests
   against the local input limit (#135; RM13, RM26, section 7.5). Each
   request is validated as the gateway does and measured with

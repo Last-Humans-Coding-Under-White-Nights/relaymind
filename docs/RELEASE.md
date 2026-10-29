@@ -199,6 +199,39 @@ build, the host version, the Node version against the host's range, and
 whether Windows was native or WSL2. The operator commands are in
 `integrations/openclaw/README.md` ("Install check").
 
+### M9 OpenClaw evaluation (#139; RM16, RM25, RM26, RM33; AC24; spec 0.50 section 12.5)
+
+Implemented: the frozen tasks (`evaluation/openclaw_tasks.v1.json`, 6
+English and 6 best-effort Chinese tasks: text, a host `read`, a host
+`write`, and a host `exec` under `deny` and under `full`; 3 repeats, seed
+139, digest and order digest in `evaluation/openclaw_tasks.v1.lock.json`),
+grading and the arm summary (`relaymind.evaluation.openclaw`), and the
+runner (`scripts/run_openclaw_eval.py`) for the four arms `direct`,
+`relaymind_external_only`, `relaymind_auto`, and `relaymind_no_local`. They
+are covered by deterministic tests over a stub host and doubles
+(`docs/TESTING.md`).
+
+Results: none. Every arm is `not_run`: no OpenClaw measurement with a live
+model and a real host exists, so no integration overhead, local inference
+value, task success, latency, or token count is claimed. The run needs a
+machine with a real host, the external provider's credential, and the
+pinned local model; the operator command is in `docs/TESTING.md` and
+`integrations/openclaw/README.md` ("M9 evaluation").
+
+Limits known before measurement: the local context stays at 8192 tokens
+(user decision), and every OpenClaw request measured so far (0 of 10 fit;
+10,500 to 10,577 tokens with the pinned tokenizer, macOS qualification) is
+over it; the live AC24 turn in auto without an external model ended
+needs_external / context_limit with 0 model calls. relaymind_auto is
+therefore expected to send every OpenClaw turn to the external model (0
+local turns, reason context_limit), and local_only would answer
+needs_external. When the run shows 0 local turns, that is reported as the
+result, with the reasons and the local-inference comparison marked as one
+without local inference; until then it is an expectation, not a result. The direct arm's host provider
+entry and the `write` tool's argument names are not verified on a real host
+(the task accepts any arguments for `write`). The issue's done-when checks
+stay open until the run is recorded.
+
 Measured on the macOS qualification: every OpenClaw request it measured
 (3 host requests and 7 probe captures) was 10,500 to 10,577 tokens with the
 pinned tokenizer, over the local limit of 8192. An OpenClaw turn therefore

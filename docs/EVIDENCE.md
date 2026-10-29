@@ -3348,3 +3348,43 @@ Mac access); Windows on a user's machine, native and WSL2, stays `not_run`
 (no Windows machine). Neither do these runs cover the stale-token
 reconnect, the interrupt, the tool policy scenarios, a host update or
 rollback, or any live model.
+
+## M9 OpenClaw evaluation (#139, spec 0.50)
+
+Section 12.5. Nothing below has run: every row is `not_run`. The tasks,
+grading, and runner exist and are tested over a stub host and gateway
+doubles (`tests/test_openclaw_eval_*.py`), which is not live evidence.
+
+| Arm | Machine | Host, Node, plugin | Gateway, models | Result | Export |
+| --- | --- | --- | --- | --- | --- |
+| direct | | | | `not_run` | none |
+| relaymind_external_only | | | | `not_run` | none |
+| relaymind_auto | | | | `not_run` | none |
+| relaymind_no_local | | | | `not_run` | none |
+| a constrained configuration | | | | `not_run` (optional; reported apart when run) | none |
+
+A recorded run fills each row from its export
+(`scripts/run_openclaw_eval.py --out <dir>`): the machine manifest, the
+OpenClaw release and the Node version against the host's engine range, the
+plugin artifact's SHA-256, the RelayMind revision, the external model and
+endpoint host, the local model manifest and runtime banner, the task file
+digest, and per arm and language the exact success count over all attempts,
+host failovers, timeouts, host interrupts (exit 130 or SIGINT), errors by
+code, needs_external and context_limit_exceeded runs, local turns with the
+reasons the runs left the local stage, external calls, unexpected host
+tools and proposals (reported, never a failure, so the arms share one
+success rule), completion and first useful content p50 and p95, and
+tokens per model with unknown counts apart. Chinese rows are best-effort and kept apart. An export marked
+aborted (an operator interrupt) is recorded with its slots not run.
+
+Expected at the 8192-token local context, which stays (user decision): 0
+of 10 OpenClaw requests counted on macOS fit it (10,500 to 10,577 tokens,
+pinned tokenizer), and the live AC24 turn in auto without an external
+model ended needs_external / context_limit with 0 model calls ("OpenClaw
+request size by tokenizer and live AC24 turn (#135)" above). relaymind_auto is therefore expected to show 0
+local turns, every run handed off with reason context_limit. A run that
+shows this records 0 local turns as the relaymind_auto result, with its
+reasons, and its comparison with relaymind_external_only as one without
+local inference; it is never left out. Until a run shows it, it is an
+expectation, not a result.
+

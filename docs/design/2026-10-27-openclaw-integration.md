@@ -1,8 +1,10 @@
 # M9: OpenClaw integration feasibility
 
-27 October 2026. Planning analysis; no plugin has been built or run.
+27 October 2026. Planning analysis, written before the plugin was built.
 The normative contract is specification 0.47, RM33, AC24, sections 7.5
-and 12.5. This replaces the planned M9 YAML workflow expansion.
+and 12.5 (now at 0.50). This replaces the planned M9 YAML workflow
+expansion. The qualification results below were added by #135; the
+current status of the plugin and the evaluation is in `docs/ROADMAP.md` (M9).
 
 ## Finding
 

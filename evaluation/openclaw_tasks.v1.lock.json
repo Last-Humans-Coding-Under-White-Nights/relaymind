@@ -1,0 +1,7 @@
+{
+  "tasks": "openclaw_tasks.v1.json",
+  "version": 1,
+  "sha256": "c4983cb76ace5421216a91ec471de01200bc4cd52a473d23e8460ec2c956cae1",
+  "order_sha256": "b11ac64abbd18e6d35d31f78a0953515523bdd86dc5483abac4f345720c6154b",
+  "frozen_on": "2026-10-27"
+}

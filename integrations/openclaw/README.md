@@ -34,7 +34,11 @@ the whole install check of the release artifact
 Linux VPS, as a functional check over gateway doubles, not a
 supported-platform qualification
 ([`docs/evidence/2026-10-28-openclaw-vps-functional-145/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-145/REPORT.md)). macOS and Windows runs of this revision
-are `not_run`; the CI job runs the same check on GitHub's runners.
+are `not_run`; the CI job runs the same check on GitHub-hosted runners,
+recorded at `78fc94d` as a functional check over doubles, not a
+user-machine qualification. The M9 evaluation runner and grading (#139,
+[M9 evaluation](#m9-evaluation-139-operator-not-run-yet)) are tested over
+a stub host and doubles; the measurement is `not_run`.
 
 What the plugin claims, and nothing more: text input; at most one function
 call per response, executed by OpenClaw under its own approvals; the answer is
@@ -888,8 +892,12 @@ the real pinned host against the gateway over doubles, with the fix of the
 scenarios there (`docs/evidence/2026-10-28-openclaw-vps-functional-137/`):
 `text-tool`, `tool-deny`, `exec-deny`, and `exec-full` passed, and
 `tool-approve` failed, correctly, because headless `agent exec` has no
-route for a plugin approval and nothing was written. Any macOS rerun and
-any Windows run are not_run.
+route for a plugin approval and nothing was written. A third ran the
+`abort` and `external-failed` host scenarios
+(`docs/evidence/2026-10-28-openclaw-vps-functional-138/`), and the install
+check of the release artifact passed there
+(`docs/evidence/2026-10-28-openclaw-vps-functional-145/`). Any macOS rerun
+and any Windows run are not_run.
 
 Host facts from that probe that the steps below rely on: a model in the
 host config needs `name`; `strictMessageKeys` must stay false (true strips
@@ -1158,3 +1166,46 @@ another model were not run on a real host (`not_run`); they are covered
 over doubles by `tests/test_openclaw_cancel_errors.py`, and failover is
 host policy. On macOS (Q11, at `a52f8bf`, through a config-file provider
 row) the abort passed; macOS and Windows at this commit are `not_run`.
+
+### M9 evaluation (#139, operator, not run yet)
+
+The section 12.5 measurement (spec 0.50) runs the frozen tasks of
+`evaluation/openclaw_tasks.v1.json` through a real host in four arms:
+`direct` (the host's own provider entry for the external model),
+`relaymind_external_only` and `relaymind_auto` (this plugin against a
+gateway with the external model and the pinned local model), and
+`relaymind_no_local` (this plugin against a gateway without a local
+model). The runner starts each gateway with `relaymind serve --config`, and
+llama-server from the manifest for the arms with a local model, and gives
+each arm its own host home. Each attempt's `agent exec` gets `--state-dir`
+on a fresh, empty directory in that home, as in the install check (without
+it the pinned host fails every turn on Windows):
+
+```bash
+export RELAYMIND_EXTERNAL_API_KEY=...
+python scripts/run_openclaw_eval.py \
+  --tarball release/openclaw/relaymind-openclaw-provider-0.1.0.tgz \
+  --external-base-url <url> --external-model <model> --external-context-limit <n> \
+  --out docs/evidence/<date>-openclaw-eval-<machine>/ \
+  -- node integrations/openclaw/node_modules/openclaw/openclaw.mjs
+```
+
+An arm without its endpoint, credential, or local model is recorded as
+not_run; `relaymind_auto` needs both the external model and the local
+model. The host's `"ok": true` never counts as a success; a host failover
+(a reported provider or model other than the arm's) is counted apart, and
+so is a host interrupt (exit 130, SIGINT, or Ctrl-C on Windows). Interrupting the runner, during an arm's
+setup or an attempt, keeps the attempts that ended: the export is written
+marked aborted and the runner exits 130; an interrupt during setup marks
+that arm and every arm not yet set up not_run, never ran. At the 8192-token local context an OpenClaw request does
+not fit the local model (macOS qualification), so `relaymind_auto` is
+expected to show 0 local turns with reason `context_limit`; the report
+states that as the result when it happens. The
+direct arm's host keeps the operator's proxy variables, as the gateways
+do, so both reach the provider the same way; the export names the
+variables (not their values) and the Node that ran the host. The direct arm writes the provider's key into the
+temporary host home's config file (removed at the end, never exported);
+whether the pinned host accepts that provider entry as written is not
+verified. Record the result in `docs/EVIDENCE.md` ("M9 OpenClaw
+evaluation").
+
