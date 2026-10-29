@@ -336,12 +336,17 @@ def _run_ids(gateway) -> list[str]:
 
 
 def _wait_until_settled(gateway, timeout: float = 10.0) -> None:
+    """Wait for the active run to end; a run still active at the timeout fails."""
+
     async def poll():
         deadline = asyncio.get_running_loop().time() + timeout
         while asyncio.get_running_loop().time() < deadline:
             if gateway.store.active_run_id() is None:
                 return
             await asyncio.sleep(0.02)
+        active = gateway.store.active_run_id()
+        if active is not None:
+            raise RuntimeError(f"run {active} is still active after {timeout} s")
 
     asyncio.run(poll())
 

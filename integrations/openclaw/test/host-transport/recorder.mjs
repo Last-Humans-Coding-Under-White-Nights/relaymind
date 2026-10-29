@@ -68,7 +68,14 @@ export async function startRecorder(options) {
   const exchanges = [];
   let replyIndex = 0;
   const server = http.createServer(async (req, res) => {
-    const raw = await readAll(req);
+    let raw;
+    try {
+      raw = await readAll(req);
+    } catch {
+      // The client went away before its request body ended: nothing to answer.
+      res.destroy();
+      return;
+    }
     const exchange = {
       request: {
         method: req.method,
@@ -148,7 +155,13 @@ function proxy(upstream, req, raw, res, exchange) {
       Buffer.concat(chunks).toString("utf8"),
     );
   };
-  upstreamRequest.on("error", () => record());
+  // The gateway could not be reached or dropped the connection: end the client's
+  // response too, a 502 when no upstream status was sent.
+  upstreamRequest.on("error", () => {
+    if (!res.headersSent) res.writeHead(502);
+    res.end();
+    record();
+  });
   // The client went away before the response ended: close the upstream request,
   // so the gateway sees the disconnect (section 7.4).
   res.on("close", () => {
