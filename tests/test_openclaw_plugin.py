@@ -48,19 +48,27 @@ def node_dependencies():
         pytest.skip(reason)
 
 
+def driver_env(base_url, token):
+    """The driver's environment: loopback only, whatever case a proxy variable has.
+
+    Node's proxy agent reads http_proxy before HTTP_PROXY and no_proxy before
+    NO_PROXY, so every case of the proxy variables is removed and both cases of
+    the loopback exemption are set.
+    """
+    env = {k: v for k, v in os.environ.items() if k.upper() not in {"HTTP_PROXY", "HTTPS_PROXY"}}
+    loopback = "127.0.0.1,localhost"
+    env.update(
+        RELAYMIND_BASE_URL=base_url, RELAYMIND_APP_TOKEN=token, NO_PROXY=loopback, no_proxy=loopback
+    )
+    return env
+
+
 def drive_plugin(base_url, token, tmp_path, *, secrets=(), **scenario):
     """Run the plugin and the transport once; return the driver's JSON."""
     path = tmp_path / f"plugin-{len(list(tmp_path.glob('plugin-*.json')))}.json"
     scenario.setdefault("pluginConfig", {})
     path.write_text(json.dumps(scenario), "utf-8")
-    env = {
-        **os.environ,
-        "RELAYMIND_BASE_URL": base_url,
-        "RELAYMIND_APP_TOKEN": token,
-        "NO_PROXY": "127.0.0.1,localhost",
-    }
-    env.pop("HTTP_PROXY", None)
-    env.pop("HTTPS_PROXY", None)
+    env = driver_env(base_url, token)
     out = path.with_suffix(".out.json")
     completed = subprocess.run(
         [_node(), str(DRIVER), str(path), str(out)],
@@ -179,7 +187,9 @@ def test_a_resolved_alias_the_gateway_does_not_serve_fails_and_never_answers_emp
             running.base_url, token_of(app), tmp_path, prompt="Say hello.", resolve="dynamic"
         )
     (exchange,) = output["exchanges"]
-    assert exchange["response"]["status"] >= 400
+    # An alias that is not served is 400 invalid_request (section 7.1).
+    assert exchange["response"]["status"] == 400
+    assert exchange["response"]["body"]["error"]["code"] == "invalid_request"
     (result,) = output["results"]
     assert result["stop_reason"] == "error"
     assert result["error_message"]
@@ -409,3 +419,25 @@ def test_parallel_demo_is_refused_before_anything_is_sent(tmp_path):
     assert "parallel_demo" in output["register_error"]["message"]
     assert output["exchanges"] == []
     assert gateway.adapter.requests == []
+
+
+def test_the_driver_environment_routes_nothing_through_a_proxy(monkeypatch):
+    """RM19: a proxy variable of either case never reaches the driver."""
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "Https_Proxy"):
+        monkeypatch.setenv(name, "http://proxy.example:3128")
+    monkeypatch.setenv("no_proxy", "example.org")
+    env = driver_env("http://127.0.0.1:1/v1", "token")
+    assert not {k for k in env if k.upper() in {"HTTP_PROXY", "HTTPS_PROXY"}}
+    assert env["NO_PROXY"] == env["no_proxy"] == "127.0.0.1,localhost"
+
+
+def test_the_driver_knows_it_is_the_entry_point_on_every_platform():
+    """A hand-built ``file://`` URL never matches ``import.meta.url`` on Windows.
+
+    There ``process.argv[1]`` is ``C:\\...``, so the driver would exit 0 without
+    running the scenario or writing its output. The entry check compares the
+    URL Node itself builds.
+    """
+    source = DRIVER.read_text("utf-8")
+    assert "file://${process.argv[1]}" not in source
+    assert "import.meta.url === pathToFileURL(process.argv[1]).href" in source

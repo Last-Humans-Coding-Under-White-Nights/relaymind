@@ -16,6 +16,7 @@
 // and the token is never written.
 import "openclaw/plugin-sdk/provider-transport-runtime";
 import { readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { createOpenAICompletionsTransportStreamFn } from "@openclaw/ai/transports";
 
 import entry from "../../src/index.ts";
@@ -123,7 +124,7 @@ async function runScenario(scenario) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const scenario = JSON.parse(readFileSync(process.argv[2], "utf8"));
   const output = await runScenario(scenario);
   writeFileSync(process.argv[3], `${JSON.stringify({ scenario, ...output }, null, 2)}\n`);
