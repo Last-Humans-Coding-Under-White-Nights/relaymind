@@ -27,6 +27,14 @@ class RefreshSettings:
     backoff_max_seconds: int = 3600
 
 
+# The closed key sets of each table, shared with the launcher's table check.
+ASSET_FIELDS = frozenset({"sources"})
+REFRESH_FIELDS = frozenset(RefreshSettings.__dataclass_fields__)
+HYBRID_FIELDS = frozenset({"manifest", "config"})
+ADAPTATION_FIELDS = frozenset({"enabled", "config"})
+SOURCE_FIELDS = frozenset({"source_id", "kind", "path", "adapter_contract", "secret_ref"})
+
+
 @dataclass(frozen=True)
 class AssetSettings:
     sources: tuple[SourceConfig, ...] = ()
@@ -47,7 +55,10 @@ class RecommendationSettings:
     fallback: bool = True
 
 
-def _closed(value: object, fields: set[str], label: str) -> Mapping[str, Any]:
+RECOMMENDATION_FIELDS = frozenset(RecommendationSettings.__dataclass_fields__)
+
+
+def _closed(value: object, fields: frozenset[str], label: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping) or set(value) - fields:
         raise ValueError(f"{label}: unknown fields or invalid table")
     return value
@@ -62,12 +73,12 @@ def _positive(value: object, label: str) -> int:
 def parse_asset_settings(
     assets: Mapping[str, object], refresh: Mapping[str, object], *, config_dir: Path
 ) -> AssetSettings:
-    _closed(assets, {"sources"}, "assets")
-    timing_fields = set(RefreshSettings.__dataclass_fields__)
-    _closed(refresh, timing_fields, "asset_refresh")
+    # parse_* stay closed on their own: they are a public contract, not only the launcher's.
+    _closed(assets, ASSET_FIELDS, "assets")
+    _closed(refresh, REFRESH_FIELDS, "asset_refresh")
     defaults = RefreshSettings()
     timings = RefreshSettings(
-        **{key: _positive(refresh.get(key, getattr(defaults, key)), key) for key in timing_fields}
+        **{key: _positive(refresh.get(key, getattr(defaults, key)), key) for key in REFRESH_FIELDS}
     )
     if timings.backoff_max_seconds < timings.backoff_initial_seconds:
         raise ValueError("asset_refresh backoff_max_seconds must be at least initial")
@@ -76,9 +87,7 @@ def parse_asset_settings(
         raise ValueError("assets.sources must be an array")
     sources = []
     for raw in raw_sources:
-        raw = _closed(
-            raw, {"source_id", "kind", "path", "adapter_contract", "secret_ref"}, "source"
-        )
+        raw = _closed(raw, SOURCE_FIELDS, "source")
         source_id = text(raw.get("source_id"), 256)
         kind = raw.get("kind")
         if kind == "qualified_remote":
@@ -106,9 +115,9 @@ def parse_recommendation_settings(
     hybrid: Mapping[str, object] | None = None,
     adaptation: Mapping[str, object] | None = None,
 ) -> RecommendationSettings:
-    _closed(value, set(RecommendationSettings.__dataclass_fields__), "recommendations")
-    hybrid = _closed(hybrid or {}, {"manifest", "config"}, "asset_hybrid")
-    adaptation = _closed(adaptation or {}, {"enabled", "config"}, "asset_adaptation")
+    _closed(value, RECOMMENDATION_FIELDS, "recommendations")
+    hybrid = _closed(hybrid or {}, HYBRID_FIELDS, "asset_hybrid")
+    adaptation = _closed(adaptation or {}, ADAPTATION_FIELDS, "asset_adaptation")
     if hybrid:
         raise ValueError("asset_hybrid artifacts are not qualified; hybrid is unavailable")
     if "enabled" in adaptation and type(adaptation["enabled"]) is not bool:

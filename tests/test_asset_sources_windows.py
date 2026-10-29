@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from test_asset_sources import capture, imported, readers, skill
+from relaymind.assets import sources
+from test_asset_sources import capture, imported, skill
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="requires native Windows filesystem APIs")
 
@@ -35,12 +36,11 @@ def test_native_unicode_long_path_readonly_and_case_lookup(tmp_path):
 
 
 def test_native_manifest_hardlink_alias_and_original_dedup(tmp_path):
-    s, _ = readers()
     manifest, data = imported(tmp_path)
     os.link(manifest, tmp_path / "alias.json")
     data["records"][0]["original_path"] = "alias.json"
     manifest.write_text(json.dumps(data))
-    with pytest.raises(s.SourceFailure):
+    with pytest.raises(sources.SourceFailure):
         capture(manifest, "metadata_import")
     (tmp_path / "alias.json").unlink()
     manifest, data = imported(tmp_path)
@@ -56,7 +56,6 @@ def test_native_manifest_hardlink_alias_and_original_dedup(tmp_path):
 
 @pytest.mark.parametrize("location", ["root", "ancestor", "candidate", "original"])
 def test_native_junctions_never_traversed(tmp_path, location):
-    s, _ = readers()
     real = tmp_path / "real"
     skill(real / "child")
     link = tmp_path / "junction"
@@ -79,19 +78,18 @@ def test_native_junctions_never_traversed(tmp_path, location):
         data["records"][0]["original_path"] = "nested/child/SKILL.md"
         source.write_text(json.dumps(data))
         kind = "metadata_import"
-    with pytest.raises(s.SourceFailure):
+    with pytest.raises(sources.SourceFailure):
         capture(source, kind)
 
 
 def test_native_ads_and_nonregular_originals_refused(tmp_path):
-    s, _ = readers()
     manifest, data = imported(tmp_path)
     for path in ("hello.bin:secret", "hello.bin::$DATA", "folder"):
         if path == "folder":
             (tmp_path / path).mkdir()
         data["records"][0]["original_path"] = path
         manifest.write_text(json.dumps(data))
-        with pytest.raises(s.SourceFailure):
+        with pytest.raises(sources.SourceFailure):
             capture(manifest, "metadata_import")
 
 

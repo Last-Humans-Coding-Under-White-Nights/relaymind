@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from relaymind.assets import catalog
 from relaymind.canonical import canonical_digest
 from relaymind.redaction import Redactor
 
@@ -31,17 +32,9 @@ def record(**changes):
     return value
 
 
-def api():
-    # Import here so the first RED reports the missing implementation as test failures.
-    from relaymind.assets import catalog
-
-    return catalog
-
-
 def test_closed_record_and_frozen_copy():
-    c = api()
     value = record()
-    got = c.validate_asset_record(value)
+    got = catalog.validate_asset_record(value)
     value["identity"]["package_id"] = "changed"
     assert got.to_json_object()["identity"]["package_id"] == "Hello World"
     with pytest.raises((TypeError, AttributeError)):
@@ -49,10 +42,10 @@ def test_closed_record_and_frozen_copy():
     for key in record():
         value = record()
         del value[key]
-        with pytest.raises(c.AssetValidationError):
-            c.validate_asset_record(value)
-    with pytest.raises(c.AssetValidationError):
-        c.validate_asset_record(record(body="hidden instructions"))
+        with pytest.raises(catalog.AssetValidationError):
+            catalog.validate_asset_record(value)
+    with pytest.raises(catalog.AssetValidationError):
+        catalog.validate_asset_record(record(body="hidden instructions"))
 
 
 @pytest.mark.parametrize(
@@ -89,14 +82,12 @@ def test_closed_record_and_frozen_copy():
     ],
 )
 def test_invalid_record_rejected_without_echo(changes):
-    c = api()
-    with pytest.raises(c.AssetValidationError) as caught:
-        c.validate_asset_record(record(**changes))
+    with pytest.raises(catalog.AssetValidationError) as caught:
+        catalog.validate_asset_record(record(**changes))
     assert "script" not in str(caught.value)
 
 
 def test_mcp_schema_hash_and_offline_reference_boundary():
-    c = api()
     schema = {
         "type": "object",
         "$defs": {"n": {"type": "string"}},
@@ -110,29 +101,28 @@ def test_mcp_schema_hash_and_offline_reference_boundary():
         "schema_hash": canonical_digest(schema),
     }
     value = record(kind="mcp_tool", identity=identity)
-    got = c.validate_asset_record(value)
+    got = catalog.validate_asset_record(value)
     assert got.identity["server_id"] == "real-server"
-    assert c.project_asset(got, body=None, redactor=Redactor(), secrets=()).record == got
+    assert catalog.project_asset(got, body=None, redactor=Redactor(), secrets=()).record == got
     identity["schema_hash"] = "0" * 64
-    with pytest.raises(c.AssetValidationError):
-        c.validate_asset_record(value)
+    with pytest.raises(catalog.AssetValidationError):
+        catalog.validate_asset_record(value)
     identity["input_schema"] = {"$ref": "https://example.invalid/secret"}
     identity["schema_hash"] = canonical_digest(identity["input_schema"])
-    with pytest.raises(c.AssetValidationError) as caught:
-        c.validate_asset_record(value)
+    with pytest.raises(catalog.AssetValidationError) as caught:
+        catalog.validate_asset_record(value)
     assert "example.invalid" not in str(caught.value)
     identity["input_schema"] = {"type": "imaginary"}
     identity["schema_hash"] = canonical_digest(identity["input_schema"])
-    with pytest.raises(c.AssetValidationError):
-        c.validate_asset_record(value)
+    with pytest.raises(catalog.AssetValidationError):
+        catalog.validate_asset_record(value)
 
 
 def test_projection_normalizes_redacts_and_preserves_original_hash():
-    c = api()
     value = record(description="Cafe\u0301 credential-987")
     original = copy.deepcopy(value)
-    doc = c.project_asset(
-        c.validate_asset_record(value),
+    doc = catalog.project_asset(
+        catalog.validate_asset_record(value),
         body="Use credential-987\nCafe\u0301",
         redactor=Redactor(),
         secrets={"credential-987"},
@@ -143,16 +133,16 @@ def test_projection_normalizes_redacts_and_preserves_original_hash():
     assert value == original
     assert "body" not in doc.record.to_json_object()
     assert "credential-987" not in json.dumps(doc.to_json_object())
-    with pytest.raises(c.AssetValidationError):
-        c.project_asset(
-            c.validate_asset_record(record(asset_id="credential-987")),
+    with pytest.raises(catalog.AssetValidationError):
+        catalog.project_asset(
+            catalog.validate_asset_record(record(asset_id="credential-987")),
             body=None,
             redactor=Redactor(),
             secrets={"credential-987"},
         )
-    with pytest.raises(c.AssetValidationError):
-        c.project_asset(
-            c.validate_asset_record(record()),
+    with pytest.raises(catalog.AssetValidationError):
+        catalog.project_asset(
+            catalog.validate_asset_record(record()),
             body="x" * (256 * 1024 + 1),
             redactor=Redactor(),
             secrets=(),
@@ -160,7 +150,6 @@ def test_projection_normalizes_redacts_and_preserves_original_hash():
 
 
 def test_snapshot_exact_shape_and_discovery_offer_limits():
-    c = api()
     assets = [record(), record(asset_id="other:hello", source_id="other", stale=True)]
     sources = [
         dict(
@@ -184,9 +173,9 @@ def test_snapshot_exact_shape_and_discovery_offer_limits():
         sources=sources,
         assets=assets,
     )
-    snapshot = c.validate_catalog_snapshot(raw)
-    assert len(c.discovery_records(snapshot, frozenset({"skill"}))) == 2
-    assert c.discovery_records(snapshot, frozenset({"mcp_tool"})) == ()
+    snapshot = catalog.validate_catalog_snapshot(raw)
+    assert len(catalog.discovery_records(snapshot, frozenset({"skill"}))) == 2
+    assert catalog.discovery_records(snapshot, frozenset({"mcp_tool"})) == ()
     for changes in (
         {"catalog_revision": True},
         {"catalog_revision": -1},
@@ -194,12 +183,12 @@ def test_snapshot_exact_shape_and_discovery_offer_limits():
         {"sources": [sources[0], sources[0]]},
         {"host_snapshot_revision": None},
     ):
-        with pytest.raises(c.AssetValidationError):
-            c.validate_catalog_snapshot(raw | changes)
+        with pytest.raises(catalog.AssetValidationError):
+            catalog.validate_catalog_snapshot(raw | changes)
     many = [record(asset_id=f"example:{i}") for i in range(1001)]
-    snapshot = c.validate_catalog_snapshot(raw | {"assets": many})
-    with pytest.raises(c.AssetValidationError):
-        c.discovery_records(snapshot, frozenset({"skill"}))
+    snapshot = catalog.validate_catalog_snapshot(raw | {"assets": many})
+    with pytest.raises(catalog.AssetValidationError):
+        catalog.discovery_records(snapshot, frozenset({"skill"}))
     # Full canonical offer, not merely descriptions, is subject to 32 MiB.
     schema = {"type": "object", "description": "x" * 64000}
     identity = dict(
@@ -210,9 +199,9 @@ def test_snapshot_exact_shape_and_discovery_offer_limits():
         schema_hash=canonical_digest(schema),
     )
     many = [record(asset_id=f"example:{i}", kind="mcp_tool", identity=identity) for i in range(530)]
-    snapshot = c.validate_catalog_snapshot(raw | {"assets": many})
-    with pytest.raises(c.AssetValidationError):
-        c.discovery_records(snapshot, frozenset({"mcp_tool"}))
+    snapshot = catalog.validate_catalog_snapshot(raw | {"assets": many})
+    with pytest.raises(catalog.AssetValidationError):
+        catalog.discovery_records(snapshot, frozenset({"mcp_tool"}))
 
 
 @pytest.mark.parametrize(
@@ -226,7 +215,6 @@ def test_snapshot_exact_shape_and_discovery_offer_limits():
     ],
 )
 def test_schema_text_is_safe_and_secret_property_names_never_persist(schema, secrets):
-    c = api()
     identity = dict(
         server_id="s",
         tool_name="t",
@@ -234,9 +222,9 @@ def test_schema_text_is_safe_and_secret_property_names_never_persist(schema, sec
         input_schema=schema,
         schema_hash=canonical_digest(schema),
     )
-    with pytest.raises(c.AssetValidationError):
-        c.project_asset(
-            c.validate_asset_record(record(kind="mcp_tool", identity=identity)),
+    with pytest.raises(catalog.AssetValidationError):
+        catalog.project_asset(
+            catalog.validate_asset_record(record(kind="mcp_tool", identity=identity)),
             body=None,
             redactor=Redactor(),
             secrets=secrets,
@@ -244,28 +232,27 @@ def test_schema_text_is_safe_and_secret_property_names_never_persist(schema, sec
 
 
 def test_nfc_repetition_exact_utf8_boundaries_and_nonfinite_schema():
-    c = api()
-    assert c.validate_asset_record(record(description="中" * 2730)).description == "中" * 2730
-    assert c.validate_asset_record(record(asset_id="中" * 85)).asset_id == "中" * 85
+    assert catalog.validate_asset_record(record(description="中" * 2730)).description == "中" * 2730
+    assert catalog.validate_asset_record(record(asset_id="中" * 85)).asset_id == "中" * 85
     assert (
-        c.project_asset(
-            c.validate_asset_record(record()),
+        catalog.project_asset(
+            catalog.validate_asset_record(record()),
             body="one\n\n\n\n two\n",
             redactor=Redactor(),
             secrets=(),
         ).body
         == "one\n\n\n\n two\n"
     )
-    with pytest.raises(c.AssetValidationError):
-        c.project_asset(
-            c.validate_asset_record(record()),
+    with pytest.raises(catalog.AssetValidationError):
+        catalog.project_asset(
+            catalog.validate_asset_record(record()),
             body="é\ne\u0301\né\ne\u0301",
             redactor=Redactor(),
             secrets=(),
         )
     schema = {"type": "number", "minimum": float("inf")}
-    with pytest.raises(c.AssetValidationError):
-        c.validate_asset_record(
+    with pytest.raises(catalog.AssetValidationError):
+        catalog.validate_asset_record(
             record(
                 kind="mcp_tool",
                 identity=dict(
@@ -288,9 +275,8 @@ def test_nfc_repetition_exact_utf8_boundaries_and_nonfinite_schema():
 )
 def test_record_and_snapshot_reject_non_whole_string_tags_and_hashes(changes):
     """RM34/AC25: exact tags/hashes are identical at record and snapshot boundaries."""
-    c = api()
-    with pytest.raises(c.AssetValidationError):
-        c.validate_asset_record(record(**changes))
+    with pytest.raises(catalog.AssetValidationError):
+        catalog.validate_asset_record(record(**changes))
     value = dict(
         schema_version=1,
         catalog_revision=1,
@@ -311,5 +297,5 @@ def test_record_and_snapshot_reject_non_whole_string_tags_and_hashes(changes):
         ],
         assets=[record(**changes)],
     )
-    with pytest.raises(c.AssetValidationError):
-        c.validate_catalog_snapshot(value)
+    with pytest.raises(catalog.AssetValidationError):
+        catalog.validate_catalog_snapshot(value)

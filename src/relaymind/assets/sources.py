@@ -7,25 +7,31 @@ original digests and locators. No file is executed and no archive is unpacked.
 import errno
 import hashlib
 import json
+import math
 import re
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
-from jsonschema import Draft202012Validator
 from yaml.tokens import AliasToken, AnchorToken, TagToken
 
 from relaymind.assets.catalog import (
-    AssetRecord,
     AssetValidationError,
-    SearchDocument,
+    InventoryAsset,
+    SourceCapture,
+    SourceInventory,
+    StagedFile,
+    check_language_tags,
+    failure_exclusions,
     project_asset,
     text,
+    timestamp,
     validate_asset_record,
+    validate_document,
 )
 from relaymind.assets.settings import SourceConfig
 from relaymind.assets.source_io import NativeIoAborted, SourceInfo, open_source_tree
@@ -33,8 +39,22 @@ from relaymind.canonical import canonical_digest
 from relaymind.redaction import Redactor
 from relaymind.schema_util import freeze_json, load_packaged_schema
 from relaymind.store.run_store import utc_iso
+from relaymind.tools.registry import StrictValidator
 
-_IMPORT_SCHEMA = load_packaged_schema("relaymind.assets", "asset_metadata_import.v1.json")
+__all__ = [
+    "CaptureContext",
+    "InventoryAsset",
+    "SourceCapture",
+    "SourceFailure",
+    "SourceInventory",
+    "StagedFile",
+    "capture_source",
+    "source_config_digest",
+]
+
+_IMPORT_VALIDATOR = StrictValidator(
+    load_packaged_schema("relaymind.assets", "asset_metadata_import.v1.json")
+)
 _CHUNK = 1024 * 1024
 
 
@@ -53,26 +73,7 @@ class SourceFailure(Exception):
         self.reason = reason
         self.rejected_count = rejected_count
         self.received_bytes = received_bytes
-        self.exclusions = (freeze_json({"asset_id": asset_id, "reason": reason}),)
-
-
-@dataclass(frozen=True)
-class InventoryAsset:
-    record: AssetRecord
-    relative_package_path: str | None
-
-
-@dataclass(frozen=True)
-class SourceInventory:
-    source_id: str
-    revision: int = 0
-    records: tuple[InventoryAsset, ...] = ()
-    tombstones: frozenset[str] = frozenset()
-    owners: Mapping[str, str] = field(default_factory=lambda: freeze_json({}))
-
-    @classmethod
-    def empty(cls, source_id: str) -> "SourceInventory":
-        return cls(source_id)
+        self.exclusions = failure_exclusions(reason, asset_id)
 
 
 @dataclass
@@ -97,24 +98,26 @@ class CaptureContext:
         self.deadline = self.batch_started + 60
 
     def check(self) -> None:
-        if self.observe_busy() and self.busy_observed_at is None:
+        # Observe busy only until the first overlap: it costs store queries.
+        # capture_source sets received_bytes on every failure it raises.
+        if self.busy_observed_at is None and self.observe_busy():
             self.busy_observed_at = self.monotonic()
         if self.cancelled():
-            raise SourceFailure("cancelled", received_bytes=self.received_bytes)
+            raise SourceFailure("cancelled")
         if self.monotonic() >= self.deadline:
-            raise SourceFailure("deadline", received_bytes=self.received_bytes)
+            raise SourceFailure("deadline")
 
     def add_bytes(self, count: int) -> None:
         self.check()
         self.received_bytes += count
         if self.received_bytes > 100 * 1024 * 1024:
-            raise SourceFailure("size_limit", received_bytes=self.received_bytes)
+            raise SourceFailure("size_limit")
 
     def add_record(self) -> None:
         self.check()
         self.record_count += 1
         if self.record_count > 1000:
-            raise SourceFailure("record_limit", received_bytes=self.received_bytes)
+            raise SourceFailure("record_limit")
 
     def finish_record(self) -> None:
         self.batch_records += 1
@@ -127,30 +130,6 @@ class CaptureContext:
             self.batch_durations_ms.append(max(0, (now - self.batch_started) * 1000))
             self.batch_started = now
             self.batch_records = 0
-
-
-@dataclass(frozen=True)
-class StagedFile:
-    relative_path: str
-    sha256: str
-    size: int
-
-
-@dataclass(frozen=True)
-class SourceCapture:
-    source_id: str
-    config_digest: str
-    source_digest: str
-    source_version: str | None
-    captured_at: str
-    documents: tuple[SearchDocument, ...]
-    files: tuple[StagedFile, ...]
-    complete: bool
-    removed_asset_ids: frozenset[str]
-    package_paths: Mapping[str, str]
-    received_bytes: int
-    observed_absences: frozenset[str] = frozenset()
-    batch_durations_ms: tuple[float, ...] = ()
 
 
 def source_config_digest(source: SourceConfig) -> str:
@@ -174,8 +153,10 @@ class _Stage:
         self.tree = open_source_tree(root, control=context)
         self.observed: dict[str, tuple[int, int, int, int, int]] = {}
         self.files: list[StagedFile] = []
-        self.physical: dict[tuple[int, int], tuple[str, bytes | None]] = {}
-        self.physical_info: dict[tuple[int, int], tuple[int, int, int, int, int]] = {}
+        # Physical identity -> (fingerprint, digest, retained bytes), hashed once.
+        self.physical: dict[
+            tuple[int, int], tuple[tuple[int, int, int, int, int], str, bytes | None]
+        ] = {}
 
     def close(self) -> None:
         self.tree.close()
@@ -210,9 +191,9 @@ class _Stage:
             if initial.size > limit:
                 raise SourceFailure("size_limit")
             if key in self.physical:
-                if self.physical_info[key] != initial.fingerprint:
+                fingerprint, digest, data = self.physical[key]
+                if fingerprint != initial.fingerprint:
                     raise SourceFailure("source_unavailable")
-                digest, data = self.physical[key]
                 if relative not in self.observed:
                     self.files.append(StagedFile(relative, digest, initial.size))
                 self.observed[relative] = initial.fingerprint
@@ -239,8 +220,7 @@ class _Stage:
             self.observed[relative] = final.fingerprint
             data = b"".join(chunks) if retain else None
             result = digest.hexdigest()
-            self.physical[key] = (result, data)
-            self.physical_info[key] = final.fingerprint
+            self.physical[key] = (final.fingerprint, result, data)
             self.files.append(StagedFile(relative, result, total))
             return data, result
         finally:
@@ -268,8 +248,18 @@ def _json(raw: bytes) -> dict[str, Any]:
     def invalid_constant(_: str) -> None:
         raise SourceFailure("invalid_data")
 
+    def finite(literal: str) -> float:
+        # 1e999 parses to infinity without reaching parse_constant.
+        number = float(literal)
+        if not math.isfinite(number):
+            raise SourceFailure("invalid_data")
+        return number
+
     value = json.loads(
-        raw.decode("utf-8"), object_pairs_hook=pairs, parse_constant=invalid_constant
+        raw.decode("utf-8"),
+        object_pairs_hook=pairs,
+        parse_constant=invalid_constant,
+        parse_float=finite,
     )
     if not isinstance(value, dict):
         raise SourceFailure("invalid_data")
@@ -309,6 +299,8 @@ def _frontmatter(raw: bytes) -> tuple[dict[str, Any], str]:
     if any(isinstance(token, AliasToken | AnchorToken | TagToken) for token in yaml.scan(header)):
         raise SourceFailure("invalid_data")
     node = yaml.compose(header, Loader=_DataLoader)
+    if node is None:
+        raise SourceFailure("invalid_data")
 
     def depth(current: yaml.Node | None, level: int = 0) -> None:
         if level > 16:
@@ -322,7 +314,8 @@ def _frontmatter(raw: bytes) -> tuple[dict[str, Any], str]:
                 depth(child, level + 1)
 
     depth(node)
-    value = yaml.load(header, Loader=_DataLoader)
+    # Build the value from the composed node instead of parsing the header again.
+    value = _DataLoader("").construct_document(node)
     if not isinstance(value, dict):
         raise SourceFailure("invalid_data")
     return value, body
@@ -385,14 +378,12 @@ def _local(
             if "version" in fallback:
                 text(fallback["version"], 256)
             if "languages" in fallback:
-                _languages(fallback["languages"])
+                check_language_tags(fallback["languages"])
         if "version" in extra:
             text(extra["version"], 256)
         version = extra.get("version", fallback.get("version"))
-        if version is not None:
-            text(version, 256)
         languages = extra.get("languages", fallback.get("languages", []))
-        _languages(languages)
+        check_language_tags(languages)
         dependencies = extra.get("dependencies", [])
         asset_id = "skill:" + canonical_digest(
             {"source_id": source.source_id, "relative_package_path": package}
@@ -434,11 +425,7 @@ def _local(
         if package is None:
             raise SourceFailure("invalid_data")
         location = "SKILL.md" if package == "." else f"{package}/SKILL.md"
-        try:
-            present = stage.exists(location)
-        except FileNotFoundError:
-            present = False
-        if present:
+        if stage.exists(location):
             raise SourceFailure("invalid_data")
         absent.add(item.record.asset_id)
     stage.verify()
@@ -458,37 +445,20 @@ def _local(
         frozenset(absent),
         freeze_json(paths),
         context.received_bytes,
-        frozenset(absent),
         tuple(context.batch_durations_ms),
     )
-
-
-def _languages(value: object) -> None:
-    if (
-        not isinstance(value, list)
-        or len(value) > 32
-        or any(not isinstance(v, str) or not re.fullmatch(r"[A-Za-z0-9-]{1,64}", v) for v in value)
-        or len(set(value)) != len(value)
-    ):
-        raise SourceFailure("invalid_data")
 
 
 def _import(
     stage: _Stage, source: SourceConfig, previous: SourceInventory, context: CaptureContext
 ) -> SourceCapture:
     raw, digest = stage.read(source.path.name, 4 * _CHUNK)
-    data = _json(raw)
-    if (
-        type(data.get("schema_version")) is not int
-        or next(Draft202012Validator(_IMPORT_SCHEMA).iter_errors(data), None) is not None
-        or data["source_id"] != source.source_id
-    ):
+    data = validate_document(_json(raw), _IMPORT_VALIDATOR)
+    if data["source_id"] != source.source_id:
         raise SourceFailure("invalid_data")
     if len(data["records"]) + len(data["removed_asset_ids"]) > 1000:
         raise SourceFailure("record_limit")
-    from relaymind.assets.catalog import _timestamp
-
-    _timestamp(data["captured_at"])
+    timestamp(data["captured_at"])
     if data["source_version"] is not None:
         text(data["source_version"], 256)
     forbidden = stage.observed[source.path.name][:2]
@@ -496,10 +466,10 @@ def _import(
     if removed and not data["complete"]:
         raise SourceFailure("invalid_data")
     records_by_id = {item.record.asset_id for item in previous.records}
+    known = records_by_id | previous.tombstones
     for asset_id in removed:
-        text(asset_id, 256)
         _check_owner(asset_id, previous, source.source_id)
-        if asset_id not in records_by_id | previous.tombstones:
+        if asset_id not in known:
             raise SourceFailure("invalid_data")
     documents, ids = [], set()
     for entry in data["records"]:

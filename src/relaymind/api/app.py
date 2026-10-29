@@ -169,9 +169,11 @@ def create_app(
         try:
             yield
         finally:
-            if asset_catalog is not None:
-                await asset_catalog.stop()
-            await probe.stop()
+            try:
+                if asset_catalog is not None:
+                    await asset_catalog.stop()
+            finally:
+                await probe.stop()
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.application_token = token

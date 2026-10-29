@@ -3,23 +3,40 @@
 import json
 import sqlite3
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
 from relaymind.assets.catalog import (
     AssetValidationError,
     CatalogSnapshot,
+    InventoryAsset,
     SearchDocument,
+    SourceCapture,
+    SourceInventory,
+    failure_exclusions,
     project_asset,
+    projection_digest,
+    text,
     validate_asset_record,
     validate_catalog_snapshot,
 )
-from relaymind.assets.sources import InventoryAsset, SourceCapture, SourceFailure, SourceInventory
 from relaymind.canonical import canonical_json
 from relaymind.redaction import Redactor
 from relaymind.schema_util import freeze_json
 from relaymind.store.run_store import RunStore, utc_iso
+
+# The snapshot-visible source fields. Observation times (captured_at,
+# last_success_at) are not content identity and never bump the revision.
+_VISIBLE_SOURCE_FIELDS = (
+    "source_version",
+    "content_hash",
+    "stale",
+    "complete",
+    "accepted_count",
+    "rejected_count",
+    "exclusions_json",
+)
 
 
 class CatalogConflict(ValueError):
@@ -38,11 +55,24 @@ class Publication:
     removed_asset_ids: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class PreparedPublication:
+    """A capture re-verified for commit; rows are (id, record, search, digest, package)."""
+
+    capture: SourceCapture
+    rows: tuple[tuple[str, str, str, str, str | None], ...]
+    ids: frozenset[str]
+
+
+def _effective_stale(row: Mapping[str, Any], source_stale: Mapping[str, bool]) -> bool:
+    return bool(row["stale"]) or source_stale[row["source_id"]]
+
+
 class AssetCatalogStore:
     def __init__(self, store: RunStore) -> None:
         self.store = store
 
-    def _state(self) -> tuple[dict, list[dict], list[dict], list[dict]]:
+    def _state(self) -> tuple[dict, list[dict], list[dict]]:
         with self.store.sql_transaction() as connection:
             meta = dict(connection.execute("SELECT * FROM asset_catalog_meta").fetchone())
             sources = [
@@ -55,15 +85,10 @@ class AssetCatalogStore:
                 dict(r)
                 for r in connection.execute("SELECT * FROM asset_catalog_assets ORDER BY asset_id")
             ]
-            tombstones = [
-                dict(r)
-                for r in connection.execute(
-                    "SELECT * FROM asset_catalog_tombstones ORDER BY asset_id"
-                )
-            ]
-        return meta, sources, assets, tombstones
+        return meta, sources, assets
 
     def _documents(self, rows: list[dict]) -> tuple[SearchDocument, ...]:
+        """Committed rows, validated once; integrity is the stored projection digest."""
         documents = []
         try:
             for row in rows:
@@ -71,23 +96,24 @@ class AssetCatalogStore:
                 search = json.loads(row["search_json"])
                 if set(search) != {"body", "projection_digest"}:
                     raise ValueError
-                document = project_asset(
-                    record, body=search["body"], redactor=Redactor(), secrets=()
-                )
+                body = search["body"]
+                if body is not None:
+                    text(body, 262144)
+                digest = projection_digest(record, body)
                 if (
                     row["asset_id"] != record.asset_id
                     or row["source_id"] != record.source_id
-                    or document.projection_digest != row["projection_digest"]
-                    or document.projection_digest != search["projection_digest"]
+                    or digest != row["projection_digest"]
+                    or digest != search["projection_digest"]
                 ):
                     raise ValueError
-                documents.append(document)
+                documents.append(SearchDocument(record, body, digest))
         except (ValueError, KeyError, TypeError, RecursionError):
             raise CatalogUnavailable("catalog_corrupt") from None
         return tuple(documents)
 
     def snapshot(self) -> CatalogSnapshot:
-        meta, source_rows, asset_rows, _ = self._state()
+        meta, source_rows, asset_rows = self._state()
         documents = self._documents(asset_rows)
         try:
             sources = [
@@ -112,10 +138,7 @@ class AssetCatalogStore:
             ]
             source_stale = {s["source_id"]: s["stale"] for s in sources}
             assets = [
-                replace(
-                    document.record,
-                    stale=bool(row["stale"]) or source_stale[document.record.source_id],
-                ).to_json_object()
+                replace(document.record, stale=_effective_stale(row, source_stale)).to_json_object()
                 for document, row in zip(documents, asset_rows, strict=True)
             ]
             return validate_catalog_snapshot(
@@ -131,45 +154,56 @@ class AssetCatalogStore:
             raise CatalogUnavailable("catalog_corrupt") from None
 
     def search_documents(self) -> tuple[SearchDocument, ...]:
-        _, sources, rows, _ = self._state()
-        stale = {s["source_id"]: bool(s["stale"]) for s in sources}
+        _, sources, rows = self._state()
+        source_stale = {s["source_id"]: bool(s["stale"]) for s in sources}
         return tuple(
-            replace(
-                doc,
-                record=replace(doc.record, stale=bool(row["stale"]) or stale[doc.record.source_id]),
-            )
+            replace(doc, record=replace(doc.record, stale=_effective_stale(row, source_stale)))
             for doc, row in zip(self._documents(rows), rows, strict=True)
         )
 
     def inventory(self, source_id: str) -> SourceInventory:
-        meta, _, rows, tombstones = self._state()
-        documents = self._documents(rows)
-        owners = {r["asset_id"]: r["source_id"] for r in [*rows, *tombstones]}
+        """One source's committed records, plus every asset ID's owning source."""
+        with self.store.sql_transaction() as connection:
+            revision = connection.execute("SELECT revision FROM asset_catalog_meta").fetchone()[0]
+            rows = [
+                dict(r)
+                for r in connection.execute(
+                    "SELECT * FROM asset_catalog_assets WHERE source_id=? ORDER BY asset_id",
+                    (source_id,),
+                )
+            ]
+            tombstones = frozenset(
+                r[0]
+                for r in connection.execute(
+                    "SELECT asset_id FROM asset_catalog_tombstones WHERE source_id=?",
+                    (source_id,),
+                )
+            )
+            owners = {
+                r[0]: r[1]
+                for r in connection.execute(
+                    "SELECT asset_id,source_id FROM asset_catalog_assets UNION ALL "
+                    "SELECT asset_id,source_id FROM asset_catalog_tombstones"
+                )
+            }
         return SourceInventory(
             source_id,
-            meta["revision"],
+            revision,
             tuple(
                 InventoryAsset(doc.record, row["relative_package_path"])
-                for doc, row in zip(documents, rows, strict=True)
-                if doc.record.source_id == source_id
+                for doc, row in zip(self._documents(rows), rows, strict=True)
             ),
-            frozenset(r["asset_id"] for r in tombstones if r["source_id"] == source_id),
+            tombstones,
             freeze_json(owners),
         )
 
-    def publish(
-        self,
-        capture: SourceCapture,
-        *,
-        expected_revision: int,
-        check: Callable[[], None] = lambda: None,
-    ) -> Publication:
-        # All parsing/projection hashing is finished before taking the SQL write lock.
-        if type(expected_revision) is not int or expected_revision < 0:
-            raise CatalogConflict("catalog_revision_conflict")
+    def prepare(
+        self, capture: SourceCapture, *, check: Callable[[], None] = lambda: None
+    ) -> PreparedPublication:
+        """Re-verify every captured projection; CPU work only, safe off the event loop."""
         check()
-        prepared = []
-        ids = set()
+        rows = []
+        ids: set[str] = set()
         for document in capture.documents:
             check()
             record = validate_asset_record(document.record.to_json_object())
@@ -183,7 +217,7 @@ class AssetCatalogStore:
             ):
                 raise AssetValidationError("invalid_capture")
             ids.add(record.asset_id)
-            prepared.append(
+            rows.append(
                 (
                     record.asset_id,
                     canonical_json(record.to_json_object()),
@@ -197,6 +231,30 @@ class AssetCatalogStore:
         check()
         if ids & capture.removed_asset_ids or (not capture.complete and capture.removed_asset_ids):
             raise AssetValidationError("invalid_capture")
+        return PreparedPublication(capture, tuple(rows), frozenset(ids))
+
+    def publish(
+        self,
+        capture: SourceCapture,
+        *,
+        expected_revision: int,
+        check: Callable[[], None] = lambda: None,
+    ) -> Publication:
+        return self.commit(
+            self.prepare(capture, check=check), expected_revision=expected_revision, check=check
+        )
+
+    def commit(
+        self,
+        prepared: PreparedPublication,
+        *,
+        expected_revision: int,
+        check: Callable[[], None] = lambda: None,
+    ) -> Publication:
+        # All parsing/projection hashing is finished before taking the SQL write lock.
+        if type(expected_revision) is not int or expected_revision < 0:
+            raise CatalogConflict("catalog_revision_conflict")
+        capture, ids = prepared.capture, prepared.ids
         now = utc_iso(self.store.clock.utc_now())
         changed_ids, removed_ids = [], []
         check()
@@ -212,22 +270,28 @@ class AssetCatalogStore:
                     "SELECT * FROM asset_catalog_assets WHERE source_id=?", (capture.source_id,)
                 )
             }
-            for asset_id in ids | capture.removed_asset_ids:
-                owners = connection.execute(
-                    "SELECT source_id FROM asset_catalog_assets WHERE asset_id=? UNION "
-                    "SELECT source_id FROM asset_catalog_tombstones WHERE asset_id=?",
-                    (asset_id, asset_id),
-                ).fetchall()
-                if any(row["source_id"] != capture.source_id for row in owners):
-                    raise CatalogConflict("source_owner_conflict")
-                if asset_id in capture.removed_asset_ids and not owners:
-                    raise CatalogConflict("unknown_tombstone")
+            touched = ids | capture.removed_asset_ids
+            owned_elsewhere, known = set(), set()
+            for row in connection.execute(
+                "SELECT asset_id,source_id FROM asset_catalog_assets UNION ALL "
+                "SELECT asset_id,source_id FROM asset_catalog_tombstones"
+            ):
+                if row["asset_id"] in touched:
+                    known.add(row["asset_id"])
+                    if row["source_id"] != capture.source_id:
+                        owned_elsewhere.add(row["asset_id"])
+            if owned_elsewhere:
+                raise CatalogConflict("source_owner_conflict")
+            if capture.removed_asset_ids - known:
+                raise CatalogConflict("unknown_tombstone")
             if capture.complete and set(current) - ids - capture.removed_asset_ids:
                 raise CatalogConflict("incomplete_inventory")
             previous_source = connection.execute(
                 "SELECT * FROM asset_catalog_sources WHERE source_id=?", (capture.source_id,)
             ).fetchone()
-            for asset_id, record_json, search_json, digest, package in prepared:
+            # A cleared or newly set per-asset stale flag is a visible change too.
+            stale_changed = False
+            for asset_id, record_json, search_json, digest, package in prepared.rows:
                 check()
                 old = current.get(asset_id)
                 if (
@@ -236,6 +300,8 @@ class AssetCatalogStore:
                     or old["relative_package_path"] != package
                 ):
                     changed_ids.append(asset_id)
+                elif old["stale"]:
+                    stale_changed = True
                 connection.execute(
                     "INSERT INTO asset_catalog_assets(asset_id,source_id,record_json,search_json,"
                     "projection_digest,relative_package_path,stale) VALUES(?,?,?,?,?,?,0) "
@@ -244,14 +310,19 @@ class AssetCatalogStore:
                     "relative_package_path=excluded.relative_package_path,stale=0",
                     (asset_id, capture.source_id, record_json, search_json, digest, package),
                 )
-                connection.execute(
-                    "DELETE FROM asset_catalog_tombstones WHERE asset_id=?", (asset_id,)
-                )
+            connection.executemany(
+                "DELETE FROM asset_catalog_tombstones WHERE asset_id=?", [(i,) for i in ids]
+            )
             if not capture.complete:
-                for asset_id in set(current) - ids:
-                    connection.execute(
-                        "UPDATE asset_catalog_assets SET stale=1 WHERE asset_id=?", (asset_id,)
-                    )
+                omitted = [
+                    (asset_id,)
+                    for asset_id, row in current.items()
+                    if asset_id not in ids and not row["stale"]
+                ]
+                stale_changed = stale_changed or bool(omitted)
+                connection.executemany(
+                    "UPDATE asset_catalog_assets SET stale=1 WHERE asset_id=?", omitted
+                )
             for asset_id in sorted(capture.removed_asset_ids):
                 check()
                 if asset_id in current:
@@ -262,12 +333,6 @@ class AssetCatalogStore:
                     "ON CONFLICT(asset_id) DO NOTHING",
                     (asset_id, capture.source_id, now),
                 )
-            changed = bool(
-                changed_ids
-                or removed_ids
-                or previous_source["content_hash"] != capture.source_digest
-            )
-            revision = expected_revision + int(changed)
             connection.execute(
                 "DELETE FROM asset_catalog_provenance WHERE source_id=?", (capture.source_id,)
             )
@@ -278,6 +343,15 @@ class AssetCatalogStore:
             accepted = connection.execute(
                 "SELECT count(*) FROM asset_catalog_assets WHERE source_id=?", (capture.source_id,)
             ).fetchone()[0]
+            source_after = {
+                "source_version": capture.source_version,
+                "content_hash": capture.source_digest,
+                "stale": 0,
+                "complete": int(capture.complete),
+                "accepted_count": accepted,
+                "rejected_count": 0,
+                "exclusions_json": "[]",
+            }
             connection.execute(
                 "UPDATE asset_catalog_sources SET source_version=?,content_hash=?,captured_at=?,"
                 "last_success_at=?,stale=0,complete=?,accepted_count=?,rejected_count=0,"
@@ -294,6 +368,15 @@ class AssetCatalogStore:
                     capture.source_id,
                 ),
             )
+            # Spec 4.6: one increment for each committed generation whose
+            # snapshot-visible state changed, including stale/complete/exclusions.
+            changed = bool(
+                changed_ids
+                or removed_ids
+                or stale_changed
+                or any(previous_source[k] != v for k, v in source_after.items())
+            )
+            revision = expected_revision + int(changed)
             if changed:
                 connection.execute(
                     "UPDATE asset_catalog_meta SET revision=?,published_at=?", (revision, now)
@@ -313,13 +396,41 @@ class AssetCatalogStore:
             (source_id,),
         )
 
-    def record_failure(self, source_id: str, failure: SourceFailure) -> None:
+    def record_failure(
+        self,
+        source_id: str,
+        *,
+        rejected_count: int,
+        exclusions: tuple[Mapping[str, Any], ...],
+    ) -> None:
         with self.store.sql_transaction() as connection:
-            self._ensure_source(connection, source_id)
+            self._record_failure(connection, source_id, rejected_count, exclusions)
+
+    def _record_failure(
+        self,
+        connection: sqlite3.Connection,
+        source_id: str,
+        rejected_count: int,
+        exclusions: tuple[Mapping[str, Any], ...],
+    ) -> None:
+        self._ensure_source(connection, source_id)
+        before = connection.execute(
+            "SELECT stale,complete,rejected_count,exclusions_json FROM asset_catalog_sources "
+            "WHERE source_id=?",
+            (source_id,),
+        ).fetchone()
+        exclusions_json = canonical_json([dict(e) for e in exclusions])
+        connection.execute(
+            "UPDATE asset_catalog_sources SET stale=1,complete=0,rejected_count=?,"
+            "exclusions_json=?,consecutive_failures=consecutive_failures+1 WHERE source_id=?",
+            (rejected_count, exclusions_json, source_id),
+        )
+        # A failure is an observation, not a new generation of content; but the
+        # snapshot shows its stale/complete/exclusions, so a change bumps the revision.
+        if tuple(before) != (1, 0, rejected_count, exclusions_json):
             connection.execute(
-                "UPDATE asset_catalog_sources SET stale=1,complete=0,rejected_count=?,"
-                "exclusions_json=?,consecutive_failures=consecutive_failures+1 WHERE source_id=?",
-                (failure.rejected_count, canonical_json(list(failure.exclusions)), source_id),
+                "UPDATE asset_catalog_meta SET revision=revision+1,published_at=?",
+                (utc_iso(self.store.clock.utc_now()),),
             )
 
     def begin_job(self, source_id: str, config_digest: str) -> str:
@@ -395,8 +506,8 @@ class AssetCatalogStore:
                 "SELECT job_id,source_id FROM asset_catalog_jobs WHERE state='running'"
             ).fetchall()
             for row in rows:
-                self.record_failure(
-                    row["source_id"], SourceFailure("interrupted", rejected_count=0)
+                self._record_failure(
+                    connection, row["source_id"], 0, failure_exclusions("interrupted")
                 )
                 connection.execute(
                     "UPDATE asset_catalog_jobs SET state='interrupted',reason='interrupted',"
