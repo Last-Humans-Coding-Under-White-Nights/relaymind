@@ -18,6 +18,7 @@ import json
 import os
 import shutil
 import socket
+import sqlite3
 import sys
 from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
@@ -570,6 +571,27 @@ def test_a_removed_credential_left_in_sqlite_free_space_is_not_reported(
     export = run(stub_host, tarball, tmp_path, host_home=tmp_path / "host")
     assert export["leftovers"]["after_removal"]["credential_in_host_state"] is False
     assert export["passed"] is True
+
+
+@pytest.mark.parametrize("folder", ["host #1", "100%41 done", "what?"])
+def test_a_sqlite_file_is_read_where_its_path_holds_uri_delimiters(tmp_path, folder):
+    """A host home path with ``#``, ``%``, ``?`` or a space is read as that path,
+    not cut at a URI delimiter and so reported as holding the token (PR #182 review)."""
+    if "?" in folder and sys.platform == "win32":
+        pytest.skip("a ? cannot be in a Windows name")
+    db = tmp_path / folder / "state.sqlite"
+    db.parent.mkdir()
+    conn = sqlite3.connect(db)
+    conn.execute("create table kv (key text, value text)")
+    conn.execute("insert into kv values ('profile', 'clean')")
+    conn.commit()
+    conn.close()
+    assert install_check._credential_in(db, "token-123") is False
+    conn = sqlite3.connect(db)
+    conn.execute("insert into kv values ('key', 'token-123')")
+    conn.commit()
+    conn.close()
+    assert install_check._credential_in(db, "token-123") is True
 
 
 def test_a_config_strict_json_cannot_read_is_never_reported_clean(

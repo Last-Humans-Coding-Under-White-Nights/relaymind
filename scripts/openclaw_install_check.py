@@ -337,7 +337,9 @@ def _credential_in(path: Path, token: str) -> bool:
     if not data.startswith(b"SQLite format 3\x00"):
         return token.encode() in data
     try:
-        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        # A file URI with the path percent-encoded: a #, ?, % or space in the
+        # host home is part of the path, not a URI delimiter.
+        conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
         try:
             tables = [
                 r[0] for r in conn.execute("select name from sqlite_master where type='table'")
