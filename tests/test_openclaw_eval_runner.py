@@ -606,6 +606,55 @@ def test_an_interrupt_during_arm_setup_still_writes_the_export_marked_aborted(tm
     assert f"{len(planned)} slot(s) not run" in report
 
 
+def test_an_interrupt_in_an_early_setup_leaves_every_later_arm_not_run(tmp_path):
+    """Spec 0.50 section 12.5: arms never set up are not_run, never "ran".
+
+    Ctrl-C in the setup of the second of four arms: the first arm keeps its
+    setup, the interrupted arm and the two after it are not_run (export,
+    summary, and report) with every planned slot not run, and no attempt ran.
+    """
+
+    class InterruptedSecond(DoublesBackend):
+        def unavailable(self, arm):
+            return None
+
+        def start(self, arm, work):
+            if arm == "relaymind_external_only":
+                raise KeyboardInterrupt
+            return super().start(arm, work)
+
+    backend = InterruptedSecond(tmp_path)
+    document, out = run_with(tmp_path, backend, arms=list(ARMS), task_ids=["text-reply-en"])
+    planned = [s for s in sampling_order(TASKS) if s.task_id == "text-reply-en"]
+    assert document["aborted"] == {
+        "stage": "setup",
+        "index": None,
+        "repeat": None,
+        "task_id": None,
+        "arm": "relaymind_external_only",
+        "slots_not_run": len(planned),
+    }
+    assert document["attempts"] == [] and document["grades"] == []
+    arms = document["arms"]
+    assert arms["direct"]["status"] == "ran" and arms["direct"]["setup"]
+    report = (out / "openclaw-eval.md").read_text("utf-8")
+    later = ("relaymind_auto", "relaymind_no_local")
+    for arm in ("relaymind_external_only", *later):
+        assert arms[arm]["status"] == "not_run", arm
+        assert "interrupted by the operator" in arms[arm]["reason"]
+        assert arms[arm]["slots_not_run"] == sum(1 for s in planned if s.arm == arm)
+        assert document["summary"]["arms"][arm] == {
+            "status": "not_run",
+            "reason": arms[arm]["reason"],
+            "languages": {},
+        }
+        assert f"| {arm} | all | not_run: {arms[arm]['reason']} |" in report
+    for arm in later:
+        assert arms[arm]["reason"] == "setup interrupted by the operator before this arm"
+    saved = json.loads((out / "openclaw-eval.json").read_text("utf-8"))
+    assert saved["arms"] == arms
+
+
 def test_an_interrupt_while_grading_keeps_the_attempt_that_ended_graded(tmp_path, monkeypatch):
     """Spec 0.50: the attempts that ended are graded, even when Ctrl-C hit the grading."""
     real = runner.grade_attempt

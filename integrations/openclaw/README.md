@@ -1193,7 +1193,8 @@ model. The host's `"ok": true` never counts as a success; a host failover
 (a reported provider or model other than the arm's) is counted apart, and
 so is a host interrupt (exit 130 or SIGINT). Interrupting the runner, during an arm's
 setup or an attempt, keeps the attempts that ended: the export is written
-marked aborted and the runner exits 130. At the 8192-token local context an OpenClaw request does
+marked aborted and the runner exits 130; an interrupt during setup marks
+that arm and every arm not yet set up not_run, never ran. At the 8192-token local context an OpenClaw request does
 not fit the local model (macOS qualification), so `relaymind_auto` is
 expected to show 0 local turns with reason `context_limit`; the report
 states that as the result when it happens. The

@@ -1532,7 +1532,9 @@ the measurement has run.
   interrupt during an attempt, during the grading of one that ended, or
   during an arm's setup keeps the attempts that ended (graded), writes the
   export and report marked aborted with the slots not run (an interrupted
-  setup marks that arm not_run and every slot not run), and the CLI
+  setup marks that arm and every later arm never set up not_run, in the
+  export, the summary, and the report, with their planned slots not run),
+  and the CLI
   exits 130. The grading never reads the user text the gateway received,
   which the host decorates (a timestamp before the prompt and a runtime
   line after it); the prompt's identity is the frozen task text the

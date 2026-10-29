@@ -605,8 +605,20 @@ def run_evaluation(
                 # No slot ran: every planned slot of an arm whose setup did not fail.
                 stopped = None
                 not_started = sum(1 for s in planned if s.arm not in not_run)
-                not_run[setting_up] = "setup interrupted by the operator"
-                arm_records[setting_up] = {"status": "not_run", "reason": not_run[setting_up]}
+                # The interrupted arm and every arm after it that was never set up
+                # are not_run, with all their planned slots (section 12.5).
+                for arm in ARMS[ARMS.index(setting_up) :]:
+                    if arm in not_run or (arm != setting_up and arm in arm_records):
+                        continue
+                    reason = "setup interrupted by the operator"
+                    if arm != setting_up:
+                        reason += " before this arm"
+                    not_run[arm] = reason
+                    arm_records[arm] = {
+                        "status": "not_run",
+                        "reason": reason,
+                        "slots_not_run": sum(1 for s in planned if s.arm == arm),
+                    }
             else:
                 stopped = slots[len(attempts)] if len(attempts) < len(slots) else None
                 not_started = len(slots) - len(attempts)
