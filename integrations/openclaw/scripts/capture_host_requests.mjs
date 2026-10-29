@@ -12,7 +12,8 @@
 // The first reply is a call to the named host tool when --tool-call is given
 // (arguments {"text": "lantern"} unless --tool-arguments '<json>'), then text.
 // The fixture is written after every request and on Ctrl-C. Authorization is
-// never recorded; the home directory is replaced by <home>. Review a host
+// never recorded; the home directory is replaced by <home>, in its raw and its
+// JSON-escaped form (capture-sanitize.mjs). Review a host
 // fixture before committing it: the host's system prompt can name local paths.
 import { writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
@@ -20,6 +21,7 @@ import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 
 import { startRecorder } from "../test/host-transport/recorder.mjs";
+import { sanitizeCapture } from "./capture-sanitize.mjs";
 
 const { values } = parseArgs({
   options: {
@@ -90,7 +92,7 @@ function write(recorder) {
     note: "A real OpenClaw host against a scripted endpoint; no gateway, no model.",
     exchanges: recorder.exchanges,
   };
-  const text = JSON.stringify(fixture, null, 2).split(home).join("<home>");
+  const text = sanitizeCapture(JSON.stringify(fixture, null, 2), home);
   mkdirSync(dirname(values.out), { recursive: true });
   writeFileSync(values.out, `${text}\n`);
 }
