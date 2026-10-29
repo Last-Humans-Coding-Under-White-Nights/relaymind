@@ -16,7 +16,9 @@ tests read that export, so the operator guide, ``docs/RELEASE.md``, and
   ``models list --refresh``, ``uninstall --force``);
 - uninstall left the config entry, the auth profile, and the token, and the
   guide's removal steps cleared them (Q12);
-- macOS and Windows stay ``not_run`` and are listed as support gaps.
+- Windows stays ``not_run`` and is listed as the support gap; the macOS row
+  of this revision is recorded by its own run
+  (``docs/evidence/2026-10-29-openclaw-mac-qualification/``).
 
 No host or model runs here; the export is data.
 """
@@ -202,19 +204,24 @@ def test_the_report_states_the_label_and_the_platform_gaps():
         assert re.search(rf"{platform}[^\n]*`not_run`", report), platform
 
 
-def test_release_and_evidence_list_macos_and_windows_as_support_gaps():
-    """Section 12.5: no Mac or Windows access; those rows stay not_run."""
+def test_release_and_evidence_list_windows_as_the_support_gap():
+    """Section 12.5: no Windows access, so the Windows rows stay not_run; the
+    macOS row of this revision names its own run and is no longer a gap."""
     release = RELEASE.read_text("utf-8")
     section = release[release.index("### OpenClaw provider plugin (#145") :]
     assert "2026-10-28-openclaw-vps-functional-145" in section
     gaps = section[section.index("Support gaps") :].split("\n\n")[0]
-    assert "macOS" in gaps and "Windows" in gaps and "native" in gaps
+    assert "Windows" in gaps and "native" in gaps
+    assert not re.search(r"macOS[^\n]*`not_run`", gaps)
     evidence = EVIDENCE.read_text("utf-8")
     table = evidence[evidence.index("## OpenClaw plugin platforms (#145)") :]
     assert "2026-10-28-openclaw-vps-functional-145" in table
     assert "Support gaps" in table
-    for row in ("| macOS (target) | the same |", "| Windows native (target) |"):
+    for row in ("| Windows native (target) |", "| Windows WSL2 |"):
         line = next(x for x in table.splitlines() if x.startswith(row))
         assert "`not_run`" in line, row
+    macos = next(x for x in table.splitlines() if x.startswith("| macOS (target) | the same |"))
+    assert "2026-10-29-openclaw-mac-qualification" in macos
+    assert "`not_run`" not in macos
     # The native Windows note stays: the host documents native support.
     assert "native Windows" in table

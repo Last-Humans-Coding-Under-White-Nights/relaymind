@@ -1,0 +1,634 @@
+{
+  "kind": "openclaw-host-qualification",
+  "evidence": "deterministic gateway doubles; not live model evidence",
+  "scenario": "tool-deny",
+  "status": "completed",
+  "command": [
+    "/opt/homebrew/bin/node",
+    "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+    "agent",
+    "exec",
+    "--config",
+    "<scratch>/home/config.json",
+    "--json",
+    "--model",
+    "relaymind/relaymind-client-tools",
+    "Write a note with the test write tool"
+  ],
+  "exit_code": 0,
+  "stdout": "{\n  \"ok\": true,\n  \"status\": \"ok\",\n  \"final\": \"The host did not allow the write.\",\n  \"payloads\": [\n    {\n      \"text\": \"The host did not allow the write.\",\n      \"mediaUrl\": null\n    }\n  ],\n  \"usage\": {\n    \"cacheRead\": 0,\n    \"cacheWrite\": 0,\n    \"cost\": {\n      \"total\": 0\n    }\n  },\n  \"codeModeEngaged\": false,\n  \"assistantTurns\": 2,\n  \"toolSummary\": {\n    \"calls\": 1,\n    \"tools\": [\n      \"relaymind_test_write\"\n    ],\n    \"failures\": 1,\n    \"unresolvedError\": {\n      \"toolName\": \"relaymind_test_write\"\n    }\n  },\n  \"model\": \"relaymind-client-tools\",\n  \"provider\": \"relaymind\",\n  \"sessionId\": \"cf379331-cc01-4149-b448-fddaede8d7a9\"\n}\n",
+  "stderr": "[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind inference attempt {\"event\":\"relaymind.inference_attempt\",\"turn\":\"turn-82d8fdbaea100292\",\"attempt\":1,\"idempotencyKey\":\"relaymind-openclaw-v1-000c1661e335aa1ad8b69f70551ff96e4c949dab39870147fe5f8062b7fb39b3\",\"runId\":\"run_503e99c28fc749858712649fbf9b8bf4\",\"runIdSource\":\"header\",\"outcome\":\"tool_call\",\"status\":200,\"code\":null,\"reasonCode\":null,\"replayed\":false,\"retried\":false,\"nativeRunUrl\":\"http://127.0.0.1:<port>/relay/v1/runs/run_503e99c28fc749858712649fbf9b8bf4\",\"uiUrl\":\"http://127.0.0.1:<port>/ui/runs/run_503e99c28fc749858712649fbf9b8bf4\",\"usage\":\"unknown\"}\n[tools] relaymind_test_write failed: Plugin approval unavailable: non-interactive CLI runs have no approval-capable initiating surface. raw_params={\"line\":\"written by the host\",\"name\":\"note.txt\"}\n[plugins] RelayMind inference attempt {\"event\":\"relaymind.inference_attempt\",\"turn\":\"turn-82d8fdbaea100292\",\"attempt\":1,\"idempotencyKey\":\"relaymind-openclaw-v1-c6dacfc076ac371120f9889e7638cba8470420295cf6ab903439b7eb3ead40b6\",\"runId\":\"run_f15c13ba9f084eeb8b0e62e46ae99159\",\"runIdSource\":\"header\",\"outcome\":\"answer\",\"status\":200,\"code\":null,\"reasonCode\":null,\"replayed\":false,\"retried\":false,\"nativeRunUrl\":\"http://127.0.0.1:<port>/relay/v1/runs/run_f15c13ba9f084eeb8b0e62e46ae99159\",\"uiUrl\":\"http://127.0.0.1:<port>/ui/runs/run_f15c13ba9f084eeb8b0e62e46ae99159\",\"usage\":\"unknown\"}\n[agents/agent-command] [agent] run cf379331-cc01-4149-b448-fddaede8d7a9 ended with stopReason=stop\n[memory] sync failed (session-startup-catchup): PluginInstanceUnavailableError: Plugin memory-core was reloaded or disabled; use its current tools.\n[memory] memory_index_chunks_vec not updated — semantic vector embeddings unavailable — no vector dimensions resolved. Vector recall degraded. Further duplicate warnings suppressed.\n[state/agent-db] agent database clean-close receipt: active-leases\n[state/agent-db] agent database clean-close receipt: written\n",
+  "token": "<not recorded>",
+  "base_url": "http://127.0.0.1:<port>/v1",
+  "versions": {
+    "openclaw": "2026.10.7",
+    "@openclaw/ai": "2026.10.7",
+    "openai": "7.27.0",
+    "node": "v26.12.1",
+    "os": "Darwin 27.0.0",
+    "machine": "arm64",
+    "relaymind_revision": {
+      "head": "6fc09544ec8132062bd998fa2e6c74fd38744efb",
+      "dirty": false
+    }
+  },
+  "runs": [
+    {
+      "run_id": "run_503e99c28fc749858712649fbf9b8bf4",
+      "state": "completed",
+      "events": [
+        {
+          "type": "run.accepted",
+          "payload": {
+            "answer_options": {},
+            "answer_pass": "final",
+            "answer_stream": "buffered",
+            "answer_stream_effective": "buffered",
+            "budgets": {
+              "active_seconds": 4.0,
+              "clarification_rounds": 2,
+              "external_generations": 6,
+              "external_seconds": 30.0,
+              "local_generations": 3,
+              "placement.margin": 2,
+              "placement.probe_after_seconds": 600,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "routing_input_tokens": 2048,
+              "routing_output_tokens": 128,
+              "run_active_seconds": 60.0,
+              "run_generations": 8,
+              "run_tool_executions": 6,
+              "selection.timeout_seconds": 2.0,
+              "tool_calls": 2,
+              "waiting_seconds": 300.0
+            },
+            "calls_per_generation": "one",
+            "early_headers": false,
+            "effective_execution_mode": "auto",
+            "example_match_margin": 0.1,
+            "example_match_score": 0.5,
+            "local_model": "double-qwen3-0.6b",
+            "local_model_reason": null,
+            "local_model_status": "ready",
+            "model_alias": "relaymind-client-tools",
+            "original_messages": [
+              {
+                "content": {
+                  "omitted_chars": 40798
+                },
+                "role": "system"
+              },
+              {
+                "content": "[Thu 2026-10-29 06:24 GMT+8] Write a note with the test write tool\n\nRuntime: agent=main | session=agent:main:explicit:cf379331-cc01-4149-b448-fddaede8d7a9 | host=<host> | repo=<repo> | os=macOS 27.0.1 (arm64) | node=v26.12.1 | active_node=unknown | active_node_identity=unknown | model=relaymind/relaymind-client-tools | default_model=openai/gpt-6-astra | shell=zsh",
+                "role": "user"
+              }
+            ],
+            "placement_policy": "local_first",
+            "prefetch": false,
+            "prefetch_declarations": {
+              "check-service-health": [
+                {
+                  "arguments": {
+                    "service": {
+                      "from": "request"
+                    }
+                  },
+                  "tool": "get_service_health"
+                }
+              ],
+              "delete-demo-database": [],
+              "health-and-diagnostic-checklist": [],
+              "investigate-performance": [
+                {
+                  "arguments": {
+                    "service": {
+                      "from": "request"
+                    }
+                  },
+                  "tool": "get_latest_deployment"
+                },
+                {
+                  "arguments": {
+                    "limit": {
+                      "constant": 50
+                    },
+                    "service": {
+                      "from": "request"
+                    }
+                  },
+                  "tool": "get_recent_logs"
+                }
+              ],
+              "lookup-latest-deployment": [
+                {
+                  "arguments": {
+                    "service": {
+                      "from": "request"
+                    }
+                  },
+                  "tool": "get_latest_deployment"
+                }
+              ],
+              "summarize-incident-counts": []
+            },
+            "requested_execution_mode": "auto",
+            "selection": [
+              "model_router"
+            ],
+            "skill_roots": [
+              "<repo>/skills"
+            ],
+            "skills_offered": []
+          }
+        },
+        {
+          "type": "route.selected",
+          "payload": {
+            "decision": {
+              "clarification": null,
+              "language": "en",
+              "reason_code": "simple_skill",
+              "route": "local",
+              "schema_version": 1,
+              "skill_id": null
+            },
+            "mechanism": "client_owned",
+            "placement": {
+              "deadline_ms": null,
+              "inputs": {
+                "cache_class": "unknown",
+                "decode_tokens_per_ms": null,
+                "expected_external_ms": null,
+                "expected_output_tokens": null,
+                "input_source": "none",
+                "input_tokens": null,
+                "local_success_rate": null,
+                "model": null,
+                "output_source": "unavailable",
+                "prefill_tokens_per_ms": null,
+                "purpose": null,
+                "sample_count": 0,
+                "sample_recorded_at": null
+              },
+              "predicted_ms": null,
+              "reason": "no_generation",
+              "role": "none"
+            }
+          }
+        },
+        {
+          "type": "model.started",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_503e99c28fc749858712649fbf9b8bf4_gen1_skill",
+            "model": "double-qwen3-0.6b",
+            "placement": {
+              "deadline_ms": null,
+              "inputs": {
+                "cache_class": "unknown",
+                "decode_tokens_per_ms": null,
+                "expected_external_ms": null,
+                "expected_output_tokens": null,
+                "input_source": "tokenizer",
+                "input_tokens": 800,
+                "local_success_rate": null,
+                "model": "double-qwen3-0.6b",
+                "output_source": "unavailable",
+                "prefill_tokens_per_ms": null,
+                "purpose": "skill",
+                "sample_count": 0,
+                "sample_recorded_at": null
+              },
+              "predicted_ms": null,
+              "reason": "local_first",
+              "role": "local"
+            },
+            "purpose": "skill",
+            "tools_offered": [
+              "agents_wait",
+              "apply_patch",
+              "ask_user",
+              "automations",
+              "conversations_list",
+              "conversations_send",
+              "conversations_turn",
+              "create_goal",
+              "dashboard",
+              "edit",
+              "exec",
+              "gateway",
+              "get_goal",
+              "intent",
+              "ls",
+              "memory_get",
+              "memory_search",
+              "plugins",
+              "portal",
+              "presence",
+              "process",
+              "progress_card",
+              "read",
+              "relaymind_test_echo",
+              "relaymind_test_write",
+              "secrets",
+              "session_status",
+              "sessions",
+              "sessions_history",
+              "sessions_list",
+              "sessions_search",
+              "sessions_send",
+              "sessions_spawn",
+              "sessions_yield",
+              "skill_workshop",
+              "skills_read",
+              "skills_search",
+              "subagents",
+              "terminal",
+              "theme",
+              "update_goal",
+              "web_fetch",
+              "write"
+            ]
+          }
+        },
+        {
+          "type": "model.finished",
+          "payload": {
+            "call_id": "run_503e99c28fc749858712649fbf9b8bf4_gen1_skill",
+            "deadline_missed": false,
+            "deadline_ms": null,
+            "duration_ms": 0,
+            "error": null,
+            "finish_reason": "tool_calls",
+            "first_token_ms": 0,
+            "model": "double-qwen3-0.6b",
+            "predicted_ms": null,
+            "proposed_calls": [
+              {
+                "arguments": {
+                  "line": "written by the host",
+                  "name": "note.txt"
+                },
+                "tool_name": "relaymind_test_write"
+              }
+            ],
+            "purpose": "skill",
+            "text": null,
+            "tool_calls": 1,
+            "usage": null
+          }
+        },
+        {
+          "type": "tool.proposed",
+          "payload": {
+            "arguments": {
+              "line": "written by the host",
+              "name": "note.txt"
+            },
+            "model": "double-qwen3-0.6b",
+            "owner": "client",
+            "proposal_id": "call_write_1",
+            "tool_name": "relaymind_test_write"
+          }
+        },
+        {
+          "type": "run.completed",
+          "payload": {
+            "active_ms": 0,
+            "answer": null,
+            "budget_usage": {
+              "active_ms": 0,
+              "external_generations": 0,
+              "local_active_ms": 0,
+              "local_generations": 1,
+              "repair_generations": 0,
+              "routing_generations": 0,
+              "stages": 1,
+              "tool_calls": 0
+            },
+            "client_tool_calls": [
+              {
+                "call_id": "call_write_1",
+                "tool_name": "relaymind_test_write"
+              }
+            ],
+            "external_calls": 0,
+            "final_answer_model": "double-qwen3-0.6b",
+            "local_active_ms": 0,
+            "model_calls": [
+              {
+                "actor": "local",
+                "call_id": "run_503e99c28fc749858712649fbf9b8bf4_gen1_skill",
+                "model": "double-qwen3-0.6b",
+                "purpose": "skill"
+              }
+            ],
+            "waiting_ms": 0
+          }
+        }
+      ]
+    },
+    {
+      "run_id": "run_f15c13ba9f084eeb8b0e62e46ae99159",
+      "state": "completed",
+      "events": [
+        {
+          "type": "run.accepted",
+          "payload": {
+            "answer_options": {},
+            "answer_pass": "final",
+            "answer_stream": "buffered",
+            "answer_stream_effective": "buffered",
+            "budgets": {
+              "active_seconds": 4.0,
+              "clarification_rounds": 2,
+              "external_generations": 6,
+              "external_seconds": 30.0,
+              "local_generations": 3,
+              "placement.margin": 2,
+              "placement.probe_after_seconds": 600,
+              "repair_generations": 1,
+              "routing_generations": 1,
+              "routing_input_tokens": 2048,
+              "routing_output_tokens": 128,
+              "run_active_seconds": 60.0,
+              "run_generations": 8,
+              "run_tool_executions": 6,
+              "selection.timeout_seconds": 2.0,
+              "tool_calls": 2,
+              "waiting_seconds": 300.0
+            },
+            "calls_per_generation": "one",
+            "early_headers": false,
+            "effective_execution_mode": "auto",
+            "example_match_margin": 0.1,
+            "example_match_score": 0.5,
+            "local_model": "double-qwen3-0.6b",
+            "local_model_reason": null,
+            "local_model_status": "ready",
+            "model_alias": "relaymind-client-tools",
+            "original_messages": [
+              {
+                "content": {
+                  "omitted_chars": 40798
+                },
+                "role": "system"
+              },
+              {
+                "content": "[Thu 2026-10-29 06:24 GMT+8] Write a note with the test write tool\n\nRuntime: agent=main | session=agent:main:explicit:cf379331-cc01-4149-b448-fddaede8d7a9 | host=<host> | repo=<repo> | os=macOS 27.0.1 (arm64) | node=v26.12.1 | active_node=unknown | active_node_identity=unknown | model=relaymind/relaymind-client-tools | default_model=openai/gpt-6-astra | shell=zsh",
+                "role": "user"
+              }
+            ],
+            "placement_policy": "local_first",
+            "prefetch": false,
+            "prefetch_declarations": {
+              "check-service-health": [
+                {
+                  "arguments": {
+                    "service": {
+                      "from": "request"
+                    }
+                  },
+                  "tool": "get_service_health"
+                }
+              ],
+              "delete-demo-database": [],
+              "health-and-diagnostic-checklist": [],
+              "investigate-performance": [
+                {
+                  "arguments": {
+                    "service": {
+                      "from": "request"
+                    }
+                  },
+                  "tool": "get_latest_deployment"
+                },
+                {
+                  "arguments": {
+                    "limit": {
+                      "constant": 50
+                    },
+                    "service": {
+                      "from": "request"
+                    }
+                  },
+                  "tool": "get_recent_logs"
+                }
+              ],
+              "lookup-latest-deployment": [
+                {
+                  "arguments": {
+                    "service": {
+                      "from": "request"
+                    }
+                  },
+                  "tool": "get_latest_deployment"
+                }
+              ],
+              "summarize-incident-counts": []
+            },
+            "requested_execution_mode": "auto",
+            "selection": [
+              "model_router"
+            ],
+            "skill_roots": [
+              "<repo>/skills"
+            ],
+            "skills_offered": []
+          }
+        },
+        {
+          "type": "route.selected",
+          "payload": {
+            "decision": {
+              "clarification": null,
+              "language": "en",
+              "reason_code": "simple_skill",
+              "route": "local",
+              "schema_version": 1,
+              "skill_id": null
+            },
+            "mechanism": "client_owned",
+            "placement": {
+              "deadline_ms": null,
+              "inputs": {
+                "cache_class": "unknown",
+                "decode_tokens_per_ms": null,
+                "expected_external_ms": null,
+                "expected_output_tokens": null,
+                "input_source": "none",
+                "input_tokens": null,
+                "local_success_rate": null,
+                "model": null,
+                "output_source": "unavailable",
+                "prefill_tokens_per_ms": null,
+                "purpose": null,
+                "sample_count": 0,
+                "sample_recorded_at": null
+              },
+              "predicted_ms": null,
+              "reason": "no_generation",
+              "role": "none"
+            }
+          }
+        },
+        {
+          "type": "model.started",
+          "payload": {
+            "actor": "local",
+            "call_id": "run_f15c13ba9f084eeb8b0e62e46ae99159_gen1_skill",
+            "model": "double-qwen3-0.6b",
+            "placement": {
+              "deadline_ms": null,
+              "inputs": {
+                "cache_class": "unknown",
+                "decode_tokens_per_ms": null,
+                "expected_external_ms": null,
+                "expected_output_tokens": null,
+                "input_source": "tokenizer",
+                "input_tokens": 800,
+                "local_success_rate": null,
+                "model": "double-qwen3-0.6b",
+                "output_source": "unavailable",
+                "prefill_tokens_per_ms": null,
+                "purpose": "skill",
+                "sample_count": 0,
+                "sample_recorded_at": "2026-10-20T03:00:00Z"
+              },
+              "predicted_ms": null,
+              "reason": "local_first",
+              "role": "local"
+            },
+            "purpose": "skill",
+            "tools_offered": [
+              "agents_wait",
+              "apply_patch",
+              "ask_user",
+              "automations",
+              "conversations_list",
+              "conversations_send",
+              "conversations_turn",
+              "create_goal",
+              "dashboard",
+              "edit",
+              "exec",
+              "gateway",
+              "get_goal",
+              "intent",
+              "ls",
+              "memory_get",
+              "memory_search",
+              "plugins",
+              "portal",
+              "presence",
+              "process",
+              "progress_card",
+              "read",
+              "relaymind_test_echo",
+              "relaymind_test_write",
+              "secrets",
+              "session_status",
+              "sessions",
+              "sessions_history",
+              "sessions_list",
+              "sessions_search",
+              "sessions_send",
+              "sessions_spawn",
+              "sessions_yield",
+              "skill_workshop",
+              "skills_read",
+              "skills_search",
+              "subagents",
+              "terminal",
+              "theme",
+              "update_goal",
+              "web_fetch",
+              "write"
+            ]
+          }
+        },
+        {
+          "type": "model.finished",
+          "payload": {
+            "call_id": "run_f15c13ba9f084eeb8b0e62e46ae99159_gen1_skill",
+            "deadline_missed": false,
+            "deadline_ms": null,
+            "duration_ms": 0,
+            "error": null,
+            "finish_reason": "stop",
+            "first_token_ms": 0,
+            "model": "double-qwen3-0.6b",
+            "predicted_ms": null,
+            "proposed_calls": [],
+            "purpose": "skill",
+            "text": "The host did not allow the write.",
+            "tool_calls": 0,
+            "usage": null
+          }
+        },
+        {
+          "type": "answer.delta",
+          "payload": {
+            "model": "double-qwen3-0.6b",
+            "text": "The host did not allow the write."
+          }
+        },
+        {
+          "type": "run.completed",
+          "payload": {
+            "active_ms": 0,
+            "answer": "The host did not allow the write.",
+            "budget_usage": {
+              "active_ms": 0,
+              "external_generations": 0,
+              "local_active_ms": 0,
+              "local_generations": 1,
+              "repair_generations": 0,
+              "routing_generations": 0,
+              "stages": 1,
+              "tool_calls": 0
+            },
+            "client_tool_calls": [],
+            "external_calls": 0,
+            "final_answer_model": "double-qwen3-0.6b",
+            "local_active_ms": 0,
+            "model_calls": [
+              {
+                "actor": "local",
+                "call_id": "run_f15c13ba9f084eeb8b0e62e46ae99159_gen1_skill",
+                "model": "double-qwen3-0.6b",
+                "purpose": "skill"
+              }
+            ],
+            "waiting_ms": 0
+          }
+        }
+      ]
+    }
+  ],
+  "host_tool_executions_by_gateway": 0,
+  "checks": {
+    "sandbox_lines": 0,
+    "expected_sandbox_lines": 0,
+    "gateway_tool_executions": 0,
+    "proposed": [
+      {
+        "run_id": "run_503e99c28fc749858712649fbf9b8bf4",
+        "tool_name": "relaymind_test_write",
+        "proposal_id": "call_write_1"
+      }
+    ],
+    "replayed_call_ids": [
+      "callwrite1"
+    ],
+    "result_reached_next_run": true,
+    "host_report": {
+      "ok": true,
+      "status": "ok",
+      "tool_calls": 1,
+      "tool_failures": 1
+    },
+    "passed": true
+  }
+}

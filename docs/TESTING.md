@@ -1316,8 +1316,10 @@ functional check, rerun with
 `docs/evidence/2026-10-28-openclaw-vps-functional-138/scaffold/vps_functional.py`
 (about three minutes, no model). Other error codes, aborts under early
 headers or before sending, the host's turn ID across its retries, its
-failover to another model, and macOS and Windows at this commit are not_run
-(the exact host commands are in
+failover to another model, and Windows at this commit are not_run. On macOS
+at `6fc0954` the `abort` and `external-failed` host scenarios passed
+(`docs/evidence/2026-10-29-openclaw-mac-qualification/`; the exact host
+commands are in
 [`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
 
 ### OpenClaw release artifact, CI, and install check (#145; RM12, RM18, RM19, RM33; AC24)
@@ -1399,8 +1401,8 @@ pass it.
   its config (the export records no environment: that the check passes no
   `OPENCLAW_*` setting is tested in `tests/test_openclaw_install_check.py`);
   no token or machine path, absolute or `~/`, is in the files; `docs/RELEASE.md` and `docs/EVIDENCE.md` keep
-  macOS and Windows `not_run` as support gaps, with the native Windows
-  note.
+  Windows `not_run` as the support gap, with the native Windows note, and
+  no longer list macOS (its row is recorded at `6fc0954`).
 
 - `tests/test_openclaw_ci_runner_install.py`: reads the GitHub-hosted
   runner functional check over doubles (not a user-machine qualification)
@@ -1413,8 +1415,28 @@ pass it.
   executed nothing; uninstall's leftovers were cleared by the removal
   steps; no token or machine path (POSIX, Windows, or `~/`) is in the
   export; `docs/EVIDENCE.md` and `docs/RELEASE.md` carry one labeled row
-  per runner with its OS version, and the user-machine macOS and Windows
-  rows stay `not_run`.
+  per runner with its OS version; a runner row closes no user-machine row:
+  the Windows rows stay `not_run`, and the macOS row of this revision names
+  its own run (`docs/evidence/2026-10-29-openclaw-mac-qualification/`).
+- `tests/test_openclaw_mac_m9_qualification.py`: reads the macOS
+  qualification at the M9 tip
+  (`docs/evidence/2026-10-29-openclaw-mac-qualification/`): the install
+  check export, the round trip and cancel exports, and the live turn
+  export carry the label "macOS 27.0.1 arm64, Apple M1 (user's machine),
+  Node v26.12.1" where they have one, the pinned host, Node v26.12.1,
+  Darwin arm64, and one clean head; the install check is the
+  `--target-platform` run (`platform_qualification` true, not live model
+  evidence), all 15 steps passed with the release build next to it, and
+  the removal cleared what uninstall left; `text-tool`, `tool-deny`,
+  `exec-deny`, and `exec-full` passed, `tool-approve` failed with 0 of 1
+  lines and "Plugin approval unavailable", and every call ID came back
+  without underscores; `abort` cancelled its run and `external-failed`
+  failed every run with attempt records; each live turn, in auto and in
+  local_only, ended needs_external / context_limit with 0 model calls and
+  an attempt record naming its run; no token or machine path is in the
+  files; and `docs/EVIDENCE.md`, `docs/RELEASE.md`, `docs/ROADMAP.md`,
+  `docs/TESTING.md`, the changelog, and the operator guide cite the run,
+  with the macOS row recorded and the Windows rows `not_run`.
 
 To refresh the runner exports from a later CI run (the job uploads them as
 `openclaw-plugin-<runner>` artifacts, kept 90 days by default):
@@ -1445,13 +1467,16 @@ after the restack and the Gateway port fix, at `393a6bf`
 (`docs/evidence/2026-10-28-openclaw-vps-functional-145/`; see
 `docs/EVIDENCE.md`). It also passed on the three GitHub-hosted runners
 in CI run 40652444733 (the exports above). None of these is a platform
-qualification: macOS and Windows runs of this revision on a user's machine
-are not_run.
+qualification. The macOS one ran on the user's Mac at `6fc0954` with
+`--target-platform` and passed all 15 steps
+(`docs/evidence/2026-10-29-openclaw-mac-qualification/`); Windows runs of
+this revision on a user's machine are not_run.
 
 What an operator sees at the 8192 local context (decision D1; the operator
-guide's "Local context limit"): every measured OpenClaw request is 10,500
-tokens or more, so with the pinned host `local_only` cannot serve an
-OpenClaw turn. With `limits.localContextLimit` copied (and
+guide's "Local context limit"): every measured OpenClaw request is over
+it (10,500 to 10,577 tokens offline on 27 October; 9,384 and 9,389 in the
+gateway's count on 29 October), so with the pinned host `local_only` cannot
+serve an OpenClaw turn. With `limits.localContextLimit` copied (and
 `maxCompletionTokens`), the host's transport refuses the turn before sending
 it with its own "Context window exceeded" error, and there is no gateway run
 (fixture `advertised-window-host-refusal`, checked by
@@ -1636,16 +1661,20 @@ a result.
   The plugin (#136) and its round trips (#137) are covered over doubles
   ([OpenClaw round trips](#openclaw-round-trips-137-rm01-rm03-rm04-rm08-rm09-rm12-rm19-rm20-rm26-rm33-ac10-ac24)),
   and a Linux VPS functional check (not a supported-platform qualification)
-  ran the harness host scenarios on the real pinned host over doubles; a
-  plugin approval answered by an operator, a macOS rerun, and any Windows
-  host run are not_run, and no live result is claimed. The cancellation and
+  ran the harness host scenarios on the real pinned host over doubles. The
+  macOS rerun at `6fc0954` passed them, the `abort` and `external-failed`
+  scenarios, and the install check, and one live turn through the plugin
+  as packaged ended needs_external / context_limit with 0 model calls
+  (`docs/evidence/2026-10-29-openclaw-mac-qualification/`). A plugin
+  approval answered by an operator and any Windows host run are not_run,
+  and no completed live task is claimed. The cancellation and
   error mapping (#138) are covered over doubles, and a third Linux VPS
   functional check ran the `abort` and `external-failed` host scenarios.
   The release artifact and its install check (#145) passed against the
   pinned host on a Linux VPS over doubles (Linux VPS functional check, not
   a supported-platform qualification) and on GitHub-hosted runners (a
-  functional check over doubles); macOS and Windows qualifications of this
-  revision are not_run.
+  functional check over doubles); the macOS qualification of this revision
+  is recorded at `6fc0954`, and the Windows qualification is not_run.
   The M9 evaluation (#139, spec 0.50) has its frozen tasks,
   grading, and runner tested over a stub host and doubles
   ([OpenClaw evaluation](#openclaw-evaluation-tasks-grading-and-runner-139-rm16-rm18-rm25-rm26-rm33-ac24));

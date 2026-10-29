@@ -1,0 +1,204 @@
+[
+  {
+    "name": "sw_vers",
+    "argv": [
+      "sw_vers"
+    ],
+    "exit_code": 0,
+    "seconds": 0.01,
+    "stdout": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "node --version",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "--version"
+    ],
+    "exit_code": 0,
+    "seconds": 0.1,
+    "stdout": "v26.12.1\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "npm --version",
+    "argv": [
+      "npm",
+      "--version"
+    ],
+    "exit_code": 0,
+    "seconds": 0.19,
+    "stdout": "11.20.0\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "openclaw --version",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "--version"
+    ],
+    "exit_code": 0,
+    "seconds": 0.12,
+    "stdout": "OpenClaw 2026.10.7 (157d8c2)\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "config set logging.file",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "config",
+      "set",
+      "logging.file",
+      "<scratch>/home/openclaw.log"
+    ],
+    "exit_code": 0,
+    "seconds": 2.98,
+    "stdout": "Updated logging.file. No gateway restart needed.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "config set gateway.port",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "config",
+      "set",
+      "gateway.port",
+      "58049"
+    ],
+    "exit_code": 0,
+    "seconds": 3.17,
+    "stdout": "Updated gateway.port. Restart the gateway to apply.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "artifact sha256",
+    "argv": [
+      "shasum",
+      "-a",
+      "256",
+      "<repo>/release/openclaw/relaymind-openclaw-provider-0.1.0.tgz"
+    ],
+    "exit_code": 0,
+    "seconds": 0.03,
+    "stdout": "16d064d521fa780b8422b32de7292df2e7f36d9ebcb9b582411a6fd2213e87ac  <repo>/release/openclaw/relaymind-openclaw-provider-0.1.0.tgz\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "install provider",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "plugins",
+      "install",
+      "npm-pack:<repo>/release/openclaw/relaymind-openclaw-provider-0.1.0.tgz",
+      "--force",
+      "--accept-capabilities"
+    ],
+    "exit_code": 0,
+    "seconds": 12.78,
+    "stdout": "WARNING - Installing plugin from local npm-pack archive: npm-pack:<repo>/release/openclaw/relaymind-openclaw-provider-0.1.0.tgz\nThis source is outside ClawHub review and trust metadata. Only continue if you trust the publisher, package contents, and install source.\nInstalling to <scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1\u2026\nInstalling <repo>/release/openclaw/relaymind-openclaw-provider-0.1.0.tgz into <scratch>/home/state/npm/projects/.openclaw-install-stage-pcYbvb\u2026\nLinked peerDependency \"openclaw\" -> <repo>/integrations/openclaw/node_modules/openclaw\nPlugin manifest id \"relaymind\" differs from npm package name \"@relaymind/openclaw-provider\"; using manifest id as the config key.\nInstalled plugin \"relaymind\" without enabling it because it requires configuration first. Configure it, then run `openclaw plugins enable relaymind`.\nInstalled plugin: relaymind\nSaved for the next Gateway start.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "config set baseUrl",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "config",
+      "set",
+      "plugins.entries.relaymind.config.baseUrl",
+      "${RELAYMIND_BASE_URL}"
+    ],
+    "exit_code": 0,
+    "seconds": 3.29,
+    "stdout": "Updated plugins.entries.relaymind.config.baseUrl. Change will apply without restarting the gateway.\n",
+    "stderr": "Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present\nConfig (<scratch>/home/config.json): missing env var \"RELAYMIND_BASE_URL\" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "enable provider",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "plugins",
+      "enable",
+      "relaymind"
+    ],
+    "exit_code": 0,
+    "seconds": 3.24,
+    "stdout": "Enabled plugin \"relaymind\". Saved for the next Gateway start.\n",
+    "stderr": "Config (<scratch>/home/config.json): missing env var \"RELAYMIND_BASE_URL\" at plugins.entries.relaymind.config.baseUrl - feature using this value will be unavailable\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "harness abort",
+    "argv": [
+      "<repo>/.venv/bin/python",
+      "<repo>/scripts/openclaw_qualification.py",
+      "host",
+      "--scenario",
+      "abort",
+      "--timeout",
+      "240",
+      "--out",
+      "<scratch>/raw/exports/abort.json",
+      "--",
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "agent",
+      "exec",
+      "--config",
+      "<scratch>/home/config.json",
+      "--json",
+      "--model",
+      "relaymind/relaymind-client-tools",
+      "Say hello"
+    ],
+    "exit_code": 0,
+    "seconds": 12.77,
+    "stdout": "{\"status\": \"interrupted\", \"runs\": 1, \"passed\": true}\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "harness external-failed",
+    "argv": [
+      "<repo>/.venv/bin/python",
+      "<repo>/scripts/openclaw_qualification.py",
+      "host",
+      "--scenario",
+      "external-failed",
+      "--timeout",
+      "240",
+      "--out",
+      "<scratch>/raw/exports/external-failed.json",
+      "--",
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "agent",
+      "exec",
+      "--config",
+      "<scratch>/home/config.json",
+      "--json",
+      "--model",
+      "relaymind/relaymind-client-tools",
+      "Say hello"
+    ],
+    "exit_code": 0,
+    "seconds": 94.8,
+    "stdout": "{\"status\": \"failed\", \"runs\": 8, \"passed\": true}\n",
+    "stderr": "",
+    "expected_exit": 0
+  }
+]

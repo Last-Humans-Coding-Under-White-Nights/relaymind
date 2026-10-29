@@ -767,8 +767,16 @@ doubles; this is not a claim of a live-qualified or faster plugin.
   against the gateway over doubles ran on the same Mac at `a52f8bf` and
   failed (harness host scenarios 4a to 4c, `checks.passed` false; the
   fixes belong to #136 and #137, and the Linux VPS functional checks of
-  #136 to #138 and #145 below ran the real host after them). Windows host
-  runs and a macOS rerun are not_run.
+  #136 to #138 and #145 below ran the real host after them). The macOS
+  rerun at `6fc0954` passed the harness host scenarios over doubles, and
+  the live AC24 turn then went through the plugin as packaged (its own
+  resolved model, no config row): in auto without an external model and
+  in local_only it ended needs_external / context_limit with 0 model calls
+  (9,384 and 9,389 tokens against 8192;
+  `docs/evidence/2026-10-29-openclaw-mac-qualification/`). The switches on
+  the plugin-supplied model are shown there by the gateway's acceptance
+  (it rejects `stream_options` by name, and the runs through the plugin's
+  model completed), not by a wire capture. Windows host runs are not_run.
 - Remove the retired workflow steps placeholder from the demo UI
   (#173; RM23, AC14). Independent of the plugin. Status: open in PR #176,
   outside this stack; the placeholder is still rendered here.
@@ -789,7 +797,10 @@ doubles; this is not a claim of a live-qualified or faster plugin.
   through `resolveDynamicModel` with no catalog refresh, the stale-token
   401 line and recovery, and removal (`models auth logout`, `config unset`)
   worked, and the host honored the plugin's switches on the wire (no
-  `stream_options`). macOS and Windows runs of this package are not_run.
+  `stream_options`). The package ran on macOS at `6fc0954`
+  (`docs/evidence/2026-10-29-openclaw-mac-qualification/`): the install
+  check of the release artifact passed, and a live turn went through its
+  resolved model. Windows runs of this package are not_run.
 - Text and host-owned tool round trips, request compatibility, and
   buffered SSE (#137; RM08, RM09, RM19, RM20, RM33; AC10, AC24), after #136.
   Status: the provider's stream wrapper refuses unsupported input by name
@@ -806,8 +817,11 @@ doubles; this is not a claim of a live-qualified or faster plugin.
   `text-tool` (one `agent exec`, Q8), `tool-deny`, `exec-deny`, and
   `exec-full` passed; `tool-approve` failed, correctly, because headless
   `agent exec` has no route for a plugin approval and nothing was
-  written. A plugin approval answered by an operator and the macOS and
-  Windows reruns are not_run.
+  written. The macOS rerun at `6fc0954` passed the same way
+  (`docs/evidence/2026-10-29-openclaw-mac-qualification/`: `tool-approve`
+  failed correctly, with "Plugin approval unavailable"). A plugin approval
+  answered by an operator is still not_run, and the Windows reruns are
+  not_run.
 - Cancellation, bounded retry behavior, errors, and trace correlation
   (#138; RM14, RM17, RM20, RM22, RM33; AC11, AC12, AC24), after #137.
   Status: the plugin passes the host's abort signal through, maps every
@@ -825,9 +839,11 @@ doubles; this is not a claim of a live-qualified or faster plugin.
   over doubles (`docs/evidence/2026-10-28-openclaw-vps-functional-138/`):
   SIGINT mid-generation cancelled the run (as Q11 on macOS), and the 503
   was a named failure that the host retried 7 times with a rewritten
-  conversation, each retry a new key and run. Other error codes on the
-  real host, its failover, and macOS and Windows at this commit are
-  not_run.
+  conversation, each retry a new key and run. On macOS at `6fc0954`
+  (`docs/evidence/2026-10-29-openclaw-mac-qualification/`) `abort` (exit
+  130, the run `cancelled`) and `external-failed` (8 runs failed, 7 host
+  retries, its own message) passed the same way. Other error codes on the
+  real host, its failover, and Windows at this commit are not_run.
 - Installable artifact, CI compatibility checks, platform qualification,
   and operator documentation (#145; RM18, RM19, RM33; AC24): packaging
   and CI after #136, platform qualification and the guide after #138.
@@ -845,9 +861,11 @@ doubles; this is not a claim of a live-qualified or faster plugin.
   ubuntu, macOS, and Windows runners; its install check exports at `78fc94d`
   are recorded as a GitHub-hosted runner functional check over doubles (not
   a user-machine qualification). The operator guide is in
-  `integrations/openclaw/README.md`. macOS and Windows runs of this
-  revision on a user's machine are not_run and listed as support gaps in
-  `docs/RELEASE.md`.
+  `integrations/openclaw/README.md`. The macOS row of a user's machine is
+  recorded at `6fc0954`: the install check passed with `--target-platform`
+  (`docs/evidence/2026-10-29-openclaw-mac-qualification/`). Windows runs
+  of this revision on a user's machine are not_run and stay the support
+  gap in `docs/RELEASE.md`.
 - M9 live evaluation (#139; RM16, RM25, RM26, RM33; section 12.5), after
   #145: direct external versus RelayMind external_only versus auto, plus
   a separate no-local setup; exact success, latency, calls, and usage.
@@ -877,11 +895,14 @@ round trips, local, external, absent-local, an oversized request,
 cancellation, errors, restart authentication) pass through the actual host
 transport over doubles. The real host ran them in Linux VPS functional
 checks and the install check on GitHub-hosted runners, neither a
-supported-platform qualification. Open: the macOS and Windows
-qualifications of this revision, a plugin approval answered on a real host,
+supported-platform qualification. The macOS qualification of this
+revision is recorded at `6fc0954`
+(`docs/evidence/2026-10-29-openclaw-mac-qualification/`). Open: the Windows
+qualification of this revision, a plugin approval answered on a real host,
 and the live #139 measurement (all not_run). The local context stays 8192:
-OpenClaw requests (about 10.5k tokens with the pinned tokenizer) do not fit
-it, so auto goes external and local_only gets needs_external.
+OpenClaw requests (about 9.4k to 10.6k tokens with the pinned tokenizer on
+macOS) do not fit it, so auto goes external and local_only gets
+needs_external.
 
 The unimplemented YAML workflow expansion and plan benchmark are removed
 from M9 (RM30 and AC23 retired). The implemented fixed parallel demo remains

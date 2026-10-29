@@ -71,7 +71,11 @@ KNOWN_SHAPES = (
     re.compile(r"(chatcmpl-)?run_[0-9a-f]{32}(_gen\d+_[a-z_]+)?"),
     re.compile(r"00-[0-9a-f]{32}-[0-9a-f]{16}-0[0-9a-f]"),
     re.compile(r"relaymind-openclaw-v1-[0-9a-f]{64}(-retry\d+)?"),
+    # llama-server's /props carries the model's chat template with its media marker.
+    re.compile(r"__media_[A-Za-z0-9_]+"),
 )
+# The host records the tarball's npm integrity (its sha512, base64): not a secret.
+INTEGRITY = re.compile(r"sha512-[A-Za-z0-9+/=]+")
 
 
 def read(*parts):
@@ -117,9 +121,14 @@ def evidence_section():
 
 def test_every_export_is_from_one_clean_commit_on_the_pinned_host_on_this_mac():
     """Section 12.5: the platform, host, Node, and revision are recorded in every export."""
+    assert install()["host_version"] == HOST_VERSION
+    assert live()["host_version"] == HOST_VERSION
+    for group in ("round-trips", "cancel-errors"):
+        steps = {s["name"]: s for s in read(group, "steps.json")}
+        assert steps["openclaw --version"]["stdout"].strip() == HOST_VERSION, group
+        assert "ProductVersion:\t\t27.0.1" in steps["sw_vers"]["stdout"], group
     for name, export in every_export():
         versions = export["versions"]
-        assert export["host_version"] == HOST_VERSION, name
         assert (versions["openclaw"], versions["@openclaw/ai"]) == ("2026.10.7", "2026.10.7"), name
         assert versions["node"] == NODE, name
         assert (versions["os"], versions["machine"]) == OS_MACHINE, name
@@ -233,9 +242,10 @@ def test_the_host_rewrote_every_call_id_it_replayed(name):
 def test_the_test_host_tools_registered_with_contracts_tools():
     """Q9 of the 2026-10-27 run, fixed in #137: the host loads both test tools."""
     steps = {s["name"]: s for s in read("round-trips", "steps.json")}
-    inspect = json.loads(steps["inspect host tools"]["stdout"])
-    assert inspect["status"] == "loaded"
-    assert sorted(inspect["toolNames"]) == ["relaymind_test_echo", "relaymind_test_write"]
+    plugin = json.loads(steps["inspect host tools"]["stdout"])["plugin"]
+    assert plugin["status"] == "loaded" and plugin["enabled"] is True
+    assert sorted(plugin["toolNames"]) == ["relaymind_test_echo", "relaymind_test_write"]
+    assert sorted(plugin["contracts"]["tools"]) == sorted(plugin["toolNames"])
     assert steps["install host tools without --accept-capabilities"]["exit_code"] == 1
     assert steps["uninstall host tools without --force"]["exit_code"] == 1
     assert steps["uninstall host tools --force"]["exit_code"] == 0
@@ -291,8 +301,9 @@ def test_the_live_run_used_the_pinned_runtime_and_the_packaged_plugin():
     assert data["runtime"]["n_ctx"] == LOCAL_LIMIT
     assert data["token"] == install_check.NOT_RECORDED
     steps = {s["name"]: s for s in data["steps"]}
-    inspect = json.loads(steps["inspect provider"]["stdout"])
-    assert inspect["status"] == "loaded" and inspect["enabled"] is True
+    plugin = json.loads(steps["inspect provider"]["stdout"])["plugin"]
+    assert plugin["status"] == "loaded" and plugin["enabled"] is True
+    assert plugin["providerIds"] == ["relaymind"] and plugin["toolNames"] == []
     assert "relaymind/relaymind-client-tools" in steps["models list --refresh"]["stdout"]
     assert [turn["mode"] for turn in data["turns"]] == list(MODES)
     assert data["gateway"]["serving_line"].startswith("Serving on http://127.0.0.1:")
@@ -341,8 +352,12 @@ def test_no_export_holds_a_token_or_a_machine_path():
         raw = path.read_text("utf-8")
         for marker in ("/Users/", "/private/tmp", "/private/var", "~/", "/tmp/claude"):
             assert marker not in raw, (path.name, marker)
-        for value in LONG_RUN.findall(raw):
+        for value in LONG_RUN.findall(INTEGRITY.sub("sha512-<integrity>", raw)):
             assert any(shape.fullmatch(value) for shape in KNOWN_SHAPES), (path.name, value[:12])
+        # The host's runtime line names the machine (its computer name on macOS,
+        # not the network hostname); every such field must be masked.
+        hosts = set(re.findall(r"\| host=([^|\n\"]+?) \|", raw))
+        assert hosts <= {"<host>"}, (path.name, hosts)
     for _, export in every_export():
         assert export["token"] == install_check.NOT_RECORDED
 

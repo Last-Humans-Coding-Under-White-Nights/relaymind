@@ -8,6 +8,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- The macOS qualification of the OpenClaw plugin at the M9 tip (#135 to
+  #138, #145; RM33, AC24; section 12.5), recorded in
+  `docs/evidence/2026-10-29-openclaw-mac-qualification/` and checked by
+  `tests/test_openclaw_mac_m9_qualification.py`. On the user's Apple M1
+  (macOS 27.0.1 arm64, Node v26.12.1, OpenClaw 2026.10.7 from the
+  devDependency), at the clean commit `6fc0954`, with the release artifact
+  built there: the install check passed all 15 recorded steps; the #137
+  host scenarios `text-tool`, `tool-deny`, `exec-deny`, and `exec-full`
+  passed, and `tool-approve` failed, correctly (no headless route for a
+  plugin approval, nothing written); the #138 `abort` (exit 130, run
+  cancelled) and `external-failed` (8 runs failed, 7 host retries) passed.
+  These ran over gateway doubles and are not live model evidence. One live
+  turn through the packaged plugin's own resolved model, against the real
+  `relaymind serve` with the pinned llama-server and no external model,
+  ended needs_external / context_limit with 0 model calls in auto and in
+  local_only (9,384 and 9,389 tokens against 8192); it completes no task.
+  The macOS rows of `docs/EVIDENCE.md` and `docs/RELEASE.md` now name the
+  run; Windows (native and WSL2) stays `not_run`. The install check takes
+  `--target-platform` (needs `--label`), which records the run as the
+  section 12.5 platform qualification of the install lifecycle
+  (`"platform_qualification": true` in the export, still not live model
+  evidence).
 - OpenClaw plugin release artifact, CI, install check, and operator guide
   (#145; RM12, RM18, RM19, RM33; AC24; sections 7.5, 12.5, 14):
   `npm run pack:release -- <dir>` (`integrations/openclaw/scripts/release-pack.mjs`)
