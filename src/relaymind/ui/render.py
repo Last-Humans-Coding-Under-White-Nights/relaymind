@@ -565,7 +565,6 @@ def render_trace(view: Mapping[str, Any], settings: UiSettings) -> str:
             else []
         ),
         _section("Skill and route", _skill_and_route(view), "skill"),
-        _section("Workflow steps", "<p>Workflow steps: not recorded</p>", "workflow-steps"),
         _section("Tool proposals", _proposals(view), "proposals"),
         _section("Tool operations", _operations(view), "operations"),
         _section("Failed operations", _failed(view), "failed"),
