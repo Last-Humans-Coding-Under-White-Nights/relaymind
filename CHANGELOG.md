@@ -395,6 +395,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `.gitattributes` pins the OpenClaw plugin package
+  (`integrations/openclaw/`) to LF, so a Windows checkout no longer packs
+  CRLF text files into the release tarball (#145; RM18); a Windows runner
+  export has yet to show the digests agree.
 - Loopback gateway health polls and API/SDK client calls in live acceptance
   and evaluation scripts bypass environment and system proxies without
   changing process-wide settings (#167; RM01, RM18, RM19). Non-loopback endpoints
