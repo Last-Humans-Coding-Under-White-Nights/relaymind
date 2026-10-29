@@ -1318,8 +1318,10 @@ functional check, rerun with
 `docs/evidence/2026-10-28-openclaw-vps-functional-138/scaffold/vps_functional.py`
 (about three minutes, no model). Other error codes, aborts under early
 headers or before sending, the host's turn ID across its retries, its
-failover to another model, and macOS and Windows at this commit are not_run
-(the exact host commands are in
+failover to another model, and Windows at this commit are not_run. On macOS
+at `6fc0954` the `abort` and `external-failed` host scenarios passed
+(`docs/evidence/2026-10-29-openclaw-mac-qualification/`; the exact host
+commands are in
 [`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
 
 ### OpenClaw release artifact, CI, and install check (#145; RM12, RM18, RM19, RM33; AC24)
@@ -1334,6 +1336,12 @@ What runs where:
 | install check over a stub host | the default `pytest`, every platform | `pytest tests/test_openclaw_install_check.py` |
 | install check with the pinned host | CI runners; an operator's machine | `python scripts/openclaw_install_check.py --tarball ... --out ... -- <openclaw>` |
 | live model, platform qualification | an operator's machine only | not part of any automated suite |
+
+An operator on a macOS or Windows machine adds `--target-platform` and a
+`--label` naming the machine and runtime to the install check command, so the
+export records the run as the section 12.5 platform qualification of the
+install lifecycle; runs on the Linux VPS and the GitHub-hosted runners do not
+pass it.
 
 - `tests/test_openclaw_install.py`: the lockfile (version 3) pins
   `openclaw` and `@openclaw/ai` at 2026.10.7 with integrity, matches
@@ -1363,7 +1371,10 @@ What runs where:
   temporary state), the gateway executing nothing, the host's result
   holding the file's text and matched through the rewrite; the token, the
   host home, the artifact folder, the checkout, and the user's home never
-  in the export, in their absolute or the host's `~/...` form; what uninstall leaves recorded and the removal steps
+  in the export, in their absolute or the host's `~/...` form; the
+  machine's name (the `host=` field of the host's runtime line, the
+  hostname, and the macOS computer name) masked as `<host>`, in its JSON
+  form too; what uninstall leaves recorded and the removal steps
   clearing it (the stub's SQLite runs with secure_delete off and WAL, so a
   deleted row's bytes stay on disk and must not count); a credential left
   after removal, a config strict JSON cannot read (unknown), an unreadable
@@ -1378,7 +1389,10 @@ What runs where:
   the pinned host, refuses `models list` when `OPENCLAW_GATEWAY_PORT` is
   set); the export is written even when the temporary
   host home cannot be removed; the label keeps "not live model
-  evidence" and "not a supported-platform qualification".
+  evidence" and "not a supported-platform qualification", and only
+  `--target-platform` (refused without `--label`, and on Linux other than
+  WSL2) records the run as the
+  platform qualification of the install lifecycle.
 
 - `tests/test_openclaw_vps_functional_install.py`: reads the Linux VPS
   functional check (not a supported-platform qualification) of the install
@@ -1393,8 +1407,8 @@ What runs where:
   its config (the export records no environment: that the check passes no
   `OPENCLAW_*` setting is tested in `tests/test_openclaw_install_check.py`);
   no token or machine path, absolute or `~/`, is in the files; `docs/RELEASE.md` and `docs/EVIDENCE.md` keep
-  macOS and Windows `not_run` as support gaps, with the native Windows
-  note.
+  Windows `not_run` as the support gap, with the native Windows note, and
+  no longer list macOS (its row is recorded at `6fc0954`).
 
 - `tests/test_openclaw_ci_runner_install.py`: reads the GitHub-hosted
   runner functional check over doubles (not a user-machine qualification)
@@ -1407,8 +1421,28 @@ What runs where:
   executed nothing; uninstall's leftovers were cleared by the removal
   steps; no token or machine path (POSIX, Windows, or `~/`) is in the
   export; `docs/EVIDENCE.md` and `docs/RELEASE.md` carry one labeled row
-  per runner with its OS version, and the user-machine macOS and Windows
-  rows stay `not_run`.
+  per runner with its OS version; a runner row closes no user-machine row:
+  the Windows rows stay `not_run`, and the macOS row of this revision names
+  its own run (`docs/evidence/2026-10-29-openclaw-mac-qualification/`).
+- `tests/test_openclaw_mac_m9_qualification.py`: reads the macOS
+  qualification at the M9 tip
+  (`docs/evidence/2026-10-29-openclaw-mac-qualification/`): the install
+  check export, the round trip and cancel exports, and the live turn
+  export carry the label "macOS 27.0.1 arm64, Apple M1 (user's machine),
+  Node v26.12.1" where they have one, the pinned host, Node v26.12.1,
+  Darwin arm64, and one clean head; the install check is the
+  `--target-platform` run (`platform_qualification` true, not live model
+  evidence), all 15 steps passed with the release build next to it, and
+  the removal cleared what uninstall left; `text-tool`, `tool-deny`,
+  `exec-deny`, and `exec-full` passed, `tool-approve` failed with 0 of 1
+  lines and "Plugin approval unavailable", and every call ID came back
+  without underscores; `abort` cancelled its run and `external-failed`
+  failed every run with attempt records; each live turn, in auto and in
+  local_only, ended needs_external / context_limit with 0 model calls and
+  an attempt record naming its run; no token or machine path is in the
+  files; and `docs/EVIDENCE.md`, `docs/RELEASE.md`, `docs/ROADMAP.md`,
+  `docs/TESTING.md`, the changelog, and the operator guide cite the run,
+  with the macOS row recorded and the Windows rows `not_run`.
 
 To refresh the runner exports from a later CI run (the job uploads them as
 `openclaw-plugin-<runner>` artifacts, kept 90 days by default):
@@ -1439,13 +1473,16 @@ after the restack and the Gateway port fix, at `393a6bf`
 (`docs/evidence/2026-10-28-openclaw-vps-functional-145/`; see
 `docs/EVIDENCE.md`). It also passed on the three GitHub-hosted runners
 in CI run 40652444733 (the exports above). None of these is a platform
-qualification: macOS and Windows runs of this revision on a user's machine
-are not_run.
+qualification. The macOS one ran on the user's Mac at `6fc0954` with
+`--target-platform` and passed all 15 steps
+(`docs/evidence/2026-10-29-openclaw-mac-qualification/`); Windows runs of
+this revision on a user's machine are not_run.
 
 What an operator sees at the 8192 local context (decision D1; the operator
-guide's "Local context limit"): every measured OpenClaw request is 10,500
-tokens or more, so with the pinned host `local_only` cannot serve an
-OpenClaw turn. With `limits.localContextLimit` copied (and
+guide's "Local context limit"): every measured OpenClaw request is over
+it (10,500 to 10,577 tokens offline on 27 October; 9,384 and 9,389 in the
+gateway's count on 29 October), so with the pinned host `local_only` cannot
+serve an OpenClaw turn. With `limits.localContextLimit` copied (and
 `maxCompletionTokens`), the host's transport refuses the turn before sending
 it with its own "Context window exceeded" error, and there is no gateway run
 (fixture `advertised-window-host-refusal`, checked by
@@ -1462,8 +1499,9 @@ pytest tests/test_openclaw_eval_fixtures.py tests/test_openclaw_eval_grading.py 
 
 These run in the default `pytest`, need no Node, host, or model, and are
 deterministic (spec 0.50 section 12.5). They test the frozen tasks, the
-grading rules, and the runner; they are not live evidence, and no part of
-the measurement has run.
+grading rules, and the runner; they are not live evidence. The live
+measurement is recorded apart (below), and
+`tests/test_openclaw_eval_apple_m1.py` reads its export.
 
 - `tests/test_openclaw_eval_fixtures.py`: `evaluation/openclaw_tasks.v1.json`
   matches its lock (digest and the digest of the sampling order); a changed
@@ -1527,6 +1565,10 @@ the measurement has run.
   host named in the export, the direct arm's host keeping the operator's
   proxy variables the way a gateway does (a RelayMind arm's host keeps
   none), and a task file that differs from its lock refused by the CLI.
+  The export replaces home-relative paths too (the host's `~/...` skill
+  locations: the checkout's as `<repo>`, any other as `<home>/...`, plain
+  and JSON-escaped), and the machine's name (the `host=` field of the host's
+  runtime line on every user message) becomes `<host>`.
   A dry run of the auto arm over a local double at the 8192-token context
   with a host-sized request (10,510 tokens, the count of the macOS live
   AC24 turn) sends every turn external: the attempts pass and the export
@@ -1554,19 +1596,39 @@ python scripts/run_openclaw_eval.py \
     -- node integrations/openclaw/node_modules/openclaw/openclaw.mjs
 ```
 
-It is not_run: there is no Mac or Windows access and no external
-provider credential for it, and the VPS runs no live model. The local
-context stays at 8192 tokens (user decision, no runtime, manifest, or spec
-change). With the pinned tokenizer 0 of the 10 OpenClaw requests measured
-on macOS fit it (10,500 to 10,577 tokens), and a live AC24 turn in auto
-without an external model ended needs_external / context_limit with 0
-model calls (`docs/evidence/2026-10-27-openclaw-mac-qualification/`). So
-relaymind_auto is expected to show 0 local turns, every turn handed off
-with reason context_limit, and relaymind_auto against
-relaymind_external_only then compares no local inference. When a run
-shows that, it is the arm's result and is reported with its reasons,
-never hidden or dropped; until a run shows it, it is an expectation, not
-a result.
+It ran once, on the user's Apple M1 (8 GiB, macOS 27.0.1 arm64, Node
+v26.12.1, OpenClaw 2026.10.7 from the devDependency), with the external
+model `glm-5.3-flash` and the pinned local model `qwen3-0.6b` Q8_0, over
+the full task set (3 repeats, seed 139), recorded in
+`docs/evidence/2026-10-29-openclaw-eval-apple-m1/` (`docs/EVIDENCE.md`,
+"M9 OpenClaw evaluation"). All four arms ran; 144 of 144 attempts
+succeeded (18 of 18 per arm and language). Every RelayMind arm had 0 local
+turns: relaymind_external_only by `execution_mode`, relaymind_auto by
+`context_limit` (each of its requests was over the 8192-token local
+context, which stays at 8192 by user decision), and relaymind_no_local by
+`no_local_model`; the local-inference comparisons therefore compare no
+local inference, and the report says so. The revision `2751124` was
+recorded dirty: while the run was in progress, two files unrelated to it
+were being written in the checkout (`tests/test_openclaw_eval_apple_m1.py`
+and the `.github/workflows/ci.yml` line that lists it); the runner, the
+plugin, the gateway, and the host used neither. After the run the
+checkout's home-relative path and the Mac's computer name were replaced in
+the export with `<repo>` and `<host>`, because the runner's sanitizer
+replaced neither; nothing else changed. Windows has not run.
+
+- `tests/test_openclaw_eval_apple_m1.py` reads that export and its report
+  (no host or model runs): one complete, not aborted run of the frozen
+  tasks (the lock's digest, 3 repeats, seed 139, every arm ran); the
+  recorded identities (Node, plugin digest, external model and host, local
+  model, runtime build, revision `2751124` with `dirty: true`); exact
+  denominators per arm and language, Chinese best-effort and apart; the
+  host's ok never deciding a success (a success has no failure, exit 0, no
+  timeout, interrupt, or failover); every RelayMind run correlated, with no
+  gateway tool execution and the direct arm's gateway measures unknown; 0
+  local turns reported with the reasons the runs left the local stage; no
+  credential, gateway token, or machine path in any file of the run; and
+  the rows in `docs/EVIDENCE.md` and the run cited by `docs/RELEASE.md`,
+  `docs/ROADMAP.md`, this file, `CHANGELOG.md`, and the OpenClaw README.
 
 ### What is not covered yet
 
@@ -1630,20 +1692,26 @@ a result.
   The plugin (#136) and its round trips (#137) are covered over doubles
   ([OpenClaw round trips](#openclaw-round-trips-137-rm01-rm03-rm04-rm08-rm09-rm12-rm19-rm20-rm26-rm33-ac10-ac24)),
   and a Linux VPS functional check (not a supported-platform qualification)
-  ran the harness host scenarios on the real pinned host over doubles; a
-  plugin approval answered by an operator, a macOS rerun, and any Windows
-  host run are not_run, and no live result is claimed. The cancellation and
+  ran the harness host scenarios on the real pinned host over doubles. The
+  macOS rerun at `6fc0954` passed them, the `abort` and `external-failed`
+  scenarios, and the install check, and one live turn through the plugin
+  as packaged ended needs_external / context_limit with 0 model calls
+  (`docs/evidence/2026-10-29-openclaw-mac-qualification/`). A plugin
+  approval answered by an operator and any Windows host run are not_run,
+  and no completed live task is claimed. The cancellation and
   error mapping (#138) are covered over doubles, and a third Linux VPS
   functional check ran the `abort` and `external-failed` host scenarios.
   The release artifact and its install check (#145) passed against the
   pinned host on a Linux VPS over doubles (Linux VPS functional check, not
   a supported-platform qualification) and on GitHub-hosted runners (a
-  functional check over doubles); macOS and Windows qualifications of this
-  revision are not_run.
+  functional check over doubles); the macOS qualification of this revision
+  is recorded at `6fc0954`, and the Windows qualification is not_run.
   The M9 evaluation (#139, spec 0.50) has its frozen tasks,
   grading, and runner tested over a stub host and doubles
   ([OpenClaw evaluation](#openclaw-evaluation-tasks-grading-and-runner-139-rm16-rm18-rm25-rm26-rm33-ac24));
-  the measurement in all four arms is not_run.
+  the measurement ran once on macOS
+  (`docs/evidence/2026-10-29-openclaw-eval-apple-m1/`: 144 of 144
+  attempts succeeded, 0 local turns), and on Windows it is not_run.
   YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are
   implemented (#143, #144), with frozen SkillsBench/ToolRet inputs and

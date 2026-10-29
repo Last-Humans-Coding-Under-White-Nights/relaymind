@@ -1,0 +1,185 @@
+# Example configuration for `relaymind serve --config relaymind.example.toml`
+# (spec 0.21 section 14.1). Copy it and edit. Relative paths resolve against
+# the directory you start the command in. No credential belongs in this file.
+
+[server]
+host = "127.0.0.1"          # loopback only; any other address stops startup
+port = 8080
+
+[store]
+path = "<scratch>/relaymind.sqlite3"
+
+[skills]
+roots = ["skills"]
+
+[sandbox]
+seed = "tests/fixtures/sandbox/baseline.json"
+work_dir = "<scratch>/sandbox"
+
+# Optional from spec 0.31 (RM26). Without this table the gateway runs without a
+# local model: it then needs [external_model], allowed_modes may name only auto
+# and external_only (their default then), the selector chain defaults to
+# ["example_match"] and may not name model_router, and auto runs on the external
+# model with the selected skill. A gateway without a local model looks like this
+# example with the [local_model] table removed and [external_model] uncommented.
+[local_model]
+manifest = "models/qwen3-0.6b-q8_0.manifest.json"
+artifact = "models/Qwen3-0.6B-Q8_0.gguf"
+base_url = "http://127.0.0.1:<port>"   # the llama-server from models/README.md
+
+# Optional. Without this table no external model is configured. Export the
+# credential into the environment of the shell that starts the gateway:
+#   macOS / Linux:  export RELAYMIND_EXTERNAL_API_KEY=...
+#   Windows:        $env:RELAYMIND_EXTERNAL_API_KEY = "..."
+# [external_model]
+# base_url = "https://api.example.com/v1"
+# model = "your-model-id"
+# context_limit = 128000
+# api_key_env = "RELAYMIND_EXTERNAL_API_KEY"
+#
+# Optional provider request fields (spec 0.31 section 6): a table sent verbatim
+# with every external request and recorded in model.started, for example to turn
+# a provider's reasoning off where its API allows it. The field names are the
+# provider's own; this one is an example. A key named api_key or authorization,
+# a headers key, a key that would replace model, messages, tools, stream, or
+# stream_options, a sampling key a request sets (max_tokens, temperature,
+# top_p), a blank key at any depth, and a value that is not JSON stop
+# startup. The message names the key and never prints the value. Only
+# declared options are recorded in model.started.
+# [external_model.request_options]
+# thinking = { type = "disabled" }
+
+[policy]
+degraded_mode = false
+enabled_workflows = []
+# To run parallel_demo (needs [external_model]):
+# enabled_workflows = ["health-and-diagnostic-checklist"]
+# allowed_modes = ["auto", "local_only", "external_only", "parallel_demo"]
+
+# The section 11 limits (spec 0.31 section 14.1, RM03). Every key is optional and
+# the values below are the defaults. Raise a limit here, for example
+# active_seconds on a machine where the local model is slow, and every run
+# records the values in force in its run.accepted event, so the change is on
+# the record. A wrong type, a non-finite number, a zero where a positive limit
+# is required, or repair_generations above local_generations stops startup.
+# [budgets]
+# routing_generations = 1
+# local_generations = 3
+# tool_calls = 2
+# repair_generations = 1
+# active_seconds = 4.0           # per local stage
+# routing_input_tokens = 2048
+# routing_output_tokens = 128
+# run_active_seconds = 60.0      # the entire run
+# run_generations = 8
+# run_tool_executions = 6
+# waiting_seconds = 300.0        # one wait for input or confirmation
+# clarification_rounds = 2
+# external_generations = 6
+# external_seconds = 30.0        # one external generation
+
+# The performance options (spec 0.32 section 14.1). Every key is optional and the
+# values below are the defaults, which are the baseline configuration and the
+# behavior before these options existed. Each run records the values in force
+# in its run.accepted event.
+#   answer_pass: final runs a second generation with tools disabled; draft
+#     publishes the checked skill-stage draft instead (RM31). The draft is
+#     published only when it is in the run's language, holds no tool-call
+#     JSON, and the chat request set no max_completion_tokens, temperature,
+#     or top_p; otherwise the final generation runs.
+#   early_headers: a streamed chat request gets its status line, X-RelayMind-Run-ID,
+#     and X-RelayMind-Events-URL as soon as the run is accepted, then SSE comment
+#     keep-alives, and answer chunks once verified (RM32). A client that
+#     wants progress opens the native event stream the header names.
+#   answer_stream: buffered (default), or live to publish verified answer statements
+#     as generated. Late failures end the stream without a replacement (RM32).
+#     Non-streamed managed chat and client-owned calls stay buffered.
+#   calls_per_generation: many admits several read-only tool calls from one
+#     generation, up to the per-stage tool_calls limit in a local stage and
+#     the remaining run_tool_executions limit in the external stage (section
+#     4.3). A mutating call is admitted only alone. A set with too many calls,
+#     one invalid call, or more new executions than the tool budget has room
+#     for is rejected whole, and nothing in it runs. The room counts one
+#     execution per call; the retry of a failed read can still use up the
+#     last of it, and then the run ends on budget. The client-owned alias
+#     and the fixed parallel workflow keep one call.
+#   prefetch: true runs the read-only calls a skill declares in its manifest
+#     before its first generation. A declared call runs when the request names
+#     exactly one allowed value for each of its identifiers; otherwise that
+#     call is skipped and the model proposes it as before (RM29). A skill
+#     whose declared calls cannot fit the [budgets] tool_calls and
+#     run_tool_executions limits stops startup.
+# [performance]
+# answer_pass = "final"
+# answer_stream = "buffered"
+# calls_per_generation = "one"
+# prefetch = false
+# early_headers = false
+
+# The startup warm-up and check of the local model (spec 0.31 sections 6 and 14.1,
+# RM26). Every key is optional and the values below are the defaults. After
+# restart recovery and before the address and the token are printed, the gateway
+# sends one routing-shaped and one skill-shaped generation to the local model, so
+# the first request does not pay for loading it. They are not runs. warmup_seconds
+# bounds both together; a runtime that does not answer in time prints one line on
+# standard error and the gateway still starts. Set warmup = false to send
+# nothing. With detect = true the gateway first checks that the runtime answers
+# with the model loaded within warmup_seconds (otherwise the model is
+# unavailable), and that the routing-shaped warm-up finishes within
+# [budgets] active_seconds (otherwise it is unsuitable); it prints one line with
+# the class and the cause, and auto then runs on the external model. With
+# warmup = false only the first check runs. detect = false keeps the behavior
+# before spec 0.31. detect_stages = true (spec 0.48 section 14.4.7, off by
+# default) holds the routing-shaped and skill-shaped warm-ups to active_seconds
+# together, and makes a ready model unsuitable while its three latest local
+# stages all ran out of local time, until that streak is older than
+# probe_after_seconds. On the recorded Apple M1 evidence the unsuitable path
+# was not faster, because a local stage that runs out of time still does tool
+# work the external stage reuses; measure before you turn it on.
+# local_first records predictions without applying limits.
+# device_aware adds hard caps, deadlines and idle probes; expected_wait adds
+# the experimental skill-success rule. A probe holds the execution slot: a valid
+# foreground attempt requests cancellation and returns 429 until cleanup ends.
+# [placement]
+# policy = "local_first"
+# margin = 2
+# probe_after_seconds = 600
+# warmup = true
+# warmup_seconds = 30
+# detect = true
+# detect_stages = false
+
+# Skill selection (RM28, spec 0.31 and 0.32 section 14.1). Every key is optional
+# and the values below are the defaults; each run records them in run.accepted.
+#   chain: the selectors, tried in order. model_router is the local model's
+#     routing generation, the baseline. example_match matches the request against
+#     the offered skills' example requests and descriptions, with no model call.
+#     A selector that chooses nothing, errs, times out, or proposes what the
+#     gateway does not admit passes to the next one; when none chooses, the run
+#     hands off to the external model with the skill catalog (selection_failed).
+#     An http selector (a table with transport and url) is not available yet and
+#     stops startup.
+#   timeout_seconds: the time limit of a selector that is not a model; the model
+#     router is bounded by its generation's limits instead.
+#   example_match_score, example_match_margin: numbers in [0, 1]. example_match
+#     picks a skill only when its score is at least the score threshold and its
+#     lead over the second-best skill is at least the margin. These defaults are
+#     provisional choices, not measured accuracy.
+# [selection]
+# chain = ["model_router"]
+# timeout_seconds = 2
+# example_match_score = 0.5
+# example_match_margin = 0.1
+
+# The routing-result cache (spec 0.26 section 10). Off by default and in the
+# benchmark configuration: leave it false for any measurement you report as the
+# baseline. When true, a repeated local read-only request skips only the routing
+# generation (five-minute TTL, 256 entries); authorization and tools still run
+# fresh, and the trace labels the run.
+[cache]
+routing = false
+
+# Optional. Without this table the demo UI is not served. The mode is a
+# declaration: live, replay, or double. It has no default.
+[ui]
+mode = "live"

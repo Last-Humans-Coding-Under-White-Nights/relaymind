@@ -1,0 +1,35 @@
+Local warm-up finished: routing 757 ms (first token 720 ms, cached 0), skill 757 ms (first token 570 ms, cached 0).
+Serving on http://127.0.0.1:<port>
+Application token: <redacted>
+Traceback (most recent call last):
+  File "/opt/homebrew/Cellar/python@3.14/3.14.9/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py", line 128, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.9/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 720, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<repo>/.venv/bin/relaymind", line 6, in <module>
+    sys.exit(cli())
+             ~~~^^
+  File "<repo>/src/relaymind/launcher.py", line 704, in cli
+    raise SystemExit(main())
+                     ~~~~^^
+  File "<repo>/src/relaymind/launcher.py", line 698, in main
+    serve_fn(launched.app, host=config.host, port=config.port)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>/src/relaymind/api/server.py", line 58, in serve
+    build_server(app, host=host, port=port).run()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "<repo>/.venv/lib/python3.14/site-packages/uvicorn/server.py", line 86, in run
+    return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())
+  File "/opt/homebrew/Cellar/python@3.14/3.14.9/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py", line 205, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.9/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py", line 133, in run
+    raise KeyboardInterrupt()
+KeyboardInterrupt

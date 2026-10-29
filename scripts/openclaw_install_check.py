@@ -40,18 +40,21 @@ gateway trace and the sandbox do. A host that cannot start is ``not_run``.
 
 The gateway answers from doubles, so a pass is a functional check of the
 package and the host, never live model evidence; a run on a machine is a
-platform qualification only when it is recorded as one (section 12.5).
+platform qualification only when it is recorded as one (section 12.5):
+``--target-platform``, with a ``--label`` naming the machine and runtime, on
+a target platform of section 1.
 
 Usage:
     python scripts/openclaw_install_check.py --tarball <relaymind-openclaw-provider-*.tgz> \\
-        --out <export.json> [--label "<machine and runtime>"] [--timeout 300] \\
-        -- <openclaw command, e.g. integrations/openclaw/node_modules/.bin/openclaw>
+        --out <export.json> [--label "<machine and runtime>"] [--target-platform] \\
+        [--timeout 300] -- <openclaw command, e.g. integrations/openclaw/node_modules/.bin/openclaw>
 """
 
 import argparse
 import hashlib
 import json
 import os
+import platform
 import shutil
 import socket
 import sqlite3
@@ -84,6 +87,11 @@ USER_HOME = "<home>"
 DEFAULT_EVIDENCE = (
     "functional check over gateway doubles: not live model evidence, "
     "not a supported-platform qualification"
+)
+TARGET_PLATFORM_EVIDENCE = (
+    "functional check over gateway doubles on a target platform of section 1 "
+    "(the section 12.5 platform qualification of the install lifecycle): "
+    "not live model evidence"
 )
 TEXT_PROMPT = "Say hello"
 TEXT_ANSWER = "Hello from RelayMind."
@@ -445,7 +453,11 @@ def _sanitize(text: str, ctx: Context) -> str:
         for form in sorted(forms, key=len, reverse=True):
             text = text.replace(form, placeholder)
     # Whatever else the host printed under the user's home, either separator.
-    return text.replace("~/", f"{USER_HOME}/").replace("~\\", f"{USER_HOME}\\")
+    text = text.replace("~/", f"{USER_HOME}/").replace("~\\", f"{USER_HOME}\\")
+    # The machine's names (the host's runtime line, the hostname, and on macOS
+    # the computer name) become <host>; only names of three or more characters
+    # are replaced, so a short name cannot wipe unrelated text.
+    return qualification.mask_machine_names(text)
 
 
 def _path_forms(candidate: PurePath, home: PurePath) -> set[str]:
@@ -621,6 +633,20 @@ def _artifact(tarball: Path) -> dict:
     }
 
 
+def _on_target_platform() -> bool:
+    """macOS, native Windows, or WSL2 on Windows (its kernel names Microsoft)."""
+    if sys.platform in ("darwin", "win32"):
+        return True
+    return sys.platform == "linux" and "microsoft" in platform.release().lower()
+
+
+def _evidence(label: str | None, target_platform: bool) -> str:
+    """What the run is; only a target-platform run is a platform qualification (12.5)."""
+    if target_platform:
+        return f"{label}; {TARGET_PLATFORM_EVIDENCE}"
+    return f"{label}; {DEFAULT_EVIDENCE}" if label else DEFAULT_EVIDENCE
+
+
 def run_install_check(
     command: Sequence[str],
     tarball: Path,
@@ -628,6 +654,7 @@ def run_install_check(
     *,
     timeout: float = 300,
     label: str | None = None,
+    target_platform: bool = False,
     host_home: Path | None = None,
 ) -> dict:
     """Run the lifecycle against one doubles gateway; write and return the export."""
@@ -668,7 +695,8 @@ def run_install_check(
                 )
                 export = {
                     "kind": "openclaw-install-check",
-                    "evidence": f"{label}; {DEFAULT_EVIDENCE}" if label else DEFAULT_EVIDENCE,
+                    "evidence": _evidence(label, target_platform),
+                    "platform_qualification": target_platform,
                     "status": status,
                     "passed": status == "completed" and all(s["status"] == "passed" for s in steps),
                     "command": [_sanitize(c, ctx) for c in command],
@@ -714,8 +742,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--timeout", type=float, default=300, help="seconds per host command")
     parser.add_argument("--label", help="the machine and runtime, recorded in the export")
+    parser.add_argument(
+        "--target-platform",
+        action="store_true",
+        help="this machine is a target platform of spec section 1: the run is "
+        "the section 12.5 platform qualification of the install lifecycle (needs --label)",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
+    if args.target_platform and not args.label:
+        parser.error("--target-platform needs --label naming the machine and runtime")
+    if args.target_platform and not _on_target_platform():
+        parser.error(
+            "--target-platform is for macOS or Windows (spec section 1; WSL2 on Windows "
+            f"too, labeled as WSL2), not {sys.platform} {platform.release()}"
+        )
     command = list(args.command)
     if command and command[0] == "--":
         command = command[1:]
@@ -726,7 +767,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if shutil.which(command[0]) is None and not Path(command[0]).exists():
         print(f"{command[0]} is not installed: the export records not_run", file=sys.stderr)
     export = run_install_check(
-        command, args.tarball, args.out, timeout=args.timeout, label=args.label
+        command,
+        args.tarball,
+        args.out,
+        timeout=args.timeout,
+        label=args.label,
+        target_platform=args.target_platform,
     )
     # A step the lifecycle never reached is not_run, not failed.
     failed = [s["name"] for s in export["steps"] if s["status"] in ("failed", "timed_out")]

@@ -8,6 +8,53 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- The M9 OpenClaw evaluation (#139; RM16, RM25, RM26, RM33; AC24; spec
+  0.50 section 12.5), recorded in
+  `docs/evidence/2026-10-29-openclaw-eval-apple-m1/` and checked by
+  `tests/test_openclaw_eval_apple_m1.py`. One run of
+  `scripts/run_openclaw_eval.py` on the user's Apple M1 (8 GiB, macOS
+  27.0.1 arm64, Node v26.12.1, OpenClaw 2026.10.7 from the devDependency),
+  with the plugin artifact built at `2751124` (sha256 `0eac2b43...`), the
+  external model `glm-5.3-flash` (Z.ai), and the pinned local model
+  `qwen3-0.6b` Q8_0, over the full frozen task set (3 repeats, seed 139).
+  All four arms ran and 144 of 144 attempts succeeded (18 of 18 per arm and
+  language), with 0 host failovers, timeouts, or interrupts. Every RelayMind
+  arm had 0 local turns: `relaymind_external_only` by `execution_mode`,
+  `relaymind_auto` by `context_limit` (the result expected at the 8192
+  local context), and `relaymind_no_local` by `no_local_model`.
+  Integration overhead (external_only against direct): median completion
+  difference -732 ms in English and -55 ms in Chinese over 18 pairs each;
+  the local-inference comparisons compare no local inference. The revision
+  was recorded dirty: two files unrelated to the run were being written in
+  the checkout while it ran (the evidence test module and the CI line that
+  lists it); the runner, the plugin, the gateway, and the host used
+  neither. After the run the checkout's home-relative path and the Mac's
+  computer name were replaced in the export with `<repo>` and `<host>`,
+  because the runner's sanitizer replaced neither; both digests are in
+  `docs/EVIDENCE.md`. One run on one machine: reduced latency, lower cost,
+  and local completion quality remain hypotheses. Windows has not run.
+- The macOS qualification of the OpenClaw plugin at the M9 tip (#135 to
+  #138, #145; RM33, AC24; section 12.5), recorded in
+  `docs/evidence/2026-10-29-openclaw-mac-qualification/` and checked by
+  `tests/test_openclaw_mac_m9_qualification.py`. On the user's Apple M1
+  (macOS 27.0.1 arm64, Node v26.12.1, OpenClaw 2026.10.7 from the
+  devDependency), at the clean commit `6fc0954`, with the release artifact
+  built there: the install check passed all 15 recorded steps; the #137
+  host scenarios `text-tool`, `tool-deny`, `exec-deny`, and `exec-full`
+  passed, and `tool-approve` failed, correctly (no headless route for a
+  plugin approval, nothing written); the #138 `abort` (exit 130, run
+  cancelled) and `external-failed` (8 runs failed, 7 host retries) passed.
+  These ran over gateway doubles and are not live model evidence. One live
+  turn through the packaged plugin's own resolved model, against the real
+  `relaymind serve` with the pinned llama-server and no external model,
+  ended needs_external / context_limit with 0 model calls in auto and in
+  local_only (9,384 and 9,389 tokens against 8192); it completes no task.
+  The macOS rows of `docs/EVIDENCE.md` and `docs/RELEASE.md` now name the
+  run; Windows (native and WSL2) stays `not_run`. The install check takes
+  `--target-platform` (needs `--label`), which records the run as the
+  section 12.5 platform qualification of the install lifecycle
+  (`"platform_qualification": true` in the export, still not live model
+  evidence).
 - OpenClaw plugin release artifact, CI, install check, and operator guide
   (#145; RM12, RM18, RM19, RM33; AC24; sections 7.5, 12.5, 14):
   `npm run pack:release -- <dir>` (`integrations/openclaw/scripts/release-pack.mjs`)
@@ -274,8 +321,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   export and a Markdown report without the token or the credential. Tests:
   `tests/test_openclaw_eval_fixtures.py`, `tests/test_openclaw_eval_grading.py`,
   and `tests/test_openclaw_eval_runner.py` (stub host, gateway doubles), also
-  in the CI `openclaw-plugin` job. The measurement is not run: every arm is
-  not_run in `docs/EVIDENCE.md` and `docs/RELEASE.md`.
+  in the CI `openclaw-plugin` job. The measurement itself is a separate
+  entry (`docs/evidence/2026-10-29-openclaw-eval-apple-m1/`).
 - Specification 0.50, the OpenClaw evaluation files, arms, and grading (#139;
   RM16, RM18, RM25, RM26, RM33; AC24; section 12.5): the tasks are
   `evaluation/openclaw_tasks.v1.json`, frozen by its digest in

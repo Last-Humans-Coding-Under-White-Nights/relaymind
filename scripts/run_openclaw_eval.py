@@ -485,15 +485,28 @@ def _sanitize(text: str, secrets: Sequence[str], places: Sequence[tuple[Path, st
     for secret in secrets:
         if secret:
             text = text.replace(secret, NOT_RECORDED)
+    home = Path.home()
+    # In the order given, most specific first, so <repo> wins over <home>.
     for path, placeholder in places:
         # Only absolute forms: a relative one (``.`` for ``--tarball x.tgz``) would
         # rewrite unrelated text, and the working directory names nothing of its own.
         if path == Path("."):
             continue
-        names = {str(p) for p in (path, path.resolve()) if p.is_absolute()}
-        for form in {*names, *(json.dumps(name)[1:-1] for name in names)}:
+        absolute = [p for p in (path, path.resolve()) if p.is_absolute()]
+        forms = {str(p) for p in absolute}
+        # The pinned host prints a path under the user's home as ``~/...``
+        # (every skill location in its system prompt), so that form goes too.
+        for candidate in absolute:
+            if candidate != home and candidate.is_relative_to(home):
+                forms.add(f"~/{candidate.relative_to(home).as_posix()}")
+        forms |= {json.dumps(form)[1:-1] for form in forms}
+        for form in sorted(forms, key=len, reverse=True):
             text = text.replace(form, placeholder)
-    return text
+    # Whatever else the host printed under the user's home.
+    text = text.replace("~/", "<home>/")
+    # The machine's names (the host= field of the host's runtime line on every
+    # user message, the hostname, the macOS computer name) become <host>.
+    return install_check.qualification.mask_machine_names(text)
 
 
 def _aborted_line(aborted: Mapping[str, Any] | None) -> str:

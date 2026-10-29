@@ -9,23 +9,27 @@ provider through the public plugin SDK of OpenClaw v2026.10.7, publishes the
 client-owned alias `relaymind/relaymind-client-tools` when the gateway serves
 it, and holds the gateway's application token in the host's credential store.
 The installable artifact, CI, and the operator guide are #145. The real
-pinned host loaded this package once, in a Linux VPS functional check (not a
+pinned host first loaded this package in a Linux VPS functional check (not a
 supported-platform qualification) against the gateway over model doubles
 ([`docs/evidence/2026-10-28-openclaw-vps-functional-136/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-136/REPORT.md)):
 install, enable, inspect, token setup, `models list --refresh`, a text turn
 through `agent exec`, the stale-token 401 line and recovery, and removal
-all worked with the command forms below. This package on macOS and Windows
-is `not_run`. The harness host scenarios (a host tool round trip, the
+all worked with the command forms below. On macOS at `6fc0954` this
+package passed the install check and the host scenarios below
+([`docs/evidence/2026-10-29-openclaw-mac-qualification/`](../../docs/evidence/2026-10-29-openclaw-mac-qualification/REPORT.md));
+on Windows it is `not_run`. The harness host scenarios (a host tool round trip, the
 host's exec policy pair, and the test write tool's approval, which fails
 closed headless) then ran on the same pinned host in a second Linux VPS
 functional check
 ([`docs/evidence/2026-10-28-openclaw-vps-functional-137/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-137/REPORT.md)).
-A plugin approval answered by an operator, and these scenarios on macOS and
-Windows, are `not_run`. The `abort` (SIGINT mid-turn) and `external-failed`
+They gave the same results on macOS at `6fc0954`. A plugin approval
+answered by an operator, and these scenarios on Windows, are `not_run`.
+The `abort` (SIGINT mid-turn) and `external-failed`
 (503) host scenarios ran in a third Linux VPS functional check
 ([`docs/evidence/2026-10-28-openclaw-vps-functional-138/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-138/REPORT.md)):
 the run was cancelled, and the 503 was a named failure that the host
-retried 7 times; on macOS and Windows at this commit they are `not_run`.
+retried 7 times. They passed on macOS at `6fc0954`; on Windows at this
+commit they are `not_run`.
 
 What has run on a real host, and what has not (details in
 [`docs/EVIDENCE.md`](../../docs/EVIDENCE.md#openclaw-plugin-platforms-145)):
@@ -33,12 +37,18 @@ the whole install check of the release artifact
 (`scripts/openclaw_install_check.py`) passed against the pinned host on a
 Linux VPS, as a functional check over gateway doubles, not a
 supported-platform qualification
-([`docs/evidence/2026-10-28-openclaw-vps-functional-145/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-145/REPORT.md)). macOS and Windows runs of this revision
-are `not_run`; the CI job runs the same check on GitHub-hosted runners,
+([`docs/evidence/2026-10-28-openclaw-vps-functional-145/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-145/REPORT.md)),
+and on the user's Mac at `6fc0954` as the macOS platform qualification
+(`--target-platform`; [`docs/evidence/2026-10-29-openclaw-mac-qualification/`](../../docs/evidence/2026-10-29-openclaw-mac-qualification/REPORT.md)).
+Windows runs of this revision are `not_run`; the CI job runs the same
+check on GitHub-hosted runners,
 recorded at `78fc94d` as a functional check over doubles, not a
 user-machine qualification. The M9 evaluation runner and grading (#139,
-[M9 evaluation](#m9-evaluation-139-operator-not-run-yet)) are tested over
-a stub host and doubles; the measurement is `not_run`.
+[M9 evaluation](#m9-evaluation-139)) are tested over a stub host and
+doubles. The measurement ran once, on the user's Mac with a live external
+model: 144 of 144 attempts succeeded, with 0 local turns
+([`docs/evidence/2026-10-29-openclaw-eval-apple-m1/`](../../docs/evidence/2026-10-29-openclaw-eval-apple-m1/openclaw-eval.md));
+on Windows it is `not_run`.
 
 What the plugin claims, and nothing more: text input; at most one function
 call per response, executed by OpenClaw under its own approvals; the answer is
@@ -94,7 +104,8 @@ corrections, and what uninstall leaves behind) and in the Linux VPS install
 check of the release artifact, a Linux VPS functional check (not a
 supported-platform qualification) over model doubles
 ([`docs/evidence/2026-10-28-openclaw-vps-functional-145/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-145/REPORT.md)).
-This revision on macOS and Windows is `not_run`. The sections after this one
+This revision passed on macOS at `6fc0954` (`docs/evidence/2026-10-29-openclaw-mac-qualification/`)
+and is `not_run` on Windows. The sections after this one
 hold the details. OpenClaw owns its sessions, tools, permissions, and
 approvals; RelayMind owns the inference, its checks, and its run trace.
 
@@ -126,8 +137,8 @@ zero external calls.
 
 Local context limit: an OpenClaw turn carries the host's ~30,000-character
 system prompt and its tool catalog. With the pinned tokenizer that is
-10,500 to 10,577 tokens per request (macOS qualification, branch
-`devnull.exile/m9-mac-qual`, commit `b575c01`), over the local model's 8192.
+9,384 to 10,577 tokens per request (the macOS qualifications of 2026-10-27
+and 2026-10-29 under `docs/evidence/`), over the local model's 8192.
 So in `auto` every OpenClaw turn goes to the external model, and with the
 pinned host and the 8192 local context `local_only` cannot serve an OpenClaw
 turn; without an external model an OpenClaw turn cannot run. What the
@@ -460,11 +471,13 @@ sees one message that starts with `RelayMind <code> (HTTP <status>)` (or
 do, quotes the gateway's own message on one line with any token removed, and
 names the gateway run (`Gateway run <id>` or `Gateway run unavailable`). The
 gateway's code stays the message's `errorCode`. Whether the host shows that
-message is the host's choice: in the Linux VPS functional check a context
-overflow's message was the host's final error text, but after a 503
-`external_failed` the host's final text was its own `⚠️ The AI service is
+message is the host's choice: in the Linux VPS functional check, after a
+503 `external_failed` the host's final text was its own `⚠️ The AI service is
 having trouble. Please try again in a moment.`, and the plugin's message
-was only in the host's log (`rawError=`, `detail=`) with the run ID. The class is what the
+was only in the host's log (`rawError=`, `detail=`) with the run ID. A
+context overflow's message was seen as the host's error text only in a
+first try of the abort scenario that was not kept, so it is not recorded
+evidence. The class is what the
 plugin's `matchesContextOverflowError` and `classifyFailoverReason` hooks
 answer:
 
@@ -603,10 +616,13 @@ still reads the stored key. The host keeps the key in its state database
 but only in an interactive terminal: without one it refuses, and typing the
 token at its prompt was not checked (`not_run`).
 `RELAYMIND_APP_TOKEN` in the host's environment is the provider's declared
-env var. In the #137 Linux VPS functional check no token was stored, and the
-host read it in every harness host scenario
-([report](../../docs/evidence/2026-10-28-openclaw-vps-functional-137/REPORT.md));
-the macOS probe did not check it. After a gateway
+env var. With no token stored, the host read it in every harness host
+scenario of the #137 Linux VPS functional check
+([report](../../docs/evidence/2026-10-28-openclaw-vps-functional-137/REPORT.md))
+and in steps 2 and 3 of the macOS qualification, where the token came from
+the harness only
+([report](../../docs/evidence/2026-10-29-openclaw-mac-qualification/REPORT.md));
+the earlier macOS host probe did not check it. After a gateway
 restart the stored token is stale: requests and discovery fail with 401
 `unauthenticated`, and `models list --refresh` logs the reconnect instruction
 (store the new token the same way). `agent exec` with the stale token exits 1
@@ -826,7 +842,11 @@ wrote to the documented default `/tmp/openclaw/`, outside the isolation):
 8. the removal of the config entry and the credential uninstall leaves.
 
 The token is never an argument, never in the host's environment, and never
-written to the export. The host inherits none of the shell's `OPENCLAW_*`
+written to the export. Machine paths in the export are placeholders
+(`<host-home>`, `<artifact-dir>`, `<repo>`, `<home>`), and the machine's
+name in the host's runtime line (`host=`, on macOS the computer name) is
+masked as `<host>`, as are the hostname and the macOS computer and local
+host names wherever they appear. The host inherits none of the shell's `OPENCLAW_*`
 settings (profile, Gateway URL, token, port) and no proxy. Its local Gateway
 port is set to a closed loopback port in the isolated config
 (`config set gateway.port`), so a running OpenClaw Gateway of yours is never
@@ -857,7 +877,12 @@ events, the host's report, and what was left after uninstall and after
 removal. The gateway answers from doubles, so a pass is never live model
 evidence. It is a platform qualification only when the label and
 `docs/EVIDENCE.md` record it as one, with the OS, the host, Node, and, on
-Windows, native or WSL2 (section 12.5).
+Windows, native or WSL2 (section 12.5). An operator on a macOS or Windows
+machine passes `--target-platform` with a `--label` naming the machine and
+runtime, and the export then says it is the platform qualification of the
+install lifecycle (`"platform_qualification": true`, still not live model
+evidence); runs on the Linux VPS and the GitHub-hosted runners do not pass it,
+and the script refuses it on Linux other than WSL2.
 
 A stale token on a running host (restart `relaymind serve`; `models list
 --refresh` reports the 401 reconnect line; paste the new token; it recovers)
@@ -896,8 +921,18 @@ route for a plugin approval and nothing was written. A third ran the
 `abort` and `external-failed` host scenarios
 (`docs/evidence/2026-10-28-openclaw-vps-functional-138/`), and the install
 check of the release artifact passed there
-(`docs/evidence/2026-10-28-openclaw-vps-functional-145/`). Any macOS rerun
-and any Windows run are not_run.
+(`docs/evidence/2026-10-28-openclaw-vps-functional-145/`). The macOS rerun
+then ran on the user's Mac at `6fc0954`
+(`docs/evidence/2026-10-29-openclaw-mac-qualification/`, recorded in
+`docs/EVIDENCE.md`): the install check of the release artifact passed with
+`--target-platform`; `text-tool`, `tool-deny`, `exec-deny`, and
+`exec-full` passed, and `tool-approve` failed, correctly, as on the VPS;
+`abort` and `external-failed` passed. One live turn then went through the
+packaged plugin's own resolved model, with no config row, against the real
+gateway and the pinned local model with no external model: in auto and in
+local_only it ended needs_external / context_limit with 0 model calls (the
+gateway counted 9,384 and 9,389 tokens against 8192). It completes no
+task. Any Windows run is not_run.
 
 Host facts from that probe that the steps below rely on: a model in the
 host config needs `name`; `strictMessageKeys` must stay false (true strips
@@ -1036,8 +1071,9 @@ Both are fixed; in the Linux VPS functional check (not a supported-platform
 qualification) at `fd6aca1`
 ([`docs/evidence/2026-10-28-openclaw-vps-functional-137/`](../../docs/evidence/2026-10-28-openclaw-vps-functional-137/REPORT.md))
 `text-tool`, `tool-deny`, `exec-deny`, and `exec-full` passed and
-`tool-approve` failed with no line written (below). macOS and Windows
-reruns are not_run.
+`tool-approve` failed with no line written (below). The macOS rerun at
+`6fc0954` (`docs/evidence/2026-10-29-openclaw-mac-qualification/`) gave the
+same results. Windows reruns are not_run.
 
 The harness passes the gateway URL and token in the command's environment
 only and never writes the token. A command that cannot start is `not_run`;
@@ -1165,9 +1201,24 @@ request is sent, the host's turn ID across its retries, and a failover to
 another model were not run on a real host (`not_run`); they are covered
 over doubles by `tests/test_openclaw_cancel_errors.py`, and failover is
 host policy. On macOS (Q11, at `a52f8bf`, through a config-file provider
-row) the abort passed; macOS and Windows at this commit are `not_run`.
+row) the abort passed, and at `6fc0954` both scenarios passed through the
+packaged plugin (`docs/evidence/2026-10-29-openclaw-mac-qualification/`);
+Windows at this commit is `not_run`.
 
-### M9 evaluation (#139, operator, not run yet)
+### M9 evaluation (#139)
+
+Status: one run is recorded, on the user's Apple M1 (macOS 27.0.1 arm64,
+Node v26.12.1, OpenClaw 2026.10.7) with the external model `glm-5.3-flash`
+and the pinned local model, at revision `2751124` (recorded dirty: two
+files unrelated to the run were being written in the checkout while it
+ran; the runner, the plugin, the gateway, and the host used neither). All
+four arms ran and 144 of 144 attempts succeeded, English and Chinese. Every
+RelayMind arm had 0 local turns; in `relaymind_auto` every run left the
+local stage with reason `context_limit`. The export and its report are in
+[`docs/evidence/2026-10-29-openclaw-eval-apple-m1/`](../../docs/evidence/2026-10-29-openclaw-eval-apple-m1/openclaw-eval.md),
+and the numbers in `docs/EVIDENCE.md` ("M9 OpenClaw evaluation"). It is one
+run on one machine: reduced latency, lower cost, and local completion
+quality remain hypotheses. Windows has not run.
 
 The section 12.5 measurement (spec 0.50) runs the frozen tasks of
 `evaluation/openclaw_tasks.v1.json` through a real host in four arms:
@@ -1198,14 +1249,14 @@ so is a host interrupt (exit 130, SIGINT, or Ctrl-C on Windows). Interrupting th
 setup or an attempt, keeps the attempts that ended: the export is written
 marked aborted and the runner exits 130; an interrupt during setup marks
 that arm and every arm not yet set up not_run, never ran. At the 8192-token local context an OpenClaw request does
-not fit the local model (macOS qualification), so `relaymind_auto` is
-expected to show 0 local turns with reason `context_limit`; the report
-states that as the result when it happens. The
+not fit the local model (macOS qualification), so `relaymind_auto` shows
+0 local turns with reason `context_limit`, as the recorded run did; the
+report states that as the result. The
 direct arm's host keeps the operator's proxy variables, as the gateways
 do, so both reach the provider the same way; the export names the
 variables (not their values) and the Node that ran the host. The direct arm writes the provider's key into the
 temporary host home's config file (removed at the end, never exported);
-whether the pinned host accepts that provider entry as written is not
-verified. Record the result in `docs/EVIDENCE.md` ("M9 OpenClaw
+the pinned host accepted that provider entry in the recorded run (36 of 36
+direct attempts, 0 host failovers). Record the result in `docs/EVIDENCE.md` ("M9 OpenClaw
 evaluation").
 

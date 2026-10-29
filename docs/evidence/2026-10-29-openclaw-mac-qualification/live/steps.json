@@ -1,0 +1,366 @@
+[
+  {
+    "name": "sw_vers",
+    "argv": [
+      "sw_vers"
+    ],
+    "exit_code": 0,
+    "seconds": 0.01,
+    "stdout": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "node --version",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "--version"
+    ],
+    "exit_code": 0,
+    "seconds": 0.1,
+    "stdout": "v26.12.1\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "npm --version",
+    "argv": [
+      "npm",
+      "--version"
+    ],
+    "exit_code": 0,
+    "seconds": 0.21,
+    "stdout": "11.20.0\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "openclaw --version",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "--version"
+    ],
+    "exit_code": 0,
+    "seconds": 0.13,
+    "stdout": "OpenClaw 2026.10.7 (157d8c2)\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "relaymind serve started",
+    "argv": [
+      "<repo>/.venv/bin/relaymind",
+      "serve",
+      "--config",
+      "<scratch>/relaymind.toml"
+    ],
+    "exit_code": null,
+    "seconds": 3.06,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "config set logging.file",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "config",
+      "set",
+      "logging.file",
+      "<scratch>/home/openclaw.log"
+    ],
+    "exit_code": 0,
+    "seconds": 3.51,
+    "stdout": "Updated logging.file. No gateway restart needed.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "config set gateway.port",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "config",
+      "set",
+      "gateway.port",
+      "58182"
+    ],
+    "exit_code": 0,
+    "seconds": 3.26,
+    "stdout": "Updated gateway.port. Restart the gateway to apply.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "install provider",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "plugins",
+      "install",
+      "npm-pack:<repo>/release/openclaw/relaymind-openclaw-provider-0.1.0.tgz",
+      "--force",
+      "--accept-capabilities"
+    ],
+    "exit_code": 0,
+    "seconds": 23.28,
+    "stdout": "WARNING - Installing plugin from local npm-pack archive: npm-pack:<repo>/release/openclaw/relaymind-openclaw-provider-0.1.0.tgz\nThis source is outside ClawHub review and trust metadata. Only continue if you trust the publisher, package contents, and install source.\nInstalling to <scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1\u2026\nInstalling <repo>/release/openclaw/relaymind-openclaw-provider-0.1.0.tgz into <scratch>/home/state/npm/projects/.openclaw-install-stage-VWqM8s\u2026\nLinked peerDependency \"openclaw\" -> <repo>/integrations/openclaw/node_modules/openclaw\nPlugin manifest id \"relaymind\" differs from npm package name \"@relaymind/openclaw-provider\"; using manifest id as the config key.\nInstalled plugin \"relaymind\" without enabling it because it requires configuration first. Configure it, then run `openclaw plugins enable relaymind`.\nInstalled plugin: relaymind\nSaved for the next Gateway start.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "config set baseUrl",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "config",
+      "set",
+      "plugins.entries.relaymind.config.baseUrl",
+      "http://127.0.0.1:<port>/v1"
+    ],
+    "exit_code": 0,
+    "seconds": 3.65,
+    "stdout": "Updated plugins.entries.relaymind.config.baseUrl. Change will apply without restarting the gateway.\n",
+    "stderr": "Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "config set diagnosticsPath",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "config",
+      "set",
+      "plugins.entries.relaymind.config.diagnosticsPath",
+      "<scratch>/diagnostics.jsonl"
+    ],
+    "exit_code": 0,
+    "seconds": 3.21,
+    "stdout": "Updated plugins.entries.relaymind.config.diagnosticsPath. Change will apply without restarting the gateway.\n",
+    "stderr": "Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "enable provider",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "plugins",
+      "enable",
+      "relaymind"
+    ],
+    "exit_code": 0,
+    "seconds": 3.4,
+    "stdout": "Enabled plugin \"relaymind\". Saved for the next Gateway start.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "inspect provider",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "plugins",
+      "inspect",
+      "relaymind",
+      "--runtime",
+      "--json"
+    ],
+    "exit_code": 0,
+    "seconds": 2.86,
+    "stdout": "{\n  \"workspaceDir\": \"<scratch>/home/state/workspace\",\n  \"plugin\": {\n    \"id\": \"relaymind\",\n    \"name\": \"RelayMind\",\n    \"description\": \"RelayMind local gateway as an OpenClaw model provider (relaymind-client-tools; OpenClaw keeps its tools)\",\n    \"packageVersion\": \"0.1.0\",\n    \"version\": \"0.1.0\",\n    \"builtWithOpenClawVersion\": \"2026.10.7\",\n    \"packageName\": \"@relaymind/openclaw-provider\",\n    \"format\": \"openclaw\",\n    \"source\": \"<scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider/dist/index.js\",\n    \"rootDir\": \"<scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider\",\n    \"origin\": \"global\",\n    \"workspaceDir\": \"<scratch>/home/state/workspace\",\n    \"trust\": {\n      \"reason\": \"origin-path\",\n      \"registryPath\": \"<scratch>/home/state/state/openclaw.sqlite\",\n      \"origin\": \"global\",\n      \"installSource\": \"npm\",\n      \"installSpec\": \"@relaymind/openclaw-provider@0.1.0\"\n    },\n    \"enabled\": true,\n    \"compat\": [],\n    \"explicitlyEnabled\": true,\n    \"activated\": true,\n    \"activationSource\": \"explicit\",\n    \"activationReason\": \"enabled in config\",\n    \"syntheticAuthRefs\": [],\n    \"status\": \"loaded\",\n    \"toolNames\": [],\n    \"hookNames\": [],\n    \"channelIds\": [],\n    \"cliBackendIds\": [],\n    \"providerIds\": [\n      \"relaymind\"\n    ],\n    \"embeddingProviderIds\": [],\n    \"speechProviderIds\": [],\n    \"realtimeTranscriptionProviderIds\": [],\n    \"realtimeVoiceProviderIds\": [],\n    \"mediaUnderstandingProviderIds\": [],\n    \"transcriptSourceProviderIds\": [],\n    \"imageGenerationProviderIds\": [],\n    \"videoGenerationProviderIds\": [],\n    \"musicGenerationProviderIds\": [],\n    \"webFetchProviderIds\": [],\n    \"webSearchProviderIds\": [],\n    \"migrationProviderIds\": [],\n    \"contextEngineIds\": [],\n    \"agentHarnessIds\": [],\n    \"cliCommands\": [],\n    \"services\": [],\n    \"gatewayDiscoveryServiceIds\": [],\n    \"commands\": [],\n    \"httpRoutes\": 0,\n    \"hookCount\": 0,\n    \"configSchema\": true,\n    \"configJsonSchema\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"required\": [\n        \"baseUrl\"\n      ],\n      \"properties\": {\n        \"baseUrl\": {\n          \"type\": \"string\",\n          \"description\": \"The gateway's loopback /v1 URL, such as http://127.0.0.1:<port>/v1 (localhost, 127.0.0.0/8, or [::1] only).\"\n        },\n        \"diagnosticsPath\": {\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"description\": \"Optional absolute file path: one JSON line per inference attempt (turn, attempt, Idempotency-Key, RelayMind run ID or unavailable, outcome, code, native run and UI links). Never the token or message content.\"\n        },\n        \"executionMode\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"auto\",\n            \"local_only\",\n            \"external_only\"\n          ],\n          \"default\": \"auto\",\n          \"description\": \"Sent as X-RelayMind-Execution-Mode on every request. parallel_demo is not a mode of this alias.\"\n        },\n        \"limits\": {\n          \"type\": \"object\",\n          \"additionalProperties\": false,\n          \"description\": \"Copies of the gateway's configured limits; a limit not set is not advertised.\",\n          \"properties\": {\n            \"externalContextLimit\": {\n              \"type\": \"integer\",\n              \"minimum\": 1,\n              \"description\": \"external_model.context_limit of the gateway's launch file; the window advertised in auto and external_only.\"\n            },\n            \"localContextLimit\": {\n              \"type\": \"integer\",\n              \"minimum\": 1,\n              \"description\": \"The local context of the pinned model manifest's launch settings; the window advertised in local_only.\"\n            },\n            \"maxCompletionTokens\": {\n              \"type\": \"integer\",\n              \"minimum\": 1,\n              \"description\": \"chat.max_completion_tokens of the gateway's launch file; the advertised output limit.\"\n            }\n          }\n        },\n        \"maxRetries\": {\n          \"type\": \"integer\",\n          \"minimum\": 0,\n          \"maximum\": 2,\n          \"default\": 0,\n          \"description\": \"The plugin's own retries after 429 overloaded (same Idempotency-Key) or 504 deadline_exceeded (a new key), only before any answer content. 0 is one attempt.\"\n        }\n      }\n    },\n    \"imported\": true,\n    \"dependencyStatus\": {\n      \"hasDependencies\": false,\n      \"installed\": true,\n      \"requiredInstalled\": true,\n      \"optionalInstalled\": true,\n      \"missing\": [],\n      \"missingOptional\": [],\n      \"dependencies\": [],\n      \"optionalDependencies\": []\n    }\n  },\n  \"shape\": \"plain-capability\",\n  \"capabilityMode\": \"plain\",\n  \"capabilityCount\": 1,\n  \"capabilities\": [\n    {\n      \"kind\": \"text-inference\",\n      \"ids\": [\n        \"relaymind\"\n      ]\n    }\n  ],\n  \"typedHooks\": [],\n  \"customHooks\": [],\n  \"tools\": [],\n  \"commands\": [],\n  \"cliCommands\": [],\n  \"services\": [],\n  \"decisions\": [],\n  \"gatewayDiscoveryServices\": [],\n  \"gatewayMethods\": [],\n  \"mcpServers\": [],\n  \"lspServers\": [],\n  \"httpRouteCount\": 0,\n  \"bundleCapabilities\": [],\n  \"diagnostics\": [],\n  \"policy\": {\n    \"allowedModels\": [],\n    \"hasAllowedModelsConfig\": false\n  },\n  \"compatibility\": [],\n  \"install\": {\n    \"source\": \"npm\",\n    \"spec\": \"@relaymind/openclaw-provider@0.1.0\",\n    \"sourcePath\": \"<repo>/release/openclaw/relaymind-openclaw-provider-0.1.0.tgz\",\n    \"installPath\": \"<scratch>/home/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider\",\n    \"version\": \"0.1.0\",\n    \"resolvedName\": \"@relaymind/openclaw-provider\",\n    \"resolvedVersion\": \"0.1.0\",\n    \"resolvedSpec\": \"@relaymind/openclaw-provider@0.1.0\",\n    \"integrity\": \"sha512-/N3EeuW0rkHe1pq9echP2E/48/0TG+ti0NKx1cuGMdER2hccmSzpYjKRkWj4AkdBcM9yf2p89ixg9C+0sL4NIQ==\",\n    \"shasum\": \"c0138f0939ef8e3cbbaf5196d81dbb8e7737817c\",\n    \"resolvedAt\": \"2026-10-28T22:27:58.733Z\",\n    \"installedAt\": \"2026-10-28T22:28:17.001Z\",\n    \"artifactKind\": \"npm-pack\",\n    \"artifactFormat\": \"tgz\",\n    \"npmIntegrity\": \"sha512-/N3EeuW0rkHe1pq9echP2E/48/0TG+ti0NKx1cuGMdER2hccmSzpYjKRkWj4AkdBcM9yf2p89ixg9C+0sL4NIQ==\",\n    \"npmShasum\": \"c0138f0939ef8e3cbbaf5196d81dbb8e7737817c\",\n    \"npmTarballName\": \"relaymind-openclaw-provider-0.1.0.tgz\",\n    \"acceptedSurface\": {\n      \"channels\": [],\n      \"providers\": [\n        \"relaymind\"\n      ],\n      \"tools\": [],\n      \"contracts\": [],\n      \"hooks\": [],\n      \"mcpServers\": [],\n      \"cliCommands\": [],\n      \"cliBackends\": [],\n      \"skills\": [],\n      \"dangerousConfigFlags\": []\n    },\n    \"acceptedSurfaceHash\": \"d0b287698c3b4c4a5272c29b514431ff392e1940a8c1c1252466888420e1669d\",\n    \"acceptedSurfaceAt\": \"2026-10-28T22:28:17.000Z\",\n    \"acceptedSurfaceIntegrity\": \"sha512-/N3EeuW0rkHe1pq9echP2E/48/0TG+ti0NKx1cuGMdER2hccmSzpYjKRkWj4AkdBcM9yf2p89ixg9C+0sL4NIQ==\"\n  }\n}\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "store token (stdin)",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "models",
+      "auth",
+      "paste-api-key",
+      "--provider",
+      "relaymind"
+    ],
+    "exit_code": 0,
+    "seconds": 3.92,
+    "stdout": "Updated config: $OPENCLAW_HOME/config.json\n  Backup: $OPENCLAW_HOME/config.json.bak\nAuth profile: relaymind:manual (relaymind/api_key)\n",
+    "stderr": "Warning: Model auth changes were saved, but the local Gateway could not refresh them. Run `openclaw gateway restart` to apply the saved changes.\nAPI key saved, but the Gateway has not confirmed applying the provider settings. Run `openclaw gateway restart` to apply them.\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "models list --refresh",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "models",
+      "list",
+      "--refresh",
+      "--provider",
+      "relaymind",
+      "--json"
+    ],
+    "exit_code": 0,
+    "seconds": 5.22,
+    "stdout": "{\n  \"count\": 1,\n  \"models\": [\n    {\n      \"key\": \"relaymind/relaymind-client-tools\",\n      \"name\": \"RelayMind client-owned tools (auto)\",\n      \"input\": \"text\",\n      \"contextWindow\": 128000,\n      \"local\": true,\n      \"available\": true,\n      \"tags\": []\n    }\n  ],\n  \"providerOutcomes\": [\n    {\n      \"provider\": \"relaymind\",\n      \"status\": \"ready\"\n    }\n  ]\n}\n",
+    "stderr": "Gateway is not running. Refreshing the local model catalog.\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind gateway at http://127.0.0.1:<port>/v1 serves relaymind-client-tools; mode auto is ready; no context window advertised (no external limit configured for mode auto); no output limit advertised.\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "config set executionMode auto",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "config",
+      "set",
+      "plugins.entries.relaymind.config.executionMode",
+      "auto"
+    ],
+    "exit_code": 0,
+    "seconds": 3.29,
+    "stdout": "Updated plugins.entries.relaymind.config.executionMode. Change will apply without restarting the gateway.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "agent exec auto",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "agent",
+      "exec",
+      "--config",
+      "<scratch>/home/config.json",
+      "--json",
+      "--cwd",
+      "<scratch>/sandboxes/auto",
+      "--state-dir",
+      "<scratch>/home/agent-exec/auto",
+      "--model",
+      "relaymind/relaymind-client-tools",
+      "Say hello"
+    ],
+    "exit_code": 1,
+    "seconds": 10.93,
+    "stdout": "{\n  \"ok\": false,\n  \"status\": \"error\",\n  \"final\": \"\",\n  \"payloads\": [],\n  \"model\": null,\n  \"provider\": null,\n  \"sessionId\": \"5526e2c4-0fed-4ad0-84e5-038f7e64f4f6\",\n  \"error\": {\n    \"message\": \"LLM request rejected: RelayMind needs\\\\_external \\\\(HTTP 422\\\\)\\\\: The request cannot complete under the effective execution mode without the external model \\\\(for example executionMode local\\\\_only\\\\)\\\\. RelayMind refused this request under its configuration\\\\; this is not an answer\\\\. Gateway\\\\: \\\\\\\"the task cannot complete under the effective execution mode\\\\\\\"\\\\. Gateway run run\\\\_bf7f7f50edd44e51900be11340bef4d2\\\\, reason context\\\\_limit\\\\.\",\n    \"kind\": \"exception\"\n  }\n}\n",
+    "stderr": "[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[agent/embedded] tool-search: cataloged 40 tools behind compact prompt surface\n[provider-transport-fetch] [model-fetch] response provider=relaymind api=openai-completions model=relaymind-client-tools status=422 elapsedMs=76 dispatcher=new contentType=application/json\n[plugins] RelayMind inference attempt {\"event\":\"relaymind.inference_attempt\",\"turn\":\"turn-1d9c97afa4ed1877\",\"attempt\":1,\"idempotencyKey\":\"relaymind-openclaw-v1-e45da4f3b360c3575f21b41fdeea904f112f7ed0ecdf6edbce565e273164ae01\",\"runId\":\"run_bf7f7f50edd44e51900be11340bef4d2\",\"runIdSource\":\"error_body\",\"outcome\":\"failed\",\"status\":422,\"code\":\"needs_external\",\"reasonCode\":\"context_limit\",\"replayed\":false,\"retried\":false,\"nativeRunUrl\":\"http://127.0.0.1:<port>/relay/v1/runs/run_bf7f7f50edd44e51900be11340bef4d2\",\"uiUrl\":\"http://127.0.0.1:<port>/ui/runs/run_bf7f7f50edd44e51900be11340bef4d2\",\"usage\":\"unknown\"}\n[agent/embedded] embedded run agent end: runId=5526e2c4-0fed-4ad0-84e5-038f7e64f4f6 isError=true model=relaymind-client-tools provider=relaymind error=LLM request rejected: RelayMind needs\\_external \\(HTTP 422\\)\\: The request cannot complete under the effective execution mode without the external model \\(for example executionMode local\\_only\\)\\. RelayMind refused this request under its configuration\\; this is not an answer\\. Gateway\\: \\\"the task cannot complete under the effective execution mode\\\"\\. Gateway run run\\_bf7f7f50edd44e51900be11340bef\u2026 rawError=RelayMind needs_external (HTTP 422): The request cannot complete under the effective execution mode without the external model (for example executionMode local_only). RelayMind refused this request un\u2026\n[agent/embedded] embedded run failover decision: runId=5526e2c4-0fed-4ad0-84e5-038f7e64f4f6 stage=assistant decision=surface_error reason=format attempt=1 retry=0 rotations=0 from=relaymind/relaymind-client-tools profile=sha256:2e0940f3a786 rawError=RelayMind needs_external (HTTP 422): The request cannot complete under the effective execution mode without the external model (for example executionMode local_only). RelayMind refused this request un\u2026\n[diagnostic] lane task error: lane=main durationMs=1699 error=\"LLM request rejected: RelayMind needs\\\\_external \\\\(HTTP 422\\\\)\\\\: The request cannot complete under the effective execution mode without the external model \\\\(for example executionMode local\\\\_only\\\\)\\\\. RelayMind refused this request under its configuration\\\\; this is not an answer\\\\. Gateway\\\\: \\\\\\\"the task cannot complete under the effective execution mode\\\\\\\"\\\\. Gateway run run\\\\_bf7f7f50edd44e51900be11340bef4d2\\\\, reason context\\\\_limit\\\\.\" errorName=FailoverError taskKind=turn sessionKey=agent:main:explicit:5526e2c4-0fed-4ad0-84e5-038f7e64f4f6 runId=5526e2c4-0fed-4ad0-84e5-038f7e64f4f6\n[diagnostic] lane task error: lane=session:agent:main:explicit:5526e2c4-0fed-4ad0-84e5-038f7e64f4f6 durationMs=1705 error=\"LLM request rejected: RelayMind needs\\\\_external \\\\(HTTP 422\\\\)\\\\: The request cannot complete under the effective execution mode without the external model \\\\(for example executionMode local\\\\_only\\\\)\\\\. RelayMind refused this request under its configuration\\\\; this is not an answer\\\\. Gateway\\\\: \\\\\\\"the task cannot complete under the effective execution mode\\\\\\\"\\\\. Gateway run run\\\\_bf7f7f50edd44e51900be11340bef4d2\\\\, reason context\\\\_limit\\\\.\" errorName=FailoverError taskKind=turn sessionKey=agent:main:explicit:5526e2c4-0fed-4ad0-84e5-038f7e64f4f6 runId=5526e2c4-0fed-4ad0-84e5-038f7e64f4f6\nLLM request rejected: RelayMind needs\\_external \\(HTTP 422\\)\\: The request cannot complete under the effective execution mode without the external model \\(for example executionMode local\\_only\\)\\. RelayMind refused this request under its configuration\\; this is not an answer\\. Gateway\\: \\\"the task cannot complete under the effective execution mode\\\"\\. Gateway run run\\_bf7f7f50edd44e51900be11340bef4d2\\, reason context\\_limit\\.\n[state/agent-db] agent database clean-close receipt: active-leases\n"
+  },
+  {
+    "name": "config set executionMode local_only",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "config",
+      "set",
+      "plugins.entries.relaymind.config.executionMode",
+      "local_only"
+    ],
+    "exit_code": 0,
+    "seconds": 3.72,
+    "stdout": "Updated plugins.entries.relaymind.config.executionMode. Change will apply without restarting the gateway.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "agent exec local_only",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "agent",
+      "exec",
+      "--config",
+      "<scratch>/home/config.json",
+      "--json",
+      "--cwd",
+      "<scratch>/sandboxes/local_only",
+      "--state-dir",
+      "<scratch>/home/agent-exec/local_only",
+      "--model",
+      "relaymind/relaymind-client-tools",
+      "Say hello"
+    ],
+    "exit_code": 1,
+    "seconds": 11.03,
+    "stdout": "{\n  \"ok\": false,\n  \"status\": \"error\",\n  \"final\": \"\",\n  \"payloads\": [],\n  \"model\": null,\n  \"provider\": null,\n  \"sessionId\": \"f42a7bb4-617b-4360-b861-37e3dc2ee020\",\n  \"error\": {\n    \"message\": \"LLM request rejected: RelayMind needs\\\\_external \\\\(HTTP 422\\\\)\\\\: The request cannot complete under the effective execution mode without the external model \\\\(for example executionMode local\\\\_only\\\\)\\\\. RelayMind refused this request under its configuration\\\\; this is not an answer\\\\. Gateway\\\\: \\\\\\\"the task cannot complete under the effective execution mode\\\\\\\"\\\\. Gateway run run\\\\_43403a319bae44e5914fa6301da9010a\\\\, reason context\\\\_limit\\\\.\",\n    \"kind\": \"exception\"\n  }\n}\n",
+    "stderr": "[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[plugins] RelayMind provider (relaymind-client-tools): text input; at most one function call per response, and OpenClaw executes its own tools and applies its own approvals; the answer is buffered by the gateway and delivered whole, so there is no live token streaming; no parallel tool calls; no vision, audio, or Responses API; no managed skill selection, prefetch, or skill stage; no managed device-aware placement; usage is unknown (the gateway's run trace is authoritative for model calls).\n[agent/embedded] tool-search: cataloged 40 tools behind compact prompt surface\n[provider-transport-fetch] [model-fetch] response provider=relaymind api=openai-completions model=relaymind-client-tools status=422 elapsedMs=57 dispatcher=new contentType=application/json\n[plugins] RelayMind inference attempt {\"event\":\"relaymind.inference_attempt\",\"turn\":\"turn-27d0738383836d57\",\"attempt\":1,\"idempotencyKey\":\"relaymind-openclaw-v1-8e250516346463f7932fe3d5567005477fcb4cd068afe10e74a2706ebe548078\",\"runId\":\"run_43403a319bae44e5914fa6301da9010a\",\"runIdSource\":\"error_body\",\"outcome\":\"failed\",\"status\":422,\"code\":\"needs_external\",\"reasonCode\":\"context_limit\",\"replayed\":false,\"retried\":false,\"nativeRunUrl\":\"http://127.0.0.1:<port>/relay/v1/runs/run_43403a319bae44e5914fa6301da9010a\",\"uiUrl\":\"http://127.0.0.1:<port>/ui/runs/run_43403a319bae44e5914fa6301da9010a\",\"usage\":\"unknown\"}\n[agent/embedded] embedded run agent end: runId=f42a7bb4-617b-4360-b861-37e3dc2ee020 isError=true model=relaymind-client-tools provider=relaymind error=LLM request rejected: RelayMind needs\\_external \\(HTTP 422\\)\\: The request cannot complete under the effective execution mode without the external model \\(for example executionMode local\\_only\\)\\. RelayMind refused this request under its configuration\\; this is not an answer\\. Gateway\\: \\\"the task cannot complete under the effective execution mode\\\"\\. Gateway run run\\_43403a319bae44e5914fa6301da90\u2026 rawError=RelayMind needs_external (HTTP 422): The request cannot complete under the effective execution mode without the external model (for example executionMode local_only). RelayMind refused this request un\u2026\n[agent/embedded] embedded run failover decision: runId=f42a7bb4-617b-4360-b861-37e3dc2ee020 stage=assistant decision=surface_error reason=format attempt=1 retry=0 rotations=0 from=relaymind/relaymind-client-tools profile=sha256:2e0940f3a786 rawError=RelayMind needs_external (HTTP 422): The request cannot complete under the effective execution mode without the external model (for example executionMode local_only). RelayMind refused this request un\u2026\n[diagnostic] lane task error: lane=main durationMs=1562 error=\"LLM request rejected: RelayMind needs\\\\_external \\\\(HTTP 422\\\\)\\\\: The request cannot complete under the effective execution mode without the external model \\\\(for example executionMode local\\\\_only\\\\)\\\\. RelayMind refused this request under its configuration\\\\; this is not an answer\\\\. Gateway\\\\: \\\\\\\"the task cannot complete under the effective execution mode\\\\\\\"\\\\. Gateway run run\\\\_43403a319bae44e5914fa6301da9010a\\\\, reason context\\\\_limit\\\\.\" errorName=FailoverError taskKind=turn sessionKey=agent:main:explicit:f42a7bb4-617b-4360-b861-37e3dc2ee020 runId=f42a7bb4-617b-4360-b861-37e3dc2ee020\n[diagnostic] lane task error: lane=session:agent:main:explicit:f42a7bb4-617b-4360-b861-37e3dc2ee020 durationMs=1568 error=\"LLM request rejected: RelayMind needs\\\\_external \\\\(HTTP 422\\\\)\\\\: The request cannot complete under the effective execution mode without the external model \\\\(for example executionMode local\\\\_only\\\\)\\\\. RelayMind refused this request under its configuration\\\\; this is not an answer\\\\. Gateway\\\\: \\\\\\\"the task cannot complete under the effective execution mode\\\\\\\"\\\\. Gateway run run\\\\_43403a319bae44e5914fa6301da9010a\\\\, reason context\\\\_limit\\\\.\" errorName=FailoverError taskKind=turn sessionKey=agent:main:explicit:f42a7bb4-617b-4360-b861-37e3dc2ee020 runId=f42a7bb4-617b-4360-b861-37e3dc2ee020\nLLM request rejected: RelayMind needs\\_external \\(HTTP 422\\)\\: The request cannot complete under the effective execution mode without the external model \\(for example executionMode local\\_only\\)\\. RelayMind refused this request under its configuration\\; this is not an answer\\. Gateway\\: \\\"the task cannot complete under the effective execution mode\\\"\\. Gateway run run\\_43403a319bae44e5914fa6301da9010a\\, reason context\\_limit\\.\n[state/agent-db] agent database clean-close receipt: active-leases\n"
+  },
+  {
+    "name": "disable provider",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "plugins",
+      "disable",
+      "relaymind"
+    ],
+    "exit_code": 0,
+    "seconds": 3.55,
+    "stdout": "Disabled plugin \"relaymind\". Saved for the next Gateway start.\n",
+    "stderr": "Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "uninstall provider",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "plugins",
+      "uninstall",
+      "relaymind",
+      "--force"
+    ],
+    "exit_code": 0,
+    "seconds": 4.67,
+    "stdout": "Plugin: RelayMind (relaymind)\nWill remove: plugin settings, install record, directory: $OPENCLAW_HOME/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1\nUninstalled plugin \"relaymind\". Removed: plugin settings, install record, directory.\nSaved for the next Gateway start.\n",
+    "stderr": "Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "config unset plugin entry",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "config",
+      "unset",
+      "plugins.entries.relaymind"
+    ],
+    "exit_code": 0,
+    "seconds": 3.18,
+    "stdout": "Removed plugins.entries.relaymind. Change will apply without restarting the gateway.\n",
+    "stderr": "",
+    "expected_exit": 0
+  },
+  {
+    "name": "models auth logout",
+    "argv": [
+      "/opt/homebrew/bin/node",
+      "<repo>/integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "models",
+      "auth",
+      "logout",
+      "relaymind:manual",
+      "--yes"
+    ],
+    "exit_code": 0,
+    "seconds": 4.48,
+    "stdout": "Updated config: $OPENCLAW_HOME/config.json\n  Backup: $OPENCLAW_HOME/config.json.bak\nAgent: main\nRemoved auth profile: relaymind:manual (relaymind/api_key)\nNo auth profiles remain for relaymind. Run openclaw models auth login --provider relaymind to sign in again.\n[state/agent-db] agent database clean-close receipt: written\n",
+    "stderr": "Warning: Model auth changes were saved, but the local Gateway could not refresh them. Run `openclaw gateway restart` to apply the saved changes.\nCredentials were removed, but the Gateway has not confirmed applying the change. Run `openclaw gateway restart` to apply it.\n",
+    "expected_exit": 0
+  },
+  {
+    "name": "stop relaymind serve (SIGINT)",
+    "argv": [
+      "<SIGINT to relaymind serve>"
+    ],
+    "exit_code": -2,
+    "seconds": 0.25,
+    "stdout": "",
+    "stderr": "",
+    "expected_exit": [
+      0,
+      -2
+    ]
+  }
+]

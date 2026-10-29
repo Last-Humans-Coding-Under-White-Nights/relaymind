@@ -72,6 +72,7 @@ Deterministic transport fixtures are not live evidence (section 12.5).
 
 import argparse
 import asyncio
+import ipaddress
 import json
 import os
 import platform
@@ -79,6 +80,7 @@ import re
 import shlex
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -115,6 +117,71 @@ ECHO_PROMPT = "Echo the word lantern with the tool."
 LONG_PROMPT = "Say hello. " * 20
 # SDK headers whose value depends on the machine, not on the pins.
 ENVIRONMENT_HEADERS = ("x-stainless-os", "x-stainless-arch", "x-stainless-runtime-version")
+MACHINE_PLACEHOLDER = "<host>"
+# Only a name of at least this many characters is replaced: a short name such
+# as "mc" would wipe unrelated text. Generic names identify no machine.
+MIN_MACHINE_NAME = 3
+GENERIC_MACHINE_NAMES = frozenset({"localhost", "localhost.localdomain"})
+# The ``host=`` field of the runtime line the pinned host puts on every user
+# message (``| host=<computer name> |``; on macOS the computer name, not the
+# network hostname).
+RUNTIME_HOST_FIELD = re.compile(r"\| host=[^|\n]*? \|")
+
+
+def _machine_names() -> tuple[str, ...]:
+    """The machine's names: the hostname, the node name, and on macOS the
+    computer and local host names (``scutil``); a name that cannot be read is skipped."""
+    hostname = socket.gethostname()
+    names = {hostname, hostname.split(".")[0], platform.node()}
+    if sys.platform == "darwin":
+        for key in ("ComputerName", "LocalHostName"):
+            try:
+                found = subprocess.run(
+                    ["scutil", "--get", key], capture_output=True, text=True, timeout=5
+                )
+            except (OSError, subprocess.SubprocessError):
+                continue
+            if found.returncode == 0:
+                names.add(found.stdout.strip())
+    # A numeric name or an IP address (``127.0.1.1`` in some containers, and its
+    # label ``127``) names no machine, and replacing it would rewrite numbers.
+    return tuple(
+        sorted(
+            n for n in names if n and n.lower() not in GENERIC_MACHINE_NAMES and not _is_address(n)
+        )
+    )
+
+
+def _is_address(name: str) -> bool:
+    """A name of digits and dots, or an IP address of either family."""
+    try:
+        ipaddress.ip_address(name)
+    except ValueError:
+        return name.replace(".", "").isdigit()
+    return True
+
+
+# Read once, when the module loads.
+MACHINE_NAMES = _machine_names()
+
+
+def mask_machine_names(text: str) -> str:
+    """Replace the machine's names with ``<host>`` (RM12).
+
+    Each name in ``MACHINE_NAMES`` of at least ``MIN_MACHINE_NAME`` characters
+    goes as a whole word, as written and in its JSON-escaped form (a curly
+    apostrophe as ``\\u2019``), since the text is often JSON. Then the runtime
+    line's ``host=`` field goes whatever it holds.
+    """
+    forms: set[str] = set()
+    for name in MACHINE_NAMES:
+        if len(name) >= MIN_MACHINE_NAME:
+            forms.update({name, json.dumps(name)[1:-1]})
+    for form in sorted(forms, key=len, reverse=True):
+        # Only as a whole word: ``dev`` goes, ``devDependency`` stays.
+        text = re.sub(rf"(?<![\w-]){re.escape(form)}(?![\w-])", MACHINE_PLACEHOLDER, text)
+    # After the names, so a computer name that holds `` | `` goes whole.
+    return RUNTIME_HOST_FIELD.sub(f"| host={MACHINE_PLACEHOLDER} |", text)
 
 
 def echo_call(call_id: str = "call_echo_1", text: str = "lantern") -> list:
@@ -957,8 +1024,8 @@ def run_host(
                 except OSError as error:
                     # Missing, not executable, or otherwise not started: no run happened.
                     status, exit_code, stdout, stderr = "not_run", None, "", str(error)
-                stdout = stdout.replace(token, NOT_RECORDED)
-                stderr = stderr.replace(token, NOT_RECORDED)
+                stdout = mask_machine_names(stdout.replace(token, NOT_RECORDED))
+                stderr = mask_machine_names(stderr.replace(token, NOT_RECORDED))
                 runs = run_records(gateway, _run_ids(gateway))
                 export = {
                     "kind": "openclaw-host-qualification",
@@ -986,12 +1053,13 @@ def run_host(
                 }
         finally:
             gateway.store.close()
-    text = json.dumps(export, indent=2, ensure_ascii=False, default=str)
+    # The host sends its runtime line to the gateway, so the runs hold it too.
+    text = mask_machine_names(json.dumps(export, indent=2, ensure_ascii=False, default=str))
     if token in text:
         raise RuntimeError("the token reached the export")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text + "\n", "utf-8")
-    return export
+    return json.loads(text)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

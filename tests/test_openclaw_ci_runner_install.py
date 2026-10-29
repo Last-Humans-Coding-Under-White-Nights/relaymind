@@ -10,9 +10,11 @@ real gateway over model doubles. Its uploaded exports are kept (line ends as LF)
 tests read them, so the platform rows of ``docs/EVIDENCE.md`` and its
 section on these runs rest on them.
 
-Section 12.5: a runner is not a user's machine. The macOS and Windows rows of
-a user's machine stay ``not_run`` and are support gaps; each runner row
-carries the runner's OS version from its export.
+Section 12.5: a runner is not a user's machine, so a runner row never closes a
+user-machine row. The Windows rows of a user's machine stay ``not_run`` and are
+support gaps; the macOS row of a user's machine names its own run
+(``docs/evidence/2026-10-29-openclaw-mac-qualification/``), not a runner. Each
+runner row carries the runner's OS version from its export.
 
 No host or model runs here; the exports are data.
 """
@@ -175,8 +177,10 @@ def test_evidence_states_the_label_the_run_and_each_runner():
         digest = hashlib.sha256((RUN / runner / "install-check.json").read_bytes()).hexdigest()
         assert digest in section, runner
         assert export(runner)["artifact"]["sha256"] in section, runner
-    for platform in ("macOS", "Windows"):
-        assert re.search(rf"{platform}[^\n]*`not_run`", section), platform
+    # The Windows user-machine rows stay not_run; the macOS user-machine row is
+    # recorded by its own run, which the section points to.
+    assert re.search(r"Windows[^\n]*`not_run`", section)
+    assert "2026-10-29-openclaw-mac-qualification" in section
 
 
 def test_evidence_records_each_runner_row_next_to_the_user_machine_gaps():
@@ -188,10 +192,15 @@ def test_evidence_records_each_runner_row_next_to_the_user_machine_gaps():
         row = next(r for r in rows if r.startswith(f"| GitHub Actions `{runner}`"))
         assert LABEL in row and os_version in row and "v24.22.1" in row, runner
         assert "15" in row and "2026-10-28-openclaw-install-check-github-runners" in row
-    # A runner row never closes a user-machine row.
-    for start in ("| macOS (target) | the same |", "| Windows native (target) |"):
+    # A runner row never closes a user-machine row: the Windows rows stay
+    # not_run, and the macOS row names its own run, not a runner export.
+    for start in ("| Windows native (target) |", "| Windows WSL2 |"):
         line = next(r for r in rows if r.startswith(start))
         assert "`not_run`" in line, start
+    macos = next(r for r in rows if r.startswith("| macOS (target) | the same |"))
+    assert "2026-10-29-openclaw-mac-qualification" in macos
+    assert "`not_run`" not in macos
+    assert "2026-10-28-openclaw-install-check-github-runners" not in macos
     assert "result is on the pull request, not recorded here" not in table
 
 
