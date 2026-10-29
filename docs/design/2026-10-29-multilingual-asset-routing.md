@@ -41,8 +41,9 @@ online fine-tuning, cloud feedback and silent host prompt/tool pruning.
 
 Specification 0.51 freezes the independent M10 recommendation core and
 preserves every full-milestone gate. Qualifications #188–#190 are reconciled
-per capability below. Matrix cohort/rights/refresh and host authority,
-exact-use and currentness blockers remain named. Their unqualified adapter
+per capability below. The blockers MATRIX-COHORT, MATRIX-OVERLAP,
+MATRIX-RIGHTS, MATRIX-REFRESH, HOST-ACTION-AUTHORITY, HOST-EXACT-SKILL-USE,
+HOST-MCP-BINDING and HOST-MCP-CURRENTNESS remain named. Their unqualified adapter
 contracts are not implementation-ready; the core fails closed at those
 boundaries. Further supported qualification and a subsequent normative adapter
 revision are required before host snapshots or use are enabled. No host upgrade,
