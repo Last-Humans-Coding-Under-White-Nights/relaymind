@@ -81,3 +81,13 @@ marker passes; a counterexample changing only that final assistant to `wrong
 answer` is rejected even though the skill marker remains in tool history. The
 runtime now uses this same capture-grading function. Original raw `checks` are
 historical outputs; the separately identified regrade is the corrected check.
+
+Review correction R2: the grader now reads the skill marker only from the
+`native_skill_use` exchange's own model requests, and re-checks that the
+recorded `choose` event names choice 2 and that both command events carry the
+selected skill's sha256. The saved capture still passes every check unchanged,
+without a host rerun; `regrade.json` records the R2 grader hashes and three
+rejected counterexamples (marker moved to another exchange, choice 3, changed
+digest). A setup failure in the driver now writes a `status: failed` export, and
+a host that never listens raises a startup timeout. Neither changes the saved
+capture.
