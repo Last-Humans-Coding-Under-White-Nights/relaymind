@@ -27,6 +27,18 @@ describe("sanitizeCapture", () => {
     expect(sanitizeCapture(`log ${home}\\a`, home)).toBe("log <home>\\a");
   });
 
+  it("replaces a Windows home that appears with forward slashes", () => {
+    const home = "C:\\Users\\x";
+    const text = JSON.stringify({ prompt: "workspace C:/Users/x/project" });
+    expect(JSON.parse(sanitizeCapture(text, home)).prompt).toBe("workspace <home>/project");
+  });
+
+  it("leaves the text unchanged when the home is the root directory", () => {
+    const text = JSON.stringify({ url: "http://127.0.0.1:1/v1", path: "/srv/a" });
+    expect(sanitizeCapture(text, "/")).toBe(text);
+    expect(sanitizeCapture(text, "C:\\")).toBe(text);
+  });
+
   it("leaves the text unchanged when there is no home", () => {
     expect(sanitizeCapture('{"a": "b"}', "")).toBe('{"a": "b"}');
   });

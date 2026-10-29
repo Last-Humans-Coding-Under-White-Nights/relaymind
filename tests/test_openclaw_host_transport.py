@@ -64,11 +64,7 @@ ANSWER = "The tool said: echo: lantern."
 
 
 def _node() -> str | None:
-    node = shutil.which("node")
-    if node is None:
-        candidate = Path.home() / ".nvm/versions/node/v24.22.1/bin/node"
-        node = str(candidate) if candidate.exists() else None
-    return node
+    return shutil.which("node")
 
 
 def _missing() -> str | None:
@@ -78,6 +74,20 @@ def _missing() -> str | None:
         if not (PACKAGE / "node_modules" / package / "package.json").exists():
             return f"run npm ci in integrations/openclaw ({package} is missing)"
     return None
+
+
+def test_node_is_found_on_path_as_the_harness_finds_it(monkeypatch, tmp_path):
+    """The tests run the Node the qualification harness runs (#135).
+
+    ``node_binary()`` and the script tests look only on PATH; a fallback
+    here would run a Node the harness never sees.
+    """
+    stray = tmp_path / ".nvm/versions/node/v24.22.1/bin/node"
+    stray.parent.mkdir(parents=True)
+    stray.write_text("")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    assert _node() is None
 
 
 @pytest.fixture(autouse=True)
