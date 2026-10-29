@@ -16,6 +16,7 @@
 // nothing (RM08, RM33).
 import "openclaw/plugin-sdk/provider-transport-runtime";
 import { readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { createOpenAICompletionsTransportStreamFn } from "@openclaw/ai/transports";
 
 import { relaymindModelEntry, PROVIDER_ID } from "../../src/compat.ts";
@@ -161,7 +162,7 @@ export function versions() {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const scenario = JSON.parse(readFileSync(process.argv[2], "utf8"));
   const output = await runScenario(scenario);
   const document = { versions: versions(), scenario, ...output };

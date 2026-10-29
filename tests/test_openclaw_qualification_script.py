@@ -221,3 +221,16 @@ def qualification_missing():
         if not (ROOT / "integrations/openclaw/node_modules" / package / "package.json").exists():
             return f"run npm ci in integrations/openclaw ({package} is missing)"
     return None
+
+
+def test_the_driver_knows_it_is_the_entry_point_on_every_platform():
+    """The pinned host supports native Windows (#135; section 7.5).
+
+    A driver that builds its own ``file://`` URL from ``process.argv[1]`` never
+    matches ``import.meta.url`` on Windows (``file:///C:/...`` against
+    ``file://C:\\...``), so it exits 0 without running the scenario or writing
+    its output. The entry check compares the URL Node itself builds.
+    """
+    source = qualification.DRIVER.read_text("utf-8")
+    assert "file://${process.argv[1]}" not in source
+    assert "import.meta.url === pathToFileURL(process.argv[1]).href" in source
