@@ -4,7 +4,7 @@
 // executes the sandbox tools under its own approval. Here only its shape is
 // checked: it registers the two tools and the approval hook, the write tool
 // stays inside the sandbox, and nothing in it talks to RelayMind.
-import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -57,9 +57,13 @@ describe("the test host tool plugin", () => {
   it("write appends one line inside the sandbox only", async () => {
     const sandbox = mkdtempSync(join(tmpdir(), "rm-host-tools-"));
     process.env.RELAYMIND_TEST_SANDBOX = sandbox;
-    await writeTool.execute("call_1", { name: "../escape.txt", line: "one" });
-    expect(readdirSync(sandbox)).toEqual(["escape.txt"]);
-    expect(readFileSync(join(sandbox, "escape.txt"), "utf8")).toBe("one\n");
+    try {
+      await writeTool.execute("call_1", { name: "../escape.txt", line: "one" });
+      expect(readdirSync(sandbox)).toEqual(["escape.txt"]);
+      expect(readFileSync(join(sandbox, "escape.txt"), "utf8")).toBe("one\n");
+    } finally {
+      rmSync(sandbox, { recursive: true, force: true });
+    }
   });
 
   it("write refuses to run without a sandbox", async () => {

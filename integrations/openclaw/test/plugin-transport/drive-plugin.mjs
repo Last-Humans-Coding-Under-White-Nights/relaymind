@@ -31,7 +31,7 @@
 // tool-deny|tool-approve with an approval surface), run by an operator or CI.
 import "openclaw/plugin-sdk/provider-transport-runtime";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createOpenAICompletionsTransportStreamFn } from "@openclaw/ai/transports";
 
@@ -131,8 +131,10 @@ function executeHostTool(scenario, call, approvals) {
         text: `denied by the host approval policy: ${call.name} was not run`,
       };
     }
-    appendFileSync(join(scenario.sandboxDir, call.arguments.name), `${call.arguments.line}\n`);
-    return { executed: true, isError: false, text: `wrote one line to ${call.arguments.name}` };
+    // basename keeps the write inside the sandbox, as the test host tool does.
+    const name = basename(call.arguments.name);
+    appendFileSync(join(scenario.sandboxDir, name), `${call.arguments.line}\n`);
+    return { executed: true, isError: false, text: `wrote one line to ${name}` };
   }
   if (scenario.toolResults?.[call.name] !== undefined) {
     return { executed: true, isError: false, text: scenario.toolResults[call.name] };
