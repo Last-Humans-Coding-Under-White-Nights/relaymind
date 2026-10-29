@@ -137,6 +137,20 @@ def test_a_host_command_that_cannot_start_is_not_run(tmp_path):
     assert export["runs"] == []
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes")
+def test_an_abort_host_command_that_cannot_start_is_not_run(tmp_path):
+    """Section 12.5: the abort scenario starts its host another way (Popen, to
+    interrupt it), and a command the OS refuses to start stays not_run there too."""
+    host = tmp_path / "openclaw"
+    host.write_text("#!/bin/sh\nexit 0\n", "utf-8")
+    host.chmod(0o644)
+    export = qualification.run_host([str(host)], tmp_path / "export.json", scenario="abort")
+    assert export["status"] == "not_run"
+    assert export["exit_code"] is None
+    assert export["runs"] == []
+    assert export["checks"]["passed"] is False
+
+
 def test_the_runs_are_listed_in_the_order_the_store_created_them(tmp_path):
     """Section 12.5: store order, not the order of the random run IDs."""
     from types import SimpleNamespace
