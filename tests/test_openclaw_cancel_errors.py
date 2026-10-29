@@ -96,8 +96,9 @@ class ThreadGate(ScriptedAdapter):
     """A scripted model whose generations wait until the test thread opens the gate.
 
     The wait polls a threading.Event, so the test thread (outside the
-    server's loop) can open it, and a cancel of the generation still stops
-    it at the next poll.
+    server's loop) can open it. The gateway cancels a generation by
+    cancelling its task, so a cancel still stops the wait at the next
+    poll: asyncio.sleep raises CancelledError there.
     """
 
     def __init__(self, *args, **kwargs):
