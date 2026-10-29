@@ -247,6 +247,30 @@ def test_a_destination_inside_the_package_is_refused(node_dependencies):
     assert not (PACKAGE / "dist" / "x").exists()
 
 
+def test_a_destination_inside_the_package_through_a_symlink_is_refused(node_dependencies, tmp_path):
+    """The package through a symlink (macOS /tmp is /private/tmp) is still inside:
+    the guard compares real paths, not the path as typed (PR #182 review)."""
+    link = tmp_path / "package"
+    try:
+        link.symlink_to(PACKAGE, target_is_directory=True)
+    except OSError as error:
+        pytest.skip(f"cannot make a symlink here: {error}")
+    target = PACKAGE / "dist" / "via"
+    try:
+        completed = subprocess.run(
+            [_node(), str(PACKAGE / "scripts" / "release-pack.mjs"), str(link / "dist" / "via")],
+            cwd=PACKAGE,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert completed.returncode == 2, completed.stdout + completed.stderr
+        assert "outside the package" in completed.stderr
+        assert not target.exists()
+    finally:
+        shutil.rmtree(target, ignore_errors=True)
+
+
 def test_a_child_folder_named_like_a_parent_is_still_inside(node_dependencies):
     """relative() gives '..release' for <package>/..release: inside, not a parent."""
     target = PACKAGE / "..release"

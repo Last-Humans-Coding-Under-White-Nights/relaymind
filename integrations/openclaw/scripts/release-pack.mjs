@@ -9,8 +9,8 @@
 // npm pack fixes file dates and order, and the build is deterministic, so two
 // builds of one checkout are the same bytes (tests/test_openclaw_install.py).
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { npm, packReport } from "./npm.mjs";
@@ -22,10 +22,18 @@ if (!dest) {
   process.exit(2);
 }
 const out = resolve(process.env.INIT_CWD ?? process.cwd(), dest);
+// The real path of a destination that may not exist yet: its nearest existing
+// ancestor resolved, so a symlink (macOS /tmp is /private/tmp) cannot hide that
+// it is under the package.
+function realDestination(path) {
+  if (existsSync(path)) return realpathSync(path);
+  const parent = dirname(path);
+  return parent === path ? path : join(realDestination(parent), basename(path));
+}
 // Under the package, the build would delete it (dist/) or npm pack could ship it.
 // Outside means a parent step (".." alone or "../..."), or another drive on
 // Windows; a child folder such as "..release" is inside.
-const inside = relative(root, out);
+const inside = relative(realpathSync(root), realDestination(out));
 const outside = inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside);
 if (!outside) {
   console.error(`the destination must be outside the package: ${out}`);
