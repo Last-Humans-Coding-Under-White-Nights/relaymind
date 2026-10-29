@@ -3512,10 +3512,29 @@ Post-run replacements: the export as the runner wrote it (sha256
 checkout's home-relative path (`~/<checkout>/...`, in the host's skill
 locations, 4,532 times) and the Mac's computer name in the host's runtime
 line (`host=...`, 206 times), because the runner's sanitizer replaced
-neither (a fix is being committed on this branch). Both were replaced after
+neither (fixed after the run in `2d6b25c`). Both were replaced after
 the run, with `<repo>` and `<host>`. The export's sha256 after that is
 `cfb87e13e0004adc771c4b88d4dd49f3eedd6e8b2a1fb85ef978140d802047a3`. Nothing
 else in the export changed; the report was unaffected.
+
+The tested commit after the restack: the run tested `2751124`. After the
+review fixes the stack was rebased, and its equivalent commit is now
+`e79ba8e`. The fixes changed code this run exercised, and the results above
+are of `2751124`; they were not run again at the new head. In the runner
+and grading (`scripts/run_openclaw_eval.py`,
+`src/relaymind/evaluation/openclaw.py`): an attempt whose host report does
+not name the arm's provider and model fails (`host_model`); a host exit of
+`0xC000013A` (Ctrl-C on Windows) counts as a host interrupt; an arm with no
+ended attempt keeps a report row; any `OSError` on host start is `not_run`;
+the gateway store is opened by its file URI; and the export sanitizer
+replaces only absolute path forms and finds the host command's directory
+with either slash. In the plugin (`integrations/openclaw/src/`): the catalog
+publishes no model when `/readyz` rejects the token, a `null` response
+format counts as omitted, and an empty `Idempotency-Key` set by the host is
+kept as the host's. The grades were not recomputed. Read from the stored
+export: every one of the 144 host reports names the arm's provider and
+model, and no host exit code is `0xC000013A`, so neither new grading rule
+matches a recorded attempt.
 
 Not shown: Windows (no machine), a constrained configuration (optional, not
 run), and a plugin approval answered by an operator. This is one run on one
