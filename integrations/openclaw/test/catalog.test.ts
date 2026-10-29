@@ -212,6 +212,21 @@ describe("diagnosis: gateway, credential, and alias (section 7.5)", () => {
     expect(discovery.models).toEqual([]);
   });
 
+  it("reports a 401 from /readyz as a rejected token too and publishes nothing", async () => {
+    // The gateway restarted between the two requests: the token is stale (section 7.5).
+    const { calls, fetch } = fakeFetch({
+      [`${BASE}/models`]: () => models(MODEL_ID),
+      "http://127.0.0.1:8080/readyz": () =>
+        json(401, { error: { code: "unauthenticated", message: "missing or invalid token" } }),
+    });
+    const discovery = await discoverRelayMind({ config: config(), token: TOKEN, fetch });
+    expect(calls).toHaveLength(2);
+    expect(discovery.diagnosis.kind).toBe("auth_failed");
+    expect(discovery.diagnosis.message).toMatch(/openclaw models auth paste-api-key --provider relaymind/);
+    expect(discovery.diagnosis.message).not.toContain(TOKEN);
+    expect(discovery.models).toEqual([]);
+  });
+
   it("refuses a redirect and does not follow it", async () => {
     const { calls, fetch } = fakeFetch({
       [`${BASE}/models`]: () =>

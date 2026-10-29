@@ -221,7 +221,9 @@ export async function discoverRelayMind(params: DiscoverParams): Promise<Discove
         "that gateway.",
     );
   }
-  return { diagnosis: await readiness(config, requester), models: [catalogModel(config)] };
+  const diagnosis = await readiness(config, requester);
+  // A token /readyz rejects is stale (the gateway restarted in between): publish nothing.
+  return { diagnosis, models: diagnosis.kind === "auth_failed" ? [] : [catalogModel(config)] };
 }
 
 async function readiness(config: RelayMindPluginConfig, requester: Requester): Promise<CatalogDiagnosis> {
@@ -241,6 +243,7 @@ async function readiness(config: RelayMindPluginConfig, requester: Requester): P
     if (!(error instanceof Unreachable)) throw error;
     return unknown(`GET /readyz: ${error.message}`);
   }
+  if (response.status === 401) return { kind: "auth_failed", message: RECONNECT };
   if (isRedirect(response) || (response.status !== 200 && response.status !== 503)) {
     return unknown(`GET /readyz answered HTTP ${response.status}`);
   }

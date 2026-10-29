@@ -181,7 +181,7 @@ Each catalog run logs one line, and reports the host outcome:
 | --- | --- | --- |
 | no stored token (the pinned host did not call the hook without a stored credential, so no line showed) | none (the catalog returns nothing) | no |
 | gateway unreachable at `<baseUrl>` | `unavailable` | no |
-| token rejected (401), with the reconnect instruction | `auth-rejected` | no |
+| token rejected (401 from `/v1/models` or `/readyz`), with the reconnect instruction | `auth-rejected` | no |
 | other gateway error or a redirect | `unavailable` | no |
 | the gateway does not serve `relaymind-client-tools` | `ready` (empty) | no |
 | the configured mode is ready, with the advertised limits | `ready` | yes |
