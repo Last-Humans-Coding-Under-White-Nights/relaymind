@@ -49,6 +49,8 @@ occurs anywhere in it. Component tests also exercise configured header values
 in that export guard. No HTTP MCP credential flow was exercised here.
 
 A `schema_sha256` hashes the UTF-8 `JSON.stringify` bytes of the captured schema.
+A tool without `parameters` records `schema` and `schema_sha256` as null, never
+an invented empty schema.
 It is a derived content identity. It is never a host-issued catalog or
 availability revision. `availability`, `host_revision`, and the schema hook's
 `session` remain unknown/null even after a successful call. `capture_window`

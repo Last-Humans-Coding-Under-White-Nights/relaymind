@@ -48,6 +48,12 @@
     },
     "note": "Offline raw history/result/trace/server-event checks; runtime source identity preserved."
   },
+  "review_regrade": {
+    "artifact": "regrade.json",
+    "sha256": "c55f6c731f0c43f2730d82a4554bf36bd5d11b230406b5a40f97efbb1e3fbc8c",
+    "note": "Current grader after review; the offline_regrade hash above identifies the grader at capture time.",
+    "checks_unchanged": true
+  },
   "source_hashes": {
     "integrations/openclaw/test/host-mcp-qualification/server.mjs": "cb0f17467f48f37ee7cb946cb22bcef897b28d3f4595721a2690431a320dc793",
     "integrations/openclaw/test/host-mcp-qualification/capture.mjs": "ccfea73e51474d1371e7423296e084cc3ab0c1445a61c76f7ee8d53c8ca4c003",
