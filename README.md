@@ -205,9 +205,10 @@ curl -s http://127.0.0.1:8080/v1/chat/completions \
 - **From OpenClaw.** The provider plugin in `integrations/openclaw/`
   (OpenClaw 2026.10.7 only) lets OpenClaw use the gateway's
   `relaymind-client-tools` model; OpenClaw runs its own tools and
-  approvals. It is tested over model doubles; macOS and Windows
-  qualification and a live measurement are not run yet. OpenClaw requests
-  (about 10.5k tokens) do not fit the 8192-token local context, so in
+  approvals. It is tested over model doubles and qualified on macOS
+  (`docs/evidence/2026-10-29-openclaw-mac-qualification/`); the Windows
+  qualification and the live measurement are not run yet. OpenClaw requests
+  (9.4k to 10.6k tokens) do not fit the 8192-token local context, so in
   `auto` they go to the external model. See
   [`integrations/openclaw/README.md`](integrations/openclaw/README.md).
 

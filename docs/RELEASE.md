@@ -218,10 +218,11 @@ pinned local model; the operator command is in `docs/TESTING.md` and
 `integrations/openclaw/README.md` ("M9 evaluation").
 
 Limits known before measurement: the local context stays at 8192 tokens
-(user decision), and every OpenClaw request measured so far (0 of 10 fit;
-10,500 to 10,577 tokens with the pinned tokenizer, macOS qualification) is
-over it; the live AC24 turn in auto without an external model ended
-needs_external / context_limit with 0 model calls. relaymind_auto is
+(user decision), and every OpenClaw request measured so far (0 of 12 fit;
+9,384 to 10,577 tokens with the pinned tokenizer, the macOS qualifications
+of 2026-10-27 and 2026-10-29) is over it; the live AC24 turns in auto
+without an external model ended needs_external / context_limit with 0
+model calls. relaymind_auto is
 therefore expected to send every OpenClaw turn to the external model (0
 local turns, reason context_limit), and local_only would answer
 needs_external. When the run shows 0 local turns, that is reported as the
@@ -233,6 +234,7 @@ stay open until the run is recorded.
 
 Measured on the macOS qualification: every OpenClaw request it measured
 (3 host requests and 7 probe captures) was 10,500 to 10,577 tokens with the
-pinned tokenizer, over the local limit of 8192. An OpenClaw turn therefore
-goes external in `auto` and is `needs_external` in `local_only`. The local
-context stays 8192.
+pinned tokenizer, over the local limit of 8192. The 2026-10-29 live turns
+through the packaged plugin measured 9,384 and 9,389 tokens, also over it.
+An OpenClaw turn therefore goes external in `auto` and is `needs_external`
+in `local_only`. The local context stays 8192.

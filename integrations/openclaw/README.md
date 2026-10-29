@@ -134,8 +134,8 @@ zero external calls.
 
 Local context limit: an OpenClaw turn carries the host's ~30,000-character
 system prompt and its tool catalog. With the pinned tokenizer that is
-10,500 to 10,577 tokens per request (macOS qualification, branch
-`devnull.exile/m9-mac-qual`, commit `b575c01`), over the local model's 8192.
+9,384 to 10,577 tokens per request (the macOS qualifications of 2026-10-27
+and 2026-10-29 under `docs/evidence/`), over the local model's 8192.
 So in `auto` every OpenClaw turn goes to the external model, and with the
 pinned host and the 8192 local context `local_only` cannot serve an OpenClaw
 turn; without an external model an OpenClaw turn cannot run. What the

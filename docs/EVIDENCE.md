@@ -3451,10 +3451,11 @@ tokens per model with unknown counts apart. Chinese rows are best-effort and kep
 aborted (an operator interrupt) is recorded with its slots not run.
 
 Expected at the 8192-token local context, which stays (user decision): 0
-of 10 OpenClaw requests counted on macOS fit it (10,500 to 10,577 tokens,
-pinned tokenizer), and the live AC24 turn in auto without an external
+of 12 OpenClaw requests counted on macOS fit it (9,384 to 10,577 tokens,
+pinned tokenizer), and the live AC24 turns in auto without an external
 model ended needs_external / context_limit with 0 model calls ("OpenClaw
-request size by tokenizer and live AC24 turn (#135)" above). relaymind_auto is therefore expected to show 0
+request size by tokenizer and live AC24 turn (#135)" and "OpenClaw plugin
+qualification on macOS at the M9 tip" above). relaymind_auto is therefore expected to show 0
 local turns, every run handed off with reason context_limit. A run that
 shows this records 0 local turns as the relaymind_auto result, with its
 reasons, and its comparison with relaymind_external_only as one without

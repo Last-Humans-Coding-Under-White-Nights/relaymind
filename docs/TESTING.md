@@ -1588,10 +1588,11 @@ python scripts/run_openclaw_eval.py \
 It is not_run: there is no Mac or Windows access and no external
 provider credential for it, and the VPS runs no live model. The local
 context stays at 8192 tokens (user decision, no runtime, manifest, or spec
-change). With the pinned tokenizer 0 of the 10 OpenClaw requests measured
-on macOS fit it (10,500 to 10,577 tokens), and a live AC24 turn in auto
+change). With the pinned tokenizer 0 of the 12 OpenClaw requests measured
+on macOS fit it (9,384 to 10,577 tokens), and the live AC24 turns in auto
 without an external model ended needs_external / context_limit with 0
-model calls (`docs/evidence/2026-10-27-openclaw-mac-qualification/`). So
+model calls (`docs/evidence/2026-10-27-openclaw-mac-qualification/` and
+`docs/evidence/2026-10-29-openclaw-mac-qualification/`). So
 relaymind_auto is expected to show 0 local turns, every turn handed off
 with reason context_limit, and relaymind_auto against
 relaymind_external_only then compares no local inference. When a run
