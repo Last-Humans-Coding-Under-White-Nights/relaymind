@@ -914,6 +914,16 @@ OpenClaw requests (about 9.4k to 10.6k tokens with the pinned tokenizer on
 macOS) do not fit it, so auto goes external and local_only gets
 needs_external.
 
+Status (2026-10-29): **M9 closed** (PRs #176 to #185, spec 0.49 and
+0.50). The GitHub milestone is closed (2026-10-29), with all 16 of its
+issues closed. The compatibility qualification (#135), the provider package
+(#136), the round trips (#137), cancellation and errors (#138), packaging
+and CI (#145), the evaluation (#139), and the UI placeholder removal (#173)
+are merged, with the macOS qualification and the live measurement recorded
+in `EVIDENCE.md`. The Windows qualification and a plugin approval answered
+on a real host stay declared gaps, not_run; neither is inferred from a
+runner.
+
 The unimplemented YAML workflow expansion and plan benchmark are removed
 from M9 (RM30 and AC23 retired). The implemented fixed parallel demo remains
 RM15/AC14. Issues #135 to #139 and #145 are repurposed with a scope-change
