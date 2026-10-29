@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.51 → 0.52 (RM34, RM38): clarify cached offer invalidation
+  for observed freshness, effective policy and requested-kind variants. Public
+  catalog content revisions and wire schemas stay unchanged. This clarification
+  claims no cache implementation or measured startup performance.
+
 - Independent asset catalog discovery (#192; RM34/AC25): ordinary local
   `SKILL.md` folders and closed, hash-verified metadata imports; bounded safe
   projections, durable atomic SQLite generations, source ownership/tombstones,

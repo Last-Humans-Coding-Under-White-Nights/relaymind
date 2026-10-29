@@ -11,7 +11,7 @@ codebase.
    requirement IDs from it (RM01–RM44, AC01–AC37; RM30 and AC23 are retired;
    RM33 and AC24 specify the M9 OpenClaw integration, added in 0.47 and
    revised in 0.49 and 0.50; RM34–RM44 and AC25–AC37 define M10
-   recommendations in 0.51; the spec is at 0.51). Implementation status
+   recommendations in 0.51; the spec is at 0.52). Implementation status
    is recorded in docs/ROADMAP.md. If code and spec disagree,
    the spec wins. If the spec is wrong, revise the spec first, then change
    the code.
