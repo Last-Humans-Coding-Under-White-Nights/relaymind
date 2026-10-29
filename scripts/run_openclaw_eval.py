@@ -255,7 +255,9 @@ class Host:
             status, code = "timed_out", None
             out = install_check.qualification._text(error.stdout)
             err = install_check.qualification._text(error.stderr) + f"\ntimed out after {timeout} s"
-        except FileNotFoundError as error:
+        except OSError as error:
+            # The host did not start (missing, not executable, or on Windows a shim
+            # that is not an executable): not_run, never a crash of the runner.
             status, code, out, err = "not_run", None, "", str(error)
         return {
             "argv": list(args),

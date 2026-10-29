@@ -806,6 +806,27 @@ def test_the_direct_host_reaches_the_provider_through_the_operators_proxy(tmp_pa
     assert plugin.env["NO_PROXY"] == "127.0.0.1,localhost,::1"
 
 
+def test_a_host_command_the_system_cannot_start_is_not_run(tmp_path, monkeypatch):
+    """Any start failure is not_run, never a crash of the runner: a missing
+    command, a file without execute permission, or another OSError (on Windows,
+    WinError 193 for a shim that is not an executable)."""
+    missing = runner.Host([str(tmp_path / "absent")], tmp_path / "a").run(["--version"], timeout=5)
+    assert missing["status"] == "not_run" and missing["exit_code"] is None
+    plain = tmp_path / "openclaw"
+    plain.write_text("#!/bin/sh\n", "utf-8")
+    plain.chmod(0o644)
+    denied = runner.Host([str(plain)], tmp_path / "b").run(["--version"], timeout=5)
+    assert denied["status"] == "not_run" and denied["exit_code"] is None
+
+    def refuses(*args, **kwargs):
+        raise OSError(193, "%1 is not a valid Win32 application")
+
+    monkeypatch.setattr(runner.subprocess, "run", refuses)
+    other = runner.Host(["openclaw.cmd"], tmp_path / "c").run(["--version"], timeout=5)
+    assert other["status"] == "not_run"
+    assert "not a valid Win32 application" in other["stderr"]
+
+
 def test_the_cli_refuses_a_task_file_that_differs_from_its_lock(tmp_path, capsys):
     changed = json.loads((REPO / "evaluation" / "openclaw_tasks.v1.json").read_text("utf-8"))
     changed["tasks"][0]["prompt"] += "!"
