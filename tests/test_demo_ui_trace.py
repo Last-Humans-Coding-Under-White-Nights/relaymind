@@ -17,7 +17,9 @@ from gateway_helpers import (
     EXTERNAL_MODEL_ID,
     LOCAL_MODEL_ID,
     STAGING_OK,
+    build_gateway,
     replace_handler,
+    route_turn,
     text_turn,
     tool_turn,
 )
@@ -25,6 +27,7 @@ from helpers import ACCEPTED_PAYLOAD, of_type
 from relaymind.adapters import GenerationOptions
 from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
 from relaymind.orchestrator.performance import PerformanceSettings
+from relaymind.orchestrator.workflows import PARALLEL_WORKFLOWS
 from relaymind.store import RunRecord, RunStore, TraceEvent
 from relaymind.store.trace_event import EventType, validate_trace_event
 from relaymind.ui.render import render_trace
@@ -79,7 +82,6 @@ def test_phase_two_evidence_is_read_from_the_run(tmp_path):
     assert "Answer pass applied: draft" in shown
     assert "Selector: model_router" in shown
     assert "First token" in shown
-    assert "Workflow steps: not recorded" in shown
 
 
 def test_historical_phase_two_fields_are_not_inferred(tmp_path):
@@ -996,3 +998,87 @@ def test_an_inline_tool_result_has_no_reference(tmp_path):
     outcome = run_to_rest(gateway, execution_mode="local_only")
     (operation,) = view_of(gateway, outcome)["operations"]
     assert operation["result_ref"] is None and operation["result_retained"] is True
+
+
+# --- the retired workflow steps placeholder (#173; RM15, RM23, AC14; RM30 retired) ---------
+
+(PARALLEL_WORKFLOW,) = PARALLEL_WORKFLOWS
+
+
+def _no_workflow_steps(shown):
+    assert "Workflow steps" not in shown
+    assert "workflow-steps" not in shown
+
+
+def test_the_trace_has_no_workflow_steps_section(tmp_path):
+    """RM23, spec 0.47 (RM30 retired): no placeholder section for a retired runner."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway)
+    shown = render_trace(view_of(gateway, outcome), UiSettings(mode="double"))
+    _no_workflow_steps(shown)
+
+
+def test_the_parallel_workflow_summary_still_renders(tmp_path):
+    """RM15, RM23, AC14: the fixed parallel demo keeps its workflow summary."""
+    gateway = build_gateway(
+        tmp_path,
+        [
+            route_turn(PARALLEL_WORKFLOW),
+            tool_turn("get_service_health", service="staging-api"),
+        ],
+        external_turns=[
+            text_turn("1. Check the upstream dependencies."),
+            text_turn(
+                "Observation: staging-api is healthy (checked at 2026-10-20T02:58:00Z).\n\n"
+                "Diagnostic checklist (draft, not log-backed):\n"
+                "- Check the upstream dependencies."
+            ),
+        ],
+        enabled_workflows={PARALLEL_WORKFLOW},
+    )
+    outcome = asyncio.run(
+        gateway.orchestrator.run_text(
+            "Run the health checklist for staging-api.", execution_mode="parallel_demo"
+        )
+    )
+    view = view_of(gateway, outcome)
+    assert view["workflow"]["workflow_id"] == PARALLEL_WORKFLOW
+    shown = render_trace(view, UiSettings(mode="double"))
+    section = shown.split('<section class="workflow">')[1].split("</section>")[0]
+    assert "<h3>Parallel workflow</h3>" in section
+    assert f"Workflow: <strong>{PARALLEL_WORKFLOW}</strong>" in section
+    for branch in ("local_health", "external_checklist", "synthesis"):
+        assert f'data-branch="{branch}"' in section
+    for figure in ("Parallel stage", "Abandoned calls", "Extra call latency"):
+        assert f"<dt>{figure}</dt>" in section
+    _no_workflow_steps(shown)
+
+
+def test_a_legacy_trace_with_the_reserved_workflow_mechanism_renders(tmp_path):
+    """RM22, RM23, section 8: a stored workflow step (reserved mechanism) still renders."""
+    gateway = health_gateway(tmp_path)
+    outcome = run_to_rest(gateway)
+    record = gateway.store.get_run(outcome.run_id)
+    marker = {"mechanism": "workflow", "model": None}
+    events = []
+    for e in gateway.store.events(outcome.run_id):
+        if e.event_type is EventType.TOOL_PROPOSED:
+            e = replace(e, actor="gateway", payload={**e.payload, **marker, "step": "check"})
+        elif e.event_type in (EventType.TOOL_STARTED, EventType.TOOL_FINISHED):
+            e = replace(e, actor="gateway", payload={**e.payload, **marker})
+        validate_trace_event(e.to_json_object())
+        events.append(e)
+
+    view = trace_view_from(record, events)
+    (proposal,) = view["proposals"]
+    assert proposal["mechanism"] == "workflow" and proposal["model"] is None
+    (operation,) = view["operations"]
+    assert operation["tool_name"] == "get_service_health" and operation["model"] is None
+    assert operation["status"] == "succeeded"
+    shown = render_trace(view, UiSettings(mode="double"))
+    assert "made by the gateway (workflow)" in shown
+    assert (
+        '<li class="op succeeded"><strong>get_service_health</strong> '
+        '<span class="status">succeeded</span>'
+    ) in shown
+    _no_workflow_steps(shown)

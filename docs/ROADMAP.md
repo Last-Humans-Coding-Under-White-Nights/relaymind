@@ -749,7 +749,10 @@ This is planned integration, not a claim of a working or faster plugin.
   rejects) and the token size of its requests against the local input
   limit, which bounds how much host work can run locally.
 - Remove the retired workflow steps placeholder from the demo UI
-  (#173; RM23, AC14). Independent of the plugin; can start now.
+  (#173; RM23, AC14). Independent of the plugin. Implemented with model
+  doubles (`tests/test_demo_ui_trace.py`): the trace has no Workflow steps
+  section, the fixed parallel demo keeps its summary, and a stored trace
+  with the reserved `workflow` tool mechanism still renders.
 - Provider package, model catalog, configuration, and token handover
   (#136; RM12, RM19, RM26, RM33), after #135.
 - Text and host-owned tool round trips, request compatibility, and
