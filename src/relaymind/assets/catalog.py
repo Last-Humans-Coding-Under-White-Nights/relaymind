@@ -9,26 +9,29 @@ import re
 import unicodedata
 from collections import Counter
 from collections.abc import Collection, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any
 
-from jsonschema import Draft202012Validator, SchemaError
+from jsonschema import SchemaError
+from jsonschema.protocols import Validator
 
 from relaymind.canonical import canonical_digest, canonical_json
 from relaymind.redaction import Redactor, redact_text, scrub
 from relaymind.schema_util import freeze_json, load_packaged_schema
-from relaymind.tools.registry import check_parameters_schema
+from relaymind.tools.registry import StrictValidator, check_parameters_schema
 
 
 class AssetValidationError(ValueError):
     """A bounded safe reason, never source text or parser exception text."""
 
 
-_RECORD_SCHEMA = load_packaged_schema("relaymind.store", "asset_record.v1.json")
-_SNAPSHOT_SCHEMA = load_packaged_schema("relaymind.store", "asset_catalog_snapshot.v1.json")
-_HASH = re.compile(r"[a-f0-9]{64}")
-_LANGUAGE = re.compile(r"[A-Za-z0-9-]{1,64}")
+# Built once. Strict integers and const/enum: 1.0 and true are not 1 (RM09 rule).
+_RECORD_VALIDATOR = StrictValidator(load_packaged_schema("relaymind.store", "asset_record.v1.json"))
+_SNAPSHOT_VALIDATOR = StrictValidator(
+    load_packaged_schema("relaymind.store", "asset_catalog_snapshot.v1.json")
+)
+LANGUAGE_TAG = re.compile(r"[A-Za-z0-9-]{1,64}")
 _MARKUP = re.compile(r"<[A-Za-z!?/]")
 _UTC = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00)$")
 
@@ -80,19 +83,31 @@ def _json(value: object) -> None:
         _fail("invalid_json")
 
 
-def _validate(value: object, schema: dict[str, Any]) -> dict[str, Any]:
+def validate_document(value: object, validator: Validator) -> dict[str, Any]:
+    """A plain-JSON object that passes one compiled closed schema, as a deep copy."""
     try:
         _json(value)
-        if not isinstance(value, Mapping) or type(value.get("schema_version")) is not int:
+        if not isinstance(value, Mapping):
             _fail("invalid_schema")
-        if next(Draft202012Validator(schema).iter_errors(value), None) is not None:
+        if next(validator.iter_errors(value), None) is not None:
             _fail("invalid_schema")
         return copy.deepcopy(dict(value))
     except (RecursionError, UnicodeError, TypeError, OverflowError):
         raise AssetValidationError("invalid_json") from None
 
 
-def _timestamp(value: object, *, nullable: bool = False) -> None:
+def check_language_tags(value: object) -> None:
+    """At most 32 unique whole-string tags, the asset_record language_tags rule."""
+    if (
+        not isinstance(value, list)
+        or len(value) > 32
+        or any(not isinstance(v, str) or not LANGUAGE_TAG.fullmatch(v) for v in value)
+        or len(set(value)) != len(value)
+    ):
+        _fail("invalid_language")
+
+
+def timestamp(value: object, *, nullable: bool = False) -> None:
     if nullable and value is None:
         return
     if not isinstance(value, str) or not _UTC.fullmatch(value):
@@ -132,12 +147,9 @@ class AssetRecord:
 
 
 def validate_asset_record(value: object) -> AssetRecord:
-    raw = _validate(value, _RECORD_SCHEMA)
-    _timestamp(raw["captured_at"])
-    if not _HASH.fullmatch(raw["content_hash"]):
-        _fail("invalid_hash")
-    if any(not _LANGUAGE.fullmatch(tag) for tag in raw["language_tags"]):
-        _fail("invalid_language")
+    # The schema's anchored patterns already fix the hash and language tag forms.
+    raw = validate_document(value, _RECORD_VALIDATOR)
+    timestamp(raw["captured_at"])
     for name in ("asset_id", "source_id"):
         text(raw[name], 256)
     text(raw["source_locator"], 2048)
@@ -185,25 +197,19 @@ class CatalogSnapshot:
 
 
 def validate_catalog_snapshot(value: object) -> CatalogSnapshot:
-    raw = _validate(value, _SNAPSHOT_SCHEMA)
-    if type(raw["catalog_revision"]) is not int:
-        _fail("invalid_revision")
-    _timestamp(raw["published_at"])
-    if len({s["source_id"] for s in raw["sources"]}) != len(raw["sources"]):
+    raw = validate_document(value, _SNAPSHOT_VALIDATOR)
+    timestamp(raw["published_at"])
+    source_ids = {s["source_id"] for s in raw["sources"]}
+    if len(source_ids) != len(raw["sources"]):
         _fail("duplicate_source")
     for source in raw["sources"]:
         text(source["source_id"], 256)
         for key in ("captured_at", "last_success_at"):
-            _timestamp(source[key], nullable=True)
-        if source["content_hash"] is not None and not _HASH.fullmatch(source["content_hash"]):
-            _fail("invalid_hash")
+            timestamp(source[key], nullable=True)
         if source["source_version"] is not None:
             text(source["source_version"], 256)
         if source["complete"] and source["exclusions"]:
             _fail("incomplete_coverage")
-        for key in ("accepted_count", "rejected_count"):
-            if type(source[key]) is not int:
-                _fail("invalid_count")
         for exclusion in source["exclusions"]:
             text(exclusion["reason"], 256)
             if exclusion["asset_id"] is not None:
@@ -211,7 +217,7 @@ def validate_catalog_snapshot(value: object) -> CatalogSnapshot:
     assets = tuple(validate_asset_record(a) for a in raw["assets"])
     if len({a.asset_id for a in assets}) != len(assets):
         _fail("duplicate_asset")
-    if any(a.source_id not in {s["source_id"] for s in raw["sources"]} for a in assets):
+    if any(a.source_id not in source_ids for a in assets):
         _fail("unknown_source")
     return CatalogSnapshot(
         1,
@@ -290,18 +296,19 @@ def project_asset(
     protected = {k: v for k, v in raw.items() if k != "description"}
     if scrub(protected, secrets) != protected or _contains_normalized_secret(protected, secrets):
         _fail("identity_contains_secret")
-    raw["description"] = _safe_free_text(raw["description"], 8192, secrets)
-    projected = validate_asset_record(raw)
+    # The record is already validated; only its description changes here, and
+    # _safe_free_text applies the same text bounds the record validator does.
+    projected = replace(record, description=_safe_free_text(raw["description"], 8192, secrets))
     normalized_body = None if body is None else _safe_free_text(body, 262144, secrets)
-    digest_value = projected.to_json_object()
-    # Observation times and staleness are not content identity.
-    digest_value.pop("captured_at")
-    digest_value.pop("stale")
-    return SearchDocument(
-        projected,
-        normalized_body,
-        canonical_digest({"record": digest_value, "body": normalized_body}),
-    )
+    return SearchDocument(projected, normalized_body, projection_digest(projected, normalized_body))
+
+
+def projection_digest(record: AssetRecord, body: str | None) -> str:
+    """The content identity of one projection; observation times and staleness excluded."""
+    value = record.to_json_object()
+    value.pop("captured_at")
+    value.pop("stale")
+    return canonical_digest({"record": value, "body": body})
 
 
 def discovery_records(
@@ -317,3 +324,54 @@ def discovery_records(
     ):
         _fail("offer_limit")
     return offered
+
+
+def failure_exclusions(reason: str, asset_id: str | None = None) -> tuple[Mapping[str, Any], ...]:
+    """The one recorded exclusion of a failed acquisition: a safe reason, no content."""
+    return (freeze_json({"asset_id": asset_id, "reason": reason}),)
+
+
+# Plain capture data shared by the staging reader and the store; the store never
+# depends on the reader (AGENTS.md ownership boundaries).
+
+
+@dataclass(frozen=True)
+class InventoryAsset:
+    record: AssetRecord
+    relative_package_path: str | None
+
+
+@dataclass(frozen=True)
+class SourceInventory:
+    source_id: str
+    revision: int = 0
+    records: tuple[InventoryAsset, ...] = ()
+    tombstones: frozenset[str] = frozenset()
+    owners: Mapping[str, str] = field(default_factory=lambda: freeze_json({}))
+
+    @classmethod
+    def empty(cls, source_id: str) -> "SourceInventory":
+        return cls(source_id)
+
+
+@dataclass(frozen=True)
+class StagedFile:
+    relative_path: str
+    sha256: str
+    size: int
+
+
+@dataclass(frozen=True)
+class SourceCapture:
+    source_id: str
+    config_digest: str
+    source_digest: str
+    source_version: str | None
+    captured_at: str
+    documents: tuple[SearchDocument, ...]
+    files: tuple[StagedFile, ...]
+    complete: bool
+    removed_asset_ids: frozenset[str]
+    package_paths: Mapping[str, str]
+    received_bytes: int
+    batch_durations_ms: tuple[float, ...] = ()

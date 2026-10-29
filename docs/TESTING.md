@@ -2094,7 +2094,9 @@ must account for every retained asset; deletion requires an explicit owned
 previous package only after confirming ordinary absence. Missing roots,
 invalid replacements, failed/partial reads and cancellation retain the last
 committed generation with stale/exclusion evidence. Identical captures are
-content revision no-ops. Search metadata, bodies and provenance digests publish
+revision no-ops; any snapshot-visible change, including a failure's stale and
+exclusion evidence or a recovery that clears it, increments the catalog
+revision once (spec section 4.6). Search metadata, bodies and provenance digests publish
 atomically in the existing SQLite store; raw originals stay under operator
 control, and known metadata secret values are scrubbed from projections.
 
@@ -2103,8 +2105,13 @@ enabled with user/workspace scope and explicit sources. There is one worker;
 `AssetCatalogService.rescan(source_id)` is the internal explicit rescan boundary,
 not a new command or HTTP endpoint. Local sources are checked every configured
 30 seconds by default; metadata documents are read initially or explicitly,
-with bounded failed-job backoff (60 seconds doubling to 3600). Work pauses before
-dispatch while execution, idle probes or warm-up are busy. Shutdown signals
+with bounded failed-job backoff (60 seconds doubling to 3600); an explicit rescan
+runs at once and does not wait out that backoff. Callers of one rescan share its
+job, which is cancelled only when no caller still waits. Work pauses before
+dispatch while execution or idle probes are busy; the worker starts with the
+served app, after startup warm-up. Cancelling the worker task propagates after
+its capture thread drains. Only the configured root itself must not be a symlink;
+symlinked ancestors such as `/tmp` on macOS are resolved. Shutdown signals
 cancellation and retains ownership until in-flight capture actually completes; cancelled or deadline-exhausted work cannot publish.
 Native Windows opens use FILE_COMPLETE_IF_OPLOCKED and reject an incomplete
 oplock break. A capture-owned monitor requests CancelSynchronousIo independently

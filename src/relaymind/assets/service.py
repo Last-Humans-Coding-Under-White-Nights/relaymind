@@ -5,9 +5,12 @@ readiness and the pre-warmup serving order belong to later milestones.
 """
 
 import asyncio
+import logging
+import math
 import threading
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from datetime import datetime, timedelta
+from typing import Any
 
 from relaymind.assets.settings import AssetSettings
 from relaymind.assets.sources import (
@@ -19,6 +22,11 @@ from relaymind.assets.sources import (
 from relaymind.store.asset_catalog import AssetCatalogStore, CatalogConflict, Publication
 from relaymind.store.run_store import TraceClock, utc_iso
 
+_LOGGER = logging.getLogger(__name__)
+
+# While a source is due but the gateway is busy, look again this often.
+_BUSY_RETRY_SECONDS = 0.1
+
 
 class AssetCatalogService:
     def __init__(
@@ -28,22 +36,21 @@ class AssetCatalogService:
         *,
         clock: TraceClock | None = None,
         busy: Callable[[], bool] = lambda: False,
-        wait: Callable[[float], Awaitable[object]] = asyncio.sleep,
     ) -> None:
         self.settings, self.store = settings, store
         self.clock = clock or TraceClock()
-        self.busy, self.wait = busy, wait
-        self.warmup_busy = False
+        self.busy = busy
         self._sources = {s.source_id: s for s in settings.sources}
         self._next = dict.fromkeys(self._sources, 0.0)
         self._failures = dict.fromkeys(self._sources, 0)
         self._retry = dict.fromkeys(self._sources, 0.0)
         self._pending: dict[str, asyncio.Future[Publication]] = {}
+        self._waiters = dict.fromkeys(self._sources, 0)
         self._lock = asyncio.Lock()
         self._task: asyncio.Task | None = None
         self._stopping = False
         self._cancel = threading.Event()
-        self._active_source: str | None = None
+        self._active_future: asyncio.Future[Publication] | None = None
         self._wakeup = asyncio.Event()
         self.store.recover_interrupted_jobs()
         for source_id, failures, next_attempt in self.store.schedules():
@@ -51,10 +58,7 @@ class AssetCatalogService:
                 continue
             self._failures[source_id] = failures
             if next_attempt is None and failures:
-                delay = min(
-                    settings.refresh.backoff_max_seconds,
-                    settings.refresh.backoff_initial_seconds * 2 ** min(failures - 1, 32),
-                )
+                delay = self._backoff(failures)
                 next_attempt = utc_iso(self.clock.utc_now() + timedelta(seconds=delay))
                 self.store.schedule_retry(source_id, next_attempt)
             if next_attempt is not None:
@@ -65,6 +69,13 @@ class AssetCatalogService:
                 self._retry[source_id] = self.clock.monotonic() + remaining
                 self._next[source_id] = self._retry[source_id]
 
+    def _backoff(self, failures: int) -> float:
+        refresh = self.settings.refresh
+        return min(
+            refresh.backoff_max_seconds,
+            refresh.backoff_initial_seconds * 2 ** min(failures - 1, 32),
+        )
+
     @property
     def running(self) -> bool:
         return self._task is not None and not self._task.done()
@@ -73,15 +84,22 @@ class AssetCatalogService:
         if not self.running:
             self._stopping = False
             self._task = asyncio.create_task(self._loop(), name="asset-catalog")
+            self._task.add_done_callback(_log_worker_end)
 
     async def stop(self) -> None:
         self._stopping = True
         self._cancel.set()
         self._wakeup.set()
         # Do not cancel/abandon to_thread: its checked staging must drain before
-        # closing the database. Publication remains on this event loop.
+        # closing the database. The SQL commit remains on this event loop.
         if self._task is not None:
-            await self._task
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                if not self._task.cancelled():
+                    raise
+            except Exception:
+                pass  # The done callback already logged how the worker ended.
         async with self._lock:
             for future in self._pending.values():
                 if not future.done():
@@ -89,6 +107,11 @@ class AssetCatalogService:
             self._pending.clear()
 
     async def rescan(self, source_id: str) -> Publication:
+        """Run this source now, ignoring its failure backoff (an explicit operator request).
+
+        Callers asking for the same source share one job. A cancelled caller cancels
+        that job only when no other caller still waits for it.
+        """
         if source_id not in self._sources:
             raise ValueError("unknown_source")
         if self._stopping:
@@ -100,54 +123,75 @@ class AssetCatalogService:
             # callers still awaiting the shared source job.
             future.add_done_callback(lambda done: None if done.cancelled() else done.exception())
             self._pending[source_id] = future
+        self._waiters[source_id] += 1
         self.start()
         self._wakeup.set()
         try:
             return await asyncio.shield(future)
         except asyncio.CancelledError:
-            if self._active_source == source_id:
-                self._cancel.set()
-            elif self._pending.get(source_id) is future:
-                self._pending.pop(source_id, None)
-                future.cancel()
+            if self._waiters[source_id] == 1 and not future.done():
+                if self._active_future is future:
+                    self._cancel.set()
+                elif self._pending.get(source_id) is future:
+                    self._pending.pop(source_id, None)
+                    future.cancel()
             raise
+        finally:
+            self._waiters[source_id] -= 1
+
+    def _due(self, now: float) -> str | None:
+        # An explicit rescan is due at once; a periodic one after its backoff.
+        pending = next(iter(self._pending), None)
+        if pending is not None:
+            return pending
+        return next(
+            (k for k in self._sources if self._next[k] <= now and self._retry[k] <= now), None
+        )
+
+    def _delay(self) -> float:
+        if self._pending:
+            return 0.0
+        now = self.clock.monotonic()
+        due = min((max(self._next[k], self._retry[k]) for k in self._sources), default=math.inf)
+        return max(0.0, due - now)
 
     async def _loop(self) -> None:
         while not self._stopping:
-            await self.tick()
+            # Cleared before the tick, so a rescan during it wakes the next wait.
+            self._wakeup.clear()
+            busy = await self.tick()
             if self._stopping:
                 break
-            # The injected wait is used for scheduling tests; production waking
-            # races a bounded wait so explicit rescan/shutdown is immediate.
-            sleeper = asyncio.create_task(self.wait(0.1))
-            wake = asyncio.create_task(self._wakeup.wait())
+            delay = _BUSY_RETRY_SECONDS if busy else self._delay()
+            # Sleep until the next source is due, or an explicit rescan/shutdown.
             try:
-                await asyncio.wait((sleeper, wake), return_when=asyncio.FIRST_COMPLETED)
-            finally:
-                for task in (sleeper, wake):
-                    if not task.done():
-                        task.cancel()
-                await asyncio.gather(sleeper, wake, return_exceptions=True)
-                self._wakeup.clear()
+                await asyncio.wait_for(self._wakeup.wait(), None if math.isinf(delay) else delay)
+            except TimeoutError:
+                pass
 
-    async def tick(self) -> None:
+    async def _drained(self, function: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        """Run blocking work in a thread; on cancellation, fence and drain it first."""
+        work = asyncio.ensure_future(asyncio.to_thread(function, *args, **kwargs))
+        try:
+            return await asyncio.shield(work)
+        except asyncio.CancelledError:
+            self._cancel.set()
+            try:
+                await asyncio.shield(work)
+            except Exception:
+                pass
+            raise
+
+    async def tick(self) -> bool:
+        """Run at most one due source; return True when a due source waits on busy."""
         async with self._lock:
-            if self._stopping or self.warmup_busy or self.busy():
-                return
-            now = self.clock.monotonic()
-            source_id = next((key for key in self._pending if self._retry[key] <= now), None)
+            if self._stopping:
+                return False
+            source_id = self._due(self.clock.monotonic())
             if source_id is None:
-                source_id = next(
-                    (
-                        key
-                        for key in self._sources
-                        if self._next[key] <= now and self._retry[key] <= now
-                    ),
-                    None,
-                )
-            if source_id is None:
-                return
-            self._active_source = source_id
+                return False
+            if self.busy():
+                return True
             self._cancel = threading.Event()
             started = self.clock.monotonic()
             source = self._sources[source_id]
@@ -156,28 +200,21 @@ class AssetCatalogService:
                 self.clock.utc_now(),
                 monotonic=self.clock.monotonic,
                 cancelled=lambda: self._cancel.is_set() or self._stopping,
-                observe_busy=lambda: self.warmup_busy or self.busy(),
+                observe_busy=self.busy,
             )
             future = self._pending.get(source_id)
+            self._active_future = future
             try:
-                inventory = self.store.inventory(source_id)
-                task = asyncio.create_task(
-                    asyncio.to_thread(capture_source, source, previous=inventory, context=context)
+                inventory = await self._drained(self.store.inventory, source_id)
+                capture = await self._drained(
+                    capture_source, source, previous=inventory, context=context
                 )
-                try:
-                    capture = await asyncio.shield(task)
-                except asyncio.CancelledError:
-                    self._cancel.set()
-                    try:
-                        await asyncio.shield(task)
-                    except SourceFailure:
-                        pass
-                    raise SourceFailure("cancelled", rejected_count=0) from None
                 context.check()
                 if self._stopping or self._cancel.is_set():
                     raise SourceFailure("cancelled", rejected_count=0)
-                result = self.store.publish(
-                    capture, expected_revision=inventory.revision, check=context.check
+                prepared = await self._drained(self.store.prepare, capture, check=context.check)
+                result = self.store.commit(
+                    prepared, expected_revision=inventory.revision, check=context.check
                 )
                 self._failures[source_id] = 0
                 self._retry[source_id] = 0
@@ -186,20 +223,13 @@ class AssetCatalogService:
                     if source.kind == "local_directory"
                     else float("inf")
                 )
-                self.store.finish_job(
-                    job_id,
-                    state="succeeded",
-                    reason=None,
-                    duration_ms=max(0, (self.clock.monotonic() - started) * 1000),
-                    received_bytes=context.received_bytes,
-                    batch_ms=tuple(context.batch_durations_ms),
-                    overlap_observed=context.busy_observed_at is not None,
-                    drain_ms=None
-                    if context.busy_observed_at is None
-                    else max(0, (self.clock.monotonic() - context.busy_observed_at) * 1000),
-                )
+                self._finish(job_id, context, started, "succeeded", None)
                 if future is not None and not future.done():
                     future.set_result(result)
+            except asyncio.CancelledError:
+                # The thread was drained; record the job, then let the cancel propagate.
+                self._fail(source_id, job_id, context, started, future, SourceFailure("cancelled"))
+                raise
             except Exception as exc:
                 failure = (
                     exc
@@ -208,33 +238,56 @@ class AssetCatalogService:
                         "catalog_conflict" if isinstance(exc, CatalogConflict) else "index_error"
                     )
                 )
-                self.store.record_failure(source_id, failure)
-                self._failures[source_id] += 1
-                refresh = self.settings.refresh
-                delay = min(
-                    refresh.backoff_max_seconds,
-                    refresh.backoff_initial_seconds * 2 ** min(self._failures[source_id] - 1, 32),
-                )
-                self._retry[source_id] = self.clock.monotonic() + delay
-                self._next[source_id] = self._retry[source_id]
-                self.store.schedule_retry(
-                    source_id, utc_iso(self.clock.utc_now() + timedelta(seconds=delay))
-                )
-                self.store.finish_job(
-                    job_id,
-                    state="cancelled" if failure.reason == "cancelled" else "failed",
-                    reason=failure.reason,
-                    duration_ms=max(0, (self.clock.monotonic() - started) * 1000),
-                    received_bytes=context.received_bytes,
-                    batch_ms=tuple(context.batch_durations_ms),
-                    overlap_observed=context.busy_observed_at is not None,
-                    drain_ms=None
-                    if context.busy_observed_at is None
-                    else max(0, (self.clock.monotonic() - context.busy_observed_at) * 1000),
-                )
-                if future is not None and not future.done():
-                    future.set_exception(failure)
+                self._fail(source_id, job_id, context, started, future, failure)
             finally:
-                self._active_source = None
+                self._active_future = None
                 if future is not None and self._pending.get(source_id) is future:
                     self._pending.pop(source_id)
+            return False
+
+    def _fail(
+        self,
+        source_id: str,
+        job_id: str,
+        context: CaptureContext,
+        started: float,
+        future: "asyncio.Future[Publication] | None",
+        failure: SourceFailure,
+    ) -> None:
+        self.store.record_failure(
+            source_id, rejected_count=failure.rejected_count, exclusions=failure.exclusions
+        )
+        self._failures[source_id] += 1
+        delay = self._backoff(self._failures[source_id])
+        self._retry[source_id] = self.clock.monotonic() + delay
+        self._next[source_id] = self._retry[source_id]
+        self.store.schedule_retry(
+            source_id, utc_iso(self.clock.utc_now() + timedelta(seconds=delay))
+        )
+        state = "cancelled" if failure.reason == "cancelled" else "failed"
+        self._finish(job_id, context, started, state, failure.reason)
+        if future is not None and not future.done():
+            future.set_exception(failure)
+
+    def _finish(
+        self, job_id: str, context: CaptureContext, started: float, state: str, reason: str | None
+    ) -> None:
+        now = self.clock.monotonic()
+        self.store.finish_job(
+            job_id,
+            state=state,
+            reason=reason,
+            duration_ms=max(0, (now - started) * 1000),
+            received_bytes=context.received_bytes,
+            batch_ms=tuple(context.batch_durations_ms),
+            overlap_observed=context.busy_observed_at is not None,
+            drain_ms=None
+            if context.busy_observed_at is None
+            else max(0, (now - context.busy_observed_at) * 1000),
+        )
+
+
+def _log_worker_end(task: asyncio.Task) -> None:
+    """A worker that ended with an error is reported, never lost silently."""
+    if not task.cancelled() and task.exception() is not None:
+        _LOGGER.error("asset catalog worker stopped", exc_info=task.exception())

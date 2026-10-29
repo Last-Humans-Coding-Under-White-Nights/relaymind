@@ -1,29 +1,26 @@
 """RM34/AC25: explicit configuration and one bounded cancellable catalog worker."""
 
 import asyncio
+import logging
 import threading
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import pytest
 
+from helpers import T0, FakeClock
 from launcher_helpers import write_config
+from relaymind.assets import service as s
+from relaymind.assets.settings import parse_asset_settings, parse_recommendation_settings
 from relaymind.assets.sources import SourceFailure
 from relaymind.launcher import LaunchError, build_app, load_config
 from relaymind.store import RunStore
+from relaymind.store.asset_catalog import AssetCatalogStore as facade
+from relaymind.store.run_store import utc_iso
 from test_asset_sources import imported, skill
 
 
-def service_api():
-    from relaymind.assets import service
-    from relaymind.assets.settings import parse_asset_settings, parse_recommendation_settings
-    from relaymind.store.asset_catalog import AssetCatalogStore
-
-    return service, parse_asset_settings, parse_recommendation_settings, AssetCatalogStore
-
-
 def settings(path, *, kind="local_directory", refresh=None):
-    _, parse, _, _ = service_api()
-    return parse(
+    return parse_asset_settings(
         {
             "sources": [
                 {
@@ -40,19 +37,13 @@ def settings(path, *, kind="local_directory", refresh=None):
     )
 
 
-class Clock:
-    def __init__(self):
-        self.seconds = 0.0
-
-    def monotonic(self):
-        return self.seconds
-
-    def utc_now(self):
-        return datetime(2026, 10, 29, tzinfo=UTC) + timedelta(seconds=self.seconds)
+def at(clock, seconds):
+    """Move a FakeClock to this many seconds after its start."""
+    clock.advance(seconds - (clock.mono - 1000.0))
 
 
 def test_config_paths_are_config_relative_and_settings_closed(tmp_path, monkeypatch):
-    _, parse, rec, _ = service_api()
+    parse, rec = parse_asset_settings, parse_recommendation_settings
     monkeypatch.chdir(tmp_path.parent)
     value = {
         "sources": [
@@ -158,9 +149,8 @@ def test_static_launcher_rejects_unqualified_artifacts_and_keeps_model_requireme
 
 
 def test_timed_scan_busy_pause_explicit_rescan_and_no_execution_slot(tmp_path):
-    s, _, _, facade = service_api()
     skill(tmp_path / "source")
-    clock, busy = Clock(), [True]
+    clock, busy = FakeClock(), [True]
     with RunStore(clock=clock) as run_store:
         catalog = facade(run_store)
         service = s.AssetCatalogService(
@@ -174,10 +164,10 @@ def test_timed_scan_busy_pause_explicit_rescan_and_no_execution_slot(tmp_path):
             await service.tick()
             assert catalog.snapshot().catalog_revision == 1
             skill(tmp_path / "source", description="Updated")
-            clock.seconds = 29
+            at(clock, 29)
             await service.tick()
             assert catalog.snapshot().catalog_revision == 1
-            clock.seconds = 30
+            at(clock, 30)
             await service.tick()
             assert catalog.snapshot().catalog_revision == 2
             assert run_store.active_run_id() is None
@@ -190,7 +180,6 @@ def test_timed_scan_busy_pause_explicit_rescan_and_no_execution_slot(tmp_path):
 
 
 def test_shutdown_drains_capture_and_never_commits_after_cancel(tmp_path, monkeypatch):
-    s, _, _, facade = service_api()
     skill(tmp_path / "source")
     entered, release = threading.Event(), threading.Event()
     real = s.capture_source
@@ -215,16 +204,15 @@ def test_shutdown_drains_capture_and_never_commits_after_cancel(tmp_path, monkey
             with pytest.raises(SourceFailure) as caught:
                 await pending
             assert str(caught.value) == "cancelled"
-            assert catalog.snapshot().catalog_revision == 0
+            assert catalog.snapshot().assets == ()
             assert catalog.job_outcomes()[0]["state"] == "cancelled"
 
         asyncio.run(run())
 
 
 def test_failure_backoff_and_import_not_periodically_polled(tmp_path):
-    s, _, _, facade = service_api()
     manifest, _ = imported(tmp_path / "import")
-    clock = Clock()
+    clock = FakeClock()
     with RunStore(clock=clock) as run_store:
         catalog = facade(run_store)
         service = s.AssetCatalogService(
@@ -235,19 +223,19 @@ def test_failure_backoff_and_import_not_periodically_polled(tmp_path):
             await service.tick()
             assert catalog.snapshot().catalog_revision == 1
             manifest.write_text("bad")
-            clock.seconds = 3600
+            at(clock, 3600)
             await service.tick()
             assert len(catalog.job_outcomes()) == 1
             with pytest.raises(SourceFailure):
                 await service.rescan("example")
             assert len(catalog.job_outcomes()) == 2
-            clock.seconds += 59
+            clock.advance(59)
             await service.tick()
             assert len(catalog.job_outcomes()) == 2
-            clock.seconds += 1
+            clock.advance(1)
             await service.tick()
             assert len(catalog.job_outcomes()) == 3
-            clock.seconds += 119
+            clock.advance(119)
             await service.tick()
             assert len(catalog.job_outcomes()) == 3
             await service.stop()
@@ -256,7 +244,6 @@ def test_failure_backoff_and_import_not_periodically_polled(tmp_path):
 
 
 def test_cancelling_direct_tick_drains_thread_before_return(tmp_path, monkeypatch):
-    s, _, _, facade = service_api()
     skill(tmp_path / "source")
     entered, release = threading.Event(), threading.Event()
     real = s.capture_source
@@ -278,18 +265,19 @@ def test_cancelling_direct_tick_drains_thread_before_return(tmp_path, monkeypatc
             await asyncio.sleep(0.01)
             assert not task.done()
             release.set()
-            await task
+            # The thread is drained first; then the cancellation propagates.
+            with pytest.raises(asyncio.CancelledError):
+                await task
             await service.stop()
-            assert catalog.snapshot().catalog_revision == 0
+            assert catalog.snapshot().assets == ()
             assert catalog.job_outcomes()[0]["state"] == "cancelled"
 
         asyncio.run(run())
 
 
 def test_interrupted_recovery_observes_initial_backoff(tmp_path):
-    s, _, _, facade = service_api()
     skill(tmp_path / "source")
-    clock = Clock()
+    clock = FakeClock()
     with RunStore(clock=clock) as run_store:
         catalog = facade(run_store)
         catalog.begin_job("example", "0" * 64)
@@ -297,26 +285,25 @@ def test_interrupted_recovery_observes_initial_backoff(tmp_path):
 
         async def run():
             await service.tick()
-            assert catalog.snapshot().catalog_revision == 0
-            clock.seconds = 60
+            assert catalog.snapshot().assets == ()
+            at(clock, 60)
             await service.tick()
-            assert catalog.snapshot().catalog_revision == 1
+            assert catalog.snapshot().assets
             await service.stop()
 
         asyncio.run(run())
 
 
 def test_inflight_overlap_and_batch_duration_are_observed(tmp_path, monkeypatch):
-    s, _, _, facade = service_api()
     skill(tmp_path / "source")
-    clock, busy = Clock(), [False]
+    clock, busy = FakeClock(), [False]
     actual = s.capture_source
 
     def overlap(source, **kwargs):
         busy[0] = True
-        clock.seconds = 0.02
+        at(clock, 0.02)
         kwargs["context"].check()
-        clock.seconds = 0.04
+        at(clock, 0.04)
         return actual(source, **kwargs)
 
     monkeypatch.setattr(s, "capture_source", overlap)
@@ -331,8 +318,8 @@ def test_inflight_overlap_and_batch_duration_are_observed(tmp_path, monkeypatch)
             outcome = catalog.job_outcomes()[0]
             assert outcome["overlap_observed"]
             assert outcome["drain_ms"] == pytest.approx(20)
-            assert outcome["batch_ms"] == [40]
-            assert outcome["duration_ms"] == 40
+            assert outcome["batch_ms"] == [pytest.approx(40)]
+            assert outcome["duration_ms"] == pytest.approx(40)
             await service.stop()
 
         asyncio.run(run())
@@ -345,18 +332,17 @@ def test_one_job_deadline_covers_preparation_and_rollback_before_commit(
     """RM34/AC25: publication never gets a fresh 60-second budget."""
     import relaymind.store.asset_catalog as storage
 
-    s, _, _, facade = service_api()
     skill(tmp_path / "source")
-    clock = Clock()
+    clock = FakeClock()
     real_capture, real_project = s.capture_source, storage.project_asset
 
     def near_deadline(*args, **kwargs):
         got = real_capture(*args, **kwargs)
-        clock.seconds = 59.9
+        at(clock, 59.9)
         return got
 
     def expensive_projection(*args, **kwargs):
-        clock.seconds += 1
+        clock.advance(1)
         return real_project(*args, **kwargs)
 
     monkeypatch.setattr(s, "capture_source", near_deadline)
@@ -366,9 +352,7 @@ def test_one_job_deadline_covers_preparation_and_rollback_before_commit(
         catalog = facade(store)
         if phase == "transaction":
             with store.sql_transaction() as connection:
-                connection.create_function(
-                    "advance_job_clock", 0, lambda: setattr(clock, "seconds", 60.9)
-                )
+                connection.create_function("advance_job_clock", 0, lambda: at(clock, 60.9))
                 connection.execute(
                     "CREATE TRIGGER slow_publish AFTER INSERT ON asset_catalog_assets "
                     "BEGIN SELECT advance_job_clock(); END"
@@ -382,7 +366,10 @@ def test_one_job_deadline_covers_preparation_and_rollback_before_commit(
             assert outcome["duration_ms"] == pytest.approx(60900)
             assert outcome["state"] == "failed"
             assert outcome["reason"] == "deadline"
-            assert catalog.snapshot().catalog_revision == 0
+            # Only the failure observation is visible; no asset was committed.
+            assert catalog.snapshot().sources[0]["exclusions"] == [
+                {"asset_id": None, "reason": "deadline"}
+            ]
             assert catalog.snapshot().assets == ()
 
         asyncio.run(run())
@@ -390,27 +377,183 @@ def test_one_job_deadline_covers_preparation_and_rollback_before_commit(
 
 def test_interrupted_started_retry_uses_new_failure_backoff(tmp_path):
     """RM34/AC25: recovery cannot reuse the elapsed schedule of the retry that crashed."""
-    s, _, _, facade = service_api()
     skill(tmp_path / "source")
-    clock = Clock()
+    clock = FakeClock()
     with RunStore(clock=clock) as store:
         catalog = facade(store)
-        catalog.record_failure("example", SourceFailure("source_unavailable"))
-        catalog.schedule_retry("example", "2026-10-29T00:01:00Z")
-        clock.seconds = 60
+        failure = SourceFailure("source_unavailable")
+        catalog.record_failure(
+            "example", rejected_count=failure.rejected_count, exclusions=failure.exclusions
+        )
+        catalog.schedule_retry("example", utc_iso(T0 + timedelta(seconds=60)))
+        at(clock, 60)
         catalog.begin_job("example", "0" * 64)
-        clock.seconds = 61
+        at(clock, 61)
         service = s.AssetCatalogService(settings(tmp_path / "source"), catalog, clock=clock)
 
         async def run():
             await service.tick()
-            assert catalog.snapshot().catalog_revision == 0
-            clock.seconds = 180
+            assert catalog.snapshot().assets == ()
+            at(clock, 180)
             await service.tick()
-            assert catalog.snapshot().catalog_revision == 0
-            clock.seconds = 181
+            assert catalog.snapshot().assets == ()
+            at(clock, 181)
             await service.tick()
-            assert catalog.snapshot().catalog_revision == 1
+            assert catalog.snapshot().assets
             await service.stop()
 
         asyncio.run(run())
+
+
+def blocking_capture(monkeypatch):
+    """Hold capture_source in its worker thread until the test releases it."""
+    entered, release = threading.Event(), threading.Event()
+    real = s.capture_source
+
+    def blocked(source, **kwargs):
+        entered.set()
+        release.wait(timeout=3)
+        return real(source, **kwargs)
+
+    monkeypatch.setattr(s, "capture_source", blocked)
+    return entered, release
+
+
+def test_cancelling_the_worker_task_mid_scan_ends_it(tmp_path, monkeypatch):
+    """RM34/AC25: a task cancellation propagates; the worker never swallows it."""
+    skill(tmp_path / "source")
+    entered, release = blocking_capture(monkeypatch)
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(tmp_path / "source"), catalog)
+
+        async def run():
+            service.start()
+            assert await asyncio.to_thread(entered.wait, 1)
+            service._task.cancel()
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(service._task, 2)
+            assert service._task.cancelled()
+            assert catalog.job_outcomes()[0]["state"] == "cancelled"
+            await asyncio.wait_for(service.stop(), 2)
+
+        asyncio.run(run())
+
+
+def test_one_cancelled_rescan_waiter_does_not_cancel_the_others(tmp_path, monkeypatch):
+    """RM34/AC25: a shared rescan is cancelled only when no caller still waits."""
+    skill(tmp_path / "source")
+    entered, release = blocking_capture(monkeypatch)
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(tmp_path / "source"), catalog)
+
+        async def run():
+            first = asyncio.create_task(service.rescan("example"))
+            second = asyncio.create_task(service.rescan("example"))
+            assert await asyncio.to_thread(entered.wait, 1)
+            first.cancel()
+            await asyncio.sleep(0.01)
+            release.set()
+            result = await asyncio.wait_for(second, 2)
+            assert result.revision == 1
+            assert first.cancelled()
+            assert catalog.job_outcomes()[0]["state"] == "succeeded"
+            await service.stop()
+
+        asyncio.run(run())
+
+
+def test_the_last_cancelled_rescan_waiter_cancels_the_job(tmp_path, monkeypatch):
+    """RM34/AC25: with no caller left waiting, the explicit job is cancelled."""
+    skill(tmp_path / "source")
+    entered, release = blocking_capture(monkeypatch)
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(tmp_path / "source"), catalog)
+
+        async def run():
+            waiter = asyncio.create_task(service.rescan("example"))
+            assert await asyncio.to_thread(entered.wait, 1)
+            waiter.cancel()
+            await asyncio.sleep(0.01)
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await waiter
+            await service.stop()
+            assert catalog.job_outcomes()[0]["state"] == "cancelled"
+            assert catalog.snapshot().assets == ()
+
+        asyncio.run(run())
+
+
+def test_explicit_rescan_runs_during_failure_backoff(tmp_path):
+    """RM34/AC25: an operator rescan does not wait out the failure backoff."""
+    root = tmp_path / "source"
+    clock = FakeClock()
+    with RunStore(clock=clock) as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(
+            settings(root, refresh={"backoff_initial_seconds": 3600}), catalog, clock=clock
+        )
+
+        async def run():
+            await service.tick()
+            assert catalog.job_outcomes()[0]["state"] == "failed"
+            skill(root)
+            result = await asyncio.wait_for(service.rescan("example"), 2)
+            assert result.changed
+            assert len(catalog.job_outcomes()) == 2
+            await service.stop()
+
+        asyncio.run(run())
+
+
+def test_lifespan_stops_the_probe_and_logs_when_the_worker_died(tmp_path, monkeypatch, caplog):
+    """RM34/AC25: a dead worker is logged, and shutdown still stops the idle probe."""
+    from helpers import ScriptedAdapter
+
+    skill(tmp_path / "ordinary")
+    path = write_config(tmp_path)
+    path.write_text(
+        path.read_text() + '\n[recommendations]\nenabled=true\nuser_id="u"\nworkspace_id="w"\n'
+        '\n[[assets.sources]]\nsource_id="example"\nkind="local_directory"\npath="ordinary"\n'
+    )
+    launched = build_app(load_config(path), local_adapter=ScriptedAdapter(turns=[]))
+    service = launched.app.state.asset_catalog
+
+    async def broken():
+        raise RuntimeError("injected worker failure")
+
+    async def failing_stop():
+        raise RuntimeError("injected stop failure")
+
+    import relaymind.orchestrator.warmup as warmup_module
+
+    stopped = []
+    real_stop = warmup_module.IdleProbe.stop
+
+    async def tracking_stop(probe):
+        stopped.append(probe)
+        await real_stop(probe)
+
+    monkeypatch.setattr(service, "tick", broken)
+    monkeypatch.setattr(warmup_module.IdleProbe, "stop", tracking_stop)
+
+    async def run():
+        with caplog.at_level(logging.ERROR, logger="relaymind.assets.service"):
+            async with launched.app.router.lifespan_context(launched.app):
+                await asyncio.sleep(0.05)
+                assert not service.running
+        assert "asset catalog worker stopped" in caplog.text
+        assert len(stopped) == 1
+        # Even a failing catalog stop never skips the idle probe's stop.
+        monkeypatch.setattr(service, "stop", failing_stop)
+        with pytest.raises(RuntimeError, match="injected stop failure"):
+            async with launched.app.router.lifespan_context(launched.app):
+                pass
+        assert len(stopped) == 2
+
+    asyncio.run(run())
+    launched.orchestrator.store.close()

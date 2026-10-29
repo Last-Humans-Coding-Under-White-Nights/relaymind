@@ -67,14 +67,22 @@ def _info(value: os.stat_result) -> SourceInfo:
     )
 
 
-def _open_directory(path: Path) -> int:
-    absolute = path.absolute()
-    descriptor = os.open(absolute.anchor, os.O_RDONLY | os.O_DIRECTORY)
+def _component(part: str) -> str:
+    if part in ("", ".", "..") or "\x00" in part:
+        raise OSError("invalid_component")
+    return part
+
+
+def _walk(descriptor: int, parts: list[str]) -> int:
+    """Open each directory part below descriptor without following links.
+
+    Owns descriptor: on success the returned one replaces it, on failure it is closed.
+    """
     try:
-        for part in absolute.parts[1:]:
-            if part in ("", ".", ".."):
-                raise OSError("invalid_component")
-            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+        for part in parts:
+            child = os.open(
+                _component(part), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor
+            )
             os.close(descriptor)
             descriptor = child
         return descriptor
@@ -83,20 +91,19 @@ def _open_directory(path: Path) -> int:
         raise
 
 
+def _open_directory(path: Path) -> int:
+    # Spec 14.5: only the configured root itself must not be a symlink. Its
+    # ancestors (such as /tmp on macOS) are operator setup, so they are resolved;
+    # the root and everything below it are opened without following links.
+    absolute = path.absolute()
+    parent = Path(os.path.realpath(absolute.parent))
+    parts = [*parent.parts[1:], _component(absolute.name)]
+    return _walk(os.open(parent.anchor, os.O_RDONLY | os.O_DIRECTORY), parts)
+
+
 def _parent(root_fd: int, relative: str) -> tuple[int, str]:
-    parts = relative.split("/")
-    if any(part in ("", ".", "..") or "\x00" in part for part in parts):
-        raise OSError("invalid_component")
-    descriptor = os.dup(root_fd)
-    try:
-        for part in parts[:-1]:
-            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
-            os.close(descriptor)
-            descriptor = child
-        return descriptor, parts[-1]
-    except BaseException:
-        os.close(descriptor)
-        raise
+    parts = [_component(part) for part in relative.split("/")]
+    return _walk(os.dup(root_fd), parts[:-1]), parts[-1]
 
 
 class _PosixFile:

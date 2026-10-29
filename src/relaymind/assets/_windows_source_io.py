@@ -173,7 +173,7 @@ class NativeIoControl:
     """
 
     def __init__(self, api: "_Api", context: CaptureIoControl | None = None) -> None:
-        self.api, self.context = api, context
+        self.api = api
         self._deadline = time.monotonic() + 60 if context is None else context.deadline
         self._clock = time.monotonic if context is None else context.monotonic
         self._cancelled = (lambda: False) if context is None else context.cancelled
@@ -447,7 +447,6 @@ class WindowsSourceTree:
         self._owns_control = native is None
         self._handles: list[int] = []
         self._directories: dict[tuple[str, ...], int] = {}
-        self._files: dict[str, _WindowsFile] = {}
         try:
             anchor, parts = _root_parts(root)
             handle = self._directory_open(anchor, None)
@@ -497,9 +496,7 @@ class WindowsSourceTree:
             if info.is_reparse or not info.is_regular:
                 raise OSError(errno.ELOOP, "source_not_regular")
             self._handles.append(handle)
-            source_file = _WindowsFile(self.api, handle)
-            self._files[relative] = source_file
-            return source_file
+            return _WindowsFile(self.api, handle)
         except BaseException:
             self.control.invoke(self.api.close, handle, cleanup=True)
             raise
@@ -534,7 +531,6 @@ class WindowsSourceTree:
         for handle in reversed(self._handles):
             self.control.invoke(self.api.close, handle, cleanup=True)
         self._handles.clear()
-        self._files.clear()
         self._directories.clear()
         if self._owns_control:
             self.control.close()

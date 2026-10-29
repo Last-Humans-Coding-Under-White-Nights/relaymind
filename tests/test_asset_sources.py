@@ -7,22 +7,16 @@ from datetime import UTC, datetime
 
 import pytest
 
+from relaymind.assets import sources
+from relaymind.assets.settings import SourceConfig
 from test_asset_catalog import record
 
 
-def readers():
-    from relaymind.assets import sources
-    from relaymind.assets.settings import SourceConfig
-
-    return sources, SourceConfig
-
-
 def capture(path, kind="local_directory", *, source_id="example", previous=None, **context):
-    s, config = readers()
-    return s.capture_source(
-        config(source_id, kind, path),
-        previous=previous or s.SourceInventory.empty(source_id),
-        context=s.CaptureContext(datetime(2026, 10, 29, tzinfo=UTC), **context),
+    return sources.capture_source(
+        SourceConfig(source_id, kind, path),
+        previous=previous or sources.SourceInventory.empty(source_id),
+        context=sources.CaptureContext(datetime(2026, 10, 29, tzinfo=UTC), **context),
     )
 
 
@@ -63,7 +57,6 @@ def imported(path, *, records=None, complete=False, removed=(), **changes):
 
 
 def test_local_ordinary_folder_identity_original_hash_and_manifest(tmp_path):
-    s, _ = readers()
     root = tmp_path / "skills"
     source_file = skill(
         root / "Zed", name="中文 Name", metadata="metadata:\n  dependencies: [other:x]\n"
@@ -92,14 +85,13 @@ def test_local_ordinary_folder_identity_original_hash_and_manifest(tmp_path):
     old_id = actual.record.asset_id
     skill(root / "Zed", name="Renamed")
     assert capture(root).documents[1].record.asset_id == old_id
-    assert s.SourceInventory.empty("example").records == ()
+    assert sources.SourceInventory.empty("example").records == ()
 
 
 def test_root_entry_prevents_child_fallback_even_when_invalid(tmp_path):
     skill(tmp_path / "child")
     (tmp_path / "SKILL.md").write_text("invalid")
-    s, _ = readers()
-    with pytest.raises(s.SourceFailure) as caught:
+    with pytest.raises(sources.SourceFailure) as caught:
         capture(tmp_path)
     assert caught.value.reason == "invalid_data"
     assert caught.value.rejected_count == 1
@@ -122,9 +114,8 @@ def test_root_entry_prevents_child_fallback_even_when_invalid(tmp_path):
     ],
 )
 def test_unsafe_or_malformed_local_input_fails_whole_scan(tmp_path, payload):
-    s, _ = readers()
     (tmp_path / "SKILL.md").write_text(payload)
-    with pytest.raises(s.SourceFailure) as caught:
+    with pytest.raises(sources.SourceFailure) as caught:
         capture(tmp_path)
     assert "<script>" not in str(caught.value)
 
@@ -151,7 +142,6 @@ def symlink(link, target, *, directory=False):
 
 @pytest.mark.parametrize("target", ["root", "skill", "manifest", "child", "original"])
 def test_symlinks_never_followed(tmp_path, target):
-    s, _ = readers()
     real = tmp_path / "real"
     skill(real)
     assert capture(real).documents
@@ -184,7 +174,7 @@ def test_symlinks_never_followed(tmp_path, target):
         (root.parent / "hello.bin").unlink()
         symlink(root.parent / "hello.bin", outside)
         kind = "metadata_import"
-    with pytest.raises(s.SourceFailure):
+    with pytest.raises(sources.SourceFailure):
         capture(root, kind)
 
 
@@ -205,8 +195,7 @@ def test_import_closed_consistent_and_no_body_or_availability(tmp_path):
         changed = json.loads(json.dumps(data))
         changed["records"][0]["record"][field] = value
         manifest.write_text(json.dumps(changed))
-        s, _ = readers()
-        with pytest.raises(s.SourceFailure):
+        with pytest.raises(sources.SourceFailure):
             capture(manifest, "metadata_import")
 
 
@@ -226,7 +215,6 @@ def test_import_closed_consistent_and_no_body_or_availability(tmp_path):
     ],
 )
 def test_invalid_import_rejects_entire_document(tmp_path, change):
-    s, _ = readers()
     manifest, data = imported(tmp_path)
     entry = data["records"][0]
     if change == "source":
@@ -253,34 +241,32 @@ def test_invalid_import_rejects_entire_document(tmp_path, change):
         manifest.write_text('{"schema_version":1,"schema_version":1}')
     else:
         manifest.write_text(json.dumps(data))
-    with pytest.raises(s.SourceFailure):
+    with pytest.raises(sources.SourceFailure):
         capture(manifest, "metadata_import")
 
 
 def test_local_limits_cancel_and_deadline_abort_before_publication(tmp_path):
-    s, _ = readers()
     skill(tmp_path, body="x" * (256 * 1024 + 1))
-    with pytest.raises(s.SourceFailure) as caught:
+    with pytest.raises(sources.SourceFailure) as caught:
         capture(tmp_path)
     assert caught.value.reason == "size_limit"
     skill(tmp_path)
-    with pytest.raises(s.SourceFailure) as caught:
+    with pytest.raises(sources.SourceFailure) as caught:
         capture(tmp_path, cancelled=lambda: True)
     assert caught.value.reason == "cancelled"
     ticks = iter([0.0, 61.0])
-    with pytest.raises(s.SourceFailure) as caught:
+    with pytest.raises(sources.SourceFailure) as caught:
         capture(tmp_path, monotonic=lambda: next(ticks, 61.0))
     assert caught.value.reason == "deadline"
     (tmp_path / "SKILL.md").unlink()
     for index in range(1001):
         (tmp_path / str(index)).touch()
-    with pytest.raises(s.SourceFailure) as caught:
+    with pytest.raises(sources.SourceFailure) as caught:
         capture(tmp_path)
     assert caught.value.reason == "record_limit"
 
 
 def test_reused_original_is_hashed_once_but_changed_capture_rejected(tmp_path, monkeypatch):
-    s, _ = readers()
     manifest, data = imported(tmp_path)
     second = json.loads(json.dumps(data["records"][0]))
     second["record"]["asset_id"] = "example:second"
@@ -289,7 +275,7 @@ def test_reused_original_is_hashed_once_but_changed_capture_rejected(tmp_path, m
     got = capture(manifest, "metadata_import")
     assert got.received_bytes == manifest.stat().st_size + 5
     assert len(got.files) == 2
-    real = s._Stage.read
+    real = sources._Stage.read
     calls = [0]
 
     def changed(self, relative, *args, **kwargs):
@@ -299,14 +285,13 @@ def test_reused_original_is_hashed_once_but_changed_capture_rejected(tmp_path, m
                 (tmp_path / relative).write_bytes(b"other")
         return real(self, relative, *args, **kwargs)
 
-    monkeypatch.setattr(s._Stage, "read", changed)
-    with pytest.raises(s.SourceFailure):
+    monkeypatch.setattr(sources._Stage, "read", changed)
+    with pytest.raises(sources.SourceFailure):
         capture(manifest, "metadata_import")
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Windows pins opened files against rename")
 def test_path_swap_during_read_and_vanished_root_fail_without_absence(tmp_path, monkeypatch):
-    s, _ = readers()
     root = tmp_path / "root"
     original = skill(root)
     import os
@@ -323,41 +308,39 @@ def test_path_swap_during_read_and_vanished_root_fail_without_absence(tmp_path, 
         return raw
 
     monkeypatch.setattr(os, "read", swap)
-    with pytest.raises(s.SourceFailure):
+    with pytest.raises(sources.SourceFailure):
         capture(root)
     monkeypatch.setattr(os, "read", actual)
     original.unlink()
     (root / "old").rename(original)
-    stage_read = s._Stage.read
+    stage_read = sources._Stage.read
 
     def vanish(self, *args, **kwargs):
         got = stage_read(self, *args, **kwargs)
         root.rename(tmp_path / "gone")
         return got
 
-    monkeypatch.setattr(s._Stage, "read", vanish)
-    with pytest.raises(s.SourceFailure):
+    monkeypatch.setattr(sources._Stage, "read", vanish)
+    with pytest.raises(sources.SourceFailure):
         capture(root)
 
 
 def test_sparse_oversized_original_and_manifest_rejected_before_read(tmp_path):
-    s, _ = readers()
     manifest, data = imported(tmp_path)
     with (tmp_path / "hello.bin").open("wb") as file:
         file.truncate(10 * 1024 * 1024 + 1)
-    with pytest.raises(s.SourceFailure) as caught:
+    with pytest.raises(sources.SourceFailure) as caught:
         capture(manifest, "metadata_import")
     assert caught.value.reason == "size_limit"
     assert caught.value.received_bytes == manifest.stat().st_size
     with manifest.open("wb") as file:
         file.truncate(4 * 1024 * 1024 + 1)
-    with pytest.raises(s.SourceFailure) as caught:
+    with pytest.raises(sources.SourceFailure) as caught:
         capture(manifest, "metadata_import")
     assert caught.value.received_bytes == 0
 
 
 def test_import_total_bytes_and_combined_operation_limits(tmp_path):
-    s, _ = readers()
     manifest, data = imported(tmp_path)
     empty_hash = hashlib.sha256(bytes(10 * 1024 * 1024)).hexdigest()
     template = data["records"][0]
@@ -371,20 +354,19 @@ def test_import_total_bytes_and_combined_operation_limits(tmp_path):
             file.truncate(10 * 1024 * 1024)
         data["records"].append(entry)
     manifest.write_text(json.dumps(data))
-    with pytest.raises(s.SourceFailure) as caught:
+    with pytest.raises(sources.SourceFailure) as caught:
         capture(manifest, "metadata_import")
     assert caught.value.reason == "size_limit"
     assert caught.value.received_bytes > 100 * 1024 * 1024
     data["records"] = [template] * 501
     data["removed_asset_ids"] = [f"example:removed{i}" for i in range(500)]
     manifest.write_text(json.dumps(data))
-    with pytest.raises(s.SourceFailure) as caught:
+    with pytest.raises(sources.SourceFailure) as caught:
         capture(manifest, "metadata_import")
     assert caught.value.reason == "record_limit"
 
 
 def test_frontmatter_precedence_manifest_validation_and_no_resource_reads(tmp_path):
-    s, _ = readers()
     skill(
         tmp_path,
         metadata="metadata:\n  version: front\n  languages: [zh]\nresources: [/never-read]\n",
@@ -395,10 +377,10 @@ def test_frontmatter_precedence_manifest_validation_and_no_resource_reads(tmp_pa
     assert got.documents[0].record.source_version == "front"
     assert got.documents[0].record.language_tags == ("zh",)
     manifest.write_text('{"version":true}')
-    with pytest.raises(s.SourceFailure):
+    with pytest.raises(sources.SourceFailure):
         capture(tmp_path)
     manifest.write_text('{"version":"a","version":"b"}')
-    with pytest.raises(s.SourceFailure):
+    with pytest.raises(sources.SourceFailure):
         capture(tmp_path)
 
 
@@ -471,18 +453,22 @@ def test_explicit_null_frontmatter_version_retains_previous_generation(tmp_path)
     from relaymind.store import RunStore
     from relaymind.store.asset_catalog import AssetCatalogStore
 
-    s, _ = readers()
     skill(tmp_path, metadata="metadata:\n  version: valid\n")
     with RunStore() as store:
         catalog = AssetCatalogStore(store)
         catalog.publish(capture(tmp_path), expected_revision=0)
         first = catalog.snapshot()
         skill(tmp_path, metadata="metadata:\n  version: null\n")
-        with pytest.raises(s.SourceFailure) as caught:
+        with pytest.raises(sources.SourceFailure) as caught:
             capture(tmp_path, previous=catalog.inventory("example"))
-        catalog.record_failure("example", caught.value)
+        catalog.record_failure(
+            "example",
+            rejected_count=caught.value.rejected_count,
+            exclusions=caught.value.exclusions,
+        )
         snapshot = catalog.snapshot()
-        assert snapshot.catalog_revision == first.catalog_revision
+        # Only the failure observation changes the revision; the generation is kept.
+        assert snapshot.catalog_revision == first.catalog_revision + 1
         assert snapshot.assets[0].content_hash == first.assets[0].content_hash
         assert snapshot.assets[0].source_version == "valid"
         assert snapshot.assets[0].stale
@@ -490,11 +476,10 @@ def test_explicit_null_frontmatter_version_retains_previous_generation(tmp_path)
 
 def test_metadata_import_language_tag_must_match_whole_string(tmp_path):
     """RM34/AC25: ASCII language tags cannot acquire a trailing newline via imports."""
-    s, _ = readers()
     manifest, data = imported(tmp_path)
     data["records"][0]["record"]["language_tags"] = ["en\n"]
     manifest.write_text(json.dumps(data))
-    with pytest.raises(s.SourceFailure):
+    with pytest.raises(sources.SourceFailure):
         capture(manifest, "metadata_import")
 
 
@@ -506,7 +491,6 @@ def test_native_io_fence_keeps_unresponsive_operation_owned_until_completion(dea
 
     from relaymind.assets._windows_source_io import NativeIoAborted, NativeIoControl
 
-    s, _ = readers()
     cancel, entered, release, requested = (threading.Event() for _ in range(4))
     closed, outcomes = [], []
 
@@ -523,7 +507,9 @@ def test_native_io_fence_keeps_unresponsive_operation_owned_until_completion(dea
             closed.append(handle)
 
     def worker():
-        context = s.CaptureContext(datetime(2026, 10, 29, tzinfo=UTC), cancelled=cancel.is_set)
+        context = sources.CaptureContext(
+            datetime(2026, 10, 29, tzinfo=UTC), cancelled=cancel.is_set
+        )
         if deadline:
             context.deadline = time.monotonic() + 0.03
         controller = NativeIoControl(Api(), context)
@@ -574,7 +560,6 @@ def test_native_create_rejects_alternate_or_cancelled_success_with_exact_handle_
 
     from relaymind.assets._windows_source_io import NativeIoControl, _Api
 
-    s, _ = readers()
     cancelled = threading.Event()
     closed = []
     api = object.__new__(_Api)
@@ -590,7 +575,7 @@ def test_native_create_rejects_alternate_or_cancelled_success_with_exact_handle_
         return status
 
     api.open = native_open
-    context = s.CaptureContext(datetime(2026, 10, 29, tzinfo=UTC), cancelled=cancelled.is_set)
+    context = sources.CaptureContext(datetime(2026, 10, 29, tzinfo=UTC), cancelled=cancelled.is_set)
     api.control = NativeIoControl(api, context)
     try:
         with pytest.raises(OSError):
@@ -603,7 +588,6 @@ def test_native_create_rejects_alternate_or_cancelled_success_with_exact_handle_
 
 def test_reused_physical_original_is_hashed_once_for_all_declared_records(tmp_path, monkeypatch):
     """RM34/AC25: one staged physical original produces one byte hash, not one per alias."""
-    s, _ = readers()
     manifest, data = imported(tmp_path)
     os.link(tmp_path / "hello.bin", tmp_path / "hello-alias.bin")
     second = json.loads(json.dumps(data["records"][0]))
@@ -611,7 +595,7 @@ def test_reused_physical_original_is_hashed_once_for_all_declared_records(tmp_pa
     second["original_path"] = "hello-alias.bin"
     data["records"].append(second)
     manifest.write_text(json.dumps(data))
-    original_sha256 = s.hashlib.sha256
+    original_sha256 = sources.hashlib.sha256
     observed_inputs = []
 
     class ObservedHash:
@@ -627,10 +611,35 @@ def test_reused_physical_original_is_hashed_once_for_all_declared_records(tmp_pa
         def hexdigest(self):
             return self.hash.hexdigest()
 
-    monkeypatch.setattr(s.hashlib, "sha256", ObservedHash)
+    monkeypatch.setattr(sources.hashlib, "sha256", ObservedHash)
     captured = capture(manifest, "metadata_import")
     assert captured.received_bytes == manifest.stat().st_size + 5
     assert sum(value == b"hello" for value in observed_inputs) == 1
     assert {d.record.content_hash for d in captured.documents} == {
         "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
     }
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX ancestor symlink semantics")
+def test_symlinked_ancestor_is_resolved_but_a_symlinked_root_is_refused(tmp_path):
+    """RM34/AC25, spec 14.5: only the configured root itself must not be a symlink.
+
+    A configured path under a symlinked folder (such as /tmp on macOS) is scanned;
+    the root and everything below it are still opened without following links.
+    """
+    real = tmp_path / "real"
+    skill(real / "skills")
+    alias = tmp_path / "alias"
+    symlink(alias, real, directory=True)
+    assert capture(alias / "skills").documents
+    symlink(real / "root-link", real / "skills", directory=True)
+    with pytest.raises(sources.SourceFailure):
+        capture(alias / "root-link")
+
+
+def test_json_manifest_rejects_non_finite_numbers():
+    """RM34/AC25: 1e999 parses to infinity; a staged manifest must not carry it."""
+    with pytest.raises(sources.SourceFailure):
+        sources._json(b'{"version": 1e999}')
+    with pytest.raises(sources.SourceFailure):
+        sources._json(b'{"version": NaN}')

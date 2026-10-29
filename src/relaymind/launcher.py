@@ -49,6 +49,11 @@ from relaymind.api.chat_request import SAMPLING_OPTIONS
 from relaymind.api.server import serve, validate_bind_host
 from relaymind.assets.service import AssetCatalogService
 from relaymind.assets.settings import (
+    ADAPTATION_FIELDS,
+    ASSET_FIELDS,
+    HYBRID_FIELDS,
+    RECOMMENDATION_FIELDS,
+    REFRESH_FIELDS,
     AssetSettings,
     RecommendationSettings,
     parse_asset_settings,
@@ -96,13 +101,11 @@ NO_LOCAL_MODES = (ExecutionMode.AUTO, ExecutionMode.EXTERNAL_ONLY)
 KNOWN_PERMISSIONS = frozenset(DEFAULT_PERMISSIONS)
 
 _TABLES: dict[str, frozenset[str]] = {
-    "recommendations": frozenset(RecommendationSettings.__dataclass_fields__),
-    "assets": frozenset({"sources"}),
-    "asset_refresh": frozenset(
-        {"local_scan_seconds", "remote_seconds", "backoff_initial_seconds", "backoff_max_seconds"}
-    ),
-    "asset_hybrid": frozenset({"manifest", "config"}),
-    "asset_adaptation": frozenset({"enabled", "config"}),
+    "recommendations": RECOMMENDATION_FIELDS,
+    "assets": ASSET_FIELDS,
+    "asset_refresh": REFRESH_FIELDS,
+    "asset_hybrid": HYBRID_FIELDS,
+    "asset_adaptation": ADAPTATION_FIELDS,
     "server": frozenset({"host", "port"}),
     "store": frozenset({"path"}),
     "skills": frozenset({"roots"}),
@@ -211,7 +214,6 @@ class Launched:
     recovered: int
     new_local_adapter: Callable[[], ModelAdapter] | None = None
     warmup: WarmupResult | None = None
-    asset_catalog: AssetCatalogService | None = None
 
 
 # -- reading the file ---------------------------------------------------------------
@@ -596,7 +598,6 @@ def build_app(
             orchestrator=orchestrator,
             recovered=len(report.runs),
             new_local_adapter=new_local_adapter,
-            asset_catalog=catalog,
         )
     except RecoveryError as exc:
         store.close()
@@ -655,13 +656,8 @@ def warm_up_gateway(
             if owned:
                 await adapter.aclose()
 
-    if launched.asset_catalog is not None:
-        launched.asset_catalog.warmup_busy = True
-    try:
-        status, result = asyncio.run(work())
-    finally:
-        if launched.asset_catalog is not None:
-            launched.asset_catalog.warmup_busy = False
+    # The catalog worker starts only with the served app's lifespan, after this.
+    status, result = asyncio.run(work())
     if status is not None:
         launched.orchestrator.set_local_status(status)
     return replace(launched, warmup=result)

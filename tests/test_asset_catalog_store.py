@@ -7,14 +7,19 @@ import pytest
 
 from helpers import ACCEPTED_PAYLOAD
 from relaymind.store import RunStore
+from relaymind.store.asset_catalog import AssetCatalogStore
 from relaymind.store.trace_event import EventType
 from test_asset_sources import capture, imported, skill
 
 
 def facade(store):
-    from relaymind.store.asset_catalog import AssetCatalogStore
-
     return AssetCatalogStore(store)
+
+
+def record_failure(catalog, failure):
+    catalog.record_failure(
+        "example", rejected_count=failure.rejected_count, exclusions=failure.exclusions
+    )
 
 
 def publish_local(catalog, path):
@@ -125,10 +130,10 @@ def test_failure_retains_generation_and_records_only_failure_observation(tmp_pat
         catalog = facade(run_store)
         publish_local(catalog, tmp_path / "source")
         old = catalog.snapshot()
-        catalog.record_failure("example", SourceFailure("source_unavailable"))
+        record_failure(catalog, SourceFailure("source_unavailable"))
         now = catalog.snapshot()
-        assert now.catalog_revision == old.catalog_revision
-        assert now.published_at == old.published_at
+        # The observation is visible (stale, exclusions), so the revision moves once.
+        assert now.catalog_revision == old.catalog_revision + 1
         assert now.assets[0].content_hash == old.assets[0].content_hash
         assert now.assets[0].stale
         assert now.sources[0]["content_hash"] == old.sources[0]["content_hash"]
@@ -200,7 +205,9 @@ def test_interrupted_jobs_recover_without_losing_catalog(tmp_path):
         catalog = facade(store)
         assert catalog.recover_interrupted_jobs() == 1
         assert catalog.recover_interrupted_jobs() == 0
-        assert catalog.snapshot().catalog_revision == 1
+        # The interruption is a visible observation; the published asset is kept.
+        assert catalog.snapshot().catalog_revision == 2
+        assert len(catalog.snapshot().assets) == 1
         assert catalog.snapshot().assets[0].stale
         assert catalog.job_outcomes()[0]["state"] == "interrupted"
 
@@ -320,3 +327,27 @@ def test_known_secret_is_scrubbed_before_and_after_nfc_in_sqlite(tmp_path, body_
         assert secret not in persisted
         assert "credential-é-987" not in persisted
         assert (tmp_path / "source" / "SKILL.md").read_bytes() == original
+
+
+def test_visible_failure_and_recovery_each_increment_the_revision_once(tmp_path):
+    """RM34/AC25, spec 4.6: a snapshot-visible change never keeps the same revision."""
+    from relaymind.assets.sources import SourceFailure
+
+    skill(tmp_path / "source")
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        publish_local(catalog, tmp_path / "source")
+        published = catalog.snapshot()
+        assert published.catalog_revision == 1
+        record_failure(catalog, SourceFailure("source_unavailable"))
+        failed = catalog.snapshot()
+        assert failed.catalog_revision == 2
+        assert failed.assets[0].stale and failed.sources[0]["stale"]
+        # The same observation again changes nothing visible.
+        record_failure(catalog, SourceFailure("source_unavailable"))
+        assert catalog.snapshot().catalog_revision == 2
+        recovered = publish_local(catalog, tmp_path / "source")
+        assert recovered.changed and recovered.revision == 3
+        assert not catalog.snapshot().assets[0].stale
+        assert not publish_local(catalog, tmp_path / "source").changed
+        assert catalog.snapshot().catalog_revision == 3
