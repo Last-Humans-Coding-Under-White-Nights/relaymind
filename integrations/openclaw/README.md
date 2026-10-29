@@ -175,7 +175,10 @@ still reads the stored key. The host keeps the key in its state database
 but only in an interactive terminal: without one it refuses, and typing the
 token at its prompt was not checked (`not_run`).
 `RELAYMIND_APP_TOKEN` in the host's environment is the provider's declared
-env var; reading it was not checked on a real host (`not_run`). After a gateway
+env var. In the #137 Linux VPS functional check no token was stored, and the
+host read it in every harness host scenario
+([report](../../docs/evidence/2026-10-28-openclaw-vps-functional-137/REPORT.md));
+the macOS probe did not check it. After a gateway
 restart the stored token is stale: requests and discovery fail with 401
 `unauthenticated`, and `models list --refresh` logs the reconnect instruction
 (store the new token the same way). `agent exec` with the stale token exits 1
@@ -512,7 +515,9 @@ gateway proposes one call to the host's own `exec` tool,
 path is absolute, so a command the host ran in another working directory still
 lands in the sandbox, and a deny that did not hold never passes. Run the host in
 the sandbox the harness creates, with a config whose `tools.exec.mode` is
-`deny` in one run and `full` in the other (the rest as above):
+`deny` in one run and `full` in the other (the rest as above). The proposed
+command and the forms below are POSIX shell (`sh`, a single-quoted path); on
+Windows these scenarios are `not_run`:
 
 ```bash
 python scripts/openclaw_qualification.py host --scenario exec-deny \

@@ -146,3 +146,15 @@ def test_unrecorded_tool_exposure_runs_are_labeled_in_both_readmes():
         assert "observed in exploratory runs that were not recorded" in text, path
     text = " ".join(README.read_text("utf-8").split())
     assert "Without them the host offered none" not in text
+
+
+def test_the_host_read_the_token_from_its_declared_env_var():
+    """AGENTS.md invariant 9 (honest evidence): no step stored a token, so every
+    run the gateway recorded came in on ``RELAYMIND_APP_TOKEN`` from the
+    harness, and the README may not call that path unchecked (RM19, RM33)."""
+    assert not any("auth" in name or "token" in name for name in steps())
+    for name in ("text-tool", "tool-deny", "tool-approve", "exec-deny", "exec-full"):
+        assert export(name)["runs"], name
+    text = " ".join(README.read_text("utf-8").split())
+    assert "reading it was not checked on a real host" not in text
+    assert "read it in every harness host scenario" in text
