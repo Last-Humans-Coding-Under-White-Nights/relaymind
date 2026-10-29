@@ -462,11 +462,13 @@ def test_a_relative_place_is_replaced_by_its_absolute_forms_only(tmp_path, monke
     document = {"version": "3.14", "file": "tasks.v1.json", "at": "2026-10-29T10:00:00"}
     text = json.dumps(document)
     assert runner._sanitize(text, [], [(Path("x.tgz").parent, "<artifact-dir>")]) == text
-    # A backslash in a POSIX name stands in for a Windows separator: JSON escapes it.
-    odd = tmp_path / "rel\\dir"
-    odd.mkdir()
+    # A backslash in the path is JSON-escaped: a Windows separator, or on POSIX a
+    # backslash in a name standing in for one (Windows refuses such a name).
+    relative = Path("rel\\dir") if os.sep == "/" else Path("rel", "dir")
+    odd = tmp_path / relative
+    odd.mkdir(parents=True)
     text = json.dumps({"log": f"wrote {odd.resolve() / 'host.log'}"})
-    cleaned = runner._sanitize(text, [], [(Path("rel\\dir"), "<dir>")])
+    cleaned = runner._sanitize(text, [], [(relative, "<dir>")])
     assert json.loads(cleaned) == {"log": f"wrote <dir>{os.sep}host.log"}
 
 
@@ -905,7 +907,8 @@ def test_a_host_command_the_system_cannot_start_is_not_run(tmp_path, monkeypatch
 def test_the_gateway_store_opens_read_only_whatever_its_path_holds(tmp_path):
     """The store is opened by its file URI, so a path with URI characters (or,
     on Windows, a drive and backslashes) names the file, read-only."""
-    store = tmp_path / "a#b?c%20d" / "runs.sqlite3"
+    # Windows refuses "?" in a file name; "#" and "%" still stand for URI syntax there.
+    store = tmp_path / ("a#b?c%20d" if os.name != "nt" else "a#b%20d") / "runs.sqlite3"
     store.parent.mkdir()
     with sqlite3.connect(store) as db:
         db.execute("CREATE TABLE runs (run_id TEXT)")
