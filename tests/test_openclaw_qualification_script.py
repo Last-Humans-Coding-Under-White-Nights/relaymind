@@ -96,6 +96,15 @@ def test_the_runs_are_listed_in_the_order_the_store_created_them(tmp_path):
         assert qualification._run_ids(SimpleNamespace(store=store)) == created
 
 
+def test_a_run_that_never_settles_fails_the_scenario():
+    """A scenario never reads run states while a run is still active (#135)."""
+    from types import SimpleNamespace
+
+    gateway = SimpleNamespace(store=SimpleNamespace(active_run_id=lambda: "run-held"))
+    with pytest.raises(RuntimeError, match="run-held is still active"):
+        qualification._wait_until_settled(gateway, timeout=0.1)
+
+
 def test_the_main_entry_requires_a_command_for_host_mode(tmp_path):
     with pytest.raises(SystemExit):
         qualification.main(["host", "--out", str(tmp_path / "x.json")])
