@@ -228,7 +228,9 @@ SCENARIOS: tuple[Scenario, ...] = (
 def node_binary() -> str:
     node = shutil.which("node")
     if node is None:
-        raise SystemExit("node is not on PATH (the pinned host needs Node >=24.22.1 <25)")
+        raise SystemExit(
+            "node is not on PATH (the pinned host needs Node >=24.22.1 <25 || >=26.12.1)"
+        )
     return node
 
 
@@ -306,7 +308,10 @@ def run_driver(
 
 def _run_ids(gateway) -> list[str]:
     """Every run the gateway's store holds, in store order."""
-    return [row[0] for row in gateway.store._conn.execute("SELECT run_id FROM runs")]
+    return [
+        row[0]
+        for row in gateway.store._conn.execute("SELECT run_id FROM runs ORDER BY created_at, rowid")
+    ]
 
 
 def _wait_until_settled(gateway, timeout: float = 10.0) -> None:
@@ -465,7 +470,8 @@ def run_host(command: Sequence[str], out: Path, *, timeout: float = 900) -> dict
                         completed.stdout,
                         completed.stderr,
                     )
-                except FileNotFoundError as error:
+                except OSError as error:
+                    # Missing, not executable, or otherwise not started: no run happened.
                     status, exit_code, stdout, stderr = "not_run", None, "", str(error)
                 except subprocess.TimeoutExpired as error:
                     # The runs the gateway recorded so far still go into the export.

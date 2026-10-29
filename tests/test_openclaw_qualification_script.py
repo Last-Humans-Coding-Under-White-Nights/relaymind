@@ -73,6 +73,29 @@ def test_a_missing_host_command_is_not_run_never_a_pass(tmp_path):
     assert export["runs"] == []
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes")
+def test_a_host_command_that_cannot_start_is_not_run(tmp_path):
+    """Section 12.5: a command the OS refuses to start (no execute bit) stays not_run."""
+    host = tmp_path / "openclaw"
+    host.write_text("#!/bin/sh\nexit 0\n", "utf-8")
+    host.chmod(0o644)
+    export = qualification.run_host([str(host)], tmp_path / "export.json")
+    assert export["status"] == "not_run"
+    assert export["exit_code"] is None
+    assert export["runs"] == []
+
+
+def test_the_runs_are_listed_in_the_order_the_store_created_them(tmp_path):
+    """Section 12.5: store order, not the order of the random run IDs."""
+    from types import SimpleNamespace
+
+    from relaymind.store.run_store import RunStore
+
+    with RunStore(tmp_path / "runs.sqlite3") as store:
+        created = [store.create_run("accepted").run_id for _ in range(8)]
+        assert qualification._run_ids(SimpleNamespace(store=store)) == created
+
+
 def test_the_main_entry_requires_a_command_for_host_mode(tmp_path):
     with pytest.raises(SystemExit):
         qualification.main(["host", "--out", str(tmp_path / "x.json")])
