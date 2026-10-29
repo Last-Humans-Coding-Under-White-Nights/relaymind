@@ -52,8 +52,9 @@ export function checkContext(context: Context): void {
 
 /** Refuse request options that the declared switches would drop silently. */
 export function checkOptions(options: { responseFormat?: unknown } | undefined): void {
-  const format = options?.responseFormat as { type?: unknown } | undefined;
-  if (format !== undefined && format.type !== "text") {
+  // A field set to null counts as omitted (spec 7.1), as in checkPayload.
+  const format = options?.responseFormat as { type?: unknown } | undefined | null;
+  if (format && format.type !== "text") {
     throw new RelayMindInputError(
       "response_format",
       `is ${String(format.type)}; the gateway answers 400 unsupported_parameter for a ` +

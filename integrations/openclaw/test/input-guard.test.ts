@@ -122,6 +122,8 @@ describe("the request options", () => {
     checkOptions(undefined);
     checkOptions({});
     checkOptions({ responseFormat: { type: "text" } });
+    // A field set to null counts as omitted (spec 7.1), as in checkPayload.
+    checkOptions({ responseFormat: null });
   });
 
   it("refuses a structured response format the switches would drop", () => {
