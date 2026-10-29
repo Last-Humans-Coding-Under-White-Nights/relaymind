@@ -271,8 +271,10 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
       return replaced;
     };
     const known = () => [...secrets(), options?.apiKey];
-    // A key the host set itself is the host's: kept as is, and never retried by the plugin.
+    // A key the host set itself, even an empty one, is the host's: kept as is, and
+    // never retried by the plugin; the gateway refuses a malformed one by name.
     const hostKey = headerValue(options?.headers, IDEMPOTENCY_HEADER);
+    const hasHostKey = hostKey !== undefined;
     const baseKey = hostKey ?? idempotencyKey({ model, context, options });
     const turn = turnId(context, (options as { sessionId?: string } | undefined)?.sessionId);
     const out = channel<AssistantMessageEvent>();
@@ -282,7 +284,7 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
     const attemptOnce = async (key: string, attempt: number) => {
       let response: AttemptReport["response"];
       const hostOnResponse = options?.onResponse;
-      const headers = hostKey ? { ...options?.headers } : { ...options?.headers, [IDEMPOTENCY_HEADER]: key };
+      const headers = hasHostKey ? { ...options?.headers } : { ...options?.headers, [IDEMPOTENCY_HEADER]: key };
       const held: AssistantMessageEvent[] = [];
       let committed = false;
       let terminal: { event: AssistantMessageEvent; raw: AssistantMessage } | undefined;
@@ -342,15 +344,15 @@ export function relaymindStreamFn(base: StreamFn, streamOptions: RelayMindStream
 
     const run = async () => {
       // A host key is sent as is; the plugin's own key follows the ledger (section 7.4).
-      let { key, n } = hostKey ? { key: hostKey, n: 0 } : keys.next(baseKey);
+      let { key, n } = hasHostKey ? { key: baseKey, n: 0 } : keys.next(baseKey);
       for (let attempt = 1; ; attempt++) {
         const outcome = await attemptOnce(key, attempt);
         // Under the answer rule: an empty answer is recorded as the failure the host sees.
         const checked = checkAnswer(outcome.raw);
         const failure = gatewayFailure(checked);
-        if (!hostKey) keys.record(baseKey, n, keyFate(checked, failure));
+        if (!hasHostKey) keys.record(baseKey, n, keyFate(checked, failure));
         const rule = failure ? retryRule(failure.code) : "none";
-        const retryable = !hostKey && !outcome.committed && rule !== "none" && attempt <= maxRetries;
+        const retryable = !hasHostKey && !outcome.committed && rule !== "none" && attempt <= maxRetries;
         // wait() is false only when the host aborts: then the abort is the outcome, not the last failure.
         const retry = retryable && (await wait(delayMs * attempt, options?.signal ?? undefined));
         const aborted = retryable && !retry ? abortedMessage(model) : undefined;

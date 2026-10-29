@@ -307,4 +307,12 @@ describe("a host retry of the same conversation (section 7.4: a retry after a fa
     await send(model, { keys: ledger }, { options });
     expect(keys()).toEqual(["host-key-1", "host-key-1"]);
   });
+
+  it("an empty key the host set is still the host's: sent as is, once, never retried", async () => {
+    // The gateway refuses it by name (400 invalid_request, section 7.4); the plugin neither adds its own beside it nor retries.
+    const model = await start([error(504, "deadline_exceeded", "run_slow"), ANSWER]);
+    const { message } = await send(model, { maxRetries: 1 }, { options: { headers: { "idempotency-key": "" } } });
+    expect(message.stopReason).toBe("error");
+    expect(keys()).toEqual([""]);
+  });
 });
