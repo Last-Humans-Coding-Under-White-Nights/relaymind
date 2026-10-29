@@ -16,7 +16,10 @@ files, not on the UTF-8 bound:
   lower bound, which still proves them over the limit);
 - the live turn ended needs_external with reason context_limit before any
   model call, as section 7.5 says a request too large for the local model
-  does when no external model can take it.
+  does when no external model can take it;
+- so with the pinned host and the 8192 local context ``local_only`` cannot
+  serve an OpenClaw turn (decision D1), and the operator guide says what the
+  operator sees with and without ``limits.localContextLimit`` copied.
 
 No model or host runs here; the reports are data.
 """
@@ -93,3 +96,57 @@ def test_the_size_records_cite_the_measured_report_not_only_the_bound(doc):
     assert "Tokenizer count | not_run" not in text
     assert "not_run (needs fresh, unsanitized captures)" not in text
     assert "not_run (needs llama-server with the pinned model" not in text
+
+
+README = ROOT / "integrations" / "openclaw" / "README.md"
+TESTING = ROOT / "docs" / "TESTING.md"
+REFUSAL = (
+    ROOT
+    / "integrations"
+    / "openclaw"
+    / "test"
+    / "fixtures"
+    / "v2026.10.7"
+    / "transport"
+    / "advertised-window-host-refusal.json"
+)
+
+
+def local_context_paragraph():
+    text = README.read_text("utf-8")
+    start = text.index("Local context limit: an OpenClaw turn")
+    end = text.index("The local context stays 8192", start)
+    return " ".join(text[start:end].split())
+
+
+def test_the_host_refuses_a_request_over_the_advertised_window_without_a_gateway_run():
+    """The pinned transport's own refusal (the frozen fixture the guide cites)."""
+    data = json.loads(REFUSAL.read_text("utf-8"))
+    assert data["gateway_runs"] == [] and data["exchanges"] == []
+    (result,) = data["results"]
+    assert result["stop_reason"] == "error"
+    assert result["error_message"].startswith("Context window exceeded: estimated input")
+
+
+def test_the_operator_guide_states_both_local_only_outcomes_at_the_8192_context():
+    """Decision D1: the local context stays 8192, so local_only cannot serve an
+    OpenClaw turn on the pinned host; the guide says what the operator then sees,
+    with and without ``limits.localContextLimit`` copied."""
+    para = local_context_paragraph()
+    assert "`local_only` cannot serve an OpenClaw turn" in para
+    assert "localContextLimit" in para
+    assert "Context window exceeded" in para and "no gateway run" in para
+    assert "advertised-window-host-refusal" in para
+    assert "422" in para and "`format`" in para and "not sent again" in para
+    assert "server_error" not in para
+    text = README.read_text("utf-8")
+    limits = text[text.index("- `limits` are copied by hand") :]
+    limits = " ".join(limits[: limits.index("\n- ")].split())
+    assert "Context window exceeded" in limits and "localContextLimit" in limits
+    row_start = "| `RelayMind needs_external (HTTP 422)`"
+    row = next(r for r in text.splitlines() if r.startswith(row_start))
+    assert "localContextLimit" in row and "cannot serve" in row
+    host_row = next(r for r in text.splitlines() if r.startswith("| `Context window exceeded"))
+    assert "no gateway run" in host_row
+    testing = " ".join(TESTING.read_text("utf-8").split())
+    assert "`local_only` cannot serve an OpenClaw turn" in testing

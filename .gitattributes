@@ -5,3 +5,6 @@
 /docs/evidence/**/*.json text eol=lf
 /docs/evidence/**/*.md text eol=lf
 /docs/evidence/**/*.tar.zst binary
+# The OpenClaw plugin's release tarball is cited by SHA-256, so its packed text
+# files must have the same bytes on a Windows checkout as on Linux and macOS.
+/integrations/openclaw/** text=auto eol=lf

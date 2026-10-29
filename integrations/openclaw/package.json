@@ -43,6 +43,7 @@
     "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "pack:check": "npm run build && node scripts/pack-check.mjs"
+    "pack:check": "npm run build && node scripts/pack-check.mjs",
+    "pack:release": "node scripts/release-pack.mjs"
   }
 }

@@ -1,0 +1,33 @@
+{
+  "package": "@relaymind/openclaw-provider",
+  "version": "0.1.0",
+  "filename": "relaymind-openclaw-provider-0.1.0.tgz",
+  "sha256": "4c11884a368eb360d9d6ecab1da3157428917fb26abe38f2ac7e9bc471dcae6d",
+  "integrity": "sha512-FC84f8TYCWFR7GcmSqXDbR3s7UPUrqzMe/9QYQohzDP8Os3MjuQaznY/tdXOUdXL+cLsg6S6pKcW+HGYWFL2Uw==",
+  "files": [
+    "README.md",
+    "dist/attempts.js",
+    "dist/catalog.js",
+    "dist/compat.js",
+    "dist/config.js",
+    "dist/diagnostics.js",
+    "dist/errors.js",
+    "dist/idempotency.js",
+    "dist/index.js",
+    "dist/input-guard.js",
+    "dist/provider.js",
+    "dist/redaction.js",
+    "dist/stream.js",
+    "openclaw.plugin.json",
+    "package.json"
+  ],
+  "openclaw": {
+    "peer": "2026.10.7",
+    "pluginApi": "2026.10.7",
+    "built_with": "2026.10.7"
+  },
+  "engines": {
+    "node": ">=24.22.1 <25 || >=26.12.1"
+  },
+  "node": "v24.22.1"
+}

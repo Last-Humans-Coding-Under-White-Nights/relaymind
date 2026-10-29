@@ -1025,7 +1025,10 @@ cd ../.. && pytest tests/test_openclaw_host_transport.py \
   tokenizer no host request fits the 8192 local limit, the live AC24 turn
   in auto without an external model (config-row workaround, #136) ended
   needs_external / context_limit with 0 model calls, and the evidence
-  record and design doc cite the measured report. No Node needed.
+  record and design doc cite the measured report; the host transport's own
+  refusal over the advertised window has no gateway run, and the operator
+  guide names both `local_only` outcomes at the 8192 context. No Node
+  needed.
 
 ### OpenClaw provider plugin (#136; RM08, RM12, RM19, RM26, RM33)
 
@@ -1317,6 +1320,137 @@ failover to another model, and macOS and Windows at this commit are not_run
 (the exact host commands are in
 [`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
 
+### OpenClaw release artifact, CI, and install check (#145; RM12, RM18, RM19, RM33; AC24)
+
+What runs where:
+
+| Check | Where | Command |
+| --- | --- | --- |
+| typecheck, vitest, pack check | here, CI (ubuntu, macOS, Windows runners) | `cd integrations/openclaw && npm ci && npm run typecheck && npm test && npm run pack:check` |
+| release artifact | here, CI | `npm run pack:release -- ../../release/openclaw` |
+| transport, plugin, round trip, cancel, artifact tiers | here (skip without `npm ci`), CI with `RELAYMIND_OPENCLAW_NODE=1` (no skip) | `pytest tests/test_openclaw_*.py` |
+| install check over a stub host | the default `pytest`, every platform | `pytest tests/test_openclaw_install_check.py` |
+| install check with the pinned host | CI runners; an operator's machine | `python scripts/openclaw_install_check.py --tarball ... --out ... -- <openclaw>` |
+| live model, platform qualification | an operator's machine only | not part of any automated suite |
+
+- `tests/test_openclaw_install.py`: the lockfile (version 3) pins
+  `openclaw` and `@openclaw/ai` at 2026.10.7 with integrity, matches
+  `package.json`, and every build dependency is exact; two
+  `pack:release` builds of one checkout have the same SHA-256 and files,
+  and `SHA256SUMS` and `release.json` (pins, engines, integrity, the
+  building Node) name it; the tarball holds exactly `package.json`, the
+  README, `openclaw.plugin.json`, and one `dist/*.js` per source module;
+  the plugin unpacked from the artifact (the host's `openclaw` linked as
+  its peer) registers, resolves the alias the headless way, and
+  round-trips text and a host tool against the gateway over doubles, and
+  the driver reports which entry it loaded (the checkout's sources by
+  default); a destination inside the package (even a child folder named
+  `..release`) is refused; the CI job runs
+  on the three runners with Node 24.22.1 and `RELAYMIND_OPENCLAW_NODE=1`,
+  builds the release, runs the install check, never runs live tests, and
+  lists every `tests/test_openclaw_*.py` module.
+- `tests/test_openclaw_install_check.py`: the install check against a stub
+  host with the pinned host's command forms and observed behavior (the key
+  in a SQLite state file, the call ID replayed without underscores,
+  `"ok": true` whatever happened, the config entry and credential left
+  after uninstall): every step in order in one isolated host home, the
+  token only on standard input; the text and the `read` tool exchanges
+  through the gateway, each `agent exec` in its own fresh `--state-dir`
+  inside the host home (the stub fails a run without one the way the pinned
+  host did on Windows: an answered turn, then `EBUSY` deleting its
+  temporary state), the gateway executing nothing, the host's result
+  holding the file's text and matched through the rewrite; the token, the
+  host home, the artifact folder, the checkout, and the user's home never
+  in the export, in their absolute or the host's `~/...` form; what uninstall leaves recorded and the removal steps
+  clearing it (the stub's SQLite runs with secure_delete off and WAL, so a
+  deleted row's bytes stay on disk and must not count); a credential left
+  after removal, a config strict JSON cannot read (unknown), an unreadable
+  SQLite file, a refused install (later steps not_run), a failed exchange
+  (cleanup still runs), a host that stops starting after install (the rest
+  listed not_run, cleanup still runs), a plugin the host did not load, a
+  host that says ok without running the tool, a tool exchange whose gateway
+  run did not complete or did not send the answer, and a missing host
+  (not_run) never pass; no `OPENCLAW_*` setting, Gateway, or proxy of the
+  operator reaches the host, and the closed local Gateway port is set as
+  `gateway.port` in the isolated config before the install (the stub, like
+  the pinned host, refuses `models list` when `OPENCLAW_GATEWAY_PORT` is
+  set); the export is written even when the temporary
+  host home cannot be removed; the label keeps "not live model
+  evidence" and "not a supported-platform qualification".
+
+- `tests/test_openclaw_vps_functional_install.py`: reads the Linux VPS
+  functional check (not a supported-platform qualification) of the install
+  check on the real pinned host
+  (`docs/evidence/2026-10-28-openclaw-vps-functional-145/`): every step
+  passed in order with the release build it names; the text and the host
+  `read` round trips went through the gateway, which executed nothing;
+  the host used the operator guide's install, enable, refresh, and
+  `uninstall --force` forms; uninstall left the config entry, the profile,
+  and the token, and the guide's removal cleared them; the host state
+  paths were in the temp host home and the closed Gateway port was set in
+  its config (the export records no environment: that the check passes no
+  `OPENCLAW_*` setting is tested in `tests/test_openclaw_install_check.py`);
+  no token or machine path, absolute or `~/`, is in the files; `docs/RELEASE.md` and `docs/EVIDENCE.md` keep
+  macOS and Windows `not_run` as support gaps, with the native Windows
+  note.
+
+- `tests/test_openclaw_ci_runner_install.py`: reads the GitHub-hosted
+  runner functional check over doubles (not a user-machine qualification)
+  of the install check (`docs/evidence/2026-10-28-openclaw-install-check-github-runners/`,
+  the `openclaw-plugin` job's exports of CI run 40652444733): on
+  `ubuntu-latest`, `macos-latest`, and `windows-latest`, each export names
+  its runner, Node v24.22.1, the pinned host, the runner's OS and machine,
+  and the clean merge commit; all 15 steps passed in order with the release
+  build its job uploaded; the round trips went through the gateway, which
+  executed nothing; uninstall's leftovers were cleared by the removal
+  steps; no token or machine path (POSIX, Windows, or `~/`) is in the
+  export; `docs/EVIDENCE.md` and `docs/RELEASE.md` carry one labeled row
+  per runner with its OS version, and the user-machine macOS and Windows
+  rows stay `not_run`.
+
+To refresh the runner exports from a later CI run (the job uploads them as
+`openclaw-plugin-<runner>` artifacts, kept 90 days by default):
+
+```bash
+gh run download <run-id> -D <empty-dir>
+for r in ubuntu-latest macos-latest windows-latest; do
+  mkdir -p docs/evidence/<date>-openclaw-install-check-github-runners/$r
+  cp <empty-dir>/openclaw-plugin-$r/ci-evidence/openclaw-install-check-$r.json \
+    docs/evidence/<date>-openclaw-install-check-github-runners/$r/install-check.json
+  cp <empty-dir>/openclaw-plugin-$r/release/openclaw/{SHA256SUMS,release.json} \
+    docs/evidence/<date>-openclaw-install-check-github-runners/$r/
+done
+```
+
+Copy them unedited (git stores a CRLF export with LF line ends; record both
+digests), then update the runner rows and the runner section in
+`docs/EVIDENCE.md` (run ID, merge commit, each export's `versions.os`, and
+the export and artifact SHA-256s), the runner row in `docs/RELEASE.md`, and
+the constants at the top of `tests/test_openclaw_ci_runner_install.py`. A
+runner row never replaces a user-machine row: those stay `not_run` until an
+export from that machine is recorded.
+
+The install check with the pinned host passed on a Linux VPS twice, as a
+functional check over gateway doubles: at `2f35664`
+(`docs/evidence/2026-10-27-openclaw-install-check-linux-vps.json`) and,
+after the restack and the Gateway port fix, at `393a6bf`
+(`docs/evidence/2026-10-28-openclaw-vps-functional-145/`; see
+`docs/EVIDENCE.md`). It also passed on the three GitHub-hosted runners
+in CI run 40652444733 (the exports above). None of these is a platform
+qualification: macOS and Windows runs of this revision on a user's machine
+are not_run.
+
+What an operator sees at the 8192 local context (decision D1; the operator
+guide's "Local context limit"): every measured OpenClaw request is 10,500
+tokens or more, so with the pinned host `local_only` cannot serve an
+OpenClaw turn. With `limits.localContextLimit` copied (and
+`maxCompletionTokens`), the host's transport refuses the turn before sending
+it with its own "Context window exceeded" error, and there is no gateway run
+(fixture `advertised-window-host-refusal`, checked by
+`tests/test_openclaw_mac_qualification.py`). Without it, the gateway answers
+422 `needs_external` (`context_limit`), which the plugin classes `format`,
+so the host does not send it again. Use `auto` with an external model.
+
 ### What is not covered yet
 
 - The correctness corpus ran on Apple Silicon macOS only (#32). The
@@ -1381,7 +1515,10 @@ failover to another model, and macOS and Windows at this commit are not_run
   and a Linux VPS functional check (not a supported-platform qualification)
   ran the harness host scenarios on the real pinned host over doubles; a
   plugin approval answered by an operator, a macOS rerun, and any Windows
-  host run are not_run, and no live result is claimed.
+  host run are not_run, and no live result is claimed. The release artifact
+  and its install check (#145) passed against the pinned host on a Linux VPS
+  over doubles, a functional check; macOS and Windows qualifications of this
+  revision are not_run.
   YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are
   implemented (#143, #144), with frozen SkillsBench/ToolRet inputs and

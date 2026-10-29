@@ -8,6 +8,91 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- OpenClaw plugin release artifact, CI, install check, and operator guide
+  (#145; RM12, RM18, RM19, RM33; AC24; sections 7.5, 12.5, 14):
+  `npm run pack:release -- <dir>` (`integrations/openclaw/scripts/release-pack.mjs`)
+  builds the tarball from a clean `dist/` after the pack check and writes
+  `SHA256SUMS` and `release.json` (pins, engines, files, integrity, the
+  building Node); two builds of one checkout are the same bytes.
+  `tests/test_openclaw_install.py` checks the locked pins, the
+  reproducible build, the runtime-only contents, a text and a host-tool
+  round trip from the unpacked artifact (the plugin driver now takes the
+  entry to load), and that CI runs every OpenClaw test module.
+  `scripts/openclaw_install_check.py` runs the artifact through a host's
+  lifecycle in an isolated host home against a gateway over doubles:
+  install with `--accept-capabilities`, configure, enable, inspect, the
+  token through `paste-api-key` on standard input, discovery, a text and a
+  host `read` tool exchange, disable, `uninstall --force`, then
+  `config unset` and `models auth logout` for what uninstall leaves (the
+  config entry and the stored token). The trace and the sandbox decide a
+  pass, never the host's `"ok": true` (`tests/test_openclaw_install_check.py`,
+  over a stub host): both exchanges need completed gateway runs and the
+  gateway's answer; a removal passes only on a config read as strict JSON
+  and no token in a file a host could read back (SQLite through SQLite, so
+  a deleted row's bytes in free space or WAL do not count), and anything
+  unreadable is unknown, never clean. The host inherits no `OPENCLAW_*`
+  setting or proxy of the shell and its local Gateway port is a closed
+  loopback port, set as `gateway.port` in the isolated config (an
+  `OPENCLAW_GATEWAY_PORT` made the pinned host's `models list --refresh`
+  demand Gateway credentials, found in the Linux VPS functional check); a host that stops starting mid-run leaves the rest
+  not_run and still cleans up; the export is written even when the
+  temporary host home cannot be removed. The npm and pack-report helpers
+  (`scripts/npm.mjs`) and the run records, proposals, tool executions, and
+  loopback environment (`openclaw_qualification.py`) are shared, not
+  copied. It passed against the pinned host (OpenClaw 2026.10.7)
+  on a Linux VPS, recorded in `docs/evidence/` as a functional check over
+  doubles, not a supported-platform qualification. A new CI job
+  `openclaw-plugin` (ubuntu, macOS, Windows runners; Node 24.22.1) runs
+  typecheck, vitest, the release build, every OpenClaw pytest tier with
+  Node required, and the install check with the pinned host. The operator
+  guide (`integrations/openclaw/README.md`) covers gateway startup, local
+  and external configuration and the local context limit, loopback, token
+  transfer and rotation, model selection, host permissions, cancellation,
+  troubleshooting, trace inspection, update and rollback, and full removal.
+  `pack-check.mjs` spawns npm through node, so the Windows `npm.cmd` shim
+  needs no shell; `release-pack.mjs` treats a child folder named like
+  `..release` as inside the package. macOS and Windows runs of this revision on a user's
+  machine are not_run (`docs/RELEASE.md` support gaps). The install check
+  ran again at `393a6bf` as a Linux VPS functional check (not a
+  supported-platform qualification) over doubles and passed every step
+  (`docs/evidence/2026-10-28-openclaw-vps-functional-145/`, read by
+  `tests/test_openclaw_vps_functional_install.py`): the artifact was packed
+  first, then all 15 recorded steps passed. The install check's sanitizer
+  also replaces the home-relative `~/...` form the host prints, and the
+  three such skill locations left in each of the two Linux VPS exports were
+  redacted after the run (recorded in the run's `REPORT.md`). The operator guide
+  states the macOS qualification's install, enable, refresh, and
+  `uninstall --force` forms (Q4) and removes what uninstall leaves: the
+  config entry, the `relaymind:manual` profile, and the stored token (Q12).
+  `docs/RELEASE.md` and `docs/EVIDENCE.md` list macOS and Windows, native
+  and WSL2, as `not_run` support gaps. The CI job on the windows-latest
+  runner found two portability bugs: the transport and plugin drivers
+  built a `file://` URL from `process.argv[1]` by hand, which never matches
+  `import.meta.url` on Windows, so they exited 0 without running a
+  scenario (they now compare with `pathToFileURL`); and the pinned host's
+  `agent exec` failed deleting its own temporary state directory (`EBUSY`
+  on a SQLite file it still held) after an answered turn, so the install
+  check gives each exchange a fresh `--state-dir` in the host home, and
+  the operator guide says to do the same on Windows. The `openclaw-plugin`
+  job's install check exports of CI run 40652444733 (PR #182) are kept in
+  `docs/evidence/2026-10-28-openclaw-install-check-github-runners/` and read
+  by `tests/test_openclaw_ci_runner_install.py`: all 15 steps passed on the
+  `ubuntu-latest` (Linux 6.17.0-1022-azure), `macos-latest` (Darwin 25.6.0
+  arm64), and native `windows-latest` (Windows 2025Server) runners, recorded
+  in `docs/EVIDENCE.md` and `docs/RELEASE.md` as a GitHub-hosted runner
+  functional check over doubles (not a user-machine qualification); the
+  user-machine macOS and Windows rows stay `not_run`. The Windows runner's
+  artifact had CRLF text files, so the release build is the same bytes per
+  checkout, not across platforms. `docs/TESTING.md` says how to refresh the
+  exports from a later run. The operator guide's local context limit,
+  `limits` bullet, and troubleshooting table (and `docs/TESTING.md`) state
+  that with the pinned host and the 8192 local context `local_only` cannot
+  serve an OpenClaw turn (decision D1), and what the operator sees: with
+  `localContextLimit` copied, the host's own "Context window exceeded" before
+  sending and no gateway run; without it, 422 `needs_external`
+  (`context_limit`), classed `format` and not sent again
+  (`tests/test_openclaw_mac_qualification.py`). No spec, gateway, budget, or
+  default change.
 - OpenClaw cancellation, errors, retries, and run trace correlation (#138;
   RM12, RM14, RM16, RM17, RM20, RM21, RM22, RM25, RM33; AC11, AC12, AC24):
   the plugin maps every gateway error code to the host's error class
@@ -240,6 +325,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `.gitattributes` pins the OpenClaw plugin package
+  (`integrations/openclaw/`) to LF, so a Windows checkout no longer packs
+  CRLF text files into the release tarball (#145; RM18); a Windows runner
+  export has yet to show the digests agree.
 - Loopback gateway health polls and API/SDK client calls in live acceptance
   and evaluation scripts bypass environment and system proxies without
   changing process-wide settings (#167; RM01, RM18, RM19). Non-loopback endpoints

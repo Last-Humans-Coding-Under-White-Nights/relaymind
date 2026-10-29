@@ -17,6 +17,23 @@
       --out-dir integrations/openclaw/test/fixtures/v2026.10.7/transport
   python scripts/openclaw_qualification.py host --out <export.json> -- <command>
   ```
+- `openclaw_install_check.py` — the OpenClaw install check (#145; RM12,
+  RM19, RM33; AC24). It serves the real gateway over model doubles and
+  runs a host command through the release artifact's lifecycle in a fresh
+  host home: install (`--accept-capabilities`), configure, enable, inspect,
+  the token through `paste-api-key` on standard input, discovery, a text
+  and a host-tool (`read`) exchange, disable, uninstall, and removal of the
+  config entry and the credential uninstall leaves. The gateway trace and
+  the sandbox decide a pass, never the host's `"ok": true`; a host that
+  cannot start is not_run. A functional check, never live evidence; a
+  platform qualification only when recorded as one.
+
+  ```bash
+  python scripts/openclaw_install_check.py \
+      --tarball release/openclaw/relaymind-openclaw-provider-0.1.0.tgz \
+      --out <export.json> [--label "<machine and runtime>"] \
+      -- node integrations/openclaw/node_modules/openclaw/openclaw.mjs
+  ```
 - `openclaw_request_size.py` — the size of captured OpenClaw requests
   against the local input limit (#135; RM13, RM26, section 7.5). Each
   request is validated as the gateway does and measured with

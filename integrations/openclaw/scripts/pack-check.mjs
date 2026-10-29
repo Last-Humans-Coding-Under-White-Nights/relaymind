@@ -4,21 +4,14 @@
 // manifest, and the README, and nothing else from the checkout (no sources, tests,
 // fixtures, or node_modules). The built JavaScript may import only Node built-ins,
 // the public openclaw/plugin-sdk subpaths, and its own relative .js files.
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+
+import { npm, packReport } from "./npm.mjs";
 
 const root = new URL("../", import.meta.url);
 const pkg = JSON.parse(readFileSync(new URL("package.json", root), "utf8"));
 const host = JSON.parse(readFileSync(new URL("node_modules/openclaw/package.json", root), "utf8"));
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-const packed = JSON.parse(
-  execFileSync(npm, ["pack", "--dry-run", "--json", "--ignore-scripts"], {
-    cwd: root,
-    encoding: "utf8",
-  }),
-);
-// npm prints an array, or an object keyed by package name when run from a script.
-const [report] = Array.isArray(packed) ? packed : Object.values(packed);
+const report = packReport(npm(["pack", "--dry-run", "--json", "--ignore-scripts"]));
 const files = report.files.map((f) => f.path).sort();
 const problems = [];
 
