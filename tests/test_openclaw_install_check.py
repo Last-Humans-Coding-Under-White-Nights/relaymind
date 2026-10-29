@@ -424,6 +424,21 @@ def test_the_main_entry_exits_by_the_result(stub_host, tarball, tmp_path, monkey
         install_check.main(["--tarball", str(tarball), "--out", str(out)])
 
 
+def test_the_main_entry_lists_only_the_steps_that_ran_and_failed(
+    stub_host, tarball, tmp_path, monkeypatch, capsys
+):
+    """A step the lifecycle never reached is not_run, not failed (PR #182 review)."""
+    out = tmp_path / "main.json"
+    monkeypatch.setenv("STUB_FAIL", "plugins enable")
+    assert install_check.main(["--tarball", str(tarball), "--out", str(out), "--", *stub_host]) == 1
+    assert json.loads(capsys.readouterr().out)["failed"] == ["enable"]
+    argv = ["--tarball", str(tarball), "--out", str(out), "--", "openclaw-not-installed-here"]
+    assert install_check.main(argv) == 1
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["status"] == "not_run"
+    assert summary["failed"] == []
+
+
 def test_a_missing_artifact_is_refused_before_the_host_runs(stub_host, tmp_path):
     with pytest.raises(SystemExit, match="artifact"):
         install_check.main(

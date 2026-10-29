@@ -665,7 +665,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     export = run_install_check(
         command, args.tarball, args.out, timeout=args.timeout, label=args.label
     )
-    failed = [s["name"] for s in export["steps"] if s["status"] != "passed"]
+    # A step the lifecycle never reached is not_run, not failed.
+    failed = [s["name"] for s in export["steps"] if s["status"] in ("failed", "timed_out")]
     print(json.dumps({"status": export["status"], "passed": export["passed"], "failed": failed}))
     return 0 if export["passed"] else 1
 
