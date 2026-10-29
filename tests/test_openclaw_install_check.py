@@ -439,6 +439,20 @@ def test_the_main_entry_lists_only_the_steps_that_ran_and_failed(
     assert summary["failed"] == []
 
 
+def test_a_host_command_is_run_as_path_lookup_finds_it(stub_host, tarball, tmp_path, monkeypatch):
+    """On Windows ``openclaw`` is ``openclaw.cmd`` on PATH, which only a PATHEXT
+    lookup finds; the command is run as ``shutil.which`` resolves it and recorded
+    as given (PR #182 review)."""
+    which = shutil.which
+    found = stub_host[0]
+    monkeypatch.setattr(
+        install_check.shutil, "which", lambda name: found if name == "openclaw" else which(name)
+    )
+    export = run(["openclaw", *stub_host[1:]], tarball, tmp_path)
+    assert export["passed"] is True
+    assert export["command"][0] == "openclaw"
+
+
 def test_a_missing_artifact_is_refused_before_the_host_runs(stub_host, tmp_path):
     with pytest.raises(SystemExit, match="artifact"):
         install_check.main(

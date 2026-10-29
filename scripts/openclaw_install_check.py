@@ -488,6 +488,9 @@ def run_steps(command: Sequence[str], ctx: Context, timeout: float) -> tuple[lis
     installed = False
     ran = False
     argv = _argv(ctx)
+    # Run the command as PATH lookup finds it: on Windows ``openclaw`` is the
+    # npm shim ``openclaw.cmd``, which only a PATHEXT lookup finds.
+    command = [shutil.which(command[0]) or command[0], *command[1:]]
     for name in STEPS:
         args, stdin = argv[name]
         step: dict[str, Any] = {
