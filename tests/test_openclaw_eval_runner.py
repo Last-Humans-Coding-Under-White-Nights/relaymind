@@ -414,6 +414,31 @@ def test_the_host_gets_the_frozen_prompt_and_the_token_only_on_standard_input(ev
         assert "--json" in argv
 
 
+def test_every_attempt_runs_with_a_fresh_state_dir_in_the_arms_host_home(evaluated, tmp_path):
+    """Section 12.5: each agent exec gets --state-dir on a fresh, empty directory.
+
+    Without it the pinned host deletes a temporary state directory after each
+    turn, which fails on Windows (EBUSY) and ends every turn ok: false; the
+    install check gives each exchange its own directory the same way.
+    """
+    document, _out, _backend = evaluated
+    execs = [c for c in host_calls(tmp_path) if c["args"][:2] == ["agent", "exec"]]
+    assert len(execs) == len(document["attempts"])
+    dirs = []
+    for call in execs:
+        args = call["args"]
+        assert "--state-dir" in args
+        state_dir = Path(args[args.index("--state-dir") + 1])
+        host_home = Path(call["home"]).parent
+        assert state_dir.is_relative_to(host_home) and state_dir != host_home
+        assert call["state_dir"] == {"exists": True, "empty": True}
+        dirs.append(state_dir)
+    assert len(set(dirs)) == len(dirs)
+    for attempt in document["attempts"]:
+        argv = attempt["host"]["argv"]
+        assert argv[argv.index("--state-dir") + 1].startswith(runner.HOST_HOME)
+
+
 def test_neither_secret_nor_a_host_home_path_reaches_the_exports(evaluated, tmp_path):
     document, out, backend = evaluated
     export = (out / "openclaw-eval.json").read_text("utf-8")

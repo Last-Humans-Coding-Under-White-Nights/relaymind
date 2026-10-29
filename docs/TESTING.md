@@ -1513,8 +1513,12 @@ the measurement has run.
   in its own host home and gateway, the frozen order filtered to the
   selected tasks, an unavailable arm not_run with its reason, every attempt
   graded and passing, external_only running no local call and auto running
-  local ones, a fresh sandbox per attempt under the task's policy, the
-  install with `--accept-capabilities`, the token only on standard input,
+  local ones, a fresh sandbox per attempt under the task's policy, a fresh
+  empty `--state-dir` per attempt in the arm's host home (the install
+  check's fix for the pinned host's EBUSY on Windows), the install with
+  `--accept-capabilities`, the token only on standard input (the stub
+  host's own call log shows it in no argument or environment and hashes
+  what each store-token call read),
   the plugin's mode and diagnostics path, neither secret nor a host path
   in the export or report, the arm availability rules (relaymind_auto
   needs the external model and a local model), the Node that runs the

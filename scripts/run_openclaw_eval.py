@@ -23,8 +23,9 @@ The plugin is installed from the release artifact with
 token through ``models auth paste-api-key`` on standard input. Every slot of
 the frozen order then runs ``openclaw agent exec <prompt> --model <ref> --json``
 in a fresh sandbox holding only the task's files, under the task's exec
-policy. The export records every attempt raw (the host's JSON report, its
-output tails, the plugin's diagnostics records, the gateway runs of the
+policy, with ``--state-dir`` on a fresh, empty directory in the host home.
+The export records every attempt raw (the host's JSON report, its output
+tails, the plugin's diagnostics records, the gateway runs of the
 attempt's window with their trace events, the sandbox after) and the grades
 and summary of ``relaymind.evaluation.openclaw``; a Markdown report is written
 next to it. The gateway token and the external credential are never written.
@@ -411,6 +412,11 @@ def run_attempt(
     sandbox.mkdir(parents=True)
     for name, text in task.sandbox.items():
         (sandbox / name).write_text(text, "utf-8")
+    # The install check's exec_state_dir: without --state-dir the pinned host deletes a
+    # temporary state directory after the turn, which fails on Windows (EBUSY) and ends
+    # every turn ok: false. A fresh, empty one per attempt, in the arm's host home.
+    state_dir = host.home / "agent-exec" / f"{slot.index:04d}-{task.task_id}"
+    state_dir.mkdir(parents=True)
     host.merge_config({"tools": {"exec": {"mode": task.exec_policy}}})
     before = set(handle.run_ids()) if handle else set()
     seen = len(_diagnostics(host.diagnostics_path))
@@ -425,6 +431,8 @@ def run_attempt(
         str(host.config_path),
         "--cwd",
         str(sandbox),
+        "--state-dir",
+        str(state_dir),
     ]
     result = host.run(args, timeout=timeout)
     window = [i for i in handle.run_ids() if i not in before] if handle else []

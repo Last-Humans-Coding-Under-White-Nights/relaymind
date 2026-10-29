@@ -1174,7 +1174,9 @@ gateway with the external model and the pinned local model), and
 `relaymind_no_local` (this plugin against a gateway without a local
 model). The runner starts each gateway with `relaymind serve --config`, and
 llama-server from the manifest for the arms with a local model, and gives
-each arm its own host home:
+each arm its own host home. Each attempt's `agent exec` gets `--state-dir`
+on a fresh, empty directory in that home, as in the install check (without
+it the pinned host fails every turn on Windows):
 
 ```bash
 export RELAYMIND_EXTERNAL_API_KEY=...
