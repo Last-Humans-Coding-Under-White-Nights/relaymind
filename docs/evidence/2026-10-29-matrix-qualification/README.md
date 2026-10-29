@@ -65,8 +65,8 @@ no translated or generated substitute was introduced.
 The [Matrix terms](https://matrix.openharmony.cn/#/docs/main?type=使用协议)
 display v1.0.0, effective 2025-08-22. Sections 5.2 and 6.4 refer to each
 publisher's license; attachment 1 section 5 describes free download and use.
-Sections 2.3, 4.2, 5.1 and 9.2 also require attention for region, access,
-platform material and service sharing. These observations do not establish
+Section 2.2 was also reviewed. Sections 2.3, 4.2, 5.1 and 9.2 also require
+attention for region, access, platform material and service sharing. These observations do not establish
 permission to redistribute assets or automate collection.
 
 No LICENSE, NOTICE, COPYING or COPYRIGHT filename was present in the sampled

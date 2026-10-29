@@ -15,14 +15,36 @@ probe = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(probe)
 
 
+CHECKS = (
+    "host_roundtrips",
+    "changed_schema_roundtrip",
+    "excluded_or_unavailable_not_passed",
+    "raw_server_calls_and_traces_consistent",
+)
+
+
 def grade_capture(capture: dict) -> dict:
-    """Re-read raw history, requests, traces, captures and server execution records."""
+    """Re-read raw history, requests, traces, captures and server execution records.
+
+    A malformed or truncated capture fails every check with a reason; it never
+    raises, and a missing field never matches a declared value (RM16).
+    """
+    try:
+        return _grade(capture)
+    except (KeyError, TypeError, AttributeError, IndexError, ValueError) as error:
+        return {
+            **dict.fromkeys(CHECKS, False),
+            "error": f"malformed capture: {type(error).__name__}: {error}",
+        }
+
+
+def _grade(capture: dict) -> dict:
     exchanges = capture["exchanges"]
     by_name = {exchange["name"]: exchange for exchange in exchanges}
     actual_calls = [
-        {key: event[key] for key in ("server", "tool", "arguments", "result")}
+        {key: event.get(key) for key in ("server", "tool", "arguments", "result")}
         for event in capture["mcp_events"]
-        if event["kind"] == "call"
+        if event.get("kind") == "call"
     ]
     declared_calls = [call for exchange in exchanges for call in exchange["roundtrip"]["calls"]]
     consistent = (
@@ -55,16 +77,19 @@ def grade_capture(capture: dict) -> dict:
             ],
             "offered": [name for request in requests for name in request["tools"]],
             "proposals": [
-                {"name": event["payload"]["tool_name"], "arguments": event["payload"]["arguments"]}
+                {
+                    "name": (event.get("payload") or {}).get("tool_name"),
+                    "arguments": (event.get("payload") or {}).get("arguments"),
+                }
                 for event in raw_events
-                if event["type"] == "tool.proposed"
+                if event.get("type") == "tool.proposed"
             ],
             "observations": [
                 tool
                 for snapshot in capture["schema_captures"][start:end]
                 for tool in snapshot["tools"]
             ],
-            "gateway_executions": sum(event["type"] == "tool.started" for event in raw_events),
+            "gateway_executions": sum(event.get("type") == "tool.started" for event in raw_events),
         }
         graded[exchange["name"]] = consistent and probe.roundtrip_pass(observed)
     return {

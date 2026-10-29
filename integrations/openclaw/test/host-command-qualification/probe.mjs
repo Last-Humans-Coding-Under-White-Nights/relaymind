@@ -46,11 +46,17 @@ export function createProbeCommand(config, gatewayRequest, gatewayDispatch = dis
         "senderId", "channel", "isAuthorizedSender", "gatewayClientScopes", "agentId", "sessionKey", "sessionId",
       ].filter(key => ctx[key] !== undefined).map(key => [key, ctx[key]]));
       const action = ctx.args === "recommend" ? "recommend" : "choose";
-      const response = await fetch(config.recorderUrl, {
-        method: "POST", headers: { authorization: `Bearer ${credential}`, "content-type": "application/json" },
-        body: JSON.stringify({ action, ...(action === "choose" ? { choice: 2 } : {}), host, skillSha256 }),
-        signal: AbortSignal.timeout(5000),
-      });
+      let response;
+      try {
+        response = await fetch(config.recorderUrl, {
+          method: "POST", headers: { authorization: `Bearer ${credential}`, "content-type": "application/json" },
+          body: JSON.stringify({ action, ...(action === "choose" ? { choice: 2 } : {}), host, skillSha256 }),
+          signal: AbortSignal.timeout(5000),
+        });
+      } catch {
+        // No event was recorded, so the grader fails closed; the reply says why.
+        return { text: "qualification recorder unavailable" };
+      }
       if (!response.ok) return { text: "qualification recorder rejected action" };
       return { text: action === "choose" ? "qualification choice 2 recorded" : "qualification recommendation: 2 (disposable skill)" };
     },

@@ -63,12 +63,10 @@ def inspect_capture(manifest_path: Path, capture_root: Path) -> dict[str, object
     pending = []
     total = 0
     for asset in entries:
+        if not isinstance(asset, dict):
+            raise ValueError("asset must be an object")
         for field in IDENTITY_FIELDS:
-            if (
-                not isinstance(asset, dict)
-                or not isinstance(asset.get(field), str)
-                or not asset[field].strip()
-            ):
+            if not isinstance(asset.get(field), str) or not asset[field].strip():
                 raise ValueError("missing or invalid " + field)
         try:
             captured = datetime.fromisoformat(asset["captured_at"])
@@ -76,17 +74,26 @@ def inspect_capture(manifest_path: Path, capture_root: Path) -> dict[str, object
                 raise ValueError
         except ValueError:
             raise ValueError("missing or invalid captured_at") from None
+        # Optional rights fields: absent is unknown, but a present value must say something.
         for field in ("license", "attribution"):
-            if asset.get(field) is not None and not isinstance(asset[field], str):
+            value = asset.get(field)
+            if value is not None and (not isinstance(value, str) or not value.strip()):
                 raise ValueError("missing or invalid " + field)
         identity = (asset["source_id"], asset["asset_id"])
         if identity in seen:
             raise ValueError("duplicate source identity")
         seen.add(identity)
         relative = Path(asset["original_path"])
-        original = (root / relative).resolve(strict=True)
-        if relative.is_absolute() or not original.is_relative_to(root):
+        if relative.is_absolute():
             raise ValueError("original path escapes capture root")
+        # Containment is checked before existence, so outside paths never reach the disk.
+        original = (root / relative).resolve()
+        if not original.is_relative_to(root):
+            raise ValueError("original path escapes capture root")
+        if not original.exists():
+            raise ValueError("missing capture asset: " + asset["original_path"])
+        if not original.is_file():
+            raise ValueError("capture input is not a regular file")
         size = original.stat().st_size
         if size > MAX_ASSET_BYTES:
             raise ValueError("asset exceeds byte limit")
@@ -102,7 +109,7 @@ def inspect_capture(manifest_path: Path, capture_root: Path) -> dict[str, object
             raise ValueError("hash mismatch")
         assets.append(
             {
-                **{field: asset[field] for field in IDENTITY_FIELDS},
+                **{field: asset[field] for field in IDENTITY_FIELDS if field != "sha256"},
                 "sha256": digest,
                 "size_bytes": len(raw),
                 "license": asset.get("license") or "unknown",
@@ -124,6 +131,8 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
+        if args.output.is_dir():
+            raise ValueError("output cannot be a directory")
         report = inspect_capture(args.manifest, args.capture_root)
         protected = [
             args.manifest,

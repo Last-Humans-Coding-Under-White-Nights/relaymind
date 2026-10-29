@@ -5,9 +5,9 @@ import json
 import subprocess
 import sys
 
-from helpers import REPO_ROOT
+from helpers import SCRIPTS_DIR
 
-SCRIPT = REPO_ROOT / "scripts/probes/qualify_matrix.py"
+SCRIPT = SCRIPTS_DIR / "probes" / "qualify_matrix.py"
 
 
 def capture(tmp_path):
@@ -215,8 +215,53 @@ def test_invalid_capture_time_or_rights_metadata_is_rejected(tmp_path):
         ("captured_at", "2026-10-29T00:00:00"),
         ("captured_at", "2026-10-29T00:00:00+08:00"),
         ("license", {"permission": True}),
+        ("license", ""),
+        ("license", "   "),
         ("attribution", ["author"]),
+        ("attribution", "  "),
     ]:
         manifest.write_bytes(saved)
         rewrite(manifest, lambda data, f=field, v=value: data["assets"][0].update({f: v}))
         assert_rejected(manifest, tmp_path / "report.json", "missing or invalid " + field)
+
+
+def test_absolute_or_missing_paths_are_rejected_as_escapes_or_missing(tmp_path):
+    """RM12: absolute and missing paths fail with the probe's own errors, not OS errors."""
+    manifest, _ = capture(tmp_path)
+    output = tmp_path / "report.json"
+    for path in ["/etc/hosts", "/nonexistent-relaymind-probe", "../../nonexistent"]:
+        rewrite(manifest, lambda data, p=path: data["assets"][0].update(original_path=p))
+        assert_rejected(manifest, output, "original path escapes capture root")
+    rewrite(manifest, lambda data: data["assets"][0].update(original_path="missing.zip"))
+    assert_rejected(manifest, output, "missing capture asset: missing.zip")
+
+
+def test_inspect_capture_raises_only_value_errors_for_bad_paths(tmp_path):
+    """RM12: callers of inspect_capture see one error type for every rejected path."""
+    import importlib.util
+
+    import pytest
+
+    spec = importlib.util.spec_from_file_location("qualify_matrix", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    manifest, _ = capture(tmp_path)
+    for path in ["/nonexistent-relaymind-probe", "../../nonexistent", "missing.zip"]:
+        rewrite(manifest, lambda data, p=path: data["assets"][0].update(original_path=p))
+        with pytest.raises(ValueError):
+            module.inspect_capture(manifest, tmp_path)
+
+
+def test_non_object_asset_entry_is_named_as_such(tmp_path):
+    """RM07: a non-object entry is reported as an invalid asset, not a missing field."""
+    manifest, _ = capture(tmp_path)
+    rewrite(manifest, lambda data: data.update(assets=[123]))
+    assert_rejected(manifest, tmp_path / "report.json", "asset must be an object")
+
+
+def test_directory_output_is_refused_with_a_probe_error(tmp_path):
+    """RM12: a directory output is refused before writing anything."""
+    manifest, _ = capture(tmp_path)
+    result = run_probe(manifest, tmp_path)
+    assert result.returncode == 2
+    assert "output cannot be a directory" in result.stderr

@@ -5,14 +5,16 @@ import { getPluginToolMeta } from "openclaw/plugin-sdk/agent-harness-runtime";
 export function observeTools(tools, metadata = getPluginToolMeta) {
   return tools.map(tool => {
     const mcp = metadata(tool)?.mcp;
-    const schema = JSON.parse(JSON.stringify(tool.parameters));
+    // A tool without parameters records an absent schema, never an invented {}.
+    const schema = tool.parameters === undefined ? null : JSON.parse(JSON.stringify(tool.parameters));
     return {
       exposed_name: tool.name,
       source: mcp ? "mcp" : "unproven",
       mcp: mcp ? { serverName: mcp.serverName, toolName: mcp.toolName,
         ...(mcp.deniedBySession ? { deniedBySession: true } : {}) } : null,
       schema,
-      schema_sha256: createHash("sha256").update(JSON.stringify(schema)).digest("hex"),
+      schema_sha256: schema === null ? null
+        : createHash("sha256").update(JSON.stringify(schema)).digest("hex"),
       availability: "unknown", host_revision: null, session: null,
     };
   });
@@ -45,4 +47,11 @@ export async function observeGatewayInventory(context, request) {
   return { hook: "before_prompt_build", tools: [], host_context: {
     sessionKey: context.sessionKey ?? null, sessionId: context.sessionId ?? null,
   }, inventory };
+}
+
+// A host without the gateway runtime is recorded as a failed inventory read.
+export function inventoryHook(runtime, emit) {
+  return async (_event, context) => {
+    emit(await observeGatewayInventory(context, runtime?.gateway?.request));
+  };
 }

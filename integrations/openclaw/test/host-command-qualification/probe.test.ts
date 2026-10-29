@@ -57,6 +57,20 @@ it("records only host context with a separate credential, never argument-supplie
   expect(command.continueAgent).toBeUndefined();
 });
 
+it("records a recommendation without a choice", async () => {
+  const result = await createProbeCommand(config).handler({ ...context, args: "recommend" });
+  expect(events).toEqual([{ action: "recommend", host: context, skillSha256: config.skill.sha256 }]);
+  expect(result.text).toBe("qualification recommendation: 2 (disposable skill)");
+});
+
+it("reports an unreachable recorder without claiming a recorded choice", async () => {
+  await new Promise(resolve => server.close(resolve));
+  server = http.createServer();
+  const result = await createProbeCommand(config).handler({ ...context, args: "choose 2" });
+  expect(result.text).toBe("qualification recorder unavailable");
+  expect(events).toEqual([]);
+});
+
 it.each([
   { ...context, isAuthorizedSender: false, args: "choose 2 actor=user" },
   { ...context, senderId: "forged", args: "choose 2" },
