@@ -37,7 +37,7 @@ task. Only what the exports show is recorded here.
 | Host | `OpenClaw 2026.10.7 (157d8c2)`, the package's devDependency, run as `node integrations/openclaw/node_modules/openclaw/openclaw.mjs` |
 | Node, npm | v26.12.1 (inside the host's engine range `>=26.12.1`), 11.20.0 |
 | Python | 3.14.9 (venv) |
-| Commit tested | `6fc09544ec8132062bd998fa2e6c74fd38744efb`, clean: `versions.relaymind_revision.dirty` is false in every export |
+| Commit tested | `6fc09544ec8132062bd998fa2e6c74fd38744efb`, clean: `versions.relaymind_revision.dirty` is false in every export. After the run the branch was rebased onto the updated #139 tip; the equivalent commit is `00d21b6`, and `git diff 6fc0954 00d21b6` touches only `scripts/run_openclaw_eval.py`, `tests/test_openclaw_eval_runner.py`, `docs/TESTING.md`, and `integrations/openclaw/README.md`, none of which these runs exercised |
 | Artifact | `relaymind-openclaw-provider-0.1.0.tgz`, 43,408 bytes, sha256 `16d064d521fa780b8422b32de7292df2e7f36d9ebcb9b582411a6fd2213e87ac`, built at that commit with `npm run pack:release` (`install-check/release.json`, `install-check/SHA256SUMS`); the round trip and cancel drivers checked the same digest before they installed it, and the live export names it |
 | Install export | `install-check/install-check.json`, sha256 `c18ae2a165dfddd9776ad4ea78f658b0a135e96705472432aa96aae7bdef0a36` |
 | Live runtime (step 4) | llama-server `b11785-8baabd53b` on 127.0.0.1:8033, `models/Qwen3-0.6B-Q8_0.gguf`, `n_ctx` 8192 (`live/llama-props.json`) |
