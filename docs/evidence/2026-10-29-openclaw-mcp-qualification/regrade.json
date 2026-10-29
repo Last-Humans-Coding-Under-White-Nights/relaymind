@@ -1,0 +1,33 @@
+{
+  "kind": "offline-regrade-of-historical-host-capture",
+  "reason": "Review of #211: the offline grader reports a malformed capture as not passed instead of raising; roundtrip_pass tolerates an MCP observation without provenance. Harness hardening (atomic control writes, startup timeout, sorted fixture hashes, absent-schema capture, optional gateway runtime) applies to later host runs only.",
+  "capture_uncompressed_sha256": "c2e0b957f8513d75dd593027be6a98b0ef9ea59e755c65eb9b9922b8d5c2bdc8",
+  "current_grader_sources_sha256": {
+    "integrations/openclaw/test/host-mcp-qualification/grade.py": "a46f64fcd1a042151c1a83d86cb59515a3e5775d29c3e8c31c281c205319536d",
+    "integrations/openclaw/test/host-mcp-qualification/qualify.py": "6433eb8e4d93e18b3eada9460c596b5618bea51e639dd7b43874f70429135fea",
+    "tests/test_openclaw_mcp_qualification.py": "5162e8ff820bb094fe925c586824643da0f05bb9635e1860d65e6e52c55178a1"
+  },
+  "current_harness_sources_sha256": {
+    "integrations/openclaw/test/host-mcp-qualification/capture.mjs": "b6f55020b993e568c12f92f3c4d18adf48c37fba07ee0410f52e9f49e8ad08ac",
+    "integrations/openclaw/test/host-mcp-qualification/probe.mjs": "5c74c0288f38060489077f143bdd458b86f6cabf16c028d65da6350b5eb3eaff",
+    "integrations/openclaw/test/host-mcp-qualification/server.mjs": "cb0f17467f48f37ee7cb946cb22bcef897b28d3f4595721a2690431a320dc793"
+  },
+  "checks": {
+    "host_roundtrips": true,
+    "changed_schema_roundtrip": true,
+    "excluded_or_unavailable_not_passed": true,
+    "raw_server_calls_and_traces_consistent": true
+  },
+  "counterexamples": {
+    "mcp_call_event_without_result": "host_roundtrips false; raw_server_calls_and_traces_consistent false",
+    "proposal_without_tool_name": "host_roundtrips false",
+    "missing_top_level_key": "every check false with a malformed capture reason"
+  },
+  "host_rerun": false,
+  "historical_capture_modified": false,
+  "validation": {
+    "consumer_regression": "test_offline_grader_reports_a_malformed_capture_as_not_passed: RED KeyError; GREEN",
+    "targeted_pytest": "11 passed",
+    "vitest": "374 passed in 18 files"
+  }
+}

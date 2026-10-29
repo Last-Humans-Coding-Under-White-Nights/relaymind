@@ -41,7 +41,10 @@ Source hashes identify the actual driver, fixture, built provider, dependency
 lock and inspected pinned host surfaces used in the final capture. The separate
 offline grader has its own source hash in `report.json` and re-reads raw final
 history, model results, trace proposals, captured provenance and server events;
-the original runtime source hashes and checks are preserved. Derived
+the original runtime source hashes and checks are preserved. After review,
+`regrade.json` re-ran the hardened grader on the unchanged capture with the
+same checks; it records the current grader and harness source hashes, and the
+host was not re-run. Derived
 schema/capture hashes are not host-issued availability revisions.
 
 Reproduce using the [fixture instructions](../../../integrations/openclaw/test/host-mcp-qualification/README.md).

@@ -72,6 +72,65 @@ def test_same_name_call_cannot_be_attributed_to_another_server(probe):
     assert not probe.roundtrip_pass(record)
 
 
+def test_mcp_source_without_provenance_fails_without_crashing(probe):
+    """RM16: a malformed observation claiming MCP without server metadata cannot pass."""
+    record = roundtrip()
+    record["observations"][0]["mcp"] = None
+    assert not probe.roundtrip_pass(record)
+
+
+def test_control_file_is_replaced_atomically(probe, tmp_path, monkeypatch):
+    """RM16: the disposable server must never read a truncated control file."""
+    import json
+    import os
+
+    path = tmp_path / "server-0.json"
+    probe.write_json_atomic(path, {"revision": 1})
+    replaced = []
+    real_replace = os.replace
+    monkeypatch.setattr(
+        probe.os, "replace", lambda src, dst: (replaced.append((src, dst)), real_replace(src, dst))
+    )
+    probe.write_json_atomic(path, {"revision": 2})
+    assert json.loads(path.read_text(encoding="utf-8")) == {"revision": 2}
+    assert len(replaced) == 1 and Path(replaced[0][1]) == path
+    assert Path(replaced[0][0]).parent == path.parent
+    assert [p.name for p in tmp_path.iterdir()] == ["server-0.json"]
+
+
+def test_host_startup_without_listener_times_out(probe):
+    """RM16: a host that never listens is a startup failure, not a later RPC error."""
+    import socket
+
+    class Running:
+        def poll(self):
+            return None
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    with pytest.raises(TimeoutError, match="did not start listening"):
+        probe.wait_for_listener(Running(), port, timeout=0.5)
+
+    class Exited:
+        def poll(self):
+            return 1
+
+    with pytest.raises(RuntimeError, match="failed startup"):
+        probe.wait_for_listener(Exited(), port, timeout=0.5)
+
+
+def test_fixture_module_hashes_are_in_a_stable_order(probe, tmp_path):
+    """RM16: the export's source hash order must not depend on the filesystem."""
+    for name in ("server.mjs", "capture.mjs", "probe.mjs", "notes.txt"):
+        (tmp_path / name).write_text("", encoding="utf-8")
+    assert [p.name for p in probe.fixture_modules(tmp_path)] == [
+        "capture.mjs",
+        "probe.mjs",
+        "server.mjs",
+    ]
+
+
 def test_credential_export_fails_closed_before_writing(probe, tmp_path):
     """RM12: reject a configured env/header credential in any nested export field."""
     out = tmp_path / "report.json"
@@ -111,7 +170,7 @@ def test_checked_in_host_capture_proves_two_real_servers_and_does_not_claim_curr
         for t in changed["observations"]
         if t.get("mcp", {}) and t["mcp"]["serverName"] == "alpha.one"
     ]
-    assert any(t["schema"]["required"] == ["count"] for t in schemas)
+    assert any(t.get("schema", {}).get("required") == ["count"] for t in schemas)
     for name in ("disconnected", "policy_denied", "removed"):
         assert exchanges[name]["roundtrip"]["calls"] == []
         assert exchanges[name]["roundtrip"]["answer"] == "tool unavailable"
@@ -190,3 +249,50 @@ def test_offline_grader_checks_raw_history_model_result_trace_and_server_events(
     changed = copy.deepcopy(captured)
     changed["mcp_events"] = [e for e in changed["mcp_events"] if e["kind"] != "call"]
     assert not grader.grade_capture(changed)["host_roundtrips"]
+
+
+def load_grader():
+    spec = importlib.util.spec_from_file_location(
+        "mcp_capture_grade", ROOT / "integrations/openclaw/test/host-mcp-qualification/grade.py"
+    )
+    assert spec and spec.loader
+    grader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(grader)
+    return grader
+
+
+def test_offline_grader_reports_a_malformed_capture_as_not_passed():
+    """RM16: tampered or truncated raw evidence fails as a check, never as a crash."""
+    import gzip
+    import json
+
+    grader = load_grader()
+    path = ROOT / "docs/evidence/2026-10-29-openclaw-mcp-qualification/mcp-capture.json.gz"
+    captured = json.loads(gzip.decompress(path.read_bytes()))
+    checks = (
+        "host_roundtrips",
+        "changed_schema_roundtrip",
+        "excluded_or_unavailable_not_passed",
+        "raw_server_calls_and_traces_consistent",
+    )
+    changed = copy.deepcopy(captured)
+    call = next(e for e in changed["mcp_events"] if e["kind"] == "call")
+    del call["result"]
+    graded = grader.grade_capture(changed)
+    assert not graded["host_roundtrips"]
+    assert not graded["raw_server_calls_and_traces_consistent"]
+    changed = copy.deepcopy(captured)
+    proposal = next(
+        e
+        for r in changed["exchanges"][0]["runs"]
+        for e in r["events"]
+        if e["type"] == "tool.proposed"
+    )
+    del proposal["payload"]["tool_name"]
+    assert not grader.grade_capture(changed)["host_roundtrips"]
+    for key in ("mcp_events", "exchanges", "schema_captures"):
+        changed = copy.deepcopy(captured)
+        del changed[key]
+        graded = grader.grade_capture(changed)
+        assert all(graded[check] is False for check in checks), key
+        assert "malformed capture" in graded["error"]

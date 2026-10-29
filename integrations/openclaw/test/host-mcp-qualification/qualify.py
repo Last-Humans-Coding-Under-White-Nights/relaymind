@@ -1,6 +1,10 @@
 """Disposable pinned-host MCP qualification (#190; RM08/RM09/RM12/RM16/RM33, AC24)."""
 
 import json
+import os
+import socket
+import tempfile
+import time
 from pathlib import Path
 
 
@@ -31,8 +35,8 @@ def roundtrip_pass(record: dict) -> bool:
         and any(
             item.get("source") == "mcp"
             and item.get("exposed_name") == record.get("tool")
-            and item.get("mcp", {}).get("serverName") == record.get("server")
-            and item.get("mcp", {}).get("toolName") == "echo"
+            and (item.get("mcp") or {}).get("serverName") == record.get("server")
+            and (item.get("mcp") or {}).get("toolName") == "echo"
             for item in record.get("observations", [])
         )
     )
@@ -44,7 +48,35 @@ def write_export(out: Path, exported: dict, credentials: list[str]) -> None:
     if any(secret and secret in serialized for secret in credentials):
         raise ValueError("credential reached qualification export")
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(serialized + "\n")
+    out.write_text(serialized + "\n", encoding="utf-8")
+
+
+def write_json_atomic(path: Path, value: dict) -> None:
+    """Replace a control file in one step; a reader never sees it truncated (RM16)."""
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", delete=False
+    ) as stream:
+        json.dump(value, stream)
+    os.replace(stream.name, path)
+
+
+def wait_for_listener(process, port: int, *, timeout: float = 90) -> None:
+    """Fail at startup if the host exits or never listens, not at a later RPC (RM16)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError("isolated host failed startup; see gateway-console.log")
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.3):
+                return
+        except OSError:
+            time.sleep(0.2)
+    raise TimeoutError(f"isolated host did not start listening within {timeout:g} seconds")
+
+
+def fixture_modules(directory: Path) -> list[Path]:
+    """The fixture's plugin and server modules, in a filesystem-independent order."""
+    return sorted(directory.glob("*.mjs"))
 
 
 def result_answer(marker: str, messages: list[dict], *, issued: bool) -> str:
@@ -59,10 +91,8 @@ def run(work: Path, out: Path) -> dict:
     """Use only host-managed MCP connections, with a real gateway and model doubles."""
     import hashlib
     import secrets
-    import socket
     import subprocess
     import sys
-    import time
 
     root = Path(__file__).resolve().parents[4]
     sys.path[:0] = [str(root / "scripts"), str(root / "tests"), str(root / "src")]
@@ -88,7 +118,7 @@ def run(work: Path, out: Path) -> dict:
     controls = {}
     for server, marker in (("alpha.one", "marker-alpha"), ("alpha?one", "marker-beta")):
         path = work / f"server-{len(controls)}.json"
-        path.write_text(json.dumps({"server": server, "marker": marker, "revision": 1}))
+        write_json_atomic(path, {"server": server, "marker": marker, "revision": 1})
         controls[server] = path
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -97,7 +127,9 @@ def run(work: Path, out: Path) -> dict:
     mode = {"server": None, "pending": False, "issued": False, "marker": None, "arguments": {}}
 
     def jsonl(path):
-        return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+        if not path.exists():
+            return []
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
     def on_generate(request):
         observed = [tool for capture in jsonl(capture_path) for tool in capture["tools"]]
@@ -283,8 +315,8 @@ def run(work: Path, out: Path) -> dict:
 
     def update_control(server, **changes):
         path = controls[server]
-        value = json.loads(path.read_text())
-        path.write_text(json.dumps({**value, **changes}))
+        value = json.loads(path.read_text(encoding="utf-8"))
+        write_json_atomic(path, {**value, **changes})
 
     try:
         with RunningServer(app) as running:
@@ -331,7 +363,7 @@ def run(work: Path, out: Path) -> dict:
                 },
             }
             config_path = Path(env["OPENCLAW_CONFIG_PATH"])
-            config_path.write_text(json.dumps(config))
+            config_path.write_text(json.dumps(config), encoding="utf-8")
             call(
                 ["models", "auth", "paste-api-key", "--provider", "relaymind"],
                 stdin=token_of(app) + "\n",
@@ -345,18 +377,12 @@ def run(work: Path, out: Path) -> dict:
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
             )
-            deadline = time.monotonic() + 90
-            while time.monotonic() < deadline:
-                if process.poll() is not None:
-                    raise RuntimeError("isolated host failed startup; see gateway-console.log")
-                try:
-                    with socket.create_connection(("127.0.0.1", port), timeout=0.3):
-                        break
-                except OSError:
-                    time.sleep(0.2)
+            wait_for_listener(process, port)
             exported["versions"] = qualification.versions()
             exported["mcp_sdk_version"] = json.loads(
-                (package / "node_modules/@modelcontextprotocol/sdk/package.json").read_text()
+                (package / "node_modules/@modelcontextprotocol/sdk/package.json").read_text(
+                    encoding="utf-8"
+                )
             )["version"]
             send("first_server", "alpha.one", {"text": "sandbox"})
             send("second_server", "alpha?one", {"text": "sandbox"})
@@ -373,13 +399,13 @@ def run(work: Path, out: Path) -> dict:
             )
             send("disconnected", "alpha.one", {"count": 2})
             config["tools"]["deny"] = ["bundle-mcp"]
-            config_path.write_text(json.dumps(config))
+            config_path.write_text(json.dumps(config), encoding="utf-8")
             exported["immediate_policy_inventory"] = rpc("tools.effective", {"sessionKey": session})
             time.sleep(1)
             send("policy_denied", "alpha?one", {"text": "sandbox"})
             config["tools"].pop("deny")
             config["mcp"]["servers"].pop("alpha?one")
-            config_path.write_text(json.dumps(config))
+            config_path.write_text(json.dumps(config), encoding="utf-8")
             exported["immediate_removal_inventory"] = rpc(
                 "tools.effective", {"sessionKey": session}
             )
@@ -406,12 +432,12 @@ def run(work: Path, out: Path) -> dict:
     exported["mcp_events"] = jsonl(events_path)
     exported["commands"] = commands
     exported["host_log"] = (
-        (work / "gateway-console.log").read_text()
+        (work / "gateway-console.log").read_text(encoding="utf-8")
         if (work / "gateway-console.log").exists()
         else ""
     )
     source_paths = [
-        *fixture.glob("*.mjs"),
+        *fixture_modules(fixture),
         fixture / "qualify.py",
         package / "dist/provider.js",
         fixture / "openclaw.plugin.json",

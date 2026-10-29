@@ -74,3 +74,22 @@ it("records the real plugin inventory boundary without exporting arbitrary error
   expect(unknown.inventory.status).toBe("failed");
   expect(JSON.stringify(unknown)).not.toContain("sensitive unexpected error");
 });
+
+it("records a tool without parameters as an absent schema, never an invented one", () => {
+  const [record] = observeTools([{ name: "bare_tool" }]);
+  expect(record.schema).toBeNull();
+  expect(record.schema_sha256).toBeNull();
+  expect(record.exposed_name).toBe("bare_tool");
+});
+
+it("records a missing host gateway runtime as a failed inventory, not a hook crash", async () => {
+  // @ts-expect-error test-only JS
+  const { inventoryHook } = await import("./capture.mjs");
+  for (const runtime of [undefined, {}, { gateway: {} }]) {
+    const captured: any[] = [];
+    await inventoryHook(runtime, (record: any) => captured.push(record))({}, { sessionKey: "agent:main:sandbox" });
+    expect(captured).toHaveLength(1);
+    expect(captured[0].inventory.status).toBe("failed");
+    expect(captured[0].host_context.sessionKey).toBe("agent:main:sandbox");
+  }
+});
