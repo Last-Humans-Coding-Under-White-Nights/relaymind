@@ -51,6 +51,7 @@ Usage:
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import socket
 import sqlite3
@@ -60,7 +61,7 @@ import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -336,7 +337,9 @@ def _credential_in(path: Path, token: str) -> bool:
     if not data.startswith(b"SQLite format 3\x00"):
         return token.encode() in data
     try:
-        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        # A file URI with the path percent-encoded: a #, ?, % or space in the
+        # host home is part of the path, not a URI delimiter.
+        conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
         try:
             tables = [
                 r[0] for r in conn.execute("select name from sqlite_master where type='table'")
@@ -438,25 +441,81 @@ def _sanitize(text: str, ctx: Context) -> str:
     )
     home = Path.home()
     for path, placeholder in places:
-        forms = set()
-        for candidate in (path, path.resolve()):
-            # The export is JSON: a path inside a string is escaped there.
-            forms |= {str(candidate), json.dumps(str(candidate))[1:-1]}
-            # The host prints a path under the user's home as ``~/...`` (its
-            # skill locations in the prompt), so the home-relative form goes too.
-            if candidate != home and candidate.is_relative_to(home):
-                forms.add(f"~/{candidate.relative_to(home).as_posix()}")
+        forms = _path_forms(path, home) | _path_forms(path.resolve(), home)
         for form in sorted(forms, key=len, reverse=True):
             text = text.replace(form, placeholder)
-    # Whatever else the host printed under the user's home.
-    return text.replace("~/", f"{USER_HOME}/")
+    # Whatever else the host printed under the user's home, either separator.
+    return text.replace("~/", f"{USER_HOME}/").replace("~\\", f"{USER_HOME}\\")
+
+
+def _path_forms(candidate: PurePath, home: PurePath) -> set[str]:
+    """The ways a path can be printed, for ``_sanitize`` to replace.
+
+    The native form and the forward-slash one (Node and the host print
+    ``C:/Users/...`` on Windows); under the user's home the ``~/...`` form the
+    host prints for its skill locations, and ``~\\...``. Each also as it reads
+    inside a JSON string, with non-ASCII kept (the export) or escaped.
+    """
+    texts = {str(candidate), candidate.as_posix()}
+    if candidate != home and candidate.is_relative_to(home):
+        relative = candidate.relative_to(home)
+        texts |= {f"~/{relative.as_posix()}", str(type(candidate)("~", relative))}
+    forms = set(texts)
+    for text in texts:
+        forms |= {json.dumps(text)[1:-1], json.dumps(text, ensure_ascii=False)[1:-1]}
+    return forms
+
+
+BATCH_SUFFIXES = (".cmd", ".bat")
+# cmd.exe expands % (and ! with delayed expansion) and ends a command at a line
+# break even inside quotes; a quote inside an argument would end its quoting.
+BATCH_UNSAFE = frozenset('"%!\r\n')
+
+
+def _batch_quote(arg: str) -> str:
+    # Inside quotes cmd.exe takes & | < > ^ ( ) literally. A backslash run
+    # before the closing quote is doubled so the program's own argument
+    # parsing does not read it as an escaped quote.
+    trailing = len(arg) - len(arg.rstrip("\\"))
+    return '"' + arg + "\\" * trailing + '"'
+
+
+def host_invocation(
+    command: Sequence[str],
+    args: Sequence[str],
+    platform: str | None = None,
+    comspec: str | None = None,
+) -> list[str] | str:
+    """What ``subprocess.run`` gets for one host step.
+
+    A program runs as an argument list with no shell. A Windows batch file
+    (``openclaw.cmd``, the npm shim on PATH) only runs through cmd.exe, which
+    Windows would start with the arguments as they are, under cmd's own
+    parsing. So the check starts cmd.exe itself, ``/d /v:off /s /c``, with
+    every argument quoted, and refuses an argument cmd.exe would rewrite: the
+    step is then not run (PR #182 review).
+    """
+    argv = [*command, *args]
+    platform = sys.platform if platform is None else platform
+    if platform != "win32" or not str(command[0]).lower().endswith(BATCH_SUFFIXES):
+        return argv
+    for arg in argv:
+        if BATCH_UNSAFE & set(arg):
+            raise OSError(
+                f"cannot pass {arg!r} to a batch file through cmd.exe;"
+                " run the host with node and its entry script instead"
+            )
+    comspec = comspec or os.environ.get("COMSPEC", "cmd.exe")
+    line = " ".join(_batch_quote(arg) for arg in argv)
+    return f'"{comspec}" /d /v:off /s /c "{line}"'
 
 
 def _run(command: Sequence[str], args: list[str], stdin: str | None, env, timeout: float):
+    invocation = host_invocation(command, args)
     started = time.monotonic()
     try:
         completed = subprocess.run(
-            [*command, *args],
+            invocation,
             env=env,
             input=stdin,
             capture_output=True,
@@ -489,7 +548,8 @@ def run_steps(command: Sequence[str], ctx: Context, timeout: float) -> tuple[lis
     ran = False
     argv = _argv(ctx)
     # Run the command as PATH lookup finds it: on Windows ``openclaw`` is the
-    # npm shim ``openclaw.cmd``, which only a PATHEXT lookup finds.
+    # npm shim ``openclaw.cmd``, which only a PATHEXT lookup finds, and which
+    # host_invocation runs through cmd.exe.
     command = [shutil.which(command[0]) or command[0], *command[1:]]
     for name in STEPS:
         args, stdin = argv[name]

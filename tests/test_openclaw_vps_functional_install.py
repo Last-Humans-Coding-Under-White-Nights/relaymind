@@ -174,21 +174,37 @@ def test_the_host_state_paths_were_isolated_and_the_closed_port_was_set_in_the_c
     assert steps()["isolate-gateway"]["argv"] == ["config", "set", "gateway.port", port]
 
 
+# Machine path forms that must not be left in the export. The host prints a
+# path under the user's home as ``~/...``; the run's checkout under the home
+# became ``<repo>`` (REPORT.md, "Redacted after the run"). These are fixed
+# forms, not this machine's checkout path: the export was recorded elsewhere.
+MACHINE_PATHS = ("/home/", "/Users/", "/root/", "/tmp/claude", "~/")
+
+
+def machine_paths(text: str) -> list:
+    return [form for form in MACHINE_PATHS if form in text]
+
+
 def test_the_export_holds_no_token_and_no_machine_path():
     """RM12: the token is never recorded; paths are placeholders."""
     raw = (RUN / "install-check.json").read_text("utf-8")
     assert export()["token"] == install_check.NOT_RECORDED
-    assert "/home/" not in raw
-    assert "/tmp/claude" not in raw
-    # The host prints paths under the user's home as ``~/...``; none is left,
-    # and the checkout's place under the home is not either (PR #182 review).
-    assert "~/" not in raw
-    if ROOT.is_relative_to(Path.home()):
-        assert ROOT.relative_to(Path.home()).as_posix() not in raw
+    assert machine_paths(raw) == []
+    # The checkout's place under the home was replaced by <repo> (PR #182 review).
     assert "<repo>/integrations/openclaw/node_modules/openclaw/skills/" in raw
     for name in ("REPORT.md", "release.json"):
         text = (RUN / name).read_text("utf-8")
         assert "/home/" not in text and "~/" not in text, name
+
+
+def test_the_machine_path_check_finds_a_planted_home_relative_checkout(tmp_path):
+    """RM12: the check is not vacuous; a home-relative checkout path is caught."""
+    copy = tmp_path / "install-check.json"
+    raw = (RUN / "install-check.json").read_text("utf-8")
+    planted = raw.replace("<repo>/integrations/", "~/x/relaymind/integrations/", 1)
+    assert planted != raw
+    copy.write_text(planted, "utf-8")
+    assert machine_paths(copy.read_text("utf-8")) == ["~/"]
 
 
 def test_the_report_states_the_label_and_the_platform_gaps():

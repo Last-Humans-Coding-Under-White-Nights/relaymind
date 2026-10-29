@@ -3335,9 +3335,13 @@ was a closed loopback port set in its config.
 Also seen: the `windows-latest` artifact is 40,712 bytes, against 40,410 on
 the other two. Its `README.md`, `package.json`, and `openclaw.plugin.json`
 have CRLF line ends: the runner's checkout converted line ends, and
-`.gitattributes` does not pin `integrations/openclaw/` to LF. So the release
+`.gitattributes` did not pin `integrations/openclaw/` to LF. So the release
 build is the same bytes per checkout, not across platforms. The host
-installed and loaded it the same way.
+installed and loaded it the same way. `.gitattributes` now pins the
+package's text files to LF (`/integrations/openclaw/** text=auto eol=lf`,
+added after this run); whether the Windows digest then agrees with the
+other two is for the next Windows runner export to show, and is not shown
+here.
 
 Not shown: macOS on a user's machine at this revision stays `not_run` (no
 Mac access); Windows on a user's machine, native and WSL2, stays `not_run`

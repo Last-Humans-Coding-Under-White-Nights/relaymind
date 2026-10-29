@@ -15,10 +15,12 @@ uninstall. A real host run is an operator or CI step, never this suite.
 """
 
 import json
+import os
 import shutil
 import socket
+import sqlite3
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 
 import pytest
@@ -308,18 +310,54 @@ def test_the_home_relative_form_the_host_prints_is_a_placeholder_too(tmp_path):
         assert line in ("<repo>/skills/a/SKILL.md", "<home>/elsewhere/b"), line
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="a backslash cannot be in a Windows name")
 def test_the_json_form_of_a_resolved_path_is_a_placeholder_too(tmp_path):
     """RM12: the export is JSON, so a path the host printed in its resolved form
     (a symlink or a Windows short name resolved) is replaced in its JSON-escaped
-    form too, not only the given path's (PR #182 review)."""
-    real = tmp_path / "real\\host"
-    real.mkdir()
+    form too, not only the given path's (PR #182 review). On Windows every
+    separator is a backslash; elsewhere a backslash in a name stands in for one."""
+    real = tmp_path / "real" / "host" if os.sep == "\\" else tmp_path / "real\\host"
+    real.mkdir(parents=True)
+    ctx = SimpleNamespace(home=real, tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    assert "\\\\" in json.dumps(str(real))
+    escaped = json.dumps(f"{real}{os.sep}state")
+    assert install_check._sanitize(escaped, ctx) == json.dumps(f"<host-home>{os.sep}state")
     link = tmp_path / "host"
-    link.symlink_to(real, target_is_directory=True)
+    try:
+        link.symlink_to(real, target_is_directory=True)
+    except OSError:
+        pytest.skip("this Windows account cannot make a symlink")
     ctx = SimpleNamespace(home=link, tarball=tmp_path / "a" / "x.tgz", token="t0k")
     escaped = json.dumps(f"{link.resolve()}/state/x")
     assert install_check._sanitize(escaped, ctx) == '"<host-home>/state/x"'
+
+
+def test_every_printed_form_of_a_windows_path_is_a_placeholder_form():
+    """RM12: Node and the host print a Windows path with backslashes or with
+    forward slashes (``C:/Users/...``), plain or inside JSON, and a path under
+    the home as ``~\\...`` or ``~/...``; each form is replaced (PR #182 review)."""
+    home = PureWindowsPath(r"C:\Users\Dmitrý")
+    path = home / "AppData" / "Local" / "Temp" / "host"
+    forms = install_check._path_forms(path, home)
+    for form in (
+        r"C:\Users\Dmitrý\AppData\Local\Temp\host",
+        r"C:\\Users\\Dmitrý\\AppData\\Local\\Temp\\host",
+        r"C:\\Users\\Dmitr\u00fd\\AppData\\Local\\Temp\\host",
+        "C:/Users/Dmitrý/AppData/Local/Temp/host",
+        "C:/Users/Dmitr\\u00fd/AppData/Local/Temp/host",
+        r"~\AppData\Local\Temp\host",
+        r"~\\AppData\\Local\\Temp\\host",
+        "~/AppData/Local/Temp/host",
+    ):
+        assert form in forms, form
+    assert not any(form.startswith("~") for form in install_check._path_forms(home, home))
+
+
+def test_a_home_relative_windows_path_the_host_printed_is_a_placeholder(tmp_path):
+    """RM12: whatever else the host printed under the home as ``~\\...`` (plain
+    or JSON-escaped) becomes ``<home>``, as ``~/...`` does."""
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    text = install_check._sanitize("~\\skills\\a\n" + json.dumps("~\\skills\\b"), ctx)
+    assert text.splitlines() == ["<home>\\skills\\a", json.dumps("<home>\\skills\\b")]
 
 
 def test_what_uninstall_leaves_is_recorded_and_the_removal_steps_clear_it(
@@ -453,6 +491,70 @@ def test_a_host_command_is_run_as_path_lookup_finds_it(stub_host, tarball, tmp_p
     assert export["command"][0] == "openclaw"
 
 
+def test_a_windows_batch_host_command_runs_through_cmd_with_every_argument_quoted():
+    """On Windows ``openclaw`` on PATH is the npm shim ``openclaw.cmd``. The check
+    runs a batch file through ``cmd.exe /d /s /c`` itself, every argument quoted
+    so ``&``, ``^``, ``(`` and spaces in a path stay one literal argument, and a
+    trailing backslash cannot escape the closing quote (PR #182 review)."""
+    shim = r"C:\Users\Runner Admin\AppData\Roaming\npm\openclaw.cmd"
+    args = ["plugins", "install", r"npm-pack:C:\a&b (x)\r^y\p.tgz", "", "C:\\dir with space\\"]
+    line = install_check.host_invocation([shim], args, platform="win32", comspec="cmd.exe")
+    assert line == (
+        '"cmd.exe" /d /v:off /s /c ""C:\\Users\\Runner Admin\\AppData\\Roaming\\npm\\openclaw.cmd"'
+        ' "plugins" "install" "npm-pack:C:\\a&b (x)\\r^y\\p.tgz" "" "C:\\dir with space\\\\""'
+    )
+    # The suffix is matched in any case, .bat too.
+    for name in (r"C:\x\OPENCLAW.CMD", r"C:\x\openclaw.bat"):
+        assert isinstance(install_check.host_invocation([name], [], platform="win32"), str)
+
+
+def test_a_host_command_that_is_not_a_windows_batch_file_runs_as_an_argument_list():
+    """A program, or any command off Windows, is run directly with no shell."""
+    args = ["plugins", "a&b"]
+    exe = [r"C:\Program Files\nodejs\node.exe", "openclaw.mjs"]
+    assert install_check.host_invocation(exe, args, platform="win32") == [*exe, *args]
+    posix = ["/usr/local/bin/openclaw.cmd"]
+    assert install_check.host_invocation(posix, args, platform="linux") == [*posix, *args]
+
+
+@pytest.mark.parametrize("bad", ['say "hi"', "C:\\100%\\x", "wow!", "two\nlines", "a\rb"])
+def test_an_argument_cmd_would_rewrite_is_refused_for_a_batch_file(bad):
+    """cmd.exe expands ``%`` and ``!`` and ends a command at a line break even in
+    quotes, and a quote inside an argument breaks the quoting; such an argument
+    is refused (the step is not run), never passed through altered."""
+    with pytest.raises(OSError, match="batch file"):
+        install_check.host_invocation([r"C:\x\openclaw.cmd"], ["agent", bad], platform="win32")
+
+
+def test_a_batch_host_command_is_run_through_cmd_on_windows(monkeypatch):
+    """``_run`` passes the cmd.exe command line for a batch file on Windows."""
+    seen = []
+
+    def fake_run(command, **_):
+        seen.append(command)
+        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(install_check.sys, "platform", "win32")
+    monkeypatch.setattr(install_check.subprocess, "run", fake_run)
+    code, stdout, _, timed_out, _ = install_check._run(
+        [r"C:\x\openclaw.cmd"], ["--version"], None, {}, 5
+    )
+    assert (code, stdout, timed_out) == (0, "ok", None)
+    assert isinstance(seen[0], str)
+    assert '/s /c ""C:\\x\\openclaw.cmd" "--version""' in seen[0]
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="a batch file runs only on Windows")
+def test_the_whole_lifecycle_passes_through_a_cmd_shim_on_windows(stub_host, tarball, tmp_path):
+    """The host behind an npm-style ``.cmd`` shim, as ``openclaw`` is on Windows
+    (PR #182 review): every step runs and the check passes."""
+    shim = tmp_path / "shim dir" / "openclaw.cmd"
+    shim.parent.mkdir()
+    shim.write_text(f'@"{stub_host[0]}" "{stub_host[1]}" %*\r\n', "utf-8")
+    export = run([str(shim)], tarball, tmp_path)
+    assert export["passed"] is True, [s for s in export["steps"] if s["status"] != "passed"]
+
+
 def test_a_missing_artifact_is_refused_before_the_host_runs(stub_host, tmp_path):
     with pytest.raises(SystemExit, match="artifact"):
         install_check.main(
@@ -469,6 +571,27 @@ def test_a_removed_credential_left_in_sqlite_free_space_is_not_reported(
     export = run(stub_host, tarball, tmp_path, host_home=tmp_path / "host")
     assert export["leftovers"]["after_removal"]["credential_in_host_state"] is False
     assert export["passed"] is True
+
+
+@pytest.mark.parametrize("folder", ["host #1", "100%41 done", "what?"])
+def test_a_sqlite_file_is_read_where_its_path_holds_uri_delimiters(tmp_path, folder):
+    """A host home path with ``#``, ``%``, ``?`` or a space is read as that path,
+    not cut at a URI delimiter and so reported as holding the token (PR #182 review)."""
+    if "?" in folder and sys.platform == "win32":
+        pytest.skip("a ? cannot be in a Windows name")
+    db = tmp_path / folder / "state.sqlite"
+    db.parent.mkdir()
+    conn = sqlite3.connect(db)
+    conn.execute("create table kv (key text, value text)")
+    conn.execute("insert into kv values ('profile', 'clean')")
+    conn.commit()
+    conn.close()
+    assert install_check._credential_in(db, "token-123") is False
+    conn = sqlite3.connect(db)
+    conn.execute("insert into kv values ('key', 'token-123')")
+    conn.commit()
+    conn.close()
+    assert install_check._credential_in(db, "token-123") is True
 
 
 def test_a_config_strict_json_cannot_read_is_never_reported_clean(
