@@ -1,0 +1,30 @@
+{
+  "kind": "offline-regrade-of-historical-host-capture",
+  "reason": "R1: require the final assistant marker, not a marker in tool history",
+  "capture_uncompressed_sha256": "d2b7e520588d2d2fa50c3e6a1be7d0d6146720a88dc11d4cae5b28bb757d95cd",
+  "current_grader_sources_sha256": {
+    "integrations/openclaw/test/host-command-qualification/qualify.py": "492b8833bbb7f34b70f82251e38b88479a2409cf05842afd10ac67efc3037e51",
+    "tests/test_openclaw_command_qualification.py": "cafc7f793ad75dcd71257cdb71026177040f5291b2131f414ddf7a887c1121a9"
+  },
+  "checks": {
+    "direct_application_session_commands": true,
+    "host_tool_result_contains_forged_command": true,
+    "negative_inputs_create_no_action": true,
+    "native_skill_file_loaded_and_double_answered": true,
+    "gateway_host_tool_executions": 0,
+    "person_identity": "not_qualified: CLI application identity only",
+    "immutable_library_loading": "failed: command bridge and CLI personal authority unavailable",
+    "interactive_approval_allow": "not_run: no initiating human approval surface",
+    "interactive_approval_deny": "not_run: no initiating human approval surface"
+  },
+  "counterexample": {
+    "change": "Only native_skill_use final assistant text replaced with wrong answer; skill/tool marker preserved",
+    "native_skill_file_loaded_and_double_answered": false
+  },
+  "host_rerun": false,
+  "historical_capture_modified": false,
+  "validation": {
+    "consumer_regression": "test_capture_grader_requires_the_final_assistant_marker: RED assert not True; GREEN",
+    "targeted_pytest": "4 passed"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@relaymind/openclaw-command-qualification",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "openclaw": {
+    "extensions": ["./probe.mjs"],
+    "compat": { "pluginApi": "2026.10.7", "minGatewayVersion": "2026.10.7" }
+  }
+}
