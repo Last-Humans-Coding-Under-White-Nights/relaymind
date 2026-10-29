@@ -497,6 +497,45 @@ def test_a_target_platform_run_must_name_its_machine(tarball, tmp_path, monkeypa
     assert not out.exists()
 
 
+@pytest.mark.parametrize(
+    ("system", "release", "allowed"),
+    [
+        ("darwin", "27.0.0", True),
+        ("win32", "11", True),
+        ("linux", "6.6.87.2-microsoft-standard-WSL2", True),
+        ("linux", "7.0.0-38-generic", False),
+    ],
+)
+def test_a_target_platform_run_is_refused_off_the_target_platforms(
+    tarball, tmp_path, monkeypatch, capsys, system, release, allowed
+):
+    """RM33, AC24, section 12.5 (invariant 9): ``--target-platform`` certifies a
+    target platform of section 1, macOS or Windows (WSL2 on Windows recorded as
+    such), so a Linux machine is refused before any host or gateway starts."""
+    started = []
+
+    def record(*args, **kwargs):
+        started.append(1)
+        return {"status": "completed", "passed": True, "steps": []}
+
+    monkeypatch.setattr(install_check, "run_install_check", record)
+    monkeypatch.setattr(install_check.shutil, "which", lambda name: name)
+    monkeypatch.setattr(install_check.sys, "platform", system)
+    monkeypatch.setattr(install_check.platform, "release", lambda: release)
+    out = tmp_path / "x.json"
+    argv = ["--tarball", str(tarball), "--out", str(out), "--target-platform"]
+    argv += ["--label", "a machine", "--", "openclaw"]
+    if allowed:
+        install_check.main(argv)
+        assert started == [1]
+        return
+    with pytest.raises(SystemExit) as raised:
+        install_check.main(argv)
+    assert raised.value.code == 2
+    assert "--target-platform is for macOS or Windows" in capsys.readouterr().err
+    assert not started
+
+
 def test_the_main_entry_exits_by_the_result(stub_host, tarball, tmp_path, monkeypatch):
     out = tmp_path / "main.json"
     argv = ["--tarball", str(tarball), "--out", str(out), "--", *stub_host]

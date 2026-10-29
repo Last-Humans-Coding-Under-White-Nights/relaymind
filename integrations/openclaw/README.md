@@ -881,7 +881,8 @@ Windows, native or WSL2 (section 12.5). An operator on a macOS or Windows
 machine passes `--target-platform` with a `--label` naming the machine and
 runtime, and the export then says it is the platform qualification of the
 install lifecycle (`"platform_qualification": true`, still not live model
-evidence); runs on the Linux VPS and the GitHub-hosted runners do not pass it.
+evidence); runs on the Linux VPS and the GitHub-hosted runners do not pass it,
+and the script refuses it on Linux other than WSL2.
 
 A stale token on a running host (restart `relaymind serve`; `models list
 --refresh` reports the 401 reconnect line; paste the new token; it recovers)

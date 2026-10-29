@@ -53,6 +53,7 @@ Usage:
 import argparse
 import hashlib
 import json
+import platform
 import shutil
 import socket
 import sqlite3
@@ -572,6 +573,13 @@ def _artifact(tarball: Path) -> dict:
     }
 
 
+def _on_target_platform() -> bool:
+    """macOS, native Windows, or WSL2 on Windows (its kernel names Microsoft)."""
+    if sys.platform in ("darwin", "win32"):
+        return True
+    return sys.platform == "linux" and "microsoft" in platform.release().lower()
+
+
 def _evidence(label: str | None, target_platform: bool) -> str:
     """What the run is; only a target-platform run is a platform qualification (12.5)."""
     if target_platform:
@@ -684,6 +692,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.target_platform and not args.label:
         parser.error("--target-platform needs --label naming the machine and runtime")
+    if args.target_platform and not _on_target_platform():
+        parser.error(
+            "--target-platform is for macOS or Windows (spec section 1; WSL2 on Windows "
+            f"too, labeled as WSL2), not {sys.platform} {platform.release()}"
+        )
     command = list(args.command)
     if command and command[0] == "--":
         command = command[1:]

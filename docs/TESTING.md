@@ -1388,7 +1388,8 @@ pass it.
   set); the export is written even when the temporary
   host home cannot be removed; the label keeps "not live model
   evidence" and "not a supported-platform qualification", and only
-  `--target-platform` (refused without `--label`) records the run as the
+  `--target-platform` (refused without `--label`, and on Linux other than
+  WSL2) records the run as the
   platform qualification of the install lifecycle.
 
 - `tests/test_openclaw_vps_functional_install.py`: reads the Linux VPS
