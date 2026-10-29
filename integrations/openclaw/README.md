@@ -162,6 +162,9 @@ npm run pack:release -- ../../release/openclaw
 `pack:release` builds from a clean `dist/`, checks the package, and records
 the tarball's SHA-256, the pins, and the Node that built it. Two builds of
 one checkout are the same bytes, so a SHA-256 names a release.
+`.gitattributes` pins the package's text files to LF, so a Windows checkout
+packs the same bytes as Linux and macOS; that is pending a Windows runner
+export (an earlier Windows build packed CRLF and had a different digest).
 
 ### 4. Install, configure, enable
 

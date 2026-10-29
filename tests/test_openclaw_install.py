@@ -125,7 +125,35 @@ def test_the_release_script_is_declared():
     assert "release-pack.mjs" in package["scripts"]["pack:release"]
 
 
-# -- the release artifact (needs npm ci) --------------------------------------------------
+def test_the_package_text_files_check_out_with_lf_on_every_platform():
+    """Issue #145, RM18: the package's text files are pinned to LF line ends.
+
+    Without an eol rule a Windows checkout wrote the packed text files with
+    CRLF, so the release tarball's SHA-256 differed from the same commit built
+    on Linux and macOS (docs/EVIDENCE.md). ``.gitattributes`` pins the package
+    to LF; whether the Windows digest now agrees is for a Windows runner
+    export to show, not this test.
+    """
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("git is not on PATH")
+    paths = [
+        "integrations/openclaw/README.md",
+        "integrations/openclaw/package.json",
+        "integrations/openclaw/openclaw.plugin.json",
+        "integrations/openclaw/src/index.ts",
+    ]
+    completed = subprocess.run(
+        [git, "-C", str(PACKAGE.parent.parent), "check-attr", "eol", "--", *paths],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    assert completed.stdout.splitlines() == [f"{path}: eol: lf" for path in paths]
+
+
+# -- the release artifact (needs npm ci)--------------------------------------------------
 
 
 def test_two_release_builds_are_the_same_bytes(releases):
