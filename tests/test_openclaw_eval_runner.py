@@ -638,6 +638,8 @@ def test_an_interrupt_in_an_early_setup_leaves_every_later_arm_not_run(tmp_path)
     arms = document["arms"]
     assert arms["direct"]["status"] == "ran" and arms["direct"]["setup"]
     report = (out / "openclaw-eval.md").read_text("utf-8")
+    # Set up, no attempt ran: its slots are counted not run, and the report keeps its row.
+    assert "| direct | all | 0/0: no attempt ended |" in report
     later = ("relaymind_auto", "relaymind_no_local")
     for arm in ("relaymind_external_only", *later):
         assert arms[arm]["status"] == "not_run", arm

@@ -883,6 +883,10 @@ def render_markdown(summary: Mapping[str, Any], *, title: str) -> str:
         if entry["status"] == "not_run":
             lines.append(f"| {arm} | all | not_run: {entry['reason']} |" + " |" * 15)
             continue
+        if not entry["languages"]:
+            # Set up, but stopped before any attempt ended: still a row, never dropped.
+            lines.append(f"| {arm} | all | 0/0: no attempt ended |" + " |" * 15)
+            continue
         for language, m in entry["languages"].items():
             label = f"{language} (best-effort)" if m["best_effort"] else language
             done = m["completion_ms"]["successful"]

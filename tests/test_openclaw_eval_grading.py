@@ -724,6 +724,16 @@ def test_the_summary_gives_exact_counts_per_arm_and_language_with_chinese_apart(
     assert auto["languages"] == {}
 
 
+def test_an_arm_that_ran_without_an_ended_attempt_keeps_its_report_row():
+    """An arm set up but stopped before any attempt ended (an operator
+    interrupt) has no language rows; the report still names it with 0 attempts."""
+    summary = summarize([], arms=("direct", "relaymind_external_only"))
+    assert summary["arms"]["direct"] == {"status": "ran", "languages": {}}
+    text = render_markdown(summary, title="OpenClaw evaluation")
+    for arm in ("direct", "relaymind_external_only"):
+        assert f"| {arm} | all | 0/0: no attempt ended |" in text
+
+
 def test_the_paired_comparison_uses_only_pairs_both_arms_completed():
     summary = summarize(grades_for_summary(), arms=("direct", "relaymind_external_only"))
     overhead = summary["comparisons"]["integration_overhead"]
