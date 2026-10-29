@@ -27,6 +27,7 @@ from helpers import ACCEPTED_PAYLOAD, of_type
 from relaymind.adapters import GenerationOptions
 from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
 from relaymind.orchestrator.performance import PerformanceSettings
+from relaymind.orchestrator.workflows import PARALLEL_WORKFLOWS
 from relaymind.store import RunRecord, RunStore, TraceEvent
 from relaymind.store.trace_event import EventType, validate_trace_event
 from relaymind.ui.render import render_trace
@@ -1001,7 +1002,7 @@ def test_an_inline_tool_result_has_no_reference(tmp_path):
 
 # --- the retired workflow steps placeholder (#173; RM15, RM23, AC14; RM30 retired) ---------
 
-PARALLEL_WORKFLOW = "health-and-diagnostic-checklist"
+(PARALLEL_WORKFLOW,) = PARALLEL_WORKFLOWS
 
 
 def _no_workflow_steps(shown):
@@ -1071,7 +1072,13 @@ def test_a_legacy_trace_with_the_reserved_workflow_mechanism_renders(tmp_path):
     view = trace_view_from(record, events)
     (proposal,) = view["proposals"]
     assert proposal["mechanism"] == "workflow" and proposal["model"] is None
+    (operation,) = view["operations"]
+    assert operation["tool_name"] == "get_service_health" and operation["model"] is None
+    assert operation["status"] == "succeeded"
     shown = render_trace(view, UiSettings(mode="double"))
     assert "made by the gateway (workflow)" in shown
-    assert "get_service_health" in shown
+    assert (
+        '<li class="op succeeded"><strong>get_service_health</strong> '
+        '<span class="status">succeeded</span>'
+    ) in shown
     _no_workflow_steps(shown)
