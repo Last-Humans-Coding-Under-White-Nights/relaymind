@@ -264,7 +264,11 @@ pinned source was read.
   and runs with `maxRetries: 0`; one attempt, no Idempotency-Key. Any
   bounded retry is #138's, under section 7.5. On the real host
   `resolveTransportTurnState` is called per model request (attempt 1);
-  whether its turn ID stays the same on a retry is not_run.
+  whether its turn ID stays the same on a retry is not_run. The pinned
+  source passes it `turnId: randomUUID()` and `attempt: 1` on every call of
+  the stream function (`createManagedCompletionsClient`), so #138 derives
+  the Idempotency-Key from the inference payload instead (the plugin
+  README, "Cancellation, errors, and retries").
 
 ### Request size against the local limit
 

@@ -218,6 +218,68 @@ describe("wrapStreamFn (the guard and the answer rule around the host transport,
   });
 });
 
+describe("wrapStreamFn keys across host calls (section 7.4, #138)", () => {
+  it("a host retry through a second wrapStreamFn call does not resend a spent key", async () => {
+    const { logger } = recordingLogger();
+    const provider = createRelayMindProvider({ pluginConfig: { baseUrl: BASE }, logger });
+    const sent: string[] = [];
+    const failed = {
+      role: "assistant",
+      content: [],
+      stopReason: "error",
+      errorCode: "deadline_exceeded",
+      errorMessage: "504 deadline",
+      errorBody: JSON.stringify({ code: "deadline_exceeded", run_id: "run_slow" }),
+    };
+    const streamFn = (_model: unknown, _context: unknown, options: { headers: Record<string, string> }) => {
+      sent.push(options.headers["Idempotency-Key"]!);
+      return {
+        async *[Symbol.asyncIterator]() {
+          yield { type: "error", reason: "error", error: failed };
+        },
+        result: async () => failed,
+      };
+    };
+    const context = { messages: [{ role: "user", content: "Hi.", timestamp: 1 }] };
+    for (let i = 0; i < 2; i++) {
+      const wrapped = provider.wrapStreamFn?.({ provider: PROVIDER_ID, modelId: MODEL_ID, streamFn } as never);
+      await (await wrapped!({ id: MODEL_ID } as never, context as never, {} as never)).result();
+    }
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toBe(`${sent[0]}-retry1`);
+  });
+});
+
+describe("the host's failover hooks (section 7.5, #138)", () => {
+  const { logger } = recordingLogger();
+  const provider = createRelayMindProvider({ pluginConfig: { baseUrl: BASE }, logger });
+  const overflow =
+    "RelayMind context_limit_exceeded (HTTP 400): The conversation does not fit. Gateway run run_1.";
+  const local =
+    "RelayMind needs_external (HTTP 422): The request cannot complete. Gateway run run_1, reason context_limit.";
+  const blip =
+    "RelayMind needs_external (HTTP 422): The local stage could not finish. Gateway run run_1, reason capability_missing.";
+
+  it("matchesContextOverflowError is true only for context_limit_exceeded", () => {
+    expect(provider.matchesContextOverflowError?.({ errorMessage: overflow })).toBe(true);
+    expect(provider.matchesContextOverflowError?.({ errorMessage: local })).toBe(false);
+    expect(provider.matchesContextOverflowError?.({ errorMessage: "Connection error." })).toBeUndefined();
+  });
+
+  it("classifyFailoverReason names the class and leaves other errors to the host", () => {
+    expect(provider.classifyFailoverReason?.({ errorMessage: overflow })).toBe("context_overflow");
+    // Spec 0.49: needs_external over the local context is format, which the pinned
+    // host does not retry on the same model; a failed local generation is server_error.
+    expect(provider.classifyFailoverReason?.({ errorMessage: local })).toBe("format");
+    expect(provider.classifyFailoverReason?.({ errorMessage: blip })).toBe("server_error");
+    expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "external_failed" })).toBe("server_error");
+    expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "overloaded" })).toBe("overloaded");
+    expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "deadline_exceeded" })).toBe("timeout");
+    expect(provider.classifyFailoverReason?.({ errorMessage: "x", code: "unauthenticated" })).toBe("auth");
+    expect(provider.classifyFailoverReason?.({ errorMessage: "Connection error." })).toBeUndefined();
+  });
+});
+
 describe("catalog.run (the host hook)", () => {
   function context(apiKey: string | undefined, discoveryApiKey?: string, withSignal = true) {
     return {

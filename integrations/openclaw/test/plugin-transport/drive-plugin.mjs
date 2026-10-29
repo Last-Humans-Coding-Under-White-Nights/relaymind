@@ -29,6 +29,18 @@
 // is the deterministic stand-in; the real host's policy is the host CLI tier
 // (scripts/openclaw_qualification.py host --scenario exec-deny|exec-full, and
 // tool-deny|tool-approve with an approval surface), run by an operator or CI.
+//
+// Cancellation and retries (#138). scenario.abort aborts the host signal of the
+// first request: "before" (already aborted when the request is made),
+// {"afterMs": n}, {"onEvent": "<event type>"} (while the host reads the
+// response), or "afterResult" (after the answer, which changes nothing).
+// scenario.repeat sends the "first" or the "last" request of the conversation
+// once more, unchanged, the way a host retry would. scenario.fixedTimestamps
+// gives every message timestamp 1, so two driver runs build the same
+// conversation. scenario.hostIdempotencyKey sets the host's own key on every
+// request. output.attempts holds the plugin's attempt records, read from its log.
+// A failed result's host_failover_reason is the class the pinned host's own
+// classifier gives the failed message with this provider (../pinned-host.ts).
 import "openclaw/plugin-sdk/provider-transport-runtime";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -37,6 +49,7 @@ import { createOpenAICompletionsTransportStreamFn } from "@openclaw/ai/transport
 
 import entry from "../../src/index.ts";
 import { startRecorder } from "../host-transport/recorder.mjs";
+import { hostFailoverReason } from "../pinned-host.ts";
 
 export const HOST_TOOLS = {
   relaymind_test_echo: {
@@ -183,6 +196,53 @@ function recordingApi(pluginConfig) {
   };
 }
 
+/** The host signal of request index: scenario.abort applies to the first request only. */
+function abortFor(scenario, index) {
+  const controller = new AbortController();
+  const abort = index === 0 ? scenario.abort : undefined;
+  if (abort === "before") controller.abort();
+  let timer;
+  if (abort && typeof abort === "object" && abort.afterMs !== undefined) {
+    timer = setTimeout(() => controller.abort(), abort.afterMs);
+  }
+  return { controller, abort, clear: () => clearTimeout(timer) };
+}
+
+async function send(stream, fullModel, context, scenario, apiKey, index, provider) {
+  const { controller, abort, clear } = abortFor(scenario, index);
+  const events = await stream(fullModel, context, {
+    apiKey,
+    signal: controller.signal,
+    streaming: scenario.stream !== false,
+    ...(scenario.toolChoice ? { toolChoice: scenario.toolChoice } : {}),
+    ...(scenario.hostIdempotencyKey ? { headers: { "Idempotency-Key": scenario.hostIdempotencyKey } } : {}),
+    ...(scenario.extraBody
+      ? { onPayload: (payload) => ({ ...payload, ...scenario.extraBody }) }
+      : {}),
+  });
+  const deltas = [];
+  const seen = [];
+  for await (const event of events) {
+    seen.push(event.type);
+    if (event.type === "text_delta") deltas.push(event.delta);
+    if (abort && typeof abort === "object" && abort.onEvent === event.type) controller.abort();
+  }
+  const message = await events.result();
+  clear();
+  if (abort === "afterResult") controller.abort();
+  const host_failover_reason =
+    message.stopReason === "error" ? await hostFailoverReason(message, provider) : null;
+  return {
+    message,
+    result: {
+      ...summarize(message),
+      text_deltas: deltas.join(""),
+      events: [...new Set(seen)],
+      host_failover_reason,
+    },
+  };
+}
+
 /**
  * The host's conversation for one model entry: the pinned transport wrapped by
  * the plugin's wrapStreamFn, with the host's own tool loop around it.
@@ -197,29 +257,22 @@ async function converse(provider, fullModel, scenario, apiKey, output) {
       extraParams: {},
       streamFn: transport,
     }) ?? transport;
+  const now = () => (scenario.fixedTimestamps ? 1 : Date.now());
   const context = {
     ...(scenario.systemPrompt ? { systemPrompt: scenario.systemPrompt } : {}),
-    messages: (scenario.history ?? []).map((m) => ({ timestamp: Date.now(), ...m })),
+    messages: (scenario.history ?? []).map((m) => ({ timestamp: now(), ...m })),
     tools: (scenario.hostTools ?? []).map((name) => HOST_TOOLS[name]),
   };
   const content = scenario.userContent ?? scenario.prompt;
-  context.messages.push({ role: "user", content, timestamp: Date.now() });
+  context.messages.push({ role: "user", content, timestamp: now() });
   const executions = [];
   const approvals = [];
+  const sent = [];
   const maxRequests = scenario.maxRequests ?? (scenario.hostTools ? 3 : 1);
-  for (let attempt = 0; attempt < maxRequests; attempt++) {
-    const events = await stream(fullModel, context, {
-      apiKey,
-      streaming: scenario.stream !== false,
-      ...(scenario.toolChoice ? { toolChoice: scenario.toolChoice } : {}),
-      ...(scenario.extraBody
-        ? { onPayload: (payload) => ({ ...payload, ...scenario.extraBody }) }
-        : {}),
-    });
-    const deltas = [];
-    for await (const event of events) if (event.type === "text_delta") deltas.push(event.delta);
-    const message = await events.result();
-    output.results.push({ ...summarize(message), text_deltas: deltas.join("") });
+  for (let index = 0; index < maxRequests; index++) {
+    sent.push({ ...context, messages: [...context.messages] });
+    const { message, result } = await send(stream, fullModel, context, scenario, apiKey, index, provider);
+    output.results.push(result);
     if (message.stopReason !== "toolUse") break;
     context.messages.push(replayedAssistant(scenario, message));
     for (const call of message.content.filter((block) => block.type === "toolCall")) {
@@ -233,9 +286,15 @@ async function converse(provider, fullModel, scenario, apiKey, output) {
         toolName: call.name,
         content: [{ type: "text", text: outcome.text }],
         isError: outcome.isError,
-        timestamp: Date.now(),
+        timestamp: now(),
       });
     }
+  }
+  if (scenario.repeat) {
+    // A host retry: the same request again, unchanged; the host executes nothing for it.
+    const again = scenario.repeat === "first" ? sent[0] : sent[sent.length - 1];
+    const { result } = await send(stream, fullModel, again, scenario, apiKey, -1, provider);
+    output.repeated = result;
   }
   output.host_tool_executions = executions;
   output.host_approvals = approvals;
@@ -296,6 +355,10 @@ async function runScenario(scenario) {
     return output;
   } finally {
     output.logs = logs;
+    const prefix = "RelayMind inference attempt ";
+    output.attempts = logs
+      .filter((log) => log.message.startsWith(prefix))
+      .map((log) => JSON.parse(log.message.slice(prefix.length)));
     await new Promise((resolve) => setTimeout(resolve, 50));
     await recorder.close();
     output.exchanges = recorder.exchanges;

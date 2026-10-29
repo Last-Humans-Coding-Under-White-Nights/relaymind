@@ -26,7 +26,10 @@ import { catalogModel, catalogResult, discoverRelayMind, type RelayMindCatalogMo
 import { MODEL_ID, PROVIDER_ID } from "./compat.ts";
 import { parsePluginConfig, type RelayMindPluginConfig } from "./config.ts";
 import { RECONNECT, TOKEN_HANDOVER } from "./diagnostics.ts";
+import { attemptRecord, createAttemptLog } from "./attempts.ts";
+import { failoverReason, isContextOverflow } from "./errors.ts";
 import { redactingLogger, type Logger } from "./redaction.ts";
+import { KeyLedger } from "./idempotency.ts";
 import { relaymindStreamFn, type StreamFn } from "./stream.ts";
 
 export const TOKEN_ENV_VAR = "RELAYMIND_APP_TOKEN";
@@ -64,6 +67,13 @@ export function createRelayMindProvider(options: RelayMindProviderOptions): Prov
   // The credential values seen in this process, redacted from every message.
   const secrets = new Set<string>();
   const logger = redactingLogger(options.logger, () => [...secrets]);
+  const logAttempt = createAttemptLog({
+    logger,
+    ...(config.diagnosticsPath ? { path: config.diagnosticsPath } : {}),
+  });
+  // One per provider, however often the host calls wrapStreamFn: a host retry
+  // must see the keys the earlier attempts spent (src/idempotency.ts).
+  const keys = new KeyLedger();
   return {
     id: PROVIDER_ID,
     label: "RelayMind",
@@ -119,7 +129,16 @@ export function createRelayMindProvider(options: RelayMindProviderOptions): Prov
     // checkPayload, so the guard reads the final payload (src/stream.ts). A
     // change an outer wrapper makes outside onPayload is not seen by the guard.
     wrapStreamFn: (ctx) =>
-      relaymindStreamFn(ctx.streamFn ?? hostStreamSimple),
+      relaymindStreamFn(ctx.streamFn ?? hostStreamSimple, {
+        secrets: () => [...secrets],
+        maxRetries: config.maxRetries,
+        keys,
+        onAttempt: (report) => logAttempt(attemptRecord(report, config.baseUrl)),
+      }),
+    // Truthful classes for the host's failover decision (section 7.5, src/errors.ts):
+    // a class never triggers or hides a failover; that is host policy.
+    matchesContextOverflowError: (ctx) => isContextOverflow(ctx),
+    classifyFailoverReason: (ctx) => failoverReason(ctx),
     buildMissingAuthMessage: () => `No RelayMind application token is stored. ${TOKEN_HANDOVER}`,
     buildAuthDoctorHint: () => RECONNECT,
   };

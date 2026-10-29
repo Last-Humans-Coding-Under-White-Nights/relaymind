@@ -624,3 +624,246 @@ def test_the_exec_command_writes_to_the_sandbox_by_absolute_path(tmp_path):
     sandbox = tmp_path / "host sandbox"
     command = qualification.exec_command(sandbox)
     assert command == f"echo written-by-the-host >> '{sandbox / 'note.txt'}'"
+
+
+# A stand-in for a host that is interrupted mid-turn (#138): one streamed chat
+# request that it never finishes reading; on SIGINT it exits 130, the way the
+# pinned host did on the macOS probe, without a JSON report.
+STUB_INTERRUPTED_HOST = """
+import json, os, signal, sys, urllib.request
+signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
+base = os.environ["RELAYMIND_BASE_URL"]
+token = os.environ["RELAYMIND_APP_TOKEN"]
+body = {"model": "relaymind-client-tools", "stream": True,
+        "messages": [{"role": "user", "content": "Hi"}]}
+request = urllib.request.Request(
+    base + "/chat/completions", data=json.dumps(body).encode(), method="POST",
+    headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+opener.open(request).read()
+print(json.dumps({"ok": True}))
+"""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stub host handles POSIX SIGINT")
+def test_the_abort_scenario_interrupts_the_host_mid_turn_and_checks_the_run(tmp_path):
+    """RM14, RM33, AC12, AC24: SIGINT to the host closes its request; the run is cancelled."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_INTERRUPTED_HOST],
+        tmp_path / "export.json",
+        scenario="abort",
+    )
+    assert export["status"] == "interrupted", export["stderr"]
+    assert export["exit_code"] == 130
+    check = export["checks"]
+    assert check["signal_sent"] is True
+    (run,) = export["runs"]
+    assert run["state"] == "cancelled"
+    assert check["cancelled_runs"] == [run["run_id"]]
+    assert check["answer_deltas"] == 0
+    assert check["passed"] is True
+
+
+def test_an_abort_scenario_whose_host_finishes_unsignalled_does_not_pass(tmp_path):
+    """The host ended before the harness could interrupt it: nothing was cancelled."""
+    export = qualification.run_host(
+        [sys.executable, "-c", "print('done')"], tmp_path / "export.json", scenario="abort"
+    )
+    assert export["checks"]["signal_sent"] is False
+    assert export["checks"]["passed"] is False
+
+
+# A host that logs more than a pipe buffer (64 KiB) before its request, as a
+# real host with verbose logging can (#138 review).
+STUB_VERBOSE_INTERRUPTED_HOST = STUB_INTERRUPTED_HOST.replace(
+    "signal.signal(signal.SIGINT, lambda *_: sys.exit(130))",
+    "signal.signal(signal.SIGINT, lambda *_: sys.exit(130))\n"
+    "sys.stderr.write('log line\\n' * 30000); sys.stderr.flush()\n"
+    "sys.stdout.write('out line\\n' * 30000); sys.stdout.flush()",
+)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stub host handles POSIX SIGINT")
+def test_the_abort_scenario_reads_a_verbose_host_output_while_it_waits(tmp_path):
+    """A host that writes more than a pipe holds before its request is still interrupted."""
+    assert "log line" in STUB_VERBOSE_INTERRUPTED_HOST
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_VERBOSE_INTERRUPTED_HOST],
+        tmp_path / "export.json",
+        scenario="abort",
+        timeout=30,
+    )
+    assert export["status"] == "interrupted", export["stderr"][-500:]
+    assert export["checks"]["signal_sent"] is True
+    assert export["checks"]["passed"] is True
+    assert export["stderr"].endswith("log line\n")
+
+
+# A host request the size of the pinned host's: a system prompt of about 30,000
+# characters (macOS probe, fact 5) and 56 KB on the wire in the Linux VPS check.
+# The doubles count one unit per character unless their count is fixed.
+STUB_LARGE_INTERRUPTED_HOST = STUB_INTERRUPTED_HOST.replace(
+    '"messages": [{"role": "user", "content": "Hi"}]',
+    '"messages": [{"role": "system", "content": "x" * 40000}, {"role": "user", "content": "Hi"}]',
+)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stub host handles POSIX SIGINT")
+def test_the_abort_scenario_holds_a_host_sized_request_in_the_local_generation(tmp_path):
+    """RM14, AC12: the real host's request must reach the held generation to be aborted.
+
+    In the Linux VPS functional check the gated double counted the host's
+    request by character, so it fit neither model's limit and the run failed
+    with context_limit_exceeded before any generation started.
+    """
+    assert '"x" * 40000' in STUB_LARGE_INTERRUPTED_HOST
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_LARGE_INTERRUPTED_HOST],
+        tmp_path / "export.json",
+        scenario="abort",
+        timeout=30,
+    )
+    assert export["status"] == "interrupted", export["stderr"][-500:]
+    (run,) = export["runs"]
+    assert run["state"] == "cancelled"
+    assert export["checks"]["passed"] is True
+
+
+# -- the host error scenario (#138; RM16, RM33, AC24, section 11) --------------------------
+
+# A stand-in for a host that reports a gateway error the way the plugin's message
+# does: "RelayMind <code> (HTTP <status>): ... Gateway run <id>, ..." (errors.ts).
+# With "silent" it prints nothing about the error.
+STUB_ERROR_HOST = """
+import json, os, sys, urllib.error, urllib.request
+base = os.environ["RELAYMIND_BASE_URL"]
+token = os.environ["RELAYMIND_APP_TOKEN"]
+echo = {"type": "function", "function": {"name": "relaymind_test_echo", "parameters": {
+    "type": "object", "properties": {}}}}
+body = {"model": "relaymind-client-tools", "tools": [echo],
+        "messages": [{"role": "system", "content": "x" * 40000},
+                     {"role": "user", "content": "Say hello."}]}
+request = urllib.request.Request(
+    base + "/chat/completions", data=json.dumps(body).encode(), method="POST",
+    headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+try:
+    opener.open(request).read()
+except urllib.error.HTTPError as error:
+    detail = json.loads(error.read())["error"]
+    if sys.argv[1:] != ["silent"]:
+        sys.stderr.write(f"RelayMind {detail['code']} (HTTP {error.code}): failed. "
+                         f"Gateway run {detail['run_id']}, reason {detail['reason_code']}.\\n")
+    print(json.dumps({"ok": False, "status": "error"}))
+    raise SystemExit(1)
+print(json.dumps({"ok": True}))
+"""
+
+# A host that retries the same model after a server error, as the pinned host did
+# in the Linux VPS functional check (7 same-model retries, each with a rewritten
+# conversation, so each a new gateway run), and logs the plugin's attempt record.
+STUB_RETRYING_ERROR_HOST = """
+import json, os, sys, urllib.error, urllib.request
+base = os.environ["RELAYMIND_BASE_URL"]
+token = os.environ["RELAYMIND_APP_TOKEN"]
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+for attempt in range(8):
+    body = {"model": "relaymind-client-tools",
+            "messages": [{"role": "system", "content": "x" * 40000},
+                         {"role": "user", "content": "Say hello." + " Continue." * attempt}]}
+    request = urllib.request.Request(
+        base + "/chat/completions", data=json.dumps(body).encode(), method="POST",
+        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+    try:
+        opener.open(request).read()
+    except urllib.error.HTTPError as error:
+        detail = json.loads(error.read())["error"]
+        record = {"event": "relaymind.inference_attempt", "attempt": 1,
+                  "runId": detail["run_id"], "outcome": "failed", "status": error.code,
+                  "code": detail["code"], "retried": False}
+        sys.stderr.write("\\x1b[36mRelayMind inference attempt " + json.dumps(record)
+                         + "\\x1b[39m\\n")
+        last = (f"RelayMind {detail['code']} (HTTP {error.code}): failed. "
+                f"Gateway run {detail['run_id']}.")
+sys.stderr.write(last + "\\n")
+raise SystemExit(1)
+"""
+
+
+def test_the_external_failed_scenario_checks_the_failed_run_and_the_host_message(tmp_path):
+    """RM16, AC24, section 11: both models fail, the host gets 503 external_failed,
+    and the message it shows names the gateway's failed run."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_ERROR_HOST],
+        tmp_path / "export.json",
+        scenario="external-failed",
+        timeout=30,
+    )
+    assert export["status"] == "failed", export["stderr"][-500:]
+    assert export["exit_code"] == 1
+    check = export["checks"]
+    (run,) = export["runs"]
+    assert run["state"] == "failed"
+    assert check["failed_runs"] == [
+        {"run_id": run["run_id"], "error_code": "external_failed", "reason_code": "invalid_output"}
+    ]
+    assert check["expected"] == {"code": "external_failed", "status": 503}
+    assert check["host_message"] is True
+    assert check["named_runs"] == [run["run_id"]]
+    assert check["answer_deltas"] == 0
+    assert check["gateway_tool_executions"] == 0
+    assert check["host_report"]["ok"] is False
+    assert check["passed"] is True
+
+
+def test_an_external_failed_scenario_without_the_host_message_does_not_pass(tmp_path):
+    """The run failed, but the host never showed the plugin's named failure."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_ERROR_HOST, "silent"],
+        tmp_path / "export.json",
+        scenario="external-failed",
+        timeout=30,
+    )
+    assert export["runs"][0]["state"] == "failed"
+    assert export["checks"]["host_message"] is False
+    assert export["checks"]["named_runs"] == []
+    assert export["checks"]["passed"] is False
+
+
+def test_an_external_failed_scenario_whose_host_answered_does_not_pass(tmp_path):
+    """A host that got no error (here: no request at all) shows no failed run."""
+    export = qualification.run_host(
+        [sys.executable, "-c", "print('{}')"], tmp_path / "export.json", scenario="external-failed"
+    )
+    assert export["runs"] == []
+    assert export["checks"]["passed"] is False
+
+
+def test_the_main_entry_accepts_a_failed_host_for_the_error_scenario(tmp_path, monkeypatch):
+    """The host's exit status is recorded, not judged: an error scenario's host fails."""
+
+    def fake_run_host(command, out, *, timeout, scenario):
+        return {"status": "failed", "runs": [{}], "checks": {"passed": True}}
+
+    monkeypatch.setattr(qualification, "run_host", fake_run_host)
+    argv = ["host", "--out", str(tmp_path / "x.json"), "--scenario", "external-failed"]
+    assert qualification.main([*argv, "--", "true"]) == 0
+
+
+def test_an_external_failed_scenario_survives_the_host_s_same_model_retries(tmp_path):
+    """Every host retry is a new gateway run that fails the same way, never an
+    unscripted double (internal_error); the plugin's attempt records name them."""
+    export = qualification.run_host(
+        [sys.executable, "-c", STUB_RETRYING_ERROR_HOST],
+        tmp_path / "export.json",
+        scenario="external-failed",
+        timeout=60,
+    )
+    check = export["checks"]
+    assert len(export["runs"]) == 8
+    assert {f["error_code"] for f in check["failed_runs"]} == {"external_failed"}
+    recorded = {run["run_id"] for run in export["runs"]}
+    assert [a["status"] for a in check["attempts"]] == [503] * 8
+    assert {a["runId"] for a in check["attempts"]} == recorded
+    assert check["attempt_runs_recorded"] is True
+    assert check["passed"] is True

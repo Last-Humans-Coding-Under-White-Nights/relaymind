@@ -1196,6 +1196,127 @@ The host request capture ran on macOS against a capture server (the host
 probe), and its requests are checked offline by
 `tests/test_openclaw_host_captures.py`.
 
+### OpenClaw cancellation, errors, retries, and run IDs (#138; RM12, RM14, RM16, RM17, RM20, RM21, RM22, RM25, RM33; AC11, AC12, AC24)
+
+```bash
+cd integrations/openclaw && npm run typecheck && npm test
+cd ../.. && pytest tests/test_openclaw_cancel_errors.py tests/test_openclaw_qualification_script.py \
+  tests/test_openclaw_vps_functional_cancel_errors.py
+```
+
+- `integrations/openclaw/test/errors.test.ts`: every gateway code of
+  section 11 read from the pinned transport's failed message (code, status,
+  run ID, reason code; a cut body still gives the code) and mapped to the
+  host's class (`context_limit_exceeded` the only context overflow,
+  `needs_external` with a local context limit not one, 429 overload, 504
+  timeout, 401 authentication with the exact reconnect instruction,
+  `needs_external` with reason code `context_limit`, `execution_mode`, or
+  `invalid_output`, `execution_mode_forbidden`, `idempotency_conflict`, and
+  `run_terminal` the request format class, the rest failures of this
+  provider, `needs_external` with a load- or runtime-dependent reason code
+  such as `capability_missing` and `external_failed` whatever its reason
+  code, and never a configuration refusal in their message), read back from the message alone and kept by the pinned host's own
+  classifier, with the pinned host's same-model retry classes read from its
+  build (`test/pinned-host.ts`; spec 0.49 section 7.5); the
+  message is one line, bounded, without a known token or a bearer value;
+  errors that are not RelayMind's are left to the host; only 429 and 504
+  may be retried.
+- `integrations/openclaw/test/idempotency.test.ts`: the key is the same for
+  the same payload and mode and 1 to 255 printable ASCII characters; it
+  changes with a message, a tool, the system prompt, the mode, the model,
+  the output limit, the stream flag, a sampling or token option, the tool
+  choice, the session, and the tool-result turn; it does not change with
+  the token, the signal, the host's hooks or headers, or the gateway's
+  address; a retry key per plugin retry; the turn ID is shared by the
+  requests after one user message.
+- `integrations/openclaw/test/retries.test.ts`: through the pinned
+  transport, every request carries the key, the same for the same
+  conversation and new for the next turn, with the host's headers and a key
+  the host set kept; one attempt by default; with `maxRetries`, a 429 is
+  retried under the same key and a 504 under the retry key, never shown to
+  the host, at most `maxRetries` times; 503, 422, 409, 401, and 400 are
+  never retried, nor a response with content or an aborted request; an
+  abort during the retry wait ends the request aborted (event, result, and
+  record), never as the 429; a `maxRetries` above 2 is refused. A host
+  retry of the same conversation: after a 504 or a 409 `run_terminal` it
+  sends `<key>-retry1`, after a plugin retry that succeeded it sends the
+  key that succeeded, after an answer or a 429 it keeps the key, and a key
+  the host set is never changed (`provider.test.ts`: the ledger is shared
+  across `wrapStreamFn` calls).
+- `integrations/openclaw/test/attempts.test.ts`: the attempt record takes
+  the run ID from `X-RelayMind-Run-ID`, the error body, or the chat
+  response ID, else `unavailable` (never a value that is not a gateway run
+  ID), marks a replay, links the native run and the UI page, and says
+  usage is unknown; one log line per attempt and one JSON line in
+  `diagnosticsPath`, and an unwritable file is one warning; through the
+  provider the answer is untouched, the token is in no line, and a retried
+  504 gives two records, two run IDs, one turn.
+- `integrations/openclaw/test/stream.test.ts`, `provider.test.ts`,
+  `config.test.ts`, `manifest.test.ts`: the gateway's message in the error
+  event and the result alike, a non-gateway failure unchanged; a stream
+  that ends without a terminal event ends with the result's own reason (a
+  call `toolUse`, a failure or an abort an error event, never `done`); the failover
+  hooks; `maxRetries` 0 to 2 and an absolute `diagnosticsPath` in the
+  settings and the manifest's closed schema.
+- `tests/test_openclaw_cancel_errors.py`: the plugin driver against the
+  gateway over doubles. Aborts before the request (no run, ID
+  unavailable), during a buffered generation (cancelled with
+  `cancel_requested`, the adapter asked to cancel, the model call kept, the
+  slot free for the next request), under early headers (the run ID recorded
+  before the cancel), while the host reads the replay (the run stays
+  completed), and after the answer (nothing changes); a native events
+  disconnect cancels nothing. 401 on the request (the headless path), 403,
+  422, 503 and the same failure as a stream error event under early
+  headers, 429 with nothing created, a 429 retried under the same key once
+  the slot is free, and 504 are named failures, never empty answers, with
+  the run ID where one exists and usage unknown; the pinned host's own
+  classifier keeps the plugin's class: `format` for 403, 422
+  `needs_external` after refused local output, and both 409s (not a class
+  it retries on the same model), `server_error` for `external_failed` and
+  for a 422 `needs_external` after a failed local generation
+  (`capability_missing`, which the message does not call a refusal). A host retry of the same
+  request replays the completed run with the same run ID and no model call;
+  the tool-result turn gets a new key and run in the same turn; a retry of
+  the follow-up after an allowed write replays the answer and the host
+  wrote once; a changed payload under the host's key, a redacted call, and
+  a cancelled run's key sent by a new plugin process are 409; a host retry
+  of a cancelled request in the same process sends `<key>-retry1` and gets
+  an answer from a new run; a key survives a gateway token change.
+- `tests/test_openclaw_qualification_script.py`: the host mode's
+  `--scenario abort` against a stub host that exits 130 on SIGINT: the
+  harness interrupts it once the generation started, the run is cancelled,
+  no answer text, `passed`; a host that ended before the interrupt does
+  not pass; a host that logs more than a pipe holds before its request is
+  still interrupted (its output goes to files); a host-sized request (a
+  40,000-character system prompt) still reaches the held generation (the
+  gated double's count is fixed). `--scenario external-failed` against stub
+  hosts: every run fails with 503 `external_failed`, the host's message
+  names a recorded run, and the plugin's attempt records are kept, also
+  across 7 host retries (the doubles never run out); a host that showed no
+  message or made no request does not pass, and a failed host exit does
+  not decide.
+- `tests/test_openclaw_vps_functional_cancel_errors.py`: reads the Linux
+  VPS functional check (not a supported-platform qualification) of the
+  `abort` and `external-failed` host scenarios on the real pinned host
+  against the gateway over doubles
+  (`docs/evidence/2026-10-28-openclaw-vps-functional-138/`): SIGINT
+  mid-generation cancelled the run (`cancel_requested`, exit 130, no
+  report, as Q11 on macOS); the 503 failed every run with
+  `external_failed`; the host retried the same model 7 times with a
+  rewritten conversation, so 8 attempt records, keys, turns, and runs; the
+  plugin's message reached the host's log while its final text was the
+  host's generic one.
+
+The aborts in the first tests come from the driver's abort signal and a
+stub's SIGINT. The real host's interrupt and a 503 ran in the Linux VPS
+functional check, rerun with
+`docs/evidence/2026-10-28-openclaw-vps-functional-138/scaffold/vps_functional.py`
+(about three minutes, no model). Other error codes, aborts under early
+headers or before sending, the host's turn ID across its retries, its
+failover to another model, and macOS and Windows at this commit are not_run
+(the exact host commands are in
+[`integrations/openclaw/README.md`](../integrations/openclaw/README.md)).
+
 ### What is not covered yet
 
 - The correctness corpus ran on Apple Silicon macOS only (#32). The

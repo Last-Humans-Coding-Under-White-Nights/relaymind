@@ -277,6 +277,49 @@ describe("the gateway's buffered replay through the pinned transport", () => {
     ]);
     expect(message.stopReason).toBe("error");
     expect(text(message)).toBe("");
+    // #138: one sanitized, actionable message; the gateway's code stays the error code.
+    expect(message.errorMessage).toMatch(/^RelayMind needs_external \(HTTP 422\): /);
+    expect(message.errorMessage).toContain("Gateway run run_1, reason invalid_output.");
+    expect(message.errorCode).toBe("needs_external");
+  });
+
+  it("an error event in a stream gets the same message, named as a stream error event", async () => {
+    const { message, seen } = await run([
+      sse([
+        { comment: "keep-alive" },
+        { error: { code: "external_failed", message: "the external model failed", run_id: "run_4" } },
+      ]),
+    ]);
+    expect(message.errorMessage).toMatch(/^RelayMind external_failed \(stream error event\): /);
+    expect(message.errorMessage).toContain("Gateway run run_4.");
+    expect(seen.at(-1)).toBe("error");
+  });
+
+  it("the error event the host iterates carries the same message as the result", async () => {
+    recorder = await startRecorder({
+      replies: [{ status: 401, body: { error: { code: "unauthenticated", message: "no", run_id: null } } }],
+    });
+    const model = {
+      ...relaymindModelEntry({ baseUrl: `${recorder.origin}/v1` }),
+      api: "openai-completions",
+      provider: PROVIDER_ID,
+    };
+    const stream = relaymindStreamFn(createOpenAICompletionsTransportStreamFn() as never);
+    const events = await stream(
+      model as never,
+      { messages: [{ role: "user", content: "x", timestamp: 1 }] } as never,
+      { apiKey: "rm-test-token" } as never,
+    );
+    let iterated: string | undefined;
+    for await (const event of events) if (event.type === "error") iterated = event.error.errorMessage;
+    expect(iterated).toMatch(/^RelayMind unauthenticated \(HTTP 401\): /);
+    expect(iterated).toBe((await events.result()).errorMessage);
+  });
+
+  it("a transport failure that is not a gateway error keeps the transport's message", async () => {
+    const { message } = await run([{ status: 502, headers: { "content-type": "text/plain" }, body: "bad gateway" }]);
+    expect(message.stopReason).toBe("error");
+    expect(message.errorMessage).not.toMatch(/^RelayMind /);
   });
 });
 
@@ -389,5 +432,60 @@ describe("checkAnswer (the plugin's own rule on the final message)", () => {
     const out = checkAnswer(empty as never);
     expect(out.stopReason).toBe("error");
     expect(out.errorMessage).toMatch(/empty answer/);
+  });
+});
+
+describe("a stream that ends without a terminal event", () => {
+  const message = (stopReason: string, content: unknown[], extra: Record<string, unknown> = {}) => ({
+    role: "assistant",
+    api: "openai-completions",
+    provider: PROVIDER_ID,
+    model: "relaymind-client-tools",
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: {} },
+    timestamp: 1,
+    content,
+    stopReason,
+    ...extra,
+  });
+  // A base stream function whose iterator ends early; result() still resolves.
+  const endsEarly =
+    (final: unknown): StreamFn =>
+    async () =>
+      ({
+        async *[Symbol.asyncIterator]() {
+          yield { type: "start", partial: final };
+        },
+        result: async () => final,
+      }) as never;
+
+  async function drive(final: unknown) {
+    const stream = relaymindStreamFn(endsEarly(final));
+    const events = await stream(
+      { id: "relaymind-client-tools", api: "openai-completions", provider: PROVIDER_ID } as never,
+      { messages: [{ role: "user", content: "Hi.", timestamp: 1 }] } as never,
+      {} as never,
+    );
+    const seen: { type: string; reason?: string }[] = [];
+    for await (const event of events) seen.push(event as never);
+    return { seen, result: await events.result() };
+  }
+
+  it("a call keeps its toolUse reason", async () => {
+    const call = message("toolUse", [{ type: "toolCall", id: "c1", name: ECHO.name, arguments: {} }]);
+    const { seen } = await drive(call);
+    expect(seen.at(-1)).toMatchObject({ type: "done", reason: "toolUse" });
+  });
+
+  it("a failure that is not the gateway's is an error event, never done", async () => {
+    const failure = message("error", [], { errorMessage: "socket hang up", errorCode: "ECONNRESET" });
+    const { seen, result } = await drive(failure);
+    expect(seen.at(-1)).toMatchObject({ type: "error", reason: "error" });
+    expect(seen.map((e) => e.type)).not.toContain("done");
+    expect(result.stopReason).toBe("error");
+  });
+
+  it("an aborted result is an error event with reason aborted", async () => {
+    const { seen } = await drive(message("aborted", [], { errorMessage: "Request was aborted" }));
+    expect(seen.at(-1)).toMatchObject({ type: "error", reason: "aborted" });
   });
 });

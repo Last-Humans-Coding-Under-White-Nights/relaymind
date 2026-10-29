@@ -113,6 +113,42 @@ describe("limits (section 7.5: copied from the gateway configuration, never esti
   });
 });
 
+describe("maxRetries (section 7.5: single attempt by default, bounded retries, #138)", () => {
+  const base = { baseUrl: "http://127.0.0.1:8080/v1" };
+
+  it("is 0 when not set: one attempt", () => {
+    expect(parsePluginConfig(base).maxRetries).toBe(0);
+  });
+
+  it.each([0, 1, 2])("accepts %s", (value) => {
+    expect(parsePluginConfig({ ...base, maxRetries: value }).maxRetries).toBe(value);
+  });
+
+  it.each([3, -1, 1.5, "1"])("refuses %s by name, never clamping it", (value) => {
+    expect(errorOf({ ...base, maxRetries: value }).message).toMatch(
+      /maxRetries must be an integer from 0 to 2/,
+    );
+  });
+});
+
+describe("diagnosticsPath (section 7.5: run-ID correlation, #138)", () => {
+  const base = { baseUrl: "http://127.0.0.1:8080/v1" };
+
+  it("is unset by default: the records go to the host logger only", () => {
+    expect(parsePluginConfig(base).diagnosticsPath).toBeUndefined();
+  });
+
+  it("keeps an absolute path", () => {
+    expect(parsePluginConfig({ ...base, diagnosticsPath: "/var/tmp/rm/attempts.jsonl" }).diagnosticsPath).toBe(
+      "/var/tmp/rm/attempts.jsonl",
+    );
+  });
+
+  it.each(["attempts.jsonl", "", 3])("refuses %s by name", (value) => {
+    expect(errorOf({ ...base, diagnosticsPath: value }).message).toMatch(/diagnosticsPath must be an absolute file path/);
+  });
+});
+
 describe("closed key set (RM12: the token is not plugin configuration)", () => {
   it("refuses an unknown key by name and never echoes its value", () => {
     const message = errorOf({ baseUrl: "http://127.0.0.1:8080/v1", apiKey: TOKEN }).message;

@@ -8,6 +8,58 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- OpenClaw cancellation, errors, retries, and run trace correlation (#138;
+  RM12, RM14, RM16, RM17, RM20, RM21, RM22, RM25, RM33; AC11, AC12, AC24):
+  the plugin maps every gateway error code to the host's error class
+  through `matchesContextOverflowError` and `classifyFailoverReason`
+  (`context_limit_exceeded` a context overflow; `execution_mode_forbidden`,
+  `idempotency_conflict`, `run_terminal`, and `needs_external` with reason
+  code `context_limit`, `execution_mode`, or `invalid_output` the request
+  format class `format`, which the pinned host does not retry on the same
+  model; `internal_error`, `workflow_unavailable`, `external_failed`,
+  `predicate_unmet`, and `needs_external` with any other reason code (a
+  failed local generation, an unavailable local model, a time budget, the
+  placement deadline) failures of this provider, `server_error`; 429 an overload, 504 a timeout, 401 authentication) and gives each failure one sanitized,
+  actionable message with the gateway run (401 carries the reconnect
+  instruction); errors that are not RelayMind's keep the host's own
+  classification (`integrations/openclaw/src/errors.ts`). Every request
+  carries an `Idempotency-Key`, the digest of the inference payload, mode,
+  and session, never the token or the gateway's address
+  (`src/idempotency.ts`): the pinned transport gives
+  `resolveTransportTurnState` a new random turn ID on every call, so the
+  host's turn ID cannot name a retry. A host retry of the same request
+  replays a completed run (also one that completed under a plugin retry
+  key); a payload whose run ended failed or cancelled sends
+  `<key>-retry<n+1>` next, a new run (section 7.4), so a host retry after a
+  504 or an abort is never stuck on 409 `run_terminal`; the next turn gets
+  a new key. An abort during the retry wait ends the request aborted. The
+  plugin makes one attempt by default; the new `maxRetries` setting (at
+  most 2) retries only a 429 under the same key and a 504 under a new key,
+  before any answer content. Each attempt is recorded with its turn, key, outcome,
+  code, and RelayMind run ID (or `unavailable`), with native run and UI
+  links and usage unknown, through the redacting logger and the optional
+  `diagnosticsPath` JSON lines file (`src/attempts.ts`); nothing goes into
+  answer text. `tests/test_openclaw_cancel_errors.py` drives the plugin
+  against the gateway over doubles: aborts before sending, during a
+  buffered or early-header generation, while the replay is read, and after
+  completion; a native events disconnect; 401, 403, 409, 422, 429, 503,
+  504, and a stream error event; replays, conflicts, a redacted call, a
+  cancelled run's key, and a token change. The qualification harness's host
+  mode gains `--scenario abort` (SIGINT once the generation started; the
+  host's output goes to files, so a verbose host cannot block on a full
+  pipe; the gated double's count is fixed, so a host-sized request reaches
+  the held generation) and `--scenario external-failed` (both doubles call
+  a tool no host offers on every generation: 503 `external_failed`, checked
+  from the runs, the host's message, and the plugin's attempt records). A
+  Linux VPS functional check (not a supported-platform qualification,
+  `docs/evidence/2026-10-28-openclaw-vps-functional-138/`, read by
+  `tests/test_openclaw_vps_functional_cancel_errors.py`) ran both on the
+  pinned host over doubles: SIGINT cancelled the run (`cancel_requested`,
+  exit 130, as Q11 on macOS); the 503 failed every run, and the host
+  retried the same model 7 times with a rewritten conversation, so 8 keys
+  and 8 runs, and showed its own generic message with the plugin's in its
+  log. Other error codes on the real host and the host's failover are not
+  run.
 - OpenClaw text and host-owned tool round trips (#137; RM01, RM03, RM04,
   RM08, RM09, RM12, RM19, RM20, RM26, RM33; AC10, AC24): the provider's
   `wrapStreamFn` (`integrations/openclaw/src/stream.ts`) refuses, by field
@@ -140,7 +192,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   proposal by the exact ID string. The host decorates the user message, and
   a request over the UTF-8 byte bound is undecided, never needs_external,
   until a tokenizer count; a count of sanitized captures is a lower bound and
-  never proves a fit. No gateway contract change.
+  never proves a fit. Amended by #138: section 7.5 names the host class of
+  each gateway error code with its retry consequence. The pinned host
+  retries the same model only for rate_limit, overloaded, server_error,
+  timeout, and output_limit, so a refusal that follows from the
+  configuration and the request (execution_mode_forbidden,
+  idempotency_conflict, run_terminal, and needs_external with reason_code
+  context_limit, execution_mode, or invalid_output) is the host's `format`
+  class, and internal_error, workflow_unavailable, external_failed,
+  predicate_unmet, and needs_external with a reason_code that depends on load
+  or the local runtime's health (capability_missing also covers a failed
+  local generation) stay `server_error` (external_failed's reason_code
+  cannot tell a refused external output from a transient provider failure).
+  No gateway contract change.
 - Specification 0.48, unsuitable detection from local stages (#170; RM26, RM27;
   section 14.4.7): the run store records, for every local stage, whether it ran out of
   local time, and handoff.started names the budget that stopped the local stage.

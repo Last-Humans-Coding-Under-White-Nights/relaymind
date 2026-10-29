@@ -45,11 +45,27 @@ Two modes:
     report (``host_report``: it says ``"ok": true`` for a denied tool) never
     decide a pass. A scenario that did not complete never passes.
 
+    ``abort`` (#138): the local double holds its generation open, and once
+    the gateway's generation has started the harness interrupts the host
+    (SIGINT, or CTRL_BREAK_EVENT on Windows), as an operator's Ctrl-C would.
+    It passes when every recorded run ended cancelled with cancel_requested,
+    the adapter was asked to cancel, and no answer text was recorded; the
+    export's status is ``interrupted``. The host's exit code is recorded, not
+    judged (130 without a JSON report on the macOS probe).
+
+    ``external-failed`` (#138): both models propose a call to a tool nobody
+    offered, so the gateway answers 503 ``external_failed``. It passes when
+    every recorded run failed with that code and no answer text, the gateway
+    executed no tool, and the host's output holds the plugin's message
+    (``RelayMind external_failed (HTTP 503): ...``) naming a recorded run. The
+    host's exit status is recorded, not judged.
+
 Usage:
     python scripts/openclaw_qualification.py fixtures \\
         --out-dir integrations/openclaw/test/fixtures/v2026.10.7/transport
     python scripts/openclaw_qualification.py host --out <export.json> \\
-        [--scenario text-tool|exec-deny|exec-full|tool-deny|tool-approve] -- <command> [args...]
+        [--scenario text-tool|exec-deny|exec-full|tool-deny|tool-approve|abort|external-failed] \\
+        -- <command> [args...]
 
 Deterministic transport fixtures are not live evidence (section 12.5).
 """
@@ -62,9 +78,11 @@ import platform
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -75,8 +93,14 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from api_helpers import RunningServer, make_app, token_of  # noqa: E402
-from gateway_helpers import build_gateway, text_turn, tool_turn  # noqa: E402
-from helpers import make_capabilities  # noqa: E402
+from gateway_helpers import (  # noqa: E402
+    EXTERNAL_MODEL_ID,
+    LOCAL_MODEL_ID,
+    build_gateway,
+    text_turn,
+    tool_turn,
+)
+from helpers import ScriptedAdapter, make_capabilities  # noqa: E402
 from native_helpers import GatedAdapter  # noqa: E402
 from relaymind.api.chat import ClientToolsChat  # noqa: E402
 from relaymind.evaluation.environment import application_revision  # noqa: E402
@@ -255,15 +279,32 @@ def node_binary() -> str:
     return node
 
 
+# The fixed token count of the gated and error-scenario doubles (build_gateway's
+# default local double uses the same).
+DOUBLE_INPUT_TOKENS = 800
+
+
+def _gated_gateway(work: Path, turns: list):
+    """A gateway whose local model holds every generation open until cancelled.
+
+    The double's count is fixed, as for the default double of build_gateway:
+    counted by character, the real host's request (a system prompt of 45,442
+    characters in the Linux VPS functional check) fit neither model and failed
+    before any generation.
+    """
+    adapter = GatedAdapter(turns=turns, input_tokens=DOUBLE_INPUT_TOKENS)
+    gateway = build_gateway(
+        work,
+        None,
+        local_model=ConfiguredModel(adapter=adapter, model_id="gated"),
+        external_turns=[],
+    )
+    return adapter, gateway
+
+
 def _gateway(scenario: Scenario, work: Path):
     if scenario.gated:
-        adapter = GatedAdapter(turns=[text_turn("never")])
-        gateway = build_gateway(
-            work,
-            None,
-            local_model=ConfiguredModel(adapter=adapter, model_id="gated"),
-            external_turns=[],
-        )
+        _adapter, gateway = _gated_gateway(work, [text_turn("never")])
     else:
         gateway = build_gateway(
             work,
@@ -559,7 +600,138 @@ HOST_SCENARIOS: dict[str, tuple[Callable[[Path], list], int | None]] = {
         0,
     ),
     "exec-full": (lambda sandbox: [exec_call(sandbox), text_turn("The note was written.")], 1),
+    # #138: the local double never answers; the harness interrupts the host mid-turn.
+    "abort": (lambda _sandbox: [text_turn("never")], None),
+    # #138: both models propose a call to a tool nobody offered, so the run fails
+    # with 503 external_failed; its doubles are in ERROR_SCENARIOS.
+    "external-failed": (lambda _sandbox: [], None),
 }
+# How long the harness lets the generation run before it interrupts the host.
+ABORT_AFTER_SECONDS = 0.5
+
+
+# A tool no host offers: the gateway refuses the call from either model.
+UNKNOWN_TOOL = "relaymind_test_not_offered"
+
+
+def unknown_call(call_id: str = "call_unknown_1") -> list:
+    return tool_turn(UNKNOWN_TOOL, call_id=call_id)
+
+
+@dataclass(frozen=True)
+class ErrorScenario:
+    """A host scenario that must end in one named gateway error (section 11).
+
+    Both doubles answer every generation with ``events``, never running out:
+    the pinned host retried the same model 7 times after a server error in
+    the Linux VPS functional check, each retry a new gateway run.
+    """
+
+    code: str
+    status: int
+    events: Callable[[], list]
+
+
+ERROR_SCENARIOS: dict[str, ErrorScenario] = {
+    "external-failed": ErrorScenario("external_failed", 503, unknown_call),
+}
+# The run the plugin's error message names (integrations/openclaw/src/errors.ts).
+NAMED_RUN = re.compile(r"Gateway run (run_[0-9a-f]+)")
+# The plugin's attempt record on the host's log (integrations/openclaw/src/attempts.ts).
+ATTEMPT_RECORD = re.compile(r"RelayMind inference attempt (\{.*\})")
+
+
+def attempt_records(output: str) -> list[dict]:
+    """The plugin's attempt records in the host's output, in order (section 7.5)."""
+    records = []
+    for match in ATTEMPT_RECORD.findall(output):
+        try:
+            record = json.loads(match)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict):
+            records.append(
+                {
+                    k: record.get(k)
+                    for k in ("runId", "runIdSource", "outcome", "status", "code", "retried")
+                }
+            )
+    return records
+
+
+def _error_gateway(work: Path, error: ErrorScenario):
+    """A gateway whose doubles answer every generation the same way."""
+    return build_gateway(
+        work,
+        None,
+        local_model=ConfiguredModel(
+            adapter=ScriptedAdapter(error.events(), input_tokens=DOUBLE_INPUT_TOKENS),
+            model_id=LOCAL_MODEL_ID,
+        ),
+        external_model=ConfiguredModel(
+            adapter=ScriptedAdapter(
+                error.events(), input_tokens=DOUBLE_INPUT_TOKENS, locality="external"
+            ),
+            model_id=EXTERNAL_MODEL_ID,
+        ),
+    )
+
+
+def error_checks(
+    scenario: str, status: str, runs: Sequence[Mapping], stdout: str, stderr: str
+) -> dict:
+    """What an error scenario must show (section 7.5, section 11, RM16).
+
+    Every recorded run failed with the scenario's code and no answer text, the
+    gateway executed no tool, and the host showed the plugin's message
+    (``RelayMind <code> (HTTP <status>): ...``) naming a recorded run. The
+    host's exit status and its own report are recorded, not judged; a host
+    that did not run to its end never passes.
+    """
+    expected = ERROR_SCENARIOS[scenario]
+    failed = [
+        {
+            "run_id": run["run_id"],
+            "error_code": e["payload"].get("error_code"),
+            "reason_code": e["payload"].get("reason_code"),
+        }
+        for run in runs
+        if run["state"] == "failed"
+        for e in run["events"]
+        if e["type"] == "run.failed"
+    ]
+    output = stdout + "\n" + stderr
+    recorded = {run["run_id"] for run in runs}
+    named = [i for i in dict.fromkeys(NAMED_RUN.findall(output)) if i in recorded]
+    deltas = sum(1 for run in runs for e in run["events"] if e["type"] == "answer.delta")
+    executions = sum(1 for run in runs for e in run["events"] if e["type"] == "tool.started")
+    attempts = attempt_records(output)
+    checks: dict[str, Any] = {
+        "expected": {"code": expected.code, "status": expected.status},
+        "failed_runs": failed,
+        "host_message": f"RelayMind {expected.code} (HTTP {expected.status}): " in output,
+        "named_runs": named,
+        "attempts": attempts,
+        # Every run an attempt record names is one the gateway recorded (never invented).
+        "attempt_runs_recorded": all(
+            a["runId"] in recorded for a in attempts if a["runId"] != "unavailable"
+        ),
+        "answer_deltas": deltas,
+        "gateway_tool_executions": executions,
+        "host_report": host_report(stdout),
+    }
+    checks["passed"] = (
+        status in ("completed", "failed")
+        and bool(runs)
+        and len(failed) == len(runs)
+        and all(f["error_code"] == expected.code for f in failed)
+        and checks["host_message"]
+        and bool(named)
+        and checks["attempt_runs_recorded"]
+        and deltas == 0
+        and executions == 0
+    )
+    return checks
 
 
 def host_checks(
@@ -616,6 +788,107 @@ def host_checks(
     return checks
 
 
+def _run_command(
+    command: Sequence[str], env: Mapping[str, str], timeout: float
+) -> tuple[str, int | None, str, str]:
+    """Run the command to its end; a timeout keeps what it wrote so far."""
+    try:
+        completed = subprocess.run(
+            list(command), env=dict(env), capture_output=True, text=True, timeout=timeout
+        )
+    except subprocess.TimeoutExpired as error:
+        # The runs the gateway recorded so far still go into the export.
+        stderr = _text(error.stderr) + f"\ntimed out after {timeout} s"
+        return "timed_out", None, _text(error.stdout), stderr
+    status = "completed" if completed.returncode == 0 else "failed"
+    return status, completed.returncode, completed.stdout, completed.stderr
+
+
+def abort_checks(signal_sent: bool, runs: Sequence[Mapping], adapter: Any) -> dict:
+    """What the abort scenario must show (section 7.5, RM14, AC12).
+
+    The host was interrupted while the gateway's generation was in flight; its
+    closed request must have cancelled the run it owned, with no answer text.
+    The host's exit code (130 on the macOS probe) is recorded, not judged.
+    """
+    cancelled = [
+        run["run_id"]
+        for run in runs
+        if run["state"] == "cancelled"
+        and any(
+            e["type"] == "run.cancelled" and e["payload"].get("reason") == "cancel_requested"
+            for e in run["events"]
+        )
+    ]
+    deltas = sum(1 for run in runs for e in run["events"] if e["type"] == "answer.delta")
+    checks: dict[str, Any] = {
+        "signal_sent": signal_sent,
+        "cancelled_runs": cancelled,
+        "answer_deltas": deltas,
+        "adapter_cancel_requested": bool(adapter.cancelled or adapter.interrupted),
+    }
+    checks["passed"] = (
+        signal_sent
+        and bool(runs)
+        and len(cancelled) == len(runs)
+        and deltas == 0
+        and checks["adapter_cancel_requested"]
+    )
+    return checks
+
+
+def _interrupt_when_started(
+    command: Sequence[str], env: Mapping[str, str], adapter: Any, timeout: float
+) -> tuple[str, int | None, str, str, bool]:
+    """Run the command and interrupt it once the gateway's generation started.
+
+    POSIX gets SIGINT, as an operator's Ctrl-C; Windows gets CTRL_BREAK_EVENT in
+    the command's own process group. Never longer than timeout.
+    """
+    windows = sys.platform == "win32"
+    # Files, not pipes: nothing reads the output until the host ends, and a host
+    # that logs more than a pipe holds would block before it sends its request.
+    with (
+        tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as out,
+        tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as err,
+    ):
+        process = subprocess.Popen(
+            list(command),
+            env=dict(env),
+            stdout=out,
+            stderr=err,
+            text=True,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if windows else 0,  # type: ignore[attr-defined]
+        )
+        deadline = time.monotonic() + timeout
+        while (
+            process.poll() is None and not adapter.started.is_set() and time.monotonic() < deadline
+        ):
+            time.sleep(0.05)
+        sent = False
+        if process.poll() is None and adapter.started.is_set():
+            time.sleep(ABORT_AFTER_SECONDS)
+            process.send_signal(signal.CTRL_BREAK_EVENT if windows else signal.SIGINT)  # type: ignore[attr-defined]
+            sent = True
+        timed_out = False
+        try:
+            process.wait(timeout=max(1.0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            timed_out = True
+        out.seek(0)
+        err.seek(0)
+        stdout, stderr = out.read(), err.read()
+    if timed_out:
+        return "timed_out", None, stdout, stderr + f"\ntimed out after {timeout} s", sent
+    if sent:
+        status = "interrupted"
+    else:
+        status = "completed" if process.returncode == 0 else "failed"
+    return status, process.returncode, stdout, stderr, sent
+
+
 def run_host(
     command: Sequence[str], out: Path, *, timeout: float = 900, scenario: str = "text-tool"
 ) -> dict:
@@ -624,35 +897,33 @@ def run_host(
     with tempfile.TemporaryDirectory(prefix="openclaw-host-") as tmp:
         sandbox = Path(tmp) / "host-sandbox"
         sandbox.mkdir()
-        gateway = build_gateway(Path(tmp), turns(sandbox), external_turns=[])
+        adapter = None
+        if scenario == "abort":
+            adapter, gateway = _gated_gateway(Path(tmp), turns(sandbox))
+        else:
+            error = ERROR_SCENARIOS.get(scenario)
+            if error is None:
+                gateway = build_gateway(Path(tmp), turns(sandbox), external_turns=[])
+            else:
+                gateway = _error_gateway(Path(tmp), error)
         app = make_app(gateway, client_tools=ClientToolsChat(gateway.orchestrator))
+        signal_sent = False
         token = token_of(app)
         try:
             with RunningServer(app) as running:
                 env = child_environment(running.base_url, token)
                 env["RELAYMIND_TEST_SANDBOX"] = str(sandbox)
                 try:
-                    completed = subprocess.run(
-                        list(command),
-                        env=env,
-                        capture_output=True,
-                        text=True,
-                        timeout=timeout,
-                    )
-                    status = "completed" if completed.returncode == 0 else "failed"
-                    exit_code, stdout, stderr = (
-                        completed.returncode,
-                        completed.stdout,
-                        completed.stderr,
-                    )
+                    if adapter is None:
+                        status, exit_code, stdout, stderr = _run_command(command, env, timeout)
+                    else:
+                        status, exit_code, stdout, stderr, signal_sent = _interrupt_when_started(
+                            command, env, adapter, timeout
+                        )
+                        _wait_until_settled(gateway)
                 except OSError as error:
                     # Missing, not executable, or otherwise not started: no run happened.
                     status, exit_code, stdout, stderr = "not_run", None, "", str(error)
-                except subprocess.TimeoutExpired as error:
-                    # The runs the gateway recorded so far still go into the export.
-                    status, exit_code = "timed_out", None
-                    stdout, stderr = _text(error.stdout), _text(error.stderr)
-                    stderr += f"\ntimed out after {timeout} s"
                 stdout = stdout.replace(token, NOT_RECORDED)
                 stderr = stderr.replace(token, NOT_RECORDED)
                 run_ids = _run_ids(gateway)
@@ -683,8 +954,14 @@ def run_host(
                     "host_tool_executions_by_gateway": sum(
                         1 for run in runs for e in run["events"] if e["type"] == "tool.started"
                     ),
-                    "checks": host_checks(
-                        scenario, status, runs, gateway.adapter.requests, sandbox, stdout
+                    "checks": (
+                        abort_checks(signal_sent, runs, adapter)
+                        if adapter is not None
+                        else error_checks(scenario, status, runs, stdout, stderr)
+                        if scenario in ERROR_SCENARIOS
+                        else host_checks(
+                            scenario, status, runs, gateway.adapter.requests, sandbox, stdout
+                        )
                     ),
                 }
         finally:
@@ -722,7 +999,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     export = run_host(command, args.out, timeout=args.timeout, scenario=args.scenario)
     passed = export["checks"]["passed"]
     print(json.dumps({"status": export["status"], "runs": len(export["runs"]), "passed": passed}))
-    return 0 if export["status"] == "completed" and passed else 1
+    # The host's exit status is recorded, not judged: an error scenario's host fails.
+    if args.scenario == "abort":
+        finished: tuple[str, ...] = ("interrupted",)
+    elif args.scenario in ERROR_SCENARIOS:
+        finished = ("completed", "failed")
+    else:
+        finished = ("completed",)
+    return 0 if export["status"] in finished and passed else 1
 
 
 if __name__ == "__main__":
