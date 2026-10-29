@@ -122,6 +122,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   The fixed parallel demo (RM15, AC14) and existing benchmark evidence remain.
   This is a specification and backlog change; the plugin is not implemented.
 
+### Removed
+
+- The demo UI trace no longer shows the "Workflow steps" section, a placeholder
+  for the retired YAML workflow runner that only said "not recorded" (#173;
+  RM23, AC14; spec 0.47 retired RM30). The fixed parallel demo's workflow
+  summary (RM15) is unchanged, and a stored trace with the reserved `workflow`
+  tool mechanism (section 8) still renders. No spec change.
+
 ### Fixed
 
 - Loopback gateway health polls and API/SDK client calls in live acceptance
