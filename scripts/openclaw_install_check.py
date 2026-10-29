@@ -438,10 +438,12 @@ def _sanitize(text: str, ctx: Context) -> str:
     )
     home = Path.home()
     for path, placeholder in places:
-        forms = {str(path), str(path.resolve()), json.dumps(str(path))[1:-1]}
-        # The host prints a path under the user's home as ``~/...`` (its skill
-        # locations in the prompt), so the home-relative form goes too.
+        forms = set()
         for candidate in (path, path.resolve()):
+            # The export is JSON: a path inside a string is escaped there.
+            forms |= {str(candidate), json.dumps(str(candidate))[1:-1]}
+            # The host prints a path under the user's home as ``~/...`` (its
+            # skill locations in the prompt), so the home-relative form goes too.
             if candidate != home and candidate.is_relative_to(home):
                 forms.add(f"~/{candidate.relative_to(home).as_posix()}")
         for form in sorted(forms, key=len, reverse=True):

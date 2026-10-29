@@ -308,6 +308,20 @@ def test_the_home_relative_form_the_host_prints_is_a_placeholder_too(tmp_path):
         assert line in ("<repo>/skills/a/SKILL.md", "<home>/elsewhere/b"), line
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="a backslash cannot be in a Windows name")
+def test_the_json_form_of_a_resolved_path_is_a_placeholder_too(tmp_path):
+    """RM12: the export is JSON, so a path the host printed in its resolved form
+    (a symlink or a Windows short name resolved) is replaced in its JSON-escaped
+    form too, not only the given path's (PR #182 review)."""
+    real = tmp_path / "real\\host"
+    real.mkdir()
+    link = tmp_path / "host"
+    link.symlink_to(real, target_is_directory=True)
+    ctx = SimpleNamespace(home=link, tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    escaped = json.dumps(f"{link.resolve()}/state/x")
+    assert install_check._sanitize(escaped, ctx) == '"<host-home>/state/x"'
+
+
 def test_what_uninstall_leaves_is_recorded_and_the_removal_steps_clear_it(
     stub_host, tarball, tmp_path
 ):
