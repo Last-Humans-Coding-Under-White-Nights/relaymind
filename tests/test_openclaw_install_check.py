@@ -322,6 +322,54 @@ def test_the_json_form_of_a_resolved_path_is_a_placeholder_too(tmp_path):
     assert install_check._sanitize(escaped, ctx) == '"<host-home>/state/x"'
 
 
+# The pinned host's runtime line on every user message; on macOS ``host=`` is
+# the computer name (``scutil --get ComputerName``), not the network hostname.
+RUNTIME_LINE = (
+    "Runtime: agent=main | session=agent:main:explicit:1b2c | host=Dmitry’s MacBook Air"
+    " | repo=/r | os=macOS 27.0.1 (arm64) | node=v26.12.1"
+)
+
+
+def test_the_host_runtime_line_machine_name_is_a_placeholder(tmp_path):
+    """RM12: the ``host=`` field of the host's runtime line never reaches the export,
+    as plain text or inside a JSON string (the macOS run of 29 October 2026)."""
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    masked = install_check._sanitize(RUNTIME_LINE, ctx)
+    assert masked == RUNTIME_LINE.replace("Dmitry’s MacBook Air", "<host>")
+    encoded = json.dumps(RUNTIME_LINE)
+    assert "\\u2019" in encoded
+    masked = install_check._sanitize(encoded, ctx)
+    assert "Dmitry" not in masked
+    assert json.loads(masked) == RUNTIME_LINE.replace("Dmitry’s MacBook Air", "<host>")
+    # A masked line stays as it is, with its other fields.
+    once = install_check._sanitize(RUNTIME_LINE, ctx)
+    assert install_check._sanitize(once, ctx) == once
+    assert "| os=macOS 27.0.1 (arm64) | node=v26.12.1" in once
+
+
+def test_the_machine_names_are_placeholders_wherever_they_appear(tmp_path, monkeypatch):
+    """RM12: the machine's names (hostname, macOS computer and local host names)
+    are replaced anywhere in the text, in their JSON form too; a short name is not."""
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    names = ("Example-Mac", "Example’s Mac", "mc")
+    monkeypatch.setattr(install_check.qualification, "MACHINE_NAMES", names)
+    text = "\n".join(
+        [
+            "built on Example-Mac.local",
+            "owner Example’s Mac",
+            json.dumps("owner Example’s Mac"),
+            "the mc command",
+        ]
+    )
+    masked = install_check._sanitize(text, ctx)
+    assert masked.splitlines() == [
+        "built on <host>.local",
+        "owner <host>",
+        '"owner <host>"',
+        "the mc command",
+    ]
+
+
 def test_what_uninstall_leaves_is_recorded_and_the_removal_steps_clear_it(
     stub_host, tarball, tmp_path
 ):

@@ -831,7 +831,11 @@ wrote to the documented default `/tmp/openclaw/`, outside the isolation):
 8. the removal of the config entry and the credential uninstall leaves.
 
 The token is never an argument, never in the host's environment, and never
-written to the export. The host inherits none of the shell's `OPENCLAW_*`
+written to the export. Machine paths in the export are placeholders
+(`<host-home>`, `<artifact-dir>`, `<repo>`, `<home>`), and the machine's
+name in the host's runtime line (`host=`, on macOS the computer name) is
+masked as `<host>`, as are the hostname and the macOS computer and local
+host names wherever they appear. The host inherits none of the shell's `OPENCLAW_*`
 settings (profile, Gateway URL, token, port) and no proxy. Its local Gateway
 port is set to a closed loopback port in the isolated config
 (`config set gateway.port`), so a running OpenClaw Gateway of yours is never

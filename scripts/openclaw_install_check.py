@@ -456,7 +456,11 @@ def _sanitize(text: str, ctx: Context) -> str:
         for form in sorted(forms, key=len, reverse=True):
             text = text.replace(form, placeholder)
     # Whatever else the host printed under the user's home.
-    return text.replace("~/", f"{USER_HOME}/")
+    text = text.replace("~/", f"{USER_HOME}/")
+    # The machine's names (the host's runtime line, the hostname, and on macOS
+    # the computer name) become <host>; only names of three or more characters
+    # are replaced, so a short name cannot wipe unrelated text.
+    return qualification.mask_machine_names(text)
 
 
 def _run(command: Sequence[str], args: list[str], stdin: str | None, env, timeout: float):

@@ -59,6 +59,56 @@ def test_host_mode_runs_the_command_and_exports_the_runs_without_the_token(tmp_p
     assert export["versions"]["relaymind_revision"]["head"]
 
 
+# The pinned host's runtime line on every user message; on macOS ``host=`` is
+# the computer name (``scutil --get ComputerName``), not the network hostname.
+RUNTIME_LINE = (
+    "Runtime: agent=main | session=agent:main:explicit:1b2c | host=Dmitry’s MacBook Air"
+    " | repo=/r | os=macOS 27.0.1 (arm64) | node=v26.12.1"
+)
+
+
+def test_the_host_runtime_line_machine_name_is_masked():
+    """RM12: the ``host=`` field of the host's runtime line is ``<host>``, as plain
+    text and inside a JSON string; the other fields and a masked line stay."""
+    expected = RUNTIME_LINE.replace("Dmitry’s MacBook Air", "<host>")
+    assert qualification.mask_machine_names(RUNTIME_LINE) == expected
+    encoded = json.dumps(RUNTIME_LINE)
+    assert "\\u2019" in encoded
+    assert json.loads(qualification.mask_machine_names(encoded)) == expected
+    assert qualification.mask_machine_names(expected) == expected
+
+
+def test_the_listed_machine_names_are_masked_but_not_a_short_one(monkeypatch):
+    """RM12: the machine's names are ``<host>`` anywhere, in their JSON form too;
+    a name under three characters is left, so it cannot wipe unrelated text."""
+    monkeypatch.setattr(qualification, "MACHINE_NAMES", ("Example-Mac", "Example’s Mac", "mc"))
+    text = "\n".join(
+        ["on Example-Mac.local", "owner Example’s Mac", json.dumps("Example’s Mac"), "mc"]
+    )
+    assert qualification.mask_machine_names(text).splitlines() == [
+        "on <host>.local",
+        "owner <host>",
+        '"<host>"',
+        "mc",
+    ]
+
+
+def test_the_machine_names_the_host_prints_or_sends_never_reach_the_export(tmp_path, monkeypatch):
+    """RM12: the host's runtime line goes to the gateway (the runs) and to the
+    host's output; the export keeps ``<host>`` in both, never the name."""
+    monkeypatch.setattr(qualification, "MACHINE_NAMES", ("Example-Mac",))
+    stub = STUB_HOST.replace('"content": "Hi"', f'"content": {RUNTIME_LINE!r} + " on Example-Mac"')
+    stub += f"\nprint({RUNTIME_LINE!r}, 'Example-Mac')\n"
+    out = tmp_path / "export.json"
+    export = qualification.run_host([sys.executable, "-c", stub], out)
+    text = out.read_text("utf-8")
+    assert export["status"] == "completed"
+    assert "Dmitry" not in text
+    assert "Example-Mac" not in text
+    assert "host=<host> |" in export["stdout"]
+    assert "host=<host> |" in json.dumps(export["runs"], ensure_ascii=False)
+
+
 def test_a_failing_host_command_is_recorded_as_failed(tmp_path):
     export = qualification.run_host(
         [sys.executable, "-c", "raise SystemExit(3)"], tmp_path / "export.json"

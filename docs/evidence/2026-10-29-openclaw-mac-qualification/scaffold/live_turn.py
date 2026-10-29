@@ -537,8 +537,19 @@ def main(scratch: Path, tarball: Path, llama_url: str, port: int) -> int:
     for name_form in sorted({hostname, hostname.split(".")[0]}, key=len, reverse=True):
         if len(name_form) >= 3:
             replacements.append((name_form, "<hostname>"))
+    # The macOS computer and local host names (the host's runtime line has the
+    # computer name); RM12. Only names of 3 or more characters are replaced.
+    for key in ("ComputerName", "LocalHostName"):
+        try:
+            found = subprocess.run(["scutil", "--get", key], capture_output=True, text=True, timeout=5)
+            name = found.stdout.strip() if found.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError):
+            name = ""
+        if len(name) >= 3:
+            replacements += [(name, "<host>"), (json.dumps(name)[1:-1], "<host>")]
 
     def clean(text: str) -> str:
+        text = re.sub(r"\| host=[^|\n]*? \|", "| host=<host> |", text)
         for old, new in replacements:
             text = text.replace(old, new)
         text = re.sub(r"(\\u001b|\x1b)\[[0-9;]*m", "", text)

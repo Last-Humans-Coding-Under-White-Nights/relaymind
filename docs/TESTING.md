@@ -1369,7 +1369,10 @@ pass it.
   temporary state), the gateway executing nothing, the host's result
   holding the file's text and matched through the rewrite; the token, the
   host home, the artifact folder, the checkout, and the user's home never
-  in the export, in their absolute or the host's `~/...` form; what uninstall leaves recorded and the removal steps
+  in the export, in their absolute or the host's `~/...` form; the
+  machine's name (the `host=` field of the host's runtime line, the
+  hostname, and the macOS computer name) masked as `<host>`, in its JSON
+  form too; what uninstall leaves recorded and the removal steps
   clearing it (the stub's SQLite runs with secure_delete off and WAL, so a
   deleted row's bytes stay on disk and must not count); a credential left
   after removal, a config strict JSON cannot read (unknown), an unreadable
