@@ -1,6 +1,8 @@
 """One isolated strict HTTP v2 attempt; no retries or credentials (RM35/AC26)."""
 
 import json
+import math
+import ssl
 import zlib
 from collections.abc import Callable
 
@@ -8,16 +10,19 @@ import httpx
 
 from relaymind.assets.catalog import text
 from relaymind.selection.asset_contract import (
-    AssetSelectionError,
     AssetSelectionRequest,
     AttemptFailure,
     SelectorContext,
-    parse_asset_result,
 )
 from relaymind.selection.http import validate_url
 
 MAX_RESPONSE_BYTES = 1024 * 1024
 READ_BUFFER_BYTES = 64 * 1024
+# validate_url admits plain http to loopback only, so TLS never runs. One shared
+# context avoids loading the CA bundle on the attempt clock for every client.
+_SSL_CONTEXT = ssl.create_default_context()
+# httpx errors that are not httpx.HTTPError; all are transport failures here.
+_HTTPX_ERRORS = (httpx.HTTPError, httpx.InvalidURL, httpx.StreamError, httpx.CookieConflict)
 
 
 def _pairs(pairs):
@@ -29,11 +34,23 @@ def _pairs(pairs):
     return result
 
 
+def _finite(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError
+    return number
+
+
 def strict_json(body: bytes) -> object:
     def constant(value):
         raise ValueError
 
-    return json.loads(body.decode("utf-8"), object_pairs_hook=_pairs, parse_constant=constant)
+    return json.loads(
+        body.decode("utf-8"),
+        object_pairs_hook=_pairs,
+        parse_constant=constant,
+        parse_float=_finite,
+    )
 
 
 def _media_type(value: str | None) -> bool:
@@ -82,6 +99,8 @@ async def _read_body(response: httpx.Response, context: SelectorContext) -> byte
 
 
 class HttpAssetSelector:
+    """Decodes one strict JSON response; the chain alone parses and admits it."""
+
     transport = "http"
     mechanism = "http"
 
@@ -105,6 +124,7 @@ class HttpAssetSelector:
                 trust_env=False,
                 follow_redirects=False,
                 timeout=None,
+                verify=_SSL_CONTEXT,
                 transport=None if self._transport_factory is None else self._transport_factory(),
             ) as client:
                 # Setup and client entry consume the original attempt clock.
@@ -128,12 +148,12 @@ class HttpAssetSelector:
                     body = await _read_body(response, context)
             context.check()
             try:
-                parsed = parse_asset_result(strict_json(body))
-            except (AssetSelectionError, ValueError, UnicodeError, RecursionError, OverflowError):
+                decoded = strict_json(body)
+            except (ValueError, UnicodeError, RecursionError, OverflowError):
                 raise AttemptFailure("invalid", "invalid_result") from None
             context.check()
-            return parsed.to_json_object()
+            return decoded
         except httpx.TimeoutException:
             raise AttemptFailure("timeout", "deadline_exceeded") from None
-        except (httpx.HTTPError, zlib.error):
+        except (*_HTTPX_ERRORS, zlib.error):
             raise AttemptFailure("unavailable", "transport_error") from None

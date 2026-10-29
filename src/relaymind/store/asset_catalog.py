@@ -10,6 +10,7 @@ from typing import Any
 from relaymind.assets.catalog import (
     AssetValidationError,
     CatalogSnapshot,
+    CatalogUnavailable,
     InventoryAsset,
     SearchDocument,
     SourceCapture,
@@ -43,10 +44,6 @@ class CatalogConflict(ValueError):
     """An internal stale catalog or source-owner publication was refused."""
 
 
-class CatalogUnavailable(RuntimeError):
-    """Committed catalog data is corrupt; never translate this to healthy empty."""
-
-
 @dataclass(frozen=True)
 class Publication:
     revision: int
@@ -68,9 +65,64 @@ def _effective_stale(row: Mapping[str, Any], source_stale: Mapping[str, bool]) -
     return bool(row["stale"]) or source_stale[row["source_id"]]
 
 
+# The same rule as _effective_stale, for rows whose stored record bytes disagree.
+_STALE_MISMATCH = (
+    "FROM asset_catalog_assets a JOIN asset_catalog_sources s ON s.source_id=a.source_id "
+    "WHERE (a.stale OR s.stale) != json_extract(a.record_json,'$.stale')"
+)
+
+
+def _record_json_with_stale(record_json: str, stale: bool) -> str:
+    """One validated, canonical rewrite of a stored record's stale flag."""
+    value = json.loads(record_json)
+    value["stale"] = stale
+    return canonical_json(validate_asset_record(value).to_json_object())
+
+
+def _require_projection(
+    documents: tuple[SearchDocument, ...], rows: list[dict], source_stale: Mapping[str, bool]
+) -> None:
+    """Stored record bytes are authoritative only when they carry effective stale."""
+    if any(
+        document.record.stale != _effective_stale(row, source_stale)
+        for document, row in zip(documents, rows, strict=True)
+    ):
+        raise CatalogUnavailable("catalog_projection_unavailable")
+
+
 class AssetCatalogStore:
     def __init__(self, store: RunStore) -> None:
         self.store = store
+        self._normalize_stale_bytes()
+
+    def _normalize_stale_bytes(self) -> None:
+        """Rewrite rows stored before record bytes carried the effective stale flag.
+
+        An older writer set only the stale column. A repaired projection is a new
+        usable generation, so the revision advances once. A row that cannot be
+        validated is left alone: readers then report the catalog unavailable.
+        """
+        with self.store.sql_transaction() as connection:
+            rows = connection.execute(
+                f"SELECT a.asset_id, a.record_json, (a.stale OR s.stale) AS effective "
+                f"{_STALE_MISMATCH}"
+            ).fetchall()
+            if not rows:
+                return
+            try:
+                prepared = [
+                    (_record_json_with_stale(row["record_json"], bool(row["effective"])), row[0])
+                    for row in rows
+                ]
+            except (ValueError, TypeError, KeyError, RecursionError):
+                return
+            connection.executemany(
+                "UPDATE asset_catalog_assets SET record_json=? WHERE asset_id=?", prepared
+            )
+            connection.execute(
+                "UPDATE asset_catalog_meta SET revision=revision+1,published_at=?",
+                (utc_iso(self.store.clock.utc_now()),),
+            )
 
     def _state(self) -> tuple[dict, list[dict], list[dict]]:
         with self.store.sql_transaction() as connection:
@@ -136,25 +188,18 @@ class AssetCatalogStore:
                 }
                 for row in source_rows
             ]
-            source_stale = {s["source_id"]: s["stale"] for s in sources}
-            assets = [
-                replace(document.record, stale=_effective_stale(row, source_stale)).to_json_object()
-                for document, row in zip(documents, asset_rows, strict=True)
-            ]
+            _require_projection(
+                documents, asset_rows, {s["source_id"]: s["stale"] for s in sources}
+            )
             snapshot = validate_catalog_snapshot(
                 {
                     "schema_version": 1,
                     "catalog_revision": meta["revision"],
                     "published_at": meta["published_at"],
                     "sources": sources,
-                    "assets": assets,
+                    "assets": [document.record.to_json_object() for document in documents],
                 }
             )
-            if any(
-                document.record.stale != asset.stale
-                for document, asset in zip(documents, snapshot.assets, strict=True)
-            ):
-                raise CatalogUnavailable("catalog_projection_unavailable")
             return replace(
                 snapshot,
                 record_bytes=tuple(row["record_json"].encode("utf-8") for row in asset_rows),
@@ -166,11 +211,7 @@ class AssetCatalogStore:
         """Cheap current revision pin; a snapshot is validated at publication."""
         with self.store.sql_transaction() as connection:
             try:
-                incompatible = connection.execute(
-                    "SELECT 1 FROM asset_catalog_assets a JOIN asset_catalog_sources s "
-                    "ON s.source_id=a.source_id WHERE (a.stale OR s.stale) "
-                    "!= json_extract(a.record_json,'$.stale') LIMIT 1"
-                ).fetchone()
+                incompatible = connection.execute(f"SELECT 1 {_STALE_MISMATCH} LIMIT 1").fetchone()
             except sqlite3.Error:
                 raise CatalogUnavailable("catalog_corrupt") from None
             if incompatible:
@@ -179,13 +220,8 @@ class AssetCatalogStore:
 
     def search_documents(self) -> tuple[SearchDocument, ...]:
         _, sources, rows = self._state()
-        source_stale = {s["source_id"]: bool(s["stale"]) for s in sources}
         documents = self._documents(rows)
-        if any(
-            doc.record.stale != _effective_stale(row, source_stale)
-            for doc, row in zip(documents, rows, strict=True)
-        ):
-            raise CatalogUnavailable("catalog_projection_unavailable")
+        _require_projection(documents, rows, {s["source_id"]: bool(s["stale"]) for s in sources})
         return documents
 
     def inventory(self, source_id: str) -> SourceInventory:
@@ -354,13 +390,11 @@ class AssetCatalogStore:
                     stale_changed = stale_changed or not bool(
                         old["stale"] or previous_source["stale"]
                     )
-                    value = json.loads(old["record_json"])
-                    if not old["stale"] or not value["stale"]:
-                        value["stale"] = True
+                    if not old["stale"] or not json.loads(old["record_json"])["stale"]:
                         connection.execute(
                             "UPDATE asset_catalog_assets SET stale=1,record_json=? "
                             "WHERE asset_id=?",
-                            (canonical_json(value), asset_id),
+                            (_record_json_with_stale(old["record_json"], True), asset_id),
                         )
             for asset_id in sorted(capture.removed_asset_ids):
                 check()
@@ -465,11 +499,10 @@ class AssetCatalogStore:
         prepared = []
         try:
             for row in rows:
-                value = json.loads(row["record_json"])
-                if not value["stale"]:
-                    value["stale"] = True
-                    record = validate_asset_record(value)
-                    prepared.append((canonical_json(record.to_json_object()), row["asset_id"]))
+                if not json.loads(row["record_json"])["stale"]:
+                    prepared.append(
+                        (_record_json_with_stale(row["record_json"], True), row["asset_id"])
+                    )
         except (ValueError, TypeError, KeyError, RecursionError):
             # Keep the source failure visible even when its matching projection
             # could not be prepared. Readers reject the mismatched old bytes.

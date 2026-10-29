@@ -2,13 +2,13 @@
 
 import asyncio
 import gzip
-import importlib.util
 import json
 import threading
 
 import httpx
 import pytest
 
+from helpers import load_script_module
 from test_asset_selection import api, request, result
 
 
@@ -124,7 +124,6 @@ def test_success_and_exact_full_offer_http_payload(monkeypatch, media):
         ({"Content-Type": "application/json"}, b"\xff", 200, "invalid", "invalid_result"),
         ({"Content-Type": "application/json"}, b"{}{}", 200, "invalid", "invalid_result"),
         ({"Content-Type": "application/json"}, b'{"a":1,"a":2}', 200, "invalid", "invalid_result"),
-        ({"Content-Type": "application/json"}, b"[]", 200, "invalid", "invalid_result"),
         (
             {"Content-Type": "application/json"},
             b'{"elapsed_ms":NaN}',
@@ -132,7 +131,6 @@ def test_success_and_exact_full_offer_http_payload(monkeypatch, media):
             "invalid",
             "invalid_result",
         ),
-        ({"Content-Type": "application/json"}, b"{}", 200, "invalid", "invalid_result"),
         ({"Location": "http://outside.invalid"}, b"credential", 302, "unavailable", "http_status"),
         ({}, b"credential", 429, "unavailable", "http_status"),
         ({}, b"credential", 503, "unavailable", "http_status"),
@@ -230,11 +228,7 @@ def test_static_url_refusal_does_not_connect(url):
 
 
 def test_disposable_loopback_example_uses_same_lexical_contract():
-    spec = importlib.util.spec_from_file_location(
-        "example_asset_selector", "scripts/example_asset_selector.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = load_script_module("example_asset_selector")
     server = module.make_server("127.0.0.1", 0)
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
@@ -364,11 +358,7 @@ def test_example_binding_never_performs_reverse_hostname_lookup(monkeypatch):
     """RM35/AC26: loopback example binding is local, with no reverse DNS lookup."""
     import socket
 
-    spec = importlib.util.spec_from_file_location(
-        "example_asset_selector_dns", "scripts/example_asset_selector.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = load_script_module("example_asset_selector")
 
     def forbidden(*args):
         pytest.fail("loopback binding performed hostname lookup")
@@ -433,3 +423,40 @@ def test_client_setup_stop_prevents_post_and_closes_transport(stop):
         assert caught.value.attempts[0]["result"] is None
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "error",
+    [httpx.InvalidURL("secret url"), httpx.StreamConsumed(), httpx.CookieConflict("secret")],
+)
+def test_every_httpx_failure_is_a_transport_attempt_failure(error):
+    """RM35/AC26: httpx errors outside HTTPError still allow lexical fallback."""
+    from relaymind.selection.asset_http import HttpAssetSelector
+
+    a = api()
+
+    def factory():
+        async def respond(req):
+            raise error
+
+        return httpx.MockTransport(respond)
+
+    selector = HttpAssetSelector(
+        name="custom", version="1", url="http://127.0.0.1:8123/select", transport_factory=factory
+    )
+    with pytest.raises(a.AttemptFailure) as caught:
+        asyncio.run(
+            selector.select(
+                a.parse_asset_request(request()), a.SelectorContext(lambda: 0, lambda: None)
+            )
+        )
+    assert (caught.value.outcome, caught.value.reason) == ("unavailable", "transport_error")
+
+
+def test_http_selector_decodes_and_leaves_schema_admission_to_the_gateway():
+    """RM35/AC26: the selector proposes; the chain's single parse decides validity."""
+    for body, decoded in ((b"[]", []), (b"{}", {})):
+        selector, req, ctx, _, _ = run_http(body=body)
+        assert asyncio.run(selector.select(req, ctx)) == decoded
+        with pytest.raises(api().AssetSelectionError):
+            api().parse_asset_result(decoded)

@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 import pytest
 
 from relaymind.assets.catalog import CatalogSnapshot, validate_asset_record
+from relaymind.canonical import canonical_json
 from test_asset_catalog import record
 
 
@@ -354,13 +355,19 @@ def test_offer_cache_coherent_variants_and_no_dispatch_catalog_work(monkeypatch)
                 request()["catalog"], ensure_ascii=False, sort_keys=True, separators=(",", ":")
             ).encode()
         )
-        assert not cache.get("discovery", ["mcp_tool"], catalog_revision=1).records
+        assert not cache.get("discovery", ["mcp_tool"], catalog_revision=1).index.records
 
         def forbidden(*args, **kwargs):
             pytest.fail("dispatch revalidated/reserialized the catalog")
 
+        def envelope_only(value):
+            # Only the small envelope may be serialized; the catalog bytes are reused.
+            if isinstance(value, list) or "catalog" in value:
+                forbidden()
+            return canonical_json(value)
+
         monkeypatch.setattr("relaymind.selection.asset_contract.validate_asset_record", forbidden)
-        monkeypatch.setattr("relaymind.selection.asset_contract.canonical_json", forbidden)
+        monkeypatch.setattr("relaymind.selection.asset_contract.canonical_json", envelope_only)
         for _ in range(2):
             req = offer.request(
                 {k: v for k, v in request().items() if k != "catalog"}, context=context
@@ -584,7 +591,7 @@ def test_cancel_before_during_result_and_commit_fence_wins():
         _, budget = await coordinate(budget=budget, clock=clock)
         budget.cancel()
         with pytest.raises(RecommendationFailure) as caught:
-            budget.check_before_commit()
+            budget.check()
         assert caught.value.code == "cancelled"
 
     asyncio.run(run())
@@ -727,8 +734,9 @@ def test_cache_invalidation_fences_inflight_publication():
 def test_configured_factory_and_launcher_preserve_v1(tmp_path):
     from helpers import ScriptedAdapter
     from launcher_helpers import write_config
-    from relaymind.assets.settings import RecommendationSettings, build_asset_selector
+    from relaymind.assets.settings import RecommendationSettings
     from relaymind.launcher import build_app, load_config
+    from relaymind.selection.asset_factory import build_asset_selector
     from relaymind.selection.asset_http import HttpAssetSelector
     from relaymind.selection.asset_lexical import LexicalAssetSelector
 
@@ -1178,7 +1186,8 @@ def test_pointer_schema_rejection_has_external_watchdog():
 
     for path in paths:
         collect(json.loads(path.read_text()))
-    assert len(patterns) == 5
+    # Every evidence_refs pattern, inline or behind a shared $defs entry.
+    assert patterns
     script = """
 import json, sys
 from jsonschema import Draft202012Validator
@@ -1204,7 +1213,7 @@ print("validated", len(patterns))
         worker.communicate()
         pytest.fail("bounded JSON Pointer schema validation exceeded external watchdog")
     assert worker.returncode == 0, stderr
-    assert stdout.strip() == "validated 5"
+    assert stdout.strip() == f"validated {len(patterns)}"
 
 
 def test_pointer_empty_root_escaped_and_array_semantics():
@@ -1246,3 +1255,127 @@ def test_pointer_empty_root_escaped_and_array_semantics():
         )
         with pytest.raises(a.AttemptFailure):
             validate_against_offer(parsed, req, a.SelectorIdentity("custom", "1"))
+
+
+class SlowPrimary(Primary):
+    def __init__(self):
+        super().__init__()
+        self.started = asyncio.Event()
+
+    async def select(self, req, context):
+        self.started.set()
+        await asyncio.sleep(10)
+
+
+def test_task_cancellation_propagates_as_cancelled_error():
+    """RM35/AC26: a caller's task cancel is not turned into a domain failure."""
+
+    async def cancel_task():
+        primary = SlowPrimary()
+        task = asyncio.create_task(coordinate(primary))
+        await primary.started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    async def timeout_scope():
+        with pytest.raises(TimeoutError):
+            async with asyncio.timeout(0.05):
+                await coordinate(SlowPrimary())
+
+    asyncio.run(cancel_task())
+    asyncio.run(timeout_scope())
+
+
+def test_request_own_cancel_signal_stays_a_recommendation_failure():
+    """RM35/AC26: the budget's cancel is a lifecycle failure, not a task cancel."""
+    from relaymind.selection.asset_chain import RecommendationFailure, SelectionBudget
+
+    async def run():
+        primary = SlowPrimary()
+        budget = SelectionBudget()
+        task = asyncio.create_task(coordinate(primary, budget=budget))
+        await primary.started.wait()
+        budget.cancel()
+        with pytest.raises(RecommendationFailure) as caught:
+            await task
+        assert caught.value.code == "cancelled"
+
+    asyncio.run(run())
+
+
+def test_exhausted_attempt_time_is_a_timeout_never_internal_error():
+    """RM35/AC26: remaining time at or below zero maps to an attempt timeout."""
+    from relaymind.selection.asset_chain import _attempt_request
+
+    clock = FakeClock()
+    req = api().parse_asset_request(request())
+    clock.seconds = 1.0
+    for deadline in (1.0, 0.999):
+        with pytest.raises(api().AttemptFailure) as caught:
+            _attempt_request(req, deadline, clock)
+        assert (caught.value.outcome, caught.value.reason) == ("timeout", "deadline_exceeded")
+    assert _attempt_request(req, 1.1, clock).data["deadline_ms"] == pytest.approx(100)
+
+
+def test_offer_permissions_compare_as_a_set():
+    """RM35/AC26: permission order is not identity at publication or dispatch."""
+    from relaymind.selection.asset_lexical import OfferCache
+
+    a = api()
+
+    async def run():
+        cache = OfferCache()
+        context = a.SelectorContext(lambda: 0, lambda: None)
+        await cache.publish(
+            snapshot(),
+            scope=request()["scope"],
+            permissions=["b.read", "a.read"],
+            policy=lambda r: True,
+            catalog_revision=1,
+            context=context,
+        )
+        offer = cache.get("discovery", ["skill", "mcp_tool"], catalog_revision=1)
+        assert offer.permissions == ("a.read", "b.read")
+        envelope = {k: v for k, v in request().items() if k != "catalog"}
+        for order in (["a.read", "b.read"], ["b.read", "a.read"]):
+            assert offer.request({**envelope, "permissions": order}, context=context)
+        with pytest.raises(a.AssetSelectionError):
+            offer.request({**envelope, "permissions": ["a.read"]}, context=context)
+
+    asyncio.run(run())
+
+
+def test_published_schema_copies_stay_identical():
+    """RM35/AC26: embedded definitions cannot drift from their source schemas."""
+    from relaymind.schema_util import load_packaged_schema
+
+    a = api()
+    result_schema = {k: v for k, v in a.RESULT_SCHEMA.items() if k != "$schema"}
+    assert a.RECOMMENDATION_SCHEMA["$defs"]["SelectionResultV2"] == result_schema
+    record_schema = load_packaged_schema("relaymind.store", "asset_record.v1.json")
+    assert a.REQUEST_SCHEMA["properties"]["catalog"]["items"] == record_schema
+    properties = a.RECOMMENDATION_SCHEMA["properties"]
+    for name in ("base_candidates", "final_candidates"):
+        assert properties[name]["items"] == {"$ref": "#/$defs/CandidateV2"}
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        (("base_candidates", 0, "score"), True),
+        (("final_candidates", 0, "kind"), "tool"),
+        (("attempts", 1, "cost_observations", 0, "value", "calls"), 1.0),
+        (("attempts", 1, "cost_observations", 0, "value", "cpu_ms"), "fast"),
+    ],
+)
+def test_referenced_schema_parts_still_reject_invalid_values(path, value):
+    """RM35/AC26: moving to $ref keeps candidate and cost checks identical."""
+    raw, _ = asyncio.run(coordinate(Primary(result(catalog_revision=2))))
+    api().parse_recommendation_result(copy.deepcopy(raw))
+    target = raw
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    with pytest.raises(api().AssetSelectionError):
+        api().parse_recommendation_result(raw)

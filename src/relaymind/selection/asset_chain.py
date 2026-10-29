@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from relaymind.assets.catalog import CatalogSnapshot
+from relaymind.assets.catalog import CatalogSnapshot, CatalogUnavailable
 from relaymind.schema_util import freeze_json
 from relaymind.selection.asset_admission import AssetPolicy, admit_current, validate_against_offer
 from relaymind.selection.asset_contract import (
@@ -20,8 +20,6 @@ from relaymind.selection.asset_contract import (
     parse_asset_result,
     parse_recommendation_result,
 )
-from relaymind.selection.asset_lexical import LexicalAssetSelector
-from relaymind.store.asset_catalog import CatalogUnavailable
 from relaymind.store.run_store import TraceClock, utc_iso
 
 
@@ -40,7 +38,7 @@ class SelectionBudget:
         total_ms: int = 500,
         *,
         clock: TraceClock | None = None,
-        cancelled: Callable[[], bool] = lambda: False,
+        cancelled: Callable[[], bool] | None = None,
         sleep: Callable[[float], Awaitable] = asyncio.sleep,
     ):
         if type(total_ms) is not int or total_ms <= 0:
@@ -56,8 +54,15 @@ class SelectionBudget:
     def cancel(self) -> None:
         self._cancel_event.set()
 
+    def _stopped(self) -> bool:
+        return (
+            self._cancel_event.is_set()
+            or self._terminal
+            or (self._cancelled is not None and self._cancelled())
+        )
+
     def check(self) -> None:
-        if self._cancel_event.is_set() or self._cancelled() or self._terminal:
+        if self._stopped():
             raise RecommendationFailure("cancelled", "cancelled")
         if self.clock.monotonic() >= self.deadline:
             raise RecommendationFailure("deadline_exceeded", "deadline_exceeded")
@@ -65,9 +70,6 @@ class SelectionBudget:
     def remaining_ms(self) -> float:
         self.check()
         return max(0, (self.deadline - self.clock.monotonic()) * 1000)
-
-    def check_before_commit(self) -> None:
-        self.check()
 
     def fence_terminal(self) -> None:
         """The lifecycle owner calls this after a terminal atomic transition."""
@@ -93,9 +95,12 @@ class SelectionBudget:
             await asyncio.wait(tuple(self._owned), timeout=timeout)
 
     async def wait_cancelled(self) -> None:
-        while True:
-            if self._cancel_event.is_set() or self._cancelled() or self._terminal:
-                return
+        if self._cancelled is None:
+            # Every stop goes through the event: no polling.
+            await self._cancel_event.wait()
+            return
+        # An external cancelled() callable cannot signal, so it is polled.
+        while not self._stopped():
             try:
                 await asyncio.wait_for(self._cancel_event.wait(), timeout=0.01)
             except TimeoutError:
@@ -118,13 +123,34 @@ class AttemptFinished:
 AttemptObserver = Callable[[AttemptStarted | AttemptFinished], object]
 
 
+def _capability(selector: AssetSelector, name: str, default: object = None) -> Any:
+    """A capability the selector class declares (see AssetSelector)."""
+    return getattr(selector, name, default)
+
+
+def _task_cancelled() -> bool:
+    """The running task itself is being cancelled, not the request's budget."""
+    task = asyncio.current_task()
+    return task is not None and task.cancelling() > 0
+
+
+def _attempt_request(
+    request: AssetSelectionRequest, deadline: float, clock: TraceClock
+) -> AssetSelectionRequest:
+    """The request with this attempt's remaining time, from one clock read."""
+    remaining = deadline - clock.monotonic()
+    if remaining <= 0:
+        raise AttemptFailure("timeout", "deadline_exceeded")
+    return request.with_deadline(remaining * 1000)
+
+
 async def _invoke(selector, request, context):
     try:
         return await selector.select(request, context)
     except (AttemptFailure, RecommendationFailure, asyncio.CancelledError):
         raise
     except Exception:
-        if isinstance(selector, LexicalAssetSelector):
+        if _capability(selector, "builtin", False):
             raise AttemptFailure("unavailable", "selector_unavailable") from None
         raise
 
@@ -158,21 +184,9 @@ async def _observe(observer, event, budget):
 def _attempt(selector, ordinal, mechanism, outcome, reason, started, budget, parsed):
     data = None if parsed is None else parsed.to_json_object()
     costs = []
-    if isinstance(selector, LexicalAssetSelector):
-        costs.append(
-            {
-                "provenance": "observed",
-                "value": {
-                    "input_tokens": 0,
-                    "output_tokens": 0,
-                    "cached_tokens": 0,
-                    "reasoning_tokens": 0,
-                    "calls": 0,
-                    "cpu_ms": None,
-                    "peak_bytes": None,
-                },
-            }
-        )
+    observed = _capability(selector, "observed_cost")
+    if observed is not None:
+        costs.append({"provenance": "observed", "value": dict(observed)})
     if data is not None and data["usage_claims"] is not None:
         costs.append(data["usage_claims"])
     return dict(
@@ -193,7 +207,7 @@ async def select_assets(
     request: AssetSelectionRequest,
     *,
     primary: AssetSelector,
-    lexical_floor: LexicalAssetSelector | None,
+    lexical_floor: AssetSelector | None,
     budget: SelectionBudget,
     primary_ms: int,
     fallback_enabled: bool,
@@ -221,13 +235,14 @@ async def select_assets(
             if current.catalog_revision != request.data["catalog_revision"]:
                 raise RecommendationFailure("recommendation_unavailable", "stale_result")
             return _ready(
-                request, attempts, None, [], "empty_catalog", None, current.catalog_revision, budget
+                request, attempts, [], "empty_catalog", None, current.catalog_revision, budget
             )
         selectors = [primary]
+        # Lexical is never repeated as its own fallback.
         if (
             fallback_enabled
-            and not isinstance(primary, LexicalAssetSelector)
             and lexical_floor is not None
+            and _capability(primary, "mechanism") != _capability(lexical_floor, "mechanism")
         ):
             selectors.append(lexical_floor)
         for ordinal, selector in enumerate(selectors, 1):
@@ -245,10 +260,11 @@ async def select_assets(
                     raise AttemptFailure("timeout", "deadline_exceeded")
 
             context = SelectorContext(budget.clock.monotonic, check_attempt)
+            identity = SelectorIdentity(selector.name, selector.version)
             mechanism = (
                 "gateway_lexical_fallback"
                 if ordinal == 2
-                else getattr(selector, "mechanism", "selector")
+                else _capability(selector, "mechanism", "selector")
             )
             parsed = None
             outcome = reason = admission = None
@@ -258,7 +274,7 @@ async def select_assets(
                 observe,
                 AttemptStarted(
                     ordinal,
-                    SelectorIdentity(selector.name, selector.version),
+                    identity,
                     mechanism,
                     max(0, (deadline - started) * 1000),
                 ),
@@ -266,13 +282,9 @@ async def select_assets(
             )
             budget.check()
             try:
-                check_attempt()
+                budget.check()
                 raw = await _bounded(
-                    _invoke(
-                        selector,
-                        request.with_deadline((deadline - budget.clock.monotonic()) * 1000),
-                        context,
-                    ),
+                    _invoke(selector, _attempt_request(request, deadline, budget.clock), context),
                     budget,
                     deadline,
                 )
@@ -285,9 +297,8 @@ async def select_assets(
                 validate_against_offer(
                     parsed,
                     request,
-                    SelectorIdentity(selector.name, selector.version),
-                    fallback=ordinal == 2,
-                    http=getattr(selector, "transport", None) == "http",
+                    identity,
+                    http=_capability(selector, "transport") == "http",
                 )
                 check_attempt()
                 if ordinal == 1:
@@ -314,6 +325,9 @@ async def select_assets(
                 reason = "cancelled" if outcome == "cancelled" else "deadline_exceeded"
             except asyncio.CancelledError:
                 budget.cancel()
+                if _task_cancelled():
+                    raise
+                # A selector's own cancellation is a cancelled attempt.
                 outcome, reason = "cancelled", "cancelled"
             except Exception:
                 # Only a built-in dependency failure is a declared unavailable
@@ -331,7 +345,6 @@ async def select_assets(
                 return _ready(
                     request,
                     attempts,
-                    0,
                     parsed.data["candidates"],
                     parsed.data["decision"],
                     fallback_reason,
@@ -351,22 +364,23 @@ async def select_assets(
         raise RecommendationFailure(failure.code, failure.reason, attempts) from None
     except asyncio.CancelledError:
         budget.cancel()
+        if _task_cancelled():
+            raise
         raise RecommendationFailure("cancelled", "cancelled", attempts) from None
     except Exception:
         raise RecommendationFailure("internal_error", "internal_error", attempts) from None
 
 
-def _ready(
-    request, attempts, primary_attempt, candidates, decision, fallback_reason, revision, budget
-):
-    budget.check_before_commit()
+def _ready(request, attempts, candidates, decision, fallback_reason, revision, budget):
+    budget.check()
     value = dict(
         schema_version=1,
         decision=decision,
         catalog_revision=request.data["catalog_revision"],
         host_snapshot_revision=None,
         attempts=attempts,
-        primary_attempt=primary_attempt,
+        # The primary is always the first attempt; empty_catalog dispatches none.
+        primary_attempt=0 if attempts else None,
         base_candidates=candidates,
         base_decision=decision,
         final_candidates=candidates,
@@ -383,5 +397,5 @@ def _ready(
         host_run_ids=[],
     )
     result = parse_recommendation_result(value)
-    budget.check_before_commit()
+    budget.check()
     return result

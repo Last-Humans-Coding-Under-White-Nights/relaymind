@@ -39,7 +39,6 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, ValidationError
-from jsonschema.validators import extend
 from jsonschema_specifications import REGISTRY as _SPECIFICATIONS
 from referencing import Resource
 from referencing.exceptions import Unresolvable
@@ -47,7 +46,12 @@ from referencing.jsonschema import DRAFT202012, specification_with
 
 from relaymind.adapters.base import ToolSchema
 from relaymind.canonical import canonical_digest
-from relaymind.schema_util import first_schema_error, freeze_json, load_packaged_schema
+from relaymind.schema_util import (
+    StrictValidator,
+    first_schema_error,
+    freeze_json,
+    load_packaged_schema,
+)
 from relaymind.store import TraceClock
 
 # Section 11: two seconds unless a tool declares a shorter timeout.
@@ -55,42 +59,6 @@ MAX_TOOL_TIMEOUT_SECONDS = 2.0
 
 TOOL_RESULT_SCHEMA: dict[str, Any] = load_packaged_schema(__package__, "tool_result.v1.json")
 _RESULT_VALIDATOR = Draft202012Validator(TOOL_RESULT_SCHEMA)
-
-
-def _same_json(left: object, right: object) -> bool:
-    """JSON equality that keeps integers, floats, and booleans apart."""
-    if isinstance(left, bool) or isinstance(right, bool):
-        return type(left) is type(right) and left == right
-    if isinstance(left, int | float) and isinstance(right, int | float):
-        return type(left) is type(right) and left == right
-    if isinstance(left, Mapping) and isinstance(right, Mapping):
-        return left.keys() == right.keys() and all(_same_json(left[k], right[k]) for k in left)
-    if isinstance(left, list | tuple) and isinstance(right, list | tuple):
-        return len(left) == len(right) and all(map(_same_json, left, right))
-    return type(left) is type(right) and left == right
-
-
-def _strict_enum(validator: Any, enums: Any, instance: Any, schema: Any) -> Any:
-    if not any(_same_json(instance, item) for item in enums):
-        yield ValidationError("value is not one of the allowed values")
-
-
-def _strict_const(validator: Any, const: Any, instance: Any, schema: Any) -> Any:
-    if not _same_json(instance, const):
-        yield ValidationError("value is not the allowed value")
-
-
-def _is_strict_integer(checker: Any, instance: object) -> bool:
-    return isinstance(instance, int) and not isinstance(instance, bool)
-
-
-# RM09, section 9: draft 2020-12 counts 60.0 as an integer and as equal
-# to 60. The gateway does not: tool handlers get exactly the declared types.
-StrictValidator = extend(
-    Draft202012Validator,
-    validators={"enum": _strict_enum, "const": _strict_const},
-    type_checker=Draft202012Validator.TYPE_CHECKER.redefine("integer", _is_strict_integer),
-)
 
 
 def check_parameters_schema(schema: Mapping[str, Any]) -> None:

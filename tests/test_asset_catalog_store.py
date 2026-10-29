@@ -532,3 +532,25 @@ def test_changed_failure_exclusions_keep_parent_visible_revision_rule(tmp_path):
         record_failure(catalog, SourceFailure("invalid_data", rejected_count=2))
         assert catalog.revision() == 3
         assert publish_local(catalog, tmp_path / "source").revision == 4
+
+
+def test_rows_from_before_stale_bytes_are_normalized_on_open(tmp_path):
+    """RM34/AC25: an older row whose record bytes lack the effective stale flag stays usable."""
+    skill(tmp_path / "source")
+    db = tmp_path / "db"
+    with RunStore(db) as run_store:
+        catalog = facade(run_store)
+        publish_local(catalog, tmp_path / "source")
+        revision = catalog.snapshot().catalog_revision
+        with run_store.sql_transaction() as connection:
+            # The pre-0.52 writer set only the column and left record_json fresh.
+            connection.execute("UPDATE asset_catalog_assets SET stale=1")
+    with RunStore(db) as reopened:
+        catalog = facade(reopened)
+        restored = catalog.snapshot()
+        assert restored.assets[0].stale
+        assert json.loads(restored.record_bytes[0])["stale"] is True
+        assert catalog.search_documents()[0].record.stale
+        assert catalog.revision() == restored.catalog_revision == revision + 1
+        # Normalization runs once: a second open is a no-op.
+        assert facade(reopened).snapshot().catalog_revision == revision + 1

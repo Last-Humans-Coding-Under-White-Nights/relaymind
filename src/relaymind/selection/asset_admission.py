@@ -10,22 +10,13 @@ from relaymind.selection.asset_contract import (
     AttemptFailure,
     SelectorIdentity,
 )
+from relaymind.selection.chain import BUILT_IN_MECHANISMS, GATEWAY_MECHANISMS
 
-# v1 labels remain reserved without importing its routing/model context.
-_RESERVED = frozenset(
-    {
-        "native_function_calling",
-        "example_match",
-        "routing_cache",
-        "bypass",
-        "execution_mode",
-        "degraded_mode",
-        "clarification_resume",
-        "client_owned",
-        "selector_chain",
-        "lexical_overlap",
-        "gateway_lexical_fallback",
-    }
+# Every v1 gateway/built-in label stays reserved, plus the two v2 gateway labels.
+_RESERVED = (
+    GATEWAY_MECHANISMS
+    | frozenset(BUILT_IN_MECHANISMS)
+    | {"lexical_overlap", "gateway_lexical_fallback"}
 )
 AssetPolicy = Callable[[AssetRecord, AssetSelectionRequest], bool]
 
@@ -62,7 +53,6 @@ def validate_against_offer(
     request: AssetSelectionRequest,
     expected_identity: SelectorIdentity,
     *,
-    fallback=False,
     http=False,
 ) -> None:
     data, req = result.data, request.data
@@ -76,9 +66,8 @@ def validate_against_offer(
     mechanism = data["mechanism"]
     if mechanism == "gateway_lexical_fallback" or (http and mechanism in _RESERVED):
         _fail(result)
-    offered = {record["asset_id"]: record for record in req["catalog"]}
     for candidate in data["candidates"]:
-        record = offered.get(candidate["asset_id"])
+        record = request.offered.get(candidate["asset_id"])
         if record is None or candidate["kind"] not in req["requested_kinds"]:
             _fail(result)
         if any(candidate[key] != record[key] for key in ("kind", "content_hash", "source_version")):
@@ -105,10 +94,10 @@ def admit_current(
 ) -> AdmissionEvidence:
     if current.catalog_revision != request.data["catalog_revision"]:
         _fail(result, stale=True)
-    offered = {r["asset_id"]: r for r in request.data["catalog"]}
-    current_records = {r.asset_id: r for r in current.assets}
+    wanted = {candidate["asset_id"] for candidate in result.data["candidates"]}
+    current_records = {r.asset_id: r for r in current.assets if r.asset_id in wanted}
     for candidate in result.data["candidates"]:
-        old = offered[candidate["asset_id"]]
+        old = request.offered[candidate["asset_id"]]
         record = current_records.get(candidate["asset_id"])
         if record is None:
             _fail(result, stale=True)
