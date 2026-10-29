@@ -1484,7 +1484,7 @@ the measurement has run.
   failed tool is not a success (and is counted as ok but failed); a proposed
   call the host did not run is not a completed task; a denied exec passes
   only when nothing was written; a gateway tool execution, an uncorrelated
-  run, an expected tool no gateway run proposed, a timeout, and exit 130 or death by SIGINT
+  run, an expected tool no gateway run proposed, a timeout, and exit 130, death by SIGINT, or a Windows Ctrl-C exit
   (a host interrupt, with its own failure label apart from other exit
   statuses) fail or are counted; a host failover is counted apart and never an arm
   success, and a host error report that names no provider or model is a

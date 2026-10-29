@@ -1191,7 +1191,7 @@ An arm without its endpoint, credential, or local model is recorded as
 not_run; `relaymind_auto` needs both the external model and the local
 model. The host's `"ok": true` never counts as a success; a host failover
 (a reported provider or model other than the arm's) is counted apart, and
-so is a host interrupt (exit 130 or SIGINT). Interrupting the runner, during an arm's
+so is a host interrupt (exit 130, SIGINT, or Ctrl-C on Windows). Interrupting the runner, during an arm's
 setup or an attempt, keeps the attempts that ended: the export is written
 marked aborted and the runner exits 130; an interrupt during setup marks
 that arm and every arm not yet set up not_run, never ran. At the 8192-token local context an OpenClaw request does

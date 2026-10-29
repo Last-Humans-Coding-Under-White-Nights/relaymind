@@ -901,9 +901,11 @@ def test_a_local_inference_comparison_without_a_local_turn_says_so():
 # -- host interrupts -----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("exit_code", [130, -2])
+@pytest.mark.parametrize("exit_code", [130, -2, 0xC000013A])
 def test_a_host_interrupt_is_counted_apart_from_other_exit_statuses(exit_code):
-    """Exit 130, or a host that died of SIGINT (-2 from the runner), is an interrupt."""
+    """Exit 130, a host that died of SIGINT (-2 from the runner), or on Windows
+    one ended by Ctrl-C (STATUS_CONTROL_C_EXIT, unsigned as Python reports it)
+    is an interrupt."""
     grade = grade_attempt(
         TEXT,
         attempt(TEXT, host=None, exit_code=exit_code, status="failed", runs=[], window=[]),

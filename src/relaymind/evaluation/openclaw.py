@@ -55,9 +55,11 @@ HOST_TOOLS = frozenset(
 )
 ANY_VALUE = "*"
 MATCHERS = ("exact", "suffix", "contains")
-# The host's exit status after SIGINT (macOS probe and qualification), and the
-# runner's return code for a host that died of the signal itself.
-HOST_INTERRUPT_EXITS = frozenset({130, -2})
+# The host's exit status after SIGINT (macOS probe and qualification), the
+# runner's return code for a host that died of the signal itself, and on
+# Windows STATUS_CONTROL_C_EXIT for a host ended by Ctrl-C (Python reports
+# the exit code unsigned).
+HOST_INTERRUPT_EXITS = frozenset({130, -2, 0xC000013A})
 COMPARISONS = {
     "integration_overhead": ("relaymind_external_only", "direct"),
     "local_inference_auto": ("relaymind_auto", "relaymind_external_only"),

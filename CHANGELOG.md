@@ -298,8 +298,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   reason codes of the runs that left the local stage, so 0 local turns (what
   the 8192-token local context gives an OpenClaw turn, macOS qualification)
   is reported as a result with its reasons, and a local-inference comparison
-  without a local turn says so; a host that exits 130 or dies of SIGINT is a
-  host interrupt, apart from other exit statuses; an evaluation the operator
+  without a local turn says so; a host that exits 130 or dies of SIGINT (on
+  Windows, ends with STATUS_CONTROL_C_EXIT) is a host interrupt, apart from
+  other exit statuses; an evaluation the operator
   interrupts still writes its export, marked aborted, with the remaining
   slots not run, also when the interrupt lands in an arm's setup (the arm
   and every slot not run) or in the grading of an attempt that ended (the
