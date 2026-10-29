@@ -72,6 +72,7 @@ Deterministic transport fixtures are not live evidence (section 12.5).
 
 import argparse
 import asyncio
+import ipaddress
 import json
 import os
 import platform
@@ -142,7 +143,22 @@ def _machine_names() -> tuple[str, ...]:
                 continue
             if found.returncode == 0:
                 names.add(found.stdout.strip())
-    return tuple(sorted(n for n in names if n and n.lower() not in GENERIC_MACHINE_NAMES))
+    # A numeric name or an IP address (``127.0.1.1`` in some containers, and its
+    # label ``127``) names no machine, and replacing it would rewrite numbers.
+    return tuple(
+        sorted(
+            n for n in names if n and n.lower() not in GENERIC_MACHINE_NAMES and not _is_address(n)
+        )
+    )
+
+
+def _is_address(name: str) -> bool:
+    """A name of digits and dots, or an IP address of either family."""
+    try:
+        ipaddress.ip_address(name)
+    except ValueError:
+        return name.replace(".", "").isdigit()
+    return True
 
 
 # Read once, when the module loads.
@@ -152,19 +168,20 @@ MACHINE_NAMES = _machine_names()
 def mask_machine_names(text: str) -> str:
     """Replace the machine's names with ``<host>`` (RM12).
 
-    The runtime line's ``host=`` field goes whatever it holds. Each name in
-    ``MACHINE_NAMES`` of at least ``MIN_MACHINE_NAME`` characters goes as
-    written and in its JSON-escaped form (a curly apostrophe as ``\\u2019``),
-    since the text is often JSON.
+    Each name in ``MACHINE_NAMES`` of at least ``MIN_MACHINE_NAME`` characters
+    goes as a whole word, as written and in its JSON-escaped form (a curly
+    apostrophe as ``\\u2019``), since the text is often JSON. Then the runtime
+    line's ``host=`` field goes whatever it holds.
     """
-    text = RUNTIME_HOST_FIELD.sub(f"| host={MACHINE_PLACEHOLDER} |", text)
     forms: set[str] = set()
     for name in MACHINE_NAMES:
         if len(name) >= MIN_MACHINE_NAME:
             forms.update({name, json.dumps(name)[1:-1]})
     for form in sorted(forms, key=len, reverse=True):
-        text = text.replace(form, MACHINE_PLACEHOLDER)
-    return text
+        # Only as a whole word: ``dev`` goes, ``devDependency`` stays.
+        text = re.sub(rf"(?<![\w-]){re.escape(form)}(?![\w-])", MACHINE_PLACEHOLDER, text)
+    # After the names, so a computer name that holds `` | `` goes whole.
+    return RUNTIME_HOST_FIELD.sub(f"| host={MACHINE_PLACEHOLDER} |", text)
 
 
 def echo_call(call_id: str = "call_echo_1", text: str = "lantern") -> list:

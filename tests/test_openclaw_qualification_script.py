@@ -93,6 +93,37 @@ def test_the_listed_machine_names_are_masked_but_not_a_short_one(monkeypatch):
     ]
 
 
+def test_a_short_machine_name_is_masked_only_as_a_whole_word(monkeypatch):
+    """RM12: a three-letter name such as ``dev`` is ``<host>`` where it stands
+    alone, never inside another word (``devDependency``, ``runs``, ``macOS``)."""
+    monkeypatch.setattr(qualification, "MACHINE_NAMES", ("dev", "run", "mac"))
+    text = json.dumps({"devDependency": "runs on macOS", "host": "dev", "at": "dev.local"})
+    assert json.loads(qualification.mask_machine_names(text)) == {
+        "devDependency": "runs on macOS",
+        "host": "<host>",
+        "at": "<host>.local",
+    }
+
+
+def test_a_numeric_or_address_hostname_gives_no_machine_name(monkeypatch):
+    """RM12: a hostname that is an IP address (``127.0.1.1`` in some containers)
+    names no machine; its first label ``127`` would rewrite exit codes and ports."""
+    monkeypatch.setattr(qualification.socket, "gethostname", lambda: "127.0.1.1")
+    monkeypatch.setattr(qualification.platform, "node", lambda: "1234")
+    monkeypatch.setattr(qualification.sys, "platform", "linux")
+    assert qualification._machine_names() == ()
+
+
+def test_a_computer_name_with_a_pipe_is_masked_whole_in_the_runtime_line(monkeypatch):
+    """RM12: the runtime line's fields are separated by `` | ``, so a computer
+    name that holds one is masked as the machine's name before the field."""
+    monkeypatch.setattr(qualification, "MACHINE_NAMES", ("Work | MacBook",))
+    line = "Runtime: agent=main | host=Work | MacBook | repo=/r | os=macOS"
+    assert qualification.mask_machine_names(line) == (
+        "Runtime: agent=main | host=<host> | repo=/r | os=macOS"
+    )
+
+
 def test_the_machine_names_the_host_prints_or_sends_never_reach_the_export(tmp_path, monkeypatch):
     """RM12: the host's runtime line goes to the gateway (the runs) and to the
     host's output; the export keeps ``<host>`` in both, never the name."""
