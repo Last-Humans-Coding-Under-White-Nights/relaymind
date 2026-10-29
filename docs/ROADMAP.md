@@ -778,8 +778,10 @@ doubles; this is not a claim of a live-qualified or faster plugin.
   (it rejects `stream_options` by name, and the runs through the plugin's
   model completed), not by a wire capture. Windows host runs are not_run.
 - Remove the retired workflow steps placeholder from the demo UI
-  (#173; RM23, AC14). Independent of the plugin. Status: open in PR #176,
-  outside this stack; the placeholder is still rendered here.
+  (#173; RM23, AC14). Independent of the plugin. Implemented with model
+  doubles (`tests/test_demo_ui_trace.py`): the trace has no Workflow steps
+  section, the fixed parallel demo keeps its summary, and a stored trace
+  with the reserved `workflow` tool mechanism still renders.
 - Provider package, model catalog, configuration, and token handover
   (#136; RM12, RM19, RM26, RM33), after #135.
   Status: the package registers the `relaymind` provider through the

@@ -165,7 +165,9 @@ starts its own llama-server.
   pass, escaped labels, missing historical fields (not recorded), and
   values recorded as null (shown with their meaning). Placement projections
   use illustrative optional event fields; they are not measured predictions.
-  The Workflow steps placeholder is removed by #173 (RM30 retired).
+  The trace has no Workflow steps section (#173, RM30 retired): the fixed
+  parallel demo keeps its workflow summary (RM15, AC14), and a stored trace
+  with the reserved `workflow` tool mechanism (section 8) still renders.
 
   The page script (`app.js`) runs in a real browser with
   `pytest tests/test_demo_ui_browser.py` (#89, #127, spec 0.27 and 0.31): Playwright
