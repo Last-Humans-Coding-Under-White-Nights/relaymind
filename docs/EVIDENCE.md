@@ -3597,3 +3597,21 @@ immutable revision attachment. Human approval allow/deny is `not_run` without an
 initiating interactive operator surface. Exact commands, boundaries, source
 hashes and sanitized captures are in the
 [evidence record](evidence/2026-10-29-openclaw-command-qualification/README.md).
+
+## 2026-10-29 — M10 MCP provenance and tool exposure qualification (#190)
+
+Real pinned OpenClaw 2026.10.7 on Linux x86-64, Node 24.22.1 and MCP SDK 1.32.0,
+with the real RelayMind gateway/provider and deterministic model doubles.
+The [qualification report](evidence/2026-10-29-openclaw-mcp-qualification/README.md)
+records host-owned round trips for two same-name MCP tools whose server names
+collide after sanitization; schema refresh; disconnect; host denial and removal.
+Public same-instance normalized schema/provenance capture passed. The gateway
+executed zero tools. Disconnect retained an offered schema while execution
+failed; no availability claim is derived from presence.
+
+Authenticated operator inventory access is distinct from the third-party
+plugin's refused runtime request. Atomic session/turn/current availability
+revision binding remains unsupported by the qualified composition and requires
+a supported host integration decision in #187 before later MCP use. Human
+allow/deny approval, live-model task quality and supported-platform acceptance
+are not_run. Spec 0.50 RM08/RM09/RM12/RM16/RM33 and AC24 remain normative.

@@ -1270,3 +1270,14 @@ passes application/session command interception and native skill file loading.
 Verified person identity and command-to-library immutable revision attachment
 remain unqualified; real human allow/deny approval is `not_run`. These results
 do not add a production recommendation command or close M10 approval coverage.
+
+### MCP provenance and exposure qualification (#190)
+
+The test-only [MCP probe](test/host-mcp-qualification/README.md) uses real
+host-owned stdio servers and the existing provider with model doubles.
+The [recorded qualification](../../docs/evidence/2026-10-29-openclaw-mcp-qualification/README.md)
+proves duplicate-name isolation, actual calls and public same-instance normalized
+schema/provenance capture. A disconnected server retains its schema while calls
+fail. Current session/turn/availability revision binding remains unsupported by
+the qualified composition; MCP use and interactive approval acceptance remain
+open pending the #187 integration contract.
