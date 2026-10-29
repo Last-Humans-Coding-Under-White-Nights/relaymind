@@ -8,9 +8,10 @@ codebase.
 1. **The spec is the single source of truth.**
    [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md) defines what RelayMind
    does. Every implementation task and every acceptance test must reference
-   requirement IDs from it (RM01–RM33, AC01–AC24; RM30 and AC23 are retired;
+   requirement IDs from it (RM01–RM44, AC01–AC37; RM30 and AC23 are retired;
    RM33 and AC24 specify the M9 OpenClaw integration, added in 0.47 and
-   revised in 0.49 and 0.50; the spec is at 0.50). Implementation status
+   revised in 0.49 and 0.50; RM34–RM44 and AC25–AC37 define M10
+   recommendations in 0.51; the spec is at 0.51). Implementation status
    is recorded in docs/ROADMAP.md. If code and spec disagree,
    the spec wins. If the spec is wrong, revise the spec first, then change
    the code.
@@ -43,6 +44,38 @@ codebase.
 | `tests/` | Test suite; `tests/fixtures/` holds sandbox demo data; `tests/test_demo_ui_browser.py` runs the UI page script in Chromium (Playwright; `playwright install chromium`) |
 | `scripts/` | Developer scripts: model manifest generation (RM18), the live acceptance harness, the corpus runner (with its offline draft-pass regrade), the latency benchmark (RM25), `--runtime-extra-args` for a constrained runtime configuration (RM18, spec 0.31 section 12.2), the spikes in `scripts/probes/` (the offline ones over the corpus export, and the live timing probes of the runtime and of one provider), and the M9 OpenClaw scripts (`openclaw_qualification.py`, `openclaw_request_size.py`, `openclaw_install_check.py`, and the evaluation runner `run_openclaw_eval.py`; RM33, spec 0.50 section 12.5); `scripts/README.md` lists what exists |
 | `docs/` | Spec, architecture, roadmap, testing guide, live evidence record (`docs/EVIDENCE.md`, raw exports in `docs/evidence/`), and design rationale for spec revisions (`docs/design/`, not normative) |
+
+## Planned M10 ownership (spec 0.51; #187)
+
+These are planned components, not shipped files or runnable commands. Actual
+0.51 merge and implementation-issue RM/AC updates precede product edits.
+Managed selection v1/AC22 and the provider/host AC24 ownership remain unchanged.
+
+| Planned path | Owner and requirements |
+| --- | --- |
+| `src/relaymind/assets/`, `store/asset_catalog.py` | Catalog identities/safe projections/index publication/qualified refresh; RM34, RM38, RM43; AC25, AC29, AC34. No execution or unrestricted archive extraction. |
+| `src/relaymind/selection/asset_contract.py`, `asset_chain.py`, `asset_lexical.py`, v2 schemas | Recommendation-only v2 and separately attributed lexical fallback; RM35, AC26. Never feed v2 into managed runs. |
+| `src/relaymind/api/recommendations.py`, `store/recommendations.py`, separate store schemas | Independent recommendation lifecycle/events/idempotency/recovery; RM36, AC27. TraceEvent remains v1; no invented run ID. |
+| `src/relaymind/api/user_actions.py`, `store/asset_feedback.py` | Operator-registered backend action auth, independent choice/feedback CAS, retention/erasure; RM37, AC28. No public credential self-enrollment; only explicit corrections feed adaptation. |
+| `src/relaymind/selection/asset_hybrid.py`, `asset_adaptation.py` | Local pinned hybrid and bounded reversible correction adaptation; RM41, RM42; AC32, AC33. Inference/cost and base/final ranks stay explicit. |
+| `src/relaymind/evaluation/asset_corpus.py`, `asset_benchmark.py`, `evaluation/assets/`, `scripts/asset_selection_benchmark.py` | Original multilingual locks/independent labels and shared run/compare protocol; RM40, RM44; AC31, AC36, AC37. Toy data cannot pass final gates. |
+| `integrations/openclaw/` future recommendation adapter | Qualified direct action/exact skill and MCP use, host-only approvals/execution; RM39; AC30, AC35. Desired contract remains blocked pending further qualification and a later normative adapter revision. |
+
+The planned catalog reads ordinary bounded SKILL.md folders without a required
+managed manifest. Separate AssetMetadataImportV1 JSON imports bind configured
+source, staged original bytes/hashes and explicit complete/partial/tombstones;
+no omission-based external deletion or runtime availability assertion is allowed.
+
+[The M10 design](docs/design/2026-10-29-multilingual-asset-routing.md) and
+[roadmap](docs/ROADMAP.md) record MATRIX-COHORT/OVERLAP/RIGHTS/REFRESH and
+HOST-ACTION-AUTHORITY/EXACT-SKILL-USE/MCP-BINDING/MCP-CURRENTNESS blockers.
+The independent core is frozen; these production adapters are not
+implementation-ready. In 0.51 public host snapshot payloads/non-null bindings
+are rejected and runtime recommendation fails closed; discovery does not prove
+availability. Do not infer host support from source hooks or schema presence.
+No alternate source/host upgrade or milestone waiver is authorized. Only three
+customer defaults are approved, dated 29 October 2026 in the design. Planned
+paths/commands must not be described as already implemented.
 
 ## Ownership boundaries (do not blur these)
 

@@ -8,6 +8,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.50 → 0.51 (#187): allocate RM34–RM44 and AC25–AC37 for
+  multilingual skill/MCP recommendations, publish the design, planned component
+  ownership and issue/dependency mapping. Freeze the independent catalog,
+  recommendation-only selection v2, bounded lexical fallback, separate
+  API/state/events/idempotency, operator-registered backend action security,
+  privacy/erasure, indexing/refresh bounds and evaluation/platform gates.
+  Managed v1/AC22, existing provider/host AC24, retired RM30/AC23 and historical
+  evidence remain unchanged. Whole-task consumption, committed-metadata gateway
+  startup and explicit-import-to-required-refresh defaults were customer-approved
+  on 29 October 2026; other finite limits are builder decisions, not measurements.
+  Qualifications #188–#190 establish bounded capture/command/MCP capabilities
+  and explicit limits. Matrix cohort/overlap/rights/refresh and host authority/
+  exact-use/atomic MCP currentness remain blocked. Public snapshot payloads and
+  non-null host bindings are refused; runtime recommendations fail closed until
+  supported qualification and a subsequent normative adapter revision. Choice
+  records lifecycle action evidence only; explicit feedback has independent
+  revisions and only correction records feed adaptation. Product implementation,
+  live/source/quality/cost/platform acceptance and dependent issue-body updates
+  are not claimed by this documentation revision. Actual spec merge and final
+  issue mappings are required before dependent product code.
+
 - The M9 OpenClaw evaluation (#139; RM16, RM25, RM26, RM33; AC24; spec
   0.50 section 12.5), recorded in
   `docs/evidence/2026-10-29-openclaw-eval-apple-m1/` and checked by
