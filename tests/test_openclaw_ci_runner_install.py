@@ -141,8 +141,20 @@ def test_the_export_holds_no_token_and_no_machine_path(runner):
     assert export(runner)["token"] == install_check.NOT_RECORDED
     for path in ("/home/", "/Users/", "\\\\Users\\\\", "runneradmin", "/tmp/claude", "~/"):
         assert path not in raw, path
-    assert not re.search(r"[A-Za-z]:(\\\\|/)", raw.replace("http://", "").replace("https://", ""))
+    assert drive_paths(raw) == []
     assert "<repo>" in raw
+
+
+def drive_paths(text: str) -> list:
+    """Windows drive paths (``C:\\`` escaped in JSON, or ``C:/``); a URL scheme
+    such as ``ws://`` or ``http://`` ends in a letter after a letter, so it is none."""
+    return re.findall(r"(?<![A-Za-z])[A-Za-z]:(?:\\\\|/)", text)
+
+
+def test_the_drive_path_check_ignores_url_schemes():
+    text = json.dumps({"a": "ws://127.0.0.1:18789", "b": "http://x", "c": "file:///x"})
+    assert drive_paths(text) == []
+    assert drive_paths(json.dumps({"p": "C:\\Users\\a", "q": "D:/a"})) == ["C:\\\\", "D:/"]
 
 
 def runner_section():
