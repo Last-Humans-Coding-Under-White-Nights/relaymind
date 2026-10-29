@@ -479,6 +479,54 @@ def test_the_host_commands_directory_is_found_with_either_slash(monkeypatch):
     assert runner._command_dirs(["openclaw", "--flag"]) == []
 
 
+def test_the_home_relative_paths_the_host_prints_are_placeholders_too(tmp_path):
+    """RM12: the pinned host prints paths under the user's home as ``~/...``
+    (every skill ``<location>`` in its system prompt); the export replaces them
+    like the absolute forms, the checkout's as ``<repo>``, any other as ``<home>``."""
+    home = Path.home()
+    if not runner.ROOT.is_relative_to(home):
+        pytest.skip("the checkout is not under the user's home, so it has no ~/ form")
+    repo = "~/" + runner.ROOT.relative_to(home).as_posix()
+    prompt = (
+        "<available_skills>\n"
+        f"<location>{repo}/integrations/openclaw/node_modules/openclaw/skills/a/SKILL.md</location>\n"
+        "<location>~/elsewhere/file</location>\n"
+        "</available_skills>"
+    )
+    places = [
+        (tmp_path / "work", "<work>"),
+        (runner.ROOT, "<repo>"),
+        (home, "<home>"),
+    ]
+    # The export is JSON text, so the prompt reaches the sanitizer escaped.
+    text = runner._sanitize(json.dumps({"system": prompt}), [], places)
+    system = json.loads(text)["system"]
+    assert "~/" not in text
+    assert str(home) not in text
+    assert (
+        "<location><repo>/integrations/openclaw/node_modules/openclaw/skills/a/SKILL.md</location>"
+        in system
+    )
+    assert "<location><home>/elsewhere/file</location>" in system
+
+
+def test_the_host_runtime_line_machine_name_is_a_placeholder_in_the_export(tmp_path):
+    """RM12: the ``host=`` field of the runtime line the pinned host puts on every
+    user message (the macOS computer name) becomes ``host=<host>`` in the export,
+    as plain text and inside a JSON string (the macOS run of 29 October 2026)."""
+    line = (
+        "Runtime: agent=main | session=agent:main:explicit:1b2c | host=Example’s Mac"
+        " | repo=/r | os=macOS 27.0.1 (arm64) | node=v26.12.1"
+    )
+    expected = line.replace("host=Example’s Mac", "host=<host>")
+    places = [(tmp_path / "work", "<work>")]
+    assert runner._sanitize(line, [], places) == expected
+    for ensure_ascii in (False, True):
+        text = runner._sanitize(json.dumps({"user": line}, ensure_ascii=ensure_ascii), [], places)
+        assert "Example" not in text
+        assert json.loads(text)["user"] == expected
+
+
 def test_the_plugin_is_configured_with_the_arms_mode_and_its_diagnostics(evaluated):
     document, _out, _backend = evaluated
     assert document["arms"]["relaymind_auto"]["plugin_config"]["executionMode"] == "auto"

@@ -1562,6 +1562,10 @@ measurement is recorded apart (below), and
   host named in the export, the direct arm's host keeping the operator's
   proxy variables the way a gateway does (a RelayMind arm's host keeps
   none), and a task file that differs from its lock refused by the CLI.
+  The export replaces home-relative paths too (the host's `~/...` skill
+  locations: the checkout's as `<repo>`, any other as `<home>/...`, plain
+  and JSON-escaped), and the machine's name (the `host=` field of the host's
+  runtime line on every user message) becomes `<host>`.
   A dry run of the auto arm over a local double at the 8192-token context
   with a host-sized request (10,510 tokens, the count of the macOS live
   AC24 turn) sends every turn external: the attempts pass and the export
