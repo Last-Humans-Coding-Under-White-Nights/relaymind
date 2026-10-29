@@ -176,6 +176,9 @@ def test_no_file_holds_a_credential_or_a_machine_path():
             assert marker not in raw, (path.name, marker)
         for value in LONG_RUN.findall(raw):
             assert any(shape.fullmatch(value) for shape in KNOWN_SHAPES), (path.name, value[:12])
+        # The runtime line's host= field (the Mac's computer name) is <host> everywhere.
+        hosts = set(re.findall(r"\| host=([^|\n\"]+?) \|", raw))
+        assert hosts <= {"<host>"}, (path.name, hosts)
 
 
 # --- what the record states -----------------------------------------------------------------
