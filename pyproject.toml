@@ -59,6 +59,8 @@ markers = [
 target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
+# Recorded evidence (scratch scripts kept as run) is data, not repo code.
+extend-exclude = ["docs/evidence"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]

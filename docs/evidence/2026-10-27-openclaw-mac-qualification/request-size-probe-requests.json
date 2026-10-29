@@ -1,0 +1,224 @@
+{
+  "kind": "openclaw-request-size",
+  "method": "tokenizer",
+  "method_note": "token counts through the pinned runtime's chat template and tokenizer",
+  "local_limit": 8192,
+  "external_context_limit": null,
+  "note": "Fitting the local limit is necessary for local work, not sufficient: the local model must still produce an admissible answer or call (sections 7.2 and 11).",
+  "summary": {
+    "captured": 26,
+    "rejected": 19,
+    "measured": 7,
+    "fits_local": 0,
+    "share_fits_local": 0.0,
+    "auto": {
+      "local": 0,
+      "external_if_it_fits": 7
+    },
+    "local_only": {
+      "local": 0,
+      "needs_external": 7
+    },
+    "size_min": 10500,
+    "size_median": 10508,
+    "size_max": 10548
+  },
+  "requests": [
+    {
+      "source": "a1-hello-nocompat.json",
+      "exchange": 0,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "a2-readfile-nocompat.json",
+      "exchange": 0,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "a2-readfile-nocompat.json",
+      "exchange": 1,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "b1-hello-compat.json",
+      "exchange": 0,
+      "size": 10503,
+      "method": "tokenizer",
+      "messages": 2,
+      "tools": 11,
+      "fits_local": false
+    },
+    {
+      "source": "b2-readfile-compat.json",
+      "exchange": 0,
+      "size": 10508,
+      "method": "tokenizer",
+      "messages": 2,
+      "tools": 11,
+      "fits_local": false
+    },
+    {
+      "source": "b2-readfile-compat.json",
+      "exchange": 1,
+      "rejected": "invalid_request",
+      "message": "messages[2].content must be a string or an array of text parts"
+    },
+    {
+      "source": "c1-write-allow.json",
+      "exchange": 0,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "c1-write-allow.json",
+      "exchange": 1,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "c2-readfile-compat-base7.json",
+      "exchange": 0,
+      "size": 10507,
+      "method": "tokenizer",
+      "messages": 2,
+      "tools": 11,
+      "fits_local": false
+    },
+    {
+      "source": "c2-readfile-compat-base7.json",
+      "exchange": 1,
+      "size": 10547,
+      "method": "tokenizer",
+      "messages": 4,
+      "tools": 11,
+      "fits_local": false
+    },
+    {
+      "source": "c2-write-deny.json",
+      "exchange": 0,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "c3-exec-deny.json",
+      "exchange": 0,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "c3-exec-deny.json",
+      "exchange": 1,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "c4-exec-ask.json",
+      "exchange": 0,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "c4-exec-ask.json",
+      "exchange": 1,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "c5-exec-full.json",
+      "exchange": 0,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "c5-exec-full.json",
+      "exchange": 1,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "c6-exec-ask-touch.json",
+      "exchange": 0,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "c6-exec-ask-touch.json",
+      "exchange": 1,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "c7-exec-full-touch.json",
+      "exchange": 0,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "c7-exec-full-touch.json",
+      "exchange": 1,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "d1-hello-nostream.json",
+      "exchange": 0,
+      "size": 10500,
+      "method": "tokenizer",
+      "messages": 2,
+      "tools": 11,
+      "fits_local": false
+    },
+    {
+      "source": "d2-readfile-nostream.json",
+      "exchange": 0,
+      "size": 10508,
+      "method": "tokenizer",
+      "messages": 2,
+      "tools": 11,
+      "fits_local": false
+    },
+    {
+      "source": "d2-readfile-nostream.json",
+      "exchange": 1,
+      "size": 10548,
+      "method": "tokenizer",
+      "messages": 4,
+      "tools": 11,
+      "fits_local": false
+    },
+    {
+      "source": "p1-plugin-hello-storedkey.json",
+      "exchange": 0,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    },
+    {
+      "source": "s1-sigint.json",
+      "exchange": 0,
+      "rejected": "unsupported_parameter",
+      "message": "stream_options is not supported by this gateway"
+    }
+  ],
+  "manifest": "models/qwen3-0.6b-q8_0.manifest.json",
+  "sources": [
+    "a1-hello-nocompat.json",
+    "a2-readfile-nocompat.json",
+    "b1-hello-compat.json",
+    "b2-readfile-compat.json",
+    "c1-write-allow.json",
+    "c2-readfile-compat-base7.json",
+    "c2-write-deny.json",
+    "c3-exec-deny.json",
+    "c4-exec-ask.json",
+    "c5-exec-full.json",
+    "c6-exec-ask-touch.json",
+    "c7-exec-full-touch.json",
+    "d1-hello-nostream.json",
+    "d2-readfile-nostream.json",
+    "p1-plugin-hello-storedkey.json",
+    "s1-sigint.json"
+  ]
+}

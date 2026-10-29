@@ -1,0 +1,27 @@
+{
+  "plugins": {
+    "entries": {
+      "relaymind": {
+        "enabled": true,
+        "config": {
+          "baseUrl": "http://127.0.0.1:8080/v1"
+        }
+      }
+    }
+  },
+  "meta": {
+    "migrations": {
+      "modelPolicyAllowlist": true,
+      "utilityModelSeparation": true
+    },
+    "lastTouchedVersion": "2026.10.7"
+  },
+  "auth": {
+    "profiles": {
+      "relaymind:manual": {
+        "provider": "relaymind",
+        "mode": "api_key"
+      }
+    }
+  }
+}

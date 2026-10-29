@@ -1,0 +1,113 @@
+{
+  "fixture_version": 1,
+  "scenario": "stale-token",
+  "covers": "auth: a token from an earlier gateway launch is 401",
+  "captured_by": "scripts/openclaw_qualification.py fixtures (drive.mjs)",
+  "transport": "@openclaw/ai openai-completions, host transport policy",
+  "compat": "plugin",
+  "pins": {
+    "openclaw": "2026.10.7",
+    "@openclaw/ai": "2026.10.7",
+    "openai": "7.27.0"
+  },
+  "drive": {
+    "systemPrompt": "You are a test host. Use relaymind_test_echo when asked to echo.",
+    "prompt": "Say hello."
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/chat/completions",
+        "headers": {
+          "accept": "application/json",
+          "accept-encoding": "gzip, deflate",
+          "accept-language": "*",
+          "authorization": "<redacted>",
+          "connection": "keep-alive",
+          "content-length": "527",
+          "content-type": "application/json",
+          "host": "127.0.0.1:<port>",
+          "sec-fetch-mode": "cors",
+          "user-agent": "OpenAI/JS 7.27.0",
+          "x-stainless-arch": "<environment>",
+          "x-stainless-lang": "js",
+          "x-stainless-os": "<environment>",
+          "x-stainless-package-version": "7.27.0",
+          "x-stainless-retry-count": "0",
+          "x-stainless-runtime": "node",
+          "x-stainless-runtime-version": "<environment>"
+        },
+        "body": {
+          "model": "relaymind-client-tools",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a test host. Use relaymind_test_echo when asked to echo."
+            },
+            {
+              "role": "user",
+              "content": "Say hello."
+            }
+          ],
+          "stream": true,
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "relaymind_test_echo",
+                "description": "Sandbox host tool: returns its text argument. Executes nothing else.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "description": "The text to echo."
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          ],
+          "tool_choice": "auto"
+        }
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-length": "100",
+          "content-type": "application/json",
+          "date": "<date>",
+          "server": "uvicorn",
+          "www-authenticate": "Bearer"
+        },
+        "body": {
+          "error": {
+            "code": "unauthenticated",
+            "message": "a valid application token is required",
+            "run_id": null
+          }
+        }
+      },
+      "client_closed_early": false
+    }
+  ],
+  "results": [
+    {
+      "stop_reason": "error",
+      "text": "",
+      "tool_calls": [],
+      "error_message": "401 a valid application token is required",
+      "events": [
+        "error"
+      ],
+      "usage_reported_by_gateway": false
+    }
+  ],
+  "host_tool_executions": [],
+  "gateway_runs": []
+}

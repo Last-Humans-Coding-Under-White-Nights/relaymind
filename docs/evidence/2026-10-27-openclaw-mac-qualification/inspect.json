@@ -1,0 +1,182 @@
+{
+  "workspaceDir": "<scratch>/qoc/state/workspace",
+  "plugin": {
+    "id": "relaymind",
+    "name": "RelayMind",
+    "description": "RelayMind local gateway as an OpenClaw model provider (relaymind-client-tools; OpenClaw keeps its tools)",
+    "packageVersion": "0.1.0",
+    "version": "0.1.0",
+    "builtWithOpenClawVersion": "2026.10.7",
+    "packageName": "@relaymind/openclaw-provider",
+    "format": "openclaw",
+    "source": "<scratch>/qoc/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider/dist/index.js",
+    "rootDir": "<scratch>/qoc/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider",
+    "origin": "global",
+    "workspaceDir": "<scratch>/qoc/state/workspace",
+    "trust": {
+      "reason": "origin-path",
+      "registryPath": "<scratch>/qoc/state/state/openclaw.sqlite",
+      "origin": "global",
+      "installSource": "npm",
+      "installSpec": "@relaymind/openclaw-provider@0.1.0"
+    },
+    "enabled": true,
+    "compat": [],
+    "explicitlyEnabled": true,
+    "activated": true,
+    "activationSource": "explicit",
+    "activationReason": "enabled in config",
+    "syntheticAuthRefs": [],
+    "status": "loaded",
+    "toolNames": [],
+    "hookNames": [],
+    "channelIds": [],
+    "cliBackendIds": [],
+    "providerIds": [
+      "relaymind"
+    ],
+    "embeddingProviderIds": [],
+    "speechProviderIds": [],
+    "realtimeTranscriptionProviderIds": [],
+    "realtimeVoiceProviderIds": [],
+    "mediaUnderstandingProviderIds": [],
+    "transcriptSourceProviderIds": [],
+    "imageGenerationProviderIds": [],
+    "videoGenerationProviderIds": [],
+    "musicGenerationProviderIds": [],
+    "webFetchProviderIds": [],
+    "webSearchProviderIds": [],
+    "migrationProviderIds": [],
+    "contextEngineIds": [],
+    "agentHarnessIds": [],
+    "cliCommands": [],
+    "services": [],
+    "gatewayDiscoveryServiceIds": [],
+    "commands": [],
+    "httpRoutes": 0,
+    "hookCount": 0,
+    "configSchema": true,
+    "configJsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseUrl"
+      ],
+      "properties": {
+        "baseUrl": {
+          "type": "string",
+          "description": "The gateway's loopback /v1 URL, such as http://127.0.0.1:8080/v1 (localhost, 127.0.0.0/8, or [::1] only)."
+        },
+        "executionMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "local_only",
+            "external_only"
+          ],
+          "default": "auto",
+          "description": "Sent as X-RelayMind-Execution-Mode on every request. parallel_demo is not a mode of this alias."
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Copies of the gateway's configured limits; a limit not set is not advertised.",
+          "properties": {
+            "externalContextLimit": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "external_model.context_limit of the gateway's launch file; the window advertised in auto and external_only."
+            },
+            "localContextLimit": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The local context of the pinned model manifest's launch settings; the window advertised in local_only."
+            },
+            "maxCompletionTokens": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "chat.max_completion_tokens of the gateway's launch file; the advertised output limit."
+            }
+          }
+        }
+      }
+    },
+    "imported": true,
+    "dependencyStatus": {
+      "hasDependencies": false,
+      "installed": true,
+      "requiredInstalled": true,
+      "optionalInstalled": true,
+      "missing": [],
+      "missingOptional": [],
+      "dependencies": [],
+      "optionalDependencies": []
+    }
+  },
+  "shape": "plain-capability",
+  "capabilityMode": "plain",
+  "capabilityCount": 1,
+  "capabilities": [
+    {
+      "kind": "text-inference",
+      "ids": [
+        "relaymind"
+      ]
+    }
+  ],
+  "typedHooks": [],
+  "customHooks": [],
+  "tools": [],
+  "commands": [],
+  "cliCommands": [],
+  "services": [],
+  "decisions": [],
+  "gatewayDiscoveryServices": [],
+  "gatewayMethods": [],
+  "mcpServers": [],
+  "lspServers": [],
+  "httpRouteCount": 0,
+  "bundleCapabilities": [],
+  "diagnostics": [],
+  "policy": {
+    "allowedModels": [],
+    "hasAllowedModelsConfig": false
+  },
+  "compatibility": [],
+  "install": {
+    "source": "npm",
+    "spec": "@relaymind/openclaw-provider@0.1.0",
+    "sourcePath": "<scratch>/qual/pack/relaymind-openclaw-provider-0.1.0.tgz",
+    "installPath": "<scratch>/qoc/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1/node_modules/@relaymind/openclaw-provider",
+    "version": "0.1.0",
+    "resolvedName": "@relaymind/openclaw-provider",
+    "resolvedVersion": "0.1.0",
+    "resolvedSpec": "@relaymind/openclaw-provider@0.1.0",
+    "integrity": "sha512-MJrKDFQhOv9cT3n+vpi68x0j9V5p/Pg4eUZbgUiZMs2vsvY9MOaBi+0T7YDgVPIrBFnsUC8LgR4rS3nemfCfNg==",
+    "shasum": "abfa71628709132bd275823aa7bce9e5b8386236",
+    "resolvedAt": "2026-10-27T17:08:27.889Z",
+    "installedAt": "2026-10-27T17:08:35.859Z",
+    "artifactKind": "npm-pack",
+    "artifactFormat": "tgz",
+    "npmIntegrity": "sha512-MJrKDFQhOv9cT3n+vpi68x0j9V5p/Pg4eUZbgUiZMs2vsvY9MOaBi+0T7YDgVPIrBFnsUC8LgR4rS3nemfCfNg==",
+    "npmShasum": "abfa71628709132bd275823aa7bce9e5b8386236",
+    "npmTarballName": "relaymind-openclaw-provider-0.1.0.tgz",
+    "acceptedSurface": {
+      "channels": [],
+      "providers": [
+        "relaymind"
+      ],
+      "tools": [],
+      "contracts": [],
+      "hooks": [],
+      "mcpServers": [],
+      "cliCommands": [],
+      "cliBackends": [],
+      "skills": [],
+      "dangerousConfigFlags": []
+    },
+    "acceptedSurfaceHash": "d0b287698c3b4c4a5272c29b514431ff392e1940a8c1c1252466888420e1669d",
+    "acceptedSurfaceAt": "2026-10-27T17:08:35.858Z",
+    "acceptedSurfaceIntegrity": "sha512-MJrKDFQhOv9cT3n+vpi68x0j9V5p/Pg4eUZbgUiZMs2vsvY9MOaBi+0T7YDgVPIrBFnsUC8LgR4rS3nemfCfNg=="
+  }
+}

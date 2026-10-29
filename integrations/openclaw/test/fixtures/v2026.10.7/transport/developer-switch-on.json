@@ -1,0 +1,153 @@
+{
+  "fixture_version": 1,
+  "scenario": "developer-switch-on",
+  "covers": "text: the developer switch on puts runtime context after the first user message",
+  "captured_by": "scripts/openclaw_qualification.py fixtures (drive.mjs)",
+  "transport": "@openclaw/ai openai-completions, host transport policy",
+  "compat": "plugin-modified",
+  "pins": {
+    "openclaw": "2026.10.7",
+    "@openclaw/ai": "2026.10.7",
+    "openai": "7.27.0"
+  },
+  "drive": {
+    "systemPrompt": "You are a test host. Use relaymind_test_echo when asked to echo.",
+    "compat": {
+      "supportsDeveloperRole": true
+    },
+    "prompt": "Second question.",
+    "history": [
+      {
+        "role": "user",
+        "content": "First question."
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "First answer."
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "relaymind",
+        "model": "relaymind-client-tools",
+        "stopReason": "stop"
+      },
+      {
+        "role": "user",
+        "content": "Runtime context: the cwd is /tmp.",
+        "runtimeContext": {
+          "retained": true
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/chat/completions",
+        "headers": {
+          "accept": "application/json",
+          "accept-encoding": "gzip, deflate",
+          "accept-language": "*",
+          "authorization": "<redacted>",
+          "connection": "keep-alive",
+          "content-length": "691",
+          "content-type": "application/json",
+          "host": "127.0.0.1:<port>",
+          "sec-fetch-mode": "cors",
+          "user-agent": "OpenAI/JS 7.27.0",
+          "x-stainless-arch": "<environment>",
+          "x-stainless-lang": "js",
+          "x-stainless-os": "<environment>",
+          "x-stainless-package-version": "7.27.0",
+          "x-stainless-retry-count": "0",
+          "x-stainless-runtime": "node",
+          "x-stainless-runtime-version": "<environment>"
+        },
+        "body": {
+          "model": "relaymind-client-tools",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a test host. Use relaymind_test_echo when asked to echo."
+            },
+            {
+              "role": "user",
+              "content": "First question."
+            },
+            {
+              "role": "assistant",
+              "content": "First answer."
+            },
+            {
+              "role": "developer",
+              "content": "Runtime context: the cwd is /tmp."
+            },
+            {
+              "role": "user",
+              "content": "Second question."
+            }
+          ],
+          "stream": true,
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "relaymind_test_echo",
+                "description": "Sandbox host tool: returns its text argument. Executes nothing else.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "description": "The text to echo."
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          ],
+          "tool_choice": "auto"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-length": "133",
+          "content-type": "application/json",
+          "date": "<date>",
+          "server": "uvicorn"
+        },
+        "body": {
+          "error": {
+            "code": "invalid_request",
+            "message": "messages[3]: system and developer messages must come before the others",
+            "run_id": null
+          }
+        }
+      },
+      "client_closed_early": false
+    }
+  ],
+  "results": [
+    {
+      "stop_reason": "error",
+      "text": "",
+      "tool_calls": [],
+      "error_message": "400 messages[3]: system and developer messages must come before the others",
+      "events": [
+        "error"
+      ],
+      "usage_reported_by_gateway": false
+    }
+  ],
+  "host_tool_executions": [],
+  "gateway_runs": []
+}

@@ -1,0 +1,3 @@
+Plugin: RelayMind (relaymind)
+Will remove: plugin settings, install record, directory: <scratch>/hoc/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1
+Uninstall plugin "relaymind"? [y/N] Error: plugins uninstall requires confirmation input. Re-run in an interactive TTY or pass --force.

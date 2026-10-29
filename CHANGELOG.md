@@ -8,6 +8,50 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- OpenClaw compatibility qualification (#135; RM33, AC24):
+  `integrations/openclaw/` pins `openclaw` and `@openclaw/ai` 2026.10.7
+  and declares the host switches (`src/compat.ts`); a Node driver runs the
+  pinned `openai-completions` transport against the real gateway over model
+  doubles (`tests/test_openclaw_host_transport.py`); 16 sanitized,
+  reproducible wire fixtures are frozen under
+  `integrations/openclaw/test/fixtures/v2026.10.7/`; the field-by-field
+  compatibility table is in `docs/design/2026-10-27-openclaw-integration.md`.
+  `scripts/openclaw_qualification.py` captures the fixtures and runs an
+  operator's real host against a doubles gateway;
+  `scripts/openclaw_request_size.py` reports captured request sizes against
+  the local limit. The real-host probe on macOS (OpenClaw 2026.10.7,
+  `docs/evidence/2026-10-27-openclaw-mac-probe/`) captured the host's own
+  requests; `tests/test_openclaw_host_captures.py` checks them with the
+  gateway's validator. The macOS real-host qualification
+  (`docs/evidence/2026-10-27-openclaw-mac-qualification/`, commit tested
+  `a52f8bf`) counted them with the pinned tokenizer: 0 of 3 fresh host
+  requests and 0 of 7 probe requests fit the 8192-token local limit
+  (10,500 to 10,577 tokens), and a live AC24 turn in auto without an
+  external model (config-row workaround, #136: a `models.providers` row,
+  not the plugin's model) ended needs_external / context_limit with 0 model
+  calls (`tests/test_openclaw_mac_qualification.py`). The harness host
+  scenarios against the gateway over doubles failed at `a52f8bf` (#136,
+  #137). The local context stays
+  8192, so in practice OpenClaw turns go external in auto and get
+  needs_external in local_only. The plugin itself is #136's.
+- Specification 0.49, OpenClaw host facts recorded on the wire (#135; RM33,
+  section 7.5): at v2026.10.7 the host's defaults for a loopback URL send
+  `stream_options` and, for a reasoning model, `reasoning_effort`; the
+  developer role is off by default there, and a developer switch turned on
+  places runtime context after the first user message. The plugin must also
+  keep the strict message keys, tool result name, and assistant-after-tool-result
+  switches off. The host refuses a request over the advertised context window
+  before sending it, so the window the plugin advertises is the larger limit
+  of the effective mode (external in auto and external_only). The real host
+  confirmed the loopback defaults and the switches on macOS for a config-file
+  provider (switches on a plugin-supplied model are not_run; #136 must show
+  them on the wire), and showed that
+  it rewrites the tool call IDs it replays (underscores removed, the same in
+  the call and its result): nothing may match a later request to an earlier
+  proposal by the exact ID string. The host decorates the user message, and
+  a request over the UTF-8 byte bound is undecided, never needs_external,
+  until a tokenizer count; a count of sanitized captures is a lower bound and
+  never proves a fit. No gateway contract change.
 - Specification 0.48, unsuitable detection from local stages (#170; RM26, RM27;
   section 14.4.7): the run store records, for every local stage, whether it ran out of
   local time, and handoff.started names the budget that stopped the local stage.

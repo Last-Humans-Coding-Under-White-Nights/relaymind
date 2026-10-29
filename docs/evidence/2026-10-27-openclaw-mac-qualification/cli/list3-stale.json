@@ -1,0 +1,101 @@
+{
+  "count": 10,
+  "models": [
+    {
+      "key": "claude-cli/claude-haiku-5-5",
+      "name": "Claude Haiku 5.5 (Claude CLI)",
+      "input": "text+image",
+      "contextWindow": 1000000,
+      "local": null,
+      "available": true,
+      "tags": []
+    },
+    {
+      "key": "claude-cli/claude-opus-5-5",
+      "name": "Claude Opus 5.5 (Claude CLI)",
+      "input": "text+image",
+      "contextWindow": 1000000,
+      "local": null,
+      "available": true,
+      "tags": []
+    },
+    {
+      "key": "claude-cli/claude-opus-5",
+      "name": "Claude Opus 5 (Claude CLI)",
+      "input": "text+image",
+      "contextWindow": 1000000,
+      "local": null,
+      "available": true,
+      "tags": []
+    },
+    {
+      "key": "claude-cli/claude-sonnet-5-5",
+      "name": "Claude Sonnet 5.5 (Claude CLI)",
+      "input": "text+image",
+      "contextWindow": 1000000,
+      "local": null,
+      "available": true,
+      "tags": []
+    },
+    {
+      "key": "claude-cli/claude-sonnet-5",
+      "name": "Claude Sonnet 5 (Claude CLI)",
+      "input": "text+image",
+      "contextWindow": 1000000,
+      "local": null,
+      "available": true,
+      "tags": []
+    },
+    {
+      "key": "claude-cli/claude-fable-5-1",
+      "name": "Claude Fable 5.1 (Claude CLI)",
+      "input": "text+image",
+      "contextWindow": 1000000,
+      "local": null,
+      "available": true,
+      "tags": []
+    },
+    {
+      "key": "claude-cli/claude-fable-5",
+      "name": "Claude Fable 5 (Claude CLI)",
+      "input": "text+image",
+      "contextWindow": 1000000,
+      "local": null,
+      "available": true,
+      "tags": []
+    },
+    {
+      "key": "claude-cli/claude-opus-4-7",
+      "name": "Claude Opus 4.7 (Claude CLI)",
+      "input": "text+image",
+      "contextWindow": 200000,
+      "local": null,
+      "available": true,
+      "tags": []
+    },
+    {
+      "key": "claude-cli/claude-sonnet-4-6",
+      "name": "Claude Sonnet 4.6 (Claude CLI)",
+      "input": "text+image",
+      "contextWindow": 200000,
+      "local": null,
+      "available": true,
+      "tags": []
+    },
+    {
+      "key": "claude-cli/claude-opus-4-6",
+      "name": "Claude Opus 4.6 (Claude CLI)",
+      "input": "text+image",
+      "contextWindow": 200000,
+      "local": null,
+      "available": true,
+      "tags": []
+    }
+  ],
+  "providerOutcomes": [
+    {
+      "provider": "relaymind",
+      "status": "auth-rejected"
+    }
+  ]
+}

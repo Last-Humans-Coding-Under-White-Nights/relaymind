@@ -1,0 +1,2 @@
+[agent/embedded] tool-search: cataloged 40 tools behind compact prompt surface
+[state/agent-db] agent database clean-close receipt: active-leases

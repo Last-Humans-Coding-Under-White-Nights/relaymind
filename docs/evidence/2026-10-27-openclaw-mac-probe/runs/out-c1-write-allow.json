@@ -1,0 +1,35 @@
+{
+  "ok": true,
+  "status": "ok",
+  "final": "The tool returned. First line: Successfully wrote 17 bytes to <scratch>/work/c1-write-allow/probe-out.txt",
+  "payloads": [
+    {
+      "text": "The tool returned. First line: Successfully wrote 17 bytes to <scratch>/work/c1-write-allow/probe-out.txt",
+      "mediaUrl": null
+    }
+  ],
+  "usage": {
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "cost": {
+      "total": 0
+    }
+  },
+  "codeModeEngaged": false,
+  "assistantTurns": 2,
+  "bridgeCalls": {
+    "search": 0,
+    "describe": 0,
+    "call": 0
+  },
+  "toolSummary": {
+    "calls": 1,
+    "tools": [
+      "write"
+    ],
+    "failures": 0
+  },
+  "model": "relaymind-client-tools",
+  "provider": "relaymind-capture",
+  "sessionId": "07ebf45f-d784-4f49-8f3a-81f8ffe92f56"
+}

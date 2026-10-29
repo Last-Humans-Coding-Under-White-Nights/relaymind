@@ -1,0 +1,6 @@
+Plugin: RelayMind test host tools (relaymind-test-host-tools)
+Will remove: plugin settings, install record, directory: <scratch>/hoc/state/extensions/relaymind-test-host-tools
+Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present
+Config warnings: plugins.entries.relaymind: plugin disabled (disabled in config) but config is present
+Uninstalled plugin "relaymind-test-host-tools". Removed: plugin settings, install record, directory.
+Saved for the next Gateway start.

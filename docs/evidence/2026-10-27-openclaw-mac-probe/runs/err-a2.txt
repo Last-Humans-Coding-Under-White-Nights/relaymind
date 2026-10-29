@@ -1,0 +1,6 @@
+[agent/embedded] tool-search: cataloged 40 tools behind compact prompt surface
+[agents/agent-command] [agent] run 2619f4ba-9f6b-453b-b499-cba80a47f73d ended with stopReason=stop
+[trajectory] retention deferred until the next append: WorkerTaskError: Session history database read was revoked
+[state/agent-db] agent database clean-close receipt: active-leases
+[state/agent-db] agent database clean-close receipt: active-leases
+[state/agent-db] agent database clean-close receipt: lease-not-held

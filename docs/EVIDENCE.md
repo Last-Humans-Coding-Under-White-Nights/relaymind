@@ -3046,3 +3046,92 @@ above) could change the balance; a later revision may measure that.
 A first live run at `74780a0` is not kept: it ran while the offline analysis was
 decompressing archives, and its local_only prompts included simple-01, which
 routes to the parallel workflow, so the streak never reached three.
+
+## 2026-10-27 — OpenClaw host qualification and request size (#135, spec 0.49)
+
+Two tiers ran; neither used a live model. The pinned `@openclaw/ai`
+2026.10.7 transport ran against the gateway over model doubles on a Linux
+x86-64 VPS (Node v24.22.1), recorded as fixtures in
+`integrations/openclaw/test/fixtures/v2026.10.7/transport/`. A real host,
+`OpenClaw 2026.10.7 (157d8c2)` on macOS 27.0.1 arm64 (Node v26.12.1, npm
+11.20.0), ran `openclaw agent exec` against the probe's own capture server,
+not against the gateway; its sanitized captures and answers are in
+[`docs/evidence/2026-10-27-openclaw-mac-probe/`](evidence/2026-10-27-openclaw-mac-probe/REPORT.md),
+and `tests/test_openclaw_host_captures.py` checks them with the gateway's
+validator. Both are contract evidence, not live evidence (spec section 12.5).
+The tokenizer count and one live AC24 turn were measured later on the same Mac
+([next entry](#2026-10-27--openclaw-request-size-by-tokenizer-and-live-ac24-turn-135-macos-apple-m1)).
+
+| Item | Status | Evidence or command |
+| --- | --- | --- |
+| Real host request capture (system prompt, tool catalog, history) | ran (macOS, capture server) | `docs/evidence/2026-10-27-openclaw-mac-probe/requests/` |
+| Real OpenClaw host against the gateway over doubles (text, host tool) | ran on macOS at `a52f8bf` and failed (`checks.passed` false; next entry); fixes in #136 and #137 | `scripts/openclaw_qualification.py host` (see `integrations/openclaw/README.md`) |
+| Captured request sizes, UTF-8 upper bound | ran offline on the sanitized captures (`--sanitized`): 7 measured, 0 proved to fit, 7 undecided; superseded by the tokenizer count | `docs/evidence/2026-10-27-openclaw-request-size-mac-probe-utf8.json` |
+| Captured request sizes, tokenizer count against the local limit (8192, `qwen3-0.6b-q8_0`), share that fits in auto and local_only | measured (macOS, next entry): 0 of 3 fresh host requests and 0 of 7 probe requests fit | `docs/evidence/2026-10-27-openclaw-mac-qualification/request-size.json` |
+| Switches on a plugin-supplied model (catalog or `resolveDynamicModel`) | not_run: the switch runs used a config-file provider; the one plugin-model run declared none and sent `stream_options` | #136 |
+
+The size report read the 26 captured chat requests. The gateway's validator
+rejects 19 of them: 18 were sent without the switches (`stream_options`), and
+one is the follow-up turn whose tool linkage `strictMessageKeys: true` stripped.
+The 7 sent with the switches measure 37,544 to 37,841 UTF-8 bytes of prompt
+fields (median 37,576; two or four messages, eleven tools). A byte count only
+bounds the token count from above, so none of them is decided against the
+8192-token local limit by this bound. The stored captures are sanitized and
+smaller than what the host sent (about 26,700 system prompt characters stored
+against 29,942 received; about 40,450 body bytes as received), so a tokenizer
+count on them is only a lower bound on each host request; the deciding count
+ran on fresh, unsanitized captures (next entry).
+
+Other host facts recorded in the probe: the host removes underscores from the
+tool call ID it replays (`call_probe_1` came back as `callprobe1`, in the call
+and its result); it decorates the user message with a timestamp and a runtime
+line; it accepts a response without `usage`; it never refused the loopback base
+URL. Not checked there: the login prompt, the env-var credential path, a
+catalog timeout, turn-ID stability on retry, plugin-tool approval, and Windows.
+
+The size share is the number #139's local-value hypothesis depends on; it is
+recorded, with its method, in the next entry.
+
+## 2026-10-27 — OpenClaw request size by tokenizer and live AC24 turn (#135), macOS, Apple M1
+
+Operator runs on one Mac, recorded in
+[`docs/evidence/2026-10-27-openclaw-mac-qualification/`](evidence/2026-10-27-openclaw-mac-qualification/REPORT.md)
+(steps 3 and 5). Measured, not estimated.
+
+| Item | Value |
+| --- | --- |
+| Machine | Apple M1, 8 GiB, macOS 27.0.1 (26A434), arm64 |
+| Host | `OpenClaw 2026.10.7 (157d8c2)`, Node v26.12.1, npm 11.20.0; host state isolated with `OPENCLAW_HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_CONFIG_PATH`, and `--config` |
+| Runtime and model | llama-server b11785 (`b11785-8baabd53b`, `/props` `n_ctx` 8192), `models/Qwen3-0.6B-Q8_0.gguf` matching `models/qwen3-0.6b-q8_0.manifest.json` |
+| Gateway | real `relaymind serve --config`, Python 3.14.9; no external model configured |
+| Commit tested | `a52f8bf93f1e7a6a2ff37d21e259529f62221141` (the #137 branch tip before the probe follow-ups) |
+| Method | `scripts/openclaw_request_size.py --base-url`: the pinned runtime's chat template and tokenizer (`method: tokenizer`) |
+
+| Source | Measured | Fit 8192 | Tokens (min / median / max) | Report |
+| --- | --- | --- | --- | --- |
+| Fresh host captures as sent (text and tool turns; 2 or 4 messages, 11 tools) | 3 | 0 (0%) | 10,513 / 10,535 / 10,577 | `request-size.json` |
+| Probe captures (26 captured; 19 rejected by the gateway's validator) | 7 | 0 (0%) | 10,500 / 10,508 / 10,548 | `request-size-probe-requests.json` |
+
+The probe captures are sanitized, so their counts are lower bounds; over the
+limit, a lower bound still decides. In both sets local_only gives
+needs_external for every request and auto needs the external model for every
+one; the smallest request is about 2,300 tokens over the limit before any
+completion budget.
+
+Live AC24 turn: `openclaw agent exec ... "Say hello"` against the real
+gateway in auto, with the pinned local model and no external model (the host
+used a config-row provider, because at `a52f8bf` the plugin's model was unknown
+to `agent exec`; #136). Run `run_88306e1afed84dd09ea317bb29d611c7` ended
+`failed` with `needs_external` / `context_limit`, detail "the request needs
+10510 (tokenizer); the local limit is 8192", 0 model calls and 0 external
+calls; every event's actor is `gateway`. The host exited 1 with the gateway's
+422. Files: `live/gateway-run.json`, `live/gateway-run-events.txt`.
+
+Decision (27 October 2026): the local context stays 8192; no runtime, manifest,
+or spec change. At that context no measured OpenClaw request fits locally, so in
+practice every OpenClaw turn goes external in auto and gets needs_external in
+local_only. #139's local-inference arm is expected to show 0 local turns at
+this context. The same report records the plugin and harness runs at
+`a52f8bf` (install, token setup, abort passed; the harness host scenarios
+failed); those belong to #136 to #138 and are not claimed here. No Linux or
+Windows run of these steps exists; they stay not_run.

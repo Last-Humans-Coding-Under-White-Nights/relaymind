@@ -1,0 +1,2 @@
+{"t":"2026-10-27T15:14:57.659Z","event":"request","method":"POST","path":"/v1/chat/completions","file":"001-POST-_v1_chat_completions.json"}
+{"t":"2026-10-27T15:14:57.660Z","event":"reply_plan","plan":{"text":"hello from probe"},"stream":true}

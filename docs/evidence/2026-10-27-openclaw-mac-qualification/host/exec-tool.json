@@ -1,0 +1,35 @@
+{
+  "ok": true,
+  "status": "ok",
+  "final": "Captured by the RelayMind qualification endpoint.",
+  "payloads": [
+    {
+      "text": "Captured by the RelayMind qualification endpoint.",
+      "mediaUrl": null
+    }
+  ],
+  "usage": {
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "cost": {
+      "total": 0
+    }
+  },
+  "codeModeEngaged": false,
+  "assistantTurns": 2,
+  "bridgeCalls": {
+    "search": 0,
+    "describe": 0,
+    "call": 0
+  },
+  "toolSummary": {
+    "calls": 1,
+    "tools": [
+      "read"
+    ],
+    "failures": 0
+  },
+  "model": "relaymind-client-tools",
+  "provider": "relaymind-capture",
+  "sessionId": "4d3e9ad2-74fa-4cbe-9331-4763097a2d4a"
+}

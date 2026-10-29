@@ -2,6 +2,40 @@
 
 ## Current
 
+- `openclaw_qualification.py` — the OpenClaw qualification harness
+  (#135; RM33, AC24). It serves the real gateway over the model doubles
+  of `tests/`. `fixtures` runs every scenario through the pinned host
+  transport (`integrations/openclaw/test/host-transport/drive.mjs`) and
+  writes the sanitized, deterministic fixtures; `host -- <command>` runs
+  an operator command such as a real `openclaw agent exec` with the
+  gateway URL and token in its environment only, and exports every run
+  and trace event without the token (a command that cannot start is
+  not_run). Deterministic doubles, not live evidence.
+
+  ```bash
+  python scripts/openclaw_qualification.py fixtures \
+      --out-dir integrations/openclaw/test/fixtures/v2026.10.7/transport
+  python scripts/openclaw_qualification.py host --out <export.json> -- <command>
+  ```
+- `openclaw_request_size.py` — the size of captured OpenClaw requests
+  against the local input limit (#135; RM13, RM26, section 7.5). Each
+  request is validated as the gateway does and measured with
+  `measure_request`: tokenizer counts through a running llama-server
+  (`--base-url`), or the labeled UTF-8 upper bound, under which a request
+  over the limit is undecided. It reads the fixture layout and the host
+  probe's one-request-per-file layout, and reports the share that fits the
+  manifest's `ctx_size` and what auto and local_only do with the rest.
+  The deciding tokenizer count runs on fresh captures as the host sent
+  them (`integrations/openclaw/README.md`); the stored probe captures are
+  sanitized and smaller, so a run on them passes `--sanitized` and every
+  size is a lower bound.
+
+  ```bash
+  python scripts/openclaw_request_size.py \
+      --fixtures <unsanitized captures> \
+      --manifest models/qwen3-0.6b-q8_0.manifest.json \
+      [--base-url http://127.0.0.1:8033] [--sanitized] --out <report.json>
+  ```
 - `gen_model_manifest.py` — generate a model artifact manifest from a
   GGUF file (RM18, spec section 6). Hashes are computed from the
   artifact, never written by hand. Manifests live in `models/`; the

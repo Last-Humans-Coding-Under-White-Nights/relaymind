@@ -1,0 +1,7 @@
+
+> @relaymind/openclaw-provider@0.1.0 pack:check
+> npm run build && node scripts/pack-check.mjs
+
+npm notice run @relaymind/openclaw-provider@0.1.0 build
+npm notice run node scripts/clean-dist.mjs && tsc -p tsconfig.build.json
+pack check passed: relaymind-openclaw-provider-0.1.0.tgz (12 files): README.md, dist/catalog.js, dist/compat.js, dist/config.js, dist/diagnostics.js, dist/index.js, dist/input-guard.js, dist/provider.js, dist/redaction.js, dist/stream.js, openclaw.plugin.json, package.json

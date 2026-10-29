@@ -1,0 +1,60 @@
+{
+  "plugins": {
+    "entries": {
+      "relaymind": {
+        "enabled": true,
+        "config": {
+          "baseUrl": "http://127.0.0.1:8080/v1"
+        }
+      }
+    }
+  },
+  "meta": {
+    "migrations": {
+      "modelPolicyAllowlist": true,
+      "utilityModelSeparation": true
+    },
+    "lastTouchedVersion": "2026.10.7"
+  },
+  "auth": {
+    "profiles": {
+      "relaymind:manual": {
+        "provider": "relaymind",
+        "mode": "api_key"
+      }
+    }
+  },
+  "models": {
+    "providers": {
+      "relaymind": {
+        "baseUrl": "http://127.0.0.1:8080/v1",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "relaymind-client-tools",
+            "name": "RelayMind client-owned tools (config row)",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "compat": {
+              "supportsUsageInStreaming": false,
+              "supportsStrictMode": false,
+              "supportsReasoningEffort": false,
+              "supportsDeveloperRole": false,
+              "maxTokensField": "max_completion_tokens",
+              "supportsJsonSchemaResponseFormat": false,
+              "supportsPromptCacheKey": false,
+              "supportsStore": false,
+              "strictMessageKeys": false,
+              "requiresToolResultName": false,
+              "requiresAssistantAfterToolResult": false,
+              "requiresStringContent": false,
+              "supportsTools": true
+            }
+          }
+        ]
+      }
+    }
+  }
+}

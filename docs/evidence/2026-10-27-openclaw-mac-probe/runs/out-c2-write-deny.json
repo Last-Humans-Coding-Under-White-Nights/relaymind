@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "status": "ok",
+  "final": "hello from probe",
+  "payloads": [
+    {
+      "text": "hello from probe",
+      "mediaUrl": null
+    }
+  ],
+  "usage": {
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "cost": {
+      "total": 0
+    }
+  },
+  "codeModeEngaged": false,
+  "assistantTurns": 1,
+  "bridgeCalls": {
+    "search": 0,
+    "describe": 0,
+    "call": 0
+  },
+  "model": "relaymind-client-tools",
+  "provider": "relaymind-capture",
+  "sessionId": "d8c71708-5be6-41c4-a378-7eab3255e3c5"
+}

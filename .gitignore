@@ -10,3 +10,4 @@ dist/
 *.gguf
 .env
 /.superpowers/
+integrations/openclaw/node_modules/

@@ -1,0 +1,142 @@
+{
+  "workspaceDir": "<scratch>/hoc/state/workspace",
+  "plugin": {
+    "id": "relaymind-test-host-tools",
+    "name": "RelayMind test host tools",
+    "description": "Test only: disposable sandbox tools for the RelayMind host qualification",
+    "packageVersion": "0.1.0",
+    "version": "0.1.0",
+    "builtWithOpenClawVersion": "2026.10.7",
+    "packageName": "@relaymind/openclaw-test-host-tools",
+    "format": "openclaw",
+    "source": "<scratch>/hoc/state/extensions/relaymind-test-host-tools/index.js",
+    "rootDir": "<scratch>/hoc/state/extensions/relaymind-test-host-tools",
+    "origin": "global",
+    "workspaceDir": "<scratch>/hoc/state/workspace",
+    "trust": {
+      "reason": "origin-path",
+      "registryPath": "<scratch>/hoc/state/state/openclaw.sqlite",
+      "origin": "global",
+      "installSource": "path"
+    },
+    "enabled": true,
+    "compat": [],
+    "explicitlyEnabled": true,
+    "activated": true,
+    "activationSource": "explicit",
+    "activationReason": "enabled in config",
+    "syntheticAuthRefs": [],
+    "status": "loaded",
+    "toolNames": [],
+    "hookNames": [],
+    "channelIds": [],
+    "cliBackendIds": [],
+    "providerIds": [],
+    "embeddingProviderIds": [],
+    "speechProviderIds": [],
+    "realtimeTranscriptionProviderIds": [],
+    "realtimeVoiceProviderIds": [],
+    "mediaUnderstandingProviderIds": [],
+    "transcriptSourceProviderIds": [],
+    "imageGenerationProviderIds": [],
+    "videoGenerationProviderIds": [],
+    "musicGenerationProviderIds": [],
+    "webFetchProviderIds": [],
+    "webSearchProviderIds": [],
+    "migrationProviderIds": [],
+    "contextEngineIds": [],
+    "agentHarnessIds": [],
+    "cliCommands": [],
+    "services": [],
+    "gatewayDiscoveryServiceIds": [],
+    "commands": [],
+    "httpRoutes": 0,
+    "hookCount": 1,
+    "configSchema": true,
+    "configJsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "imported": true,
+    "dependencyStatus": {
+      "hasDependencies": false,
+      "installed": true,
+      "requiredInstalled": true,
+      "optionalInstalled": true,
+      "missing": [],
+      "missingOptional": [],
+      "dependencies": [],
+      "optionalDependencies": []
+    }
+  },
+  "shape": "hook-only",
+  "capabilityMode": "none",
+  "capabilityCount": 0,
+  "capabilities": [],
+  "typedHooks": [
+    {
+      "name": "before_tool_call"
+    }
+  ],
+  "customHooks": [],
+  "tools": [],
+  "commands": [],
+  "cliCommands": [],
+  "services": [],
+  "decisions": [],
+  "gatewayDiscoveryServices": [],
+  "gatewayMethods": [],
+  "mcpServers": [],
+  "lspServers": [],
+  "httpRouteCount": 0,
+  "bundleCapabilities": [],
+  "diagnostics": [
+    {
+      "level": "error",
+      "pluginId": "relaymind-test-host-tools",
+      "source": "<scratch>/hoc/state/extensions/relaymind-test-host-tools/index.js",
+      "message": "plugin must declare contracts.tools before registering agent tools"
+    },
+    {
+      "level": "error",
+      "pluginId": "relaymind-test-host-tools",
+      "source": "<scratch>/hoc/state/extensions/relaymind-test-host-tools/index.js",
+      "message": "plugin must declare contracts.tools before registering agent tools"
+    }
+  ],
+  "policy": {
+    "allowedModels": [],
+    "hasAllowedModelsConfig": false
+  },
+  "compatibility": [
+    {
+      "pluginId": "relaymind-test-host-tools",
+      "code": "hook-only",
+      "compatCode": "hook-only-plugin-shape",
+      "severity": "info",
+      "message": "is hook-only. This remains a supported compatibility path, but it has not migrated to explicit capability registration yet."
+    }
+  ],
+  "install": {
+    "source": "path",
+    "sourcePath": "<home>/Playground/relaymind/integrations/openclaw/test/host-tool-plugin",
+    "installPath": "<scratch>/hoc/state/extensions/relaymind-test-host-tools",
+    "version": "0.1.0",
+    "installedAt": "2026-10-27T17:13:06.970Z",
+    "acceptedSurface": {
+      "channels": [],
+      "providers": [],
+      "tools": [],
+      "contracts": [],
+      "hooks": [],
+      "mcpServers": [],
+      "cliCommands": [],
+      "cliBackends": [],
+      "skills": [],
+      "dangerousConfigFlags": []
+    },
+    "acceptedSurfaceHash": "e9ee055fdf3a7d0f5c8f4db342886ceca40fecac78cbd94febb73acd562e45fd",
+    "acceptedSurfaceAt": "2026-10-27T17:13:06.969Z"
+  }
+}

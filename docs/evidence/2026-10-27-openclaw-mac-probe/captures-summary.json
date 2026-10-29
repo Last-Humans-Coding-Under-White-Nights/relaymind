@@ -1,0 +1,1965 @@
+{
+  "a1-hello-nocompat": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40462,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 29942,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "a2-readfile-nocompat": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40494,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 29942,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    },
+    {
+      "file": "002-POST-_v1_chat_completions.json",
+      "body_bytes": 40738,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 29942,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [
+        [
+          "role",
+          "content",
+          "tool_call_id"
+        ]
+      ],
+      "tool_message_has_name": [
+        false
+      ],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "b1-hello-compat": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40422,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": "<absent>",
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 29942,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "b2-readfile-compat": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40454,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": "<absent>",
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 29942,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    },
+    {
+      "file": "002-POST-_v1_chat_completions.json",
+      "body_bytes": 40551,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": "<absent>",
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 29942,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [
+        [
+          "role",
+          "content"
+        ]
+      ],
+      "tool_message_has_name": [
+        false
+      ],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "c1-write-allow": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40572,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 30026,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    },
+    {
+      "file": "002-POST-_v1_chat_completions.json",
+      "body_bytes": 41007,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 30026,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [
+        [
+          "role",
+          "content",
+          "tool_call_id"
+        ]
+      ],
+      "tool_message_has_name": [
+        false
+      ],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "c2-readfile-compat-base7": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40454,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": "<absent>",
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 29942,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    },
+    {
+      "file": "002-POST-_v1_chat_completions.json",
+      "body_bytes": 40698,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": "<absent>",
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 29942,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [
+        [
+          "role",
+          "content",
+          "tool_call_id"
+        ]
+      ],
+      "tool_message_has_name": [
+        false
+      ],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "c2-write-deny": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40224,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 29998,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 10,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "c3-exec-deny": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40571,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 30012,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    },
+    {
+      "file": "002-POST-_v1_chat_completions.json",
+      "body_bytes": 40935,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 30012,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [
+        [
+          "role",
+          "content",
+          "tool_call_id"
+        ]
+      ],
+      "tool_message_has_name": [
+        false
+      ],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "c4-exec-ask": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40564,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 30005,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    },
+    {
+      "file": "002-POST-_v1_chat_completions.json",
+      "body_bytes": 40919,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 30005,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [
+        [
+          "role",
+          "content",
+          "tool_call_id"
+        ]
+      ],
+      "tool_message_has_name": [
+        false
+      ],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "c5-exec-full": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40571,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 30012,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    },
+    {
+      "file": "002-POST-_v1_chat_completions.json",
+      "body_bytes": 40835,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 30012,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [
+        [
+          "role",
+          "content",
+          "tool_call_id"
+        ]
+      ],
+      "tool_message_has_name": [
+        false
+      ],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "c6-exec-ask-touch": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40602,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 30047,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    },
+    {
+      "file": "002-POST-_v1_chat_completions.json",
+      "body_bytes": 41295,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 30047,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [
+        [
+          "role",
+          "content",
+          "tool_call_id"
+        ]
+      ],
+      "tool_message_has_name": [
+        false
+      ],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "c7-exec-full-touch": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40609,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 30054,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    },
+    {
+      "file": "002-POST-_v1_chat_completions.json",
+      "body_bytes": 40866,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 30054,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [
+        [
+          "role",
+          "content",
+          "tool_call_id"
+        ]
+      ],
+      "tool_message_has_name": [
+        false
+      ],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "d1-hello-nostream": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40423,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": "<absent>",
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 29942,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "d2-readfile-nostream": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40455,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": "<absent>",
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 29942,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    },
+    {
+      "file": "002-POST-_v1_chat_completions.json",
+      "body_bytes": 40699,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": "<absent>",
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 29942,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [
+        [
+          "role",
+          "content",
+          "tool_call_id"
+        ]
+      ],
+      "tool_message_has_name": [
+        false
+      ],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "p0-models-refresh": [
+    {
+      "file": "001-GET-_v1_models.json",
+      "method": "GET",
+      "path": "/v1/models",
+      "body_bytes": 0
+    }
+  ],
+  "p1-plugin-hello-storedkey": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 33672,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 43,
+        "authorization__matches_expected_index": 1,
+        "content-type": "application/json",
+        "idempotency-key": "test-123",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-probe-turn-state": "8ca64aeb-2e21-4fe1-99d4-3609a188b93d:1",
+        "x-relaymind-execution-mode": "auto",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 23192,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ],
+  "s1-sigint": [
+    {
+      "file": "001-POST-_v1_chat_completions.json",
+      "body_bytes": 40511,
+      "headers_of_interest": {
+        "accept": "application/json",
+        "authorization": "Bearer <redacted>",
+        "authorization__token_length": 18,
+        "authorization__matches_expected_index": 0,
+        "content-type": "application/json",
+        "user-agent": "OpenAI/JS 7.27.0",
+        "x-stainless-arch": "arm64",
+        "x-stainless-lang": "js",
+        "x-stainless-os": "MacOS",
+        "x-stainless-package-version": "7.27.0",
+        "x-stainless-retry-count": "0",
+        "x-stainless-runtime": "node",
+        "x-stainless-runtime-version": "v26.12.1",
+        "accept-language": "*",
+        "accept-encoding": "gzip, deflate"
+      },
+      "top_level": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "stream_options": "object",
+        "tools": "array",
+        "tool_choice": "string",
+        "max_completion_tokens": "number"
+      },
+      "watched": {
+        "stream_options": {
+          "include_usage": true
+        },
+        "strict": "<absent>",
+        "reasoning_effort": "<absent>",
+        "store": "<absent>",
+        "prompt_cache_key": "<absent>",
+        "parallel_tool_calls": "<absent>"
+      },
+      "tools_with_function_strict": "<none>",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "system_or_developer": [
+        {
+          "role": "system",
+          "chars": 29991,
+          "content_type": "string"
+        }
+      ],
+      "tool_message_keys": [],
+      "tool_message_has_name": [],
+      "assistant_after_tool_result": [],
+      "message_keys_beyond_basic": [],
+      "tool_count": 11,
+      "tool_names": [
+        "apply_patch",
+        "edit",
+        "exec",
+        "ls",
+        "process",
+        "read",
+        "sessions_yield",
+        "tool_call",
+        "tool_describe",
+        "tool_search",
+        "write"
+      ],
+      "tool_choice": "auto"
+    }
+  ]
+}

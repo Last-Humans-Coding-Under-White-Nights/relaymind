@@ -748,6 +748,24 @@ This is planned integration, not a claim of a working or faster plugin.
   for a loopback URL (they send `stream_options`, which the gateway
   rejects) and the token size of its requests against the local input
   limit, which bounds how much host work can run locally.
+  Status (spec 0.49): the pinned transport ran against the gateway over
+  model doubles, with 16 frozen wire fixtures and the compatibility table
+  in the design doc; no gateway contract change is needed. A real host
+  (2026.10.7, macOS) ran against a capture server; its requests are in
+  `docs/evidence/2026-10-27-openclaw-mac-probe/` and stay inside section
+  7.1 with the switches on a config-file provider; the switches on a
+  plugin-supplied model are not_run (#136 must show them). Their size is
+  measured on macOS with the pinned tokenizer: 0 of 3 fresh host requests
+  and 0 of 7 probe requests fit the 8192 local limit (10,500 to 10,577
+  tokens), and a live AC24 turn in auto without an external model ended
+  needs_external / context_limit with 0 model calls (config-row
+  workaround, #136: a `models.providers` row, not the plugin's model)
+  (`docs/evidence/2026-10-27-openclaw-mac-qualification/`). The local
+  context stays 8192: in practice OpenClaw turns go external in auto and
+  get needs_external in local_only, and #139 reports that. The real host
+  against the gateway over doubles ran on the same Mac at `a52f8bf` and
+  failed (harness host scenarios 4a to 4c, `checks.passed` false; the
+  fixes belong to #136 and #137). Linux and Windows host runs are not_run.
 - Remove the retired workflow steps placeholder from the demo UI
   (#173; RM23, AC14). Independent of the plugin. Implemented with model
   doubles (`tests/test_demo_ui_trace.py`): the trace has no Workflow steps

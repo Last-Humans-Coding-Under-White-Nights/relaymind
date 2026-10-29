@@ -1,0 +1,9 @@
+WARNING - Installing plugin from local npm-pack archive: npm-pack:<scratch>/qual/pack/relaymind-openclaw-provider-0.1.0.tgz
+This source is outside ClawHub review and trust metadata. Only continue if you trust the publisher, package contents, and install source.
+Installing to <scratch>/qoc/state/npm/projects/relaymind-openclaw-provider-fcf0101bf1…
+Installing <scratch>/qual/pack/relaymind-openclaw-provider-0.1.0.tgz into <scratch>/qoc/state/npm/projects/.openclaw-install-stage-EIGbtZ…
+Linked peerDependency "openclaw" -> <scratch>/prefix/lib/node_modules/openclaw
+Plugin manifest id "relaymind" differs from npm package name "@relaymind/openclaw-provider"; using manifest id as the config key.
+Installed plugin "relaymind" without enabling it because it requires configuration first. Configure it, then run `openclaw plugins enable relaymind`.
+Installed plugin: relaymind
+Saved for the next Gateway start.

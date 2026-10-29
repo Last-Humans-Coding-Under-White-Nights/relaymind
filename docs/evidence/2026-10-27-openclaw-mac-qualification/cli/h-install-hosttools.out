@@ -1,0 +1,7 @@
+WARNING - Installing plugin from local path: integrations/openclaw/test/host-tool-plugin
+This source is outside ClawHub review and trust metadata. Only continue if you trust the publisher, package contents, and install source.
+Plugin manifest id "relaymind-test-host-tools" differs from npm package name "@relaymind/openclaw-test-host-tools"; using manifest id as the config key.
+Installing to <scratch>/hoc/state/extensions/relaymind-test-host-tools…
+Linked peerDependency "openclaw" -> <scratch>/prefix/lib/node_modules/openclaw
+Installed plugin: relaymind-test-host-tools
+Saved for the next Gateway start.

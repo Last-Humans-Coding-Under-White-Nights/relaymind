@@ -1,0 +1,3 @@
+Plugin: RelayMind test host tools (relaymind-test-host-tools)
+Will remove: plugin settings, install record, directory: <scratch>/hoc/state/extensions/relaymind-test-host-tools
+Uninstall plugin "relaymind-test-host-tools"? [y/N] Error: plugins uninstall requires confirmation input. Re-run in an interactive TTY or pass --force.

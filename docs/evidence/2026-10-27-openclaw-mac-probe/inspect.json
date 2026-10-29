@@ -1,0 +1,142 @@
+{
+  "workspaceDir": "<scratch>/oc/state/workspace",
+  "plugin": {
+    "id": "probe",
+    "name": "Probe",
+    "description": "Throwaway provider plugin for the RelayMind Mac probe.",
+    "packageVersion": "0.1.2",
+    "version": "0.1.2",
+    "builtWithOpenClawVersion": "2026.10.7",
+    "packageName": "openclaw-plugin-probe",
+    "format": "openclaw",
+    "source": "<scratch>/oc/state/npm/projects/openclaw-plugin-probe__openclaw-generation__g-96471dd94c6116df/node_modules/openclaw-plugin-probe/dist/index.js",
+    "rootDir": "<scratch>/oc/state/npm/projects/openclaw-plugin-probe__openclaw-generation__g-96471dd94c6116df/node_modules/openclaw-plugin-probe",
+    "origin": "global",
+    "workspaceDir": "<scratch>/oc/state/workspace",
+    "trust": {
+      "reason": "origin-path",
+      "registryPath": "<scratch>/oc/state/state/openclaw.sqlite",
+      "origin": "global",
+      "installSource": "npm",
+      "installSpec": "openclaw-plugin-probe@0.1.2"
+    },
+    "enabled": true,
+    "compat": [],
+    "explicitlyEnabled": true,
+    "activated": true,
+    "activationSource": "explicit",
+    "activationReason": "enabled in config",
+    "syntheticAuthRefs": [],
+    "status": "loaded",
+    "toolNames": [],
+    "hookNames": [],
+    "channelIds": [],
+    "cliBackendIds": [],
+    "providerIds": [
+      "probe"
+    ],
+    "embeddingProviderIds": [],
+    "speechProviderIds": [],
+    "realtimeTranscriptionProviderIds": [],
+    "realtimeVoiceProviderIds": [],
+    "mediaUnderstandingProviderIds": [],
+    "transcriptSourceProviderIds": [],
+    "imageGenerationProviderIds": [],
+    "videoGenerationProviderIds": [],
+    "musicGenerationProviderIds": [],
+    "webFetchProviderIds": [],
+    "webSearchProviderIds": [],
+    "migrationProviderIds": [],
+    "contextEngineIds": [],
+    "agentHarnessIds": [],
+    "cliCommands": [],
+    "services": [],
+    "gatewayDiscoveryServiceIds": [],
+    "commands": [],
+    "httpRoutes": 0,
+    "hookCount": 0,
+    "configSchema": true,
+    "configJsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "imported": true,
+    "dependencyStatus": {
+      "hasDependencies": false,
+      "installed": true,
+      "requiredInstalled": true,
+      "optionalInstalled": true,
+      "missing": [],
+      "missingOptional": [],
+      "dependencies": [],
+      "optionalDependencies": []
+    }
+  },
+  "shape": "plain-capability",
+  "capabilityMode": "plain",
+  "capabilityCount": 1,
+  "capabilities": [
+    {
+      "kind": "text-inference",
+      "ids": [
+        "probe"
+      ]
+    }
+  ],
+  "typedHooks": [],
+  "customHooks": [],
+  "tools": [],
+  "commands": [],
+  "cliCommands": [],
+  "services": [],
+  "decisions": [],
+  "gatewayDiscoveryServices": [],
+  "gatewayMethods": [],
+  "mcpServers": [],
+  "lspServers": [],
+  "httpRouteCount": 0,
+  "bundleCapabilities": [],
+  "diagnostics": [],
+  "policy": {
+    "allowedModels": [],
+    "hasAllowedModelsConfig": false
+  },
+  "compatibility": [],
+  "install": {
+    "source": "npm",
+    "spec": "openclaw-plugin-probe@0.1.2",
+    "sourcePath": "<scratch>/openclaw-plugin-probe-0.1.2.tgz",
+    "installPath": "<scratch>/oc/state/npm/projects/openclaw-plugin-probe__openclaw-generation__g-96471dd94c6116df/node_modules/openclaw-plugin-probe",
+    "version": "0.1.2",
+    "resolvedName": "openclaw-plugin-probe",
+    "resolvedVersion": "0.1.2",
+    "resolvedSpec": "openclaw-plugin-probe@0.1.2",
+    "integrity": "sha512-v81xmTCQQx3DhetpWSvPsSLm/y4HF1gRA/M91JAiir+rgDsn+YwOYTfK8YnM4wyuPNF/l7vbD3qYKgor5ABKxA==",
+    "shasum": "99699d511b1018a82f3a350ff00ab87304ad4234",
+    "resolvedAt": "2026-10-27T15:28:42.214Z",
+    "installedAt": "2026-10-27T15:28:44.067Z",
+    "artifactKind": "npm-pack",
+    "artifactFormat": "tgz",
+    "npmIntegrity": "sha512-v81xmTCQQx3DhetpWSvPsSLm/y4HF1gRA/M91JAiir+rgDsn+YwOYTfK8YnM4wyuPNF/l7vbD3qYKgor5ABKxA==",
+    "npmShasum": "99699d511b1018a82f3a350ff00ab87304ad4234",
+    "npmTarballName": "openclaw-plugin-probe-0.1.2.tgz",
+    "acceptedSurface": {
+      "channels": [],
+      "providers": [
+        "probe"
+      ],
+      "tools": [],
+      "contracts": [],
+      "hooks": [],
+      "mcpServers": [],
+      "cliCommands": [],
+      "cliBackends": [],
+      "skills": [],
+      "dangerousConfigFlags": []
+    },
+    "acceptedSurfaceHash": "4036a00559fb4a4897b2b669209fda98ceba5b1cb8716c9b5c7ef939eb4b8acf",
+    "acceptedSurfaceAt": "2026-10-27T15:28:44.066Z",
+    "acceptedSurfaceIntegrity": "sha512-v81xmTCQQx3DhetpWSvPsSLm/y4HF1gRA/M91JAiir+rgDsn+YwOYTfK8YnM4wyuPNF/l7vbD3qYKgor5ABKxA=="
+  }
+}
