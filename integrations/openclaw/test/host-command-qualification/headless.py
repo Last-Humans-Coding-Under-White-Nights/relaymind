@@ -14,7 +14,7 @@ from relaymind.api.chat import ClientToolsChat
 
 def run(host_home: Path, work: Path, out: Path) -> dict:
     """Use an existing disposable probe config as input to a fresh headless sandbox."""
-    config = json.loads((host_home / "openclaw.json").read_text())
+    config = json.loads((host_home / "openclaw.json").read_text(encoding="utf-8"))
     work.mkdir(parents=True, exist_ok=False)
     for name in ("home", "state", "sandbox", "exec-state"):
         (work / name).mkdir()
@@ -42,7 +42,7 @@ def run(host_home: Path, work: Path, out: Path) -> dict:
             env["RELAYMIND_APP_TOKEN"] = token_of(app)
             config["plugins"]["entries"]["relaymind"]["config"]["baseUrl"] = running.base_url
             config_path = Path(env["OPENCLAW_CONFIG_PATH"])
-            config_path.write_text(json.dumps(config))
+            config_path.write_text(json.dumps(config), encoding="utf-8")
             subprocess.run(
                 HOST + ["models", "auth", "paste-api-key", "--provider", "relaymind"],
                 env=env,
@@ -91,7 +91,7 @@ def run(host_home: Path, work: Path, out: Path) -> dict:
             if token_of(app) in serialized:
                 raise RuntimeError("credential reached export")
             out.parent.mkdir(parents=True, exist_ok=True)
-            out.write_text(qualification.mask_machine_names(serialized) + "\n")
+            out.write_text(qualification.mask_machine_names(serialized) + "\n", encoding="utf-8")
             return exported
     finally:
         gateway.store.close()
