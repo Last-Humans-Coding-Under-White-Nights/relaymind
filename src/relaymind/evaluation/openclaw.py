@@ -572,6 +572,10 @@ def grade_attempt(task: Task, attempt: Mapping[str, Any]) -> dict[str, Any]:
             failures.append("host_interrupted")
         elif host["exit_code"] != 0:
             failures.append("exit_status")
+        # Not a failover, but a report that names neither (or only one) is not
+        # the arm's provider and model either.
+        if any(report.get(key) != expected[key] for key in ("provider", "model")):
+            failures.append("host_model")
         if not all(any(_evidence(final, p) for p in group) for group in task.required_evidence) or (
             not final.strip()
         ):

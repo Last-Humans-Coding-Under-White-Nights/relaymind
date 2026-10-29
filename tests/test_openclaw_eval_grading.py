@@ -458,6 +458,27 @@ def test_a_host_error_report_with_no_provider_is_a_failed_attempt_not_a_failover
     assert summary["arms"]["relaymind_auto"]["languages"]["en"]["host_failovers"] == 0
 
 
+@pytest.mark.parametrize(
+    "identity",
+    [
+        {"provider": None, "model": None},
+        {"provider": RELAYMIND_HOST_MODEL["provider"], "model": None},
+        {"provider": None, "model": RELAYMIND_HOST_MODEL["model"]},
+    ],
+)
+def test_a_host_that_does_not_report_the_arms_provider_and_model_fails(identity):
+    """Spec 0.50 section 12.5: the host's reported provider and model are the arm's.
+
+    A report that names neither, or only one, is no failover, but it is not
+    the arm's identity either, so even an exit 0 with the answer fails.
+    """
+    host = {**report(TEXT), **identity}
+    grade = grade_attempt(TEXT, attempt(TEXT, host=host, runs=[text_run("run_a")]))
+    assert grade["host_failover"] is False
+    assert grade["success"] is False
+    assert grade["failures"] == ["host_model"]
+
+
 def test_a_completed_run_without_any_model_call_is_a_local_turn():
     """Spec 0.50 section 12.5: local turns are completed runs without an external call."""
     replay = {
