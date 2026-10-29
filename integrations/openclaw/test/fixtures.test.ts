@@ -129,6 +129,7 @@ describe("the transport fixtures (#135)", () => {
       for (const exchange of fixture.exchanges) {
         const roles: string[] = exchange.request.body.messages.map((m: any) => m.role);
         const firstUser = roles.indexOf("user");
+        expect(firstUser, fixture.scenario).toBeGreaterThanOrEqual(0);
         expect(roles.slice(firstUser).includes("developer"), fixture.scenario).toBe(false);
       }
     }
