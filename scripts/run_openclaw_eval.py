@@ -463,6 +463,12 @@ def run_attempt(
 # -- the run ---------------------------------------------------------------------------
 
 
+def _read_only(store: Path) -> sqlite3.Connection:
+    """The gateway store, read-only, by its file URI (portable: a Windows drive and
+    backslashes, or a ``#``, ``?``, or ``%`` in the path, still name the file)."""
+    return sqlite3.connect(store.resolve().as_uri() + "?mode=ro", uri=True)
+
+
 def _sha256(path: Path) -> str | None:
     try:
         return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -763,14 +769,14 @@ class LiveBackend:
         store = work / "runs.sqlite3"
 
         def run_ids() -> list[str]:
-            conn = sqlite3.connect(f"file:{store}?mode=ro", uri=True)
+            conn = _read_only(store)
             try:
                 return [r[0] for r in conn.execute("SELECT run_id FROM runs ORDER BY rowid")]
             finally:
                 conn.close()
 
         def run_records(ids: Sequence[str]) -> list[dict]:
-            conn = sqlite3.connect(f"file:{store}?mode=ro", uri=True)
+            conn = _read_only(store)
             try:
                 states = dict(conn.execute("SELECT run_id, state FROM runs"))
             finally:

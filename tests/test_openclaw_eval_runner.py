@@ -16,6 +16,7 @@ measurement itself is an operator run.
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -825,6 +826,24 @@ def test_a_host_command_the_system_cannot_start_is_not_run(tmp_path, monkeypatch
     other = runner.Host(["openclaw.cmd"], tmp_path / "c").run(["--version"], timeout=5)
     assert other["status"] == "not_run"
     assert "not a valid Win32 application" in other["stderr"]
+
+
+def test_the_gateway_store_opens_read_only_whatever_its_path_holds(tmp_path):
+    """The store is opened by its file URI, so a path with URI characters (or,
+    on Windows, a drive and backslashes) names the file, read-only."""
+    store = tmp_path / "a#b?c%20d" / "runs.sqlite3"
+    store.parent.mkdir()
+    with sqlite3.connect(store) as db:
+        db.execute("CREATE TABLE runs (run_id TEXT)")
+        db.execute("INSERT INTO runs VALUES ('run_1')")
+    db.close()
+    conn = runner._read_only(store)
+    try:
+        assert conn.execute("SELECT run_id FROM runs").fetchall() == [("run_1",)]
+        with pytest.raises(sqlite3.OperationalError):
+            conn.execute("INSERT INTO runs VALUES ('run_2')")
+    finally:
+        conn.close()
 
 
 def test_the_cli_refuses_a_task_file_that_differs_from_its_lock(tmp_path, capsys):
