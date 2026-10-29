@@ -613,10 +613,13 @@ still reads the stored key. The host keeps the key in its state database
 but only in an interactive terminal: without one it refuses, and typing the
 token at its prompt was not checked (`not_run`).
 `RELAYMIND_APP_TOKEN` in the host's environment is the provider's declared
-env var. In the #137 Linux VPS functional check no token was stored, and the
-host read it in every harness host scenario
-([report](../../docs/evidence/2026-10-28-openclaw-vps-functional-137/REPORT.md));
-the macOS probe did not check it. After a gateway
+env var. With no token stored, the host read it in every harness host
+scenario of the #137 Linux VPS functional check
+([report](../../docs/evidence/2026-10-28-openclaw-vps-functional-137/REPORT.md))
+and in steps 2 and 3 of the macOS qualification, where the token came from
+the harness only
+([report](../../docs/evidence/2026-10-29-openclaw-mac-qualification/REPORT.md));
+the earlier macOS host probe did not check it. After a gateway
 restart the stored token is stale: requests and discovery fail with 401
 `unauthenticated`, and `models list --refresh` logs the reconnect instruction
 (store the new token the same way). `agent exec` with the stale token exits 1
