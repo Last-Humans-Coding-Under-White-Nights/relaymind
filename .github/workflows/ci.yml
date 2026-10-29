@@ -102,6 +102,7 @@ jobs:
           tests/test_openclaw_eval_runner.py tests/test_openclaw_mac_m9_qualification.py
           tests/test_openclaw_eval_apple_m1.py
           tests/test_openclaw_command_qualification.py
+          tests/test_openclaw_mcp_qualification.py
 
       - name: Pinned host lifecycle (install, inspect, round trips, removal)
         run: |
