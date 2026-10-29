@@ -8,26 +8,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Specification 0.50 → 0.51 (#187): allocate RM34–RM44 and AC25–AC37 for
-  multilingual skill/MCP recommendations, publish the design, planned component
-  ownership and issue/dependency mapping. Freeze the independent catalog,
-  recommendation-only selection v2, bounded lexical fallback, separate
-  API/state/events/idempotency, operator-registered backend action security,
-  privacy/erasure, indexing/refresh bounds and evaluation/platform gates.
-  Managed v1/AC22, existing provider/host AC24, retired RM30/AC23 and historical
-  evidence remain unchanged. Whole-task consumption, committed-metadata gateway
-  startup and explicit-import-to-required-refresh defaults were customer-approved
-  on 29 October 2026; other finite limits are builder decisions, not measurements.
-  Qualifications #188–#190 establish bounded capture/command/MCP capabilities
-  and explicit limits. Matrix cohort/overlap/rights/refresh and host authority/
-  exact-use/atomic MCP currentness remain blocked. Public snapshot payloads and
-  non-null host bindings are refused; runtime recommendations fail closed until
-  supported qualification and a subsequent normative adapter revision. Choice
-  records lifecycle action evidence only; explicit feedback has independent
-  revisions and only correction records feed adaptation. Product implementation,
-  live/source/quality/cost/platform acceptance and dependent issue-body updates
-  are not claimed by this documentation revision. Actual spec merge and final
-  issue mappings are required before dependent product code.
+- Specification 0.50 → 0.51 (#187): adds M10 multilingual skill and MCP
+  recommendations as RM34–RM44 and AC25–AC37 (new sections 4.6, 5.1, 7.6,
+  8.1, 11.1, 12.6 and 14.5) and amends RM02 and sections 3, 10 and 14.1.
+  Managed selection v1 (AC22), AC24, the retired RM30 and AC23, and historical
+  evidence are unchanged. The rationale and qualification record are in
+  `docs/design/2026-10-29-multilingual-asset-routing.md`; status, blockers and
+  issue order are in `docs/ROADMAP.md` (M10). Specification and backlog change
+  only; no product code.
+  - Review clarifications in the same revision: a ready no_match supports a
+    correction but not a rejection; the feedback listing is ordered by a
+    per-scope insertion sequence, not by UUID; the create body cap is 512 KiB;
+    digests kept after erasure are keyed; the 0.51 runtime create 503 comes
+    before the idempotency claim; a partial import marks omitted records
+    stale; every new M10 path key resolves against the configuration
+    directory.
 
 - The M9 OpenClaw evaluation (#139; RM16, RM25, RM26, RM33; AC24; spec
   0.50 section 12.5), recorded in

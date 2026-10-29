@@ -47,35 +47,22 @@ codebase.
 
 ## Planned M10 ownership (spec 0.51; #187)
 
-These are planned components, not shipped files or runnable commands. Actual
-0.51 merge and implementation-issue RM/AC updates precede product edits.
-Managed selection v1/AC22 and the provider/host AC24 ownership remain unchanged.
+These are planned components: the files and commands below do not exist yet
+and must not be described as implemented. Contracts are in spec sections
+4.6 to 14.5; blockers, gates, the merge gate and issue order are in
+[docs/ROADMAP.md](docs/ROADMAP.md) (M10); the customer-approved defaults are in
+spec section 1. Managed selection v1 (AC22) and the provider and host contract
+(AC24) are unchanged.
 
 | Planned path | Owner and requirements |
 | --- | --- |
-| `src/relaymind/assets/`, `store/asset_catalog.py` | Catalog identities/safe projections/index publication/qualified refresh; RM34, RM38, RM43; AC25, AC29, AC34. No execution or unrestricted archive extraction. |
-| `src/relaymind/selection/asset_contract.py`, `asset_chain.py`, `asset_lexical.py`, v2 schemas | Recommendation-only v2 and separately attributed lexical fallback; RM35, AC26. Never feed v2 into managed runs. |
-| `src/relaymind/api/recommendations.py`, `store/recommendations.py`, separate store schemas | Independent recommendation lifecycle/events/idempotency/recovery; RM36, AC27. TraceEvent remains v1; no invented run ID. |
-| `src/relaymind/api/user_actions.py`, `store/asset_feedback.py` | Operator-registered backend action auth, independent choice/feedback CAS, retention/erasure; RM37, AC28. No public credential self-enrollment; only explicit corrections feed adaptation. |
-| `src/relaymind/selection/asset_hybrid.py`, `asset_adaptation.py` | Local pinned hybrid and bounded reversible correction adaptation; RM41, RM42; AC32, AC33. Inference/cost and base/final ranks stay explicit. |
-| `src/relaymind/evaluation/asset_corpus.py`, `asset_benchmark.py`, `evaluation/assets/`, `scripts/asset_selection_benchmark.py` | Original multilingual locks/independent labels and shared run/compare protocol; RM40, RM44; AC31, AC36, AC37. Toy data cannot pass final gates. |
-| `integrations/openclaw/` future recommendation adapter | Qualified direct action/exact skill and MCP use, host-only approvals/execution; RM39; AC30, AC35. Desired contract remains blocked pending further qualification and a later normative adapter revision. |
-
-The planned catalog reads ordinary bounded SKILL.md folders without a required
-managed manifest. Separate AssetMetadataImportV1 JSON imports bind configured
-source, staged original bytes/hashes and explicit complete/partial/tombstones;
-no omission-based external deletion or runtime availability assertion is allowed.
-
-[The M10 design](docs/design/2026-10-29-multilingual-asset-routing.md) and
-[roadmap](docs/ROADMAP.md) record MATRIX-COHORT/OVERLAP/RIGHTS/REFRESH and
-HOST-ACTION-AUTHORITY/EXACT-SKILL-USE/MCP-BINDING/MCP-CURRENTNESS blockers.
-The independent core is frozen; these production adapters are not
-implementation-ready. In 0.51 public host snapshot payloads/non-null bindings
-are rejected and runtime recommendation fails closed; discovery does not prove
-availability. Do not infer host support from source hooks or schema presence.
-No alternate source/host upgrade or milestone waiver is authorized. Only three
-customer defaults are approved, dated 29 October 2026 in the design. Planned
-paths/commands must not be described as already implemented.
+| `src/relaymind/assets/`, `store/asset_catalog.py` | Catalog identities, safe searchable projections, index publication, and qualified refresh; RM34, RM38, RM43; AC25, AC29, AC34. Schemas: spec section 8.1. Never executes assets or extracts archives without limits. |
+| `src/relaymind/selection/asset_contract.py`, `asset_chain.py`, `asset_lexical.py`, v2 schemas | Recommendation-only selection v2 and a separately attributed lexical fallback; RM35, AC26. v2 never feeds a managed run. |
+| `src/relaymind/api/recommendations.py`, `store/recommendations.py`, separate store schemas | Independent recommendation lifecycle, events, idempotency, and recovery; RM36, AC27. TraceEvent stays at v1; no invented run ID. |
+| `src/relaymind/api/user_actions.py`, `store/asset_feedback.py` | Operator-registered backend action authentication; choice and feedback each updated by their own compare-and-set (CAS); retention and erasure; RM37, AC28. No public self-enrollment of credentials; only explicit corrections feed adaptation. |
+| `src/relaymind/selection/asset_hybrid.py`, `asset_adaptation.py` | Local pinned hybrid selector and bounded, reversible correction adaptation; RM41, RM42; AC32, AC33. Inference and its cost, and the base and final ranks, are recorded separately. |
+| `src/relaymind/evaluation/asset_corpus.py`, `asset_benchmark.py`, `evaluation/assets/`, `scripts/asset_selection_benchmark.py` | Original multilingual corpus locks, independent labels, and one shared run and compare protocol; RM40, RM44; AC31, AC36, AC37. Toy data cannot pass final gates. |
+| `integrations/openclaw/` future recommendation adapter | Qualified direct action, exact skill and MCP use, host-only approvals and execution; RM39; AC30, AC35. Blocked until further qualification and a later normative adapter revision (ROADMAP M10). |
 
 ## Ownership boundaries (do not blur these)
 
