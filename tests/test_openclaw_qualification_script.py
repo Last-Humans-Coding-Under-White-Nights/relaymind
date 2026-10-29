@@ -170,6 +170,7 @@ CAPTURE_INPUTS = (
     "scripts/openclaw_qualification.py",
     "integrations/openclaw/package.json",
     "integrations/openclaw/package-lock.json",
+    "integrations/openclaw/src/compat.ts",
     "integrations/openclaw/test/host-transport",
     "integrations/openclaw/test/fixtures/v2026.10.7/transport",
 )
