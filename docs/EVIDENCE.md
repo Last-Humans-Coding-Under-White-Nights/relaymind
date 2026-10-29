@@ -3428,41 +3428,117 @@ rollback, or any live model.
 
 ## M9 OpenClaw evaluation (#139, spec 0.50)
 
-Section 12.5. Nothing below has run: every row is `not_run`. The tasks,
-grading, and runner exist and are tested over a stub host and gateway
-doubles (`tests/test_openclaw_eval_*.py`), which is not live evidence.
+Section 12.5. One run is recorded: on the user's Apple M1, all four arms
+ran, with the external model `glm-5.3-flash` and the pinned local model
+(the 2026-10-29 subsection below; export
+[`docs/evidence/2026-10-29-openclaw-eval-apple-m1/`](evidence/2026-10-29-openclaw-eval-apple-m1/openclaw-eval.md)).
+It is live evidence on one machine. The tasks, grading, and runner are also
+tested over a stub host and gateway doubles (`tests/test_openclaw_eval_*.py`),
+which is not live evidence. A constrained configuration has not run.
 
 | Arm | Machine | Host, Node, plugin | Gateway, models | Result | Export |
 | --- | --- | --- | --- | --- | --- |
-| direct | | | | `not_run` | none |
-| relaymind_external_only | | | | `not_run` | none |
-| relaymind_auto | | | | `not_run` | none |
-| relaymind_no_local | | | | `not_run` | none |
+| direct | Apple M1, 8 GiB, macOS 27.0.1 arm64 | OpenClaw 2026.10.7 (157d8c2), Node v26.12.1; plugin not used (the host's own provider entry) | no gateway; `glm-5.3-flash` at `api.z.ai` | en 18 of 18, zh 18 of 18; 0 host failovers, timeouts, interrupts; gateway measures unknown | `2026-10-29-openclaw-eval-apple-m1` |
+| relaymind_external_only | Apple M1, 8 GiB, macOS 27.0.1 arm64 | OpenClaw 2026.10.7 (157d8c2), Node v26.12.1, `relaymind-openclaw-provider-0.1.0.tgz` (`0eac2b43`) | `relaymind serve` at `2751124` (dirty tree); `glm-5.3-flash` external, `qwen3-0.6b` Q8_0 local; plugin mode `external_only` | en 18 of 18, zh 18 of 18; 0 local turns of 65 gateway runs (`execution_mode`); 65 external calls | `2026-10-29-openclaw-eval-apple-m1` |
+| relaymind_auto | Apple M1, 8 GiB, macOS 27.0.1 arm64 | OpenClaw 2026.10.7 (157d8c2), Node v26.12.1, `relaymind-openclaw-provider-0.1.0.tgz` (`0eac2b43`) | `relaymind serve` at `2751124` (dirty tree); `glm-5.3-flash` external, `qwen3-0.6b` Q8_0 local; plugin mode `auto` | en 18 of 18, zh 18 of 18; 0 local turns of 70 gateway runs (`context_limit`); 70 external calls | `2026-10-29-openclaw-eval-apple-m1` |
+| relaymind_no_local | Apple M1, 8 GiB, macOS 27.0.1 arm64 | OpenClaw 2026.10.7 (157d8c2), Node v26.12.1, `relaymind-openclaw-provider-0.1.0.tgz` (`0eac2b43`) | `relaymind serve` at `2751124` (dirty tree); `glm-5.3-flash` external, no local model; plugin mode `auto` | en 18 of 18, zh 18 of 18; 0 local turns of 71 gateway runs (`no_local_model`); 71 external calls | `2026-10-29-openclaw-eval-apple-m1` |
 | a constrained configuration | | | | `not_run` (optional; reported apart when run) | none |
 
-A recorded run fills each row from its export
+### 2026-10-29 — M9 OpenClaw evaluation on macOS, Apple M1, glm-5.3-flash
+
+Operator run of `scripts/run_openclaw_eval.py` on the user's Mac, recorded
+in
+[`docs/evidence/2026-10-29-openclaw-eval-apple-m1/`](evidence/2026-10-29-openclaw-eval-apple-m1/openclaw-eval.md)
+(`openclaw-eval.json`, the raw export, and `openclaw-eval.md`, its report).
+Live models through a real OpenClaw host. Started 2026-10-29T05:04:15Z,
+finished 05:52:36Z; all four arms `ran`; the run was not aborted.
+
+| Item | Value |
+| --- | --- |
+| Machine | Apple M1 (8 CPU cores, 7 GPU cores), 8 GiB, macOS 27.0.1 arm64; Python 3.14.9 |
+| Host | `OpenClaw 2026.10.7 (157d8c2)`, the package's devDependency, run by Node v26.12.1; no proxy variables |
+| Plugin artifact | `relaymind-openclaw-provider-0.1.0.tgz`, sha256 `0eac2b434aceafe372ffe0729ae88600186bffb57bed981fa1f434b2ba20e1ed`, built at `2751124` (not the macOS qualification's artifact: the packed README changed since `6fc0954`) |
+| RelayMind revision | `2751124e152e676150751afaac326d81ce1de580`, recorded `dirty: true` (below) |
+| External model | `glm-5.3-flash` at `https://api.z.ai/api/paas/v4`, context limit 128000; the key came from `RELAYMIND_EXTERNAL_API_KEY` and is not recorded |
+| Local model | `qwen3-0.6b` Q8_0 (`models/qwen3-0.6b-q8_0.manifest.json`), llama-server `0.7.0-dev (build 11785, commit 8baabd53b)`, started by the runner (cold start 0.93 s) |
+| Tasks | `evaluation/openclaw_tasks.v1.json` version 1, sha256 `c4983cb76ace5421216a91ec471de01200bc4cd52a473d23e8460ec2c956cae1`, the full set (6 English, 6 best-effort Chinese), 3 repeats, seed 139, 300 s limit |
+
+The dirty tree: while the run was in progress, two files unrelated to it
+were being written in the checkout, `tests/test_openclaw_eval_apple_m1.py`
+(the evidence test module for this run) and `.github/workflows/ci.yml` (the
+line that lists it). The runner, the plugin, the gateway, and the host used
+neither.
+
+Results per arm and language (exact counts over every attempt; Chinese is
+best-effort and apart). Completion is the runner's clock around the host
+command; first useful content is the gateway's clock; the two are never
+subtracted. Tokens are the gateway's usage for `glm-5.3-flash`, summed over
+the successful attempts, with 0 calls of unknown count.
+
+| Arm | Language | Successes | Gateway runs | Local turns (reason) | External calls | Completion p50/p95 ms | First useful p50/p95 ms | Tokens in / out |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| direct | en | 18/18 | unknown | unknown | unknown | 17293/36867 | unknown | none recorded |
+| direct | zh | 18/18 | unknown | unknown | unknown | 18210/33247 | unknown | none recorded |
+| relaymind_external_only | en | 18/18 | 32 | 0 (`execution_mode`: 32) | 32 | 17152/25039 | 3972/9317 | 291069 / 3326 |
+| relaymind_external_only | zh | 18/18 | 33 | 0 (`execution_mode`: 33) | 33 | 18310/27237 | 3202/10031 | 300328 / 3043 |
+| relaymind_auto | en | 18/18 | 35 | 0 (`context_limit`: 35) | 35 | 17297/40454 | 4025/20798 | 318196 / 3245 |
+| relaymind_auto | zh | 18/18 | 35 | 0 (`context_limit`: 35) | 35 | 17808/34008 | 3662/9813 | 318673 / 4054 |
+| relaymind_no_local | en | 18/18 | 36 | 0 (`no_local_model`: 36) | 36 | 16492/33545 | 3445/10515 | 327972 / 3862 |
+| relaymind_no_local | zh | 18/18 | 35 | 0 (`no_local_model`: 35) | 35 | 18420/33591 | 3598/9666 | 318678 / 3334 |
+
+144 of 144 attempts succeeded. Every row had 0 host failovers, 0 timeouts,
+0 host interrupts, and 0 ok-but-failed attempts; the RelayMind rows had 0
+errors, 0 needs_external, and 0 context_limit_exceeded runs, and the
+gateway executed no tool. The direct arm has no gateway, so its gateway
+runs, calls, and first useful content are unknown, and no tokens are
+recorded for it. Unexpected host tools were reported, never failures:
+direct 4 (en) and 2 (zh); relaymind_external_only 0 and 1;
+relaymind_auto 4 and 3; relaymind_no_local 4 and 4.
+
+Paired comparisons (task and repeat pairs that both arms completed; median
+of the completion differences):
+
+- Integration overhead, relaymind_external_only against direct: -732 ms
+  (en) and -55 ms (zh), 18 pairs each, successes 18/18 against 18/18.
+- Local inference, relaymind_auto against relaymind_external_only: 437 ms
+  (en) and -39 ms (zh), 18 pairs each. relaymind_auto had 0 local turns,
+  so this compares no local inference.
+- No local model, relaymind_no_local against relaymind_external_only:
+  -344 ms (en) and 869 ms (zh), 18 pairs each. relaymind_no_local had 0
+  local turns, so this also compares no local inference.
+
+Post-run replacements: the export as the runner wrote it (sha256
+`720c7c4676da41f291ca02427b6c19bb24bc66e4884363600c44383598dbf443`) held the
+checkout's home-relative path (`~/<checkout>/...`, in the host's skill
+locations, 4,532 times) and the Mac's computer name in the host's runtime
+line (`host=...`, 206 times), because the runner's sanitizer replaced
+neither (a fix is being committed on this branch). Both were replaced after
+the run, with `<repo>` and `<host>`. The export's sha256 after that is
+`cfb87e13e0004adc771c4b88d4dd49f3eedd6e8b2a1fb85ef978140d802047a3`. Nothing
+else in the export changed; the report was unaffected.
+
+Not shown: Windows (no machine), a constrained configuration (optional, not
+run), and a plugin approval answered by an operator. This is one run on one
+machine. Reduced latency, lower cost, and local completion quality remain
+hypotheses (section 12.5): no local turn ran, and the latency differences
+above are single-run medians.
+
+A recorded run filled each row from its export
 (`scripts/run_openclaw_eval.py --out <dir>`): the machine manifest, the
-OpenClaw release and the Node version against the host's engine range, the
-plugin artifact's SHA-256, the RelayMind revision, the external model and
-endpoint host, the local model manifest and runtime banner, the task file
-digest, and per arm and language the exact success count over all attempts,
-host failovers, timeouts, host interrupts (exit 130 or SIGINT), errors by
-code, needs_external and context_limit_exceeded runs, local turns with the
-reasons the runs left the local stage, external calls, unexpected host
-tools and proposals (reported, never a failure, so the arms share one
-success rule), completion and first useful content p50 and p95, and
-tokens per model with unknown counts apart. Chinese rows are best-effort and kept apart. An export marked
-aborted (an operator interrupt) is recorded with its slots not run.
+OpenClaw release and the Node version, the plugin artifact's SHA-256, the
+RelayMind revision, the external model and endpoint host, the local model
+manifest and runtime banner, the task file digest, and per arm and language
+the exact counts, local turns with their reasons, the two clocks, and tokens
+per model with unknown counts apart. An export marked aborted is recorded
+with its slots not run.
 
-Expected at the 8192-token local context, which stays (user decision): 0
-of 12 OpenClaw requests counted on macOS fit it (9,384 to 10,577 tokens,
-pinned tokenizer), and the live AC24 turns in auto without an external
-model ended needs_external / context_limit with 0 model calls ("OpenClaw
-request size by tokenizer and live AC24 turn (#135)" and "OpenClaw plugin
-qualification on macOS at the M9 tip" above). relaymind_auto is therefore expected to show 0
-local turns, every run handed off with reason context_limit. A run that
-shows this records 0 local turns as the relaymind_auto result, with its
-reasons, and its comparison with relaymind_external_only as one without
-local inference; it is never left out. Until a run shows it, it is an
-expectation, not a result.
-
+Measured at the 8192-token local context, which stays (user decision):
+before this run, 0 of 12 OpenClaw requests counted on macOS fit it (9,384
+to 10,577 tokens, pinned tokenizer), and the live AC24 turns in auto
+without an external model ended needs_external / context_limit with 0
+model calls ("OpenClaw request size by tokenizer and live AC24 turn (#135)"
+and "OpenClaw plugin qualification on macOS at the M9 tip" above). The
+expectation is now a result: relaymind_auto showed 0 local turns of 70
+gateway runs, every one leaving the local stage with reason
+`context_limit`. Its comparison with relaymind_external_only is one
+without local inference.

@@ -73,6 +73,7 @@ i7-1165G7, 16 GiB RAM, Windows 11 Pro (build 26200), llama.cpp b11785
 | 2026-10-23 | Latency benchmark on x86-64 Windows, local path, 120 measured requests (#110, AC15) | `docs/evidence/2026-10-23-latency-windows-x64.json` |
 | 2026-10-25, 2026-10-26 | Phase 2 M8 matrix (31 cells) and M7 matrix (9 cells), Z.ai `glm-4.6` (#134, #128, #125) | `docs/evidence/2026-10-26-phase2/` |
 | 2026-10-25, 2026-10-26 | External model comparison in the default configuration: glm-4.6, glm-5.3-flash, and glm-5.3-flash with `reasoning_effort` low (corpus 88, 85 and 90 of 156) | `docs/evidence/2026-10-27-external-model/` |
+| 2026-10-29 | M9 OpenClaw evaluation through the real host, four arms, `glm-5.3-flash` (#139): 144 of 144 attempts succeeded; 0 local turns in every RelayMind arm (relaymind_auto: `context_limit`); revision `2751124`, recorded dirty | `docs/evidence/2026-10-29-openclaw-eval-apple-m1/` |
 
 Key measured numbers (Apple M1 only):
 
@@ -174,11 +175,14 @@ from each runner. Declared compatibility: OpenClaw 2026.10.7 only
 `>=24.22.1 <25 || >=26.12.1`.
 
 Supported environments. A row says what ran on that environment, never more.
-The gateway in every host check below answered from model doubles. The only
-live model evidence for the plugin is one live turn on macOS at `6fc0954`:
-through the packaged plugin, with no external model, it ended
+The gateway in every host check below answered from model doubles. The
+live model evidence for the plugin is two runs on macOS. One live turn at
+`6fc0954`, through the packaged plugin with no external model, ended
 needs_external / context_limit at the 8192 local context before any model
-call, so it completes no task. The #139 measurement is not run.
+call, so it completes no task. The #139 measurement at `2751124` (recorded
+dirty) ran the frozen tasks through the real host with the external model
+`glm-5.3-flash`: 144 of 144 attempts succeeded, with 0 local turns
+(`docs/evidence/2026-10-29-openclaw-eval-apple-m1/`; the section below).
 
 | Environment | OpenClaw runtime | Node against the host's range | Status |
 | --- | --- | --- | --- |
@@ -210,27 +214,42 @@ runner (`scripts/run_openclaw_eval.py`) for the four arms `direct`,
 are covered by deterministic tests over a stub host and doubles
 (`docs/TESTING.md`).
 
-Results: none. Every arm is `not_run`: no OpenClaw measurement with a live
-model and a real host exists, so no integration overhead, local inference
-value, task success, latency, or token count is claimed. The run needs a
-machine with a real host, the external provider's credential, and the
-pinned local model; the operator command is in `docs/TESTING.md` and
+Results: one run, on the user's Apple M1 (8 GiB, macOS 27.0.1 arm64,
+Node v26.12.1, OpenClaw 2026.10.7 from the devDependency), recorded in
+`docs/evidence/2026-10-29-openclaw-eval-apple-m1/` (`docs/EVIDENCE.md`, "M9
+OpenClaw evaluation"). External model `glm-5.3-flash`; local model
+`qwen3-0.6b` Q8_0; the full task set, 3 repeats, seed 139. All four arms
+ran, and 144 of 144 attempts succeeded: 18 of 18 per arm and language,
+English and Chinese, with 0 host failovers, timeouts, interrupts, or
+ok-but-failed attempts. Every RelayMind arm had 0 local turns:
+relaymind_external_only by `execution_mode` (65 gateway runs),
+relaymind_auto by `context_limit` (70), and relaymind_no_local by
+`no_local_model` (71); external calls equal gateway runs. Integration
+overhead (relaymind_external_only against direct, 18 pairs each): median
+completion difference -732 ms in English and -55 ms in Chinese, 18/18
+against 18/18. The local-inference comparisons compare no local inference,
+because no local turn ran. The revision `2751124` was recorded dirty: two
+files unrelated to the run were being written in the checkout while it ran
+(its evidence test module and the CI line that lists it); the runner, the
+plugin, the gateway, and the host used neither. This is one run on one
+machine: reduced latency, lower cost, and local completion quality remain
+hypotheses (section 12.5). Windows (no machine) is the gap; a constrained
+configuration (optional) and a plugin approval answered by an operator did
+not run. The operator command is in `docs/TESTING.md` and
 `integrations/openclaw/README.md` ("M9 evaluation").
 
 Limits known before measurement: the local context stays at 8192 tokens
-(user decision), and every OpenClaw request measured so far (0 of 12 fit;
-9,384 to 10,577 tokens with the pinned tokenizer, the macOS qualifications
-of 2026-10-27 and 2026-10-29) is over it; the live AC24 turns in auto
-without an external model ended needs_external / context_limit with 0
-model calls. relaymind_auto is
-therefore expected to send every OpenClaw turn to the external model (0
-local turns, reason context_limit), and local_only would answer
-needs_external. When the run shows 0 local turns, that is reported as the
-result, with the reasons and the local-inference comparison marked as one
-without local inference; until then it is an expectation, not a result. The direct arm's host provider
-entry and the `write` tool's argument names are not verified on a real host
-(the task accepts any arguments for `write`). The issue's done-when checks
-stay open until the run is recorded.
+(user decision), and every OpenClaw request measured before the run (0 of
+12 fit; 9,384 to 10,577 tokens with the pinned tokenizer, the macOS
+qualifications of 2026-10-27 and 2026-10-29) is over it; the live AC24
+turns in auto without an external model ended needs_external /
+context_limit with 0 model calls. relaymind_auto was therefore expected to
+send every OpenClaw turn to the external model. The run showed it: 0 local
+turns of 70 gateway runs, every one with reason `context_limit`, reported
+as the result, and its comparison with relaymind_external_only is one
+without local inference. In the run the direct arm's host provider entry
+worked (36 of 36, 0 host failovers); the `write` tool's argument names are
+still not checked (the task accepts any arguments for `write`).
 
 Measured on the macOS qualification: every OpenClaw request it measured
 (3 host requests and 7 probe captures) was 10,500 to 10,577 tokens with the

@@ -1496,8 +1496,9 @@ pytest tests/test_openclaw_eval_fixtures.py tests/test_openclaw_eval_grading.py 
 
 These run in the default `pytest`, need no Node, host, or model, and are
 deterministic (spec 0.50 section 12.5). They test the frozen tasks, the
-grading rules, and the runner; they are not live evidence, and no part of
-the measurement has run.
+grading rules, and the runner; they are not live evidence. The live
+measurement is recorded apart (below), and
+`tests/test_openclaw_eval_apple_m1.py` reads its export.
 
 - `tests/test_openclaw_eval_fixtures.py`: `evaluation/openclaw_tasks.v1.json`
   matches its lock (digest and the digest of the sampling order); a changed
@@ -1588,20 +1589,39 @@ python scripts/run_openclaw_eval.py \
     -- node integrations/openclaw/node_modules/openclaw/openclaw.mjs
 ```
 
-It is not_run: there is no Mac or Windows access and no external
-provider credential for it, and the VPS runs no live model. The local
-context stays at 8192 tokens (user decision, no runtime, manifest, or spec
-change). With the pinned tokenizer 0 of the 12 OpenClaw requests measured
-on macOS fit it (9,384 to 10,577 tokens), and the live AC24 turns in auto
-without an external model ended needs_external / context_limit with 0
-model calls (`docs/evidence/2026-10-27-openclaw-mac-qualification/` and
-`docs/evidence/2026-10-29-openclaw-mac-qualification/`). So
-relaymind_auto is expected to show 0 local turns, every turn handed off
-with reason context_limit, and relaymind_auto against
-relaymind_external_only then compares no local inference. When a run
-shows that, it is the arm's result and is reported with its reasons,
-never hidden or dropped; until a run shows it, it is an expectation, not
-a result.
+It ran once, on the user's Apple M1 (8 GiB, macOS 27.0.1 arm64, Node
+v26.12.1, OpenClaw 2026.10.7 from the devDependency), with the external
+model `glm-5.3-flash` and the pinned local model `qwen3-0.6b` Q8_0, over
+the full task set (3 repeats, seed 139), recorded in
+`docs/evidence/2026-10-29-openclaw-eval-apple-m1/` (`docs/EVIDENCE.md`,
+"M9 OpenClaw evaluation"). All four arms ran; 144 of 144 attempts
+succeeded (18 of 18 per arm and language). Every RelayMind arm had 0 local
+turns: relaymind_external_only by `execution_mode`, relaymind_auto by
+`context_limit` (each of its requests was over the 8192-token local
+context, which stays at 8192 by user decision), and relaymind_no_local by
+`no_local_model`; the local-inference comparisons therefore compare no
+local inference, and the report says so. The revision `2751124` was
+recorded dirty: while the run was in progress, two files unrelated to it
+were being written in the checkout (`tests/test_openclaw_eval_apple_m1.py`
+and the `.github/workflows/ci.yml` line that lists it); the runner, the
+plugin, the gateway, and the host used neither. After the run the
+checkout's home-relative path and the Mac's computer name were replaced in
+the export with `<repo>` and `<host>`, because the runner's sanitizer
+replaced neither; nothing else changed. Windows has not run.
+
+- `tests/test_openclaw_eval_apple_m1.py` reads that export and its report
+  (no host or model runs): one complete, not aborted run of the frozen
+  tasks (the lock's digest, 3 repeats, seed 139, every arm ran); the
+  recorded identities (Node, plugin digest, external model and host, local
+  model, runtime build, revision `2751124` with `dirty: true`); exact
+  denominators per arm and language, Chinese best-effort and apart; the
+  host's ok never deciding a success (a success has no failure, exit 0, no
+  timeout, interrupt, or failover); every RelayMind run correlated, with no
+  gateway tool execution and the direct arm's gateway measures unknown; 0
+  local turns reported with the reasons the runs left the local stage; no
+  credential, gateway token, or machine path in any file of the run; and
+  the rows in `docs/EVIDENCE.md` and the run cited by `docs/RELEASE.md`,
+  `docs/ROADMAP.md`, this file, `CHANGELOG.md`, and the OpenClaw README.
 
 ### What is not covered yet
 
@@ -1682,7 +1702,9 @@ a result.
   The M9 evaluation (#139, spec 0.50) has its frozen tasks,
   grading, and runner tested over a stub host and doubles
   ([OpenClaw evaluation](#openclaw-evaluation-tasks-grading-and-runner-139-rm16-rm18-rm25-rm26-rm33-ac24));
-  the measurement in all four arms is not_run.
+  the measurement ran once on macOS
+  (`docs/evidence/2026-10-29-openclaw-eval-apple-m1/`: 144 of 144
+  attempts succeeded, 0 local turns), and on Windows it is not_run.
   YAML workflow acceptance AC23 is retired; AC14 still covers the fixed demo.
 - The skill and tool selection benchmarks of spec section 12.4 are
   implemented (#143, #144), with frozen SkillsBench/ToolRet inputs and

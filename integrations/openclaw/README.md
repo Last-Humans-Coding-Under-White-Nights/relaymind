@@ -44,8 +44,11 @@ Windows runs of this revision are `not_run`; the CI job runs the same
 check on GitHub-hosted runners,
 recorded at `78fc94d` as a functional check over doubles, not a
 user-machine qualification. The M9 evaluation runner and grading (#139,
-[M9 evaluation](#m9-evaluation-139-operator-not-run-yet)) are tested over
-a stub host and doubles; the measurement is `not_run`.
+[M9 evaluation](#m9-evaluation-139)) are tested over a stub host and
+doubles. The measurement ran once, on the user's Mac with a live external
+model: 144 of 144 attempts succeeded, with 0 local turns
+([`docs/evidence/2026-10-29-openclaw-eval-apple-m1/`](../../docs/evidence/2026-10-29-openclaw-eval-apple-m1/openclaw-eval.md));
+on Windows it is `not_run`.
 
 What the plugin claims, and nothing more: text input; at most one function
 call per response, executed by OpenClaw under its own approvals; the answer is
@@ -1201,7 +1204,20 @@ row) the abort passed, and at `6fc0954` both scenarios passed through the
 packaged plugin (`docs/evidence/2026-10-29-openclaw-mac-qualification/`);
 Windows at this commit is `not_run`.
 
-### M9 evaluation (#139, operator, not run yet)
+### M9 evaluation (#139)
+
+Status: one run is recorded, on the user's Apple M1 (macOS 27.0.1 arm64,
+Node v26.12.1, OpenClaw 2026.10.7) with the external model `glm-5.3-flash`
+and the pinned local model, at revision `2751124` (recorded dirty: two
+files unrelated to the run were being written in the checkout while it
+ran; the runner, the plugin, the gateway, and the host used neither). All
+four arms ran and 144 of 144 attempts succeeded, English and Chinese. Every
+RelayMind arm had 0 local turns; in `relaymind_auto` every run left the
+local stage with reason `context_limit`. The export and its report are in
+[`docs/evidence/2026-10-29-openclaw-eval-apple-m1/`](../../docs/evidence/2026-10-29-openclaw-eval-apple-m1/openclaw-eval.md),
+and the numbers in `docs/EVIDENCE.md` ("M9 OpenClaw evaluation"). It is one
+run on one machine: reduced latency, lower cost, and local completion
+quality remain hypotheses. Windows has not run.
 
 The section 12.5 measurement (spec 0.50) runs the frozen tasks of
 `evaluation/openclaw_tasks.v1.json` through a real host in four arms:
@@ -1232,14 +1248,14 @@ so is a host interrupt (exit 130, SIGINT, or Ctrl-C on Windows). Interrupting th
 setup or an attempt, keeps the attempts that ended: the export is written
 marked aborted and the runner exits 130; an interrupt during setup marks
 that arm and every arm not yet set up not_run, never ran. At the 8192-token local context an OpenClaw request does
-not fit the local model (macOS qualification), so `relaymind_auto` is
-expected to show 0 local turns with reason `context_limit`; the report
-states that as the result when it happens. The
+not fit the local model (macOS qualification), so `relaymind_auto` shows
+0 local turns with reason `context_limit`, as the recorded run did; the
+report states that as the result. The
 direct arm's host keeps the operator's proxy variables, as the gateways
 do, so both reach the provider the same way; the export names the
 variables (not their values) and the Node that ran the host. The direct arm writes the provider's key into the
 temporary host home's config file (removed at the end, never exported);
-whether the pinned host accepts that provider entry as written is not
-verified. Record the result in `docs/EVIDENCE.md` ("M9 OpenClaw
+the pinned host accepted that provider entry in the recorded run (36 of 36
+direct attempts, 0 host failovers). Record the result in `docs/EVIDENCE.md` ("M9 OpenClaw
 evaluation").
 

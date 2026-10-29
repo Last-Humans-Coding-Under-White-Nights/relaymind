@@ -874,9 +874,14 @@ doubles; this is not a claim of a live-qualified or faster plugin.
   (`relaymind.evaluation.openclaw`), and the runner
   (`scripts/run_openclaw_eval.py`) are implemented and tested over a stub
   host and doubles, including a dry run of auto at the 8192 context with a
-  host-sized request (0 local turns, reason context_limit). The measurement
-  in all four arms is not_run; the issue stays open until it is recorded in
-  `docs/EVIDENCE.md`.
+  host-sized request (0 local turns, reason context_limit). The
+  measurement is recorded: one run on the user's Apple M1 with
+  `glm-5.3-flash` (`docs/evidence/2026-10-29-openclaw-eval-apple-m1/`),
+  all four arms ran and 144 of 144 attempts succeeded, with 0 local turns
+  in every RelayMind arm (relaymind_auto by `context_limit`). The revision
+  `2751124` was recorded dirty: two unrelated files were being written
+  while it ran (its evidence test module and the CI line that lists it).
+  Windows did not run.
 - Closes: AC24. Existing AC10 to AC12 and AC14 remain regression gates.
 
 The first milestone version supports text and one host-owned function call
@@ -897,9 +902,12 @@ transport over doubles. The real host ran them in Linux VPS functional
 checks and the install check on GitHub-hosted runners, neither a
 supported-platform qualification. The macOS qualification of this
 revision is recorded at `6fc0954`
-(`docs/evidence/2026-10-29-openclaw-mac-qualification/`). Open: the Windows
-qualification of this revision, a plugin approval answered on a real host,
-and the live #139 measurement (all not_run). The local context stays 8192:
+(`docs/evidence/2026-10-29-openclaw-mac-qualification/`). The live #139
+measurement is recorded on macOS
+(`docs/evidence/2026-10-29-openclaw-eval-apple-m1/`: 144 of 144 attempts
+succeeded, 0 local turns). Open: the Windows qualification and a Windows
+measurement of this revision, and a plugin approval answered on a real
+host (all not_run). The local context stays 8192:
 OpenClaw requests (about 9.4k to 10.6k tokens with the pinned tokenizer on
 macOS) do not fit it, so auto goes external and local_only gets
 needs_external.
