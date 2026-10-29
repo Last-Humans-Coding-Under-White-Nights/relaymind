@@ -61,7 +61,7 @@ import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -439,18 +439,29 @@ def _sanitize(text: str, ctx: Context) -> str:
     )
     home = Path.home()
     for path, placeholder in places:
-        forms = set()
-        for candidate in (path, path.resolve()):
-            # The export is JSON: a path inside a string is escaped there.
-            forms |= {str(candidate), json.dumps(str(candidate))[1:-1]}
-            # The host prints a path under the user's home as ``~/...`` (its
-            # skill locations in the prompt), so the home-relative form goes too.
-            if candidate != home and candidate.is_relative_to(home):
-                forms.add(f"~/{candidate.relative_to(home).as_posix()}")
+        forms = _path_forms(path, home) | _path_forms(path.resolve(), home)
         for form in sorted(forms, key=len, reverse=True):
             text = text.replace(form, placeholder)
-    # Whatever else the host printed under the user's home.
-    return text.replace("~/", f"{USER_HOME}/")
+    # Whatever else the host printed under the user's home, either separator.
+    return text.replace("~/", f"{USER_HOME}/").replace("~\\", f"{USER_HOME}\\")
+
+
+def _path_forms(candidate: PurePath, home: PurePath) -> set[str]:
+    """The ways a path can be printed, for ``_sanitize`` to replace.
+
+    The native form and the forward-slash one (Node and the host print
+    ``C:/Users/...`` on Windows); under the user's home the ``~/...`` form the
+    host prints for its skill locations, and ``~\\...``. Each also as it reads
+    inside a JSON string, with non-ASCII kept (the export) or escaped.
+    """
+    texts = {str(candidate), candidate.as_posix()}
+    if candidate != home and candidate.is_relative_to(home):
+        relative = candidate.relative_to(home)
+        texts |= {f"~/{relative.as_posix()}", str(type(candidate)("~", relative))}
+    forms = set(texts)
+    for text in texts:
+        forms |= {json.dumps(text)[1:-1], json.dumps(text, ensure_ascii=False)[1:-1]}
+    return forms
 
 
 BATCH_SUFFIXES = (".cmd", ".bat")

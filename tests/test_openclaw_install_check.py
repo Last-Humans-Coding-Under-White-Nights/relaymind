@@ -15,10 +15,11 @@ uninstall. A real host run is an operator or CI step, never this suite.
 """
 
 import json
+import os
 import shutil
 import socket
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 
 import pytest
@@ -308,18 +309,54 @@ def test_the_home_relative_form_the_host_prints_is_a_placeholder_too(tmp_path):
         assert line in ("<repo>/skills/a/SKILL.md", "<home>/elsewhere/b"), line
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="a backslash cannot be in a Windows name")
 def test_the_json_form_of_a_resolved_path_is_a_placeholder_too(tmp_path):
     """RM12: the export is JSON, so a path the host printed in its resolved form
     (a symlink or a Windows short name resolved) is replaced in its JSON-escaped
-    form too, not only the given path's (PR #182 review)."""
-    real = tmp_path / "real\\host"
-    real.mkdir()
+    form too, not only the given path's (PR #182 review). On Windows every
+    separator is a backslash; elsewhere a backslash in a name stands in for one."""
+    real = tmp_path / "real" / "host" if os.sep == "\\" else tmp_path / "real\\host"
+    real.mkdir(parents=True)
+    ctx = SimpleNamespace(home=real, tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    assert "\\\\" in json.dumps(str(real))
+    escaped = json.dumps(f"{real}{os.sep}state")
+    assert install_check._sanitize(escaped, ctx) == json.dumps(f"<host-home>{os.sep}state")
     link = tmp_path / "host"
-    link.symlink_to(real, target_is_directory=True)
+    try:
+        link.symlink_to(real, target_is_directory=True)
+    except OSError:
+        pytest.skip("this Windows account cannot make a symlink")
     ctx = SimpleNamespace(home=link, tarball=tmp_path / "a" / "x.tgz", token="t0k")
     escaped = json.dumps(f"{link.resolve()}/state/x")
     assert install_check._sanitize(escaped, ctx) == '"<host-home>/state/x"'
+
+
+def test_every_printed_form_of_a_windows_path_is_a_placeholder_form():
+    """RM12: Node and the host print a Windows path with backslashes or with
+    forward slashes (``C:/Users/...``), plain or inside JSON, and a path under
+    the home as ``~\\...`` or ``~/...``; each form is replaced (PR #182 review)."""
+    home = PureWindowsPath(r"C:\Users\Dmitrý")
+    path = home / "AppData" / "Local" / "Temp" / "host"
+    forms = install_check._path_forms(path, home)
+    for form in (
+        r"C:\Users\Dmitrý\AppData\Local\Temp\host",
+        r"C:\\Users\\Dmitrý\\AppData\\Local\\Temp\\host",
+        r"C:\\Users\\Dmitr\u00fd\\AppData\\Local\\Temp\\host",
+        "C:/Users/Dmitrý/AppData/Local/Temp/host",
+        "C:/Users/Dmitr\\u00fd/AppData/Local/Temp/host",
+        r"~\AppData\Local\Temp\host",
+        r"~\\AppData\\Local\\Temp\\host",
+        "~/AppData/Local/Temp/host",
+    ):
+        assert form in forms, form
+    assert not any(form.startswith("~") for form in install_check._path_forms(home, home))
+
+
+def test_a_home_relative_windows_path_the_host_printed_is_a_placeholder(tmp_path):
+    """RM12: whatever else the host printed under the home as ``~\\...`` (plain
+    or JSON-escaped) becomes ``<home>``, as ``~/...`` does."""
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    text = install_check._sanitize("~\\skills\\a\n" + json.dumps("~\\skills\\b"), ctx)
+    assert text.splitlines() == ["<home>\\skills\\a", json.dumps("<home>\\skills\\b")]
 
 
 def test_what_uninstall_leaves_is_recorded_and_the_removal_steps_clear_it(
