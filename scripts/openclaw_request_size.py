@@ -206,15 +206,15 @@ async def measure_fixtures(
             )
         rows.append(row)
     measured_rows = [r for r in rows if "size" in r]
-    fits = sum(1 for r in measured_rows if r["fits_local"] is True)
+    local_fits = sum(1 for r in measured_rows if r["fits_local"] is True)
     undecided_rows = [r for r in measured_rows if r["fits_local"] is None]
     over = [r for r in measured_rows if r["fits_local"] is False]
-    local_only: dict[str, int] = {"local": fits, "needs_external": len(over)}
+    local_only: dict[str, int] = {"local": local_fits, "needs_external": len(over)}
     if external_context_limit is None:
-        auto: dict[str, int] = {"local": fits, "external_if_it_fits": len(over)}
+        auto: dict[str, int] = {"local": local_fits, "external_if_it_fits": len(over)}
     else:
         auto = {
-            "local": fits,
+            "local": local_fits,
             "external": sum(1 for r in over if r["fits_external"] is True),
             "context_limit_exceeded": sum(1 for r in over if r["fits_external"] is False),
         }
@@ -229,9 +229,9 @@ async def measure_fixtures(
         "captured": len(rows),
         "rejected": len(rows) - len(measured_rows),
         "measured": len(measured_rows),
-        "fits_local": fits,
+        "fits_local": local_fits,
         "undecided": len(undecided_rows),
-        "share_fits_local": fits / len(measured_rows) if measured_rows else None,
+        "share_fits_local": local_fits / len(measured_rows) if measured_rows else None,
         "share_fits_local_is": "measured" if upper and lower else "lower_bound",
         "auto": auto,
         "local_only": local_only,
