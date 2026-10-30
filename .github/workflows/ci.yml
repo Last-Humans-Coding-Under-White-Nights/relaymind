@@ -21,6 +21,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Install
         run: pip install -e ".[dev]"
@@ -33,10 +35,17 @@ jobs:
 
       # The browser test of the demo UI page script (#89) needs Chromium.
       - name: Install browser
-        run: playwright install --with-deps chromium
+        run: playwright install --with-deps --only-shell chromium
 
       - name: Test
-        run: pytest
+        run: pytest --durations=30 --junitxml=ci-evidence/core-tests.xml
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-test-profile-${{ matrix.os }}
+          path: ci-evidence/core-tests.xml
+          if-no-files-found: warn
 
   # The OpenClaw provider plugin (#145; RM33, section 7.5): type, test, and a
   # reproducible release build; the transport and plugin tiers against the real
@@ -70,6 +79,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Install
         run: |
@@ -103,6 +114,7 @@ jobs:
           tests/test_openclaw_eval_apple_m1.py
           tests/test_openclaw_command_qualification.py
           tests/test_openclaw_mcp_qualification.py
+          --durations=30 --junitxml=ci-evidence/openclaw-tests.xml
 
       - name: Pinned host lifecycle (install, inspect, round trips, removal)
         run: |
