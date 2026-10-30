@@ -369,7 +369,9 @@ def create_windows_private_file(path: Path, data: bytes) -> bool:
                         tree._directories[()],
                         read=True,
                         directory=False,
-                        access=0xC0000000,
+                        # NtCreateFile's synchronous option requires explicit
+                        # SYNCHRONIZE in addition to generic file rights.
+                        access=0xC0100000,
                         disposition=2,
                         security_descriptor=descriptor,
                     )

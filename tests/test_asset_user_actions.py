@@ -869,8 +869,13 @@ def test_production_registration_gate_and_closed_private_file(tmp_path):
         session_mapping="session",
         qualified_contract_revision="claimed",
     )
-    path.write_text(json.dumps(dict(schema_version=1, registrations=[record])))
-    path.chmod(0o600)
+    from relaymind.recommendations.private_files import create_private_file_exclusive
+
+    # Windows elevated tokens may default ordinary files to a group owner;
+    # chmod does not establish TokenUser ownership or a restrictive DACL.
+    assert create_private_file_exclusive(
+        path, json.dumps(dict(schema_version=1, registrations=[record])).encode()
+    )
     with pytest.raises(PrivateFileError):
         load_registrations(path)
 
@@ -890,12 +895,15 @@ def test_production_registration_gate_and_closed_private_file(tmp_path):
 def test_private_registration_json_rejects_duplicate_fields_and_blank_refs(tmp_path):
     """RM37/AC28: operator records are closed and unambiguous before loading."""
     import json
+    import os
 
+    from relaymind.recommendations.private_files import create_private_file_exclusive
     from relaymind.recommendations.registrations import PrivateFileError, load_registrations
 
     path = tmp_path / "registration.json"
-    path.write_text('{"schema_version":1,"schema_version":1,"registrations":[]}')
-    path.chmod(0o600)
+    assert create_private_file_exclusive(
+        path, b'{"schema_version":1,"schema_version":1,"registrations":[]}'
+    )
     with pytest.raises(PrivateFileError):
         load_registrations(path)
     raw = dict(
@@ -918,10 +926,16 @@ def test_private_registration_json_rejects_duplicate_fields_and_blank_refs(tmp_p
     with pytest.raises(PrivateFileError):
         load_registrations(path)
     path.write_text('{"schema_version":1,"registrations":[]}')
-    path.chmod(0o644)
+    if os.name == "nt":
+        from test_private_files_windows import _set_native_acl
+
+        _set_native_acl(path, "D:P(A;;FA;;;WD)")
+    else:
+        path.chmod(0o644)
     with pytest.raises(PrivateFileError):
         load_registrations(path)
-    path.chmod(0o600)
+    path.unlink()
+    assert create_private_file_exclusive(path, b'{"schema_version":1,"registrations":[]}')
     link = tmp_path / "alias.json"
     link.symlink_to(path)
     with pytest.raises(PrivateFileError):
@@ -978,8 +992,13 @@ def test_launcher_resolves_private_path_and_loads_only_disabled_contracts(tmp_pa
         session_mapping="session",
         qualified_contract_revision="claimed",
     )
-    path.write_text(json.dumps(dict(schema_version=1, registrations=[record])))
-    path.chmod(0o600)
+    from relaymind.recommendations.private_files import create_private_file_exclusive
+
+    # Windows elevated tokens may default ordinary files to a group owner;
+    # chmod does not establish TokenUser ownership or a restrictive DACL.
+    assert create_private_file_exclusive(
+        path, json.dumps(dict(schema_version=1, registrations=[record])).encode()
+    )
     config = load_config(
         write_config(tmp_path, "\n[user_actions]\nregistrations_path='private.json'\n")
     )

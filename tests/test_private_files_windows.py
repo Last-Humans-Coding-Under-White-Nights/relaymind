@@ -21,7 +21,7 @@ def test_private_native_create_applies_security_at_exclusive_open():
     def native_open(out, access, attributes, status, allocation, flags, share, disposition, *rest):
         attrs = C.cast(attributes, C.POINTER(_ObjectAttributes)).contents
         assert attrs.SecurityDescriptor == 12345
-        assert access == 0xC0000000
+        assert access == 0xC0100000
         assert share == 1
         assert disposition == 2
         C.cast(out, C.POINTER(C.c_void_p))[0] = 999
@@ -36,7 +36,7 @@ def test_private_native_create_applies_security_at_exclusive_open():
                 1,
                 read=True,
                 directory=False,
-                access=0xC0000000,
+                access=0xC0100000,
                 disposition=2,
                 security_descriptor=12345,
             )
@@ -471,7 +471,12 @@ def test_private_creation_write_progress_failures_and_late_cancellation(
         attrs = C.cast(attributes, C.POINTER(_ObjectAttributes)).contents
         assert attrs.SecurityDescriptor == descriptor_address
         assert attrs.RootDirectory == 333
-        assert access == 0xC0000000 and share == 1 and disposition == 2
+        # NtCreateFile requires explicit SYNCHRONIZE for synchronous options,
+        # even when generic read/write rights will later be mapped for the file.
+        assert rest[0] & 0x20
+        assert access & 0x00100000, "synchronous NtCreateFile requires SYNCHRONIZE"
+        assert access & 0xC0000000 == 0xC0000000
+        assert share == 1 and disposition == 2
         C.cast(out, C.POINTER(C.c_void_p))[0] = 999
         created = True
         if scenario == "cancel-create":

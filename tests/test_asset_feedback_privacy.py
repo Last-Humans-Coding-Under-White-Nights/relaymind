@@ -1,6 +1,7 @@
 """RM37/AC28: explicit feedback erasure, replay and retention ownership."""
 
 import asyncio
+import os
 from datetime import datetime, timedelta
 
 import httpx
@@ -520,8 +521,9 @@ def test_erasure_key_loss_or_replacement_refuses_replay_in_the_same_process(tmp_
     with pytest.raises(PrivateFileError):
         feedback.reset(action, 1, claim, now=NOW)
     assert not path.exists()
-    path.write_bytes(b"r" * 32)
-    path.chmod(0o600)
+    from relaymind.recommendations.private_files import create_private_file_exclusive
+
+    assert create_private_file_exclusive(path, b"r" * 32)
     with pytest.raises(PrivateFileError):
         feedback.reset(action, 1, claim, now=NOW)
     # Operator restore crosses a process/store lifetime. New bytes under a new
@@ -665,6 +667,10 @@ def test_feedback_page_sequence_survives_reset_and_uuid_disorder(tmp_path, monke
     runs.close()
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="POSIX chmod/rename semantics; native ACL mutation and pinned leases tested separately",
+)
 def test_private_file_lease_checks_same_opened_owner_and_path(tmp_path):
     """RM37/AC28: final and ancestor substitutions cannot bypass privacy."""
     import pytest
@@ -752,8 +758,9 @@ def test_key_lease_rejects_same_bytes_replacement_and_missing_binding(tmp_path):
     path = tmp_path / "privacy-db.erasure-key"
     original = path.read_bytes()
     path.rename(tmp_path / "retired-key")
-    path.write_bytes(original)
-    path.chmod(0o600)
+    from relaymind.recommendations.private_files import create_private_file_exclusive
+
+    assert create_private_file_exclusive(path, original)
     with pytest.raises(ValueError, match="key"):
         feedback.reset(action, 1, claim, now=NOW)
     with runs.sql_transaction() as db:
