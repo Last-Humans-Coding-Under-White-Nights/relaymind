@@ -2239,7 +2239,7 @@ pin a compatible `OfferCache` generation before idempotency lookup, and pass
 `trusted_scope` and `trusted_permissions` to `select_assets`. These are trusted
 internal keyword arguments, not request authority. Observer events and immutable
 attempts are for its separate lifecycle store. The service must recheck current
-revision/admission and call that same budget's `check_before_commit()` inside its
+revision/admission and call that same budget's `check()` inside its
 atomic ready transition; a returned selection object is not a durable ready
 commit. Call `fence_terminal()` on terminal lifecycle commit and retain ownership
 of resistant work until bounded cleanup observes completion. API lifecycle,
