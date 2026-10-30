@@ -324,18 +324,29 @@ class _Api:
             raise NotADirectoryError(errno.ENOTDIR, "source_not_directory")
         raise OSError(errno.EACCES if code in (5, 32, 33) else errno.EIO, "source_io_failure")
 
-    def create(self, name: str, parent: int | None, *, read: bool, directory: bool) -> int:
+    def create(
+        self,
+        name: str,
+        parent: int | None,
+        *,
+        read: bool,
+        directory: bool,
+        access: int | None = None,
+        disposition: int = 1,
+        security_descriptor: int | None = None,
+    ) -> int:
         encoded = name.encode("utf-16-le")
         if len(encoded) > 65532:
             raise OSError(errno.ENAMETOOLONG, "invalid_component")
         buffer = C.create_string_buffer(encoded + b"\x00\x00")
         string = _UnicodeString(len(encoded), len(encoded) + 2, C.cast(buffer, C.c_void_p))
         attributes = _ObjectAttributes(
-            C.sizeof(_ObjectAttributes), parent, C.pointer(string), 0x40, None, None
+            C.sizeof(_ObjectAttributes), parent, C.pointer(string), 0x40, security_descriptor, None
         )
         handle, status = _HANDLE(), _IoStatus()
         status.Result.Status = _STATUS_PENDING
-        access = 0x00100000 | 0x80 | (1 if read or directory else 0)
+        if access is None:
+            access = 0x00100000 | 0x80 | (1 if read or directory else 0)
         share = 1 | (2 if directory or not read else 0)
 
         def opened() -> int:
@@ -347,7 +358,7 @@ class _Api:
                 None,
                 0,
                 share,
-                1,
+                disposition,
                 0x00200000 | 0x20 | _FILE_COMPLETE_IF_OPLOCKED,
                 None,
                 0,
@@ -376,7 +387,10 @@ class _Api:
 
         result = self.control.invoke(opened, discard=discard)
         if result < 0:
-            self.failure(self.error_code(result))
+            code = self.error_code(result)
+            if disposition == 2 and code in (80, 183):
+                raise FileExistsError(errno.EEXIST, "private_file_exists")
+            self.failure(code)
         if result == _STATUS_OPLOCK_BREAK_IN_PROGRESS:
             discard(result)
             raise OSError(errno.EIO, "source_oplock_pending")

@@ -36,7 +36,7 @@ __all__ = [
 ]
 
 # The columns every lifecycle read needs; accepted_json (the full offer) is read
-# only by the ready transition.
+# only by ready/action admission, not ordinary lifecycle reads.
 _VIEW_COLUMNS = "recommendation_id,user_id,workspace_id,state,state_version,view_json,active_ms"
 
 
@@ -97,11 +97,21 @@ def _expiry_due(row, now) -> bool:
 class RecommendationStore:
     def __init__(self, store: RunStore) -> None:
         self.store = store
-        self._purge_hooks: list[Callable] = []
+
+    @property
+    def _purge_hooks(self) -> list[Callable]:
+        return self.store._recommendation_purge_hooks
+
+    @property
+    def _maintain_feedback(self) -> Callable | None:
+        with self.store._lock:
+            owner = self.store._asset_feedback_owner
+            return None if owner is None else owner.maintain_scope
 
     def register_purge_hook(self, hook: Callable) -> None:
         """Synchronous transactional ownership extension for #195 private state."""
-        self._purge_hooks.append(hook)
+        with self.store._lock:
+            self._purge_hooks.append(hook)
 
     def _purge(self, db, now):
         ids = tuple(
@@ -111,9 +121,9 @@ class RecommendationStore:
                 (utc_iso(now),),
             )
         )
+        for hook in self._purge_hooks:
+            hook(db, ids, now=now)
         for rid in ids:
-            for hook in self._purge_hooks:
-                hook(db, rid)
             db.execute(
                 "UPDATE recommendation_slot SET recommendation_id=NULL WHERE recommendation_id=?",
                 (rid,),
@@ -449,11 +459,199 @@ class RecommendationStore:
             )
         return StoredRecommendation(validate_view(view))
 
+    def _expire_scope(self, db, scope, *, now):
+        rows = db.execute(
+            f"SELECT {_VIEW_COLUMNS} FROM recommendations WHERE user_id=? AND workspace_id=? "
+            "AND retain_until>? AND state='ready' AND "
+            "json_extract(view_json,'$.choice_expires_at')<=?",
+            (scope["user_id"], scope["workspace_id"], utc_iso(now), utc_iso(now)),
+        ).fetchall()
+        for row in rows:
+            self._expire(db, row, now)
+
+    def _observe_scope_expiry(self, scope, *, now):
+        with self.store.sql_read() as db:
+            due = db.execute(
+                "SELECT 1 FROM recommendations WHERE user_id=? AND workspace_id=? "
+                "AND retain_until>? AND state='ready' AND "
+                "json_extract(view_json,'$.choice_expires_at')<=? LIMIT 1",
+                (scope["user_id"], scope["workspace_id"], utc_iso(now), utc_iso(now)),
+            ).fetchone()
+        if due:
+            with self.store.sql_transaction() as db:
+                self._expire_scope(db, scope, now=now)
+
+    def _action_maintenance(self, registrations, action, *, now):
+        # Maintenance has its own committed boundary. A later rejected replay
+        # or fresh precondition cannot undo expiry of unrelated private data.
+        registrations.recheck(action)
+        if self._maintain_feedback is not None:
+            self._maintain_feedback(action.scope, now=now)
+
+    def choose(
+        self,
+        action,
+        recommendation_id,
+        request,
+        claim,
+        *,
+        now,
+        registrations,
+        catalog=None,
+        policy=lambda record: True,
+    ) -> StoredResponse:
+        """RM37: one preference action, independent of feedback CAS and execution."""
+        error = None
+        result = None
+        self._action_maintenance(registrations, action, now=now)
+        with self.store.sql_transaction() as db:
+            registrations.recheck(action)
+            prior = self._lookup(db, claim, now)
+            if prior is not None:
+                if prior.response is None:
+                    error = RecommendationError("recommendation_in_progress", recommendation_id)
+                else:
+                    result = prior.response
+            else:
+                try:
+                    row = self._row(
+                        db,
+                        action.scope,
+                        recommendation_id,
+                        now=now,
+                        columns=_VIEW_COLUMNS + ",accepted_json,retain_until",
+                    )
+                except RecommendationError as exc:
+                    error = exc
+                else:
+                    self._expire(db, row, now)
+                    row = self._row(
+                        db,
+                        action.scope,
+                        recommendation_id,
+                        now=now,
+                        columns=_VIEW_COLUMNS + ",accepted_json,retain_until",
+                    )
+                    view = json.loads(row["view_json"])
+                    if request["expected_version"] != view["state_version"]:
+                        error = RecommendationError("stale_version", recommendation_id)
+                    elif view["state"] == "expired":
+                        error = RecommendationError("recommendation_expired", recommendation_id)
+                    elif view["state"] != "ready":
+                        error = RecommendationError("invalid_state", recommendation_id)
+                    else:
+                        choice = request["choice"]
+                        if choice["kind"] == "asset":
+                            offered = {
+                                item["asset_id"]: item
+                                for item in view["result"]["final_candidates"]
+                            }
+                            target = offered.get(choice["asset_id"])
+                            if target is None:
+                                error = RecommendationError("invalid_request", recommendation_id)
+                            elif target["content_hash"] != choice["content_hash"]:
+                                error = RecommendationError("asset_changed", recommendation_id)
+                            else:
+                                original = {
+                                    item["asset_id"]: item
+                                    for item in json.loads(row["accepted_json"])["catalog"]
+                                }.get(choice["asset_id"])
+                                try:
+                                    current = next(
+                                        item
+                                        for item in catalog.snapshot().assets
+                                        if item.asset_id == choice["asset_id"]
+                                    )
+                                except (StopIteration, Exception):
+                                    current = None
+                                if (
+                                    original is None
+                                    or current is None
+                                    or any(
+                                        getattr(current, name) != original[name]
+                                        for name in (
+                                            "schema_version",
+                                            "kind",
+                                            "source_id",
+                                            "source_locator",
+                                            "source_version",
+                                            "content_hash",
+                                            "identity",
+                                        )
+                                    )
+                                    or not policy(current)
+                                ):
+                                    error = RecommendationError("asset_changed", recommendation_id)
+                        if error is None:
+                            scope_rev = db.execute(
+                                "SELECT feedback_revision FROM recommendation_scope "
+                                "WHERE user_id=? AND workspace_id=?",
+                                (action.scope["user_id"], action.scope["workspace_id"]),
+                            ).fetchone()[0]
+                            version = view["state_version"] + 1
+                            evidence = dict(
+                                adapter_id=action.adapter_id,
+                                scope=action.scope,
+                                recommendation_id=recommendation_id,
+                                task_id=view["task_id"],
+                                choice=choice,
+                                catalog_revision=view["catalog_revision"],
+                                host_snapshot_revision=None,
+                                recorded_at=utc_iso(now),
+                                state_version=version,
+                            )
+                            kind = "cancelled" if choice["kind"] == "cancel" else "chosen"
+                            view.update(
+                                state=kind,
+                                state_version=version,
+                                selected_action=evidence,
+                                feedback_revision=scope_rev,
+                            )
+                            self._write(db, view, row["active_ms"])
+                            payload = (
+                                dict(
+                                    state_version=version,
+                                    origin="direct_user",
+                                    reason="user_cancel",
+                                    action=evidence,
+                                    active_ms=row["active_ms"],
+                                    attempts=[],
+                                )
+                                if kind == "cancelled"
+                                else dict(state_version=version, action=evidence)
+                            )
+                            self._event(
+                                db,
+                                recommendation_id,
+                                kind,
+                                payload,
+                                now,
+                                row["active_ms"],
+                                actor="adapter",
+                            )
+                            result = StoredResponse(200, view)
+                            db.execute(
+                                "INSERT INTO recommendation_claims VALUES(?,?,?,?,?,?)",
+                                (
+                                    claim.namespace,
+                                    claim.key_digest,
+                                    claim.request_digest,
+                                    recommendation_id,
+                                    200,
+                                    canonical_json(result.body),
+                                ),
+                            )
+        if error is not None:
+            raise error
+        return result
+
     def _observe(self, scope, rid, now, read):
         """Run read(db, view) on the current view, recording a due expiry first.
 
         Only a read that finds an elapsed choice window takes the write lock.
         """
+        if self._maintain_feedback is not None:
+            self._maintain_feedback(scope, now=now)
         with self.store.sql_read() as db:
             row = self._row(db, scope, rid, now=now)
             if not _expiry_due(row, now):
@@ -463,7 +661,19 @@ class RecommendationStore:
             return read(db, self._expire(db, row, now))
 
     def get(self, scope, recommendation_id, *, now):
-        return self._observe(scope, recommendation_id, now, lambda db, stored: stored)
+        def current_view(db, stored):
+            revision = db.execute(
+                "SELECT feedback_revision FROM recommendation_scope "
+                "WHERE user_id=? AND workspace_id=?",
+                (scope["user_id"], scope["workspace_id"]),
+            ).fetchone()
+            if revision is None:
+                raise RecommendationError("internal_error")
+            return StoredRecommendation(
+                validate_view(dict(stored.view, feedback_revision=revision[0]))
+            )
+
+        return self._observe(scope, recommendation_id, now, current_view)
 
     def events(self, scope, recommendation_id, *, after_seq, limit, now):
         if (

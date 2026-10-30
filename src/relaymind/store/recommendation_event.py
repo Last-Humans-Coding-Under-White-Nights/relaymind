@@ -18,6 +18,7 @@ _SCHEMAS = {
         "recommendation_readiness",
         "recommendation_result",
         "asset_record",
+        "action_evidence",
     )
 }
 _REGISTRY = Registry().with_resources(

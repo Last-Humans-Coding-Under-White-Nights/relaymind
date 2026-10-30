@@ -56,7 +56,12 @@ def test_create_poll_readiness_and_exact_defaults_replay(tmp_path):
                 assert (
                     await client.get(f"/relay/v1/recommendations/{rid}/events" + suffix)
                 ).status_code == 400
-            for path in (f"/{rid}/choice", f"/{rid}/feedback", "/registration", "/cancel"):
+            # RM37/AC28 adds private actions; the app bearer grants no authority.
+            for path in (f"/{rid}/choice", f"/{rid}/feedback"):
+                assert (
+                    await client.post("/relay/v1/recommendations" + path, json={})
+                ).status_code == 403
+            for path in ("/registration", "/cancel"):
                 assert (
                     await client.post("/relay/v1/recommendations" + path, json={})
                 ).status_code in (404, 405)

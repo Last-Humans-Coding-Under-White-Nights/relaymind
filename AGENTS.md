@@ -46,12 +46,13 @@ codebase.
 | `scripts/` | Developer scripts: model manifest generation (RM18), the live acceptance harness, the corpus runner (with its offline draft-pass regrade), the latency benchmark (RM25), `--runtime-extra-args` for a constrained runtime configuration (RM18, spec 0.31 section 12.2), the spikes in `scripts/probes/` (the offline ones over the corpus export, and the live timing probes of the runtime and of one provider), and the M9 OpenClaw scripts (`openclaw_qualification.py`, `openclaw_request_size.py`, `openclaw_install_check.py`, and the evaluation runner `run_openclaw_eval.py`; RM33, spec 0.50 section 12.5); `scripts/README.md` lists what exists |
 | `docs/` | Spec, architecture, roadmap, testing guide, live evidence record (`docs/EVIDENCE.md`, raw exports in `docs/evidence/`), and design rationale for spec revisions (`docs/design/`, not normative) |
 
-## M10 ownership (spec 0.52; #187, #192, #193, #194)
+## M10 ownership (spec 0.52; #187, #192, #193, #194, #195)
 
 The independent catalog discovery core above is implemented by #192,
-recommendation-only selection v2 with its lexical fallback by #193, and the
-recommendation lifecycle/API below by #194. Remaining components below are
-planned and must not be described as implemented.
+recommendation-only selection v2 with its lexical fallback by #193, the
+recommendation lifecycle/API below by #194, and backend direct actions and
+feedback privacy by #195. Remaining components below are planned and must not
+be described as implemented.
 The user explicitly authorized implementation on the reviewed specification PR
 stack before #187 merges; each implementation issue still needs its RM/AC
 mapping. Merges remain user-owned. Contracts are in spec sections
@@ -64,7 +65,7 @@ spec section 1. Managed selection v1 (AC22) and the provider and host contract
 | --- | --- |
 | `src/relaymind/assets/`, `src/relaymind/store/asset_catalog.py` future extensions | Useful lexical index/readiness and qualified external refresh remain #196/#203; RM38, RM43; AC29, AC34. The independent discovery core is listed above. |
 | `src/relaymind/api/recommendations.py`, `src/relaymind/recommendations/service.py`, `src/relaymind/store/recommendations.py`, separate store schemas | Implemented #194: independent recommendation lifecycle, JSON polling, readiness, events, idempotency, recovery and expiry; RM36, AC27. TraceEvent stays at v1; no invented run ID. |
-| `src/relaymind/api/user_actions.py`, `src/relaymind/store/asset_feedback.py` | Operator-registered backend action authentication; choice and feedback each updated by their own compare-and-set (CAS); retention and erasure; RM37, AC28. No public self-enrollment of credentials; only explicit corrections feed adaptation. |
+| `src/relaymind/api/user_actions.py`, `src/relaymind/recommendations/registrations.py`, `src/relaymind/recommendations/private_files.py`, `src/relaymind/recommendations/erasure.py`, `src/relaymind/store/asset_feedback.py` | Backend #195: operator-registered action authentication, independent choice/feedback CAS, scoped inspection and logical erasure/retention; RM37, AC28. Production host authority remains blocked; fixtures require explicit qualification injection. No public enrollment or adaptation; only explicit corrections are eligible for later adaptation. |
 | `src/relaymind/selection/asset_hybrid.py`, `src/relaymind/selection/asset_adaptation.py` | Local pinned hybrid selector and bounded, reversible correction adaptation; RM41, RM42; AC32, AC33. Inference and its cost, and the base and final ranks, are recorded separately. |
 | `src/relaymind/evaluation/asset_corpus.py`, `src/relaymind/evaluation/asset_benchmark.py`, `evaluation/assets/`, `scripts/asset_selection_benchmark.py` | Original multilingual corpus locks, independent labels, and one shared run and compare protocol; RM40, RM44; AC31, AC36, AC37. Toy data cannot pass final gates. |
 | `integrations/openclaw/` future recommendation adapter | Qualified direct action, exact skill and MCP use, host-only approvals and execution; RM39; AC30, AC35. Blocked until further qualification and a later normative adapter revision (ROADMAP M10). |

@@ -186,7 +186,15 @@ def install_recommendation_routes(
             raise RecommendationError("invalid_request")
         if service is None:
             raise RecommendationError("recommendation_unavailable")
-        body = service.redactor.redact_with_repeats(scrub(body, [app.state.application_token]))
+        body = service.redactor.redact_with_repeats(
+            scrub(
+                body,
+                [
+                    app.state.application_token,
+                    *request.headers.getlist("X-RelayMind-User-Action-Token"),
+                ],
+            )
+        )
         digest = canonical_digest(
             dict(method="POST", endpoint=ENDPOINT, object_id=None, query={}, body=body)
         )
@@ -257,3 +265,6 @@ def install_recommendation_routes(
     app.add_api_route(ENDPOINT + "/readiness", guarded(readiness), methods=["GET"])
     app.add_api_route(ENDPOINT + "/{recommendation_id}", guarded(get), methods=["GET"])
     app.add_api_route(ENDPOINT + "/{recommendation_id}/events", guarded(events), methods=["GET"])
+    from relaymind.api.user_actions import install_action_routes
+
+    install_action_routes(app, service)
