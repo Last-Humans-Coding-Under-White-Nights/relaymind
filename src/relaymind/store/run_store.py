@@ -307,7 +307,8 @@ MIGRATIONS: tuple[str, ...] = (
     );
     CREATE TABLE asset_catalog_jobs (
         job_id TEXT PRIMARY KEY,
-        source_id TEXT NOT NULL REFERENCES asset_catalog_sources(source_id),
+        -- NULL marks a derived-only rebuild (spec 8.1 IndexJobEventV1).
+        source_id TEXT REFERENCES asset_catalog_sources(source_id),
         config_digest TEXT NOT NULL,
         state TEXT NOT NULL CHECK(
             state IN ('running','succeeded','failed','cancelled','interrupted')

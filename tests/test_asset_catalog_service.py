@@ -557,3 +557,172 @@ def test_lifespan_stops_the_probe_and_logs_when_the_worker_died(tmp_path, monkey
 
     asyncio.run(run())
     launched.orchestrator.store.close()
+
+
+def test_repeated_cancel_still_drains_the_thread_before_return(tmp_path, monkeypatch):
+    """RM34/AC25: a second cancel while draining never abandons the staging thread."""
+    skill(tmp_path / "source")
+    entered, release = threading.Event(), threading.Event()
+    finished = threading.Event()
+    real = s.capture_source
+
+    def blocked(source, **kwargs):
+        entered.set()
+        release.wait(timeout=3)
+        try:
+            return real(source, **kwargs)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(s, "capture_source", blocked)
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(tmp_path / "source"), catalog)
+
+        async def run():
+            task = asyncio.create_task(service.tick())
+            assert await asyncio.to_thread(entered.wait, 1)
+            task.cancel()
+            await asyncio.sleep(0.01)
+            task.cancel()
+            await asyncio.sleep(0.01)
+            assert not task.done()
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert finished.is_set()
+            await service.stop()
+
+        asyncio.run(run())
+
+
+def test_cancelled_stop_still_fails_pending_rescans(tmp_path, monkeypatch):
+    """RM34/AC25: waiters get a cancelled failure even when stop() itself is cancelled."""
+    skill(tmp_path / "source")
+    entered, release = threading.Event(), threading.Event()
+    real = s.capture_source
+
+    def blocked(source, **kwargs):
+        entered.set()
+        release.wait(timeout=3)
+        return real(source, **kwargs)
+
+    monkeypatch.setattr(s, "capture_source", blocked)
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(tmp_path / "source"), catalog)
+
+        async def run():
+            first = asyncio.create_task(service.rescan("example"))
+            assert await asyncio.to_thread(entered.wait, 1)
+            # A waiter queued behind the running job is still pending at shutdown.
+            pending = asyncio.get_running_loop().create_future()
+            service._pending["other"] = pending
+            stopping = asyncio.create_task(service.stop())
+            await asyncio.sleep(0.01)
+            stopping.cancel()
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await stopping
+            with pytest.raises(SourceFailure):
+                await first
+            assert pending.done() and isinstance(pending.exception(), SourceFailure)
+            assert str(pending.exception()) == "cancelled"
+            assert service._pending == {}
+            if service._task is not None and not service._task.done():
+                await service._task
+
+        asyncio.run(run())
+
+
+def test_cancelled_jobs_reject_nothing_and_use_spec_reasons(tmp_path, monkeypatch):
+    """RM34/AC25: a cancelled job records shutdown, rejects no record (spec 8.1)."""
+    skill(tmp_path / "source")
+    entered, release = threading.Event(), threading.Event()
+    real = s.capture_source
+
+    def blocked(source, **kwargs):
+        entered.set()
+        release.wait(timeout=3)
+        return real(source, **kwargs)
+
+    monkeypatch.setattr(s, "capture_source", blocked)
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(tmp_path / "source"), catalog)
+
+        async def run():
+            task = asyncio.create_task(service.tick())
+            assert await asyncio.to_thread(entered.wait, 1)
+            task.cancel()
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            await service.stop()
+
+        asyncio.run(run())
+        outcome = catalog.job_outcomes()[0]
+        assert (outcome["state"], outcome["reason"]) == ("cancelled", "shutdown")
+        assert catalog.snapshot().sources[0]["rejected_count"] == 0
+
+
+def test_operator_cancel_records_operator_reason(tmp_path, monkeypatch):
+    """RM34/AC25: the last rescan waiter cancelling is an operator cancel (spec 8.1)."""
+    skill(tmp_path / "source")
+    entered, release = threading.Event(), threading.Event()
+    real = s.capture_source
+
+    def blocked(source, **kwargs):
+        entered.set()
+        release.wait(timeout=3)
+        return real(source, **kwargs)
+
+    monkeypatch.setattr(s, "capture_source", blocked)
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(tmp_path / "source"), catalog)
+
+        async def run():
+            waiter = asyncio.create_task(service.rescan("example"))
+            assert await asyncio.to_thread(entered.wait, 1)
+            waiter.cancel()
+            await asyncio.sleep(0.01)
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await waiter
+            for _ in range(200):
+                if catalog.job_outcomes()[0]["state"] != "running":
+                    break
+                await asyncio.sleep(0.01)
+            await service.stop()
+
+        asyncio.run(run())
+        outcome = catalog.job_outcomes()[0]
+        assert (outcome["state"], outcome["reason"]) == ("cancelled", "operator")
+        assert catalog.snapshot().sources[0]["rejected_count"] == 0
+
+
+def test_catalog_conflict_is_recorded_as_index_error(tmp_path, monkeypatch):
+    """RM34/AC25: job reasons stay in the closed spec 8.1 enum."""
+    from relaymind.store.asset_catalog import CatalogConflict
+
+    skill(tmp_path / "source")
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(tmp_path / "source"), catalog)
+
+        def conflict(*args, **kwargs):
+            raise CatalogConflict("revision moved")
+
+        monkeypatch.setattr(catalog, "commit", conflict)
+
+        async def run():
+            await service.tick()
+            await service.stop()
+
+        asyncio.run(run())
+        outcome = catalog.job_outcomes()[0]
+        assert (outcome["state"], outcome["reason"]) == ("failed", "index_error")
+        source = catalog.snapshot().sources[0]
+        assert [e["reason"] for e in source["exclusions"]] == ["index_error"]
+        assert source["rejected_count"] == 0
