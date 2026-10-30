@@ -2423,9 +2423,13 @@ lookup tombstone; empty retention does not change feedback revision.
 Focused deterministic checks are `tests/test_asset_user_actions.py`,
 `tests/test_asset_feedback_privacy.py`, and the platform-scoped private-file
 checks (`tests/test_private_files.py` on POSIX, `tests/test_private_files_windows.py`
-on native Windows). A private file is created complete or not at all: the bytes
-are synced under a temporary name and hard-linked to the final name, so a crash
-never leaves a truncated erasure key. A configured path through an ancestor link
+on native Windows). On POSIX, a private file is created complete or not at all:
+the bytes are synced under a temporary name and hard-linked to the final name,
+so a crash never leaves a truncated erasure key. Native Windows creates the
+final file exclusively with a protected DACL before writing and flushing it;
+an interrupted write can leave an incomplete file, which the erasure-key reader
+refuses. This is not an atomic-publication guarantee (RM16, RM37/AC28).
+A configured path through an ancestor link
 (such as macOS /tmp) is resolved where it is configured; a link in the checked
 path is still refused. They exercise backend boundaries and do not qualify a real host/person,
 OpenClaw exact loading, interactive approvals, or native Windows privacy from a
