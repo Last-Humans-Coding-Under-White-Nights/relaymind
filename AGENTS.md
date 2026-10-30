@@ -57,11 +57,11 @@ spec section 1. Managed selection v1 (AC22) and the provider and host contract
 | Planned path | Owner and requirements |
 | --- | --- |
 | `src/relaymind/assets/`, `src/relaymind/store/asset_catalog.py` | Catalog identities, safe searchable projections, index publication, and qualified refresh; RM34, RM38, RM43; AC25, AC29, AC34. Schemas: spec section 8.1. Never executes assets or extracts archives without limits. |
-| `src/relaymind/selection/asset_contract.py`, `asset_chain.py`, `asset_lexical.py`, v2 schemas | Recommendation-only selection v2 and a separately attributed lexical fallback; RM35, AC26. v2 never feeds a managed run. |
+| `src/relaymind/selection/asset_contract.py`, `src/relaymind/selection/asset_chain.py`, `src/relaymind/selection/asset_lexical.py`, v2 schemas | Recommendation-only selection v2 and a separately attributed lexical fallback; RM35, AC26. v2 never feeds a managed run. |
 | `src/relaymind/api/recommendations.py`, `src/relaymind/store/recommendations.py`, separate store schemas | Independent recommendation lifecycle, events, idempotency, and recovery; RM36, AC27. TraceEvent stays at v1; no invented run ID. |
 | `src/relaymind/api/user_actions.py`, `src/relaymind/store/asset_feedback.py` | Operator-registered backend action authentication; choice and feedback each updated by their own compare-and-set (CAS); retention and erasure; RM37, AC28. No public self-enrollment of credentials; only explicit corrections feed adaptation. |
-| `src/relaymind/selection/asset_hybrid.py`, `asset_adaptation.py` | Local pinned hybrid selector and bounded, reversible correction adaptation; RM41, RM42; AC32, AC33. Inference and its cost, and the base and final ranks, are recorded separately. |
-| `src/relaymind/evaluation/asset_corpus.py`, `asset_benchmark.py`, `evaluation/assets/`, `scripts/asset_selection_benchmark.py` | Original multilingual corpus locks, independent labels, and one shared run and compare protocol; RM40, RM44; AC31, AC36, AC37. Toy data cannot pass final gates. |
+| `src/relaymind/selection/asset_hybrid.py`, `src/relaymind/selection/asset_adaptation.py` | Local pinned hybrid selector and bounded, reversible correction adaptation; RM41, RM42; AC32, AC33. Inference and its cost, and the base and final ranks, are recorded separately. |
+| `src/relaymind/evaluation/asset_corpus.py`, `src/relaymind/evaluation/asset_benchmark.py`, `evaluation/assets/`, `scripts/asset_selection_benchmark.py` | Original multilingual corpus locks, independent labels, and one shared run and compare protocol; RM40, RM44; AC31, AC36, AC37. Toy data cannot pass final gates. |
 | `integrations/openclaw/` future recommendation adapter | Qualified direct action, exact skill and MCP use, host-only approvals and execution; RM39; AC30, AC35. Blocked until further qualification and a later normative adapter revision (ROADMAP M10). |
 
 ## Ownership boundaries (do not blur these)
