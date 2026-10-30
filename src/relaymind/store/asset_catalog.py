@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from relaymind.assets.catalog import (
+    AssetRecord,
     AssetValidationError,
     CatalogSnapshot,
     CatalogUnavailable,
@@ -61,6 +62,7 @@ class PreparedPublication:
     capture: SourceCapture
     rows: tuple[tuple[str, str, str, str, str | None], ...]
     ids: frozenset[str]
+    records: tuple[AssetRecord, ...]
 
 
 def _effective_stale(row: Mapping[str, Any], source_stale: Mapping[str, bool]) -> bool:
@@ -270,7 +272,7 @@ class AssetCatalogStore:
     ) -> PreparedPublication:
         """Re-verify every captured projection; CPU work only, safe off the event loop."""
         check()
-        rows = []
+        rows, records = [], []
         ids: set[str] = set()
         for document in capture.documents:
             check()
@@ -285,6 +287,7 @@ class AssetCatalogStore:
             ):
                 raise AssetValidationError("invalid_capture")
             ids.add(record.asset_id)
+            records.append(record)
             rows.append(
                 (
                     record.asset_id,
@@ -299,7 +302,119 @@ class AssetCatalogStore:
         check()
         if ids & capture.removed_asset_ids or (not capture.complete and capture.removed_asset_ids):
             raise AssetValidationError("invalid_capture")
-        return PreparedPublication(capture, tuple(rows), frozenset(ids))
+        return PreparedPublication(capture, tuple(rows), frozenset(ids), tuple(records))
+
+    def preview(
+        self,
+        prepared: PreparedPublication,
+        *,
+        expected_revision: int,
+        base: CatalogSnapshot,
+        check: Callable[[], None] = lambda: None,
+    ) -> CatalogSnapshot:
+        """Prepare effective offered records before a source CAS; no rows are mutated.
+
+        The source commit still owns final identifier/ownership/deadline checks.
+        Existing published bytes survive a capture-only observation unchanged.
+        """
+        check()
+        if base.catalog_revision != expected_revision:
+            raise CatalogConflict("catalog_revision_conflict")
+        with self.store.sql_read() as db:
+            revision = db.execute("SELECT revision FROM asset_catalog_meta").fetchone()[0]
+            source = db.execute(
+                "SELECT * FROM asset_catalog_sources WHERE source_id=?",
+                (prepared.capture.source_id,),
+            ).fetchone()
+            old_rows = {
+                r["asset_id"]: dict(r)
+                for r in db.execute(
+                    "SELECT asset_id,projection_digest,relative_package_path,stale "
+                    "FROM asset_catalog_assets WHERE source_id=?",
+                    (prepared.capture.source_id,),
+                )
+            }
+        if revision != expected_revision:
+            raise CatalogConflict("catalog_revision_conflict")
+        capture = prepared.capture
+        previous = (
+            dict(source)
+            if source is not None
+            else dict(
+                source_version=None,
+                content_hash=None,
+                stale=1,
+                complete=0,
+                accepted_count=0,
+                rejected_count=0,
+                exclusions_json="[]",
+            )
+        )
+        records = {r.asset_id: r for r in base.assets}
+        encoded = dict(zip((r.asset_id for r in base.assets), base.record_bytes, strict=True))
+        changed = False
+        for row, record in zip(prepared.rows, prepared.records, strict=True):
+            check()
+            asset_id, record_json, _, digest, package = row
+            old = old_rows.get(asset_id)
+            if (
+                old is None
+                or old["projection_digest"] != digest
+                or old["relative_package_path"] != package
+                or old["stale"]
+                or previous["stale"]
+            ):
+                changed = True
+                records[asset_id] = record
+                encoded[asset_id] = record_json.encode("utf-8")
+        if not capture.complete:
+            for asset_id in old_rows.keys() - prepared.ids:
+                check()
+                record = records[asset_id]
+                if not record.stale:
+                    changed = True
+                    records[asset_id] = replace(record, stale=True)
+                    encoded[asset_id] = canonical_json(records[asset_id].to_json_object()).encode()
+        for asset_id in capture.removed_asset_ids:
+            if asset_id in records:
+                changed = True
+                records.pop(asset_id)
+                encoded.pop(asset_id)
+        accepted = sum(r.source_id == capture.source_id for r in records.values())
+        after = dict(
+            source_version=capture.source_version,
+            content_hash=capture.source_digest,
+            stale=0,
+            complete=int(capture.complete),
+            accepted_count=accepted,
+            rejected_count=0,
+            exclusions_json="[]",
+        )
+        changed = changed or any(previous[k] != v for k, v in after.items())
+        source_view = dict(
+            source_id=capture.source_id,
+            source_version=capture.source_version,
+            content_hash=capture.source_digest,
+            captured_at=capture.captured_at,
+            last_success_at=utc_iso(self.store.clock.utc_now()),
+            accepted_count=accepted,
+            rejected_count=0,
+            stale=False,
+            complete=capture.complete,
+            exclusions=[],
+        )
+        sources = {s["source_id"]: s for s in base.sources}
+        sources[capture.source_id] = freeze_json(source_view)
+        ordered = tuple(records[k] for k in sorted(records))
+        check()
+        return CatalogSnapshot(
+            1,
+            expected_revision + int(changed),
+            utc_iso(self.store.clock.utc_now()) if changed else base.published_at,
+            tuple(sources[k] for k in sorted(sources)),
+            ordered,
+            tuple(encoded[r.asset_id] for r in ordered),
+        )
 
     def publish(
         self,
@@ -561,10 +676,15 @@ class AssetCatalogStore:
                 )
             )
 
-    def begin_job(self, source_id: str, config_digest: str) -> str:
+    def begin_job(
+        self, source_id: str | None, config_digest: str, *, job_kind: str = "refresh"
+    ) -> str:
+        if job_kind not in ("refresh", "lexical", "embedding"):
+            raise ValueError("invalid_job_kind")
         job_id = "assetjob_" + uuid.uuid4().hex
         with self.store.sql_transaction() as connection:
-            self._ensure_source(connection, source_id)
+            if source_id is not None:
+                self._ensure_source(connection, source_id)
             connection.execute(
                 "INSERT INTO asset_catalog_jobs(job_id,source_id,config_digest,state,"
                 "started_at) VALUES(?,?,?,'running',?)",
@@ -585,7 +705,7 @@ class AssetCatalogStore:
                     source_id=source_id,
                     catalog_revision=revision,
                     config_digest=config_digest,
-                    job_kind="refresh",
+                    job_kind=job_kind,
                     budgets=acquisition_budgets(),
                 ),
             )
@@ -608,6 +728,7 @@ class AssetCatalogStore:
         batches: tuple[Mapping, ...] = (),
         accepted_count: int = 0,
         rejected_count: int = 0,
+        index_revision: str | None = None,
     ) -> None:
         if state not in ("succeeded", "failed", "cancelled"):
             raise ValueError("invalid_job_state")
@@ -640,7 +761,7 @@ class AssetCatalogStore:
                     "published",
                     dict(
                         catalog_revision=revision,
-                        index_revision=None,
+                        index_revision=index_revision,
                         accepted_count=accepted_count,
                         rejected_count=rejected_count,
                         duration_ms=duration_ms,
@@ -703,6 +824,83 @@ class AssetCatalogStore:
                     "SELECT state, COUNT(*) FROM asset_catalog_jobs GROUP BY state"
                 )
             }
+
+    def lexical_generation(self, *, snapshot: CatalogSnapshot | None = None) -> Mapping | None:
+        """Derived compatibility only; original records and feedback retain their owners."""
+        with self.store.sql_read() as db:
+            row = db.execute("SELECT * FROM asset_lexical_generation").fetchone()
+        if row is None:
+            return None
+        try:
+            value = dict(row)
+            ids = json.loads(value.pop("eligible_ids_json"))
+            assets = json.loads(value.pop("asset_ids_json"))
+            if (
+                not isinstance(ids, list)
+                or not isinstance(assets, list)
+                or any(not isinstance(k, str) or not k for k in ids)
+                or any(not isinstance(k, str) or not k for k in assets)
+                or ids != sorted(set(ids))
+                or assets != sorted(set(assets))
+                or not set(ids) <= set(assets)
+                or type(value["catalog_revision"]) is not int
+                or value["catalog_revision"] < 0
+                or (
+                    snapshot is not None
+                    and (
+                        value["catalog_revision"] > snapshot.catalog_revision
+                        or (
+                            value["catalog_revision"] == snapshot.catalog_revision
+                            and assets != [r.asset_id for r in snapshot.assets]
+                        )
+                    )
+                )
+                or not value["representation"]
+                or len(value["config_digest"]) != 64
+            ):
+                raise ValueError
+            return freeze_json(value | dict(eligible_ids=ids, asset_ids=assets))
+        except (ValueError, TypeError, KeyError):
+            raise CatalogUnavailable("catalog_corrupt") from None
+
+    def commit_lexical_generation(
+        self,
+        *,
+        expected_revision: int,
+        eligible_ids: tuple[str, ...],
+        asset_ids: tuple[str, ...],
+        representation: str,
+        config_digest: str,
+        advance: bool = False,
+        check: Callable[[], None] = lambda: None,
+    ) -> int:
+        with self.store.sql_transaction() as db:
+            check()
+            revision = db.execute("SELECT revision FROM asset_catalog_meta").fetchone()[0]
+            if revision != expected_revision:
+                raise CatalogConflict("catalog_revision_conflict")
+            revision += int(advance)
+            if advance:
+                db.execute(
+                    "UPDATE asset_catalog_meta SET revision=?,published_at=?",
+                    (revision, utc_iso(self.store.clock.utc_now())),
+                )
+            db.execute(
+                "INSERT INTO asset_lexical_generation VALUES(1,?,?,?,?,?) "
+                "ON CONFLICT(singleton) DO UPDATE SET catalog_revision=excluded.catalog_revision,"
+                "asset_ids_json=excluded.asset_ids_json,"
+                "eligible_ids_json=excluded.eligible_ids_json,representation=excluded.representation,"
+                "config_digest=excluded.config_digest",
+                (
+                    revision,
+                    canonical_json(sorted(asset_ids)),
+                    canonical_json(sorted(eligible_ids)),
+                    representation,
+                    config_digest,
+                ),
+            )
+            check()
+        return revision
 
     def snapshot_with_provenance(self) -> tuple[CatalogSnapshot, dict[str, Mapping]]:
         """One consistent read: the snapshot and each source's provenance row."""

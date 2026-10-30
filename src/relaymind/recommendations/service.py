@@ -4,12 +4,13 @@ import asyncio
 import logging
 import re
 import uuid
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 
 from relaymind.assets.catalog import CatalogUnavailable, timestamp
+from relaymind.assets.index_lifecycle import IndexLifecycle
 from relaymind.assets.settings import AssetSettings, RecommendationSettings
-from relaymind.assets.sources import source_config_digest
+from relaymind.assets.sources import SourceFailure, source_config_digest
 from relaymind.canonical import canonical_digest
 from relaymind.recommendations.errors import RecommendationError
 from relaymind.recommendations.limits import CANDIDATE_LIMIT, recommendation_budgets
@@ -24,7 +25,7 @@ from relaymind.selection.asset_chain import (
 )
 from relaymind.selection.asset_contract import SelectorContext
 from relaymind.selection.asset_factory import build_asset_selector
-from relaymind.selection.asset_lexical import LexicalAssetSelector, OfferCache
+from relaymind.selection.asset_lexical import IMPLEMENTATION, LexicalAssetSelector, OfferCache
 from relaymind.store.asset_catalog import AssetCatalogStore
 from relaymind.store.recommendations import (
     RecommendationClaim,
@@ -70,7 +71,8 @@ class CatalogProvider:
         policy: Callable = lambda record: True,
     ):
         self.store, self.settings = store, settings
-        self.scope, self.permissions, self.policy = dict(scope), tuple(permissions), policy
+        self.scope, self.permissions, self._policy = dict(scope), tuple(permissions), policy
+        self._eligible_sources = frozenset(s.source_id for s in settings.sources)
         self.cache = OfferCache(current_revision=store.revision)
         self.snapshot = None
         self.reason = "no_lexical_generation"
@@ -79,6 +81,32 @@ class CatalogProvider:
         self._stopping = False
         self._refresh_epoch = 0
         self._refresh_lock = asyncio.Lock()
+        self.lifecycle = IndexLifecycle(self)
+
+    @property
+    def policy(self) -> Callable:
+        # Bound once by feedback/admission consumers, but resolves current
+        # publication eligibility and operator policy on every candidate check.
+        return self._eligible
+
+    @policy.setter
+    def policy(self, policy: Callable) -> None:
+        self._policy = policy
+        self.cache.invalidate()
+        self.reason = "no_lexical_generation"
+
+    def _eligible(self, record) -> bool:
+        return record.source_id in self._eligible_sources and self._policy(record)
+
+    def generation_config(self) -> str:
+        return canonical_digest(
+            dict(
+                sources={s.source_id: source_config_digest(s) for s in self.settings.sources},
+                permissions=self.permissions,
+                scope=self.scope,
+                representation=IMPLEMENTATION,
+            )
+        )
 
     async def refresh(self) -> None:
         # The cache can invalidate during a failed older publication. Keep
@@ -86,9 +114,15 @@ class CatalogProvider:
         async with self._refresh_lock:
             await self._refresh_owned()
 
-    async def _refresh_owned(self) -> None:
+    async def _refresh_owned(
+        self,
+        *,
+        force: bool = False,
+        check: Callable[[], None] = lambda: None,
+        yield_control: Callable[[], Awaitable[None]] | None = None,
+    ) -> bool:
         if self._stopping:
-            return
+            return False
         self._refresh_epoch += 1
         epoch = self._refresh_epoch
         failed_reason = "corrupt_catalog"
@@ -104,6 +138,11 @@ class CatalogProvider:
                 snapshot, rows = self.store.snapshot_with_provenance()
             self.known_revision, self.size = snapshot.catalog_revision, len(snapshot.assets)
             configured = {s.source_id: source_config_digest(s) for s in self.settings.sources}
+            self._eligible_sources = frozenset(
+                source_id
+                for source_id, digest in configured.items()
+                if source_id in rows and rows[source_id]["config_digest"] == digest
+            )
             success = False
             for source_id, digest in configured.items():
                 row = rows.get(source_id)
@@ -123,37 +162,105 @@ class CatalogProvider:
                 self.cache.invalidate()
                 self.snapshot = None
                 self.reason = "no_lexical_generation"
-                return
-            if any(
-                r.source_id not in configured
-                or rows.get(r.source_id, {}).get("config_digest") != configured[r.source_id]
-                for r in snapshot.assets
-            ):
+                return False
+            if any(r.source_id in configured and r.source_id not in rows for r in snapshot.assets):
+                # Retained inactive sources can leave the offer, but a configured
+                # source's missing provenance cannot establish compatibility.
                 failed_reason = "no_lexical_generation"
                 raise CatalogUnavailable("catalog_configuration_changed")
-            if snapshot is self.snapshot and self._cache_valid(snapshot.catalog_revision):
-                self.reason = None
-                return
+            manifest_corrupt = False
+            try:
+                manifest = self.store.lexical_generation(snapshot=snapshot)
+            except CatalogUnavailable:
+                # Safe committed records/provenance were validated above. An
+                # invalid derived marker is rebuilt without source acquisition;
+                # its unknown prior eligibility cannot reuse the old revision.
+                manifest, manifest_corrupt = None, True
+            asset_ids = tuple(r.asset_id for r in snapshot.assets)
+            eligible_ids = tuple(r.asset_id for r in snapshot.assets if self.policy(r))
+            previous_ids = () if manifest is None else tuple(manifest["eligible_ids"])
+            eligibility_changed = eligible_ids != previous_ids
+            # Add/remove publication already owns those identities' revision.
+            # A separate eligibility change to a surviving record is a new
+            # committed generation even if newer metadata lacked an index.
+            advance = manifest_corrupt or bool(
+                snapshot.catalog_revision > 0
+                if manifest is None
+                else (set(eligible_ids) ^ set(previous_ids))
+                & set(manifest["asset_ids"])
+                & set(asset_ids)
+            )
+            config_digest = self.generation_config()
+            preserve_compatible = bool(
+                not advance
+                and not eligibility_changed
+                and manifest is not None
+                and manifest["catalog_revision"] == snapshot.catalog_revision
+                and manifest["config_digest"] == config_digest
+                and manifest["representation"] == IMPLEMENTATION
+                and self.snapshot is not None
+                and self._cache_valid(snapshot.catalog_revision)
+            )
+            # Cancellation/deadline is not evidence of corrupt metadata. First
+            # establish whether the already-serving offer is still compatible.
             failed_reason = "no_lexical_generation"
-            preserve_compatible = True
-            await self.cache.publish(
-                snapshot,
+            check()
+            if (
+                not force
+                and snapshot is self.snapshot
+                and self._cache_valid(snapshot.catalog_revision)
+                and not eligibility_changed
+                and manifest is not None
+                and manifest["config_digest"] == config_digest
+                and manifest["representation"] == IMPLEMENTATION
+            ):
+                self.reason = None
+                return True
+            options = dict(
                 scope=self.scope,
                 permissions=self.permissions,
                 policy=self.policy,
-                context=SelectorContext(self.store.store.clock.monotonic, lambda: None),
+                context=SelectorContext(self.store.store.clock.monotonic, check, yield_control),
             )
+
+            def guard():
+                nonlocal preserve_compatible
+                check()
+                if (
+                    self.generation_config() != config_digest
+                    or tuple(r.asset_id for r in snapshot.assets if self.policy(r)) != eligible_ids
+                ):
+                    preserve_compatible = False
+                    raise CatalogUnavailable("catalog_policy_changed")
+
+            if advance:
+                snapshot = replace(snapshot, catalog_revision=snapshot.catalog_revision + 1)
+            prepared = await self.cache.prepare(snapshot, **options)
+            with self.store.store._lock:
+                guard()
+                self.store.commit_lexical_generation(
+                    expected_revision=snapshot.catalog_revision - int(advance),
+                    eligible_ids=eligible_ids,
+                    asset_ids=asset_ids,
+                    representation=IMPLEMENTATION,
+                    config_digest=config_digest,
+                    advance=advance,
+                    check=check,
+                )
+                self.cache.install(prepared)
             if self._stopping:
                 self.cache.invalidate()
-                return
+                return False
             if epoch != self._refresh_epoch:
-                return
+                return False
             self.snapshot = snapshot
+            self.known_revision = snapshot.catalog_revision
             self.reason = None
-        except Exception:
+            return True
+        except Exception as exc:
             # A losing refresh cannot tear down a newer compatible publication.
             if epoch != self._refresh_epoch:
-                return
+                return False
             if preserve_compatible and self.snapshot is not None:
                 try:
                     revision = self.store.revision()
@@ -161,10 +268,15 @@ class CatalogProvider:
                     revision = None
                 if revision is not None and self._cache_valid(revision):
                     self.reason = None
-                    return
+                    if isinstance(exc, SourceFailure):
+                        raise
+                    return False
             self.cache.invalidate()
             self.snapshot = None
             self.reason = failed_reason
+            if isinstance(exc, SourceFailure):
+                raise
+            return False
 
     def _cache_valid(self, revision: int) -> bool:
         try:

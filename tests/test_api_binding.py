@@ -6,9 +6,11 @@ secure random source and is long enough to resist guessing. Both are
 refused at startup, never downgraded.
 """
 
+import httpx
 import pytest
+from fastapi import FastAPI
 
-from api_helpers import make_app, token_of
+from api_helpers import RunningServer, make_app, token_of
 from gateway_helpers import build_gateway
 from relaymind.adapters.local_http import is_loopback_host
 from relaymind.api.app import MIN_TOKEN_LENGTH, create_app, generate_application_token
@@ -87,3 +89,20 @@ def test_the_server_refuses_a_public_bind_address(tmp_path, host):
     app = make_app(build_gateway(tmp_path, []))
     with pytest.raises(ValueError, match="loopback"):
         build_server(app, host=host, port=8080)
+
+
+def test_asgi_wrapper_without_state_serves_normally():
+    """RM19, RM33/AC24, RM38/AC29: optional warm-up preserves ASGI wrappers."""
+    app = FastAPI()
+
+    @app.get("/health")
+    async def health():
+        return {"ready": True}
+
+    async def wrapped(scope, receive, send):
+        await app(scope, receive, send)
+
+    with RunningServer(wrapped) as running:
+        response = httpx.get(running.origin + "/health")
+        assert response.status_code == 200
+        assert response.json() == {"ready": True}

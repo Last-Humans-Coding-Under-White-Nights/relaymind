@@ -10,7 +10,7 @@ import json
 import math
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -92,6 +92,7 @@ class CaptureContext:
     received_bytes: int = 0
     record_count: int = 0
     observe_busy: Callable[[], bool] = lambda: False
+    observe_busy_since: Callable[[], float | None] = lambda: None
     busy_observed_at: float | None = None
     batch_durations_ms: list[float] = field(default_factory=list)
     batch_started: float = field(init=False)
@@ -101,21 +102,42 @@ class CaptureContext:
     rejected_count: int = 0
     utc_now: Callable[[], datetime] = lambda: datetime.now(UTC)
     deadline: float = field(init=False)
+    work_gate: Callable[["CaptureContext"], None] | None = None
+    async_gate: Callable[["CaptureContext"], Awaitable[None]] | None = None
+    work_batch_started: float = field(init=False)
+    work_batches: list[dict] = field(default_factory=list)
+    busy_since: float | None = None
+    drain_ms: float | None = None
 
     def __post_init__(self) -> None:
         utc_iso(self.captured_at)
         self.batch_started = self.monotonic()
         self.deadline = self.batch_started + JOB_SECONDS
+        self.work_batch_started = self.batch_started
 
     def check(self) -> None:
-        # Observe busy only until the first overlap: it costs store queries.
-        # capture_source sets received_bytes on every failure it raises.
-        if self.busy_observed_at is None and self.observe_busy():
-            self.busy_observed_at = self.monotonic()
+        if self.work_gate is not None:
+            self.work_gate(self)
+        else:
+            self.check_limits()
+
+    def check_limits(self) -> None:
+        if self.observe_busy():
+            self.busy_since = self.observe_busy_since()
+            if self.busy_observed_at is None:
+                self.busy_observed_at = self.monotonic()
+        else:
+            self.busy_since = None
         if self.cancelled():
             raise SourceFailure("cancelled", rejected_count=0)
         if self.monotonic() >= self.deadline:
             raise SourceFailure("deadline")
+
+    async def async_checkpoint(self) -> None:
+        if self.async_gate is not None:
+            await self.async_gate(self)
+        else:
+            self.check_limits()
 
     def add_bytes(self, count: int) -> None:
         self.check()
@@ -257,10 +279,13 @@ class _Stage:
                 raise SourceFailure("source_unavailable")
 
 
-def _json(raw: bytes) -> dict[str, Any]:
+def _json(raw: bytes, context: CaptureContext | None = None) -> dict[str, Any]:
+    check = context.check if context is not None else lambda: None
+
     def pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
         result = {}
         for key, value in items:
+            check()
             if key in result:
                 raise SourceFailure("invalid_data")
             result[key] = value
@@ -276,19 +301,85 @@ def _json(raw: bytes) -> dict[str, Any]:
             raise SourceFailure("invalid_data")
         return number
 
-    value = json.loads(
-        raw.decode("utf-8"),
+    decoder = json.JSONDecoder(
         object_pairs_hook=pairs,
         parse_constant=invalid_constant,
         parse_float=finite,
     )
+
+    def checked(scanner):
+        def scan_once(string, index):
+            check()
+            return scanner(string, index)
+
+        return scan_once
+
+    parse_object, parse_array = decoder.parse_object, decoder.parse_array
+
+    def object_value(state, strict, scan_once, *args):
+        check()
+        return parse_object(state, strict, checked(scan_once), *args)
+
+    def array_value(state, scan_once):
+        check()
+        return parse_array(state, checked(scan_once))
+
+    # The standard Python scanner exposes each array/object value to the same
+    # gate. The C decoder otherwise traverses a whole document in one call.
+    decoder.parse_object = object_value
+    decoder.parse_array = array_value
+    decoder.scan_once = json.scanner.py_make_scanner(decoder)
+    value = decoder.decode(raw.decode("utf-8"))
     if not isinstance(value, dict):
         raise SourceFailure("invalid_data")
     return value
 
 
 class _DataLoader(yaml.SafeLoader):
-    pass
+    """The existing safe YAML parser, with gates inside its Python CPU loops."""
+
+    def __init__(self, stream, *, check: Callable[[], None] = lambda: None):
+        self._check = check
+        self._characters = 0
+        self._advanced = 0
+        super().__init__(stream)
+
+    def peek(self, index=0):
+        # A single scalar can consume most of the allowed header. Token/node
+        # gates alone cannot interrupt its scanner character loop.
+        self._characters += 1
+        if self._characters >= 256:
+            self._characters = 0
+            self._check()
+        return super().peek(index)
+
+    def forward(self, length=1):
+        # Reader.forward itself loops in Python over every consumed character;
+        # a scalar's single large advance must be interruptible too.
+        while length:
+            step = min(length, 256)
+            self._advanced += step
+            if self._advanced >= 256:
+                self._advanced = 0
+                self._check()
+            super().forward(step)
+            length -= step
+
+    def fetch_more_tokens(self):
+        self._check()
+        return super().fetch_more_tokens()
+
+    def compose_node(self, parent, index):
+        self._check()
+        return super().compose_node(parent, index)
+
+    def construct_object(self, node, deep=False):
+        self._check()
+        return super().construct_object(node, deep=deep)
+
+    def construct_sequence(self, node, deep=False):
+        self._check()
+        return super().construct_sequence(node, deep=deep)
 
 
 def _mapping(loader: _DataLoader, node: yaml.MappingNode) -> dict[str, Any]:
@@ -304,12 +395,17 @@ def _mapping(loader: _DataLoader, node: yaml.MappingNode) -> dict[str, Any]:
 _DataLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _mapping)
 
 
-def _frontmatter(raw: bytes) -> tuple[dict[str, Any], str]:
+def _frontmatter(raw: bytes, context: CaptureContext) -> tuple[dict[str, Any], str]:
     decoded = raw.decode("utf-8")
     lines = decoded.splitlines(keepends=True)
     if not lines or lines[0].rstrip("\r\n") != "---":
         raise SourceFailure("invalid_data")
-    closing = next((i for i in range(1, len(lines)) if lines[i].rstrip("\r\n") == "---"), None)
+    closing = None
+    for i in range(1, len(lines)):
+        context.check()
+        if lines[i].rstrip("\r\n") == "---":
+            closing = i
+            break
     if closing is None:
         raise SourceFailure("invalid_data")
     header, body = "".join(lines[1:closing]), "".join(lines[closing + 1 :])
@@ -317,13 +413,24 @@ def _frontmatter(raw: bytes) -> tuple[dict[str, Any], str]:
         raise SourceFailure("size_limit")
     if not body.strip():
         raise SourceFailure("invalid_data")
-    if any(isinstance(token, AliasToken | AnchorToken | TagToken) for token in yaml.scan(header)):
-        raise SourceFailure("invalid_data")
-    node = yaml.compose(header, Loader=_DataLoader)
+    scanner = _DataLoader(header, check=context.check)
+    try:
+        while scanner.check_token():
+            context.check()
+            if isinstance(scanner.get_token(), AliasToken | AnchorToken | TagToken):
+                raise SourceFailure("invalid_data")
+    finally:
+        scanner.dispose()
+    loader = _DataLoader(header, check=context.check)
+    try:
+        node = loader.get_single_node()
+    finally:
+        loader.dispose()
     if node is None:
         raise SourceFailure("invalid_data")
 
     def depth(current: yaml.Node | None, level: int = 0) -> None:
+        context.check()
         if level > 16:
             raise SourceFailure("invalid_data")
         if isinstance(current, yaml.MappingNode):
@@ -336,7 +443,11 @@ def _frontmatter(raw: bytes) -> tuple[dict[str, Any], str]:
 
     depth(node)
     # Build the value from the composed node instead of parsing the header again.
-    value = _DataLoader("").construct_document(node)
+    constructor = _DataLoader("", check=context.check)
+    try:
+        value = constructor.construct_document(node)
+    finally:
+        constructor.dispose()
     if not isinstance(value, dict):
         raise SourceFailure("invalid_data")
     return value, body
@@ -386,7 +497,7 @@ def _local(
         context.add_record()
         relative = "SKILL.md" if package == "." else f"{package}/SKILL.md"
         original, digest = stage.read(relative, MAX_ASSET_BYTES)
-        metadata, body = _frontmatter(original)
+        metadata, body = _frontmatter(original, context)
         extra = metadata.get("metadata", {})
         if not isinstance(extra, dict):
             raise SourceFailure("invalid_data")
@@ -394,7 +505,7 @@ def _local(
         fallback = {}
         if stage.exists(manifest):
             raw, _ = stage.read(manifest, MAX_METADATA_BYTES)
-            fallback = _json(raw)
+            fallback = _json(raw, context)
             # Validate recognized values even when frontmatter wins.
             if "version" in fallback:
                 text(fallback["version"], 256)
@@ -440,6 +551,7 @@ def _local(
     context.finish_batch()
     absent = set()
     for item in previous.records:
+        context.check()
         if item.record.asset_id in paths:
             continue
         package = item.relative_package_path
@@ -474,7 +586,34 @@ def _import(
     stage: _Stage, source: SourceConfig, previous: SourceInventory, context: CaptureContext
 ) -> SourceCapture:
     raw, digest = stage.read(source.path.name, MAX_METADATA_BYTES)
-    data = validate_document(_json(raw), _IMPORT_VALIDATOR)
+    data = _json(raw, context)
+    schema = _IMPORT_VALIDATOR.schema
+    properties = dict(schema["properties"])
+    # Preserve every envelope constraint, then apply the exact published item
+    # schemas under the same gate. One full validator traversal of 1000 records
+    # would otherwise bypass capture's per-record scheduling checkpoints.
+    for name in ("records", "removed_asset_ids"):
+        properties[name] = {
+            key: value
+            for key, value in properties[name].items()
+            if key not in ("items", "uniqueItems")
+        }
+    context.check()
+    if not _IMPORT_VALIDATOR.evolve(schema=schema | {"properties": properties}).is_valid(data):
+        raise SourceFailure("invalid_data")
+    entry_validator = _IMPORT_VALIDATOR.evolve(schema=schema["properties"]["records"]["items"])
+    removed_validator = _IMPORT_VALIDATOR.evolve(
+        schema=schema["properties"]["removed_asset_ids"]["items"]
+    )
+    seen = set()
+    for asset_id in data["removed_asset_ids"]:
+        context.check()
+        if not removed_validator.is_valid(asset_id) or asset_id in seen:
+            raise SourceFailure("invalid_data")
+        seen.add(asset_id)
+    for entry in data["records"]:
+        context.check()
+        validate_document(entry, entry_validator)
     if data["source_id"] != source.source_id:
         raise SourceFailure("invalid_data")
     if len(data["records"]) + len(data["removed_asset_ids"]) > 1000:
@@ -489,6 +628,7 @@ def _import(
     records_by_id = {item.record.asset_id for item in previous.records}
     known = records_by_id | previous.tombstones
     for asset_id in removed:
+        context.check()
         _check_owner(asset_id, previous, source.source_id)
         if asset_id not in known:
             raise SourceFailure("invalid_data")

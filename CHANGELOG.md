@@ -6,7 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Specification 0.52 → 0.53 (RM16, RM38/AC29; #196, review #218):
+  fixed 500 ms request slots admit measured dispatch delay within the original
+  deadline, with a separate scheduled-to-response p95 ≤300 ms gate. Service and
+  dispatch-to-response timings keep their existing meanings. Contention evidence
+  requires foreground overlap with each sequential source/rebuild job and actual
+  inference contention, without requiring two jobs on one worker to run together.
+  All samples, failure denominators and outstanding live qualification gates remain.
+
 ### Added
+
+- Lexical startup and index lifecycle (#196; RM38/AC29): enabled launchers serve
+  committed lexical recommendations before generative warm-up, with an independent
+  pending inference fence and owned shutdown. Source changes prepare matching
+  offers/indexes before atomic publication; policy eligibility has a durable public
+  revision binding. Source scans, derived rebuilds and failure repair share one
+  cooperative worker with actual job/batch/overlap/drain evidence. Restart rebuilds
+  derived state from safe metadata without resetting feedback or its protected key.
+  Deterministic checks do not close the real 300-asset, platform, memory or
+  embedding/inference contention gates.
 
 - Backend direct actions and feedback privacy (#195; RM37/AC28): separate
   operator registrations and current bearer checks, exact retained-offer choice,

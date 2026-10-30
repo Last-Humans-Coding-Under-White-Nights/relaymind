@@ -201,6 +201,20 @@ def test_correction_outside_original_pool_accepts_current_source_target(tmp_path
                 capture(tmp_path / "outside-source", source_id="outside"),
                 expected_revision=catalog.revision(),
             )
+            # RM38/AC29: the new source is explicitly configured and published;
+            # RM37/AC28 still admits correction outside the original pool.
+            from dataclasses import replace
+
+            from relaymind.assets.settings import SourceConfig
+
+            service.provider.settings = replace(
+                service.provider.settings,
+                sources=(
+                    *service.provider.settings.sources,
+                    SourceConfig("outside", "local_directory", tmp_path / "outside-source"),
+                ),
+            )
+            await service.refresh_catalog()
             outside = next(
                 asset
                 for asset in catalog.snapshot().assets
