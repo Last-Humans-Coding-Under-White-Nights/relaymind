@@ -125,7 +125,7 @@ class CatalogProvider:
                 return
             if any(
                 r.source_id not in configured
-                or rows[r.source_id]["config_digest"] != configured[r.source_id]
+                or rows.get(r.source_id, {}).get("config_digest") != configured[r.source_id]
                 for r in snapshot.assets
             ):
                 failed_reason = "no_lexical_generation"
@@ -405,6 +405,8 @@ class RecommendationService:
                 work.attempts.append(event.attempt_record)
                 payload = dict(attempt_record=event.attempt_record, embeddings=[])
                 kind = "selector.finished"
+            else:
+                raise TypeError("unexpected selection event")
             self.store.append_attempt_event(
                 self.scope,
                 rid,
