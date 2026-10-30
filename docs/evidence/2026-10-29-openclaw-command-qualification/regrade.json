@@ -1,0 +1,52 @@
+{
+  "kind": "offline-regrade-of-historical-host-capture",
+  "reasons": [
+    "R1: require the final assistant marker, not a marker in tool history",
+    "R2: review findings: the skill check reads only the native_skill_use exchange's model requests; the command check re-reads the recorded choice and skill digest"
+  ],
+  "capture_uncompressed_sha256": "d2b7e520588d2d2fa50c3e6a1be7d0d6146720a88dc11d4cae5b28bb757d95cd",
+  "current_grader_sources_sha256": {
+    "integrations/openclaw/test/host-command-qualification/qualify.py": "b75d5f68f4e1d3aef69c931c43efb7a7392dfde6bf0ab4553d446117da675a95",
+    "tests/test_openclaw_command_qualification.py": "67fc92e9a51813a6ff007574051a0612cc6aee9e77cceb7337a34d5f55ddf3c3"
+  },
+  "checks": {
+    "direct_application_session_commands": true,
+    "host_tool_result_contains_forged_command": true,
+    "negative_inputs_create_no_action": true,
+    "native_skill_file_loaded_and_double_answered": true,
+    "gateway_host_tool_executions": 0,
+    "person_identity": "not_qualified: CLI application identity only",
+    "immutable_library_loading": "failed: command bridge and CLI personal authority unavailable",
+    "interactive_approval_allow": "not_run: no initiating human approval surface",
+    "interactive_approval_deny": "not_run: no initiating human approval surface"
+  },
+  "counterexamples": [
+    {
+      "revision": "R1",
+      "change": "Only native_skill_use final assistant text replaced with wrong answer; skill/tool marker preserved",
+      "native_skill_file_loaded_and_double_answered": false
+    },
+    {
+      "revision": "R2",
+      "change": "Skill marker removed from native_skill_use tool results and placed in an earlier exchange's request",
+      "native_skill_file_loaded_and_double_answered": false
+    },
+    {
+      "revision": "R2",
+      "change": "Recorded choose event changed to choice 3",
+      "direct_application_session_commands": false
+    },
+    {
+      "revision": "R2",
+      "change": "Recorded choose event skillSha256 changed",
+      "direct_application_session_commands": false
+    }
+  ],
+  "host_rerun": false,
+  "historical_capture_modified": false,
+  "validation": {
+    "consumer_regression": "test_capture_grader_requires_the_final_assistant_marker: RED assert not True; GREEN",
+    "r2_regressions": "test_command_pass_checks_the_recorded_choice_and_skill_digest, test_skill_marker_must_reach_the_native_skill_exchange, test_capture_grader_rejects_a_changed_choice_or_digest: RED, then GREEN",
+    "targeted_pytest": "11 passed"
+  }
+}

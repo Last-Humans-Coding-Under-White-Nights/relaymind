@@ -3580,3 +3580,20 @@ remain unknown. The 100-skill cohort, 25 equivalent-function English pairs,
 redistribution and scheduled refresh remain unqualified, with the required
 operator export and scope decision documented. This bounded qualification adds
 no product behavior and does not change the section 12.4 benchmark sources.
+
+## 2026-10-29 — OpenClaw direct commands and skill qualification (#189)
+
+The pinned real host and RelayMind gateway over model doubles handled registered
+recommendation/choice commands before inference and supplied application/session
+context. Forged source, tool-result and numbered chat inputs created no action;
+native skill search/read remained enabled and loaded an authored sandbox marker.
+This is a bounded Linux x86-64 functional qualification (RM08, RM11, RM12, RM16,
+RM19, RM33; AC24), not live-model or supported-platform acceptance evidence.
+
+The result is partial: the CLI application identity is not a verified person,
+both command-to-Gateway library dispatch candidates were refused, and personal
+library save required durable sign-in. The file guard/read does not qualify
+immutable revision attachment. Human approval allow/deny is `not_run` without an
+initiating interactive operator surface. Exact commands, boundaries, source
+hashes and sanitized captures are in the
+[evidence record](evidence/2026-10-29-openclaw-command-qualification/README.md).

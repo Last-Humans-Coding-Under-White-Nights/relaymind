@@ -1,0 +1,41 @@
+{
+  "id": "relaymind-command-qualification",
+  "name": "RelayMind command qualification (test only)",
+  "activation": {
+    "onStartup": true
+  },
+  "commandAliases": [
+    {
+      "name": "rmqualification"
+    }
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "recorderUrl",
+      "credentialFile",
+      "registration",
+      "skill"
+    ],
+    "properties": {
+      "recorderUrl": {
+        "type": "string"
+      },
+      "credentialFile": {
+        "type": "string"
+      },
+      "registration": {
+        "type": "object"
+      },
+      "skill": {
+        "type": "object"
+      }
+    }
+  },
+  "contracts": {
+    "gatewayMethodDispatch": [
+      "authenticated-request"
+    ]
+  }
+}

@@ -1260,3 +1260,13 @@ the pinned host accepted that provider entry in the recorded run (36 of 36
 direct attempts, 0 host failovers). Record the result in `docs/EVIDENCE.md` ("M9 OpenClaw
 evaluation").
 
+
+### Direct command and skill qualification (#189)
+
+The test-only [command probe](test/host-command-qualification/README.md) uses
+real authenticated `chat.send`, the provider and model doubles while preserving
+native skill/tool search. The [recorded qualification](../../docs/evidence/2026-10-29-openclaw-command-qualification/README.md)
+passes application/session command interception and native skill file loading.
+Verified person identity and command-to-library immutable revision attachment
+remain unqualified; real human allow/deny approval is `not_run`. These results
+do not add a production recommendation command or close M10 approval coverage.
