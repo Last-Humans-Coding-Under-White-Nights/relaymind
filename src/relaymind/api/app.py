@@ -32,7 +32,7 @@ import secrets
 import time
 import traceback
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -87,6 +87,7 @@ from relaymind.assets.service import AssetCatalogService
 from relaymind.orchestrator.local_loop import LocalOrchestrator, StartedRun
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
+from relaymind.recommendations.service import RecommendationService
 from relaymind.store import IdempotencyKeyTakenError
 from relaymind.ui import UiSettings
 from relaymind.ui.routes import install_ui_routes
@@ -137,6 +138,7 @@ def create_app(
     native: NativeSettings | None = None,
     ui: UiSettings | None = None,
     asset_catalog: "AssetCatalogService | None" = None,
+    recommendations: "RecommendationService | None" = None,
 ) -> FastAPI:
     """The compatible API over one orchestrator.
 
@@ -163,21 +165,29 @@ def create_app(
 
         probe = IdleProbe(orchestrator, cancel_wait_seconds=native.cancel_wait_seconds)
         app.state.idle_probe = probe
-        probe.start()
-        if asset_catalog is not None:
-            asset_catalog.start()
-        try:
+        # Each component's stop is registered before its start, so a failed
+        # start still stops everything already running. Stops run in reverse
+        # order, and one failing stop never skips the others.
+        async with AsyncExitStack() as components:
+            components.push_async_callback(probe.stop)
+            probe.start()
+            if recommendations is not None:
+                components.push_async_callback(recommendations.stop)
+                await recommendations.start()
+            if asset_catalog is not None:
+                components.push_async_callback(asset_catalog.stop)
+                asset_catalog.start()
             yield
-        finally:
-            try:
-                if asset_catalog is not None:
-                    await asset_catalog.stop()
-            finally:
-                await probe.stop()
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.application_token = token
     app.state.asset_catalog = asset_catalog
+    app.state.recommendations = recommendations
+    from relaymind.api.recommendations import install_recommendation_routes
+
+    install_recommendation_routes(
+        app, recommendations, configured_scope=recommendations.scope if recommendations else None
+    )
 
     @app.get("/v1/models")
     @_guarded

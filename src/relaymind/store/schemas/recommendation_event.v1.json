@@ -1,0 +1,734 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaymind.local/schemas/recommendation_event.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "recommendation_id",
+    "seq",
+    "timestamp",
+    "elapsed_ms",
+    "event_type",
+    "actor",
+    "erased",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "recommendation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "elapsed_ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "event_type": {
+      "enum": [
+        "accepted",
+        "selector.started",
+        "selector.finished",
+        "adaptation.applied",
+        "ready",
+        "failed",
+        "cancelled",
+        "chosen",
+        "expired",
+        "feedback.recorded",
+        "feedback.deleted"
+      ]
+    },
+    "actor": {
+      "enum": [
+        "gateway",
+        "selector",
+        "adapter"
+      ]
+    },
+    "erased": {
+      "type": "boolean"
+    },
+    "payload": {}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "erased": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "event_type": {
+                  "const": "accepted"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "configured_primary",
+                    "task_id",
+                    "task_text",
+                    "conversation",
+                    "scope",
+                    "budgets",
+                    "config_digest",
+                    "catalog_revision",
+                    "host_snapshot_revision",
+                    "requested_kinds",
+                    "selection_scope",
+                    "language_tags",
+                    "code_switched"
+                  ],
+                  "properties": {
+                    "configured_primary": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "name",
+                        "version"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "version": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      }
+                    },
+                    "task_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "task_text": {
+                      "type": "string"
+                    },
+                    "conversation": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "role",
+                          "text"
+                        ],
+                        "properties": {
+                          "role": {
+                            "enum": [
+                              "system",
+                              "developer",
+                              "user",
+                              "assistant"
+                            ]
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "maxItems": 32
+                    },
+                    "scope": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "user_id",
+                        "workspace_id"
+                      ],
+                      "properties": {
+                        "user_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "workspace_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      }
+                    },
+                    "budgets": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "total_ms",
+                        "primary_ms",
+                        "candidate_limit",
+                        "display_limit",
+                        "max_catalog_records",
+                        "max_catalog_bytes",
+                        "max_result_bytes",
+                        "max_create_bytes",
+                        "max_task_bytes",
+                        "max_conversation_entries",
+                        "max_conversation_bytes",
+                        "choice_seconds",
+                        "retention_days",
+                        "fallback_enabled"
+                      ],
+                      "properties": {
+                        "total_ms": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "primary_ms": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "candidate_limit": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "display_limit": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "max_catalog_records": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "max_catalog_bytes": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "max_result_bytes": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "max_create_bytes": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "max_task_bytes": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "max_conversation_entries": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "max_conversation_bytes": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "choice_seconds": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "retention_days": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "fallback_enabled": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "config_digest": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "catalog_revision": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "host_snapshot_revision": {
+                      "type": "null"
+                    },
+                    "requested_kinds": {
+                      "type": "array",
+                      "items": {
+                        "enum": [
+                          "skill",
+                          "mcp_tool"
+                        ]
+                      },
+                      "minItems": 1,
+                      "maxItems": 2,
+                      "uniqueItems": true
+                    },
+                    "selection_scope": {
+                      "enum": [
+                        "discovery",
+                        "runtime"
+                      ]
+                    },
+                    "language_tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "maxItems": 32,
+                      "uniqueItems": true
+                    },
+                    "code_switched": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event_type": {
+                  "const": "selector.started"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "attempt",
+                    "selector",
+                    "mechanism",
+                    "remaining_ms"
+                  ],
+                  "properties": {
+                    "attempt": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "selector": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "name",
+                        "version"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "version": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      }
+                    },
+                    "mechanism": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "remaining_ms": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event_type": {
+                  "const": "selector.finished"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "attempt_record",
+                    "embeddings"
+                  ],
+                  "properties": {
+                    "attempt_record": {
+                      "$ref": "recommendation_result.v1.json#/properties/attempts/items"
+                    },
+                    "embeddings": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "recommendation_result.v1.json#/properties/embeddings/items"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event_type": {
+                  "const": "adaptation.applied"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "adaptation"
+                  ],
+                  "properties": {
+                    "adaptation": {
+                      "$ref": "recommendation_result.v1.json#/properties/adaptation/anyOf/1"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event_type": {
+                  "const": "ready"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "state_version",
+                    "result",
+                    "ready_at",
+                    "choice_expires_at"
+                  ],
+                  "properties": {
+                    "state_version": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "result": {
+                      "$ref": "recommendation_result.v1.json"
+                    },
+                    "ready_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "choice_expires_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event_type": {
+                  "const": "failed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "state_version",
+                    "code",
+                    "reason",
+                    "active_ms",
+                    "attempts"
+                  ],
+                  "properties": {
+                    "state_version": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "code": {
+                      "$ref": "recommendation_view.v1.json#/properties/error/anyOf/1/properties/code"
+                    },
+                    "reason": {
+                      "enum": [
+                        "interrupted",
+                        "deadline",
+                        "unavailable",
+                        "internal",
+                        "corrupt_catalog"
+                      ]
+                    },
+                    "active_ms": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "attempts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "recommendation_result.v1.json#/properties/attempts/items"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event_type": {
+                  "const": "cancelled"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "payload": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "state_version",
+                        "origin",
+                        "reason",
+                        "action",
+                        "active_ms",
+                        "attempts"
+                      ],
+                      "properties": {
+                        "state_version": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "origin": {
+                          "const": "gateway"
+                        },
+                        "reason": {
+                          "enum": [
+                            "disconnect",
+                            "shutdown"
+                          ]
+                        },
+                        "action": {
+                          "type": "null"
+                        },
+                        "active_ms": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "attempts": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "recommendation_result.v1.json#/properties/attempts/items"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "state_version",
+                        "origin",
+                        "reason",
+                        "action",
+                        "active_ms",
+                        "attempts"
+                      ],
+                      "properties": {
+                        "state_version": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "origin": {
+                          "const": "direct_user"
+                        },
+                        "reason": {
+                          "const": "user_cancel"
+                        },
+                        "action": {
+                          "$ref": "recommendation_view.v1.json#/properties/selected_action/anyOf/1"
+                        },
+                        "active_ms": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "attempts": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "recommendation_result.v1.json#/properties/attempts/items"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event_type": {
+                  "const": "chosen"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "state_version",
+                    "action"
+                  ],
+                  "properties": {
+                    "state_version": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "action": {
+                      "$ref": "recommendation_view.v1.json#/properties/selected_action/anyOf/1"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event_type": {
+                  "const": "expired"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "state_version",
+                    "choice_expires_at"
+                  ],
+                  "properties": {
+                    "state_version": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "choice_expires_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event_type": {
+                  "const": "feedback.recorded"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "feedback_id",
+                    "feedback_revision"
+                  ],
+                  "properties": {
+                    "feedback_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    },
+                    "feedback_revision": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event_type": {
+                  "const": "feedback.deleted"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "feedback_id_digest",
+                    "feedback_revision"
+                  ],
+                  "properties": {
+                    "feedback_id_digest": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "feedback_revision": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -24,6 +24,30 @@ from relaymind.tools.registry import check_parameters_schema
 # Spec 14.5 offer caps: one offered projection, in records and canonical bytes.
 MAX_OFFER_RECORDS = 1000
 MAX_OFFER_BYTES = 32 * 1024 * 1024
+# Acquisition limits (spec 14.5). Capture enforces these and queued jobs record them.
+READ_BUFFER_BYTES = 1024 * 1024
+MAX_JOB_RECORDS = 1000
+MAX_JOB_RECEIVED_BYTES = 100 * 1024 * 1024
+MAX_ASSET_BYTES = 10 * READ_BUFFER_BYTES
+MAX_METADATA_BYTES = 4 * READ_BUFFER_BYTES
+JOB_SECONDS = 60
+
+
+def acquisition_budgets() -> dict[str, Any]:
+    """The budgets a refresh job records: the same values capture enforces (RM03)."""
+    return dict(
+        max_requests=1000,
+        max_records=MAX_JOB_RECORDS,
+        max_received_bytes=MAX_JOB_RECEIVED_BYTES,
+        max_asset_bytes=MAX_ASSET_BYTES,
+        max_metadata_bytes=MAX_METADATA_BYTES,
+        read_buffer_bytes=READ_BUFFER_BYTES,
+        exchange_seconds=10,
+        job_seconds=JOB_SECONDS,
+        workers=1,
+        cpu_batch_ms=50,
+        background_gpu_with_llama=False,
+    )
 
 
 class CatalogUnavailable(RuntimeError):

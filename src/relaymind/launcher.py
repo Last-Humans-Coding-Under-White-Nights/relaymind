@@ -76,7 +76,6 @@ from relaymind.selection.asset_factory import build_asset_selector
 from relaymind.skills import SkillConfigError, SkillRegistry, default_skill_roots
 from relaymind.skills.predicates import COMPLETION_PREDICATES
 from relaymind.store import RunStore
-from relaymind.store.asset_catalog import AssetCatalogStore
 from relaymind.tools import CallerContext, OperatorPolicy, ToolRegistry
 from relaymind.tools.sandbox import (
     DEMO_TOOL_NAMES,
@@ -579,13 +578,26 @@ def build_app(
         )
         report = orchestrator.recover_after_restart()
         catalog = None
+        recommendations = None
         if config.recommendations.enabled:
+            from relaymind.recommendations.service import RecommendationService
+
+            # Recovery of recommendation objects runs in the service's start(),
+            # before the app accepts work (spec 14.1 startup order).
+            recommendations = RecommendationService.from_config(
+                store,
+                config.assets,
+                config.recommendations,
+                permissions=config.permissions,
+                redactor=orchestrator.redactor,
+            )
             catalog = AssetCatalogService(
                 config.assets,
-                AssetCatalogStore(store),
+                recommendations.provider.store,
                 busy=lambda: (
                     store.active_run_id() is not None or store.probe_reservation() is not None
                 ),
+                after_change=recommendations.refresh_catalog,
             )
         ui = None if config.ui is None else replace(config.ui, fixtures=sandbox)
         app = create_app(
@@ -595,6 +607,7 @@ def build_app(
             native=config.native,
             ui=ui,
             asset_catalog=catalog,
+            recommendations=recommendations,
         )
         return Launched(
             app=app,

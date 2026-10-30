@@ -962,7 +962,18 @@ def test_real_user_cancel_beats_suspended_gateway_deadline(tmp_path, catch_stop,
         started = gateway.orchestrator.start(
             [Message(role=Role.USER, content="Is staging-api healthy right now?")]
         )
-        await entered.wait()
+        assert started.task is not None
+        entered_task = asyncio.create_task(entered.wait())
+        try:
+            done, _ = await asyncio.wait(
+                (entered_task, started.task),
+                timeout=SOCKET_TIMEOUT_SECONDS,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            assert entered_task in done, gateway.store.get_run(started.run_id)
+        finally:
+            entered_task.cancel()
+            await asyncio.gather(entered_task, return_exceptions=True)
         version = gateway.store.get_run(started.run_id).version
         await gateway.orchestrator.cancel(started.run_id, version)
         events = gateway.store.events(started.run_id)
@@ -975,7 +986,7 @@ def test_real_user_cancel_beats_suspended_gateway_deadline(tmp_path, catch_stop,
         assert [a["outcome"] for a in cancelled["selector"]["attempts"]] == ["none", "cancelled"]
         assert cancelled["selector"]["attempts"][0]["model_calls_claim"] == []
 
-    asyncio.run(asyncio.wait_for(execute(), 1))
+    asyncio.run(execute())
 
 
 def test_http_budget_guard_resumes_after_real_placement_decline(tmp_path, monkeypatch):

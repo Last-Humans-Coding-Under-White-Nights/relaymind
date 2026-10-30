@@ -113,6 +113,8 @@ class AttemptStarted:
     selector: SelectorIdentity
     mechanism: str
     remaining_ms: float
+    # The selector's declared observed cost, kept for a cancel before it finishes.
+    observed_cost: Mapping | None = None
 
 
 @dataclass(frozen=True)
@@ -161,11 +163,18 @@ async def _bounded(work: Awaitable, budget: SelectionBudget, deadline: float) ->
     timer = asyncio.create_task(budget.sleep(max(0, deadline - budget.clock.monotonic())))
     cancel = asyncio.create_task(budget.wait_cancelled())
     try:
-        done, _ = await asyncio.wait((task, timer, cancel), return_when=asyncio.FIRST_COMPLETED)
-        budget.check()  # Cancellation always wins ties with result/timeout.
-        if budget.clock.monotonic() >= deadline or task not in done:
-            raise AttemptFailure("timeout", "deadline_exceeded")
-        return task.result()
+        while True:
+            done, _ = await asyncio.wait((task, timer, cancel), return_when=asyncio.FIRST_COMPLETED)
+            budget.check()  # Cancellation always wins ties with result/timeout.
+            remaining = deadline - budget.clock.monotonic()
+            if remaining <= 0:
+                raise AttemptFailure("timeout", "deadline_exceeded")
+            if task in done:
+                return task.result()
+            # A platform timer can wake before the absolute clock deadline.
+            # Keep the same attempt alive for its remaining allowance.
+            if timer in done:
+                timer = asyncio.create_task(budget.sleep(remaining))
     finally:
         # Do not await cancellation-resistant selector cleanup past service time.
         for pending in (task, timer, cancel):
@@ -179,6 +188,29 @@ async def _observe(observer, event, budget):
         value = observer(event)
         if inspect.isawaitable(value):
             await _bounded(value, budget, budget.deadline)
+
+
+def cancelled_attempt(started: AttemptStarted, observed_ms: float) -> dict:
+    """The record of a dispatched attempt cancelled before it finished (spec 8.1).
+
+    Only evidence the gateway holds is kept: the declared observed cost, never a
+    selector claim, because the selector returned nothing.
+    """
+    costs = []
+    if started.observed_cost is not None:
+        costs.append({"provenance": "observed", "value": dict(started.observed_cost)})
+    return dict(
+        attempt=started.attempt,
+        selector=started.selector.to_json_object(),
+        mechanism=started.mechanism,
+        outcome="cancelled",
+        reason="cancelled",
+        observed_ms=max(0, observed_ms),
+        reported_ms=None,
+        index_revision=None,
+        cost_observations=costs,
+        result=None,
+    )
 
 
 def _attempt(selector, ordinal, mechanism, outcome, reason, started, budget, parsed):
@@ -277,6 +309,7 @@ async def select_assets(
                     identity,
                     mechanism,
                     max(0, (deadline - started) * 1000),
+                    _capability(selector, "observed_cost"),
                 ),
                 budget,
             )

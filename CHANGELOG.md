@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Independent recommendation lifecycle and JSON API (#194; RM36/AC27):
+  separate SQLite objects, events, slot and exact idempotency receipts;
+  bounded create, read, event polling and readiness routes; owned cancellation,
+  restart recovery, choice expiry and 30-day parent retention. Real source jobs
+  emit separate index-job events, and compatible lexical offers follow committed
+  configured-source acquisition. Direct choice/feedback, SSE, qualified host
+  execution and operational readiness measurements remain later work.
+
 - Recommendation-only selector v2 (#193; RM35/AC26): closed versioned contracts,
   deterministic projection-only lexical ranking, strict loopback HTTP replacement
   and example, shared deadline/cancellation fences, current admission and one
@@ -15,7 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   separately from managed v1. The spec 0.52 follow-up revisions effective
   stale transitions with stored projection bytes and preserves capture-only
   bytes through restart; computing offers require exact current revision.
-  No recommendation API, calibrated confidence,
+  No calibrated confidence,
   qualified host binding, inference, useful startup-readiness measurement or
   final M10 quality claim is introduced.
 

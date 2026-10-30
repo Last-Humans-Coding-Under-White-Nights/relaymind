@@ -1048,9 +1048,10 @@ imports, safe internal searchable bodies, atomic shared-SQLite publication,
 source-owned tombstones, retained stale observations, recovery and one bounded
 local worker. `[recommendations]` defaults disabled; enabled catalog work starts
 in the application lifespan. This is development on the explicitly authorized
-reviewed-spec stack while #187's merge remains pending. No recommendation API,
-useful lexical readiness, pre-warmup serving change, qualified external refresh
-or current host availability is claimed. #194/#196 own API/startup behavior; #193 selection is recorded below. The AC25 live host/source subcases, full 300-asset measurements,
+reviewed-spec stack while #187's merge remains pending. No pre-warmup serving
+change, qualified external refresh or current host availability is claimed.
+#193 selection and #194's partial lifecycle implementation are recorded below.
+The AC25 live host/source subcases, full 300-asset measurements,
 Windows/macOS qualification and Matrix rights/cohort/refresh remain open; these
 deterministic catalog tests do not close #191 or #192's qualified adapter gates.
 
@@ -1066,8 +1067,14 @@ record bytes; capture-only observations retain the prior projection through
 restart. Current revision equality applies to computing recommendations,
 including abstentions and empty offers. This does not change later choice
 semantics, which retain their exact-candidate/current-policy checks.
-Lifecycle/API persistence (#194), operational readiness/measurements (#196),
-qualified host/source adapters and the final corpus/whole-task gates remain open.
+The #194 implementation supplies RM36/AC27's separate recommendation object,
+event and index-job schemas, atomic recommendation slot and exact replay receipts,
+bounded JSON create/read/event polling, request-owned cancellation, recovery,
+expiry and 30-day parent retention. It publishes a compatible lexical offer
+after actual configured-source acquisition and reports current readiness facts.
+There is no public recommendation cancel, action, feedback or SSE route.
+Operational startup/readiness measurements (#196), qualified host/source
+adapters and the final corpus/whole-task gates remain open.
 
 Specification 0.51 froze the independent M10 recommendation core (spec
 section 1), and 0.52 revised its offer cache and freshness rules

@@ -12,7 +12,7 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +20,12 @@ import yaml
 from yaml.tokens import AliasToken, AnchorToken, TagToken
 
 from relaymind.assets.catalog import (
+    JOB_SECONDS,
+    MAX_ASSET_BYTES,
+    MAX_JOB_RECEIVED_BYTES,
+    MAX_JOB_RECORDS,
+    MAX_METADATA_BYTES,
+    READ_BUFFER_BYTES,
     AssetValidationError,
     InventoryAsset,
     SourceCapture,
@@ -55,7 +61,7 @@ __all__ = [
 _IMPORT_VALIDATOR = StrictValidator(
     load_packaged_schema("relaymind.assets", "asset_metadata_import.v1.json")
 )
-_CHUNK = 1024 * 1024
+_CHUNK = READ_BUFFER_BYTES
 
 
 class SourceFailure(Exception):
@@ -90,12 +96,16 @@ class CaptureContext:
     batch_durations_ms: list[float] = field(default_factory=list)
     batch_started: float = field(init=False)
     batch_records: int = 0
+    batch_observations: list[dict] = field(default_factory=list)
+    batch_bytes: int = 0
+    rejected_count: int = 0
+    utc_now: Callable[[], datetime] = lambda: datetime.now(UTC)
     deadline: float = field(init=False)
 
     def __post_init__(self) -> None:
         utc_iso(self.captured_at)
         self.batch_started = self.monotonic()
-        self.deadline = self.batch_started + 60
+        self.deadline = self.batch_started + JOB_SECONDS
 
     def check(self) -> None:
         # Observe busy only until the first overlap: it costs store queries.
@@ -110,13 +120,13 @@ class CaptureContext:
     def add_bytes(self, count: int) -> None:
         self.check()
         self.received_bytes += count
-        if self.received_bytes > 100 * 1024 * 1024:
+        if self.received_bytes > MAX_JOB_RECEIVED_BYTES:
             raise SourceFailure("size_limit")
 
     def add_record(self) -> None:
         self.check()
         self.record_count += 1
-        if self.record_count > 1000:
+        if self.record_count > MAX_JOB_RECORDS:
             raise SourceFailure("record_limit")
 
     def finish_record(self) -> None:
@@ -127,7 +137,18 @@ class CaptureContext:
     def finish_batch(self) -> None:
         if self.batch_records:
             now = self.monotonic()
-            self.batch_durations_ms.append(max(0, (now - self.batch_started) * 1000))
+            duration = max(0, (now - self.batch_started) * 1000)
+            self.batch_durations_ms.append(duration)
+            self.batch_observations.append(
+                dict(
+                    timestamp=utc_iso(self.utc_now()),
+                    accepted_count=self.batch_records,
+                    rejected_count=0,
+                    received_bytes=self.received_bytes - self.batch_bytes,
+                    duration_ms=duration,
+                )
+            )
+            self.batch_bytes = self.received_bytes
             self.batch_started = now
             self.batch_records = 0
 
@@ -364,7 +385,7 @@ def _local(
     for package in candidates:
         context.add_record()
         relative = "SKILL.md" if package == "." else f"{package}/SKILL.md"
-        original, digest = stage.read(relative, 10 * _CHUNK)
+        original, digest = stage.read(relative, MAX_ASSET_BYTES)
         metadata, body = _frontmatter(original)
         extra = metadata.get("metadata", {})
         if not isinstance(extra, dict):
@@ -372,7 +393,7 @@ def _local(
         manifest = "skill.manifest.json" if package == "." else f"{package}/skill.manifest.json"
         fallback = {}
         if stage.exists(manifest):
-            raw, _ = stage.read(manifest, 4 * _CHUNK)
+            raw, _ = stage.read(manifest, MAX_METADATA_BYTES)
             fallback = _json(raw)
             # Validate recognized values even when frontmatter wins.
             if "version" in fallback:
@@ -452,7 +473,7 @@ def _local(
 def _import(
     stage: _Stage, source: SourceConfig, previous: SourceInventory, context: CaptureContext
 ) -> SourceCapture:
-    raw, digest = stage.read(source.path.name, 4 * _CHUNK)
+    raw, digest = stage.read(source.path.name, MAX_METADATA_BYTES)
     data = validate_document(_json(raw), _IMPORT_VALIDATOR)
     if data["source_id"] != source.source_id:
         raise SourceFailure("invalid_data")
@@ -481,7 +502,9 @@ def _import(
         ids.add(asset_id)
         _check_owner(asset_id, previous, source.source_id)
         relative = _relative_path(entry["original_path"])
-        _, original_digest = stage.read(relative, 10 * _CHUNK, retain=False, forbidden=forbidden)
+        _, original_digest = stage.read(
+            relative, MAX_ASSET_BYTES, retain=False, forbidden=forbidden
+        )
         if original_digest != value["content_hash"]:
             raise SourceFailure("invalid_data")
         record = validate_asset_record(
