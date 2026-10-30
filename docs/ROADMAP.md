@@ -5,7 +5,7 @@ Implementation order follows the dependency guidance in
 requirements it implements and the acceptance tests that close it. A
 milestone is done when its deterministic tests pass and its live checks are
 recorded in [`EVIDENCE.md`](EVIDENCE.md). Issues on GitHub carry an `M1`
-to `M9` label; the lists below name the issues where the order matters.
+to `M10` label; the lists below name the issues where the order matters.
 M1 to M6 are the prototype; M7 to M9 are phase 2 (spec 0.31, revised
 for OpenClaw integration in spec 0.47), the
 answer to customer feedback, with shorter waiting time as the objective
@@ -1038,3 +1038,81 @@ listed here so the current order can be traced to its reason.
   loopback URL is not rejected for `stream_options` or a misplaced
   developer message. The UI placeholder removal moved from #145 to #173
   so it does not wait for the plugin.
+
+
+## M10 — Multilingual asset recommendations (spec 0.51)
+
+Specification 0.51 freezes the independent M10 recommendation core (spec
+section 1); every full-milestone gate stays. The
+[published design](design/2026-10-29-multilingual-asset-routing.md) reconciles
+qualifications #188–#190 per capability. The adapter contracts behind the
+blockers MATRIX-COHORT, MATRIX-OVERLAP, MATRIX-RIGHTS, MATRIX-REFRESH,
+HOST-ACTION-AUTHORITY, HOST-EXACT-SKILL-USE, HOST-MCP-BINDING and
+HOST-MCP-CURRENTNESS are not qualified or implementation-ready, and the core
+fails closed at those boundaries. Host snapshots and host use stay disabled
+until further supported qualification and a later normative adapter revision.
+This revision adds no host upgrade, no alternate dataset, no new milestone,
+and no relaxed or partial acceptance.
+
+The customer-approved defaults of 29 October 2026 are in spec section 1.
+
+Status at this revision: the bounded qualifications have committed evidence;
+#187 specifies the product contracts and design but implements nothing.
+Before any implementation issue's code begins, spec 0.51 must be merged (a
+spec in an unmerged stack does not count) and that issue updated with its
+final RM and AC IDs. Those issue updates are still pending; the table gives the
+mapping and does not claim any GitHub issue was changed.
+
+| Qualification / gate | Current evidence and remaining requirement |
+| --- | --- |
+| #188 Matrix capture | One genuine version 1.1.1 archive, two equal-hash downloads; one Chinese body. MATRIX-COHORT (100 original Chinese), MATRIX-OVERLAP (25 functional pairs), MATRIX-RIGHTS and MATRIX-REFRESH remain blocked; same-source permitted operator export/rights/inventory input required. No automatic substitute or source permission. |
+| #189 direct commands | Real pre-model ingress and isolated credential/native search/read/forged-input checks pass over doubles; verified person and immutable choice-to-library composition failed. HOST-ACTION-AUTHORITY and HOST-EXACT-SKILL-USE block #195 host completion/#197/#198. Real interactive approvals not_run; read-only does not waive exact content/authority. |
+| #190 MCP | Same-instance public genuine provenance/schema, collision-safe host execution and changed-schema execution passed; three server invocations, ten completed gateway runs, zero gateway execution. Disconnect retains schemas and actual call fails; deny/removal exclude tools. HOST-MCP-BINDING and HOST-MCP-CURRENTNESS remain blocked: session/turn/host revision absent, availability unknown, third-party authorized runtime inventory refused. |
+| Evidence tiers | #189/#190 are Linux real-host functional runs with model doubles. #190 uses coding profile/toolSearch=false/disposable conversation grant; not intact-native/default or customer acceptance. HTTP/OAuth, live quality, supported-platform M10 and human interactive approval remain not_run. |
+
+After the merge, these may proceed within their dependencies: the
+independent catalog, reads of ordinary SKILL.md directories, closed reviewed
+metadata imports, discovery v2, the lexical and HTTP selectors, the persisted
+API, and the backend registration, revocation and privacy tests. A runtime
+create returns recommendation_unavailable, and snapshot payloads and non-null
+bindings are rejected (spec section 7.6). No production host registration
+is enabled by these probes. #191 and #199 dataset acceptance cannot close
+without a real permitted cohort and labels; #203 cannot claim Matrix refresh
+from one download route. Generic infrastructure and doubles never close actual
+source or host gates. The hybrid selector and adaptation keep the trial and
+data dependencies in the table below. Partial PRs must state their retained
+acceptance and cannot auto-close incomplete issues.
+
+The table retains direct issue dependencies and existing foundations. New IDs
+are normative in 0.51; all paths/feature components remain planned until their
+implementation lands.
+
+| Issue | Direct dependencies | Existing foundations | New RM/AC IDs | Deliverable / completion gate |
+| --- | --- | --- | --- | --- |
+| #191 | #187, #188 | RM07, RM12, RM16, RM25, RM28 | RM40; AC31 | 100 original Chinese +100 original English skills, permitted reproducibility, native authorship and independent annotations |
+| #192 | #187, #188 | RM07, RM08, RM12, RM17, RM24, RM28 | RM34; AC25 | Durable atomic catalog with safe projection/import/scans/deletion and honest runtime availability |
+| #193 | #187, #192 | RM02, RM04, RM08, RM12, RM18, RM22, RM28; AC22 | RM35; AC26 | v2 schemas/chain/lexical fallback + HTTP replacement; unchanged managed v1 |
+| #194 | #187, #193 | RM12, RM17, RM19, RM21, RM22, RM28, RM33 | RM36; AC27 | Independent recommendation API/store/events; atomic idempotency, disconnect and recovery |
+| #195 | #187, #189, #194 | RM08, RM11, RM12, RM17, RM19, RM22, RM33 | RM37; AC28 | Authenticated direct-input choices/feedback, scope isolation, retention/delete/reset |
+| #196 | #187, #192, #193, #194 | RM03, RM16–RM19, RM22, RM24, RM26, RM27, RM28 | RM38; AC29 | Separate readiness, lexical visibility/rebuild/scheduler behavior; full 300-asset/live embedding measurements later |
+| #197 | #187, #189, #194, #195, #193 | RM08, RM11, RM12, RM19, RM20, RM22, RM33; AC24 | RM39; AC30 | Packaged direct commands, exact installed-skill load/use and feedback; unchanged provider |
+| #198 | #187, #191, #192, #196, #197 | RM16, RM18, RM25, RM26, RM28, RM33; AC22, AC24 | RM39, RM44; AC30, AC36 | Actual early Apple M1 8 GiB customer trial and three-arm costs; observations before hybrid investment |
+| #199 | #187, #188, #191 | RM07, RM12, RM16, RM25, RM28, RM33 | RM40; AC31 | Exactly 300 real assets, independently authored/annotated held-out cohorts and locks |
+| #200 | #187, #193, #191 | RM03, RM12, RM16, RM18, RM22, RM25, RM28; AC22 | RM35, RM40; AC26, AC31 | Production-path benchmark run/compare CLI; deterministic third-party example; full acceptance cohort plugs into same runner |
+| #201 | #187, #198, #199, #200, #196 | RM03, RM04, RM12, RM16, RM18, RM22, RM24–RM28 | RM38, RM41; AC29, AC32 | Development-selected pinned local embedding artifact, bounded revisioned hybrid ranking/indexing, lifecycle/resource evidence |
+| #202 | #187, #195, #201, #199, #200 | RM04, RM08, RM11, RM12, RM16, RM17, RM22, RM24, RM28 | RM37, RM42; AC28, AC33 | Bounded separate adaptation stage, 100 chronological episodes, unrelated controls and exact reset |
+| #203 | #187, #188, #192, #196, #198 | RM03, RM07, RM12, RM16, RM17, RM19, RM24, RM28 | RM34, RM38, RM43; AC25, AC29, AC34 | Permitted automatic refresh, bounded staging/atomic publication, stale failure states and live demonstration |
+| #204 | #187, #190, #197, #195, #192 | RM08–RM12, RM16, RM19, RM22, RM33; AC24 | RM39; AC35 | Exact host MCP use and real interactive approval, duplicate/schema/policy/disconnect rejection |
+| #205 | #187, #199, #200, #201, #202, #203, #204 | RM03, RM04, RM16, RM18, RM22, RM25–RM28, RM33; AC22, AC24 | RM40–RM44; AC31–AC36 | Every language/hard cohort and ≥100 paired host tasks, honest whole-task consumption, confidence bounds |
+| #206 | #187, #197, #201, #202, #203, #204 | RM03, RM16, RM18, RM19, RM25, RM26, RM33; AC24 | RM38, RM39, RM44; AC29, AC30, AC35, AC37 | Current package and operational gates on actual Apple M1 8 GiB macOS and named native x86-64 Windows |
+| #207 | #187 formally; completion follows shipped features and #205/#206 evidence | RM07, RM12, RM16–RM19, RM22, RM25, RM28, RM33; AC22, AC24 | RM34–RM44; AC25–AC37 | Incremental guides, exact benchmark/migration/privacy commands, verified bilingual skill/MCP walkthroughs and evidence references |
+
+Choice and feedback revisions follow spec sections 5.1 and 7.6, and the
+inputs to adaptation follow RM42.
+
+M10 closes in one decision, when every issue and gate above passes and
+AC25–AC37 pass with the evidence spec section 12.6 and RM44 require. The
+actual Apple M1 8 GiB trial (#198) is delivery order, not milestone closure. Failed, unknown or not_run evidence stays open;
+WSL, CI, doubles and historical M9 evidence do not substitute. Missing export,
+rights, profile, interactive or platform inputs are concrete blockers, not
+permission to fabricate completion.

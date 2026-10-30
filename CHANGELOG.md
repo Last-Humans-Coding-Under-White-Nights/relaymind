@@ -8,6 +8,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.50 → 0.51 (#187): adds M10 multilingual skill and MCP
+  recommendations as RM34–RM44 and AC25–AC37 (new sections 4.6, 5.1, 7.6,
+  8.1, 11.1, 12.6 and 14.5) and amends RM02 and sections 3, 10 and 14.1.
+  Managed selection v1 (AC22), AC24, the retired RM30 and AC23, and historical
+  evidence are unchanged. The rationale and qualification record are in
+  `docs/design/2026-10-29-multilingual-asset-routing.md`; status, blockers and
+  issue order are in `docs/ROADMAP.md` (M10). Specification and backlog change
+  only; no product code.
+  - Review clarifications in the same revision: a ready no_match supports a
+    correction but not a rejection; the feedback listing is ordered by a
+    per-scope insertion sequence, not by UUID; the create body cap is 512 KiB;
+    digests kept after erasure are keyed; the 0.51 runtime create 503 comes
+    before the idempotency claim; a partial import marks omitted records
+    stale; every new M10 path key resolves against the configuration
+    directory.
+
 - The M9 OpenClaw evaluation (#139; RM16, RM25, RM26, RM33; AC24; spec
   0.50 section 12.5), recorded in
   `docs/evidence/2026-10-29-openclaw-eval-apple-m1/` and checked by

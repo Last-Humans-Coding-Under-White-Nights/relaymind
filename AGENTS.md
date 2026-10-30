@@ -8,9 +8,10 @@ codebase.
 1. **The spec is the single source of truth.**
    [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md) defines what RelayMind
    does. Every implementation task and every acceptance test must reference
-   requirement IDs from it (RM01–RM33, AC01–AC24; RM30 and AC23 are retired;
+   requirement IDs from it (RM01–RM44, AC01–AC37; RM30 and AC23 are retired;
    RM33 and AC24 specify the M9 OpenClaw integration, added in 0.47 and
-   revised in 0.49 and 0.50; the spec is at 0.50). Implementation status
+   revised in 0.49 and 0.50; RM34–RM44 and AC25–AC37 define M10
+   recommendations in 0.51; the spec is at 0.51). Implementation status
    is recorded in docs/ROADMAP.md. If code and spec disagree,
    the spec wins. If the spec is wrong, revise the spec first, then change
    the code.
@@ -43,6 +44,25 @@ codebase.
 | `tests/` | Test suite; `tests/fixtures/` holds sandbox demo data; `tests/test_demo_ui_browser.py` runs the UI page script in Chromium (Playwright; `playwright install chromium`) |
 | `scripts/` | Developer scripts: model manifest generation (RM18), the live acceptance harness, the corpus runner (with its offline draft-pass regrade), the latency benchmark (RM25), `--runtime-extra-args` for a constrained runtime configuration (RM18, spec 0.31 section 12.2), the spikes in `scripts/probes/` (the offline ones over the corpus export, and the live timing probes of the runtime and of one provider), and the M9 OpenClaw scripts (`openclaw_qualification.py`, `openclaw_request_size.py`, `openclaw_install_check.py`, and the evaluation runner `run_openclaw_eval.py`; RM33, spec 0.50 section 12.5); `scripts/README.md` lists what exists |
 | `docs/` | Spec, architecture, roadmap, testing guide, live evidence record (`docs/EVIDENCE.md`, raw exports in `docs/evidence/`), and design rationale for spec revisions (`docs/design/`, not normative) |
+
+## Planned M10 ownership (spec 0.51; #187)
+
+These are planned components: the files and commands below do not exist yet
+and must not be described as implemented. Contracts are in spec sections
+4.6 to 14.5; blockers, gates, the merge gate and issue order are in
+[docs/ROADMAP.md](docs/ROADMAP.md) (M10); the customer-approved defaults are in
+spec section 1. Managed selection v1 (AC22) and the provider and host contract
+(AC24) are unchanged.
+
+| Planned path | Owner and requirements |
+| --- | --- |
+| `src/relaymind/assets/`, `src/relaymind/store/asset_catalog.py` | Catalog identities, safe searchable projections, index publication, and qualified refresh; RM34, RM38, RM43; AC25, AC29, AC34. Schemas: spec section 8.1. Never executes assets or extracts archives without limits. |
+| `src/relaymind/selection/asset_contract.py`, `src/relaymind/selection/asset_chain.py`, `src/relaymind/selection/asset_lexical.py`, v2 schemas | Recommendation-only selection v2 and a separately attributed lexical fallback; RM35, AC26. v2 never feeds a managed run. |
+| `src/relaymind/api/recommendations.py`, `src/relaymind/store/recommendations.py`, separate store schemas | Independent recommendation lifecycle, events, idempotency, and recovery; RM36, AC27. TraceEvent stays at v1; no invented run ID. |
+| `src/relaymind/api/user_actions.py`, `src/relaymind/store/asset_feedback.py` | Operator-registered backend action authentication; choice and feedback each updated by their own compare-and-set (CAS); retention and erasure; RM37, AC28. No public self-enrollment of credentials; only explicit corrections feed adaptation. |
+| `src/relaymind/selection/asset_hybrid.py`, `src/relaymind/selection/asset_adaptation.py` | Local pinned hybrid selector and bounded, reversible correction adaptation; RM41, RM42; AC32, AC33. Inference and its cost, and the base and final ranks, are recorded separately. |
+| `src/relaymind/evaluation/asset_corpus.py`, `src/relaymind/evaluation/asset_benchmark.py`, `evaluation/assets/`, `scripts/asset_selection_benchmark.py` | Original multilingual corpus locks, independent labels, and one shared run and compare protocol; RM40, RM44; AC31, AC36, AC37. Toy data cannot pass final gates. |
+| `integrations/openclaw/` future recommendation adapter | Qualified direct action, exact skill and MCP use, host-only approvals and execution; RM39; AC30, AC35. Blocked until further qualification and a later normative adapter revision (ROADMAP M10). |
 
 ## Ownership boundaries (do not blur these)
 
