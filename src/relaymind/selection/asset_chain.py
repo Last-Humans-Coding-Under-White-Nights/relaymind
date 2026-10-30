@@ -113,6 +113,8 @@ class AttemptStarted:
     selector: SelectorIdentity
     mechanism: str
     remaining_ms: float
+    # The selector's declared observed cost, kept for a cancel before it finishes.
+    observed_cost: Mapping | None = None
 
 
 @dataclass(frozen=True)
@@ -186,6 +188,29 @@ async def _observe(observer, event, budget):
         value = observer(event)
         if inspect.isawaitable(value):
             await _bounded(value, budget, budget.deadline)
+
+
+def cancelled_attempt(started: AttemptStarted, observed_ms: float) -> dict:
+    """The record of a dispatched attempt cancelled before it finished (spec 8.1).
+
+    Only evidence the gateway holds is kept: the declared observed cost, never a
+    selector claim, because the selector returned nothing.
+    """
+    costs = []
+    if started.observed_cost is not None:
+        costs.append({"provenance": "observed", "value": dict(started.observed_cost)})
+    return dict(
+        attempt=started.attempt,
+        selector=started.selector.to_json_object(),
+        mechanism=started.mechanism,
+        outcome="cancelled",
+        reason="cancelled",
+        observed_ms=max(0, observed_ms),
+        reported_ms=None,
+        index_revision=None,
+        cost_observations=costs,
+        result=None,
+    )
 
 
 def _attempt(selector, ordinal, mechanism, outcome, reason, started, budget, parsed):
@@ -284,6 +309,7 @@ async def select_assets(
                     identity,
                     mechanism,
                     max(0, (deadline - started) * 1000),
+                    _capability(selector, "observed_cost"),
                 ),
                 budget,
             )

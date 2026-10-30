@@ -136,8 +136,12 @@ def _query(request, *, events=False):
     for text in values.values():
         if not re.fullmatch(r"[0-9]+", text):
             raise RecommendationError("invalid_request")
-    # The store owns the page-size range check (section 14.5).
-    return int(values.get("after_seq", "0")), int(values.get("limit", str(DEFAULT_EVENTS_PAGE)))
+    # The store owns the page-size range check (section 14.5). A numeral past
+    # Python's integer-string limit makes int() raise; that is a bad request too.
+    try:
+        return int(values.get("after_seq", "0")), int(values.get("limit", str(DEFAULT_EVENTS_PAGE)))
+    except ValueError:
+        raise RecommendationError("invalid_request") from None
 
 
 class _NoReply(Response):
