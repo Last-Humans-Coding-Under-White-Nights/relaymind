@@ -1120,31 +1120,56 @@ def test_explicit_usefulness_feedback_has_independent_scope_revision(tmp_path):
 
 @pytest.mark.parametrize(
     "version_change,code",
-    [(0, "recommendation_expired"), (-1, "stale_version"), (5, "stale_version")],
+    [
+        (0, "stale_version"),
+        (1, "recommendation_expired"),
+        (-1, "stale_version"),
+        (5, "stale_version"),
+    ],
 )
-def test_choice_after_window_lapse_is_expired_not_stale(tmp_path, version_change, code):
-    """RM37/AC28, spec section 11: a lapsed window is recommendation_expired.
+def test_choice_after_window_lapse_checks_version_before_expired_state(
+    tmp_path, version_change, code
+):
+    """RM36/AC27, RM37/AC28, spec section 11.1: expire once, then check CAS.
 
-    A client that still holds the ready version sees why its choice failed;
-    a version it never saw is still stale_version.
+    The old ready version is stale after expiry advances the lifecycle version.
+    Only the current expired version reaches the recommendation_expired check.
     """
     from helpers import FakeClock
 
     async def go():
         clock = FakeClock()
-        async with action_client(tmp_path, clock=clock) as (client, app, service, *_):
+        async with action_client(tmp_path, clock=clock) as (client, app, service, runs, *_):
             parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
             clock.advance(601)
-            response = await client.post(
-                f"/relay/v1/recommendations/{parent['recommendation_id']}/choice",
-                json=dict(
-                    schema_version=1,
-                    expected_version=parent["state_version"] + version_change,
-                    choice=dict(kind="none"),
-                ),
-                headers={"Idempotency-Key": "lapsed"},
-            )
-            assert response.json()["error"]["code"] == code, response.text
+            for _ in range(2):
+                response = await client.post(
+                    f"/relay/v1/recommendations/{parent['recommendation_id']}/choice",
+                    json=dict(
+                        schema_version=1,
+                        expected_version=parent["state_version"] + version_change,
+                        choice=dict(kind="none"),
+                    ),
+                    headers={"Idempotency-Key": "lapsed"},
+                )
+                assert response.status_code == 409, response.text
+                assert response.json()["error"]["code"] == code, response.text
+            # Inspect storage before a GET could perform a missing lazy expiry.
+            with runs.sql_read() as db:
+                assert tuple(
+                    db.execute(
+                        "SELECT state,state_version FROM recommendations WHERE recommendation_id=?",
+                        (parent["recommendation_id"],),
+                    ).fetchone()
+                ) == ("expired", parent["state_version"] + 1)
+                events = [
+                    __import__("json").loads(row[0])
+                    for row in db.execute(
+                        "SELECT event_json FROM recommendation_events WHERE recommendation_id=?",
+                        (parent["recommendation_id"],),
+                    )
+                ]
+                assert sum(event["event_type"] == "expired" for event in events) == 1
 
     asyncio.run(go())
 

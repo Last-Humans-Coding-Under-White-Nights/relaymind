@@ -547,15 +547,12 @@ class RecommendationStore:
                 else:
                     view = self._expired_view(db, row, now)
                     expected = request["expected_version"]
-                    if view["state"] == "expired" and expected in (
-                        view["state_version"] - 1,
-                        view["state_version"],
-                    ):
-                        # The client saw the ready version, or the expiry itself:
-                        # the lapsed window is the reason (spec section 11).
-                        error = RecommendationError("recommendation_expired", recommendation_id)
-                    elif expected != view["state_version"]:
+                    # Section 11.1: expiry advances the version before fresh CAS;
+                    # stale versions take precedence over lifecycle errors.
+                    if expected != view["state_version"]:
                         error = RecommendationError("stale_version", recommendation_id)
+                    elif view["state"] == "expired":
+                        error = RecommendationError("recommendation_expired", recommendation_id)
                     elif view["state"] != "ready":
                         error = RecommendationError("invalid_state", recommendation_id)
                     else:
