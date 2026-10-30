@@ -1070,7 +1070,8 @@ Lifecycle/API persistence (#194), operational readiness/measurements (#196),
 qualified host/source adapters and the final corpus/whole-task gates remain open.
 
 Specification 0.51 froze the independent M10 recommendation core (spec
-section 1), and 0.52 revised its offer cache rule; every full-milestone gate stays. The
+section 1), and 0.52 revised its offer cache and freshness rules
+(RM24, RM34, RM38); every full-milestone gate stays. The
 [published design](design/2026-10-29-multilingual-asset-routing.md) reconciles
 qualifications #188–#190 per capability. The adapter contracts behind the
 blockers MATRIX-COHORT, MATRIX-OVERLAP, MATRIX-RIGHTS, MATRIX-REFRESH,
@@ -1085,8 +1086,8 @@ The customer-approved defaults of 29 October 2026 are in spec section 1.
 
 Status at this revision: the bounded qualifications have committed evidence;
 #187 specifies the product contracts and design but implements nothing.
-Before any implementation issue's code begins, spec 0.51 must be merged (a
-spec in an unmerged stack does not count) and that issue updated with its
+Before any implementation issue's code begins, spec 0.51 and its 0.52 revision
+must be merged (a spec in an unmerged stack does not count) and that issue updated with its
 final RM and AC IDs. Those issue updates are still pending; the table gives the
 mapping and does not claim any GitHub issue was changed.
 

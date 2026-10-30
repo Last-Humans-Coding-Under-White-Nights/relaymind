@@ -533,7 +533,11 @@ def capture_source(
         context.check()
         return capture
     except NativeIoAborted as exc:
-        raise SourceFailure(exc.reason, received_bytes=context.received_bytes) from None
+        raise SourceFailure(
+            exc.reason,
+            rejected_count=0 if exc.reason == "cancelled" else 1,
+            received_bytes=context.received_bytes,
+        ) from None
     except SourceFailure as exc:
         exc.received_bytes = context.received_bytes
         raise

@@ -679,3 +679,36 @@ def test_searchable_text_is_nfc_but_identifiers_and_paths_stay_exact(tmp_path):
     assert document.record.description == f"{nfc} tool"
     paths = [f.relative_path for f in got.files]
     assert f"{nfd}.bin" in paths and f"{nfc}.bin" not in paths
+
+
+@pytest.mark.parametrize("reason,rejected_count", [("cancelled", 0), ("deadline", 1)])
+def test_native_abort_preserves_honest_rejection_count(
+    tmp_path, monkeypatch, reason, rejected_count
+):
+    """RM16, RM34/AC25: native cancellation retains content without rejecting an asset."""
+    from relaymind.assets.source_io import NativeIoAborted
+    from relaymind.store import RunStore
+    from relaymind.store.asset_catalog import AssetCatalogStore
+
+    skill(tmp_path)
+    with RunStore() as store:
+        catalog = AssetCatalogStore(store)
+        catalog.publish(capture(tmp_path), expected_revision=0)
+        original = catalog.snapshot()
+
+        def aborted(*args, **kwargs):
+            raise NativeIoAborted(reason)
+
+        monkeypatch.setattr(sources, "open_source_tree", aborted)
+        with pytest.raises(sources.SourceFailure) as caught:
+            capture(tmp_path, previous=catalog.inventory("example"), received_bytes=17)
+        failure = caught.value
+        assert failure.reason == reason
+        assert failure.received_bytes == 17
+        catalog.record_failure(
+            "example", rejected_count=failure.rejected_count, exclusions=failure.exclusions
+        )
+        observed = catalog.snapshot()
+        assert observed.assets[0].content_hash == original.assets[0].content_hash
+        assert observed.assets[0].stale
+        assert observed.sources[0]["rejected_count"] == rejected_count
