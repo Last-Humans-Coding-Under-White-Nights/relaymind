@@ -18,6 +18,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.53 → 0.55 (#200; RM35/RM40/RM44; AC26/AC31/AC36):
+  publishes the closed M10 retrieval configuration, report and paired comparison
+  contracts, deterministic planned slots, independent repetition-zero quality
+  denominators, production v2 ownership and complete failure/fallback/cost coverage.
+  Digest-bound offline companion inputs preserve private custodian resolution;
+  sanitized effective configuration and source/generator proofs make comparison
+  reproducible. Partial cost subtotals and arm descriptors keep its renderer
+  self-contained; catalog revision zero remains valid. The explicit quality-only
+  exception relaxes machine differences alone.
+  Registers future schemas; runtime implementation and genuine cohort, model,
+  whole-task and platform qualification remain separate work. Corpus contracts,
+  operational clarification, historical protocols and numerical gates are unchanged.
+
 - Specification 0.52 → 0.53 (#191; RM40/AC31): defines closed M10 catalog,
   case, immutable double-annotation, adjudication and transitive lock contracts,
   exact hard-subset derivation, evidence/rights checks and held-out split rules.
