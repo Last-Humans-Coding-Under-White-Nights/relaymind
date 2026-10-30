@@ -18,6 +18,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.56 → 0.57 (#191/#199/#200; RM35/RM40; AC26/AC31):
+  optional explicit loopback index prepare/status/cancel binds the exact offered
+  catalog and scope, with bounded cold/reuse preparation and separate readiness,
+  wall-time and observed/reported costs. Stateless mode remains explicit;
+  selection v2 stays unchanged. Closed benchmark config/report/comparison
+  preparation records and protocol identities preserve historical truth.
+  Other original skill origins are permitted only in source-grounded development;
+  independent qualified sources, minima and all numerical gates are unchanged.
+
 - Specification 0.55 → 0.56 (#191/#199/#200; RM34/RM35/RM40/RM44;
   AC25/AC26/AC31/AC36): source-grounded development benchmarks and actual Matrix
   examples use documented author-defined references without invented human
