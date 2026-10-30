@@ -148,9 +148,10 @@ class AssetCatalogService:
         pending = next(iter(self._pending), None)
         if pending is not None:
             return pending
-        return next(
-            (k for k in self._sources if self._next[k] <= now and self._retry[k] <= now), None
-        )
+        # The source due longest goes first, so slow scans cannot starve a later
+        # source; declaration order only breaks ties (min keeps the first).
+        due = [k for k in self._sources if self._next[k] <= now and self._retry[k] <= now]
+        return min(due, key=lambda k: max(self._next[k], self._retry[k]), default=None)
 
     def _delay(self) -> float:
         if self._pending:
