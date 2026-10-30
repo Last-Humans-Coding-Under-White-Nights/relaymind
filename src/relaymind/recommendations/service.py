@@ -19,6 +19,7 @@ from relaymind.selection.asset_chain import (
     AttemptStarted,
     RecommendationFailure,
     SelectionBudget,
+    cancelled_attempt,
     select_assets,
 )
 from relaymind.selection.asset_contract import SelectorContext
@@ -230,6 +231,18 @@ class _Work:
     task: asyncio.Task
     signal: CancellationSignal
     attempts: list = field(default_factory=list)
+    # The dispatched attempt that has not finished yet, and when it started.
+    in_flight: tuple[AttemptStarted, float] | None = None
+
+    def terminal_attempts(self) -> list:
+        """Finished attempts plus a cancelled record for one still in flight."""
+        if self.in_flight is None:
+            return list(self.attempts)
+        started, at = self.in_flight
+        if any(record["attempt"] == started.attempt for record in self.attempts):
+            return list(self.attempts)
+        elapsed = (self.budget.clock.monotonic() - at) * 1000
+        return [*self.attempts, cancelled_attempt(started, elapsed)]
 
 
 class RecommendationService:
@@ -394,6 +407,7 @@ class RecommendationService:
         def observe(event):
             budget.check()
             if isinstance(event, AttemptStarted):
+                work.in_flight = (event, budget.clock.monotonic())
                 payload = dict(
                     attempt=event.attempt,
                     selector=event.selector.to_json_object(),
@@ -402,6 +416,7 @@ class RecommendationService:
                 )
                 kind = "selector.started"
             elif isinstance(event, AttemptFinished):
+                work.in_flight = None
                 work.attempts.append(event.attempt_record)
                 payload = dict(attempt_record=event.attempt_record, embeddings=[])
                 kind = "selector.finished"
@@ -521,7 +536,7 @@ class RecommendationService:
             rid,
             now=self.clock.utc_now(),
             active_ms=work.budget.elapsed_ms(),
-            attempts=work.attempts,
+            attempts=work.terminal_attempts(),
             reason=reason,
         )
         work.budget.fence_terminal()

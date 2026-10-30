@@ -52,10 +52,13 @@ def test_create_poll_readiness_and_exact_defaults_replay(tmp_path):
                 "?other=1",
                 "?after_seq=-1",
                 "?after_seq=1.0",
+                # Past Python's integer-string limit int() raises; still a bad request.
+                "?limit=" + "9" * 5000,
+                "?after_seq=" + "9" * 5000,
             ):
-                assert (
-                    await client.get(f"/relay/v1/recommendations/{rid}/events" + suffix)
-                ).status_code == 400
+                bad = await client.get(f"/relay/v1/recommendations/{rid}/events" + suffix)
+                assert bad.status_code == 400
+                assert bad.json()["error"]["code"] == "invalid_request"
             # RM37/AC28 adds private actions; the app bearer grants no authority.
             for path in (f"/{rid}/choice", f"/{rid}/feedback"):
                 assert (

@@ -377,3 +377,60 @@ def test_disconnected_create_records_the_cancel_but_sends_nothing(tmp_path):
         runs.close()
 
     asyncio.run(go())
+
+
+def _terminal_attempts(service, rid):
+    page = service.store.events(SCOPE, rid, after_seq=0, limit=100, now=service.clock.utc_now())
+    terminal = page["events"][-1]
+    assert terminal["event_type"] == "cancelled"
+    return terminal["payload"]["attempts"]
+
+
+@pytest.mark.parametrize("how", ["disconnect", "shutdown"])
+def test_cancel_mid_attempt_keeps_the_in_flight_attempt(tmp_path, how):
+    """RM36, spec 8.1: a cancel after dispatch keeps that attempt, without waiting for it."""
+    from recommendation_helpers import BODY, client_for
+    from relaymind.store.recommendation_event import validate_event
+
+    async def go():
+        gate = Gate(resist=True)
+        app, service, runs, _ = setup(tmp_path, primary=gate)
+        try:
+            await check(gate, app, service)
+        finally:
+            # Never leave the resisting selector blocked, even when an assertion fails.
+            gate.release.set()
+            await service.stop()
+            runs.close()
+
+    async def check(gate, app, service):
+        await service.refresh_catalog()
+        original = raw_client(app).start()
+        await gate.started.wait()
+        rid = next(iter(service._active))
+        if how == "disconnect":
+            await original.leave()
+        else:
+            await service.cancel_computing(rid, reason="shutdown")
+        attempts = _terminal_attempts(service, rid)
+        assert len(attempts) == 1
+        (attempt,) = attempts
+        assert attempt["attempt"] == 1 and attempt["selector"] == {"name": "gate", "version": "1"}
+        assert (attempt["outcome"], attempt["reason"]) == ("cancelled", "cancelled")
+        assert attempt["observed_ms"] >= 0 and attempt["result"] is None
+        assert attempt["cost_observations"] == []
+        page = service.store.events(SCOPE, rid, after_seq=0, limit=100, now=service.clock.utc_now())
+        for event in page["events"]:
+            validate_event(event)
+        async with await client_for(app) as c:
+            replay = await c.post("/relay/v1/recommendations", json=BODY)
+            stored = await c.get(f"/relay/v1/recommendations/{rid}")
+        assert replay.status_code == 200 and replay.json()["state"] == "cancelled"
+        assert replay.json() == stored.json()
+        # The resisting selector finishing later adds nothing after the terminal event.
+        gate.release.set()
+        await gate.ended.wait()
+        await asyncio.sleep(0)
+        assert _terminal_attempts(service, rid) == attempts
+
+    asyncio.run(go())
