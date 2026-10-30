@@ -15,6 +15,7 @@ _SCHEMAS = {
     for name in (
         "recommendation_view",
         "recommendation_event",
+        "recommendation_readiness",
         "recommendation_result",
         "asset_record",
     )
@@ -23,10 +24,10 @@ _REGISTRY = Registry().with_resources(
     (f"https://relaymind.local/schemas/{name}.v1.json", Resource.from_contents(schema))
     for name, schema in _SCHEMAS.items()
 )
-# Only the view and event are validated here; the other two are reference targets.
+# Result and asset schemas are reference targets for the view and event.
 _VALIDATORS = {
     name: StrictValidator(_SCHEMAS[name], registry=_REGISTRY, format_checker=FormatChecker())
-    for name in ("recommendation_view", "recommendation_event")
+    for name in ("recommendation_view", "recommendation_event", "recommendation_readiness")
 }
 
 
@@ -68,4 +69,13 @@ def validate_event(
         raise ValueError("invalid_erasure")
     if raw["event_type"] == "ready" and not raw["erased"] and not result_checked:
         parse_recommendation_result(raw["payload"]["result"])
+    return freeze_json(raw)
+
+
+def validate_readiness(value: object) -> Mapping:
+    """Validate the closed public readiness body (RM36/AC27, section 7.6)."""
+    raw = _validate("recommendation_readiness", value)
+    coverage = raw["semantic_coverage"]
+    if coverage["ready"] > coverage["total"]:
+        raise ValueError("invalid_readiness")
     return freeze_json(raw)

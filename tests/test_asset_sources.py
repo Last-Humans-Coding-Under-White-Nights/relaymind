@@ -493,9 +493,16 @@ def test_native_io_fence_keeps_unresponsive_operation_owned_until_completion(dea
 
     cancel, entered, release, requested = (threading.Event() for _ in range(4))
     closed, outcomes = [], []
+    started_at = None
+
+    def in_flight_clock():
+        return 0.0 if started_at is None else time.monotonic() - started_at
 
     class Api:
         def current_thread_handle(self):
+            if deadline:
+                # Exercise a cold handle/monitor setup beyond the in-flight budget.
+                time.sleep(0.05)
             return 777
 
         def cancel_synchronous(self, handle):
@@ -508,13 +515,17 @@ def test_native_io_fence_keeps_unresponsive_operation_owned_until_completion(dea
 
     def worker():
         context = sources.CaptureContext(
-            datetime(2026, 10, 29, tzinfo=UTC), cancelled=cancel.is_set
+            datetime(2026, 10, 29, tzinfo=UTC),
+            monotonic=in_flight_clock if deadline else time.monotonic,
+            cancelled=cancel.is_set,
         )
         if deadline:
-            context.deadline = time.monotonic() + 0.03
+            context.deadline = 0.03
         controller = NativeIoControl(Api(), context)
 
         def unresponsive_driver():
+            nonlocal started_at
+            started_at = time.monotonic()
             entered.set()
             release.wait(timeout=2)
             return 999
@@ -541,6 +552,33 @@ def test_native_io_fence_keeps_unresponsive_operation_owned_until_completion(dea
     assert closed.count(999) == 1
     assert closed.count(777) == 1
     assert not any(t.name == "asset-native-cancel" and t.is_alive() for t in threading.enumerate())
+
+
+def test_native_io_deadline_expired_before_invoke_skips_driver():
+    """RM34/AC25: an expired source deadline aborts before native I/O begins."""
+    from relaymind.assets._windows_source_io import NativeIoAborted, NativeIoControl
+
+    closed = []
+
+    class Api:
+        def current_thread_handle(self):
+            return 777
+
+        def cancel_synchronous(self, handle):
+            raise AssertionError("no native request was registered")
+
+        def close(self, handle):
+            closed.append(handle)
+
+    context = sources.CaptureContext(datetime(2026, 10, 29, tzinfo=UTC))
+    context.deadline = context.monotonic() - 1
+    controller = NativeIoControl(Api(), context)
+    try:
+        with pytest.raises(NativeIoAborted, match="deadline"):
+            controller.invoke(lambda: pytest.fail("expired operation entered the driver"))
+    finally:
+        controller.close()
+    assert closed == [777]
 
 
 @pytest.mark.parametrize(

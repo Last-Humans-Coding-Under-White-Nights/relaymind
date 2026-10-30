@@ -30,6 +30,7 @@ from relaymind.recommendations.service import (
 from relaymind.redaction import scrub
 from relaymind.selection.asset_chain import RecommendationFailure, SelectionBudget
 from relaymind.selection.asset_http import strict_json
+from relaymind.store.recommendation_event import validate_readiness
 from relaymind.store.recommendations import RecommendationClaim
 
 ENDPOINT = "/relay/v1/recommendations"
@@ -225,7 +226,9 @@ def install_recommendation_routes(
 
     async def readiness(request):
         _query(request)
-        return JSONResponse(service.readiness() if service else readiness_body())
+        return JSONResponse(
+            validate_readiness(service.readiness() if service else readiness_body())
+        )
 
     def object_id(request):
         raw = request.path_params["recommendation_id"]
