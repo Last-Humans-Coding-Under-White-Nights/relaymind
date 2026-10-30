@@ -87,9 +87,9 @@
       "derivation"
     ]
   },
-  "unicode_version": "16.0.0",
+  "unicode_version": "15.0.0",
   "qualification_evidence_ids": [
     "access_control"
   ],
-  "digest": "a6db15bc9500f8610e52c675c9f57a5fdaa44586f3d2f3245a26b235d178749b"
+  "digest": "fa4ce5349f7706f8a29ab512a7fc0d41a759b6ce505003ae39ad04067955fb26"
 }

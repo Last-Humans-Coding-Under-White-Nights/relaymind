@@ -206,10 +206,6 @@ def _assess_asset_release(
             if kinds and evidence[evidence_id]["kind"] not in kinds:
                 reasons.add("evidence_kind_mismatch")
 
-    if purpose == "fixture":
-        return QualificationAssessment(
-            "fixture", ("fixture_purpose",), freeze_json(dict(counts)), unavailable, freeze_json({})
-        )
     if unavailable:
         reasons.add("evidence_unavailable")
     expected = {"matrix_original_zh": 100, "original_en": 100}

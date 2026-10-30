@@ -6,6 +6,7 @@ import json
 import sys
 from pathlib import Path
 
+from relaymind.assets.catalog import AssetValidationError
 from relaymind.evaluation.asset_corpus_io import AssetCorpusError
 from relaymind.evaluation.asset_derivation import derive_matrix_export
 
@@ -18,7 +19,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         result = derive_matrix_export(args.input, args.lock, args.output)
-    except AssetCorpusError as exc:
+    except (AssetCorpusError, AssetValidationError) as exc:
         print(json.dumps({"status": "blocked", "reason": str(exc)}), file=sys.stderr)
         return 1
     print(

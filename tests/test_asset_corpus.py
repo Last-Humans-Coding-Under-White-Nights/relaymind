@@ -156,6 +156,22 @@ def test_rm40_ac31_rejects_unsafe_json(release_root, payload):
         load(release_root)
 
 
+@pytest.mark.parametrize(
+    ("payload", "reason"),
+    [
+        (b"{", "invalid_json"),
+        (b'{"schema_version":1,"schema_version":1}', "duplicate_key"),
+        (b'{"n":NaN}', "invalid_number"),
+        (b"[]", "invalid_document"),
+    ],
+)
+def test_rm40_ac31_unsafe_json_keeps_its_specific_reason(payload, reason):
+    from relaymind.evaluation.asset_corpus_io import AssetCorpusError, parse_json
+
+    with pytest.raises(AssetCorpusError, match=f"^{reason}$"):
+        parse_json(payload)
+
+
 def test_rm40_ac31_symlink_and_oversize_refused(release_root, tmp_path):
     original = release_root / "originals/calendar.md"
     other = tmp_path / "outside"
@@ -1319,3 +1335,11 @@ def test_rm40_ac31_loader_schema_text_respects_subschema_positions(
     assert result["hard_precision_included"] is (not shared)
     expected = query.split() if shared else []
     assert result["token_intersections"]["calendar"] == expected
+
+
+def test_rm40_ac31_fixture_assessment_keeps_diagnostic_counts(release_root):
+    assessment = api().assess_asset_release(load(release_root))
+    assert assessment.status == "fixture"
+    assert "fixture_purpose" in assessment.reasons
+    for key in ("lanes", "no_shared_latin", "repeated_input_case_ids"):
+        assert key in assessment.counts

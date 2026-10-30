@@ -117,6 +117,8 @@ def parse_json(payload: bytes) -> dict[str, Any]:
         if not isinstance(value, dict):
             raise AssetCorpusError("invalid_document")
         return value
+    except AssetCorpusError:
+        raise
     except (ValueError, UnicodeError, RecursionError, OverflowError):
         raise AssetCorpusError("invalid_json") from None
 
