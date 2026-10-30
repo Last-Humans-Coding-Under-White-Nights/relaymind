@@ -18,6 +18,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Acceptance corpus input tooling (#199; RM40/AC31): assess exact 200-to-300
+  source continuity, per-lane and all-target hard-subset cohorts through the
+  existing external custodian gate. Pinned offline MCP reproduction reuses the
+  four-document export engine without source acquisition or execution. Corpus
+  readers follow the corrected related-path, ordering, qualification evidence,
+  stored-agreement and schema-search-text contracts. Fixtures remain fixtures;
+  genuine originals, human labels and source/platform acceptance stay outstanding.
+
+- Frozen M10 retrieval input infrastructure (#191; RM40/AC31): four closed
+  schemas, bounded offline local release/lock verification, immutable raw double
+  annotation and adjudication, recomputed agreement and cross-release leakage and
+  Latin-token diagnostics. External custodian review is separate from JSON/byte
+  integrity; fixtures never qualify real baselines. The offline supplied-export
+  CLI preserves exact originals and locked exclusions without acquiring assets.
+  Genuine originals, human annotations, rights/access evidence and real acceptance
+  measurements remain outstanding.
+
 - Specification 0.53 → 0.55 (#200; RM35/RM40/RM44; AC26/AC31/AC36):
   publishes the closed M10 retrieval configuration, report and paired comparison
   contracts, deterministic planned slots, independent repetition-zero quality

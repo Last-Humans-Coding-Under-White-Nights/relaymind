@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "dataset_id": "fixture-small",
+  "release": 1,
+  "purpose": "fixture",
+  "state": "provisional",
+  "frozen_at": null,
+  "catalog": {
+    "path": "catalog.json",
+    "digest": "666aec59cd986ec6f6a5183f2f8ea715dc893cc2920aea08bcc94550c68661d5"
+  },
+  "cases": {
+    "path": "cases.json",
+    "digest": "89cdf331ba82af31cb68e39974bbaa76366cd15b30de29877a64938426312fcd"
+  },
+  "labels": {
+    "path": "labels.json",
+    "digest": "757bb514cb88f0d1cadcf2fd71368b0f0dcf3c0cdf006b8105500c2465fa22cf"
+  },
+  "related_locks": [],
+  "evidence": [
+    {
+      "id": "access_control",
+      "sha256": "3f77bfdae4e1d6750a058ae8a5f0d0c176db21e2f2dd451ac62e2dd4b099b80f",
+      "bytes": 64
+    },
+    {
+      "id": "adjudication",
+      "sha256": "3cf2a83e374ac91abfe496c5eb7aff0e09ab1c1776f3a28b6f1a2afc82751290",
+      "bytes": 62
+    },
+    {
+      "id": "authorship",
+      "sha256": "0171d4275007485402bc25d6532060ce2a37b62c4d8e17b1e399e256d81c5bea",
+      "bytes": 60
+    },
+    {
+      "id": "derivation",
+      "sha256": "b097cb90a5a9db7ff10c72c8581c789fad731aaa61c7052bbd0fac245d44c924",
+      "bytes": 60
+    },
+    {
+      "id": "independence",
+      "sha256": "6a5f82e112a72182473cf8245dd1df5e316305d08e7a695dbb516ce4a3747f56",
+      "bytes": 62
+    },
+    {
+      "id": "language_review",
+      "sha256": "f528e23a6d960d2f74fa6dc06a5626ba838b697cdd52a0fff3f9e2daa7b63555",
+      "bytes": 65
+    },
+    {
+      "id": "license",
+      "sha256": "19f3189d2ae35183351e059b5bb44f7c55c8336c4eee2cc1d296a2042ec190a8",
+      "bytes": 57
+    },
+    {
+      "id": "notice",
+      "sha256": "9473b9dc30eec6ba5c80b7d4bf91c8bce4ddcb0f4ad5e5a38ffce9efd1702a21",
+      "bytes": 56
+    },
+    {
+      "id": "original",
+      "sha256": "1defa6396b1d171810d65e313267b929748324acc7f6b7e0450357e6932e3aa2",
+      "bytes": 62
+    },
+    {
+      "id": "permission",
+      "sha256": "7c600be4ea9bee469dab9a457f9d6314c14e209b7a3c35c811d9fd0abf7f4b7b",
+      "bytes": 60
+    },
+    {
+      "id": "source_provenance",
+      "sha256": "c20519845080da78a798fe346e68b80702874934d8e7923d45efa4f016468ef5",
+      "bytes": 67
+    },
+    {
+      "id": "split_review",
+      "sha256": "b87708435de8767e71e70e9cd0db888b05e3d565c77a7507b433ddce29bdf62e",
+      "bytes": 62
+    }
+  ],
+  "derivation": {
+    "revision": "fixture-v1",
+    "config_digest": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "evidence_ids": [
+      "derivation"
+    ]
+  },
+  "unicode_version": "16.0.0",
+  "qualification_evidence_ids": [
+    "access_control"
+  ],
+  "digest": "a6db15bc9500f8610e52c675c9f57a5fdaa44586f3d2f3245a26b235d178749b"
+}

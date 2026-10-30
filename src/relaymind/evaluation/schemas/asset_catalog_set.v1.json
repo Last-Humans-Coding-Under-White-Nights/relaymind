@@ -1,0 +1,594 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "dataset_id",
+    "release",
+    "purpose",
+    "assets",
+    "people",
+    "equivalent_pairs",
+    "exclusions",
+    "evidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "dataset_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "x-maxBytes": 256
+    },
+    "release": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "purpose": {
+      "enum": [
+        "fixture",
+        "development",
+        "acceptance"
+      ]
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "record",
+          "origin",
+          "original_languages",
+          "asset_family_ids",
+          "original_evidence_id",
+          "source_url",
+          "source_revision",
+          "rights",
+          "language_review_evidence_ids",
+          "provenance_evidence_ids"
+        ],
+        "properties": {
+          "record": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "schema_version",
+              "asset_id",
+              "kind",
+              "source_id",
+              "source_locator",
+              "source_version",
+              "captured_at",
+              "content_hash",
+              "description",
+              "language_tags",
+              "dependencies",
+              "availability",
+              "stale",
+              "identity"
+            ],
+            "properties": {
+              "schema_version": {
+                "const": 1
+              },
+              "asset_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "enum": [
+                  "skill",
+                  "mcp_tool"
+                ]
+              },
+              "source_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_locator": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_version": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "captured_at": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}(?![\\s\\S])"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              },
+              "language_tags": {
+                "type": "array",
+                "maxItems": 32,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9-]{1,64}(?![\\s\\S])"
+                }
+              },
+              "dependencies": {
+                "type": "array",
+                "maxItems": 64,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "availability": {
+                "enum": [
+                  "available",
+                  "needs_setup",
+                  "unavailable",
+                  "unknown"
+                ]
+              },
+              "stale": {
+                "type": "boolean"
+              },
+              "identity": {
+                "type": "object"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "skill"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "identity": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "package_id",
+                        "package_version"
+                      ],
+                      "properties": {
+                        "package_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "package_version": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        }
+                      }
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "identity": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "server_id",
+                        "tool_name",
+                        "exposed_name",
+                        "input_schema",
+                        "schema_hash"
+                      ],
+                      "properties": {
+                        "server_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "tool_name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "exposed_name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "input_schema": {
+                          "type": "object"
+                        },
+                        "schema_hash": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}(?![\\s\\S])"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "origin": {
+            "enum": [
+              "matrix_original_zh",
+              "original_en",
+              "genuine_mcp",
+              "fixture"
+            ]
+          },
+          "original_languages": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9-]{1,64}$(?![\\s\\S])"
+            },
+            "maxItems": 32,
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "asset_family_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "minItems": 1,
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "original_evidence_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "source_url": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "x-maxBytes": 2048
+          },
+          "source_revision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "x-maxBytes": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rights": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "acquisition",
+              "evaluation",
+              "retention",
+              "redistribution",
+              "evidence_ids",
+              "notice_evidence_ids"
+            ],
+            "properties": {
+              "acquisition": {
+                "enum": [
+                  "permitted",
+                  "unknown",
+                  "prohibited"
+                ]
+              },
+              "evaluation": {
+                "enum": [
+                  "permitted",
+                  "unknown",
+                  "prohibited"
+                ]
+              },
+              "retention": {
+                "enum": [
+                  "permitted",
+                  "unknown",
+                  "prohibited"
+                ]
+              },
+              "redistribution": {
+                "enum": [
+                  "permitted",
+                  "unknown",
+                  "prohibited"
+                ]
+              },
+              "evidence_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-maxBytes": 256
+                },
+                "uniqueItems": true,
+                "x-sorted": true
+              },
+              "notice_evidence_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-maxBytes": 256
+                },
+                "uniqueItems": true,
+                "x-sorted": true
+              }
+            }
+          },
+          "language_review_evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "provenance_evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          }
+        }
+      },
+      "maxItems": 1000
+    },
+    "people": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "roles",
+          "competencies",
+          "evidence_ids"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "author",
+                "annotator",
+                "adjudicator",
+                "tuner",
+                "custodian",
+                "reviewer"
+              ]
+            },
+            "uniqueItems": true
+          },
+          "competencies": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "native_zh",
+                "proficient_en"
+              ]
+            },
+            "uniqueItems": true
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          }
+        }
+      }
+    },
+    "equivalent_pairs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "zh_asset_id",
+          "en_asset_id",
+          "reviewer_ids",
+          "evidence_ids"
+        ],
+        "properties": {
+          "zh_asset_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "en_asset_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "reviewer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "minItems": 1,
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          }
+        }
+      }
+    },
+    "exclusions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_id",
+          "original_id",
+          "reason",
+          "evidence_ids"
+        ],
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "original_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "x-maxBytes": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "access",
+          "path",
+          "sha256",
+          "bytes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "kind": {
+            "enum": [
+              "original",
+              "license",
+              "notice",
+              "permission",
+              "source_provenance",
+              "language_review",
+              "authorship",
+              "independence",
+              "adjudication",
+              "split_review",
+              "access_control",
+              "derivation",
+              "qualification"
+            ]
+          },
+          "access": {
+            "enum": [
+              "redistributable",
+              "restricted"
+            ]
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048,
+                "x-maxBytes": 2048
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "maxItems": 10000
+    }
+  }
+}
