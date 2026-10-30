@@ -627,10 +627,10 @@ def test_rm40_ac31_mcp_export_cannot_replace_an_existing_destination(mcp_input, 
     output = tmp_path / "existing"
     output.mkdir()
     original = output / "original.txt"
-    original.write_text("User content")
+    original.write_text("User content", encoding="utf-8", newline="\n")
     with pytest.raises(ValueError, match="output_exists"):
         derive_api()(mcp_input, mcp_input / "lock.json", output)
-    assert original.read_text() == "User content"
+    assert original.read_text(encoding="utf-8") == "User content"
     assert list(output.iterdir()) == [original]
 
 
@@ -649,7 +649,9 @@ def test_rm40_ac31_mcp_export_requires_pinned_mcp_records_not_a_generic_source_f
 def test_rm40_ac31_generic_api_export_cannot_be_converted_through_mcp_cli(tmp_path):
     source = tmp_path / "generic"
     source.mkdir()
-    (source / "openapi.json").write_text(json.dumps({"openapi": "3.0.0", "paths": {}}))
+    (source / "openapi.json").write_text(
+        json.dumps({"openapi": "3.0.0", "paths": {}}), encoding="utf-8", newline="\n"
+    )
     output = tmp_path / "fake-mcp"
     with pytest.raises(ValueError):
         derive_api()(source, source / "openapi.json", output)
