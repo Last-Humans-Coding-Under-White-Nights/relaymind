@@ -291,3 +291,89 @@ def test_event_schema_references_still_check_action_and_error_code():
     assert validate_event(failed)["payload"]["code"] == "deadline_exceeded"
     with pytest.raises(ValueError):
         validate_event(failed | dict(payload=failed["payload"] | {"code": "made_up"}))
+
+
+def test_configured_source_missing_provenance_is_a_configuration_change(tmp_path):
+    """RM34/RM36: a configured asset source without a provenance row is not 'corrupt'."""
+    import dataclasses
+
+    from relaymind.assets.settings import SourceConfig
+    from relaymind.assets.sources import source_config_digest
+
+    async def go():
+        _, service, runs, catalog = setup(tmp_path)
+        provider = service.provider
+        extra = SourceConfig("other", "local_directory", tmp_path / "other")
+        provider.settings = dataclasses.replace(
+            provider.settings, sources=(*provider.settings.sources, extra)
+        )
+        snapshot, _ = catalog.snapshot_with_provenance()
+        # Only the extra source has provenance; the snapshot's own source has none.
+        rows = {
+            "other": {
+                "source_id": "other",
+                "config_digest": source_config_digest(extra),
+                "last_success_at": "2026-10-29T00:00:00.000000Z",
+                "captured_at": "2026-10-29T00:00:00Z",
+                "content_hash": "a" * 64,
+            }
+        }
+        catalog.snapshot_with_provenance = lambda: (snapshot, rows)
+        await provider.refresh()
+        assert provider.snapshot is None
+        assert provider.reason == "no_lexical_generation"
+        await service.stop()
+        runs.close()
+
+    asyncio.run(go())
+
+
+def test_unexpected_selection_event_fails_loudly(tmp_path, monkeypatch):
+    """RM36: an unknown observer event is a TypeError, never an UnboundLocalError."""
+    from recommendation_helpers import BODY, client_for
+    from relaymind.recommendations import service as service_module
+    from relaymind.selection.asset_chain import RecommendationFailure
+
+    seen = []
+
+    async def fake_select(selection, *, observe, **kwargs):
+        try:
+            observe(object())
+        except Exception as error:  # the observer's own failure is what we check
+            seen.append(error)
+        raise RecommendationFailure("internal_error", "internal_error")
+
+    monkeypatch.setattr(service_module, "select_assets", fake_select)
+
+    async def go():
+        app, service, runs, _ = setup(tmp_path)
+        await service.refresh_catalog()
+        async with await client_for(app) as c:
+            await c.post("/relay/v1/recommendations", json=BODY)
+        await service.stop()
+        runs.close()
+
+    asyncio.run(go())
+    assert len(seen) == 1
+    assert type(seen[0]) is TypeError and str(seen[0]) == "unexpected selection event"
+
+
+def test_disconnected_create_records_the_cancel_but_sends_nothing(tmp_path):
+    """RM36 (TESTING.md): a disconnected create is cancelled for replay; no reply is forced."""
+    from recommendation_helpers import BODY, client_for
+
+    async def go():
+        gate = Gate()
+        app, service, runs, _ = setup(tmp_path, primary=gate)
+        await service.refresh_catalog()
+        original = raw_client(app).start()
+        await gate.started.wait()
+        await original.leave()
+        assert not any(m["type"] == "http.response.start" for m in original.sent)
+        async with await client_for(app) as c:
+            replay = await c.post("/relay/v1/recommendations", json=BODY)
+        assert replay.status_code == 200 and replay.json()["state"] == "cancelled"
+        await service.stop()
+        runs.close()
+
+    asyncio.run(go())

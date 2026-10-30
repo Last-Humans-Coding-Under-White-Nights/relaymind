@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from uuid import UUID
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from relaymind.api.app import _disconnect, _left, _log_internal
 from relaymind.api.auth import require_bearer_token
@@ -140,6 +140,16 @@ def _query(request, *, events=False):
     return int(values.get("after_seq", "0")), int(values.get("limit", str(DEFAULT_EVENTS_PAGE)))
 
 
+class _NoReply(Response):
+    """A response for a client that already disconnected: it sends nothing."""
+
+    def __init__(self) -> None:
+        super().__init__(status_code=204)
+
+    async def __call__(self, scope, receive, send) -> None:
+        return None
+
+
 def install_recommendation_routes(
     app: FastAPI, service: RecommendationService | None, *, configured_scope: Mapping | None
 ) -> None:
@@ -205,6 +215,10 @@ def install_recommendation_routes(
                     await service.cancel_computing(signal.recommendation_id, reason="disconnect")
                 else:
                     task.cancel()
+                # The cancelled view is recorded for replay; the client is gone,
+                # so nothing is sent on its socket.
+                await asyncio.gather(task, return_exceptions=True)
+                return _NoReply()
             response = await task
             return JSONResponse(response.body, status_code=response.status)
         except asyncio.CancelledError:
