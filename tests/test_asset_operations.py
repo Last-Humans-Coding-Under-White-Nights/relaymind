@@ -643,7 +643,7 @@ def test_startup_counts_context_entry_and_keeps_ten_failures(tmp_path):
         @asynccontextmanager
         async def launch():
             calls.append("enter")
-            await asyncio.sleep(0.002)
+            await asyncio.sleep(0.05)
             async with await client_for(app) as client:
                 yield 1234, client
             calls.append("exit")

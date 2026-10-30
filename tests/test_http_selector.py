@@ -922,7 +922,7 @@ def test_real_user_cancel_beats_suspended_gateway_deadline(tmp_path, catch_stop,
             [],
             input_tokens=100,
             external_turns=[],
-            budgets=LocalBudgets(active_seconds=0.2, run_active_seconds=60),
+            budgets=LocalBudgets(active_seconds=2, run_active_seconds=60),
             placement=PlacementSettings(policy="device_aware"),
         )
         router = ModelRouterSelector(gateway.orchestrator.router)
@@ -954,7 +954,7 @@ def test_real_user_cancel_beats_suspended_gateway_deadline(tmp_path, catch_stop,
             try:
                 await asyncio.Event().wait()
             except asyncio.CancelledError:
-                gateway.clock.advance(0.3)
+                gateway.clock.advance(3)
                 for event in route_turn("check-service-health"):
                     yield event
 
