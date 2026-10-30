@@ -726,3 +726,32 @@ def test_catalog_conflict_is_recorded_as_index_error(tmp_path, monkeypatch):
         source = catalog.snapshot().sources[0]
         assert [e["reason"] for e in source["exclusions"]] == ["index_error"]
         assert source["rejected_count"] == 0
+
+
+def test_periodic_sources_are_scheduled_oldest_due_first(tmp_path):
+    """RM34/AC25: slow scans cannot starve a later source (31 s scans, 30 s interval)."""
+    sources = [
+        {
+            "source_id": name,
+            "kind": "local_directory",
+            "path": str(tmp_path / name),
+            "adapter_contract": None,
+            "secret_ref": None,
+        }
+        for name in ("a", "b", "c")
+    ]
+    parsed = parse_asset_settings({"sources": sources}, {}, config_dir=tmp_path)
+    clock = FakeClock()
+    with RunStore(clock=clock) as run_store:
+        service = s.AssetCatalogService(parsed, facade(run_store), clock=clock)
+        now = clock.monotonic()
+        for key in ("a", "b", "c"):
+            service._next[key] = now
+            service._retry[key] = 0
+        order = []
+        for _ in range(6):
+            key = service._due(now)
+            order.append(key)
+            now += 31  # the scan takes longer than the 30-second interval
+            service._next[key] = now + 30
+        assert order == ["a", "b", "c", "a", "b", "c"]
