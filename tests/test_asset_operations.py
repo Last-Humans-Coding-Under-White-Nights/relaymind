@@ -64,11 +64,19 @@ def _measured_workload(records):
     return WorkloadSamples("measured", requests=list(records), origin_at=0.0)
 
 
+@pytest.mark.parametrize("coarse_clock", [False, True], ids=["observed_duration", "zero_clock"])
 def test_schedule_requires_fixed_origin_cadence_and_single_request_slot(
     validated_request_cohort,
     production_batch_samples,
+    coarse_clock,
 ):
     """RM38/AC29: 120 valid API responses cannot relabel a 1 Hz or overlapping run."""
+    if coarse_clock:
+        # Preserve real API evidence; model a clock whose two reads share a tick.
+        validated_request_cohort = [
+            replace(record, finished_at=record.started_at) for record in validated_request_cohort
+        ]
+        assert all(record.client_elapsed_ms == 0 for record in validated_request_cohort)
     original = _measured_workload(validated_request_cohort)
     assert summarize_operations([], original, None)["scheduled"]["passes"] is True
     one_hz = _measured_workload(
@@ -98,7 +106,17 @@ def test_schedule_requires_fixed_origin_cadence_and_single_request_slot(
     overlapping = _measured_workload(validated_request_cohort)
     probe = replace(production_batch_samples[0].probes[0], started_at=0.005, finished_at=0.015)
     overlapping.batches = [replace(production_batch_samples[0], probes=(probe,))]
+    if coarse_clock:
+        # A zero-duration response ends before this later probe; there is no overlap.
+        assert summarize_operations([], overlapping, None)["scheduled"]["passes"] is True
+    # Only this adversarial case needs a synthetic nonzero interval. The API
+    # evidence and the cohort's observed durations remain unchanged.
+    first = overlapping.requests[0]
+    overlapping.requests[0] = replace(first, finished_at=first.started_at + 0.020)
     assert summarize_operations([], overlapping, None)["scheduled"]["passes"] is False
+    touching = replace(probe, started_at=0.020, finished_at=0.030)
+    overlapping.batches = [replace(production_batch_samples[0], probes=(touching,))]
+    assert summarize_operations([], overlapping, None)["scheduled"]["passes"] is True
 
 
 def test_measured_label_adversarial_delay_fails(validated_request_cohort):

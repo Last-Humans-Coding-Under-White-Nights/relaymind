@@ -56,8 +56,15 @@ def raw_client(app, key="key"):
 
 def test_concurrent_keys_disconnect_and_resistant_late_result(tmp_path):
     async def go():
+        from relaymind.assets.settings import RecommendationSettings
+
         gate = Gate(resist=True)
-        app, service, runs, _ = setup(tmp_path, primary=gate)
+        # The default 150 ms primary budget can expire between the three HTTP
+        # calls on a slow runner, which would fall back and free the slot.
+        settings = RecommendationSettings(
+            enabled=True, user_id="u", workspace_id="w", total_ms=60_000, primary_ms=60_000
+        )
+        app, service, runs, _ = setup(tmp_path, settings=settings, primary=gate)
         await service.refresh_catalog()
         original = raw_client(app).start()
         await gate.started.wait()

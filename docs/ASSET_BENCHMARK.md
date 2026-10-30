@@ -1,5 +1,12 @@
 # Benchmarking skill and tool recommendation selectors
 
+For the actual 412-asset Matrix/English-skill/MCP development catalog and 128 frozen
+Chinese, English and mixed cases, start with [SOURCE_BENCHMARK.md](SOURCE_BENCHMARK.md).
+It provides tested acquisition/build commands, the same v2 team integration and
+index readiness, builtin/external runs on one full catalog, and comparisons.
+The formal/fixture protocol walkthrough below remains a separate profile.
+
+
 The retrieval benchmark implements RM35/RM40, AC26/AC31 and the exports in
 specification §12.6.2. It uses the production v2 settings parser,
 `RecommendationService`, HTTP transport, coordinator and admission. A disposable
@@ -93,7 +100,7 @@ request = dict(schema_version=2,
         'exposed_name': 'weather.lookup', 'input_schema': schema,
         'schema_hash': canonical_digest(schema)})])
 validated = parse_asset_request(request).to_json_object()
-(root / 'request.json').write_text(json.dumps(validated, ensure_ascii=False))
+(root / 'request.json').write_text(json.dumps(validated, ensure_ascii=False), encoding="utf-8", newline="\n")
 print(json.dumps(validated, ensure_ascii=False, indent=2))
 PYEXAMPLE
 ```
@@ -111,7 +118,7 @@ import json
 from pathlib import Path
 from relaymind.selection.asset_contract import parse_asset_result
 result = parse_asset_result(json.loads(
-    Path('/var/tmp/relaymind-asset-demo/response.json').read_text())).to_json_object()
+    Path('/var/tmp/relaymind-asset-demo/response.json').read_text(encoding="utf-8"))).to_json_object()
 assert result['selector'] == {'name': 'example_lexical', 'version': '1'}
 assert result['outcome'] == 'ranked' and result['decision'] == 'choice_required'
 assert result['candidates'][0]['asset_id'] == 'demo:skill:calendar'
@@ -130,9 +137,11 @@ current eligibility; successful JSON validation alone does not admit a result.
 
 Use an environment containing the project's declared dependencies. `python`
 below means that environment's Python 3.12+ interpreter. Start from the repository
-root. The fixture pins Unicode 16.0.0, as recorded in its lock; a different
-Unicode database requires a newly authored fixture release rather than silently
-changing the locked dataset during a run.
+root. The checked-in fixture records Unicode 16.0.0. The explicit authoring
+step below binds a new disposable provisional fixture copy to the interpreter's
+actual Unicode table (for example Python 3.12 uses 15.0.0). It changes that copy's
+lock identity, never its original-byte hashes or genuine/frozen corpus bindings.
+Run and compare never repair or rewrite an incompatible lock.
 
 An installed-wheel verification omits that override and uses the installed
 candidate; the runner refuses source-inventory mismatches. Building/installing
@@ -158,18 +167,19 @@ python - <<'PYEXAMPLE'
 from pathlib import Path
 root = Path('/var/tmp/relaymind-asset-demo')
 for name, port in (('team-a', 8913), ('team-b', 8914)):
-    config = (root / 'third-party.toml').read_text().replace(
+    config = (root / 'third-party.toml').read_text(encoding="utf-8").replace(
         'third-party-production.toml', name + '-production.toml')
-    production = (root / 'third-party-production.toml').read_text().replace(
+    production = (root / 'third-party-production.toml').read_text(encoding="utf-8").replace(
         '127.0.0.1:8913/select', f'127.0.0.1:{port}/select')
-    (root / (name + '.toml')).write_text(config)
-    (root / (name + '-production.toml')).write_text(production)
+    (root / (name + '.toml')).write_text(config, encoding="utf-8", newline="\n")
+    (root / (name + '-production.toml')).write_text(production, encoding="utf-8", newline="\n")
 PYEXAMPLE
 ```
 
 Author settings/environment digests on the device that will run the benchmark.
 This explicit helper refuses a genuine development or acceptance corpus. It
-expands production parser defaults, commits the full implementation/schema
+explicitly reauthors only the provisional fixture Unicode binding, expands
+production parser defaults, commits the full implementation/schema
 inventories and collects actual device/dependency facts. `run` never rewrites
 settings or increases budgets. Refresh after any implementation or schema edit.
 
@@ -179,7 +189,7 @@ from pathlib import Path
 from relaymind.evaluation.asset_benchmark import refresh_fixture_benchmark_config
 root = Path('/var/tmp/relaymind-asset-demo')
 for name in ('builtin', 'team-a', 'team-b'):
-    refresh_fixture_benchmark_config(root / (name + '.toml'))
+    refresh_fixture_benchmark_config(root / (name + '.toml'), reauthor_fixture_unicode=True)
 PY
 ```
 
@@ -225,7 +235,7 @@ from pathlib import Path
 root = Path('/var/tmp/relaymind-asset-demo')
 entries = {}
 for name in ('builtin', 'team-a', 'team-b'):
-    value = json.loads((root / (name + '.json.resolver.json')).read_text())
+    value = json.loads((root / (name + '.json.resolver.json')).read_text(encoding="utf-8"))
     for entry in value['entries']:
         key = (entry['id'], entry['hash_kind'], entry['hash'])
         if key in entries and entries[key]['bytes'] != entry['bytes']:
@@ -233,7 +243,7 @@ for name in ('builtin', 'team-a', 'team-b'):
         entries[key] = entry
 (root / 'resolver.json').write_text(json.dumps({
     'schema_version': 1, 'entries': [entries[k] for k in sorted(entries)]
-}))
+}), encoding="utf-8", newline="\n")
 PY
 python scripts/asset_selection_benchmark.py compare \
   /var/tmp/relaymind-asset-demo/builtin.json \
@@ -392,37 +402,117 @@ comparison.
 Three facts are distinct: gateway lexical readiness, the team's index readiness,
 and the outcome of an actual query. A successful fallback proves only the final
 service result. The existing example rebuilds its in-memory lexical index inside
-each POST, so its observed query duration includes that build. There is currently
-no implemented companion preparation command or readiness endpoint in this
-example. Do not call a healthy socket or an absent build observation a ready
+each POST, so its observed query duration includes that build. Without its explicit indexed-mode option the example exposes no preparation
+endpoint. Do not call a healthy socket or an absent build observation a ready
 index or a zero-cost build.
 
-**Proposed 0.57 lifecycle; not implemented commands/configuration yet:** an
-explicit loopback companion accepts prepare/status/cancel for an exact
-selector/catalog/scope binding before query warm-ups. Mode `none` keeps existing
-stateless selectors unchanged. `cold` and `reuse` are separate frozen profiles;
-a ready response states the actual index revision and whether reuse occurred.
-The runner records preparation wall time (transport, build and polling), cleanup,
-server-reported cumulative costs and independently observed costs separately from
-query latency and primary/floor outcomes. Unknown build/token/CPU/memory evidence
-stays null. Polling and cancellation have finite declared bounds.
+The optional companion runs explicitly before query warm-ups. Existing stateless
+configurations omit `[preparation]` and send no lifecycle traffic; their report
+says `not_applicable` with null setup time. Indexed configurations bind selector
+identity, exact ordered offered catalog digest/revision, scope, permissions and
+requested kinds. A different scope or stale index cannot reuse that readiness.
 
-The planned benchmark-only table is shown for review; today's closed config
-correctly rejects it until the companion implementation and schemas land:
+Start two indexed example servers in separate terminals:
 
-```toml
-[preparation]
-mode = "http"
-url = "http://127.0.0.1:8913/index"
-profile = "cold"
-total_ms = 60000
-request_ms = 2000
-poll_ms = 250
-max_polls = 240
+```bash
+python scripts/example_asset_selector.py --port 8923 --preparation-path /index
+# In another terminal:
+python scripts/example_asset_selector.py --port 8924 --preparation-path /index
 ```
 
-A proposed `prepare --config PATH --output PATH` subcommand will write the same
-bounded transcript independently of a run. Existing `run` will perform its own
-preparation once before warm-ups; a standalone cold preparation is not silently
-adopted by a later cold run. The current executable CLI offers only `run` and
-`compare`. The v2 query/result wire stays unchanged throughout this addition.
+Using the staged files from above, create explicit cold/reuse configs for both
+teams. Production query settings remain ordinary v2; `[preparation]` belongs to
+the benchmark config only. Both teams get exactly the same catalog/cases and
+preparation budgets, with endpoint/algorithm as the intended variable.
+
+```bash
+python - <<'PYINDEX'
+from pathlib import Path
+from relaymind.evaluation.asset_benchmark import refresh_fixture_benchmark_config
+root = Path('/var/tmp/relaymind-asset-demo')
+for team, old_port, port in (('team-a', 8913, 8923), ('team-b', 8914, 8924)):
+    for profile in ('cold', 'reuse'):
+        name = team + '-' + profile
+        production = (root / (team + '-production.toml')).read_text(encoding="utf-8").replace(
+            f'127.0.0.1:{old_port}/select', f'127.0.0.1:{port}/select')
+        (root / (name + '-production.toml')).write_text(production, encoding="utf-8", newline="\n")
+        config = (root / (team + '.toml')).read_text(encoding="utf-8").replace(
+            team + '-production.toml', name + '-production.toml')
+        config += ('\n[preparation]\nmode = "http"\n'
+            + f'url = "http://127.0.0.1:{port}/index"\nprofile = "{profile}"\n'
+            + 'total_ms = 60000\nrequest_ms = 2000\npoll_ms = 250\nmax_polls = 240\n')
+        (root / (name + '.toml')).write_text(config, encoding="utf-8", newline="\n")
+        refresh_fixture_benchmark_config(root / (name + '.toml'), reauthor_fixture_unicode=True)
+PYINDEX
+python scripts/asset_selection_benchmark.py prepare \
+  --config /var/tmp/relaymind-asset-demo/team-a-cold.toml \
+  --output /var/tmp/relaymind-asset-demo/team-a-preparation.json
+python scripts/asset_selection_benchmark.py run \
+  --config /var/tmp/relaymind-asset-demo/team-a-cold.toml \
+  --output /var/tmp/relaymind-asset-demo/team-a-cold.json
+python scripts/asset_selection_benchmark.py run \
+  --config /var/tmp/relaymind-asset-demo/team-b-cold.toml \
+  --output /var/tmp/relaymind-asset-demo/team-b-cold.json
+python scripts/asset_selection_benchmark.py run \
+  --config /var/tmp/relaymind-asset-demo/team-a-reuse.toml \
+  --output /var/tmp/relaymind-asset-demo/team-a-reuse.json
+python scripts/asset_selection_benchmark.py run \
+  --config /var/tmp/relaymind-asset-demo/team-b-reuse.toml \
+  --output /var/tmp/relaymind-asset-demo/team-b-reuse.json
+```
+
+`prepare` writes the bounded preparation transcript without querying a case.
+`run` independently prepares once before its warm-ups; running a standalone cold
+preparation followed by a cold run deliberately performs two fresh preparations.
+The later reuse run may reuse the exact compatible ready index and records the
+server's actual `reused` value. Cold does not delete another caller's active
+index. Reuse does not claim that the original build cost was zero or amortized.
+
+Merge the new resolver entries by the same complete identity triple used above,
+then compare cold with cold and reuse with reuse:
+
+```bash
+python - <<'PYINDEX'
+import json
+from pathlib import Path
+root = Path('/var/tmp/relaymind-asset-demo')
+entries = {}
+for name in ('builtin', 'team-a', 'team-b', 'team-a-cold', 'team-b-cold',
+             'team-a-reuse', 'team-b-reuse'):
+    for entry in json.loads((root / (name + '.json.resolver.json')).read_text(encoding="utf-8"))['entries']:
+        key = (entry['id'], entry['hash_kind'], entry['hash'])
+        if key in entries and entries[key]['bytes'] != entry['bytes']:
+            raise ValueError('conflicting resolver byte commitment')
+        entries[key] = entry
+(root / 'resolver.json').write_text(json.dumps({
+    'schema_version': 1, 'entries': [entries[k] for k in sorted(entries)]}), encoding="utf-8", newline="\n")
+PYINDEX
+python scripts/asset_selection_benchmark.py compare \
+  /var/tmp/relaymind-asset-demo/team-a-cold.json \
+  /var/tmp/relaymind-asset-demo/team-b-cold.json \
+  --resolver /var/tmp/relaymind-asset-demo/resolver.json --quality-only \
+  --output /var/tmp/relaymind-asset-demo/cold-comparison.json \
+  --markdown /var/tmp/relaymind-asset-demo/cold-comparison.md
+python scripts/asset_selection_benchmark.py compare \
+  /var/tmp/relaymind-asset-demo/team-a-reuse.json \
+  /var/tmp/relaymind-asset-demo/team-b-reuse.json \
+  --resolver /var/tmp/relaymind-asset-demo/resolver.json --quality-only \
+  --output /var/tmp/relaymind-asset-demo/reuse-comparison.json \
+  --markdown /var/tmp/relaymind-asset-demo/reuse-comparison.md
+```
+
+Comparison JSON/Markdown keeps setup state/profile/reuse, observed preparation
+wall time, cleanup and server-reported cumulative costs separate from query
+latency/cost and primary/floor outcomes. Unknown CPU/token/memory costs stay null.
+Poll claims are cumulative, so never sum them. Reported server build time is not
+client-observed wall time. A failed/unready/stale preparation retains its
+transcript and every planned query slot as `not_run`, with a nonzero exit. The
+example supports bounded status/cancellation; closing an HTTP connection alone is
+not proof that a build was cancelled.
+
+Cold-versus-reuse comparison is incompatible in both modes; inspect those reports
+separately to understand startup. Stateless-versus-indexed comparisons are allowed
+with explicit `not_applicable` versus observed setup, never missing-as-zero.
+`--quality-only` still makes latency/resource/cost values not comparable. These
+synthetic examples validate protocol replacement, not multilingual usefulness or
+independent qualification. The v2 query/result wire remains unchanged.

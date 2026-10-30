@@ -18,6 +18,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Source-grounded asset benchmark delivery (#191/#199/#200; RM35/RM40/RM44;
+  AC26/AC31/AC36): pinned acquisition/build and a 412-asset working catalog
+  (87 Matrix skills, 194 original-English SkillsBench skills, 131 genuine MCP
+  tools), 128 preregistered Chinese/English/mixed references, and shared
+  production-path builtin/team run/compare with explicit index readiness.
+  Preserve actual primary timeouts, blocked setup, unknown costs and historical
+  report hashes. Developer-authored references support the working development
+  profile; independent formal corpus, host/human and platform gates remain
+  separate. Reproduction, team integration and shortlist guides are included.
+
 - Specification 0.56 → 0.57 (#191/#199/#200; RM35/RM40; AC26/AC31):
   optional explicit loopback index prepare/status/cancel binds the exact offered
   catalog and scope, with bounded cold/reuse preparation and separate readiness,

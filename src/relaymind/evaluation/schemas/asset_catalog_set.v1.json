@@ -224,6 +224,7 @@
             "enum": [
               "matrix_original_zh",
               "original_en",
+              "other_original",
               "genuine_mcp",
               "fixture"
             ]
