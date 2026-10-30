@@ -36,8 +36,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   exact hard-subset derivation, evidence/rights checks and held-out split rules.
   Fixture validation remains separate from genuine external qualification;
   missing inputs do not block loader development or satisfy acceptance gates.
-  Clarifies the operational workload slot timing and separate foreground overlap
-  with source/derived work (RM38/AC29), preserving the single-worker model.
   Historical evaluation formats, numerical gates and host authority are unchanged.
 
 - Lexical startup and index lifecycle (#196; RM38/AC29): enabled launchers serve
