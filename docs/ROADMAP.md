@@ -1040,7 +1040,7 @@ listed here so the current order can be traced to its reason.
   so it does not wait for the plugin.
 
 
-## M10 — Multilingual asset recommendations (spec 0.51)
+## M10 — Multilingual asset recommendations (spec 0.52)
 
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
@@ -1055,8 +1055,9 @@ behavior. The AC25 live host/source subcases, full 300-asset measurements,
 Windows/macOS qualification and Matrix rights/cohort/refresh remain open; these
 deterministic catalog tests do not close #191 or #192's qualified adapter gates.
 
-Specification 0.51 freezes the independent M10 recommendation core (spec
-section 1); every full-milestone gate stays. The
+Specification 0.51 froze the independent M10 recommendation core (spec
+section 1), and 0.52 revised its offer cache and freshness rules
+(RM24, RM34, RM38); every full-milestone gate stays. The
 [published design](design/2026-10-29-multilingual-asset-routing.md) reconciles
 qualifications #188–#190 per capability. The adapter contracts behind the
 blockers MATRIX-COHORT, MATRIX-OVERLAP, MATRIX-RIGHTS, MATRIX-REFRESH,
@@ -1071,8 +1072,8 @@ The customer-approved defaults of 29 October 2026 are in spec section 1.
 
 Status at this revision: the bounded qualifications have committed evidence;
 #187 specifies the product contracts and design but implements nothing.
-Before any implementation issue's code begins, spec 0.51 must be merged (a
-spec in an unmerged stack does not count) and that issue updated with its
+Before any implementation issue's code begins, spec 0.51 and its 0.52 revision
+must be merged (a spec in an unmerged stack does not count) and that issue updated with its
 final RM and AC IDs. Those issue updates are still pending; the table gives the
 mapping and does not claim any GitHub issue was changed.
 
