@@ -8,6 +8,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Recommendation-only selector v2 (#193; RM35/AC26): closed versioned contracts,
+  deterministic projection-only lexical ranking, strict loopback HTTP replacement
+  and example, shared deadline/cancellation fences, current admission and one
+  separately attributed lexical floor. Configuration constructs the v2 selector
+  separately from managed v1. The spec 0.52 follow-up revisions effective
+  stale transitions with stored projection bytes and preserves capture-only
+  bytes through restart; computing offers require exact current revision.
+  No recommendation API, calibrated confidence,
+  qualified host binding, inference, useful startup-readiness measurement or
+  final M10 quality claim is introduced.
+
 - Independent asset catalog discovery (#192; RM34/AC25): ordinary local
   `SKILL.md` folders and closed, hash-verified metadata imports; bounded safe
   projections, durable atomic SQLite generations, source ownership/tombstones,

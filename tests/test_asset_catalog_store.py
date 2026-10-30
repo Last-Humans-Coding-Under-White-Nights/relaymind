@@ -134,6 +134,7 @@ def test_failure_retains_generation_and_records_only_failure_observation(tmp_pat
         now = catalog.snapshot()
         # The observation is visible (stale, exclusions), so the revision moves once.
         assert now.catalog_revision == old.catalog_revision + 1
+        assert now.published_at >= old.published_at
         assert now.assets[0].content_hash == old.assets[0].content_hash
         assert now.assets[0].stale
         assert now.sources[0]["content_hash"] == old.sources[0]["content_hash"]
@@ -351,6 +352,208 @@ def test_visible_failure_and_recovery_each_increment_the_revision_once(tmp_path)
         assert not catalog.snapshot().assets[0].stale
         assert not publish_local(catalog, tmp_path / "source").changed
         assert catalog.snapshot().catalog_revision == 3
+
+
+def test_public_revision_stale_recovery_and_capture_only_bytes(tmp_path):
+    """RM34/RM35 AC25/AC26, spec0.52: offered observations are revisioned."""
+    from datetime import datetime
+
+    from helpers import FakeClock
+    from relaymind.assets.sources import SourceFailure
+
+    clock = FakeClock()
+    clock.now = datetime.fromisoformat("2026-10-29T00:00:00+00:00")
+    skill(tmp_path / "source")
+    db = tmp_path / "db"
+    with RunStore(db, clock=clock) as run_store:
+        catalog = facade(run_store)
+        publish_local(catalog, tmp_path / "source")
+        original = catalog.snapshot()
+        with run_store.sql_transaction() as connection:
+            original_bytes = connection.execute(
+                "SELECT record_json FROM asset_catalog_assets"
+            ).fetchone()[0]
+        clock.advance(10)
+        from dataclasses import replace
+
+        later = capture(tmp_path / "source", previous=catalog.inventory("example"))
+        later_stamp = "2026-10-29T00:00:10Z"
+        later = replace(
+            later,
+            captured_at=later_stamp,
+            documents=tuple(
+                replace(document, record=replace(document.record, captured_at=later_stamp))
+                for document in later.documents
+            ),
+        )
+        assert not catalog.commit(catalog.prepare(later), expected_revision=1).changed
+        assert catalog.snapshot().sources[0]["captured_at"] == later_stamp
+        assert catalog.snapshot().sources[0]["last_success_at"] == "2026-10-29T00:00:10.000000Z"
+        assert catalog.snapshot().assets[0].captured_at == original.assets[0].captured_at
+        with run_store.sql_transaction() as connection:
+            assert (
+                connection.execute("SELECT record_json FROM asset_catalog_assets").fetchone()[0]
+                == original_bytes
+            )
+        clock.advance(10)
+        record_failure(catalog, SourceFailure("source_unavailable"))
+        assert catalog.snapshot().catalog_revision == 2
+        stale_bytes = catalog.snapshot().record_bytes
+        assert json.loads(stale_bytes[0])["stale"] is True
+        record_failure(catalog, SourceFailure("source_unavailable"))
+        assert (
+            catalog.snapshot().catalog_revision == 2
+            and catalog.snapshot().record_bytes == stale_bytes
+        )
+        assert publish_local(catalog, tmp_path / "source").revision == 3
+        recovered = catalog.snapshot()
+        assert not recovered.assets[0].stale
+    with RunStore(db, clock=clock) as reopened:
+        restored = facade(reopened).snapshot()
+        assert restored.record_bytes == recovered.record_bytes
+        assert restored.catalog_revision == 3
+
+
+def test_failed_stale_projection_preparation_is_honestly_unavailable(tmp_path, monkeypatch):
+    """RM34/RM35 AC25/AC26: failed preparation cannot leave a false-fresh pin."""
+    from relaymind.assets.sources import SourceFailure
+    from relaymind.store import asset_catalog
+
+    skill(tmp_path / "source")
+    with RunStore() as store:
+        catalog = facade(store)
+        publish_local(catalog, tmp_path / "source")
+        original = asset_catalog.canonical_json
+
+        def fail(value):
+            if isinstance(value, dict) and value.get("stale") is True:
+                raise ValueError("secret preparation failure")
+            return original(value)
+
+        monkeypatch.setattr(asset_catalog, "canonical_json", fail)
+        record_failure(catalog, SourceFailure("source_unavailable"))
+        with pytest.raises(asset_catalog.CatalogUnavailable):
+            catalog.snapshot()
+        with pytest.raises(asset_catalog.CatalogUnavailable):
+            catalog.revision()
+        with store.sql_transaction() as connection:
+            assert connection.execute("SELECT stale FROM asset_catalog_sources").fetchone()[0] == 1
+            assert connection.execute("SELECT revision FROM asset_catalog_meta").fetchone()[0] == 2
+        # Repeating the same failed preparation is another attempt, not another state.
+        record_failure(catalog, SourceFailure("source_unavailable"))
+        with store.sql_transaction() as connection:
+            assert connection.execute("SELECT revision FROM asset_catalog_meta").fetchone()[0] == 2
+        monkeypatch.undo()
+        # Repairing the matching stale projection is a new usable generation.
+        record_failure(catalog, SourceFailure("source_unavailable"))
+        assert catalog.snapshot().catalog_revision == 3
+
+
+def test_partial_staleness_and_recovery_count_effective_values(tmp_path):
+    """RM34/RM35 AC25/AC26: source/row stale overlap does not double-bump."""
+    from dataclasses import replace
+
+    from relaymind.assets.sources import SourceFailure
+
+    skill(tmp_path / "source" / "one")
+    skill(tmp_path / "source" / "two")
+    with RunStore() as store:
+        catalog = facade(store)
+        publish_local(catalog, tmp_path / "source")
+        full = capture(tmp_path / "source", previous=catalog.inventory("example"))
+        partial = replace(full, documents=full.documents[:1], complete=False)
+        assert catalog.publish(partial, expected_revision=1).revision == 2
+        assert sum(r.stale for r in catalog.snapshot().assets) == 1
+        assert catalog.publish(partial, expected_revision=2).revision == 2
+        record_failure(catalog, SourceFailure("source_unavailable"))
+        assert catalog.snapshot().catalog_revision == 3
+        assert all(r.stale for r in catalog.snapshot().assets)
+        assert catalog.publish(partial, expected_revision=3).revision == 4
+        assert sum(r.stale for r in catalog.snapshot().assets) == 1
+        assert catalog.publish(partial, expected_revision=4).revision == 4
+
+
+def test_interrupted_recovery_failure_preparation_fences_unusable_bytes(tmp_path, monkeypatch):
+    """RM34/RM35 AC25/AC26: recovery's shared helper has the same unavailable fence."""
+    from relaymind.assets.sources import SourceFailure
+    from relaymind.store import asset_catalog
+
+    skill(tmp_path / "source")
+    with RunStore() as store:
+        catalog = facade(store)
+        publish_local(catalog, tmp_path / "source")
+        catalog.begin_job("example", "0" * 64)
+        original = asset_catalog.canonical_json
+
+        def fail(value):
+            if isinstance(value, dict) and value.get("stale") is True:
+                raise ValueError("secret preparation failure")
+            return original(value)
+
+        monkeypatch.setattr(asset_catalog, "canonical_json", fail)
+        assert catalog.recover_interrupted_jobs() == 1
+        assert catalog.recover_interrupted_jobs() == 0
+        assert catalog.job_outcomes()[0]["state"] == "interrupted"
+        with pytest.raises(asset_catalog.CatalogUnavailable):
+            catalog.snapshot()
+        with pytest.raises(asset_catalog.CatalogUnavailable):
+            catalog.revision()
+        with store.sql_transaction() as connection:
+            assert connection.execute("SELECT revision FROM asset_catalog_meta").fetchone()[0] == 2
+            assert (
+                json.loads(
+                    connection.execute("SELECT record_json FROM asset_catalog_assets").fetchone()[0]
+                )["stale"]
+                is False
+            )
+        monkeypatch.undo()
+        record_failure(catalog, SourceFailure("interrupted", rejected_count=0))
+        assert catalog.snapshot().catalog_revision == 3
+        assert json.loads(catalog.snapshot().record_bytes[0])["stale"] is True
+        assert publish_local(catalog, tmp_path / "source").revision == 4
+
+
+def test_changed_failure_exclusions_keep_parent_visible_revision_rule(tmp_path):
+    """RM34/RM35 AC25/AC26: changed visible failure data invalidates pinned offers."""
+    from relaymind.assets.sources import SourceFailure
+
+    skill(tmp_path / "source")
+    with RunStore() as store:
+        catalog = facade(store)
+        publish_local(catalog, tmp_path / "source")
+        record_failure(catalog, SourceFailure("source_unavailable"))
+        assert catalog.snapshot().catalog_revision == 2
+        stale_bytes = catalog.snapshot().record_bytes
+        record_failure(catalog, SourceFailure("invalid_data", rejected_count=2))
+        failed = catalog.snapshot()
+        assert failed.catalog_revision == 3 and failed.record_bytes == stale_bytes
+        assert failed.sources[0]["rejected_count"] == 2
+        assert failed.sources[0]["exclusions"][0]["reason"] == "invalid_data"
+        record_failure(catalog, SourceFailure("invalid_data", rejected_count=2))
+        assert catalog.revision() == 3
+        assert publish_local(catalog, tmp_path / "source").revision == 4
+
+
+def test_rows_from_before_stale_bytes_are_normalized_on_open(tmp_path):
+    """RM34/AC25: an older row whose record bytes lack the effective stale flag stays usable."""
+    skill(tmp_path / "source")
+    db = tmp_path / "db"
+    with RunStore(db) as run_store:
+        catalog = facade(run_store)
+        publish_local(catalog, tmp_path / "source")
+        revision = catalog.snapshot().catalog_revision
+        with run_store.sql_transaction() as connection:
+            # The pre-0.52 writer set only the column and left record_json fresh.
+            connection.execute("UPDATE asset_catalog_assets SET stale=1")
+    with RunStore(db) as reopened:
+        catalog = facade(reopened)
+        restored = catalog.snapshot()
+        assert restored.assets[0].stale
+        assert json.loads(restored.record_bytes[0])["stale"] is True
+        assert catalog.search_documents()[0].record.stale
+        assert catalog.revision() == restored.catalog_revision == revision + 1
+        # Normalization runs once: a second open is a no-op.
+        assert facade(reopened).snapshot().catalog_revision == revision + 1
 
 
 def test_derived_only_job_rows_have_a_null_source(tmp_path):

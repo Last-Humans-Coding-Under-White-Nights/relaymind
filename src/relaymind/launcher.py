@@ -71,6 +71,8 @@ from relaymind.orchestrator.routing_cache import RoutingCache
 from relaymind.orchestrator.warmup import WarmupResult, detect_local_model, warm_up
 from relaymind.orchestrator.workflows import PARALLEL_WORKFLOWS
 from relaymind.selection import EXAMPLE_MATCH, MODEL_ROUTER, SelectionSettings
+from relaymind.selection.asset_contract import AssetSelector
+from relaymind.selection.asset_factory import build_asset_selector
 from relaymind.skills import SkillConfigError, SkillRegistry, default_skill_roots
 from relaymind.skills.predicates import COMPLETION_PREDICATES
 from relaymind.store import RunStore
@@ -214,6 +216,7 @@ class Launched:
     recovered: int
     new_local_adapter: Callable[[], ModelAdapter] | None = None
     warmup: WarmupResult | None = None
+    asset_selector: AssetSelector | None = None
 
 
 # -- reading the file ---------------------------------------------------------------
@@ -598,6 +601,9 @@ def build_app(
             orchestrator=orchestrator,
             recovered=len(report.runs),
             new_local_adapter=new_local_adapter,
+            asset_selector=build_asset_selector(config.recommendations)
+            if config.recommendations.enabled
+            else None,
         )
     except RecoveryError as exc:
         store.close()

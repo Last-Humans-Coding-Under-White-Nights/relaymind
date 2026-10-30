@@ -14,6 +14,47 @@ from collections.abc import Iterable, Mapping, Sequence
 from importlib import resources
 from typing import Any, NoReturn
 
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError
+from jsonschema.validators import extend
+
+
+def _same_json(left: object, right: object) -> bool:
+    """JSON equality that keeps integers, floats, and booleans apart."""
+    if isinstance(left, bool) or isinstance(right, bool):
+        return type(left) is type(right) and left == right
+    if isinstance(left, int | float) and isinstance(right, int | float):
+        return type(left) is type(right) and left == right
+    if isinstance(left, Mapping) and isinstance(right, Mapping):
+        return left.keys() == right.keys() and all(_same_json(left[k], right[k]) for k in left)
+    if isinstance(left, list | tuple) and isinstance(right, list | tuple):
+        return len(left) == len(right) and all(map(_same_json, left, right))
+    return type(left) is type(right) and left == right
+
+
+def _strict_enum(validator: Any, enums: Any, instance: Any, schema: Any) -> Any:
+    if not any(_same_json(instance, item) for item in enums):
+        yield ValidationError("value is not one of the allowed values")
+
+
+def _strict_const(validator: Any, const: Any, instance: Any, schema: Any) -> Any:
+    if not _same_json(instance, const):
+        yield ValidationError("value is not the allowed value")
+
+
+def _is_strict_integer(checker: Any, instance: object) -> bool:
+    return isinstance(instance, int) and not isinstance(instance, bool)
+
+
+# RM09, section 9: draft 2020-12 counts 60.0 as an integer and as equal
+# to 60. The gateway does not: tool handlers and every published v2
+# boundary get exactly the declared types.
+StrictValidator = extend(
+    Draft202012Validator,
+    validators={"enum": _strict_enum, "const": _strict_const},
+    type_checker=Draft202012Validator.TYPE_CHECKER.redefine("integer", _is_strict_integer),
+)
+
 
 def load_packaged_schema(package: str, name: str) -> dict[str, Any]:
     """Load ``schemas/<name>`` published inside a package."""

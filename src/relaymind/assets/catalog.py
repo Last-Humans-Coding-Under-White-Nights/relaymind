@@ -18,8 +18,16 @@ from jsonschema.protocols import Validator
 
 from relaymind.canonical import canonical_digest, canonical_json
 from relaymind.redaction import Redactor, redact_text, scrub
-from relaymind.schema_util import freeze_json, load_packaged_schema
-from relaymind.tools.registry import StrictValidator, check_parameters_schema
+from relaymind.schema_util import StrictValidator, freeze_json, load_packaged_schema
+from relaymind.tools.registry import check_parameters_schema
+
+# Spec 14.5 offer caps: one offered projection, in records and canonical bytes.
+MAX_OFFER_RECORDS = 1000
+MAX_OFFER_BYTES = 32 * 1024 * 1024
+
+
+class CatalogUnavailable(RuntimeError):
+    """Committed catalog data is corrupt; never translate this to healthy empty."""
 
 
 class AssetValidationError(ValueError):
@@ -185,6 +193,8 @@ class CatalogSnapshot:
     published_at: str
     sources: tuple[Mapping[str, Any], ...]
     assets: tuple[AssetRecord, ...]
+    # Internal committed bytes; never accepted from an untrusted wire snapshot.
+    record_bytes: tuple[bytes, ...] = field(default=(), repr=False, compare=False)
 
     def to_json_object(self) -> dict[str, Any]:
         return {
@@ -318,9 +328,9 @@ def discovery_records(
         _fail("invalid_kinds")
     offered = tuple(a for a in snapshot.assets if a.kind in requested_kinds)
     if (
-        len(offered) > 1000
+        len(offered) > MAX_OFFER_RECORDS
         or len(canonical_json([a.to_json_object() for a in offered]).encode("utf-8"))
-        > 32 * 1024 * 1024
+        > MAX_OFFER_BYTES
     ):
         _fail("offer_limit")
     return offered
