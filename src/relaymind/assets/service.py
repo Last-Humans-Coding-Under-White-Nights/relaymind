@@ -19,7 +19,7 @@ from relaymind.assets.sources import (
     capture_source,
     source_config_digest,
 )
-from relaymind.store.asset_catalog import AssetCatalogStore, CatalogConflict, Publication
+from relaymind.store.asset_catalog import AssetCatalogStore, Publication
 from relaymind.store.run_store import TraceClock, utc_iso
 
 _LOGGER = logging.getLogger(__name__)
@@ -94,15 +94,19 @@ class AssetCatalogService:
         self._wakeup.set()
         # Do not cancel/abandon to_thread: its checked staging must drain before
         # closing the database. The SQL commit remains on this event loop.
-        if self._task is not None:
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                if not self._task.cancelled():
-                    raise
-            except Exception:
-                pass  # The done callback already logged how the worker ended.
-        async with self._lock:
+        try:
+            if self._task is not None:
+                try:
+                    # Shielded: cancelling stop() itself never cancels the draining worker.
+                    await asyncio.shield(self._task)
+                except asyncio.CancelledError:
+                    current = asyncio.current_task()
+                    if not self._task.cancelled() or (current and current.cancelling()):
+                        raise
+                except Exception:
+                    pass  # The done callback already logged how the worker ended.
+        finally:
+            # Even when stop() is cancelled, no rescan caller is left waiting.
             for future in self._pending.values():
                 if not future.done():
                     future.set_exception(SourceFailure("cancelled", rejected_count=0))
@@ -178,10 +182,13 @@ class AssetCatalogService:
             return await asyncio.shield(work)
         except asyncio.CancelledError:
             self._cancel.set()
-            try:
-                await asyncio.shield(work)
-            except Exception:
-                pass
+            # Drain even if this task is cancelled again: staging must never be
+            # left running while the caller closes the database.
+            while not work.done():
+                try:
+                    await asyncio.shield(work)
+                except BaseException:
+                    pass
             raise
 
     async def tick(self) -> bool:
@@ -229,7 +236,14 @@ class AssetCatalogService:
                 self._finish(job_id, context, started, "succeeded", None)
             except asyncio.CancelledError:
                 # The thread was drained; record the job, then let the cancel propagate.
-                self._fail(source_id, job_id, context, started, future, SourceFailure("cancelled"))
+                self._fail(
+                    source_id,
+                    job_id,
+                    context,
+                    started,
+                    future,
+                    SourceFailure("cancelled", rejected_count=0),
+                )
                 if self.after_change is not None:
                     await self.after_change()
                 raise
@@ -237,9 +251,8 @@ class AssetCatalogService:
                 failure = (
                     exc
                     if isinstance(exc, SourceFailure)
-                    else SourceFailure(
-                        "catalog_conflict" if isinstance(exc, CatalogConflict) else "index_error"
-                    )
+                    # A publication conflict is an index error (spec 8.1 closed reasons).
+                    else SourceFailure("index_error", rejected_count=0)
                 )
                 self._fail(source_id, job_id, context, started, future, failure)
                 if self.after_change is not None:
@@ -284,15 +297,14 @@ class AssetCatalogService:
         self.store.schedule_retry(
             source_id, utc_iso(self.clock.utc_now() + timedelta(seconds=delay))
         )
-        state = "cancelled" if failure.reason == "cancelled" else "failed"
         context.rejected_count = failure.rejected_count
-        self._finish(
-            job_id,
-            context,
-            started,
-            state,
-            "shutdown" if state == "cancelled" and self._stopping else failure.reason,
-        )
+        state, reason = "failed", failure.reason
+        if failure.reason == "cancelled":
+            # Spec 8.1: a cancelled job's reason is shutdown or operator.
+            task = asyncio.current_task()
+            shutdown = self._stopping or (task is not None and task.cancelling() > 0)
+            state, reason = "cancelled", "shutdown" if shutdown else "operator"
+        self._finish(job_id, context, started, state, reason)
         if future is not None and not future.done():
             future.set_exception(failure)
 

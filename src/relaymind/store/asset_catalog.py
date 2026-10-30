@@ -735,9 +735,11 @@ class AssetCatalogStore:
                 "WHERE state='running'"
             ).fetchall()
             for row in rows:
-                self._record_failure(
-                    connection, row["source_id"], 0, failure_exclusions("interrupted")
-                )
+                # A derived-only rebuild (null source) has no source state to mark.
+                if row["source_id"] is not None:
+                    self._record_failure(
+                        connection, row["source_id"], 0, failure_exclusions("interrupted")
+                    )
                 revision = connection.execute("SELECT revision FROM asset_catalog_meta").fetchone()[
                     0
                 ]

@@ -554,3 +554,19 @@ def test_rows_from_before_stale_bytes_are_normalized_on_open(tmp_path):
         assert catalog.revision() == restored.catalog_revision == revision + 1
         # Normalization runs once: a second open is a no-op.
         assert facade(reopened).snapshot().catalog_revision == revision + 1
+
+
+def test_derived_only_job_rows_have_a_null_source(tmp_path):
+    """RM34/AC25: IndexJobEventV1 allows source_id null for a derived-only rebuild (spec 8.1)."""
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        with run_store.sql_transaction() as connection:
+            connection.execute(
+                "INSERT INTO asset_catalog_jobs(job_id,source_id,config_digest,state,started_at) "
+                "VALUES('assetjob_derived',NULL,?,'running','2026-10-29T00:00:00.000000Z')",
+                ("0" * 64,),
+            )
+        assert catalog.recover_interrupted_jobs() == 1
+        outcome = catalog.job_outcomes()[0]
+        assert (outcome["source_id"], outcome["state"]) == (None, "interrupted")
+        assert catalog.snapshot().sources == ()

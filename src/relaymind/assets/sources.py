@@ -107,7 +107,7 @@ class CaptureContext:
         if self.busy_observed_at is None and self.observe_busy():
             self.busy_observed_at = self.monotonic()
         if self.cancelled():
-            raise SourceFailure("cancelled")
+            raise SourceFailure("cancelled", rejected_count=0)
         if self.monotonic() >= self.deadline:
             raise SourceFailure("deadline")
 
