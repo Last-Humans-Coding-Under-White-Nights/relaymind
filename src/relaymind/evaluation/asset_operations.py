@@ -42,6 +42,12 @@ class RequestSample:
         return (self.finished_at - self.started_at) * 1000
 
     @property
+    def scheduled_elapsed_ms(self) -> float | None:
+        if not _finite_ordered(self.scheduled_at, self.finished_at):
+            return None
+        return (self.finished_at - self.scheduled_at) * 1000
+
+    @property
     def scheduling_delay_ms(self) -> float | None:
         if self.scheduled_at is None or self.started_at is None:
             return None
@@ -841,7 +847,7 @@ def _contention_observed(workload: WorkloadSamples) -> bool | None:
         if isinstance(job, Mapping) and isinstance(job.get("job_id"), str)
     }
     derived = jobs.get(rebuild_id)
-    if not derived:
+    if not derived or derived.get("overlap_observed") is not True:
         return None
     derived_interval = _job_interval(derived, kind="lexical") or _job_interval(
         derived, kind="embedding"
@@ -854,6 +860,13 @@ def _contention_observed(workload: WorkloadSamples) -> bool | None:
     ):
         return None
     if len({rebuild_id, *batch_ids.values()}) != 5:
+        return None
+    query_intervals = [
+        (at(query.started_at), at(query.finished_at))
+        for query in workload.requests
+        if query.category == "scheduled" and _valid_request(query)
+    ]
+    if not any(_overlap(query, derived_interval) for query in query_intervals):
         return None
     for batch in workload.batches:
         if not _valid_batch(batch):
@@ -868,17 +881,11 @@ def _contention_observed(workload: WorkloadSamples) -> bool | None:
             source_interval is None
             or not run_interval[0] <= source_interval[0] <= source_interval[1] <= run_interval[1]
             or not _overlap(source_interval, receipt_interval)
-            or not _overlap(source_interval, derived_interval)
         ):
             return None
         if not any(
-            _valid_request(query)
-            and query.category == "scheduled"
-            and _finite_ordered(query.started_at, query.finished_at)
-            and _overlap((at(query.started_at), at(query.finished_at)), source_interval)
-            and _overlap((at(query.started_at), at(query.finished_at)), derived_interval)
-            and _overlap((at(query.started_at), at(query.finished_at)), receipt_interval)
-            for query in workload.requests
+            _overlap(query, source_interval) and _overlap(query, receipt_interval)
+            for query in query_intervals
         ):
             return None
     return True
@@ -919,11 +926,14 @@ def summarize_operations(
     on_time = [
         x
         for x in useful
-        if x.scheduled_at == x.started_at and x.finished_at <= x.scheduled_at + 0.5
+        if _finite_ordered(x.scheduled_at, x.started_at) and x.finished_at <= x.scheduled_at + 0.5
     ]
     observed = [value for x in unique.values() if (value := _service_observed_ms(x)) is not None]
     elapsed = [
         x.client_elapsed_ms for x in unique.values() if _finite_ordered(x.started_at, x.finished_at)
+    ]
+    scheduled_elapsed = [
+        value for x in unique.values() if (value := x.scheduled_elapsed_ms) is not None
     ]
     delayed = sum(
         x.scheduling_delay_ms is not None and x.scheduling_delay_ms > 0 for x in unique.values()
@@ -984,15 +994,19 @@ def summarize_operations(
             "delayed": delayed,
             "service_observed_count": len(observed),
             "client_elapsed_count": len(elapsed),
+            "scheduled_elapsed_count": len(scheduled_elapsed),
             "client_elapsed_ms": tuple(x.client_elapsed_ms for x in scheduled),
+            "scheduled_elapsed_ms": tuple(x.scheduled_elapsed_ms for x in scheduled),
             "scheduling_delay_ms": tuple(x.scheduling_delay_ms for x in scheduled),
             "p95_observed_ms": nearest_rank(observed, 0.95),
             "p95_client_elapsed_ms": nearest_rank(elapsed, 0.95),
+            "p95_scheduled_elapsed_ms": nearest_rank(scheduled_elapsed, 0.95),
             "passes": workload.provenance == "measured"
             and _scheduled_protocol(workload, scheduled)
             and len(scheduled) == len(unique) == len(useful) == len(on_time) == 120
             and len({x.view["recommendation_id"] for x in useful}) == 120
             and nearest_rank(observed, 0.95) <= 300
+            and nearest_rank(scheduled_elapsed, 0.95) <= 300
             and not workload.errors,
         },
         "batches": {

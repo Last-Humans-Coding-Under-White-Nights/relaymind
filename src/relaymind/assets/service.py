@@ -43,12 +43,14 @@ class AssetCatalogService:
         *,
         clock: TraceClock | None = None,
         busy: Callable[[], bool] = lambda: False,
+        busy_since: Callable[[], float | None] = lambda: None,
         after_change: Callable[[], Awaitable[None]] | None = None,
         index_lifecycle: IndexLifecycle | None = None,
     ) -> None:
         self.settings, self.store = settings, store
         self.clock = clock or TraceClock()
         self.busy = busy
+        self.busy_since = busy_since
         self.after_change = after_change or _no_change_observer
         self.index_lifecycle = index_lifecycle
         self.scheduler = AssetWorkScheduler(busy=lambda: self.busy())
@@ -65,7 +67,7 @@ class AssetCatalogService:
         self._cancel = threading.Event()
         self._active_future: asyncio.Future[Publication] | None = None
         self._wakeup = asyncio.Event()
-        self._observer_deferred = False
+        self._observer_future: asyncio.Future[Publication] | None = None
         self.store.recover_interrupted_jobs()
         for source_id, failures, next_attempt in self.store.schedules():
             if source_id not in self._sources:
@@ -118,8 +120,7 @@ class AssetCatalogService:
                 # A failure's new stale bytes may need a derived generation.
                 # Queue that repair on this same owner; notification must not
                 # dispatch unmeasured index work while inference is busy.
-                self._observer_deferred = True
-                self._queue(_REBUILD)
+                self._observer_future = self._queue(_REBUILD)
                 self.start()
                 self._wakeup.set()
                 return
@@ -183,7 +184,11 @@ class AssetCatalogService:
         try:
             return await asyncio.shield(future)
         except asyncio.CancelledError:
-            if self._waiters[source_id] == 1 and not future.done():
+            if (
+                self._waiters[source_id] == 1
+                and self._observer_future is not future
+                and not future.done()
+            ):
                 if self._active_future is future:
                     self._cancel.set()
                     self.scheduler.wake()
@@ -274,6 +279,7 @@ class AssetCatalogService:
                 monotonic=self.clock.monotonic,
                 cancelled=lambda: self._cancel.is_set() or self._stopping,
                 observe_busy=self.busy,
+                observe_busy_since=lambda: self.busy_since(),
                 utc_now=self.clock.utc_now,
                 work_gate=self.scheduler.checkpoint,
                 async_gate=self.scheduler.async_checkpoint,
@@ -344,8 +350,6 @@ class AssetCatalogService:
 
     async def _tick_rebuild(self) -> None:
         assert self.index_lifecycle is not None
-        notify = self._observer_deferred
-        self._observer_deferred = False
         self._cancel = threading.Event()
         started = self.clock.monotonic()
         context = CaptureContext(
@@ -353,6 +357,7 @@ class AssetCatalogService:
             monotonic=self.clock.monotonic,
             cancelled=lambda: self._cancel.is_set() or self._stopping,
             observe_busy=self.busy,
+            observe_busy_since=lambda: self.busy_since(),
             utc_now=self.clock.utc_now,
             work_gate=self.scheduler.checkpoint,
             async_gate=self.scheduler.async_checkpoint,
@@ -368,10 +373,6 @@ class AssetCatalogService:
             )
             context.check_limits()
             self._finish(job_id, context, started, "succeeded", None)
-            if notify:
-                await self._notify_changed(allow_defer=False)
-            if not future.done():
-                future.set_result(result)
         except asyncio.CancelledError:
             context.rejected_count = 0
             self._finish(job_id, context, started, "cancelled", "shutdown")
@@ -389,10 +390,20 @@ class AssetCatalogService:
             self._finish(job_id, context, started, state, reason)
             if not future.done():
                 future.set_exception(failure)
+        else:
+            try:
+                if self._observer_future is future:
+                    await self._notify_changed(allow_defer=False)
+            finally:
+                # Observer cancellation cannot undo a committed publication.
+                if not future.done():
+                    future.set_result(result)
         finally:
             if not future.done():
                 future.set_exception(SourceFailure("cancelled", rejected_count=0))
             self._active_future = None
+            if self._observer_future is future:
+                self._observer_future = None
             if self._pending.get(_REBUILD) is future:
                 self._pending.pop(_REBUILD)
 

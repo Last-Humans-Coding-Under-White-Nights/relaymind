@@ -316,7 +316,11 @@ def test_inflight_overlap_and_batch_duration_are_observed(tmp_path, monkeypatch)
     with RunStore(clock=clock) as run_store:
         catalog = facade(run_store)
         service = s.AssetCatalogService(
-            settings(tmp_path / "source"), catalog, clock=clock, busy=lambda: busy[0]
+            settings(tmp_path / "source"),
+            catalog,
+            clock=clock,
+            busy=lambda: busy[0],
+            busy_since=lambda: 1000.0 if busy[0] else None,
         )
 
         async def run():
@@ -331,7 +335,7 @@ def test_inflight_overlap_and_batch_duration_are_observed(tmp_path, monkeypatch)
             await task
             outcome = catalog.job_outcomes()[0]
             assert outcome["overlap_observed"]
-            assert outcome["drain_ms"] == pytest.approx(0)
+            assert outcome["drain_ms"] == pytest.approx(20)
             assert outcome["batch_ms"] == pytest.approx([20, 30, 10])
             assert outcome["duration_ms"] == pytest.approx(40)
             await service.stop()

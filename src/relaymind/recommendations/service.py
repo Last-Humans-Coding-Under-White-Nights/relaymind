@@ -235,29 +235,19 @@ class CatalogProvider:
 
             if advance:
                 snapshot = replace(snapshot, catalog_revision=snapshot.catalog_revision + 1)
-                prepared = await self.cache.prepare(snapshot, **options)
-                with self.store.store._lock:
-                    guard()
-                    self.store.commit_lexical_generation(
-                        expected_revision=snapshot.catalog_revision - 1,
-                        eligible_ids=eligible_ids,
-                        asset_ids=asset_ids,
-                        representation=IMPLEMENTATION,
-                        config_digest=config_digest,
-                        advance=True,
-                        check=check,
-                    )
-                    self.cache.install(prepared)
-            else:
-                await self.cache.publish(snapshot, before_install=guard, **options)
+            prepared = await self.cache.prepare(snapshot, **options)
+            with self.store.store._lock:
+                guard()
                 self.store.commit_lexical_generation(
-                    expected_revision=snapshot.catalog_revision,
+                    expected_revision=snapshot.catalog_revision - int(advance),
                     eligible_ids=eligible_ids,
                     asset_ids=asset_ids,
                     representation=IMPLEMENTATION,
                     config_digest=config_digest,
+                    advance=advance,
                     check=check,
                 )
+                self.cache.install(prepared)
             if self._stopping:
                 self.cache.invalidate()
                 return False

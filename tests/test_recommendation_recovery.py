@@ -285,7 +285,7 @@ def test_commit_index_gap_and_stale_refresh_cannot_invalidate_newer_cache(tmp_pa
             first = await c.post("/relay/v1/recommendations", json=BODY)
             catalog.record_failure("example", rejected_count=1, exclusions=())
             entered, release = asyncio.Event(), asyncio.Event()
-            publish = service.provider.cache.publish
+            prepare = service.provider.cache.prepare
             count = 0
 
             async def controlled(*args, **kwargs):
@@ -297,9 +297,9 @@ def test_commit_index_gap_and_stale_refresh_cannot_invalidate_newer_cache(tmp_pa
                     from relaymind.selection.asset_contract import AttemptFailure
 
                     raise AttemptFailure("unavailable", "selector_unavailable")
-                return await publish(*args, **kwargs)
+                return await prepare(*args, **kwargs)
 
-            monkeypatch.setattr(service.provider.cache, "publish", controlled)
+            monkeypatch.setattr(service.provider.cache, "prepare", controlled)
             old = asyncio.create_task(service.refresh_catalog())
             await entered.wait()
             assert service.readiness()["state"] == "unavailable"

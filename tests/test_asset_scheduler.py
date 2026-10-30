@@ -69,7 +69,8 @@ def test_capture_checkpoint_waits_without_processing_and_keeps_original_deadline
             if ending == "cancelled":
                 assert error.value.rejected_count == 0
         assert context.deadline == original_deadline
-        assert context.drain_ms is not None
+        assert context.busy_observed_at is not None
+        assert context.drain_ms is None  # This predicate supplies no onset measurement.
 
     asyncio.run(go())
 
@@ -333,7 +334,7 @@ def test_async_index_batches_pause_without_blocking_lexical_requests(tmp_path, m
                 await asyncio.wait_for(rebuild, 2)
             assert service.readiness()["state"] == "ready"
             job = next(j for j in worker.store.job_outcomes() if j["source_id"] is None)
-            assert job["overlap_observed"] and job["drain_ms"] is not None
+            assert job["overlap_observed"] and job["drain_ms"] is None
             assert job["batch_ms"]
         launched.orchestrator.store.close()
 

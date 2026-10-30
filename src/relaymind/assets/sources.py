@@ -92,6 +92,7 @@ class CaptureContext:
     received_bytes: int = 0
     record_count: int = 0
     observe_busy: Callable[[], bool] = lambda: False
+    observe_busy_since: Callable[[], float | None] = lambda: None
     busy_observed_at: float | None = None
     batch_durations_ms: list[float] = field(default_factory=list)
     batch_started: float = field(init=False)
@@ -122,10 +123,9 @@ class CaptureContext:
 
     def check_limits(self) -> None:
         if self.observe_busy():
-            if self.busy_since is None:
-                self.busy_since = self.monotonic()
+            self.busy_since = self.observe_busy_since()
             if self.busy_observed_at is None:
-                self.busy_observed_at = self.busy_since
+                self.busy_observed_at = self.monotonic()
         else:
             self.busy_since = None
         if self.cancelled():

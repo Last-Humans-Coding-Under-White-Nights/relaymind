@@ -630,6 +630,11 @@ def build_app(
                     or store.active_run_id() is not None
                     or store.probe_reservation() is not None
                 ),
+                busy_since=lambda: (
+                    getattr(getattr(app.state, "startup_warmup", None), "busy_since", None)
+                    if orchestrator.local_startup_pending
+                    else store.foreground_busy_since()
+                ),
                 after_change=recommendations.refresh_catalog,
                 index_lifecycle=recommendations.provider.lifecycle,
             )
@@ -759,6 +764,7 @@ class _ServingWarmup:
         self._completed = False
         self._generation = object()
         self.report: Callable[[Launched], None] = lambda result: None
+        self.busy_since = launched.orchestrator.store.clock.monotonic()
         launched.orchestrator.local_startup_pending = True
 
     def prepare(self) -> None:
@@ -772,6 +778,8 @@ class _ServingWarmup:
             self._generation = object()
             self._closing = False
         if self.task is None:
+            if not self.launched.orchestrator.local_startup_pending:
+                self.busy_since = self.launched.orchestrator.store.clock.monotonic()
             self.launched.orchestrator.local_startup_pending = True
 
     def start(self) -> None:

@@ -119,7 +119,7 @@ def test_measured_label_adversarial_delay_fails(validated_request_cohort):
 def test_delayed_valid_responses_still_report_all_service_latency(
     validated_request_cohort,
 ):
-    """RM38/AC29: dispatch lateness fails cadence without erasing service timings."""
+    """RM38/AC29: bounded dispatch jitter passes and stays in client latency."""
     workload = _measured_workload(
         [
             replace(
@@ -131,13 +131,61 @@ def test_delayed_valid_responses_still_report_all_service_latency(
         ]
     )
     scheduled = summarize_operations([], workload, None)["scheduled"]
-    assert scheduled["passes"] is False
+    assert scheduled["passes"] is True
     assert scheduled["useful"] == 120
     assert scheduled["delayed"] == 120
     assert scheduled["service_observed_count"] == 120
     assert scheduled["client_elapsed_count"] == 120
     assert scheduled["p95_observed_ms"] is not None
     assert scheduled["p95_client_elapsed_ms"] is not None
+    assert scheduled["scheduled_elapsed_count"] == 120
+    assert scheduled["p95_scheduled_elapsed_ms"] == pytest.approx(
+        scheduled["p95_client_elapsed_ms"] + 1
+    )
+    assert scheduled["scheduled_elapsed_ms"] == pytest.approx(
+        [value + 1 for value in scheduled["client_elapsed_ms"]]
+    )
+
+
+def test_dispatch_delay_counts_toward_scheduled_latency_gate(validated_request_cohort):
+    """RM38/AC29: fast service cannot conceal a delayed client schedule."""
+    workload = _measured_workload(
+        [
+            replace(
+                record,
+                started_at=record.scheduled_at + 0.35,
+                finished_at=record.scheduled_at + 0.351,
+            )
+            for record in validated_request_cohort
+        ]
+    )
+    scheduled = summarize_operations([], workload, None)["scheduled"]
+    assert scheduled["useful"] == scheduled["scheduled_elapsed_count"] == 120
+    assert scheduled["p95_client_elapsed_ms"] == pytest.approx(1)
+    assert scheduled["p95_scheduled_elapsed_ms"] == pytest.approx(351)
+    assert scheduled["passes"] is False
+
+
+@pytest.mark.parametrize("started,finished", [(-0.001, 0.01), (0.499, 0.501)])
+def test_each_dispatch_and_response_stays_in_original_slot(
+    validated_request_cohort, started, finished
+):
+    """RM38/AC29: one early dispatch or late response fails even below p95."""
+    workload = _measured_workload(validated_request_cohort)
+    workload.requests[0] = replace(workload.requests[0], started_at=started, finished_at=finished)
+    scheduled = summarize_operations([], workload, None)["scheduled"]
+    assert scheduled["p95_scheduled_elapsed_ms"] < 300
+    assert scheduled["passes"] is False
+
+
+def test_slow_in_slot_request_remains_in_latency_cohort(validated_request_cohort):
+    """RM27, RM38/AC29: p95 keeps an occasional delayed but in-slot response."""
+    workload = _measured_workload(validated_request_cohort)
+    workload.requests[0] = replace(workload.requests[0], started_at=0.4, finished_at=0.5)
+    scheduled = summarize_operations([], workload, None)["scheduled"]
+    assert scheduled["scheduled_elapsed_count"] == 120
+    assert scheduled["scheduled_elapsed_ms"][0] == 500
+    assert scheduled["passes"] is True
 
 
 def test_delayed_http_and_timeout_keep_original_failure_and_elapsed(
@@ -163,6 +211,8 @@ def test_delayed_http_and_timeout_keep_original_failure_and_elapsed(
     assert scheduled["client_elapsed_count"] == 120
     assert scheduled["service_observed_count"] == 110
     assert scheduled["p95_client_elapsed_ms"] >= 399.9
+    assert scheduled["scheduled_elapsed_count"] == 120
+    assert scheduled["p95_scheduled_elapsed_ms"] >= 400.9
 
 
 @pytest.mark.parametrize("failure", ["timeout", "transport"])
@@ -1255,11 +1305,18 @@ def test_contention_needs_scoped_valid_jobs_and_temporal_overlap(
     production_batch_samples,
     validated_request_cohort,
 ):
-    """RM38/AC29: even a claimed measured run needs bound jobs and query overlap."""
+    """RM38/AC29: sequential jobs each need bound evidence and foreground overlap."""
     base = datetime(2026, 10, 30, tzinfo=UTC)
     batches = []
-    queries = []
-    jobs = [_synthetic_valid_job("rebuild", None, "lexical", 0, 45, base)]
+    queries = [
+        replace(
+            validated_request_cohort[4],
+            scheduled_at=0.5,
+            started_at=0.501,
+            finished_at=0.51,
+        )
+    ]
+    jobs = [_synthetic_valid_job("rebuild", None, "lexical", 0, 1, base)]
     for number, original in enumerate(production_batch_samples):
         receipt = 5 + number * 10
         probes = tuple(
@@ -1299,13 +1356,17 @@ def test_contention_needs_scoped_valid_jobs_and_temporal_overlap(
         requests=queries,
         batches=batches,
         jobs=jobs,
-        rebuild={"started_at": 0.0, "finished_at": 45.0, "outcome": "returned"},
+        rebuild={"started_at": 0.0, "finished_at": 1.0, "outcome": "returned"},
         origin_at=0.0,
         origin_utc=base,
     )
     assert summarize_operations([], workload, None)["contention_observed"] is True
     for change_index, changed in enumerate(
         (
+            replace(workload, requests=queries[1:]),
+            replace(workload, requests=[queries[0], *queries[2:]]),
+            replace(workload, jobs=[jobs[0] | {"overlap_observed": False}, *jobs[1:]]),
+            replace(workload, jobs=[jobs[0], jobs[1] | {"overlap_observed": False}, *jobs[2:]]),
             replace(workload, jobs=[*jobs[:1], jobs[1] | {"state": "failed"}, *jobs[2:]]),
             replace(workload, jobs=[*jobs[:1], jobs[1] | {"events": ()}, *jobs[2:]]),
             replace(

@@ -1040,7 +1040,7 @@ listed here so the current order can be traced to its reason.
   so it does not wait for the plugin.
 
 
-## M10 — Multilingual asset recommendations (spec 0.52)
+## M10 — Multilingual asset recommendations (spec 0.53)
 
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata

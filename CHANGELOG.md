@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Specification 0.52 → 0.53 (RM16, RM38/AC29; #196, review #218):
+  fixed 500 ms request slots admit measured dispatch delay within the original
+  deadline, with a separate scheduled-to-response p95 ≤300 ms gate. Service and
+  dispatch-to-response timings keep their existing meanings. Contention evidence
+  requires foreground overlap with each sequential source/rebuild job and actual
+  inference contention, without requiring two jobs on one worker to run together.
+  All samples, failure denominators and outstanding live qualification gates remain.
+
 ### Added
 
 - Lexical startup and index lifecycle (#196; RM38/AC29): enabled launchers serve

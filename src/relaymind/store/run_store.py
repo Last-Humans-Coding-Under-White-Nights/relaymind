@@ -708,6 +708,9 @@ class RunStore:
         # Per run this store writes events for: the monotonic reading at
         # its start here, and the run's elapsed_ms at that moment (RM25).
         self._run_started: dict[str, tuple[float, int]] = {}
+        # Process-local onset evidence; restored with the owning transaction.
+        self._slot_started: tuple[str, int, float] | None = None
+        self._probe_started: tuple[str, float] | None = None
         # One connection is shared by every thread using this store; the
         # lock keeps each transaction and read whole (RM17: a racing
         # writer gets 409, never a nested-transaction error).
@@ -836,11 +839,13 @@ class RunStore:
                 return
             self._conn.execute("BEGIN IMMEDIATE")
             self._depth = 1
+            slot_started, probe_started = self._slot_started, self._probe_started
             try:
                 yield
                 self._conn.execute("COMMIT")
             except BaseException as exc:
                 self._rollback()
+                self._slot_started, self._probe_started = slot_started, probe_started
                 for run_id in self._transaction_clocks:
                     self._run_started.pop(run_id, None)
                 if isinstance(exc, SlotUnavailableError) and exc.probe:
@@ -925,6 +930,7 @@ class RunStore:
                 " cancel_requested=0 WHERE singleton=1",
                 (token, owner_instance, _iso(self.clock.utc_now())),
             )
+            self._probe_started = (token, self.clock.monotonic())
             return True
 
     def _probe_eligible(self, *, model: str, after_seconds: float) -> bool:
@@ -1170,6 +1176,28 @@ class RunStore:
             row = self._conn.execute("SELECT run_id FROM runs WHERE holds_slot = 1").fetchone()
         return None if row is None else row["run_id"]
 
+    def foreground_busy_since(self) -> float | None:
+        """Actual monotonic onset for a slot acquired here, or unknown (RM38).
+
+        A reservation read from another store/process has no local monotonic
+        measurement. Match the version too, so foreign transitions invalidate
+        older evidence rather than reusing it for a later acquisition.
+        """
+        with self._lock:
+            self._check_open()
+            active = self._conn.execute(
+                "SELECT run_id, version FROM runs WHERE holds_slot = 1"
+            ).fetchone()
+            if active is not None:
+                if self._slot_started is not None and tuple(active) == self._slot_started[:2]:
+                    return self._slot_started[2]
+                return None
+            probe = self.probe_reservation()
+            if probe is not None and self._probe_started is not None:
+                if probe["token"] == self._probe_started[0]:
+                    return self._probe_started[1]
+            return None
+
     def _require_run(self, run_id: str) -> sqlite3.Row:
         row = self._conn.execute(
             "SELECT version, state FROM runs WHERE run_id = ?", (run_id,)
@@ -1201,6 +1229,8 @@ class RunStore:
         all of it happens or none.
         """
         with self._write():
+            previous_onset = self.foreground_busy_since()
+            previous_holder = self.active_run_id()
             rows = self._conn.execute(
                 "UPDATE runs SET state = ?, version = version + 1, resume_state = ?,"
                 " error_code = ?, holds_slot = ?, updated_at = ?"
@@ -1243,6 +1273,13 @@ class RunStore:
             )
             if event is not None:
                 self._insert_events(run_id, [event])
+            if holds_slot:
+                onset = previous_onset if previous_holder == run_id else self.clock.monotonic()
+                self._slot_started = (
+                    None if onset is None else (run_id, expected_version + 1, onset)
+                )
+            elif self._slot_started is not None and self._slot_started[0] == run_id:
+                self._slot_started = None
         return _run_record(rows[0])
 
     def delete_run(self, run_id: str) -> None:

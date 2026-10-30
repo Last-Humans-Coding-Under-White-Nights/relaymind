@@ -66,9 +66,13 @@ def build_server(
 ) -> uvicorn.Server:
     """A uvicorn server for app on a validated loopback host.
 
-    Enabled launchers pass their owned warm-up's start as on_started; main()
-    supplies it. The absent callback retains ordinary ASGI serving behavior.
+    The app-owned warm-up starts after the listener is ready unless the caller
+    supplies its own startup callback. Apps without an owner serve normally.
     """
+    if on_started is None:
+        startup_warmup = getattr(app.state, "startup_warmup", None)
+        if startup_warmup is not None:
+            on_started = startup_warmup.start
     config = uvicorn.Config(app, host=validate_bind_host(host), port=port, log_level="warning")
     # After the config, which sets up the server loggers; adding the one filter twice is a no-op.
     logging.getLogger("uvicorn.error").addFilter(_EXPECTED_ABORTS)
