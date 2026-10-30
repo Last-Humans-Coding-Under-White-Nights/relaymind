@@ -70,6 +70,14 @@ from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.routing_cache import RoutingCache
 from relaymind.orchestrator.warmup import WarmupResult, detect_local_model, warm_up
 from relaymind.orchestrator.workflows import PARALLEL_WORKFLOWS
+from relaymind.recommendations.registrations import (
+    ActionRegistrations,
+    PrivateFileError,
+    RegistrationSnapshot,
+    UserActionSettings,
+    load_registrations,
+    parse_user_action_settings,
+)
 from relaymind.selection import EXAMPLE_MATCH, MODEL_ROUTER, SelectionSettings
 from relaymind.selection.asset_contract import AssetSelector
 from relaymind.selection.asset_factory import build_asset_selector
@@ -102,6 +110,7 @@ NO_LOCAL_MODES = (ExecutionMode.AUTO, ExecutionMode.EXTERNAL_ONLY)
 KNOWN_PERMISSIONS = frozenset(DEFAULT_PERMISSIONS)
 
 _TABLES: dict[str, frozenset[str]] = {
+    "user_actions": frozenset({"registrations_path"}),
     "recommendations": RECOMMENDATION_FIELDS,
     "assets": ASSET_FIELDS,
     "asset_refresh": REFRESH_FIELDS,
@@ -198,6 +207,7 @@ class LauncherConfig:
     selection: SelectionSettings = field(default_factory=SelectionSettings)
     assets: AssetSettings = field(default_factory=AssetSettings)
     recommendations: RecommendationSettings = field(default_factory=RecommendationSettings)
+    user_actions: UserActionSettings = field(default_factory=UserActionSettings)
 
 
 @dataclass(frozen=True)
@@ -294,6 +304,13 @@ def load_config(path: Path | str) -> LauncherConfig:
     if unknown:
         raise LaunchError(f"unknown table: {', '.join(unknown)}")
     tables = {name: _table(raw, name) for name in _TABLES}
+    user_actions = _settings(
+        "user_actions",
+        lambda: parse_user_action_settings(
+            tables["user_actions"],
+            config_dir=path.absolute().parent,
+        ),
+    )
     assets = _settings(
         "assets",
         lambda: parse_asset_settings(
@@ -396,6 +413,7 @@ def load_config(path: Path | str) -> LauncherConfig:
         placement=placement_settings,
         assets=assets,
         recommendations=recommendations,
+        user_actions=user_actions,
         warmup=warmup,
         warmup_seconds=float(warmup_seconds),
         detect=detect,
@@ -552,6 +570,14 @@ def build_app(
         except PrefetchBudgetError as exc:
             raise LaunchError(f"[performance] prefetch: {exc}") from exc
     try:
+        registration_snapshot = (
+            load_registrations(config.user_actions.registrations_path)
+            if config.user_actions.registrations_path is not None
+            else RegistrationSnapshot(())
+        )
+    except PrivateFileError as exc:
+        raise LaunchError(f"action registration: {exc}") from None
+    try:
         config.store_path.parent.mkdir(parents=True, exist_ok=True)
         store = RunStore(config.store_path)
     except (OSError, sqlite3.Error) as exc:
@@ -579,6 +605,9 @@ def build_app(
         report = orchestrator.recover_after_restart()
         catalog = None
         recommendations = None
+        registrations = ActionRegistrations(store)
+        registrations.replace(registration_snapshot)
+        feedback = None
         if config.recommendations.enabled:
             from relaymind.recommendations.service import RecommendationService
 
@@ -599,6 +628,14 @@ def build_app(
                 ),
                 after_change=recommendations.refresh_catalog,
             )
+            from relaymind.store.asset_feedback import AssetFeedbackStore
+
+            feedback = AssetFeedbackStore(
+                recommendations.store,
+                catalog.store,
+                registrations,
+                policy=recommendations.provider.policy,
+            )
         ui = None if config.ui is None else replace(config.ui, fixtures=sandbox)
         app = create_app(
             orchestrator=orchestrator,
@@ -609,6 +646,8 @@ def build_app(
             asset_catalog=catalog,
             recommendations=recommendations,
         )
+        app.state.action_registrations = registrations
+        app.state.feedback_store = feedback
         return Launched(
             app=app,
             orchestrator=orchestrator,

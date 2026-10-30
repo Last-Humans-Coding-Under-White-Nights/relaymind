@@ -109,13 +109,14 @@ class Redactor:
             found.add(json.dumps(value))
 
 
-def scrub(value: Any, secrets: Iterable[str]) -> Any:
+def scrub(value: Any, secrets: Iterable[str], *, whole_tokens: bool = True) -> Any:
     """A copy of a JSON value with the secret values replaced in every string.
 
     Keys are left alone; this is for free text whose secret fields were
-    already redacted, such as the data of a tool result.
+    already redacted, such as the data of a tool result. Known transport
+    credentials use whole_tokens=False to remove embedded copies too.
     """
-    pattern = _pattern(secrets)
+    pattern = _pattern(secrets, whole_tokens=whole_tokens)
     return value if pattern is None else _scrub(value, pattern)
 
 
@@ -141,10 +142,12 @@ def redact_text(text: str, secrets: Iterable[str]) -> str:
     return text if pattern is None else pattern.sub(REDACTED, text)
 
 
-def _pattern(secrets: Iterable[str]) -> re.Pattern[str] | None:
-    """One whole-token pattern for all values, longest first; None when there are none."""
+def _pattern(secrets: Iterable[str], *, whole_tokens: bool = True) -> re.Pattern[str] | None:
+    """One pattern for all values, longest first; None when there are none."""
     values = sorted({s for s in secrets if s}, key=len, reverse=True)
     if not values:
         return None
     alternatives = "|".join(re.escape(value) for value in values)
-    return re.compile(rf"(?<![A-Za-z0-9])(?:{alternatives})(?![A-Za-z0-9])")
+    if whole_tokens:
+        alternatives = rf"(?<![A-Za-z0-9])(?:{alternatives})(?![A-Za-z0-9])"
+    return re.compile(alternatives)

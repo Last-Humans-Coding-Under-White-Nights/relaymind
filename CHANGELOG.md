@@ -8,13 +8,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Backend direct actions and feedback privacy (#195; RM37/AC28): separate
+  operator registrations and current bearer checks, exact retained-offer choice,
+  independent feedback revisions, event-ID deduplication, scoped inspection,
+  delete/reset and atomic retention. Erased replay lookups use a protected
+  external instance HMAC key; parent/choice receipts remain independently
+  retained. Production action contracts remain unqualified and disabled.
+
 - Independent recommendation lifecycle and JSON API (#194; RM36/AC27):
   separate SQLite objects, events, slot and exact idempotency receipts;
   bounded create, read, event polling and readiness routes; owned cancellation,
   restart recovery, choice expiry and 30-day parent retention. Real source jobs
   emit separate index-job events, and compatible lexical offers follow committed
-  configured-source acquisition. Direct choice/feedback, SSE, qualified host
-  execution and operational readiness measurements remain later work.
+  configured-source acquisition. Backend choice/feedback is supplied by #195;
+  SSE, qualified host execution and readiness measurements remain later work.
 
 - Recommendation-only selector v2 (#193; RM35/AC26): closed versioned contracts,
   deterministic projection-only lexical ranking, strict loopback HTTP replacement

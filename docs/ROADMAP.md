@@ -1151,3 +1151,13 @@ actual Apple M1 8 GiB trial (#198) is delivery order, not milestone closure. Fai
 WSL, CI, doubles and historical M9 evidence do not substitute. Missing export,
 rights, profile, interactive or platform inputs are concrete blockers, not
 permission to fabricate completion.
+
+#195 backend status (RM37/AC28): the independent core now implements private
+operator registration/authentication, exact-offer choice, independent scoped
+feedback CAS and insertion cursor, feedback delete/reset, keyed erased-replay
+handling and atomic dependent retention. Deterministic fixtures inject their
+qualification resolver; no production action contract is enabled. This does
+not close full #195 host acceptance: HOST-ACTION-AUTHORITY and
+HOST-EXACT-SKILL-USE remain blocked, as do later host approval/use gates.
+Native platform security execution and final full-check evidence are reported
+separately; Linux backend doubles do not substitute for them.

@@ -1,6 +1,6 @@
 """The recommendation error taxonomy (spec 11.1; RM36).
 
-Shared codes keep their section 11 status from api/errors.py. The three
+Shared codes keep their section 11 status from api/errors.py. The
 recommendation-only codes are listed here, because the section 11 table that
 STATUS_BY_CODE mirrors does not include them.
 """
@@ -19,11 +19,19 @@ MESSAGES = {
     "recommendation_unavailable": "the recommendation service is unavailable",
     "deadline_exceeded": "the recommendation deadline was exceeded",
     "internal_error": INTERNAL_MESSAGE,
+    "user_action_required": "a registered direct action is required",
+    "feedback_not_found": "the feedback was not found",
+    "recommendation_expired": "the recommendation choice expired",
+    "asset_changed": "the asset changed; request a fresh recommendation",
 }
 _OWN_STATUSES = {
     "recommendation_not_found": 404,
     "recommendation_in_progress": 409,
     "recommendation_unavailable": 503,
+    "user_action_required": 403,
+    "feedback_not_found": 404,
+    "recommendation_expired": 409,
+    "asset_changed": 409,
 }
 STATUSES = {code: _OWN_STATUSES.get(code) or STATUS_BY_CODE[code] for code in MESSAGES}
 

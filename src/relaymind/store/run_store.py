@@ -366,6 +366,69 @@ MIGRATIONS: tuple[str, ...] = (
         PRIMARY KEY(job_id, seq)
     );
     """,
+    """
+    CREATE TABLE action_registrations (
+        credential_sha256 TEXT PRIMARY KEY,
+        adapter_id TEXT NOT NULL, user_id TEXT NOT NULL, workspace_id TEXT NOT NULL,
+        enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
+        host_identity TEXT NOT NULL, session_mapping TEXT NOT NULL,
+        qualified_contract_revision TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX action_registration_enabled_scope
+        ON action_registrations(adapter_id,user_id,workspace_id) WHERE enabled=1;
+    CREATE TABLE feedback_scope_sequence (
+        user_id TEXT NOT NULL, workspace_id TEXT NOT NULL,
+        next_sequence INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY(user_id,workspace_id)
+    );
+    CREATE TABLE feedback_records (
+        feedback_id TEXT PRIMARY KEY, recommendation_id TEXT NOT NULL
+            REFERENCES recommendations ON DELETE CASCADE,
+        user_id TEXT NOT NULL, workspace_id TEXT NOT NULL,
+        insertion_sequence INTEGER NOT NULL, retain_until TEXT NOT NULL,
+        record_json TEXT NOT NULL,
+        UNIQUE(user_id,workspace_id,insertion_sequence)
+    );
+    CREATE INDEX feedback_retention ON feedback_records(retain_until);
+    CREATE TABLE feedback_bindings (
+        feedback_id TEXT PRIMARY KEY REFERENCES feedback_records ON DELETE CASCADE,
+        asset_json TEXT NOT NULL
+    );
+    CREATE TABLE feedback_audits (
+        audit_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, workspace_id TEXT NOT NULL,
+        timestamp TEXT NOT NULL, audit_json TEXT NOT NULL
+    );
+    CREATE TABLE action_receipts (
+        namespace TEXT NOT NULL, key_digest TEXT NOT NULL,
+        request_digest TEXT NOT NULL, feedback_id TEXT, event_id TEXT,
+        user_id TEXT NOT NULL, workspace_id TEXT NOT NULL,
+        endpoint TEXT NOT NULL, caller TEXT NOT NULL,
+        status INTEGER, body_json TEXT, retain_until TEXT NOT NULL,
+        created_at TEXT NOT NULL, erased_at TEXT,
+        erased INTEGER NOT NULL DEFAULT 0 CHECK(erased IN (0,1)),
+        PRIMARY KEY(namespace,key_digest)
+    );
+    CREATE INDEX action_receipt_retention ON action_receipts(retain_until);
+    CREATE INDEX action_receipt_feedback ON action_receipts(feedback_id);
+    CREATE TABLE feedback_event_ids (
+        user_id TEXT NOT NULL, workspace_id TEXT NOT NULL,
+        adapter_id TEXT NOT NULL, event_id TEXT NOT NULL,
+        request_digest TEXT NOT NULL, feedback_id TEXT,
+        response_json TEXT, retain_until TEXT NOT NULL,
+        recorded_at TEXT NOT NULL, erased_at TEXT,
+        erased INTEGER NOT NULL DEFAULT 0 CHECK(erased IN (0,1)),
+        PRIMARY KEY(user_id,workspace_id,adapter_id,event_id)
+    );
+    CREATE INDEX feedback_event_id_feedback ON feedback_event_ids(feedback_id);
+    CREATE INDEX feedback_event_id_retention ON feedback_event_ids(retain_until);
+    CREATE INDEX action_receipt_erased ON action_receipts(erased) WHERE erased=1;
+    CREATE INDEX feedback_event_id_erased ON feedback_event_ids(erased) WHERE erased=1;
+    CREATE INDEX feedback_audit_keyed ON feedback_audits(audit_id)
+        WHERE json_extract(audit_json,'$.idempotency_digest') IS NOT NULL;
+    CREATE TABLE erasure_key_binding (
+        singleton INTEGER PRIMARY KEY CHECK(singleton=1), binding TEXT NOT NULL
+    );
+    """,
 )
 
 
@@ -638,6 +701,9 @@ class RunStore:
         # lock keeps each transaction and read whole (RM17: a racing
         # writer gets 409, never a nested-transaction error).
         self._lock = threading.RLock()
+        # Private feedback ownership follows this shared RunStore's lifetime.
+        self._asset_feedback_owner: object | None = None
+        self._recommendation_purge_hooks: list[Callable] = []
         # Nesting depth of the open write transaction; see transaction().
         self._depth = 0
         # Runs whose baseline the open write transaction started. A rollback

@@ -66,9 +66,11 @@ def test_retention_hook_failure_rolls_back_all_owned_private_rows(tmp_path):
         rid = store.begin(accepted(), claim()).view["recommendation_id"]
         store.finish(SCOPE, rid, 0, "ready", result=empty_result(), now=NOW)
 
-        def fail(db, parent):
-            db.execute("DELETE FROM recommendation_events WHERE recommendation_id=?", (parent,))
-            raise RuntimeError("private cache failed")
+        def fail(db, parents, *, now):
+            for parent in parents:
+                db.execute("DELETE FROM recommendation_events WHERE recommendation_id=?", (parent,))
+            if parents:
+                raise RuntimeError("private cache failed")
 
         store.register_purge_hook(fail)
         with pytest.raises(RuntimeError):

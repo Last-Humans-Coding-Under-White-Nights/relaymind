@@ -2322,8 +2322,10 @@ while computing is cancelled and records a cancelled view for replay; no reply
 is forced onto the disconnected socket. After restart, an interrupted computing
 object becomes failed once with HTTP 503 on replay and no selector rerun. The
 new startup bearer is required before either lookup. At `retain_until` (30 days
-from creation), the parent, its events and replay receipt are purged together;
-the old key can then start a fresh request.
+from creation), parent reads and claim lookups become logically absent. Begin,
+recovery and the sweeper physically purge the parent, events and receipts
+together; an unchanged ordinary read takes no write lock. The old key can then
+start a fresh request.
 
 `selection_scope="runtime"` is currently refused with HTTP 503 before a
 recommendation claim. Missing or unusable catalog generation is also 503 before
@@ -2339,3 +2341,96 @@ model. Useful pre-warmup serving order and measured latency/resource gates
 remain #196. The deterministic checks are in
 `tests/test_recommendation_{api,store,races,recovery,review}.py`; they do not qualify
 a live host, remote source or model.
+
+### Backend direct actions and feedback privacy (#195; RM37/AC28)
+
+Every choice, feedback creation, feedback inspection, deletion and reset needs
+both the current application bearer and the separate
+`X-RelayMind-User-Action-Token`. A bearer alone returns 403
+`user_action_required`; it cannot register a channel. There is no public
+credential administration endpoint or model-callable action helper. The current
+backend trusts a registered adapter channel, not verified human identity or a
+compromised host. No production contract is qualified here, including OpenClaw;
+writing a qualification reference into a file does not enable one. Tests inject
+a deterministic qualification resolver explicitly, outside launch configuration.
+
+`[user_actions].registrations_path` is optional and resolves relative to the
+launch configuration directory. An omitted path loads no registrations. Its
+closed JSON envelope is `{schema_version:1,registrations:[...]}`. Each record
+contains `schema_version:1`, `adapter_id`, `user_id`, `workspace_id`,
+`credential_sha256`, `enabled`, `host_identity`, `session_mapping`, and
+`qualified_contract_revision`. The last three are bounded references to an
+independently qualified contract and operator configuration. Disabled records
+can document an integration awaiting qualification. All enabled production
+records are refused until a genuine contract is supported.
+
+Use a regular nonsymlink operator-owned file with owner-only Unix permissions
+(0600). Native Windows checks use actual process-user SID/owner/DACL evidence,
+not chmod's read-only attribute. Inherited grants to other users are unsafe.
+Examples of explicit resolved paths are `/srv/relaymind/private/actions.json`,
+`/srv/relaymind/private/relay.sqlite3`, and the separately protected adapter
+storage `/srv/relaymind/private/adapter-token`. Windows equivalents can live in
+`C:\Users\operator\RelayMind\private\`. Use absolute store paths when the
+operator needs a configuration-directory-independent DB location; legacy store
+path resolution is unchanged.
+
+Local setup must generate at least 32 random bytes, for example with
+`secrets.token_urlsafe(32)`, deliver that token once to protected adapter storage,
+and put only `hashlib.sha256(token.encode("utf-8")).hexdigest()` in the gateway
+record. The digest does not prove entropy. Never reuse the application bearer,
+print credentials into logs, or forward them to model/tool context. This backend
+adds no enrollment command. Rotation/revocation is stop the old gateway, replace
+the protected registration file, then restart; it is effective only once the old
+process is stopped. Rotation keeps the stable adapter caller identity and its
+idempotency namespace. Old bearer and revoked action credentials fail even on
+previously successful replay.
+
+Choice is a preference receipt. Asset/none moves ready to chosen; cancel moves
+it to cancelled. It neither executes an asset nor records feedback, usefulness,
+rejection, task success or mutation approval. Choice checks the exact final
+candidate, original content/source/schema binding and current discovery policy;
+an unrelated catalog revision does not reject an unchanged candidate. Historical
+replay is not renewed use authorization. Choice expires 600 seconds after ready;
+private evidence is retained until its fixed 30-day parent deadline.
+
+Explicit correction/rejection/usefulness is separate scoped feedback. Only
+correction records are eligible for future adaptation; this change performs no
+adaptation. Feedback creation/delete/reset each CAS the scoped feedback revision,
+independent of lifecycle version. GET recommendation overlays the current scope
+revision; historical create/choice receipts remain unchanged. GET feedback uses
+an opaque insertion-sequence cursor; UUID order and reset never reuse a sequence.
+
+DELETE requires `expected_feedback_revision` in the query and no body; reset is
+POST `{schema_version:1,expected_feedback_revision:N}`. Delete/reset removes
+feedback, owned binding/event/receipt/alias copies, invalidates owned derived
+state synchronously, and leaves content-free audit/tombstones. Erased events
+keep their sequence and show `erased:true,payload:null`. Every erased create or
+event-ID alias retry returns `invalid_state`; DELETE/reset's own content-free
+receipt can replay. Reset preserves independently retained parent requests and
+chosen/cancelled state. It cannot unload already copied host conversation text
+or reverse host side effects. This is logical erasure, not forensic disk wiping.
+
+The instance erasure key is the deterministic sibling
+`<resolved store path>.erasure-key`, outside SQLite, created privately before
+writing and retained across restart. It is never exported with the store. Each
+keyed transaction reopens a protected file lease, checks its binding and current
+identity, and verifies it before commit. Missing/replaced/unsafe keys fail closed;
+there is no automatic rotation or unkeyed fallback. Protect and restore this
+separate key consistently with the instance store. Complete 30-day retention
+purges parent/feedback/receipt ownership without requiring a key or leaving a
+lookup tombstone; empty retention does not change feedback revision.
+
+Focused deterministic checks are `tests/test_asset_user_actions.py`,
+`tests/test_asset_feedback_privacy.py`, and the platform-scoped private-file
+checks (`tests/test_private_files.py` on POSIX, `tests/test_private_files_windows.py`
+on native Windows). On POSIX, a private file is created complete or not at all:
+the bytes are synced under a temporary name and hard-linked to the final name,
+so a crash never leaves a truncated erasure key. Native Windows creates the
+final file exclusively with a protected DACL before writing and flushing it;
+an interrupted write can leave an incomplete file, which the erasure-key reader
+refuses. This is not an atomic-publication guarantee (RM16, RM37/AC28).
+A configured path through an ancestor link
+(such as macOS /tmp) is resolved where it is configured; a link in the checked
+path is still refused. They exercise backend boundaries and do not qualify a real host/person,
+OpenClaw exact loading, interactive approvals, or native Windows privacy from a
+Linux run. HOST-ACTION-AUTHORITY and HOST-EXACT-SKILL-USE remain blocked.

@@ -59,7 +59,12 @@ def test_create_poll_readiness_and_exact_defaults_replay(tmp_path):
                 bad = await client.get(f"/relay/v1/recommendations/{rid}/events" + suffix)
                 assert bad.status_code == 400
                 assert bad.json()["error"]["code"] == "invalid_request"
-            for path in (f"/{rid}/choice", f"/{rid}/feedback", "/registration", "/cancel"):
+            # RM37/AC28 adds private actions; the app bearer grants no authority.
+            for path in (f"/{rid}/choice", f"/{rid}/feedback"):
+                assert (
+                    await client.post("/relay/v1/recommendations" + path, json={})
+                ).status_code == 403
+            for path in ("/registration", "/cancel"):
                 assert (
                     await client.post("/relay/v1/recommendations" + path, json={})
                 ).status_code in (404, 405)
@@ -127,16 +132,18 @@ def test_strict_raw_json(tmp_path, raw):
 
 
 def test_bound_key_and_unavailable_before_every_key_lookup(tmp_path):
+    """RM36/AC27: byte/key admission is independent of host scheduling time."""
+    from helpers import FakeClock
+
     async def go():
-        app, service, runs, catalog = setup(tmp_path)
+        app, service, runs, catalog = setup(tmp_path, clock=FakeClock())
         await service.refresh_catalog()
         async with await client_for(app) as c:
             raw = json.dumps(BODY).encode()
-            assert (
-                await c.post(
-                    "/relay/v1/recommendations", content=raw + b" " * (512 * 1024 - len(raw))
-                )
-            ).status_code == 200
+            first = await c.post(
+                "/relay/v1/recommendations", content=raw + b" " * (512 * 1024 - len(raw))
+            )
+            assert first.status_code == 200, first.text
             assert (
                 await c.post(
                     "/relay/v1/recommendations", content=raw + b" " * (512 * 1024 - len(raw) + 1)
@@ -159,7 +166,8 @@ def test_bound_key_and_unavailable_before_every_key_lookup(tmp_path):
             with runs.sql_transaction() as db:
                 assert db.execute("SELECT count(*) FROM recommendations").fetchone()[0] == 1
             await service.refresh_catalog()
-            assert (await c.post("/relay/v1/recommendations", json=BODY)).status_code == 200
+            replay = await c.post("/relay/v1/recommendations", json=BODY)
+            assert replay.status_code == 200 and replay.content == first.content
         runs.close()
 
     asyncio.run(go())

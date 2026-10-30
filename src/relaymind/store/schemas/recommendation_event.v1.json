@@ -585,7 +585,7 @@
                           "const": "user_cancel"
                         },
                         "action": {
-                          "$ref": "recommendation_view.v1.json#/properties/selected_action/anyOf/1"
+                          "$ref": "action_evidence.v1.json"
                         },
                         "active_ms": {
                           "type": "number",
@@ -627,7 +627,7 @@
                       "minimum": 0
                     },
                     "action": {
-                      "$ref": "recommendation_view.v1.json#/properties/selected_action/anyOf/1"
+                      "$ref": "action_evidence.v1.json"
                     }
                   }
                 }

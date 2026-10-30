@@ -214,3 +214,7 @@ mode = "live"
 # backoff_initial_seconds = 60
 # backoff_max_seconds = 3600
 # No remote adapter is qualified. Hybrid/adaptation artifacts are not yet admitted.
+#
+# [user_actions]
+# registrations_path = "private/action-registrations.json" # relative to this config
+# Owner-only private file; disabled records only until a production contract is qualified.
