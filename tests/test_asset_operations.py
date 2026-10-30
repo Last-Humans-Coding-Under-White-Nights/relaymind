@@ -166,6 +166,23 @@ def test_dispatch_delay_counts_toward_scheduled_latency_gate(validated_request_c
     assert scheduled["passes"] is False
 
 
+def test_response_overhead_counts_toward_complete_request_latency(validated_request_cohort):
+    """RM38/AC29: low selector time cannot hide a 450 ms full response."""
+    workload = _measured_workload(
+        [
+            replace(record, finished_at=record.scheduled_at + 0.45)
+            for record in validated_request_cohort
+        ]
+    )
+    scheduled = summarize_operations([], workload, None)["scheduled"]
+    assert scheduled["useful"] == scheduled["scheduled_elapsed_count"] == 120
+    assert all(record.finished_at <= record.scheduled_at + 0.5 for record in workload.requests)
+    assert scheduled["p95_observed_ms"] < 300
+    assert scheduled["p95_client_elapsed_ms"] == pytest.approx(450)
+    assert scheduled["p95_scheduled_elapsed_ms"] == pytest.approx(450)
+    assert scheduled["passes"] is False
+
+
 @pytest.mark.parametrize("started,finished", [(-0.001, 0.01), (0.499, 0.501)])
 def test_each_dispatch_and_response_stays_in_original_slot(
     validated_request_cohort, started, finished

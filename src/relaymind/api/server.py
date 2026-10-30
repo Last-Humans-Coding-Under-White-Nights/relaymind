@@ -15,7 +15,7 @@ import logging
 from collections.abc import Callable
 
 import uvicorn
-from fastapi import FastAPI
+from starlette.types import ASGIApp
 
 from relaymind.adapters.local_http import is_loopback_host
 from relaymind.api.chat import StreamAborted
@@ -58,7 +58,7 @@ class _StartedServer(uvicorn.Server):
 
 
 def build_server(
-    app: FastAPI,
+    app: ASGIApp,
     *,
     host: str = "127.0.0.1",
     port: int = 8080,
@@ -70,7 +70,7 @@ def build_server(
     supplies its own startup callback. Apps without an owner serve normally.
     """
     if on_started is None:
-        startup_warmup = getattr(app.state, "startup_warmup", None)
+        startup_warmup = getattr(getattr(app, "state", None), "startup_warmup", None)
         if startup_warmup is not None:
             on_started = startup_warmup.start
     config = uvicorn.Config(app, host=validate_bind_host(host), port=port, log_level="warning")
@@ -80,7 +80,7 @@ def build_server(
 
 
 def serve(
-    app: FastAPI,
+    app: ASGIApp,
     *,
     host: str = "127.0.0.1",
     port: int = 8080,

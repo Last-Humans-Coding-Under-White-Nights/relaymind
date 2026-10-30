@@ -295,7 +295,10 @@ def test_idle_source_failure_repairs_only_through_recorded_derived_job(tmp_path,
     asyncio.run(go())
 
 
-def test_async_index_batches_pause_without_blocking_lexical_requests(tmp_path, monkeypatch):
+@pytest.mark.parametrize("work_seconds,expected_batches", [(0, []), (0.02, [20])])
+def test_async_index_batches_pause_without_blocking_lexical_requests(
+    tmp_path, monkeypatch, work_seconds, expected_batches
+):
     """RM38/AC29: busy during index preparation yields the serving loop until idle."""
 
     async def go():
@@ -307,22 +310,34 @@ def test_async_index_batches_pause_without_blocking_lexical_requests(tmp_path, m
         service = launched.app.state.recommendations
         async with launched.app.router.lifespan_context(launched.app):
             await worker.rescan("example")
+            # A batch may finish within one platform clock tick. Control work
+            # and pause durations separately instead of requiring a real tick.
+            clock = FakeClock()
+            worker.clock = clock
             busy, entered = False, asyncio.Event()
             worker.busy = lambda: busy
             real = asset_lexical.build_lexical_index
+            checkpoint = worker.scheduler.async_checkpoint
+
+            async def observed_checkpoint(context):
+                if busy:
+                    entered.set()
+                await checkpoint(context)
+
+            monkeypatch.setattr(worker.scheduler, "async_checkpoint", observed_checkpoint)
 
             async def overlap(*args, **kwargs):
                 nonlocal busy
+                clock.advance(work_seconds)
                 busy = True
-                entered.set()
                 return await real(*args, **kwargs)
 
             monkeypatch.setattr(asset_lexical, "build_lexical_index", overlap)
             rebuild = asyncio.create_task(worker.rebuild())
             await asyncio.wait_for(entered.wait(), 1)
             try:
-                await asyncio.sleep(0.02)
                 assert not rebuild.done()
+                clock.advance(1)
                 async with await client_for(launched.app) as client:
                     response = await client.post("/relay/v1/recommendations", json=BODY)
                     assert response.status_code == 200, response.text
@@ -335,7 +350,8 @@ def test_async_index_batches_pause_without_blocking_lexical_requests(tmp_path, m
             assert service.readiness()["state"] == "ready"
             job = next(j for j in worker.store.job_outcomes() if j["source_id"] is None)
             assert job["overlap_observed"] and job["drain_ms"] is None
-            assert job["batch_ms"]
+            assert job["batch_ms"] == pytest.approx(expected_batches)
+            assert job["duration_ms"] == pytest.approx(1000 + work_seconds * 1000)
         launched.orchestrator.store.close()
 
     asyncio.run(go())
