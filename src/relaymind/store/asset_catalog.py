@@ -111,7 +111,10 @@ class AssetCatalogStore:
                 return
             try:
                 prepared = [
-                    (_record_json_with_stale(row["record_json"], bool(row["effective"])), row[0])
+                    (
+                        _record_json_with_stale(row["record_json"], bool(row["effective"])),
+                        row["asset_id"],
+                    )
                     for row in rows
                 ]
             except (ValueError, TypeError, KeyError, RecursionError):

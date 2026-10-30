@@ -1040,7 +1040,7 @@ listed here so the current order can be traced to its reason.
   so it does not wait for the plugin.
 
 
-## M10 — Multilingual asset recommendations (spec 0.51)
+## M10 — Multilingual asset recommendations (spec 0.52)
 
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
@@ -1069,8 +1069,8 @@ semantics, which retain their exact-candidate/current-policy checks.
 Lifecycle/API persistence (#194), operational readiness/measurements (#196),
 qualified host/source adapters and the final corpus/whole-task gates remain open.
 
-Specification 0.51 freezes the independent M10 recommendation core (spec
-section 1); every full-milestone gate stays. The
+Specification 0.51 froze the independent M10 recommendation core (spec
+section 1), and 0.52 revised its offer cache rule; every full-milestone gate stays. The
 [published design](design/2026-10-29-multilingual-asset-routing.md) reconciles
 qualifications #188–#190 per capability. The adapter contracts behind the
 blockers MATRIX-COHORT, MATRIX-OVERLAP, MATRIX-RIGHTS, MATRIX-REFRESH,
