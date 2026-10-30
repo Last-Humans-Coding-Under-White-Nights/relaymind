@@ -1,0 +1,7 @@
+{
+  "id": "relaymind-mcp-qualification", "name": "RelayMind MCP qualification (test only)",
+  "providers": ["relaymind"], "activation": { "onStartup": true },
+  "configSchema": { "type": "object", "additionalProperties": false,
+    "required": ["baseUrl", "capturePath"],
+    "properties": { "baseUrl": { "type": "string" }, "capturePath": { "type": "string" } } }
+}

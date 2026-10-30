@@ -1,0 +1,6 @@
+{
+  "name": "@relaymind/openclaw-mcp-qualification", "version": "0.1.0",
+  "private": true, "type": "module",
+  "openclaw": { "extensions": ["./probe.mjs"], "providers": ["relaymind"],
+    "compat": { "pluginApi": "2026.10.7", "minGatewayVersion": "2026.10.7" } }
+}

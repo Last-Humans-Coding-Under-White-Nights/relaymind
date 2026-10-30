@@ -1,0 +1,175 @@
+{
+  "kind": "openclaw-mcp-qualification-summary",
+  "issue": 190,
+  "specification": "0.50",
+  "requirements": [
+    "RM08",
+    "RM09",
+    "RM12",
+    "RM16",
+    "RM33",
+    "AC24"
+  ],
+  "evidence": "real embedded Gateway host + real RelayMind gateway + deterministic model doubles; no live model",
+  "platform": {
+    "system": "Linux",
+    "release": "7.0.0-38-generic",
+    "machine": "x86_64"
+  },
+  "versions": {
+    "openclaw": "2026.10.7",
+    "@openclaw/ai": "2026.10.7",
+    "openai": "7.27.0",
+    "node": "v24.22.1",
+    "os": "Linux 7.0.0-38-generic",
+    "machine": "x86_64",
+    "relaymind_revision": {
+      "head": "a01f33de01949223bd2a733f1f77fcc970be87b8",
+      "dirty": true
+    }
+  },
+  "mcp_sdk_version": "1.32.0",
+  "capture": {
+    "path": "mcp-capture.json.gz",
+    "sha256": "0dcceff6fc2fcab615476e6df38bfa0bee31688f70638feb5fe710b467d666f3",
+    "uncompressed_sha256": "c2e0b957f8513d75dd593027be6a98b0ef9ea59e755c65eb9b9922b8d5c2bdc8"
+  },
+  "runtime_checks": {
+    "two_real_host_roundtrips": true
+  },
+  "offline_regrade": {
+    "path": "integrations/openclaw/test/host-mcp-qualification/grade.py",
+    "sha256": "908c081a6e748850ba6b5ca2c750a17ed4b6359e67d9cd0018455a4336a9ad4b",
+    "checks": {
+      "host_roundtrips": true,
+      "changed_schema_roundtrip": true,
+      "excluded_or_unavailable_not_passed": true,
+      "raw_server_calls_and_traces_consistent": true
+    },
+    "note": "Offline raw history/result/trace/server-event checks; runtime source identity preserved."
+  },
+  "review_regrade": {
+    "artifact": "regrade.json",
+    "sha256": "c55f6c731f0c43f2730d82a4554bf36bd5d11b230406b5a40f97efbb1e3fbc8c",
+    "note": "Current grader after review; the offline_regrade hash above identifies the grader at capture time.",
+    "checks_unchanged": true
+  },
+  "source_hashes": {
+    "integrations/openclaw/test/host-mcp-qualification/server.mjs": "cb0f17467f48f37ee7cb946cb22bcef897b28d3f4595721a2690431a320dc793",
+    "integrations/openclaw/test/host-mcp-qualification/capture.mjs": "ccfea73e51474d1371e7423296e084cc3ab0c1445a61c76f7ee8d53c8ca4c003",
+    "integrations/openclaw/test/host-mcp-qualification/probe.mjs": "d83e8a652e2712fdb78559f9ff4c4479995a8df2279c7466299c9b875ac4de8c",
+    "integrations/openclaw/test/host-mcp-qualification/qualify.py": "b506b8fa623cdaf8c45463fcf6dffdedf5c82e3c2e49ebdac9feb1f1541b9ddd",
+    "integrations/openclaw/dist/provider.js": "4f88e25d65e36d32da12c7c4adfd1c3badddce406c5673efa783de871775d899",
+    "integrations/openclaw/test/host-mcp-qualification/openclaw.plugin.json": "5ac1d26ea5477bc02896227357777e78f0d5a2ddf9dc1af47771553c9777b677",
+    "integrations/openclaw/test/host-mcp-qualification/package.json": "51cfc7fee8d75b2f8ff9d11240a9cecb03a64448061b1867d96131408d647f88",
+    "integrations/openclaw/node_modules/openclaw/openclaw.mjs": "98caf565334400768d4a8ee54f7f9302c4b2c79881552c79785ed7d66da6a996",
+    "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/agent-harness-runtime.js": "98d12f921f5b1724de6625b0143f153170726b650ab28a6c0b2f2444ad5c41ca",
+    "integrations/openclaw/node_modules/openclaw/dist/agent-bundle-mcp-materialize-DD5Z5Ssq.mjs": "ca7277db86aeee5447a65102d50e6142de6dba559c707b3840d1c78a5b8c7dc4",
+    "integrations/openclaw/node_modules/openclaw/dist/tools-effective-DRoSpE_Y.mjs": "4b0d63a3e4a71540b8851e63f34ea68a971f09e752691ed01fef1cc2b543fe1b",
+    "integrations/openclaw/package-lock.json": "f4722ebb94de2b8200890ba3247dbc42a2118325d110df7154c1a9a53cb39709",
+    "integrations/openclaw/node_modules/openclaw/package.json": "362f8c0fda7b71a116e0ca2f812e896bfe9cfec41e64b6b66243f95703aaf7b8",
+    "integrations/openclaw/node_modules/openclaw/dist/config-contracts-Db6WHFol.d.ts": "48c2f15bb8041a49dd7da5d34663cab7f73081b2ed03f807c09c01ab61851a3d",
+    "integrations/openclaw/node_modules/openclaw/dist/server-plugins-BN7J9yLN.mjs": "8de8193491239c4855ba417558e162fdcdce71b6a2a436003d8f35e24bad9efd",
+    "scripts/openclaw_qualification.py": "eb9faf8e5e446b421159850d2f55e662fee59dec30d03914a2fd9f2110f4226c",
+    "tests/gateway_helpers.py": "b84b1957dacb58bbbf9bb189d2685d5578001cd8425537dc48eded35005e2c7c"
+  },
+  "host_configuration": {
+    "runtime": "embedded Gateway with the existing RelayMind provider",
+    "initial_tools": {
+      "profile": "coding",
+      "toolSearch": false
+    },
+    "probe_conversation_access": true,
+    "server_names": [
+      "alpha.one",
+      "alpha?one"
+    ],
+    "transport": "stdio",
+    "credential_fields": [
+      "RELAYMIND_MCP_TEST_CREDENTIAL"
+    ]
+  },
+  "integration_decision": {
+    "same_instance_schema_provenance": "qualified_read_only",
+    "current_availability_revision": "unsupported",
+    "session_turn_binding": "not_qualified: schema hook has no authoritative session/turn field",
+    "required_host_change": "supported immutable tool snapshot with authentic schema/provenance, session/requester/turn binding and a use-time revision/availability guard",
+    "approvals": "not_run: read-only fixture; #189 headless refusal is separate evidence"
+  },
+  "gateway_executions": 0,
+  "exchange_results": [
+    {
+      "name": "first_server",
+      "server": "alpha.one",
+      "exposed_tool": "alpha-one__echo",
+      "arguments": {
+        "text": "sandbox"
+      },
+      "calls": 1,
+      "answer": "marker-alpha"
+    },
+    {
+      "name": "second_server",
+      "server": "alpha?one",
+      "exposed_tool": "alpha-one-2__echo",
+      "arguments": {
+        "text": "sandbox"
+      },
+      "calls": 1,
+      "answer": "marker-beta"
+    },
+    {
+      "name": "changed_schema",
+      "server": "alpha.one",
+      "exposed_tool": "alpha-one__echo",
+      "arguments": {
+        "count": 2
+      },
+      "calls": 1,
+      "answer": "marker-alpha"
+    },
+    {
+      "name": "disconnected",
+      "server": "alpha.one",
+      "exposed_tool": "alpha-one__echo",
+      "arguments": {
+        "count": 2
+      },
+      "calls": 0,
+      "answer": "tool unavailable"
+    },
+    {
+      "name": "policy_denied",
+      "server": "alpha?one",
+      "exposed_tool": null,
+      "arguments": {
+        "text": "sandbox"
+      },
+      "calls": 0,
+      "answer": "tool unavailable"
+    },
+    {
+      "name": "removed",
+      "server": "alpha?one",
+      "exposed_tool": null,
+      "arguments": {
+        "text": "sandbox"
+      },
+      "calls": 0,
+      "answer": "tool unavailable"
+    }
+  ],
+  "credential_scan": {
+    "runtime_guard": "all three generated credentials scanned before write",
+    "compressed_export_rescan": "configured host token and MCP env values absent",
+    "header_credentials": "synthetic export guard regression only; HTTP transport not_run"
+  },
+  "unrun": [
+    "live models",
+    "customer task completion",
+    "macOS",
+    "Windows",
+    "human approval allow/deny",
+    "HTTP/OAuth MCP transport"
+  ]
+}
