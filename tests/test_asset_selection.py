@@ -162,6 +162,23 @@ def test_invalid_request(changes):
 @pytest.mark.parametrize(
     "changes",
     [
+        {"schema_version": 3},
+        {"catalog": [record(), record()]},
+        {"requested_kinds": ["mcp_tool"]},
+        {"conversation": [{"role": "user", "text": "x" * 16384}] * 3},
+    ],
+)
+def test_request_validation_reports_invalid_request_not_invalid_result(changes):
+    """RM35/AC26: a malformed caller request is invalid_request; invalid_result is for selectors."""
+    a = api()
+    with pytest.raises(a.AssetSelectionError) as caught:
+        a.parse_asset_request(request(**changes))
+    assert str(caught.value) == "invalid_request"
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
         {"schema_version": True},
         {"schema_version": 2.0},
         {"catalog_revision": True},
@@ -631,20 +648,25 @@ def test_cancel_resistant_late_work_cannot_publish_or_block():
 @pytest.mark.parametrize(
     "records,revision,outcome",
     [
+        # Spec 0.52: any revision change makes a computing result stale.
         ([record(content_hash="a" * 64)], 2, "stale"),
         ([], 2, "stale"),
         ([record(identity={"package_id": "changed", "package_version": None})], 2, "stale"),
         ([record(), record(asset_id="unrelated")], 2, "stale"),
+        # At the pinned revision admission still rechecks each candidate's exact content.
+        ([record(content_hash="a" * 64)], 1, "stale"),
+        ([], 1, "stale"),
+        ([record(identity={"package_id": "changed", "package_version": None})], 1, "stale"),
+        ([record(), record(asset_id="unrelated")], 1, "ranked"),
     ],
 )
-def test_current_catalog_rechecks_exact_content_without_global_revision_rejection(
-    records, revision, outcome
-):
+def test_current_catalog_requires_the_pinned_revision_and_exact_content(records, revision, outcome):
+    """RM35/AC26, spec 0.52 section 4.6.2: revision equality, then exact candidate content."""
     from relaymind.selection.asset_chain import RecommendationFailure
 
     if outcome == "ranked":
         got, _ = asyncio.run(coordinate(current=lambda: snapshot(records, revision)))
-        assert got["admission"]["rechecked_catalog_revision"] == 2
+        assert got["admission"]["rechecked_catalog_revision"] == revision
     else:
         with pytest.raises(RecommendationFailure) as caught:
             asyncio.run(coordinate(current=lambda: snapshot(records, revision)))

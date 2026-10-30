@@ -148,14 +148,19 @@ def _bounded_labels(value: object) -> None:
             _bounded_labels(item)
 
 
+# A caller's request or envelope is invalid_request; invalid_result is for selector output.
+_REQUEST_KINDS = frozenset({"request", "envelope"})
+
+
 def _check(kind: str, value: object) -> dict[str, Any]:
+    code = "invalid_request" if kind in _REQUEST_KINDS else "invalid_result"
     try:
         _precheck_pointers(kind, value)
         raw = validate_document(value, _VALIDATORS[kind])
         _bounded_labels(raw)
         return raw
     except (ValueError, TypeError, RecursionError, OverflowError, UnicodeError):
-        raise AssetSelectionError("invalid_result") from None
+        raise AssetSelectionError(code) from None
 
 
 def _check_pointer(pointer: str) -> None:
@@ -200,16 +205,16 @@ def parse_asset_request(value: object) -> AssetSelectionRequest:
     try:
         _check_query(raw)
         if len({r["asset_id"] for r in raw["catalog"]}) != len(raw["catalog"]):
-            raise AssetSelectionError("invalid_result")
+            raise AssetSelectionError("invalid_request")
         for record in raw["catalog"]:
             validate_asset_record(record)
             if record["kind"] not in raw["requested_kinds"]:
-                raise AssetSelectionError("invalid_result")
+                raise AssetSelectionError("invalid_request")
         catalog_bytes = canonical_json(raw["catalog"]).encode("utf-8")
         if len(catalog_bytes) > MAX_OFFER_BYTES:
-            raise AssetSelectionError("invalid_result")
+            raise AssetSelectionError("invalid_request")
     except (AssetSelectionError, AssetValidationError, UnicodeError):
-        raise AssetSelectionError("invalid_result") from None
+        raise AssetSelectionError("invalid_request") from None
     return AssetSelectionRequest(
         freeze_json(raw), catalog_bytes, hashlib.sha256(catalog_bytes).hexdigest()
     )

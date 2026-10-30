@@ -46,10 +46,12 @@ codebase.
 | `scripts/` | Developer scripts: model manifest generation (RM18), the live acceptance harness, the corpus runner (with its offline draft-pass regrade), the latency benchmark (RM25), `--runtime-extra-args` for a constrained runtime configuration (RM18, spec 0.31 section 12.2), the spikes in `scripts/probes/` (the offline ones over the corpus export, and the live timing probes of the runtime and of one provider), and the M9 OpenClaw scripts (`openclaw_qualification.py`, `openclaw_request_size.py`, `openclaw_install_check.py`, and the evaluation runner `run_openclaw_eval.py`; RM33, spec 0.50 section 12.5); `scripts/README.md` lists what exists |
 | `docs/` | Spec, architecture, roadmap, testing guide, live evidence record (`docs/EVIDENCE.md`, raw exports in `docs/evidence/`), and design rationale for spec revisions (`docs/design/`, not normative) |
 
-## M10 ownership (spec 0.52; #187, #192)
+## M10 ownership (spec 0.52; #187, #192, #193, #194)
 
-The independent catalog discovery core above is implemented by #192 and the
-recommendation lifecycle/API below by #194. Other components remain planned.
+The independent catalog discovery core above is implemented by #192,
+recommendation-only selection v2 with its lexical fallback by #193, and the
+recommendation lifecycle/API below by #194. Remaining components below are
+planned and must not be described as implemented.
 The user explicitly authorized implementation on the reviewed specification PR
 stack before #187 merges; each implementation issue still needs its RM/AC
 mapping. Merges remain user-owned. Contracts are in spec sections
