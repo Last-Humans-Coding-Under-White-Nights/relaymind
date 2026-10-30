@@ -506,9 +506,11 @@ class AssetCatalogStore:
                 "SELECT job_id,source_id FROM asset_catalog_jobs WHERE state='running'"
             ).fetchall()
             for row in rows:
-                self._record_failure(
-                    connection, row["source_id"], 0, failure_exclusions("interrupted")
-                )
+                # A derived-only rebuild (null source) has no source state to mark.
+                if row["source_id"] is not None:
+                    self._record_failure(
+                        connection, row["source_id"], 0, failure_exclusions("interrupted")
+                    )
                 connection.execute(
                     "UPDATE asset_catalog_jobs SET state='interrupted',reason='interrupted',"
                     "finished_at=? WHERE job_id=?",
