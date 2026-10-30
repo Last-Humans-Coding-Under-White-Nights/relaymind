@@ -1,8 +1,6 @@
 """Operator-owned direct action registrations (RM37/AC28)."""
 
 import hashlib
-import hmac
-import json
 import os
 import re
 from dataclasses import dataclass
@@ -10,7 +8,12 @@ from pathlib import Path
 from typing import Protocol
 
 from relaymind.recommendations.errors import RecommendationError
-from relaymind.recommendations.private_files import PrivateFileError, read_private_file
+from relaymind.recommendations.private_files import (
+    PrivateFileError,
+    read_private_file,
+    resolve_private_path,
+)
+from relaymind.selection.asset_http import strict_json
 from relaymind.store.run_store import RunStore
 
 
@@ -57,7 +60,7 @@ def parse_user_action_settings(value: dict, *, config_dir: Path) -> UserActionSe
         return UserActionSettings()
     if not isinstance(path, str) or not path.strip() or len(path.encode("utf-8")) > 2048:
         raise ValueError("user_actions registrations_path must be a nonempty path")
-    return UserActionSettings(Path(os.path.abspath(config_dir / path)))
+    return UserActionSettings(resolve_private_path(Path(os.path.abspath(config_dir / path))))
 
 
 @dataclass(frozen=True)
@@ -67,20 +70,11 @@ class AuthenticatedAction:
     credential_sha256: str
 
 
-def _pairs(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError("duplicate registration field")
-        result[key] = value
-    return result
-
-
 def load_registrations(
     path: Path, *, qualification: QualificationResolver = no_production_qualification
 ) -> RegistrationSnapshot:
     try:
-        raw = json.loads(read_private_file(path).decode("utf-8"), object_pairs_hook=_pairs)
+        raw = strict_json(read_private_file(path))
         if type(raw) is not dict or set(raw) != {"schema_version", "registrations"}:
             raise ValueError
         if type(raw["schema_version"]) is not int or raw["schema_version"] != 1:
@@ -126,12 +120,7 @@ def load_registrations(
             digests.add(digest)
             scope = (item["adapter_id"], item["user_id"], item["workspace_id"])
             if item["enabled"]:
-                if scope in enabled_scopes or not qualification(
-                    item["adapter_id"],
-                    item["host_identity"],
-                    item["session_mapping"],
-                    item["qualified_contract_revision"],
-                ):
+                if scope in enabled_scopes or not _qualified(qualification, item):
                     raise ValueError
                 enabled_scopes.add(scope)
             parsed.append(Registration(**{k: item[k] for k in keys - {"schema_version"}}))
@@ -140,6 +129,19 @@ def load_registrations(
         if isinstance(exc, PrivateFileError):
             raise
         raise PrivateFileError(f"invalid registration file: {path}") from None
+
+
+def _qualified(qualification: QualificationResolver, record) -> bool:
+    """Whether the qualified adapter contract a registration names is accepted.
+
+    record is any mapping by field name: a parsed item, a database row, or vars().
+    """
+    return qualification(
+        record["adapter_id"],
+        record["host_identity"],
+        record["session_mapping"],
+        record["qualified_contract_revision"],
+    )
 
 
 class ActionRegistrations:
@@ -151,13 +153,7 @@ class ActionRegistrations:
 
     def replace(self, snapshot: RegistrationSnapshot) -> None:
         if any(
-            record.enabled
-            and not self.qualification(
-                record.adapter_id,
-                record.host_identity,
-                record.session_mapping,
-                record.qualified_contract_revision,
-            )
+            record.enabled and not _qualified(self.qualification, vars(record))
             for record in snapshot.registrations
         ):
             raise ValueError("action contract is not qualified")
@@ -192,16 +188,8 @@ class ActionRegistrations:
                 "SELECT * FROM action_registrations WHERE credential_sha256=? AND enabled=1",
                 (digest,),
             ).fetchone()
-            if (
-                row is None
-                or not hmac.compare_digest(row["credential_sha256"], digest)
-                or not self.qualification(
-                    row["adapter_id"],
-                    row["host_identity"],
-                    row["session_mapping"],
-                    row["qualified_contract_revision"],
-                )
-            ):
+            # The row was selected by an exact match on the token's digest.
+            if row is None or not _qualified(self.qualification, row):
                 raise RecommendationError("user_action_required")
             scope = {"user_id": row["user_id"], "workspace_id": row["workspace_id"]}
             if scope != active_scope:
@@ -224,11 +212,6 @@ class ActionRegistrations:
             or row["adapter_id"] != action.adapter_id
             or row["user_id"] != action.scope["user_id"]
             or row["workspace_id"] != action.scope["workspace_id"]
-            or not self.qualification(
-                row["adapter_id"],
-                row["host_identity"],
-                row["session_mapping"],
-                row["qualified_contract_revision"],
-            )
+            or not _qualified(self.qualification, row)
         ):
             raise RecommendationError("user_action_required")

@@ -1,11 +1,14 @@
 """Same-file ownership checks and bounded private leases (RM37/AC28)."""
 
 import os
+import secrets
 import stat
 from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from relaymind.recommendations.limits import MAX_PRIVATE_FILE_BYTES
 
 
 class PrivateFileError(ValueError):
@@ -15,9 +18,13 @@ class PrivateFileError(ValueError):
 @dataclass(repr=False)
 class PrivateFileLease:
     data: bytes = field(repr=False)
-    identity: tuple[int, int]
     fingerprint: tuple
     _verify: Callable[[], None] = field(repr=False)
+
+    @property
+    def identity(self) -> tuple:
+        """The file's device and inode (or volume and file ID on Windows)."""
+        return self.fingerprint[:2]
 
     def verify(self) -> None:
         self._verify()
@@ -37,6 +44,17 @@ def _private(info: os.stat_result) -> tuple:
     )
 
 
+def resolve_private_path(path: Path) -> Path:
+    """Resolve links in a configured path's ancestors, never in the file itself.
+
+    The private-file checks open every component without following links, so
+    an operator path through an ancestor link (such as macOS /tmp) is resolved
+    once, where it is configured. A link that appears later is still refused.
+    """
+    absolute = path.absolute()
+    return Path(os.path.realpath(absolute.parent)) / absolute.name
+
+
 @contextmanager
 def _parent(path: Path):
     absolute = path.absolute()
@@ -54,7 +72,9 @@ def _parent(path: Path):
 
 
 @contextmanager
-def open_private_file(path: Path, *, maximum: int = 1024 * 1024) -> Iterator[PrivateFileLease]:
+def open_private_file(
+    path: Path, *, maximum: int = MAX_PRIVATE_FILE_BYTES
+) -> Iterator[PrivateFileLease]:
     """Hold checked final/parent descriptors through caller work and verification."""
     if os.name == "nt":
         from relaymind.recommendations._windows_private_files import open_windows_private_file
@@ -98,7 +118,7 @@ def open_private_file(path: Path, *, maximum: int = 1024 * 1024) -> Iterator[Pri
                     except OSError:
                         raise PrivateFileError(f"private file changed: {path}") from None
 
-                lease = PrivateFileLease(b"".join(chunks), fingerprint[:2], fingerprint, verify)
+                lease = PrivateFileLease(b"".join(chunks), fingerprint, verify)
                 lease.verify()
                 yield lease
             finally:
@@ -109,45 +129,65 @@ def open_private_file(path: Path, *, maximum: int = 1024 * 1024) -> Iterator[Pri
         raise PrivateFileError(f"cannot open private file: {path}") from None
 
 
-def read_private_snapshot(path: Path, *, maximum: int = 1024 * 1024) -> PrivateFileLease:
-    with open_private_file(path, maximum=maximum) as lease:
-        lease.verify()
-        return lease
-
-
-def read_private_file(path: Path, *, maximum: int = 1024 * 1024) -> bytes:
+def read_private_file(path: Path, *, maximum: int = MAX_PRIVATE_FILE_BYTES) -> bytes:
     try:
-        return read_private_snapshot(path, maximum=maximum).data
+        with open_private_file(path, maximum=maximum) as lease:
+            return lease.data
     except FileNotFoundError:
         raise PrivateFileError(f"cannot open private file: {path}") from None
 
 
+def _write_all(descriptor: int, data: bytes) -> None:
+    pending = memoryview(data)
+    while pending:
+        written = os.write(descriptor, pending)
+        if written <= 0:
+            raise PrivateFileError("private file write failed")
+        pending = pending[written:]
+
+
 def create_private_file_exclusive(path: Path, data: bytes) -> bool:
-    """Private before writing; collision never overwrites an existing entry."""
+    """Create a complete private file, or report that one already exists.
+
+    The bytes are written and synced under a temporary name in the same
+    directory, then hard-linked to the final name, which never replaces an
+    existing entry. A crash or a failed write therefore never leaves a
+    truncated file under the final name; leftover temporary files from an
+    earlier crash are removed here and are never read.
+    """
     if os.name == "nt":
         from relaymind.recommendations._windows_private_files import create_windows_private_file
 
         return create_windows_private_file(path, data)
     try:
         with _parent(path) as (_, parent, name, _):
+            prefix = f".{name}.partial-"
+            for entry in os.listdir(parent):
+                if entry.startswith(prefix):
+                    os.unlink(entry, dir_fd=parent)
+            temporary = prefix + secrets.token_hex(8)
+            descriptor = os.open(
+                temporary,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600,
+                dir_fd=parent,
+            )
             try:
-                descriptor = os.open(
-                    name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent
-                )
-            except FileExistsError:
-                return False
-            try:
-                _private(os.fstat(descriptor))
-                pending = memoryview(data)
-                while pending:
-                    written = os.write(descriptor, pending)
-                    if written <= 0:
-                        raise PrivateFileError("private file write failed")
-                    pending = pending[written:]
-                os.fsync(descriptor)
-                _private(os.fstat(descriptor))
+                try:
+                    _private(os.fstat(descriptor))
+                    _write_all(descriptor, data)
+                    os.fsync(descriptor)
+                    _private(os.fstat(descriptor))
+                finally:
+                    os.close(descriptor)
+                try:
+                    os.link(temporary, name, src_dir_fd=parent, dst_dir_fd=parent)
+                    created = True
+                except FileExistsError:
+                    created = False
             finally:
-                os.close(descriptor)
-        return True
+                os.unlink(temporary, dir_fd=parent)
+            os.fsync(parent)
+            return created
     except OSError:
         raise PrivateFileError(f"cannot create private file: {path}") from None

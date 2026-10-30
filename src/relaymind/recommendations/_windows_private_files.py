@@ -19,6 +19,7 @@ from relaymind.assets._windows_source_io import (
     _component,
     _WindowsFile,
 )
+from relaymind.recommendations.limits import MAX_PRIVATE_FILE_BYTES
 from relaymind.recommendations.private_files import PrivateFileError, PrivateFileLease
 
 _PTR = C.c_void_p
@@ -306,10 +307,10 @@ def _parent(path: Path) -> Iterator[tuple[WindowsSourceTree, str, bytes]]:
 
 @contextmanager
 def open_windows_private_file(
-    path: Path, *, maximum: int = 1024 * 1024
+    path: Path, *, maximum: int = MAX_PRIVATE_FILE_BYTES
 ) -> Iterator[PrivateFileLease]:
     """Own read/parent handles until exit; every verification checks current path."""
-    if not 0 <= maximum <= 1024 * 1024:
+    if not 0 <= maximum <= MAX_PRIVATE_FILE_BYTES:
         raise PrivateFileError("invalid private file size limit")
     try:
         with _parent(path) as (tree, name, user):
@@ -343,7 +344,7 @@ def open_windows_private_file(
                     except OSError:
                         raise PrivateFileError(f"private file changed: {path}") from None
 
-                lease = PrivateFileLease(bytes(data), fingerprint[:2], fingerprint, verify)
+                lease = PrivateFileLease(bytes(data), fingerprint, verify)
                 lease.verify()
                 yield lease
             finally:
@@ -356,7 +357,7 @@ def open_windows_private_file(
 
 def create_windows_private_file(path: Path, data: bytes) -> bool:
     """Supply owner/protected DACL at FILE_CREATE, before any private bytes exist."""
-    if len(data) > 1024 * 1024:
+    if len(data) > MAX_PRIVATE_FILE_BYTES:
         raise PrivateFileError("private file too large")
     try:
         with _parent(path) as (tree, name, user):

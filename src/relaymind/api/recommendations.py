@@ -140,6 +140,68 @@ def _query(request, *, events=False):
     return int(values.get("after_seq", "0")), int(values.get("limit", str(DEFAULT_EVENTS_PAGE)))
 
 
+def parse_object_id(raw: str, code: str = "recommendation_not_found") -> str:
+    """A canonical UUID path parameter; anything else is the not-found code."""
+    try:
+        if str(UUID(raw)) != raw:
+            raise ValueError
+    except ValueError:
+        raise RecommendationError(code) from None
+    return raw
+
+
+def required_idempotency_key(request: Request) -> str:
+    """Every state-changing recommendation request carries exactly one key (section 7.6)."""
+    try:
+        key = idempotency_key(request.headers)
+    except ApiError:
+        raise RecommendationError("invalid_request") from None
+    if key is None:
+        raise RecommendationError("invalid_request")
+    return key
+
+
+def request_digest(method: str, endpoint: str, object_id, body, query=None) -> str:
+    """The canonical request hash of section 7.6: method, endpoint, object, query and body."""
+    return canonical_digest(
+        dict(method=method, endpoint=endpoint, object_id=object_id, query=query or {}, body=body)
+    )
+
+
+def guarded_route(app: FastAPI, handler, *, authenticate=None):
+    """Bearer first, then the optional action check, then the handler; one error envelope.
+
+    An unexpected failure is logged for the operator (without its text) and
+    answered as internal_error.
+    """
+
+    async def wrapped(request: Request):
+        try:
+            require_bearer_token(request.headers.get("authorization"), app.state.application_token)
+            if authenticate is None:
+                return await handler(request)
+            return await handler(request, *authenticate(request))
+        except ApiError as exc:
+            error = RecommendationError(
+                exc.code if exc.code in ("unauthenticated", "invalid_request") else "internal_error"
+            )
+        except RecommendationError as exc:
+            error = exc
+        except RecommendationFailure as failure:
+            error = RecommendationError(
+                "deadline_exceeded"
+                if failure.code == "deadline_exceeded"
+                else "recommendation_unavailable"
+            )
+        except Exception as exc:
+            _log_internal(request, exc)
+            error = RecommendationError("internal_error")
+        headers = {"WWW-Authenticate": "Bearer"} if error.code == "unauthenticated" else {}
+        return JSONResponse({"error": error.inner()}, status_code=error.status, headers=headers)
+
+    return wrapped
+
+
 class _NoReply(Response):
     """A response for a client that already disconnected: it sends nothing."""
 
@@ -153,47 +215,16 @@ class _NoReply(Response):
 def install_recommendation_routes(
     app: FastAPI, service: RecommendationService | None, *, configured_scope: Mapping | None
 ) -> None:
-    """Install only the four RM36 routes. #195 direct actions remain unwired."""
+    """Install the four RM36 routes and the RM37 direct-action routes."""
 
     def guarded(handler):
-        async def wrapped(request: Request):
-            try:
-                require_bearer_token(
-                    request.headers.get("authorization"), app.state.application_token
-                )
-                return await handler(request)
-            except ApiError as exc:
-                error = RecommendationError(
-                    exc.code
-                    if exc.code in ("unauthenticated", "invalid_request")
-                    else "internal_error"
-                )
-            except RecommendationError as exc:
-                error = exc
-            except RecommendationFailure as failure:
-                error = RecommendationError(
-                    "deadline_exceeded"
-                    if failure.code == "deadline_exceeded"
-                    else "recommendation_unavailable"
-                )
-            except Exception as exc:
-                _log_internal(request, exc)
-                error = RecommendationError("internal_error")
-            headers = {"WWW-Authenticate": "Bearer"} if error.code == "unauthenticated" else {}
-            return JSONResponse({"error": error.inner()}, status_code=error.status, headers=headers)
-
-        return wrapped
+        return guarded_route(app, handler)
 
     async def create(request):
         budget = service.new_budget() if service else SelectionBudget()
         _query(request)
         body = parse_create(await _body(request, budget))
-        try:
-            key = idempotency_key(request.headers)
-        except ApiError:
-            raise RecommendationError("invalid_request") from None
-        if key is None:
-            raise RecommendationError("invalid_request")
+        key = required_idempotency_key(request)
         if service is None:
             raise RecommendationError("recommendation_unavailable")
         body = service.redactor.redact_with_repeats(
@@ -205,9 +236,7 @@ def install_recommendation_routes(
                 ],
             )
         )
-        digest = canonical_digest(
-            dict(method="POST", endpoint=ENDPOINT, object_id=None, query={}, body=body)
-        )
+        digest = request_digest("POST", ENDPOINT, None, body)
         claim = RecommendationClaim(
             configured_scope, APPLICATION_CALLER, "POST", ENDPOINT, None, key, digest
         )
@@ -253,13 +282,7 @@ def install_recommendation_routes(
         )
 
     def object_id(request):
-        raw = request.path_params["recommendation_id"]
-        try:
-            if str(UUID(raw)) != raw:
-                raise ValueError
-        except ValueError:
-            raise RecommendationError("recommendation_not_found") from None
-        return raw
+        return parse_object_id(request.path_params["recommendation_id"])
 
     async def get(request):
         _query(request)

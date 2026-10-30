@@ -16,8 +16,13 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from relaymind.canonical import canonical_digest, canonical_json
+from relaymind.recommendations.admission import (
+    current_asset,
+    offered_record,
+    same_identity,
+)
 from relaymind.recommendations.errors import MESSAGES, STATUSES, RecommendationError
-from relaymind.recommendations.limits import MAX_EVENTS_PAGE, recommendation_budgets
+from relaymind.recommendations.limits import MAX_EVENTS_PAGE, MAX_SEQUENCE, recommendation_budgets
 from relaymind.schema_util import freeze_json
 from relaymind.selection.asset_contract import parse_recommendation_result
 from relaymind.store.recommendation_event import validate_event, validate_view
@@ -86,6 +91,13 @@ class RecommendationClaim:
     @property
     def key_digest(self) -> str:
         return canonical_digest(self.key)
+
+
+# Ready recommendations of one scope whose choice window has lapsed.
+_SCOPE_EXPIRY_DUE = (
+    "user_id=? AND workspace_id=? AND retain_until>? AND state='ready' AND "
+    "json_extract(view_json,'$.choice_expires_at')<=?"
+)
 
 
 def _expiry_due(row, now) -> bool:
@@ -442,7 +454,20 @@ class RecommendationStore:
                 return None
             raise
 
+    @staticmethod
+    def feedback_revision(db, scope) -> int:
+        """The scope's explicit-feedback revision; 0 before any feedback."""
+        row = db.execute(
+            "SELECT feedback_revision FROM recommendation_scope WHERE user_id=? AND workspace_id=?",
+            (scope["user_id"], scope["workspace_id"]),
+        ).fetchone()
+        return 0 if row is None else row[0]
+
     def _expire(self, db, row, now):
+        return StoredRecommendation(validate_view(self._expired_view(db, row, now)))
+
+    def _expired_view(self, db, row, now) -> dict:
+        """The row's view as a plain dict, recording a due expiry first."""
         view = json.loads(row["view_json"])
         if row["state"] == "ready" and view["choice_expires_at"] <= utc_iso(now):
             view.update(state="expired", state_version=view["state_version"] + 1)
@@ -457,13 +482,11 @@ class RecommendationStore:
                 now,
                 row["active_ms"],
             )
-        return StoredRecommendation(validate_view(view))
+        return view
 
     def _expire_scope(self, db, scope, *, now):
         rows = db.execute(
-            f"SELECT {_VIEW_COLUMNS} FROM recommendations WHERE user_id=? AND workspace_id=? "
-            "AND retain_until>? AND state='ready' AND "
-            "json_extract(view_json,'$.choice_expires_at')<=?",
+            f"SELECT {_VIEW_COLUMNS} FROM recommendations WHERE {_SCOPE_EXPIRY_DUE}",
             (scope["user_id"], scope["workspace_id"], utc_iso(now), utc_iso(now)),
         ).fetchall()
         for row in rows:
@@ -472,9 +495,7 @@ class RecommendationStore:
     def _observe_scope_expiry(self, scope, *, now):
         with self.store.sql_read() as db:
             due = db.execute(
-                "SELECT 1 FROM recommendations WHERE user_id=? AND workspace_id=? "
-                "AND retain_until>? AND state='ready' AND "
-                "json_extract(view_json,'$.choice_expires_at')<=? LIMIT 1",
+                f"SELECT 1 FROM recommendations WHERE {_SCOPE_EXPIRY_DUE} LIMIT 1",
                 (scope["user_id"], scope["workspace_id"], utc_iso(now), utc_iso(now)),
             ).fetchone()
         if due:
@@ -524,19 +545,17 @@ class RecommendationStore:
                 except RecommendationError as exc:
                     error = exc
                 else:
-                    self._expire(db, row, now)
-                    row = self._row(
-                        db,
-                        action.scope,
-                        recommendation_id,
-                        now=now,
-                        columns=_VIEW_COLUMNS + ",accepted_json,retain_until",
-                    )
-                    view = json.loads(row["view_json"])
-                    if request["expected_version"] != view["state_version"]:
-                        error = RecommendationError("stale_version", recommendation_id)
-                    elif view["state"] == "expired":
+                    view = self._expired_view(db, row, now)
+                    expected = request["expected_version"]
+                    if view["state"] == "expired" and expected in (
+                        view["state_version"] - 1,
+                        view["state_version"],
+                    ):
+                        # The client saw the ready version, or the expiry itself:
+                        # the lapsed window is the reason (spec section 11).
                         error = RecommendationError("recommendation_expired", recommendation_id)
+                    elif expected != view["state_version"]:
+                        error = RecommendationError("stale_version", recommendation_id)
                     elif view["state"] != "ready":
                         error = RecommendationError("invalid_state", recommendation_id)
                     else:
@@ -552,42 +571,21 @@ class RecommendationStore:
                             elif target["content_hash"] != choice["content_hash"]:
                                 error = RecommendationError("asset_changed", recommendation_id)
                             else:
-                                original = {
-                                    item["asset_id"]: item
-                                    for item in json.loads(row["accepted_json"])["catalog"]
-                                }.get(choice["asset_id"])
-                                try:
-                                    current = next(
-                                        item
-                                        for item in catalog.snapshot().assets
-                                        if item.asset_id == choice["asset_id"]
-                                    )
-                                except (StopIteration, Exception):
-                                    current = None
+                                original = offered_record(
+                                    json.loads(row["accepted_json"]), choice["asset_id"]
+                                )
+                                # A catalog failure propagates as internal_error;
+                                # only a missing or changed asset is asset_changed.
+                                current = current_asset(catalog, choice["asset_id"])
                                 if (
                                     original is None
                                     or current is None
-                                    or any(
-                                        getattr(current, name) != original[name]
-                                        for name in (
-                                            "schema_version",
-                                            "kind",
-                                            "source_id",
-                                            "source_locator",
-                                            "source_version",
-                                            "content_hash",
-                                            "identity",
-                                        )
-                                    )
+                                    or not same_identity(original, current)
                                     or not policy(current)
                                 ):
                                     error = RecommendationError("asset_changed", recommendation_id)
                         if error is None:
-                            scope_rev = db.execute(
-                                "SELECT feedback_revision FROM recommendation_scope "
-                                "WHERE user_id=? AND workspace_id=?",
-                                (action.scope["user_id"], action.scope["workspace_id"]),
-                            ).fetchone()[0]
+                            scope_rev = self.feedback_revision(db, action.scope)
                             version = view["state_version"] + 1
                             evidence = dict(
                                 adapter_id=action.adapter_id,
@@ -688,7 +686,7 @@ class RecommendationStore:
             rows = db.execute(
                 "SELECT event_json FROM recommendation_events WHERE recommendation_id=? AND "
                 "seq>? ORDER BY seq LIMIT ?",
-                (recommendation_id, min(after_seq, 2**63 - 1), limit + 1),
+                (recommendation_id, min(after_seq, MAX_SEQUENCE), limit + 1),
             ).fetchall()
             events = [validate_event(json.loads(r[0]), allow_erased=True) for r in rows[:limit]]
             return freeze_json(

@@ -11,6 +11,7 @@ from relaymind.recommendations.private_files import (
     PrivateFileError,
     create_private_file_exclusive,
     open_private_file,
+    resolve_private_path,
 )
 
 _PURPOSES = frozenset({"lookup", "key", "object", "request", "event_id", "task_id"})
@@ -57,7 +58,8 @@ def protected_erasure_digester(store):
     """Keep a currently checked file/parent lease through one SQL operation."""
     if store._in_memory:
         raise PrivateFileError("in-memory erasure requires an injected provider")
-    path = Path(store._path).absolute().with_name(Path(store._path).name + ".erasure-key")
+    store_path = resolve_private_path(Path(store._path))
+    path = store_path.with_name(store_path.name + ".erasure-key")
     with store.sql_transaction() as db:
         bound = db.execute("SELECT binding FROM erasure_key_binding WHERE singleton=1").fetchone()
         if bound is None and has_keyed_state(db):

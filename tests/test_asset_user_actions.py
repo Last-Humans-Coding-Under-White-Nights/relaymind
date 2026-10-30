@@ -1097,3 +1097,68 @@ def test_explicit_usefulness_feedback_has_independent_scope_revision(tmp_path):
         runs.close()
 
     asyncio.run(go())
+
+
+@pytest.mark.parametrize(
+    "version_change,code",
+    [(0, "recommendation_expired"), (-1, "stale_version"), (5, "stale_version")],
+)
+def test_choice_after_window_lapse_is_expired_not_stale(tmp_path, version_change, code):
+    """RM37/AC28, spec section 11: a lapsed window is recommendation_expired.
+
+    A client that still holds the ready version sees why its choice failed;
+    a version it never saw is still stale_version.
+    """
+    from helpers import FakeClock
+
+    async def go():
+        clock = FakeClock()
+        async with action_client(tmp_path, clock=clock) as (client, app, service, *_):
+            parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
+            clock.advance(601)
+            response = await client.post(
+                f"/relay/v1/recommendations/{parent['recommendation_id']}/choice",
+                json=dict(
+                    schema_version=1,
+                    expected_version=parent["state_version"] + version_change,
+                    choice=dict(kind="none"),
+                ),
+                headers={"Idempotency-Key": "lapsed"},
+            )
+            assert response.json()["error"]["code"] == code, response.text
+
+    asyncio.run(go())
+
+
+def test_choice_catalog_failure_is_internal_error_not_asset_changed(tmp_path, monkeypatch, caplog):
+    """RM37/AC28, RM16: a catalog outage is never reported as a changed asset."""
+
+    async def go():
+        async with action_client(tmp_path) as (client, app, service, runs, catalog, registry):
+            parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
+            target = parent["result"]["final_candidates"][0]
+
+            def broken():
+                raise RuntimeError("catalog storage failed")
+
+            monkeypatch.setattr(catalog, "snapshot", broken)
+            response = await client.post(
+                f"/relay/v1/recommendations/{parent['recommendation_id']}/choice",
+                json=dict(
+                    schema_version=1,
+                    expected_version=parent["state_version"],
+                    choice=dict(
+                        kind="asset",
+                        asset_id=target["asset_id"],
+                        content_hash=target["content_hash"],
+                    ),
+                ),
+                headers={"Idempotency-Key": "catalog-down"},
+            )
+            assert response.status_code == 500, response.text
+            assert response.json()["error"]["code"] == "internal_error"
+
+    asyncio.run(go())
+    assert any(
+        "RuntimeError" in record.getMessage() or record.exc_info for record in caplog.records
+    )

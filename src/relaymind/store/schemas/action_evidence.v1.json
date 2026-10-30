@@ -46,8 +46,7 @@
     },
     "task_id": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 256
+      "pattern": "^[0-9a-f]{64}$"
     },
     "choice": {
       "oneOf": [

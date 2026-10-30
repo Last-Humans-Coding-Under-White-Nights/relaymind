@@ -1,39 +1,33 @@
 """Closed direct-input action routes (RM37/AC28)."""
 
-import json
 import re
-from uuid import UUID
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from relaymind.api.auth import require_bearer_token
-from relaymind.api.errors import ApiError
-from relaymind.api.idempotency import idempotency_key
-from relaymind.canonical import canonical_digest
+from relaymind.api.recommendations import (
+    guarded_route,
+    parse_object_id,
+    request_digest,
+    required_idempotency_key,
+)
 from relaymind.recommendations.errors import RecommendationError
-from relaymind.recommendations.limits import DEFAULT_EVENTS_PAGE, MAX_CREATE_BYTES, MAX_EVENTS_PAGE
+from relaymind.recommendations.limits import (
+    DEFAULT_EVENTS_PAGE,
+    MAX_CREATE_BYTES,
+    MAX_EVENTS_PAGE,
+    MAX_SEQUENCE,
+)
+from relaymind.selection.asset_http import strict_json
 from relaymind.store.recommendations import RecommendationClaim
 
-
-def _pairs(pairs):
-    value = {}
-    for key, item in pairs:
-        if key in value:
-            raise ValueError
-        value[key] = item
-    return value
+ACTION_TOKEN_HEADER = "X-RelayMind-User-Action-Token"
 
 
 def _json(raw: bytes, secrets=()):
+    """Strict JSON that also refuses any string carrying a current secret (RM12)."""
     try:
-        if len(raw) > MAX_CREATE_BYTES:
-            raise ValueError
-        value = json.loads(
-            raw.decode("utf-8"),
-            object_pairs_hook=_pairs,
-            parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
-        )
+        value = strict_json(raw)
 
         def check(item):
             if isinstance(item, str):
@@ -76,7 +70,7 @@ def _versioned(value, fields):
 
 
 def _nonnegative(value):
-    if type(value) is not int or value < 0 or value > 2**63 - 1:
+    if type(value) is not int or value < 0 or value > MAX_SEQUENCE:
         raise RecommendationError("invalid_request")
 
 
@@ -89,6 +83,18 @@ def _decimal(value: str, *, maximum: int) -> int:
     return number
 
 
+def _asset_reference(value):
+    """{kind, asset_id, content_hash}: the shape shared by asset choices and targeted feedback."""
+    _closed(value, ("kind", "asset_id", "content_hash"))
+    if (
+        type(value["asset_id"]) is not str
+        or not 1 <= len(value["asset_id"].encode("utf-8")) <= 256
+        or type(value["content_hash"]) is not str
+        or not re.fullmatch(r"[0-9a-f]{64}", value["content_hash"])
+    ):
+        raise RecommendationError("invalid_request")
+
+
 def _choice(raw, secrets=()):
     value = _json(raw, secrets)
     _versioned(value, ("expected_version", "choice"))
@@ -97,14 +103,7 @@ def _choice(raw, secrets=()):
     if type(choice) is not dict:
         raise RecommendationError("invalid_request")
     if choice.get("kind") == "asset":
-        _closed(choice, ("kind", "asset_id", "content_hash"))
-        if (
-            type(choice["asset_id"]) is not str
-            or not 1 <= len(choice["asset_id"].encode("utf-8")) <= 256
-            or type(choice["content_hash"]) is not str
-            or not re.fullmatch(r"[0-9a-f]{64}", choice["content_hash"])
-        ):
-            raise RecommendationError("invalid_request")
+        _asset_reference(choice)
     elif choice.get("kind") in ("none", "cancel"):
         _closed(choice, ("kind",))
     else:
@@ -123,14 +122,7 @@ def _feedback(raw, secrets=()):
         raise RecommendationError("invalid_request")
     kind = feedback.get("kind")
     if kind in ("correction", "rejection"):
-        _closed(feedback, ("kind", "asset_id", "content_hash"))
-        if (
-            type(feedback["asset_id"]) is not str
-            or not 1 <= len(feedback["asset_id"].encode("utf-8")) <= 256
-            or type(feedback["content_hash"]) is not str
-            or not re.fullmatch(r"[0-9a-f]{64}", feedback["content_hash"])
-        ):
-            raise RecommendationError("invalid_request")
+        _asset_reference(feedback)
     elif kind == "usefulness":
         _closed(feedback, ("kind", "value"))
         if feedback["value"] not in ("useful", "not_useful"):
@@ -140,23 +132,9 @@ def _feedback(raw, secrets=()):
     return value
 
 
-def _id(value: str, code="recommendation_not_found") -> str:
-    try:
-        if str(UUID(value)) != value:
-            raise ValueError
-    except ValueError:
-        raise RecommendationError(code) from None
-    return value
-
-
-def _key(request):
-    try:
-        key = idempotency_key(request.headers)
-    except ApiError:
-        raise RecommendationError("invalid_request") from None
-    if key is None:
-        raise RecommendationError("invalid_request")
-    return key
+# Kept under these names for callers and tests that build claims directly.
+_id = parse_object_id
+_key = required_idempotency_key
 
 
 def _claim(action, method, endpoint, object_id, key, body, query=None):
@@ -167,15 +145,7 @@ def _claim(action, method, endpoint, object_id, key, body, query=None):
         endpoint,
         object_id,
         key,
-        canonical_digest(
-            dict(
-                method=method,
-                endpoint=endpoint,
-                object_id=object_id,
-                query=query or {},
-                body=body,
-            )
-        ),
+        request_digest(method, endpoint, object_id, body, query),
     )
 
 
@@ -183,40 +153,26 @@ def install_action_routes(app: FastAPI, service) -> None:
     """Register the published private routes; absent registration denies action."""
 
     def secrets(request):
-        return (app.state.application_token, request.headers.get("X-RelayMind-User-Action-Token"))
+        return (app.state.application_token, *request.headers.getlist(ACTION_TOKEN_HEADER))
+
+    def authenticate(request):
+        # Section 7.6 step 2: a registered direct-input credential, after the bearer.
+        registrations = getattr(app.state, "action_registrations", None)
+        if registrations is None or service is None:
+            raise RecommendationError("user_action_required")
+        tokens = request.headers.getlist(ACTION_TOKEN_HEADER)
+        if len(tokens) != 1:
+            raise RecommendationError("user_action_required")
+        return registrations.authenticate(tokens[0], service.scope), registrations
+
+    def feedback_store():
+        store = getattr(app.state, "feedback_store", None)
+        if store is None:
+            raise RecommendationError("invalid_state")
+        return store
 
     def guarded(handler):
-        async def wrapped(request: Request):
-            try:
-                require_bearer_token(
-                    request.headers.get("authorization"), app.state.application_token
-                )
-                registrations = getattr(app.state, "action_registrations", None)
-                if registrations is None or service is None:
-                    raise RecommendationError("user_action_required")
-                tokens = [
-                    value.decode("latin-1")
-                    for key, value in request.scope["headers"]
-                    if key.lower() == b"x-relaymind-user-action-token"
-                ]
-                if len(tokens) != 1:
-                    raise RecommendationError("user_action_required")
-                action = registrations.authenticate(tokens[0], service.scope)
-                return await handler(request, action, registrations)
-            except ApiError as exc:
-                error = RecommendationError(
-                    exc.code
-                    if exc.code in ("unauthenticated", "invalid_request")
-                    else "internal_error"
-                )
-            except RecommendationError as exc:
-                error = exc
-            except Exception:
-                error = RecommendationError("internal_error")
-            headers = {"WWW-Authenticate": "Bearer"} if error.code == "unauthenticated" else {}
-            return JSONResponse({"error": error.inner()}, status_code=error.status, headers=headers)
-
-        return wrapped
+        return guarded_route(app, handler, authenticate=authenticate)
 
     async def choose(request, action, registrations):
         if request.query_params:
@@ -226,8 +182,6 @@ def install_action_routes(app: FastAPI, service) -> None:
         rid = _id(request.path_params["recommendation_id"])
         endpoint = "/relay/v1/recommendations/{id}/choice"
         claim = _claim(action, "POST", endpoint, rid, key, body)
-        if service is None:
-            raise RecommendationError("recommendation_not_found")
         response = service.store.choose(
             action,
             rid,
@@ -248,10 +202,7 @@ def install_action_routes(app: FastAPI, service) -> None:
         rid = _id(request.path_params["recommendation_id"])
         endpoint = "/relay/v1/recommendations/{id}/feedback"
         claim = _claim(action, "POST", endpoint, rid, key, body)
-        feedback_store = getattr(app.state, "feedback_store", None)
-        if feedback_store is None:
-            raise RecommendationError("invalid_state")
-        response = feedback_store.create(action, rid, body, claim, now=service.clock.utc_now())
+        response = feedback_store().create(action, rid, body, claim, now=service.clock.utc_now())
         return JSONResponse(response.body, status_code=response.status)
 
     async def list_feedback(request, action, registrations):
@@ -261,12 +212,8 @@ def install_action_routes(app: FastAPI, service) -> None:
         ) != len(pairs):
             raise RecommendationError("invalid_request")
         query = dict(pairs)
-        limit_text = query.get("limit", str(DEFAULT_EVENTS_PAGE))
-        limit = _decimal(limit_text, maximum=MAX_EVENTS_PAGE)
-        feedback_store = getattr(app.state, "feedback_store", None)
-        if feedback_store is None:
-            raise RecommendationError("invalid_state")
-        page = feedback_store.list(
+        limit = _decimal(query.get("limit", str(DEFAULT_EVENTS_PAGE)), maximum=MAX_EVENTS_PAGE)
+        page = feedback_store().list(
             action,
             after_id=query.get("after_id"),
             limit=limit,
@@ -278,8 +225,7 @@ def install_action_routes(app: FastAPI, service) -> None:
         pairs = list(request.query_params.multi_items())
         if len(pairs) != 1 or pairs[0][0] != "expected_feedback_revision":
             raise RecommendationError("invalid_request")
-        raw_revision = pairs[0][1]
-        revision = _decimal(raw_revision, maximum=2**63 - 1)
+        revision = _decimal(pairs[0][1], maximum=MAX_SEQUENCE)
         if await _body(request):
             raise RecommendationError("invalid_request")
         fid = _id(request.path_params["feedback_id"], "feedback_not_found")
@@ -294,10 +240,9 @@ def install_action_routes(app: FastAPI, service) -> None:
             None,
             query={"expected_feedback_revision": revision},
         )
-        feedback_store = getattr(app.state, "feedback_store", None)
-        if feedback_store is None:
-            raise RecommendationError("invalid_state")
-        response = feedback_store.delete(action, fid, revision, claim, now=service.clock.utc_now())
+        response = feedback_store().delete(
+            action, fid, revision, claim, now=service.clock.utc_now()
+        )
         return JSONResponse(response.body, status_code=response.status)
 
     async def reset_feedback(request, action, registrations):
@@ -309,19 +254,13 @@ def install_action_routes(app: FastAPI, service) -> None:
         key = _key(request)
         endpoint = "/relay/v1/feedback/reset"
         claim = _claim(action, "POST", endpoint, None, key, body)
-        feedback_store = getattr(app.state, "feedback_store", None)
-        if feedback_store is None:
-            raise RecommendationError("invalid_state")
-        response = feedback_store.reset(
+        response = feedback_store().reset(
             action,
             body["expected_feedback_revision"],
             claim,
             now=service.clock.utc_now(),
         )
         return JSONResponse(response.body, status_code=response.status)
-
-    async def unavailable(request, action, registrations):
-        raise RecommendationError("invalid_state")
 
     base = "/relay/v1/recommendations/{recommendation_id}"
     app.add_api_route(base + "/choice", guarded(choose), methods=["POST"])

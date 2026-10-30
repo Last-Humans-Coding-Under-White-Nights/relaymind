@@ -18,6 +18,10 @@ CHOICE_SECONDS = 600
 RETENTION_DAYS = 30
 MAX_EVENTS_PAGE = 1000
 DEFAULT_EVENTS_PAGE = 100
+# Largest stored sequence or revision a query may name (SQLite INTEGER).
+MAX_SEQUENCE = 2**63 - 1
+# Registration and erasure-key files are small private files.
+MAX_PRIVATE_FILE_BYTES = 1024 * 1024
 
 _DEFAULTS = RecommendationSettings()
 

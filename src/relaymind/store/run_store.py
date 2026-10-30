@@ -419,6 +419,12 @@ MIGRATIONS: tuple[str, ...] = (
         erased INTEGER NOT NULL DEFAULT 0 CHECK(erased IN (0,1)),
         PRIMARY KEY(user_id,workspace_id,adapter_id,event_id)
     );
+    CREATE INDEX feedback_event_id_feedback ON feedback_event_ids(feedback_id);
+    CREATE INDEX feedback_event_id_retention ON feedback_event_ids(retain_until);
+    CREATE INDEX action_receipt_erased ON action_receipts(erased) WHERE erased=1;
+    CREATE INDEX feedback_event_id_erased ON feedback_event_ids(erased) WHERE erased=1;
+    CREATE INDEX feedback_audit_keyed ON feedback_audits(audit_id)
+        WHERE json_extract(audit_json,'$.idempotency_digest') IS NOT NULL;
     CREATE TABLE erasure_key_binding (
         singleton INTEGER PRIMARY KEY CHECK(singleton=1), binding TEXT NOT NULL
     );
