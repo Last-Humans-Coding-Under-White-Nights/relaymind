@@ -304,7 +304,11 @@ class PublishedOffer:
     def request(self, envelope: Mapping, *, context: SelectorContext) -> AssetSelectionRequest:
         context.check()
         raw = _check("envelope", envelope)
-        _check_query(raw)
+        try:
+            _check_query(raw)
+        except (AssetSelectionError, UnicodeError):
+            # Caller input, classified the same way as parse_asset_request.
+            raise AssetSelectionError("invalid_request") from None
         if (
             raw["scope"] != self.scope
             or set(raw["permissions"]) != set(self.permissions)
