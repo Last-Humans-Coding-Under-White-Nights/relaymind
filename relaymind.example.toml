@@ -183,3 +183,34 @@ routing = false
 # declaration: live, replay, or double. It has no default.
 [ui]
 mode = "live"
+
+# Independent asset discovery (#192; RM34/AC25). Disabled by default.
+# Enabling starts bounded catalog scans only; recommendation API/lexical readiness
+# is delivered by later issues. At least one model table above is still required.
+# Local/imported assets always have unknown host availability. Installing a skill
+# in a host is a separate manual operation; catalog reads do not execute it.
+# [recommendations]
+# enabled = true
+# user_id = "operator"
+# workspace_id = "local-workspace"
+# total_ms = 500
+# primary_ms = 150
+# primary = "lexical"
+# fallback = true
+#
+# [[assets.sources]]
+# source_id = "installed-skills"
+# kind = "local_directory"
+# path = "ordinary-skills" # relative to this configuration file, not the cwd
+#
+# [[assets.sources]]
+# source_id = "example"
+# kind = "metadata_import"
+# path = "asset-import/import.json" # one closed AssetMetadataImportV1 document
+#
+# [asset_refresh]
+# local_scan_seconds = 30
+# remote_seconds = 3600
+# backoff_initial_seconds = 60
+# backoff_max_seconds = 3600
+# No remote adapter is qualified. Hybrid/adaptation artifacts are not yet admitted.
