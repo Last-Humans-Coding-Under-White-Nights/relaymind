@@ -86,7 +86,9 @@ def test_rm40_ac31_derivation_never_overwrites_unrelated_originals(input_root, t
 
 
 def test_rm40_ac31_tampered_export_never_leaves_partial_output(input_root, tmp_path):
-    (input_root / "originals/calendar.md").write_text("Changed source")
+    (input_root / "originals/calendar.md").write_text(
+        "Changed source", encoding="utf-8", newline="\n"
+    )
     output = tmp_path / "derived"
     with pytest.raises(ValueError, match="evidence_digest"):
         derivation().derive_matrix_export(input_root, input_root / "lock.json", output)

@@ -8,3 +8,6 @@
 # The OpenClaw plugin's release tarball is cited by SHA-256, so its packed text
 # files must have the same bytes on a Windows checkout as on Linux and macOS.
 /integrations/openclaw/** text=auto eol=lf
+# The asset corpus fixtures and locks are hashed as exact bytes (RM40/AC31).
+/tests/fixtures/asset-corpus/** text eol=lf
+/evaluation/assets/** text eol=lf

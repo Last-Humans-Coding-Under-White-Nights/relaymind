@@ -42,11 +42,13 @@ def stage_fixture(root):
 
 
 def read(root, name):
-    return json.loads((root / f"{name}.json").read_text())
+    return json.loads((root / f"{name}.json").read_text(encoding="utf-8"))
 
 
 def write(root, name, document):
-    (root / f"{name}.json").write_text(json.dumps(document, ensure_ascii=False, indent=2))
+    (root / f"{name}.json").write_text(
+        json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n"
+    )
 
 
 def relock(root):
@@ -71,7 +73,9 @@ def test_rm40_ac31_rejects_tampered_linked_original(release_root):
     release = load(release_root)
     assert release.lock["purpose"] == "fixture"
     catalog = read(release_root, "catalog")
-    (release_root / "catalog.json").write_text(json.dumps(catalog, separators=(",", ":")))
+    (release_root / "catalog.json").write_text(
+        json.dumps(catalog, separators=(",", ":")), encoding="utf-8", newline="\n"
+    )
     assert load(release_root).lock["digest"] == release.lock["digest"]
     (release_root / "originals/calendar.md").write_bytes(b"tampered original")
     with pytest.raises(ValueError, match="evidence_digest"):
@@ -1105,7 +1109,7 @@ def test_rm40_ac31_related_lock_path_selects_nested_file_under_explicit_root(
     (child / "lock.json").rename(child / "custom.lock.json")
     # Document refs stay relative to the selected lock, inside the allowed root.
     revise_fixture_release(release_root, 2)
-    child_lock = json.loads((child / "custom.lock.json").read_text())
+    child_lock = json.loads((child / "custom.lock.json").read_text(encoding="utf-8"))
     lock = read(release_root, "lock")
     lock["related_locks"] = [
         {
@@ -1179,12 +1183,12 @@ def test_rm40_ac31_related_paths_can_select_two_explicit_custodian_roots(release
         {
             "id": "first-alias",
             "path": "a.lock.json",
-            "digest": json.loads((one / "a.lock.json").read_text())["digest"],
+            "digest": json.loads((one / "a.lock.json").read_text(encoding="utf-8"))["digest"],
         },
         {
             "id": "second-alias",
             "path": "b.lock.json",
-            "digest": json.loads((two / "b.lock.json").read_text())["digest"],
+            "digest": json.loads((two / "b.lock.json").read_text(encoding="utf-8"))["digest"],
         },
     ]
     write(release_root, "lock", lock)
