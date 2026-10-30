@@ -752,15 +752,36 @@ def test_choice_rejects_changed_identity_even_with_same_original_hash(tmp_path, 
     asyncio.run(go())
 
 
-def test_action_secrets_are_not_persisted_from_request_text(tmp_path):
+@pytest.mark.parametrize("embedded", [False, True])
+def test_action_secrets_are_not_persisted_from_request_text(tmp_path, monkeypatch, embedded):
     """RM12/RM37/AC28: credential header never becomes model/task/event data."""
+
+    from relaymind.selection.asset_lexical import LexicalAssetSelector
+
+    seen = []
+    select = LexicalAssetSelector.select
+
+    async def capture(self, request, context):
+        seen.append(request.to_json_object())
+        return await select(self, request, context)
+
+    monkeypatch.setattr(LexicalAssetSelector, "select", capture)
 
     async def go():
         async with action_client(tmp_path) as (client, app, service, runs, catalog, registry):
-            parent = await client.post(
-                "/relay/v1/recommendations", json=BODY | {"task_text": "hello " + ACTION_TOKEN}
-            )
-            assert parent.status_code == 200
+            bearer = app.state.application_token
+            text = "hello " + ACTION_TOKEN
+            if embedded:
+                text = "hello prefix" + ACTION_TOKEN + "suffix prefix" + bearer + "suffix"
+            body = BODY | {"task_text": text, "conversation": [{"role": "user", "text": text}]}
+            parent = await client.post("/relay/v1/recommendations", json=body)
+            assert parent.status_code == 200, parent.text
+            assert seen
+            assert ACTION_TOKEN not in str(seen)
+            assert bearer not in str(seen)
+            replay = await client.post("/relay/v1/recommendations", json=body)
+            assert replay.content == parent.content
+            assert ACTION_TOKEN not in replay.text and bearer not in replay.text
             with runs.sql_transaction() as db:
                 assert ACTION_TOKEN not in str(
                     [tuple(row) for row in db.execute("SELECT accepted_json FROM recommendations")]

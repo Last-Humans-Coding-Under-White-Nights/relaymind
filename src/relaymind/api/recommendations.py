@@ -240,6 +240,7 @@ def install_recommendation_routes(
                     app.state.application_token,
                     *request.headers.getlist("X-RelayMind-User-Action-Token"),
                 ],
+                whole_tokens=False,
             )
         )
         digest = request_digest("POST", ENDPOINT, None, body)
