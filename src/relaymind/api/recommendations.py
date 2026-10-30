@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
+from starlette.concurrency import run_in_threadpool
 
 from relaymind.api.app import _disconnect, _left, _log_internal
 from relaymind.api.auth import require_bearer_token
@@ -184,7 +185,8 @@ def guarded_route(app: FastAPI, handler, *, authenticate=None):
             require_bearer_token(request.headers.get("authorization"), app.state.application_token)
             if authenticate is None:
                 return await handler(request)
-            return await handler(request, *authenticate(request))
+            action = await run_in_threadpool(authenticate, request)
+            return await handler(request, *action)
         except ApiError as exc:
             error = RecommendationError(
                 exc.code if exc.code in ("unauthenticated", "invalid_request") else "internal_error"

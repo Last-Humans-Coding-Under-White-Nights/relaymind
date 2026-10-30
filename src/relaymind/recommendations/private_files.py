@@ -153,8 +153,11 @@ def create_private_file_exclusive(path: Path, data: bytes) -> bool:
     directory, then hard-linked to the final name, which never replaces an
     existing entry. A crash or a failed write therefore never leaves a
     truncated file under the final name; leftover temporary files from an
-    earlier crash are removed here and are never read.
+    earlier crash are never read or removed here: another creator may still
+    own them. Each call removes only its own temporary entry.
     """
+    if len(data) > MAX_PRIVATE_FILE_BYTES:
+        raise PrivateFileError("private file too large")
     if os.name == "nt":
         from relaymind.recommendations._windows_private_files import create_windows_private_file
 
@@ -162,9 +165,6 @@ def create_private_file_exclusive(path: Path, data: bytes) -> bool:
     try:
         with _parent(path) as (_, parent, name, _):
             prefix = f".{name}.partial-"
-            for entry in os.listdir(parent):
-                if entry.startswith(prefix):
-                    os.unlink(entry, dir_fd=parent)
             temporary = prefix + secrets.token_hex(8)
             descriptor = os.open(
                 temporary,

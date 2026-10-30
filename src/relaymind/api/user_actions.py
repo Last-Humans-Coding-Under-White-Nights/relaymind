@@ -4,6 +4,7 @@ import re
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from relaymind.api.recommendations import (
     guarded_route,
@@ -168,11 +169,18 @@ def install_action_routes(app: FastAPI, service) -> None:
     def feedback_store():
         store = getattr(app.state, "feedback_store", None)
         if store is None:
-            raise RecommendationError("invalid_state")
+            raise RecommendationError("internal_error")
         return store
 
     def guarded(handler):
         return guarded_route(app, handler, authenticate=authenticate)
+
+    async def run_storage(operation, *args, **kwargs):
+        # Take the time in the worker: waiting for dispatch cannot extend expiry.
+        def invoke():
+            return operation(*args, now=service.clock.utc_now(), **kwargs)
+
+        return await run_in_threadpool(invoke)
 
     async def choose(request, action, registrations):
         if request.query_params:
@@ -182,12 +190,12 @@ def install_action_routes(app: FastAPI, service) -> None:
         rid = _id(request.path_params["recommendation_id"])
         endpoint = "/relay/v1/recommendations/{id}/choice"
         claim = _claim(action, "POST", endpoint, rid, key, body)
-        response = service.store.choose(
+        response = await run_storage(
+            service.store.choose,
             action,
             rid,
             body,
             claim,
-            now=service.clock.utc_now(),
             registrations=registrations,
             catalog=service.provider.store,
             policy=service.provider.policy,
@@ -202,7 +210,7 @@ def install_action_routes(app: FastAPI, service) -> None:
         rid = _id(request.path_params["recommendation_id"])
         endpoint = "/relay/v1/recommendations/{id}/feedback"
         claim = _claim(action, "POST", endpoint, rid, key, body)
-        response = feedback_store().create(action, rid, body, claim, now=service.clock.utc_now())
+        response = await run_storage(feedback_store().create, action, rid, body, claim)
         return JSONResponse(response.body, status_code=response.status)
 
     async def list_feedback(request, action, registrations):
@@ -213,11 +221,11 @@ def install_action_routes(app: FastAPI, service) -> None:
             raise RecommendationError("invalid_request")
         query = dict(pairs)
         limit = _decimal(query.get("limit", str(DEFAULT_EVENTS_PAGE)), maximum=MAX_EVENTS_PAGE)
-        page = feedback_store().list(
+        page = await run_storage(
+            feedback_store().list,
             action,
             after_id=query.get("after_id"),
             limit=limit,
-            now=service.clock.utc_now(),
         )
         return JSONResponse(page)
 
@@ -240,9 +248,7 @@ def install_action_routes(app: FastAPI, service) -> None:
             None,
             query={"expected_feedback_revision": revision},
         )
-        response = feedback_store().delete(
-            action, fid, revision, claim, now=service.clock.utc_now()
-        )
+        response = await run_storage(feedback_store().delete, action, fid, revision, claim)
         return JSONResponse(response.body, status_code=response.status)
 
     async def reset_feedback(request, action, registrations):
@@ -254,11 +260,11 @@ def install_action_routes(app: FastAPI, service) -> None:
         key = _key(request)
         endpoint = "/relay/v1/feedback/reset"
         claim = _claim(action, "POST", endpoint, None, key, body)
-        response = feedback_store().reset(
+        response = await run_storage(
+            feedback_store().reset,
             action,
             body["expected_feedback_revision"],
             claim,
-            now=service.clock.utc_now(),
         )
         return JSONResponse(response.body, status_code=response.status)
 

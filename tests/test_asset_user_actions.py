@@ -1206,3 +1206,154 @@ def test_choice_catalog_failure_is_internal_error_not_asset_changed(tmp_path, mo
     assert any(
         "RuntimeError" in record.getMessage() or record.exc_info for record in caplog.records
     )
+
+
+@pytest.mark.parametrize("length", [256, 257])
+def test_registered_action_credential_has_no_identifier_length_cap(tmp_path, monkeypatch, length):
+    """RM37/AC28, section 14.5: the action credential has a minimum, not an ID cap."""
+    import sys
+
+    monkeypatch.setattr(sys.modules[__name__], "ACTION_TOKEN", "a" * length)
+
+    async def go():
+        async with action_client(tmp_path) as (client, *_):
+            response = await client.get("/relay/v1/feedback")
+            assert response.status_code == 200, response.text
+            denied = await client.get(
+                "/relay/v1/feedback", headers={"X-RelayMind-User-Action-Token": "b" * length}
+            )
+            assert denied.status_code == 403, denied.text
+
+    asyncio.run(go())
+
+
+def test_missing_feedback_store_reports_internal_error(tmp_path):
+    """RM37/AC28, section 11.1: backend absence is not a lifecycle conflict."""
+
+    async def go():
+        async with action_client(tmp_path) as (client, app, *_):
+            app.state.feedback_store = None
+            response = await client.get("/relay/v1/feedback")
+            assert response.status_code == 500, response.text
+            assert response.json()["error"]["code"] == "internal_error"
+
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize(
+    "operation", ["authenticate", "choose", "create", "list", "delete", "reset"]
+)
+def test_action_storage_does_not_block_event_loop(tmp_path, monkeypatch, operation):
+    """RM14/RM37/AC28: action I/O must leave the loop free to service cancellation."""
+    from threading import Event
+
+    async def go():
+        async with action_client(tmp_path) as (client, app, service, runs, catalog, registry):
+            parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
+            base = f"/relay/v1/recommendations/{parent['recommendation_id']}"
+            feedback_body = dict(
+                schema_version=1,
+                event_id="loop-progress",
+                expected_feedback_revision=0,
+                feedback=dict(kind="usefulness", value="useful"),
+            )
+            fid = None
+            if operation == "delete":
+                created = await client.post(
+                    base + "/feedback",
+                    json=feedback_body,
+                    headers={"Idempotency-Key": "feedback"},
+                )
+                assert created.status_code == 200, created.text
+                fid = created.json()["feedback_id"]
+            owner = (
+                registry
+                if operation == "authenticate"
+                else service.store
+                if operation == "choose"
+                else app.state.feedback_store
+            )
+            original = getattr(owner, operation)
+            entered, release = Event(), Event()
+            progressed = []
+
+            def stalled(*args, **kwargs):
+                entered.set()
+                progressed.append(release.wait(2))
+                return original(*args, **kwargs)
+
+            monkeypatch.setattr(owner, operation, stalled)
+
+            async def make_request():
+                if operation in ("authenticate", "list"):
+                    return await client.get("/relay/v1/feedback")
+                if operation == "choose":
+                    return await client.post(
+                        base + "/choice",
+                        json=dict(
+                            schema_version=1,
+                            expected_version=parent["state_version"],
+                            choice=dict(kind="none"),
+                        ),
+                    )
+                if operation == "create":
+                    return await client.post(base + "/feedback", json=feedback_body)
+                if operation == "delete":
+                    return await client.delete(
+                        f"/relay/v1/feedback/{fid}?expected_feedback_revision=1"
+                    )
+                return await client.post(
+                    "/relay/v1/feedback/reset",
+                    json=dict(
+                        schema_version=1,
+                        expected_feedback_revision=0,
+                    ),
+                )
+
+            task = asyncio.create_task(make_request())
+            try:
+                assert await asyncio.to_thread(entered.wait, 5)
+                release.set()
+                response = await task
+                assert response.status_code == 200, response.text
+                assert progressed == [True], "storage blocked the event loop"
+            finally:
+                release.set()
+                await task
+
+    asyncio.run(go())
+
+
+def test_choice_expiry_uses_time_after_worker_dispatch(tmp_path, monkeypatch):
+    """RM36/RM37/AC28: waiting for a storage worker cannot extend the choice window."""
+    from helpers import FakeClock
+    from relaymind.api import user_actions
+
+    async def go():
+        clock = FakeClock()
+        async with action_client(tmp_path, clock=clock) as (client, *_):
+            parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
+            dispatch = user_actions.run_in_threadpool
+
+            async def delayed_dispatch(func, *args, **kwargs):
+                clock.advance(601)
+                return await dispatch(func, *args, **kwargs)
+
+            monkeypatch.setattr(user_actions, "run_in_threadpool", delayed_dispatch)
+            response = await client.post(
+                f"/relay/v1/recommendations/{parent['recommendation_id']}/choice",
+                json=dict(
+                    schema_version=1,
+                    expected_version=parent["state_version"],
+                    choice=dict(kind="none"),
+                ),
+            )
+            assert response.status_code == 409, response.text
+            assert response.json()["error"]["code"] == "stale_version"
+            view = (
+                await client.get(f"/relay/v1/recommendations/{parent['recommendation_id']}")
+            ).json()
+            assert view["state"] == "expired"
+            assert view["selected_action"] is None
+
+    asyncio.run(go())

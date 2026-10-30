@@ -28,7 +28,7 @@ def current_asset(catalog, asset_id: str):
 
 
 def offered_record(accepted: Mapping, asset_id: str) -> Mapping | None:
-    """The record as it was offered, from the stored accepted event."""
+    """The record as it was offered, from the internal accepted_json offer payload."""
     return next((asset for asset in accepted["catalog"] if asset["asset_id"] == asset_id), None)
 
 

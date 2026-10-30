@@ -88,14 +88,67 @@ def test_a_failed_key_write_leaves_no_partial_file_and_can_be_retried(tmp_path, 
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
-def test_a_crash_leftover_partial_file_is_cleaned_and_never_used(tmp_path):
+def test_an_unowned_partial_file_is_neither_used_nor_removed(tmp_path):
     from relaymind.recommendations.private_files import create_private_file_exclusive
 
     path = tmp_path / "store.erasure-key"
     leftover = private(tmp_path / ".store.erasure-key.partial-deadbeef", b"kk")
     assert create_private_file_exclusive(path, b"k" * 32) is True
     assert path.read_bytes() == b"k" * 32
-    assert not leftover.exists()
+    assert leftover.read_bytes() == b"kk"
+
+
+def test_concurrent_key_creators_publish_one_complete_key(tmp_path, monkeypatch):
+    """RM37/AC28: a second creator must not unlink an in-flight private key."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from relaymind.recommendations import private_files
+
+    path = tmp_path / "store.erasure-key"
+    writing, release = Event(), Event()
+    write_all = private_files._write_all
+
+    def pause_first(descriptor, data):
+        if data == b"a" * 32:
+            writing.set()
+            assert release.wait(5), "second creator did not finish"
+        write_all(descriptor, data)
+
+    monkeypatch.setattr(private_files, "_write_all", pause_first)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        first = pool.submit(private_files.create_private_file_exclusive, path, b"a" * 32)
+        try:
+            assert writing.wait(5)
+            assert private_files.create_private_file_exclusive(path, b"b" * 32) is True
+        finally:
+            release.set()
+        assert first.result() is False
+    assert path.read_bytes() == b"b" * 32
+    assert [p.name for p in tmp_path.iterdir()] == [path.name]
+
+
+def test_a_matching_partial_directory_is_not_touched(tmp_path):
+    """RM37/AC28: publication owns only the temporary entry it created."""
+    from relaymind.recommendations.private_files import create_private_file_exclusive
+
+    other = tmp_path / ".key.partial-other"
+    other.mkdir()
+    assert create_private_file_exclusive(tmp_path / "key", b"k" * 32) is True
+    assert other.is_dir()
+
+
+def test_oversized_private_file_is_refused_before_creation(tmp_path):
+    """RM37/AC28: never publish a file the bounded private reader cannot read."""
+    from relaymind.recommendations.limits import MAX_PRIVATE_FILE_BYTES
+    from relaymind.recommendations.private_files import (
+        PrivateFileError,
+        create_private_file_exclusive,
+    )
+
+    with pytest.raises(PrivateFileError, match="private file too large"):
+        create_private_file_exclusive(tmp_path / "key", b"k" * (MAX_PRIVATE_FILE_BYTES + 1))
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_an_existing_key_is_never_replaced(tmp_path):

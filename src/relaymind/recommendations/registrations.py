@@ -180,7 +180,7 @@ class ActionRegistrations:
                 )
 
     def authenticate(self, token: str | None, active_scope: dict) -> AuthenticatedAction:
-        if token is None or not token or len(token) > 255 or not token.isascii():
+        if token is None or not token or not token.isascii():
             raise RecommendationError("user_action_required")
         digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
         with self.store.sql_read() as db:
