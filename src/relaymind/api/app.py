@@ -87,6 +87,7 @@ from relaymind.assets.service import AssetCatalogService
 from relaymind.orchestrator.local_loop import LocalOrchestrator, StartedRun
 from relaymind.orchestrator.route_decision import ExecutionMode
 from relaymind.orchestrator.run_state import RunState
+from relaymind.recommendations.service import RecommendationService
 from relaymind.store import IdempotencyKeyTakenError
 from relaymind.ui import UiSettings
 from relaymind.ui.routes import install_ui_routes
@@ -137,6 +138,7 @@ def create_app(
     native: NativeSettings | None = None,
     ui: UiSettings | None = None,
     asset_catalog: "AssetCatalogService | None" = None,
+    recommendations: "RecommendationService | None" = None,
 ) -> FastAPI:
     """The compatible API over one orchestrator.
 
@@ -164,6 +166,8 @@ def create_app(
         probe = IdleProbe(orchestrator, cancel_wait_seconds=native.cancel_wait_seconds)
         app.state.idle_probe = probe
         probe.start()
+        if recommendations is not None:
+            await recommendations.start()
         if asset_catalog is not None:
             asset_catalog.start()
         try:
@@ -173,11 +177,21 @@ def create_app(
                 if asset_catalog is not None:
                     await asset_catalog.stop()
             finally:
-                await probe.stop()
+                try:
+                    if recommendations is not None:
+                        await recommendations.stop()
+                finally:
+                    await probe.stop()
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.application_token = token
     app.state.asset_catalog = asset_catalog
+    app.state.recommendations = recommendations
+    from relaymind.api.recommendations import install_recommendation_routes
+
+    install_recommendation_routes(
+        app, recommendations, configured_scope=recommendations.scope if recommendations else None
+    )
 
     @app.get("/v1/models")
     @_guarded

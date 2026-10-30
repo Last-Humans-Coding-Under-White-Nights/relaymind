@@ -2177,7 +2177,7 @@ The published schemas are
 [`selection_result.v2.json`](../src/relaymind/selection/schemas/selection_result.v2.json)
 and [`recommendation_result.v1.json`](../src/relaymind/store/schemas/recommendation_result.v1.json).
 The internal selector factory is separate from managed `[selection]` v1.
-Recommendation lifecycle endpoints remain #194; useful readiness, startup order
+Recommendation lifecycle endpoints are supplied by #194; operational startup
 and measured update/rebuild/resource gates remain #196. Runtime binding is
 unavailable, and discovery availability remains unknown without qualified host
 evidence.
@@ -2234,13 +2234,108 @@ Both primary and floor keep the original offer. The cache rejects changed
 same-revision policy/availability publication; live policy update wiring is not
 enabled in this component.
 
-The #194 service must create one `SelectionBudget` before envelope preparation,
-pin a compatible `OfferCache` generation before idempotency lookup, and pass
+The #194 service creates one `SelectionBudget` before envelope preparation,
+pins a compatible `OfferCache` generation before idempotency lookup, and passes
 `trusted_scope` and `trusted_permissions` to `select_assets`. These are trusted
 internal keyword arguments, not request authority. Observer events and immutable
-attempts are for its separate lifecycle store. The service must recheck current
-revision/admission and call that same budget's `check_before_commit()` inside its
-atomic ready transition; a returned selection object is not a durable ready
-commit. Call `fence_terminal()` on terminal lifecycle commit and retain ownership
-of resistant work until bounded cleanup observes completion. API lifecycle,
-readiness and startup publication remain #194/#196.
+attempts are in its separate lifecycle store. The service rechecks current
+revision/admission and calls that same budget's `check()` inside its atomic ready
+transition; a returned selection object is not a durable ready commit. It calls
+`fence_terminal()` on terminal lifecycle commit and retains ownership of resistant
+work until bounded cleanup observes completion. Operational startup and
+performance qualification remain #196.
+
+## Recommendation JSON lifecycle (#194; RM36/AC27)
+
+Enable `[recommendations]` with a configured `user_id`, `workspace_id` and at
+least one `[assets]` source, then start the gateway as above. The existing
+application token printed at startup is required as a bearer token on **every**
+recommendation route. The server takes the user/workspace scope from its
+configuration; the client cannot supply or override it. A create request also
+requires exactly one printable `Idempotency-Key` header. The key is scoped to
+the stable application caller, configured user/workspace and create endpoint;
+rotating the bearer token does not change that caller.
+
+These are POSIX-shell examples using the loopback server. Replace
+`<application-token>` with the token printed by `relaymind serve` and use a
+fresh key for a new task. The body is a complete, valid minimal create request:
+
+```bash
+TOKEN='<application-token>'
+curl -sS -X POST 'http://127.0.0.1:8033/relay/v1/recommendations' \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Idempotency-Key: greeting-001' \
+  -H 'Content-Type: application/json' \
+  --data-binary '{"schema_version":1,"task_text":"Find a greeting skill","requested_kinds":["skill"],"selection_scope":"discovery"}' \
+  -o recommendation.json
+python -m json.tool recommendation.json
+```
+
+When computation reaches `ready` or `cancelled`, HTTP 200 returns a closed
+`RecommendationViewV1` JSON object. Accepted failures return the fixed error
+envelope with a `recommendation_id` and HTTP 500, 503 or 504. Read a view's
+generated `recommendation_id`, `state`, `state_version`,
+`catalog_revision`, `decision`, `displayed_candidates`, `result`, `ready_at`,
+`choice_expires_at` and `retain_until`; on a ready view, `result.attempts` and
+`result.primary_attempt` show actual selection work. A successful compatible
+empty catalog gives `decision="empty_catalog"`, `result.attempts=[]` and
+`result.primary_attempt=null`. The request body has no run ID, scope, host
+availability, actor or execution authority. Selection returns proposals only.
+
+Use the ID from that response to read the current view and page stored events:
+
+```bash
+RID=$(python -c 'import json; print(json.load(open("recommendation.json"))["recommendation_id"])')
+curl -sS "http://127.0.0.1:8033/relay/v1/recommendations/$RID" \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+curl -sS "http://127.0.0.1:8033/relay/v1/recommendations/$RID/events?after_seq=0&limit=100" \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+curl -sS 'http://127.0.0.1:8033/relay/v1/recommendations/readiness' \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+```
+
+The events response is JSON with `schema_version`, `recommendation_id`,
+`events`, `next_after_seq` and `has_more`.
+Pass `next_after_seq` as the next `after_seq` while `has_more` is true; there
+is no SSE or long-poll transport. For an authenticated request, readiness is
+always HTTP 200 and reports
+`state`, `reason`, `catalog_revision`, `catalog_size`, `lexical_ready`,
+`semantic_coverage`, `pending_jobs` and `failed_jobs`. `ready` requires a
+compatible lexical generation backed by a committed configured-source success;
+`empty` means a compatible empty generation, and `unavailable` reports
+`disabled`, `no_lexical_generation` or `corrupt_catalog` as applicable. This
+route reports current facts; it is not a startup-speed measurement.
+
+The deterministic one-skill fixture, using the minimal body above, returned
+readiness `state="ready"`, `reason="usable_catalog"`, `catalog_revision=1`,
+`catalog_size=1`; create returned `state="ready"`,
+`decision="choice_required"`, `result.primary_attempt=0`; polling returned
+`accepted`, `selector.started`, `selector.finished`, `ready` in sequence. These
+are fixture observations, not live host or latency evidence.
+
+Repeat the POST with the same key and equivalent defaulted body to retrieve
+the **original status and JSON response**, without another selection. GET by ID
+reports the current lifecycle instead: a ready object's choice window ends
+600 seconds after `ready_at` and GET then reports `expired`, while the POST
+receipt remains the historical ready response. An accepted request disconnected
+while computing is cancelled and records a cancelled view for replay; no reply
+is forced onto the disconnected socket. After restart, an interrupted computing
+object becomes failed once with HTTP 503 on replay and no selector rerun. The
+new startup bearer is required before either lookup. At `retain_until` (30 days
+from creation), the parent, its events and replay receipt are purged together;
+the old key can then start a fresh request.
+
+`selection_scope="runtime"` is currently refused with HTTP 503 before a
+recommendation claim. Missing or unusable catalog generation is also 503 before
+key lookup, including a historical retry. Waiting for the first or a later
+create-body chunk consumes the original authenticated total budget; expiry
+returns HTTP 504 without creating an object or key claim. A dispatched attempt
+that reaches the deadline remains in the final failed event's attempt evidence,
+even if its separate `selector.finished` event missed the deadline. There is no
+public compute-cancel,
+choice, feedback, registration or execution route in #194; those actions and
+explicit privacy controls belong to #195. No choice helper is exposed to a
+model. Useful pre-warmup serving order and measured latency/resource gates
+remain #196. The deterministic checks are in
+`tests/test_recommendation_{api,store,races,recovery}.py`; they do not qualify
+a live host, remote source or model.

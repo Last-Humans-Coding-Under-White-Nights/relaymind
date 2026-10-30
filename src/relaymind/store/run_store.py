@@ -324,6 +324,47 @@ MIGRATIONS: tuple[str, ...] = (
     CREATE UNIQUE INDEX asset_catalog_running_source ON asset_catalog_jobs(source_id)
         WHERE state='running';
     """,
+    """
+    CREATE TABLE recommendation_scope (
+        user_id TEXT NOT NULL, workspace_id TEXT NOT NULL,
+        feedback_revision INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(user_id, workspace_id)
+    );
+    CREATE TABLE recommendations (
+        recommendation_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL, workspace_id TEXT NOT NULL,
+        state TEXT NOT NULL CHECK(
+            state IN ('computing','ready','failed','cancelled','expired','chosen')
+        ),
+        state_version INTEGER NOT NULL,
+        created_at TEXT NOT NULL, retain_until TEXT NOT NULL,
+        view_json TEXT NOT NULL, accepted_json TEXT NOT NULL,
+        active_ms REAL NOT NULL DEFAULT 0
+    );
+    CREATE TABLE recommendation_events (
+        recommendation_id TEXT NOT NULL REFERENCES recommendations ON DELETE CASCADE,
+        seq INTEGER NOT NULL, event_json TEXT NOT NULL,
+        PRIMARY KEY(recommendation_id, seq)
+    );
+    CREATE TABLE recommendation_claims (
+        namespace TEXT NOT NULL, key_digest TEXT NOT NULL,
+        request_digest TEXT NOT NULL,
+        recommendation_id TEXT NOT NULL REFERENCES recommendations ON DELETE CASCADE,
+        status INTEGER, body_json TEXT,
+        PRIMARY KEY(namespace, key_digest)
+    );
+    CREATE TABLE recommendation_slot (
+        singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+        recommendation_id TEXT UNIQUE REFERENCES recommendations ON DELETE CASCADE
+    );
+    INSERT INTO recommendation_slot VALUES(1,NULL);
+    CREATE INDEX recommendation_retention ON recommendations(retain_until);
+    CREATE TABLE asset_index_job_events (
+        job_id TEXT NOT NULL REFERENCES asset_catalog_jobs ON DELETE CASCADE,
+        seq INTEGER NOT NULL, event_json TEXT NOT NULL,
+        PRIMARY KEY(job_id, seq)
+    );
+    """,
 )
 
 

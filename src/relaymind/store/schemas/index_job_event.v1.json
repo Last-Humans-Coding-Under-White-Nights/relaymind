@@ -1,0 +1,403 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaymind.local/schemas/index_job_event.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "job_id",
+    "seq",
+    "timestamp",
+    "event_type",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "job_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "event_type": {
+      "enum": [
+        "queued",
+        "started",
+        "batch.finished",
+        "published",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "payload": {}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "queued"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source_id",
+              "catalog_revision",
+              "config_digest",
+              "job_kind",
+              "budgets"
+            ],
+            "properties": {
+              "source_id": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                ]
+              },
+              "catalog_revision": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "config_digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "job_kind": {
+                "enum": [
+                  "lexical",
+                  "embedding",
+                  "refresh"
+                ]
+              },
+              "budgets": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "max_requests",
+                  "max_records",
+                  "max_received_bytes",
+                  "max_asset_bytes",
+                  "max_metadata_bytes",
+                  "read_buffer_bytes",
+                  "exchange_seconds",
+                  "job_seconds",
+                  "workers",
+                  "cpu_batch_ms",
+                  "background_gpu_with_llama"
+                ],
+                "properties": {
+                  "max_requests": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_records": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_received_bytes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_asset_bytes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_metadata_bytes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "read_buffer_bytes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "exchange_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "job_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "workers": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "cpu_batch_ms": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "background_gpu_with_llama": {
+                    "const": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "started"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "catalog_revision",
+              "index_revision"
+            ],
+            "properties": {
+              "catalog_revision": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "index_revision": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "batch.finished"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "batch",
+              "accepted_count",
+              "rejected_count",
+              "received_bytes",
+              "duration_ms",
+              "embeddings"
+            ],
+            "properties": {
+              "batch": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "accepted_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "rejected_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "received_bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "duration_ms": {
+                "type": "number",
+                "minimum": 0
+              },
+              "embeddings": {
+                "type": "array",
+                "items": {
+                  "$ref": "recommendation_result.v1.json#/properties/embeddings/items"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "published"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "catalog_revision",
+              "index_revision",
+              "accepted_count",
+              "rejected_count",
+              "duration_ms"
+            ],
+            "properties": {
+              "catalog_revision": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "index_revision": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                ]
+              },
+              "accepted_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "rejected_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "duration_ms": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "reason",
+              "duration_ms",
+              "retained_catalog_revision",
+              "received_bytes",
+              "accepted_count",
+              "rejected_count"
+            ],
+            "properties": {
+              "reason": {
+                "enum": [
+                  "interrupted",
+                  "deadline",
+                  "size_limit",
+                  "record_limit",
+                  "request_limit",
+                  "invalid_data",
+                  "source_unavailable",
+                  "index_error"
+                ]
+              },
+              "duration_ms": {
+                "type": "number",
+                "minimum": 0
+              },
+              "retained_catalog_revision": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "received_bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "accepted_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "rejected_count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "cancelled"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "reason",
+              "duration_ms",
+              "retained_catalog_revision"
+            ],
+            "properties": {
+              "reason": {
+                "enum": [
+                  "shutdown",
+                  "operator"
+                ]
+              },
+              "duration_ms": {
+                "type": "number",
+                "minimum": 0
+              },
+              "retained_catalog_revision": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

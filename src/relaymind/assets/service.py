@@ -8,7 +8,7 @@ import asyncio
 import logging
 import math
 import threading
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -36,10 +36,12 @@ class AssetCatalogService:
         *,
         clock: TraceClock | None = None,
         busy: Callable[[], bool] = lambda: False,
+        after_change: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self.settings, self.store = settings, store
         self.clock = clock or TraceClock()
         self.busy = busy
+        self.after_change = after_change
         self._sources = {s.source_id: s for s in settings.sources}
         self._next = dict.fromkeys(self._sources, 0.0)
         self._failures = dict.fromkeys(self._sources, 0)
@@ -201,6 +203,7 @@ class AssetCatalogService:
                 monotonic=self.clock.monotonic,
                 cancelled=lambda: self._cancel.is_set() or self._stopping,
                 observe_busy=self.busy,
+                utc_now=self.clock.utc_now,
             )
             future = self._pending.get(source_id)
             self._active_future = future
@@ -224,11 +227,11 @@ class AssetCatalogService:
                     else float("inf")
                 )
                 self._finish(job_id, context, started, "succeeded", None)
-                if future is not None and not future.done():
-                    future.set_result(result)
             except asyncio.CancelledError:
                 # The thread was drained; record the job, then let the cancel propagate.
                 self._fail(source_id, job_id, context, started, future, SourceFailure("cancelled"))
+                if self.after_change is not None:
+                    await self.after_change()
                 raise
             except Exception as exc:
                 failure = (
@@ -239,6 +242,23 @@ class AssetCatalogService:
                     )
                 )
                 self._fail(source_id, job_id, context, started, future, failure)
+                if self.after_change is not None:
+                    await self.after_change()
+            else:
+                # Publication and its job evidence are already committed. A
+                # derived-cache observer has separate ownership and cannot
+                # convert successful acquisition into a source failure.
+                try:
+                    if self.after_change is not None:
+                        await self.after_change()
+                except asyncio.CancelledError:
+                    if future is not None and not future.done():
+                        future.set_result(result)
+                    raise
+                except Exception:
+                    _LOGGER.exception("asset catalog derived preparation failed")
+                if future is not None and not future.done():
+                    future.set_result(result)
             finally:
                 self._active_future = None
                 if future is not None and self._pending.get(source_id) is future:
@@ -265,7 +285,14 @@ class AssetCatalogService:
             source_id, utc_iso(self.clock.utc_now() + timedelta(seconds=delay))
         )
         state = "cancelled" if failure.reason == "cancelled" else "failed"
-        self._finish(job_id, context, started, state, failure.reason)
+        context.rejected_count = failure.rejected_count
+        self._finish(
+            job_id,
+            context,
+            started,
+            state,
+            "shutdown" if state == "cancelled" and self._stopping else failure.reason,
+        )
         if future is not None and not future.done():
             future.set_exception(failure)
 
@@ -281,6 +308,10 @@ class AssetCatalogService:
             received_bytes=context.received_bytes,
             batch_ms=tuple(context.batch_durations_ms),
             overlap_observed=context.busy_observed_at is not None,
+            batches=tuple(context.batch_observations),
+            accepted_count=sum(b["accepted_count"] for b in context.batch_observations)
+            + context.batch_records,
+            rejected_count=context.rejected_count,
             drain_ms=None
             if context.busy_observed_at is None
             else max(0, (now - context.busy_observed_at) * 1000),

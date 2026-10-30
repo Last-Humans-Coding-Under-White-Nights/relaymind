@@ -12,7 +12,7 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -90,6 +90,10 @@ class CaptureContext:
     batch_durations_ms: list[float] = field(default_factory=list)
     batch_started: float = field(init=False)
     batch_records: int = 0
+    batch_observations: list[dict] = field(default_factory=list)
+    batch_bytes: int = 0
+    rejected_count: int = 0
+    utc_now: Callable[[], datetime] = lambda: datetime.now(UTC)
     deadline: float = field(init=False)
 
     def __post_init__(self) -> None:
@@ -127,7 +131,18 @@ class CaptureContext:
     def finish_batch(self) -> None:
         if self.batch_records:
             now = self.monotonic()
-            self.batch_durations_ms.append(max(0, (now - self.batch_started) * 1000))
+            duration = max(0, (now - self.batch_started) * 1000)
+            self.batch_durations_ms.append(duration)
+            self.batch_observations.append(
+                dict(
+                    timestamp=utc_iso(self.utc_now()),
+                    accepted_count=self.batch_records,
+                    rejected_count=0,
+                    received_bytes=self.received_bytes - self.batch_bytes,
+                    duration_ms=duration,
+                )
+            )
+            self.batch_bytes = self.received_bytes
             self.batch_started = now
             self.batch_records = 0
 

@@ -579,6 +579,7 @@ def build_app(
         )
         report = orchestrator.recover_after_restart()
         catalog = None
+        recommendations = None
         if config.recommendations.enabled:
             catalog = AssetCatalogService(
                 config.assets,
@@ -587,6 +588,26 @@ def build_app(
                     store.active_run_id() is not None or store.probe_reservation() is not None
                 ),
             )
+            from relaymind.recommendations.service import CatalogProvider, RecommendationService
+            from relaymind.store.recommendations import RecommendationStore
+
+            provider = CatalogProvider(
+                catalog.store,
+                config.assets,
+                scope=dict(
+                    user_id=config.recommendations.user_id,
+                    workspace_id=config.recommendations.workspace_id,
+                ),
+                permissions=tuple(sorted(config.permissions)),
+            )
+            recommendations = RecommendationService(
+                RecommendationStore(store),
+                provider,
+                config.recommendations,
+                redactor=orchestrator.redactor,
+            )
+            recommendations.recover()
+            catalog.after_change = recommendations.refresh_catalog
         ui = None if config.ui is None else replace(config.ui, fixtures=sandbox)
         app = create_app(
             orchestrator=orchestrator,
@@ -595,6 +616,7 @@ def build_app(
             native=config.native,
             ui=ui,
             asset_catalog=catalog,
+            recommendations=recommendations,
         )
         return Launched(
             app=app,

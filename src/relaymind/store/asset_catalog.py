@@ -25,6 +25,7 @@ from relaymind.assets.catalog import (
 from relaymind.canonical import canonical_json
 from relaymind.redaction import Redactor
 from relaymind.schema_util import freeze_json
+from relaymind.store.recommendation_event import validate_job_event
 from relaymind.store.run_store import RunStore, utc_iso
 
 # The snapshot-visible source fields. Observation times (captured_at,
@@ -526,6 +527,35 @@ class AssetCatalogStore:
                 (utc_iso(self.store.clock.utc_now()),),
             )
 
+    def _job_event(self, connection, job_id, event_type, payload, *, timestamp=None):
+        seq = connection.execute(
+            "SELECT COALESCE(MAX(seq),0)+1 FROM asset_index_job_events WHERE job_id=?", (job_id,)
+        ).fetchone()[0]
+        event = validate_job_event(
+            dict(
+                schema_version=1,
+                job_id=job_id,
+                seq=seq,
+                timestamp=timestamp or utc_iso(self.store.clock.utc_now()),
+                event_type=event_type,
+                payload=payload,
+            )
+        )
+        connection.execute(
+            "INSERT INTO asset_index_job_events VALUES(?,?,?)", (job_id, seq, canonical_json(event))
+        )
+
+    def job_events(self, job_id: str) -> tuple[Mapping, ...]:
+        """Actual evidence only; legacy jobs may have unavailable initial history."""
+        with self.store.sql_transaction() as connection:
+            return tuple(
+                validate_job_event(json.loads(row[0]))
+                for row in connection.execute(
+                    "SELECT event_json FROM asset_index_job_events WHERE job_id=? ORDER BY seq",
+                    (job_id,),
+                )
+            )
+
     def begin_job(self, source_id: str, config_digest: str) -> str:
         job_id = "assetjob_" + uuid.uuid4().hex
         with self.store.sql_transaction() as connection:
@@ -541,6 +571,34 @@ class AssetCatalogStore:
                 "UPDATE asset_catalog_sources SET next_attempt_at=NULL WHERE source_id=?",
                 (source_id,),
             )
+            revision = connection.execute("SELECT revision FROM asset_catalog_meta").fetchone()[0]
+            self._job_event(
+                connection,
+                job_id,
+                "queued",
+                dict(
+                    source_id=source_id,
+                    catalog_revision=revision,
+                    config_digest=config_digest,
+                    job_kind="refresh",
+                    budgets=dict(
+                        max_requests=1000,
+                        max_records=1000,
+                        max_received_bytes=100 * 1024 * 1024,
+                        max_asset_bytes=10 * 1024 * 1024,
+                        max_metadata_bytes=4 * 1024 * 1024,
+                        read_buffer_bytes=1024 * 1024,
+                        exchange_seconds=10,
+                        job_seconds=60,
+                        workers=1,
+                        cpu_batch_ms=50,
+                        background_gpu_with_llama=False,
+                    ),
+                ),
+            )
+            self._job_event(
+                connection, job_id, "started", dict(catalog_revision=revision, index_revision=None)
+            )
         return job_id
 
     def finish_job(
@@ -554,10 +612,87 @@ class AssetCatalogStore:
         batch_ms: tuple[float, ...] = (),
         overlap_observed: bool = False,
         drain_ms: float | None = None,
+        batches: tuple[Mapping, ...] = (),
+        accepted_count: int = 0,
+        rejected_count: int = 0,
     ) -> None:
         if state not in ("succeeded", "failed", "cancelled"):
             raise ValueError("invalid_job_state")
         with self.store.sql_transaction() as connection:
+            row = connection.execute(
+                "SELECT state FROM asset_catalog_jobs WHERE job_id=?", (job_id,)
+            ).fetchone()
+            if row is None or row["state"] != "running":
+                return
+            for index, batch in enumerate(batches, 1):
+                self._job_event(
+                    connection,
+                    job_id,
+                    "batch.finished",
+                    dict(
+                        batch=index,
+                        accepted_count=batch["accepted_count"],
+                        rejected_count=batch["rejected_count"],
+                        received_bytes=batch["received_bytes"],
+                        duration_ms=batch["duration_ms"],
+                        embeddings=[],
+                    ),
+                    timestamp=batch["timestamp"],
+                )
+            revision = connection.execute("SELECT revision FROM asset_catalog_meta").fetchone()[0]
+            if state == "succeeded":
+                self._job_event(
+                    connection,
+                    job_id,
+                    "published",
+                    dict(
+                        catalog_revision=revision,
+                        index_revision=None,
+                        accepted_count=accepted_count,
+                        rejected_count=rejected_count,
+                        duration_ms=duration_ms,
+                    ),
+                )
+            elif state == "cancelled":
+                self._job_event(
+                    connection,
+                    job_id,
+                    "cancelled",
+                    dict(
+                        reason=reason if reason in ("shutdown", "operator") else "operator",
+                        duration_ms=duration_ms,
+                        retained_catalog_revision=revision,
+                    ),
+                )
+            else:
+                safe_reason = (
+                    reason
+                    if reason
+                    in (
+                        "interrupted",
+                        "deadline",
+                        "size_limit",
+                        "record_limit",
+                        "request_limit",
+                        "invalid_data",
+                        "source_unavailable",
+                        "index_error",
+                    )
+                    else "index_error"
+                )
+                self._job_event(
+                    connection,
+                    job_id,
+                    "failed",
+                    dict(
+                        reason=safe_reason,
+                        duration_ms=duration_ms,
+                        retained_catalog_revision=revision,
+                        received_bytes=received_bytes,
+                        accepted_count=accepted_count,
+                        rejected_count=rejected_count,
+                    ),
+                )
             connection.execute(
                 "UPDATE asset_catalog_jobs SET state=?,reason=?,duration_ms=?,"
                 "received_bytes=?,finished_at=?,batch_ms_json=?,overlap_observed=?,drain_ms=? "
@@ -596,11 +731,28 @@ class AssetCatalogStore:
     def recover_interrupted_jobs(self) -> int:
         with self.store.sql_transaction() as connection:
             rows = connection.execute(
-                "SELECT job_id,source_id FROM asset_catalog_jobs WHERE state='running'"
+                "SELECT job_id,source_id,duration_ms,received_bytes FROM asset_catalog_jobs "
+                "WHERE state='running'"
             ).fetchall()
             for row in rows:
                 self._record_failure(
                     connection, row["source_id"], 0, failure_exclusions("interrupted")
+                )
+                revision = connection.execute("SELECT revision FROM asset_catalog_meta").fetchone()[
+                    0
+                ]
+                self._job_event(
+                    connection,
+                    row["job_id"],
+                    "failed",
+                    dict(
+                        reason="interrupted",
+                        duration_ms=row["duration_ms"] or 0,
+                        retained_catalog_revision=revision,
+                        received_bytes=row["received_bytes"],
+                        accepted_count=0,
+                        rejected_count=0,
+                    ),
                 )
                 connection.execute(
                     "UPDATE asset_catalog_jobs SET state='interrupted',reason='interrupted',"

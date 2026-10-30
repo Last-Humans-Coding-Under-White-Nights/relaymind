@@ -48,8 +48,8 @@ codebase.
 
 ## M10 ownership (spec 0.51; #187, #192)
 
-The independent catalog discovery core above is implemented by #192. Remaining
-components below are planned and must not be described as implemented.
+The independent catalog discovery core above is implemented by #192 and the
+recommendation lifecycle/API below by #194. Other components remain planned.
 The user explicitly authorized implementation on the reviewed specification PR
 stack before #187 merges; each implementation issue still needs its RM/AC
 mapping. Merges remain user-owned. Contracts are in spec sections
@@ -61,7 +61,7 @@ spec section 1. Managed selection v1 (AC22) and the provider and host contract
 | Planned path | Owner and requirements |
 | --- | --- |
 | `src/relaymind/assets/`, `store/asset_catalog.py` future extensions | Useful lexical index/readiness and qualified external refresh remain #196/#203; RM38, RM43; AC29, AC34. The independent discovery core is listed above. |
-| `src/relaymind/api/recommendations.py`, `store/recommendations.py`, separate store schemas | Independent recommendation lifecycle, events, idempotency, and recovery; RM36, AC27. TraceEvent stays at v1; no invented run ID. |
+| `src/relaymind/api/recommendations.py`, `recommendations/service.py`, `store/recommendations.py`, separate store schemas | Implemented #194: independent recommendation lifecycle, JSON polling, readiness, events, idempotency, recovery and expiry; RM36, AC27. TraceEvent stays at v1; no invented run ID. |
 | `src/relaymind/api/user_actions.py`, `store/asset_feedback.py` | Operator-registered backend action authentication; choice and feedback each updated by their own compare-and-set (CAS); retention and erasure; RM37, AC28. No public self-enrollment of credentials; only explicit corrections feed adaptation. |
 | `src/relaymind/selection/asset_hybrid.py`, `asset_adaptation.py` | Local pinned hybrid selector and bounded, reversible correction adaptation; RM41, RM42; AC32, AC33. Inference and its cost, and the base and final ranks, are recorded separately. |
 | `src/relaymind/evaluation/asset_corpus.py`, `asset_benchmark.py`, `evaluation/assets/`, `scripts/asset_selection_benchmark.py` | Original multilingual corpus locks, independent labels, and one shared run and compare protocol; RM40, RM44; AC31, AC36, AC37. Toy data cannot pass final gates. |
