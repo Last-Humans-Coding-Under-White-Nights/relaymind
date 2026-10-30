@@ -435,11 +435,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Specification 0.51 → 0.52 (#187; RM24, RM34, RM38): section 14.5 defines the
-  offer projection cache. A stale, availability or eligibility change increments
-  catalog_revision (section 4.6), so a result on an older offer is stale; a
-  capture-time-only observation keeps the revision. Projections key
+  offer projection cache, and section 4.6 now says a stale, availability or
+  eligibility change is a changed committed generation that increments
+  catalog_revision, so a result on an older offer is stale; a capture-time-only
+  observation keeps the revision. Projections key catalog_revision,
   selection_scope and the requested_kinds set (section 10), and a missing usable
-  generation fails create before the idempotency claim (section 7.6). Wire schemas
+  generation fails a create request before the idempotency claim (section 7.6). Wire schemas
   are unchanged. Specification change only; no product code.
 
 - Documentation brought up to date with M9 at #139: the spec version and
