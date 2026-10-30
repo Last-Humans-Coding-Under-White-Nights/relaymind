@@ -7,9 +7,10 @@ failure is one explicit ``LaunchError`` message, never a traceback.
 Restart recovery (section 5) runs exactly once, after the orchestrator
 is built and before the server accepts a run. The warm-up of the local
 model (``placement.warmup``, section 6) and its detection (``placement.detect``,
-RM26) are a separate step, ``warm_up_gateway``, that ``main`` runs after
-recovery and before the address and the token are printed; building the app
-never sends a generation. The local_model table is optional (RM26): without
+RM26) use one async core. Disabled recommendations retain synchronous warm-up
+before serving; enabled launchers run its owned task on the serving loop only
+after the listener opens (RM38). Building the app never sends a generation.
+The local_model table is optional (RM26): without
 it the gateway runs without a local model, allowed_modes defaults to auto and
 external_only, and the selector chain to example_match.
 
@@ -22,6 +23,7 @@ written nowhere else.
 
 import argparse
 import asyncio
+import logging
 import math
 import sqlite3
 import sys
@@ -61,7 +63,7 @@ from relaymind.assets.settings import (
 )
 from relaymind.orchestrator.budgets import LocalBudgets
 from relaymind.orchestrator.local_loop import ConfiguredModel, LocalOrchestrator
-from relaymind.orchestrator.local_status import LocalStatus
+from relaymind.orchestrator.local_status import LocalModelClass, LocalStatus
 from relaymind.orchestrator.performance import PerformanceSettings
 from relaymind.orchestrator.placement import PlacementSettings
 from relaymind.orchestrator.prefetch import PrefetchBudgetError, check_prefetch_budgets
@@ -624,9 +626,12 @@ def build_app(
                 config.assets,
                 recommendations.provider.store,
                 busy=lambda: (
-                    store.active_run_id() is not None or store.probe_reservation() is not None
+                    orchestrator.local_startup_pending
+                    or store.active_run_id() is not None
+                    or store.probe_reservation() is not None
                 ),
                 after_change=recommendations.refresh_catalog,
+                index_lifecycle=recommendations.provider.lifecycle,
             )
             from relaymind.store.asset_feedback import AssetFeedbackStore
 
@@ -648,7 +653,7 @@ def build_app(
         )
         app.state.action_registrations = registrations
         app.state.feedback_store = feedback
-        return Launched(
+        launched = Launched(
             app=app,
             orchestrator=orchestrator,
             recovered=len(report.runs),
@@ -657,6 +662,14 @@ def build_app(
             if config.recommendations.enabled
             else None,
         )
+        app.state.startup_warmup = (
+            _ServingWarmup(config, launched)
+            if config.recommendations.enabled
+            and local is not None
+            and (config.warmup or config.detect)
+            else None
+        )
+        return launched
     except RecoveryError as exc:
         store.close()
         raise LaunchError(f"restart recovery failed: {exc}") from exc
@@ -668,7 +681,7 @@ def build_app(
 # -- the warm-up --------------------------------------------------------------------
 
 
-def warm_up_gateway(
+async def warm_up_gateway_async(
     config: LauncherConfig,
     launched: Launched,
     *,
@@ -676,8 +689,9 @@ def warm_up_gateway(
 ) -> Launched:
     """Classify and warm up the local model, once (RM26, section 6).
 
-    Called by ``main`` after restart recovery and before the address and the
-    token are printed. It creates no run. With placement.detect true the
+    The disabled-startup wrapper calls this after recovery and before serving;
+    enabled startup awaits it on the serving loop after the listener opens.
+    It creates no run. With placement.detect true the
     local model is checked first and its class is set on the orchestrator
     (unavailable or unsuitable when it cannot run or cannot help); with
     detect false only the warm-up runs, as before spec 0.31. The timings are
@@ -714,11 +728,100 @@ def warm_up_gateway(
             if owned:
                 await adapter.aclose()
 
-    # The catalog worker starts only with the served app's lifespan, after this.
-    status, result = asyncio.run(work())
+    status, result = await work()
     if status is not None:
         launched.orchestrator.set_local_status(status)
+    elif result is not None and not result.ready and config.recommendations.enabled:
+        launched.orchestrator.set_local_status(
+            LocalStatus(LocalModelClass.UNAVAILABLE, result.detail or "startup warm-up failed")
+        )
     return replace(launched, warmup=result)
+
+
+def warm_up_gateway(
+    config: LauncherConfig,
+    launched: Launched,
+    *,
+    sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
+) -> Launched:
+    """Disabled-recommendation startup retains its synchronous warm-up order."""
+    return asyncio.run(warm_up_gateway_async(config, launched, sleep=sleep))
+
+
+class _ServingWarmup:
+    """One serving-loop task, signalled only after the transport is listening (RM38)."""
+
+    def __init__(self, config: LauncherConfig, launched: Launched):
+        self.config, self.launched = config, launched
+        self.task: asyncio.Task | None = None
+        self._closing = False
+        self._cancel_requested = False
+        self._completed = False
+        self._generation = object()
+        self.report: Callable[[Launched], None] = lambda result: None
+        launched.orchestrator.local_startup_pending = True
+
+    def prepare(self) -> None:
+        """Arm one lifespan before probes or background work can dispatch."""
+        if self._closing:
+            if self.task is not None and not self.task.done():
+                raise RuntimeError("the previous startup check has not drained")
+            self.task = None
+            self._cancel_requested = False
+            self._completed = False
+            self._generation = object()
+            self._closing = False
+        if self.task is None:
+            self.launched.orchestrator.local_startup_pending = True
+
+    def start(self) -> None:
+        if not self._closing and self.task is None:
+            self.task = asyncio.create_task(self._run(), name="gateway-startup-warmup")
+
+    async def _run(self) -> None:
+        try:
+            self.launched = await warm_up_gateway_async(self.config, self.launched)
+            self._completed = True
+        except BaseException as exc:
+            self.launched.orchestrator.set_local_status(
+                LocalStatus(LocalModelClass.UNAVAILABLE, "the startup model check did not finish")
+            )
+            if isinstance(exc, asyncio.CancelledError):
+                raise
+            logging.getLogger(__name__).error("startup model check failed: %s", type(exc).__name__)
+        finally:
+            self.launched.orchestrator.local_startup_pending = False
+        self.report(self.launched)
+
+    async def stop(self) -> None:
+        generation = self._generation
+        self._closing = True
+        task = self.task
+        interrupted = False
+        try:
+            if task is not None:
+                if not task.done() and not self._cancel_requested:
+                    self._cancel_requested = True
+                    task.cancel()
+                while not task.done():
+                    try:
+                        await asyncio.shield(task)
+                    except asyncio.CancelledError:
+                        current = asyncio.current_task()
+                        interrupted = interrupted or bool(current and current.cancelling())
+        finally:
+            # A task cancelled before its coroutine starts has no finally of
+            # its own. The owner still clears its fence after the shared drain.
+            if self._generation is generation and (task is None or task.done()):
+                if not self._completed:
+                    self.launched.orchestrator.set_local_status(
+                        LocalStatus(
+                            LocalModelClass.UNAVAILABLE, "the startup model check did not finish"
+                        )
+                    )
+                self.launched.orchestrator.local_startup_pending = False
+        if interrupted:
+            raise asyncio.CancelledError
 
 
 # -- the command --------------------------------------------------------------------
@@ -784,24 +887,34 @@ def main(
         stdout(
             f"Ended {launched.recovered} unfinished run(s) from an earlier process as interrupted."
         )
+
     # Section 14.1: after recovery, before the socket. A runtime that is not ready in time
     # is one printed line, not a startup error (section 6).
-    launched = warm_up_gateway(config, launched)
-    if launched.warmup is not None:
-        if launched.warmup.ready:
-            stdout(launched.warmup.summary())
-        else:
-            stderr(f"relaymind: local warm-up did not finish: {launched.warmup.detail}")
-    # RM26: one line names the class and the cause when the local model cannot run or help.
-    local = launched.orchestrator.local_status
-    if not local.usable:
-        stdout(local.line())
+    def report_warmup(result: Launched) -> None:
+        if result.warmup is not None:
+            if result.warmup.ready:
+                stdout(result.warmup.summary())
+            else:
+                stderr(f"relaymind: local warm-up did not finish: {result.warmup.detail}")
+        local = result.orchestrator.local_status
+        if not local.usable:
+            stdout(local.line())
+
+    startup = launched.app.state.startup_warmup
+    if startup is None:
+        launched = warm_up_gateway(config, launched)
+        report_warmup(launched)
+    else:
+        startup.report = report_warmup
     host = validate_bind_host(config.host)
     url_host = f"[{host}]" if ":" in host else host
     stdout(f"Serving on http://{url_host}:{config.port}")
     # The one place the token is written (RM12, section 14.1).
     stdout(f"Application token: {launched.app.state.application_token}")
-    serve_fn(launched.app, host=config.host, port=config.port)
+    if startup is None:
+        serve_fn(launched.app, host=config.host, port=config.port)
+    else:
+        serve_fn(launched.app, host=config.host, port=config.port, on_started=startup.start)
     return 0
 
 

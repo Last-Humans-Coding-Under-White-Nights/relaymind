@@ -30,12 +30,12 @@ _HAN_CHAR = re.compile(f"[{_HAN}]")
 IMPLEMENTATION = "lexical/1:nfc-casefold-han-bigrams/1"
 
 
-def tokenize(value: str) -> frozenset[str]:
+def _token_batches(value: str):
     result = set()
     # Split mixed Han/Latin segments explicitly, while keeping other letters/numbers.
     value = unicodedata.normalize("NFC", value).casefold()
     run, han = "", None
-    for char in value + " ":
+    for position, char in enumerate(value + " ", 1):
         category = "han" if _HAN_CHAR.fullmatch(char) else "word" if char.isalnum() else None
         if category != han or category is None:
             if run:
@@ -48,6 +48,16 @@ def tokenize(value: str) -> frozenset[str]:
         if category is not None:
             run += char
         han = category
+        if position % 512 == 0:
+            yield result
+            result = set()
+    yield result
+
+
+def tokenize(value: str) -> frozenset[str]:
+    result = set()
+    for batch in _token_batches(value):
+        result.update(batch)
     return frozenset(result)
 
 
@@ -71,6 +81,32 @@ def record_fields(record: AssetRecord) -> tuple[tuple[str, frozenset[str]], ...]
     return tuple((key, tokenize(value)) for key, value in values.items())
 
 
+async def _yield(context: SelectorContext) -> None:
+    context.check()
+    if context.yield_control is None:
+        await asyncio.sleep(0)
+    else:
+        await context.yield_control()
+    context.check()
+
+
+async def _publication_fields(record: AssetRecord, context: SelectorContext) -> tuple:
+    if context.yield_control is None:
+        return record_fields(record)
+    values = [("/description", record.description)]
+    keys = ("package_id",) if record.kind == "skill" else ("server_id", "tool_name", "exposed_name")
+    values.extend((f"/identity/{key}", record.identity[key]) for key in keys)
+    fields = []
+    for pointer, value in values:
+        tokens = set()
+        for batch in _token_batches(value):
+            context.check()
+            tokens.update(batch)
+            await _yield(context)
+        fields.append((pointer, frozenset(tokens)))
+    return tuple(fields)
+
+
 async def build_lexical_index(
     catalog_revision: int,
     records: Sequence[AssetRecord],
@@ -82,6 +118,8 @@ async def build_lexical_index(
 ) -> LexicalIndex:
     """An index over records; a publisher passes bytes, digest and fields it already has."""
     context.check()
+    if context.yield_control is not None:
+        await _yield(context)
     fields = {}
     for i, record in enumerate(records):
         context.check()
@@ -89,7 +127,7 @@ async def build_lexical_index(
             tokenized[record.asset_id] if tokenized is not None else record_fields(record)
         )
         if (i + 1) % 25 == 0:
-            await asyncio.sleep(0)
+            await _yield(context)
     if catalog_bytes is None:
         catalog_bytes = canonical_json([r.to_json_object() for r in records]).encode("utf-8")
     if digest is None:
@@ -176,6 +214,14 @@ class LexicalAssetSelector:
         )
 
 
+@dataclass(frozen=True)
+class PreparedOffers:
+    catalog_revision: int
+    records: tuple[AssetRecord, ...]
+    offers: Mapping[tuple[str, ...], PublishedOffer]
+    epoch: int
+
+
 class OfferCache:
     """Explicit compatible-publication primitive; get never rebuilds missing data.
 
@@ -197,7 +243,7 @@ class OfferCache:
         self._offers = {}
         self._revision = None
 
-    async def publish(
+    async def prepare(
         self,
         snapshot: CatalogSnapshot,
         *,
@@ -206,7 +252,7 @@ class OfferCache:
         policy: Callable[[AssetRecord], bool],
         context: SelectorContext,
         catalog_revision: int | None = None,
-    ) -> None:
+    ) -> PreparedOffers:
         # Prepare beside the last compatible publication. An explicit
         # invalidate still fences it when authoritative state changes.
         self._epoch += 1
@@ -231,9 +277,9 @@ class OfferCache:
                 records.append(record)
                 encoded[record.asset_id] = data
                 frozen[record.asset_id] = freeze_json(record.to_json_object())
-                tokenized[record.asset_id] = record_fields(record)
+                tokenized[record.asset_id] = await _publication_fields(record, context)
             if (i + 1) % 25 == 0:
-                await asyncio.sleep(0)
+                await _yield(context)
         records = tuple(records)
         if (
             self._last_revision is not None
@@ -274,14 +320,27 @@ class OfferCache:
                 MappingProxyType({r.asset_id: frozen[r.asset_id] for r in eligible}),
             )
         context.check()
+        if self._epoch != epoch:
+            raise AttemptFailure("unavailable", "selector_unavailable")
+        return PreparedOffers(snapshot.catalog_revision, records, MappingProxyType(prepared), epoch)
+
+    def install(self, prepared: PreparedOffers) -> None:
+        """Publish prepared immutable offers only after their authoritative metadata commits."""
         if (
-            self._epoch != epoch
+            self._epoch != prepared.epoch
             or self._current_revision is not None
-            and self._current_revision() != snapshot.catalog_revision
+            and self._current_revision() != prepared.catalog_revision
         ):
             raise AttemptFailure("unavailable", "selector_unavailable")
-        self._offers, self._revision = prepared, snapshot.catalog_revision
-        self._last_revision, self._last_records = snapshot.catalog_revision, records
+        self._offers, self._revision = prepared.offers, prepared.catalog_revision
+        self._last_revision, self._last_records = prepared.catalog_revision, prepared.records
+
+    async def publish(self, snapshot: CatalogSnapshot, **options) -> None:
+        """Restore/rebuild one already-committed compatible generation."""
+        guard = options.pop("before_install", lambda: None)
+        prepared = await self.prepare(snapshot, **options)
+        guard()
+        self.install(prepared)
 
     def get(
         self, selection_scope: str, requested_kinds: Sequence[str], *, catalog_revision: int

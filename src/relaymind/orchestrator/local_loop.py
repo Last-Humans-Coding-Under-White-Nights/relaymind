@@ -880,6 +880,7 @@ class LocalOrchestrator:
         """
         self.model = model
         self._local_status = self._checked_status(local_status)
+        self.local_startup_pending = False
         # The last measured unsuitable class: a model that comes back from unavailable
         # is unsuitable again until a measurement says otherwise (RM26).
         self._unsuitable: LocalStatus | None = (
@@ -987,6 +988,8 @@ class LocalOrchestrator:
         local stages kept running out of local time is unsuitable (RM26, spec 0.48
         section 14.4.7).
         """
+        if self.local_startup_pending:
+            return LocalStatus(LocalModelClass.UNAVAILABLE, "the startup model check is pending")
         if (
             not (self.detect and self.detect_stages)
             or self.model is None
@@ -1016,7 +1019,7 @@ class LocalOrchestrator:
         loaded is unavailable; one that answers again with the model loaded
         is used again, and a model last measured unsuitable is unsuitable again.
         """
-        if not self.detect or self.model is None:
+        if not self.detect or self.model is None or self.local_startup_pending:
             return
         current = self._local_status.status
         if current == LocalModelClass.UNAVAILABLE and available and warm:

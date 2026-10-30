@@ -429,6 +429,17 @@ MIGRATIONS: tuple[str, ...] = (
         singleton INTEGER PRIMARY KEY CHECK(singleton=1), binding TEXT NOT NULL
     );
     """,
+    # RM38/AC29: durable compatibility/eligibility of the published lexical generation.
+    """
+    CREATE TABLE asset_lexical_generation (
+        singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+        catalog_revision INTEGER NOT NULL CHECK(catalog_revision>=0),
+        asset_ids_json TEXT NOT NULL,
+        eligible_ids_json TEXT NOT NULL,
+        representation TEXT NOT NULL,
+        config_digest TEXT NOT NULL
+    );
+    """,
 )
 
 

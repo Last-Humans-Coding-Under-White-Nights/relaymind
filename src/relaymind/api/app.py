@@ -170,12 +170,18 @@ def create_app(
         # order, and one failing stop never skips the others.
         async with AsyncExitStack() as components:
             components.push_async_callback(probe.stop)
-            probe.start()
             if recommendations is not None:
                 components.push_async_callback(recommendations.stop)
-                await recommendations.start()
             if asset_catalog is not None:
                 components.push_async_callback(asset_catalog.stop)
+            startup_warmup = getattr(app.state, "startup_warmup", None)
+            if startup_warmup is not None:
+                components.push_async_callback(startup_warmup.stop)
+                startup_warmup.prepare()
+            probe.start()
+            if recommendations is not None:
+                await recommendations.start()
+            if asset_catalog is not None:
                 asset_catalog.start()
             yield
 

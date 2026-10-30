@@ -8,7 +8,7 @@ import copy
 import hashlib
 import math
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any, Protocol
@@ -267,6 +267,7 @@ def parse_recommendation_result(value: object) -> RecommendationSelectionResult:
 class SelectorContext:
     clock: Callable[[], float]
     check: Callable[[], None]
+    yield_control: Callable[[], Awaitable[None]] | None = None
 
 
 class AssetSelector(Protocol):

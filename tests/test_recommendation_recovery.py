@@ -156,7 +156,9 @@ def test_production_source_observer_publishes_cache_and_actual_job_events(tmp_pa
         assert service.readiness()["state"] == "empty"
         jobs = catalog.job_outcomes()
         events = catalog.job_events(jobs[0]["job_id"])
-        assert [e["event_type"] for e in events] == ["queued", "started", "published"]
+        assert [e["event_type"] for e in events[:2]] == ["queued", "started"]
+        assert events[-1]["event_type"] == "published"
+        assert all(e["event_type"] == "batch.finished" for e in events[2:-1])
         for e in events:
             validate_job_event(e)
         from test_asset_sources import skill
@@ -166,13 +168,11 @@ def test_production_source_observer_publishes_cache_and_actual_job_events(tmp_pa
         assert service.readiness()["state"] == "ready"
         jobs = catalog.job_outcomes()
         events = catalog.job_events(jobs[0]["job_id"])
-        assert [e["event_type"] for e in events] == [
-            "queued",
-            "started",
-            "batch.finished",
-            "published",
-        ]
-        batch = events[2]["payload"]
+        assert [e["event_type"] for e in events[:2]] == ["queued", "started"]
+        assert events[-1]["event_type"] == "published"
+        assert all(e["event_type"] == "batch.finished" for e in events[2:-1])
+        assert sum(e["payload"]["accepted_count"] for e in events[2:-1]) == 1
+        batch = next(e["payload"] for e in events[2:-1] if e["payload"]["accepted_count"])
         assert (
             batch["accepted_count"] == 1
             and batch["received_bytes"] > 0
@@ -206,11 +206,10 @@ def test_completed_source_job_survives_derived_observer_failure(tmp_path, observ
                 pass
             job = catalog.job_outcomes()[0]
             assert job["state"] == "succeeded"
-            assert [event["event_type"] for event in catalog.job_events(job["job_id"])] == [
-                "queued",
-                "started",
-                "published",
-            ]
+            events = catalog.job_events(job["job_id"])
+            assert [e["event_type"] for e in events[:2]] == ["queued", "started"]
+            assert events[-1]["event_type"] == "published"
+            assert all(e["event_type"] == "batch.finished" for e in events[2:-1])
             with runs.sql_transaction() as db:
                 source = db.execute(
                     "SELECT last_success_at, consecutive_failures FROM asset_catalog_sources "
@@ -257,6 +256,9 @@ def test_launcher_wires_recommendations_recovery_and_catalog_worker(tmp_path):
     skill(source)
     configured = replace(
         load_config(write_config(tmp_path)),
+        # RM38: source/recovery wiring has no generative startup work in this fixture.
+        warmup=False,
+        detect=False,
         recommendations=RecommendationSettings(enabled=True, user_id="u", workspace_id="w"),
         assets=AssetSettings((SourceConfig("example", "local_directory", source),)),
     )
@@ -359,7 +361,7 @@ def test_real_cache_old_refresh_cannot_invalidate_new_compatible_generation(tmp_
             release.set()
             await asyncio.wait_for(asyncio.gather(old_task, newer), timeout=2)
             ready = service.readiness()
-            assert ready["state"] == "ready" and ready["catalog_revision"] == 2
+            assert ready["state"] == "ready" and ready["catalog_revision"] == 3
             assert len(service.provider.pin(["skill"]).catalog) == 25
             replay = await client.post("/relay/v1/recommendations", json=BODY)
             assert replay.status_code == 200 and replay.content == first.content
@@ -369,7 +371,9 @@ def test_real_cache_old_refresh_cannot_invalidate_new_compatible_generation(tmp_
     asyncio.run(go())
 
 
-def test_configuration_mismatch_is_unavailable_without_claiming_corruption(tmp_path):
+def test_configuration_change_revisions_eligibility_and_retains_source_records(tmp_path):
+    """RM38/AC29: inactive source records stay owned but leave the revisioned offer."""
+
     async def go():
         _, service, runs, _ = setup(tmp_path)
         await service.refresh_catalog()
@@ -395,9 +399,12 @@ def test_configuration_mismatch_is_unavailable_without_claiming_corruption(tmp_p
             0,
         )
         cat.publish(capture, expected_revision=cat.revision())
+        before_policy = cat.revision()
         service.provider.settings = replace(service.provider.settings, sources=(second,))
         await service.refresh_catalog()
-        assert service.readiness()["reason"] == "no_lexical_generation"
+        assert service.readiness()["reason"] == "empty_catalog"
+        assert cat.revision() == before_policy + 1
+        assert not service.provider.pin(["skill"]).catalog
         assert len(cat.snapshot().assets) == 1
         runs.close()
 

@@ -2337,8 +2337,8 @@ even if its separate `selector.finished` event missed the deadline. There is no
 public compute-cancel,
 choice, feedback, registration or execution route in #194; those actions and
 explicit privacy controls belong to #195. No choice helper is exposed to a
-model. Useful pre-warmup serving order and measured latency/resource gates
-remain #196. The deterministic checks are in
+model. #196's lexical startup/lifecycle checks are described below; real
+latency/resource gates remain open. The deterministic checks are in
 `tests/test_recommendation_{api,store,races,recovery,review}.py`; they do not qualify
 a live host, remote source or model.
 
@@ -2434,3 +2434,78 @@ A configured path through an ancestor link
 path is still refused. They exercise backend boundaries and do not qualify a real host/person,
 OpenClaw exact loading, interactive approvals, or native Windows privacy from a
 Linux run. HOST-ACTION-AUTHORITY and HOST-EXACT-SKILL-USE remain blocked.
+
+### Lexical startup and shared index lifecycle (#196; RM38/AC29)
+
+With recommendations enabled, `relaymind serve --config` validates static
+settings/artifacts and performs recovery before accepting work. It restores
+committed safe metadata and a compatible lexical generation before the app
+lifespan yields. The real server's started callback then schedules generative
+warm-up on that same event loop. While that check is pending, lexical readiness
+and nonempty discovery recommendations can succeed, while local inference,
+health-based model promotion and idle probes remain fenced. External requests
+follow their own readiness. Disabled recommendations retain the existing
+warm-up-before-serving order. Direct server composition supplies the launched
+owner's start callback to `build_server(..., on_started=...)`; starting only an
+ASGI lifespan is not the transport-started signal.
+
+Source updates prepare the complete offered bytes and matching lexical index
+before the catalog CAS. A request pins one immutable generation for all
+attempts and final admission still rechecks the current revision and policy.
+Capture-only observations preserve published bytes. Source-owned records remain
+stored when their source/policy becomes ineligible, but that committed offer
+change has its own public revision. Derived rebuild failure retains a compatible
+old generation, including an early timeout/cancel, when its committed revision,
+configuration and eligibility still match. Missing or inconsistent derived
+binding metadata cannot prove the old offer identity: repair prepares safe
+metadata first, then advances the public revision. This includes initial
+migration from a store without the marker. Failed repair remains unavailable.
+Restart reconstructs derived state with no original-file download and no
+feedback/key reset. An honestly empty compatible generation remains `empty`,
+which is not useful-startup acceptance.
+
+`AssetCatalogService.rescan(source_id)` and `rebuild()` are internal lifecycle
+entry points. Both use the existing background worker and are separate from
+foreground recommendation and native execution slots. There is no public rebuild
+route. Captures pause on a thread condition and index preparation yields the
+serving loop when inference/warm-up is busy. Waiting still consumes the original
+60-second job deadline. YAML scanner/character advancement, composition,
+construction and recursive depth work contain cooperative checkpoints. Source
+JSON container decoding and metadata-import validation check between values and
+records under that same owner, preserving published input bounds. Cancellation
+wakes paused work; even repeatedly cancelled shutdown waits for worker/thread
+finalization before returning cancellation and allowing store teardown. Native
+I/O retains its existing completion ownership and does not promise preemption. CPU batch target
+50 ms is measured, never inferred from a 25-record group or a scheduling yield.
+Job outcomes and validated `IndexJobEventV1` events retain actual durations,
+overlap and cooperative drain; processing batches with no newly accepted
+metadata record zero accepted records and no embeddings. Job wall duration
+includes waiting. Existing inference timing keeps failed, cancelled and
+contended samples. Semantic coverage stays at zero without real embeddings.
+
+The deterministic lifecycle and regression checks include:
+
+```bash
+pytest tests/test_asset_readiness.py tests/test_asset_index_lifecycle.py \
+  tests/test_asset_scheduler.py tests/test_recommendation_recovery.py \
+  tests/test_asset_catalog_service.py tests/test_asset_feedback_privacy.py
+```
+
+The internal operational driver in `relaymind.evaluation.asset_operations`
+accepts explicit catalog/configuration, production HTTP requests and lifecycle
+callbacks. It does not acquire or generate an acceptance corpus, introduce a
+public benchmark protocol, or turn unavailable memory/contention observations
+into a pass. It feeds the shared evaluation runner planned in #200.
+
+Full AC29 remains open until spec section 12.6 is measured on the real locked
+300-asset catalog: ten clean process launches to a valid nonempty lexical result,
+each within 1,000 ms; every received 25-record batch/update visible within
+1,000 ms; and 60 seconds at two requests/second, concurrency one, with four
+25-record imports during rebuild, warm p95 within 300 ms and zero errors or
+timeouts. Peak incremental memory must remain within 1 GiB across startup,
+rebuild, import and queries, including observed child/model/GPU allocations.
+Scheduled or failed samples cannot be dropped. Download time, scan detection
+and OpenClaw startup are reported separately. Repeat with actual embeddings and
+inference contention, and retain actual Apple M1 8 GiB/macOS and named native
+x86-64 Windows evidence. These fixture tests, Linux CI, model doubles and a
+listening socket do not satisfy those measurements or host/source qualification.

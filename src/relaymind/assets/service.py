@@ -1,7 +1,7 @@
-"""One bounded local/import staging worker, separate from run admission (RM34).
+"""One source/derived lexical worker, separate from run admission (RM34, RM38).
 
-The catalog supplies discovery data only. Recommendation endpoints, lexical
-readiness and the pre-warmup serving order belong to later milestones.
+Acquisition and derived rebuilds share cancellation, deadline and batch gates;
+published metadata supplies discovery data and never host execution authority.
 """
 
 import asyncio
@@ -12,6 +12,8 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from typing import Any
 
+from relaymind.assets.index_lifecycle import IndexLifecycle
+from relaymind.assets.scheduler import AssetWorkScheduler
 from relaymind.assets.settings import AssetSettings
 from relaymind.assets.sources import (
     CaptureContext,
@@ -26,6 +28,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # While a source is due but the gateway is busy, look again this often.
 _BUSY_RETRY_SECONDS = 0.1
+_REBUILD = object()
 
 
 async def _no_change_observer() -> None:
@@ -41,23 +44,28 @@ class AssetCatalogService:
         clock: TraceClock | None = None,
         busy: Callable[[], bool] = lambda: False,
         after_change: Callable[[], Awaitable[None]] | None = None,
+        index_lifecycle: IndexLifecycle | None = None,
     ) -> None:
         self.settings, self.store = settings, store
         self.clock = clock or TraceClock()
         self.busy = busy
         self.after_change = after_change or _no_change_observer
+        self.index_lifecycle = index_lifecycle
+        self.scheduler = AssetWorkScheduler(busy=lambda: self.busy())
         self._sources = {s.source_id: s for s in settings.sources}
         self._next = dict.fromkeys(self._sources, 0.0)
         self._failures = dict.fromkeys(self._sources, 0)
         self._retry = dict.fromkeys(self._sources, 0.0)
-        self._pending: dict[str, asyncio.Future[Publication]] = {}
+        self._pending: dict[str | object, asyncio.Future[Publication]] = {}
         self._waiters = dict.fromkeys(self._sources, 0)
+        self._waiters[_REBUILD] = 0
         self._lock = asyncio.Lock()
         self._task: asyncio.Task | None = None
         self._stopping = False
         self._cancel = threading.Event()
         self._active_future: asyncio.Future[Publication] | None = None
         self._wakeup = asyncio.Event()
+        self._observer_deferred = False
         self.store.recover_interrupted_jobs()
         for source_id, failures, next_attempt in self.store.schedules():
             if source_id not in self._sources:
@@ -92,13 +100,29 @@ class AssetCatalogService:
             self._task = asyncio.create_task(self._loop(), name="asset-catalog")
             self._task.add_done_callback(_log_worker_end)
 
-    async def _notify_changed(self) -> None:
+    async def _notify_changed(self, *, allow_defer: bool = True) -> None:
         """Tell the derived-cache observer the catalog may have changed.
 
         Failures change visible stale state too (and so the revision), so every
         finished job notifies. The observer has separate ownership: its failure
         is logged and never turns committed source evidence into a failure.
         """
+        if self.index_lifecycle is not None and allow_defer:
+            if self._stopping:
+                return
+            try:
+                needs_repair = not self.index_lifecycle.provider._cache_valid(self.store.revision())
+            except Exception:
+                needs_repair = True
+            if self.busy() or needs_repair:
+                # A failure's new stale bytes may need a derived generation.
+                # Queue that repair on this same owner; notification must not
+                # dispatch unmeasured index work while inference is busy.
+                self._observer_deferred = True
+                self._queue(_REBUILD)
+                self.start()
+                self._wakeup.set()
+                return
         try:
             await self.after_change()
         except Exception:
@@ -107,26 +131,31 @@ class AssetCatalogService:
     async def stop(self) -> None:
         self._stopping = True
         self._cancel.set()
+        self.scheduler.wake()
         self._wakeup.set()
-        # Do not cancel/abandon to_thread: its checked staging must drain before
-        # closing the database. The SQL commit remains on this event loop.
-        try:
-            if self._task is not None:
+        # Capture this lifetime's owner and pending futures. An old stop waiter
+        # must never clear a later lifetime's queue after its worker has drained.
+        task, pending = self._task, tuple(self._pending.items())
+        cancelled = False
+        if task is not None:
+            while not task.done():
                 try:
-                    # Shielded: cancelling stop() itself never cancels the draining worker.
-                    await asyncio.shield(self._task)
+                    await asyncio.shield(task)
                 except asyncio.CancelledError:
                     current = asyncio.current_task()
-                    if not self._task.cancelled() or (current and current.cancelling()):
-                        raise
+                    if current is not None and current.cancelling():
+                        cancelled = True
                 except Exception:
-                    pass  # The done callback already logged how the worker ended.
-        finally:
-            # Even when stop() is cancelled, no rescan caller is left waiting.
-            for future in self._pending.values():
-                if not future.done():
-                    future.set_exception(SourceFailure("cancelled", rejected_count=0))
-            self._pending.clear()
+                    break  # The done callback logs worker failures.
+        # No capture/finalization writes remain when stop returns or raises,
+        # even when the caller cancels repeatedly during native work.
+        for source_id, future in pending:
+            if not future.done():
+                future.set_exception(SourceFailure("cancelled", rejected_count=0))
+            if self._pending.get(source_id) is future:
+                self._pending.pop(source_id)
+        if cancelled:
+            raise asyncio.CancelledError
 
     async def rescan(self, source_id: str) -> Publication:
         """Run this source now, ignoring its failure backoff (an explicit operator request).
@@ -136,15 +165,18 @@ class AssetCatalogService:
         """
         if source_id not in self._sources:
             raise ValueError("unknown_source")
+        return await self._request(source_id)
+
+    async def rebuild(self) -> Publication:
+        """Queue one derived lexical rebuild on the existing background owner (RM38)."""
+        if self.index_lifecycle is None:
+            raise SourceFailure("index_error", rejected_count=0)
+        return await self._request(_REBUILD)
+
+    async def _request(self, source_id: str | object) -> Publication:
         if self._stopping:
             raise SourceFailure("cancelled", rejected_count=0)
-        future = self._pending.get(source_id)
-        if future is None:
-            future = asyncio.get_running_loop().create_future()
-            # Consume abandoned waiter exceptions without hiding them from any
-            # callers still awaiting the shared source job.
-            future.add_done_callback(lambda done: None if done.cancelled() else done.exception())
-            self._pending[source_id] = future
+        future = self._queue(source_id)
         self._waiters[source_id] += 1
         self.start()
         self._wakeup.set()
@@ -154,6 +186,7 @@ class AssetCatalogService:
             if self._waiters[source_id] == 1 and not future.done():
                 if self._active_future is future:
                     self._cancel.set()
+                    self.scheduler.wake()
                 elif self._pending.get(source_id) is future:
                     self._pending.pop(source_id, None)
                     future.cancel()
@@ -161,7 +194,17 @@ class AssetCatalogService:
         finally:
             self._waiters[source_id] -= 1
 
-    def _due(self, now: float) -> str | None:
+    def _queue(self, source_id: str | object) -> asyncio.Future[Publication]:
+        future = self._pending.get(source_id)
+        if future is None:
+            future = asyncio.get_running_loop().create_future()
+            # Consume abandoned waiter exceptions without hiding them from any
+            # callers still awaiting the shared source job.
+            future.add_done_callback(lambda done: None if done.cancelled() else done.exception())
+            self._pending[source_id] = future
+        return future
+
+    def _due(self, now: float) -> str | object | None:
         # An explicit rescan is due at once; a periodic one after its backoff.
         pending = next(iter(self._pending), None)
         if pending is not None:
@@ -199,6 +242,7 @@ class AssetCatalogService:
             return await asyncio.shield(work)
         except asyncio.CancelledError:
             self._cancel.set()
+            self.scheduler.wake()
             # Drain even if this task is cancelled again: staging must never be
             # left running while the caller closes the database.
             while not work.done():
@@ -218,6 +262,9 @@ class AssetCatalogService:
                 return False
             if self.busy():
                 return True
+            if source_id is _REBUILD:
+                await self._tick_rebuild()
+                return False
             self._cancel = threading.Event()
             started = self.clock.monotonic()
             source = self._sources[source_id]
@@ -228,6 +275,8 @@ class AssetCatalogService:
                 cancelled=lambda: self._cancel.is_set() or self._stopping,
                 observe_busy=self.busy,
                 utc_now=self.clock.utc_now,
+                work_gate=self.scheduler.checkpoint,
+                async_gate=self.scheduler.async_checkpoint,
             )
             future = self._pending.get(source_id)
             self._active_future = future
@@ -236,13 +285,21 @@ class AssetCatalogService:
                 capture = await self._drained(
                     capture_source, source, previous=inventory, context=context
                 )
-                context.check()
+                context.check_limits()
                 if self._stopping or self._cancel.is_set():
                     raise SourceFailure("cancelled", rejected_count=0)
                 prepared = await self._drained(self.store.prepare, capture, check=context.check)
-                result = self.store.commit(
-                    prepared, expected_revision=inventory.revision, check=context.check
-                )
+                if self.index_lifecycle is None:
+                    result = self.store.commit(
+                        prepared, expected_revision=inventory.revision, check=context.check_limits
+                    )
+                else:
+                    result = await self.index_lifecycle.publish(
+                        prepared,
+                        expected_revision=inventory.revision,
+                        context=context,
+                        run_cpu=self._drained,
+                    )
                 self._failures[source_id] = 0
                 self._retry[source_id] = 0
                 self._next[source_id] = (
@@ -285,6 +342,60 @@ class AssetCatalogService:
                     self._pending.pop(source_id)
             return False
 
+    async def _tick_rebuild(self) -> None:
+        assert self.index_lifecycle is not None
+        notify = self._observer_deferred
+        self._observer_deferred = False
+        self._cancel = threading.Event()
+        started = self.clock.monotonic()
+        context = CaptureContext(
+            self.clock.utc_now(),
+            monotonic=self.clock.monotonic,
+            cancelled=lambda: self._cancel.is_set() or self._stopping,
+            observe_busy=self.busy,
+            utc_now=self.clock.utc_now,
+            work_gate=self.scheduler.checkpoint,
+            async_gate=self.scheduler.async_checkpoint,
+        )
+        future = self._pending[_REBUILD]
+        self._active_future = future
+        job_id = self.store.begin_job(
+            None, self.index_lifecycle.provider.generation_config(), job_kind="lexical"
+        )
+        try:
+            result = await self.index_lifecycle.rebuild(
+                check=context.check_limits, yield_control=context.async_checkpoint
+            )
+            context.check_limits()
+            self._finish(job_id, context, started, "succeeded", None)
+            if notify:
+                await self._notify_changed(allow_defer=False)
+            if not future.done():
+                future.set_result(result)
+        except asyncio.CancelledError:
+            context.rejected_count = 0
+            self._finish(job_id, context, started, "cancelled", "shutdown")
+            raise
+        except Exception as exc:
+            failure = (
+                exc
+                if isinstance(exc, SourceFailure)
+                else SourceFailure("index_error", rejected_count=0)
+            )
+            state, reason = "failed", failure.reason
+            if failure.reason == "cancelled":
+                state, reason = "cancelled", "shutdown" if self._stopping else "operator"
+            context.rejected_count = failure.rejected_count
+            self._finish(job_id, context, started, state, reason)
+            if not future.done():
+                future.set_exception(failure)
+        finally:
+            if not future.done():
+                future.set_exception(SourceFailure("cancelled", rejected_count=0))
+            self._active_future = None
+            if self._pending.get(_REBUILD) is future:
+                self._pending.pop(_REBUILD)
+
     def _fail(
         self,
         source_id: str,
@@ -319,21 +430,33 @@ class AssetCatalogService:
         self, job_id: str, context: CaptureContext, started: float, state: str, reason: str | None
     ) -> None:
         now = self.clock.monotonic()
+        self.scheduler.finish_batch(context, force=True)
+        batches = sorted(
+            [*context.batch_observations, *context.work_batches],
+            key=lambda batch: batch["timestamp"],
+        )
+        index_revision = None
+        if self.index_lifecycle is not None:
+            try:
+                index_revision = self.index_lifecycle.provider.pin(
+                    ("skill", "mcp_tool")
+                ).index.index_revision
+            except Exception:
+                pass  # No compatible index measurement is available.
         self.store.finish_job(
             job_id,
             state=state,
             reason=reason,
             duration_ms=max(0, (now - started) * 1000),
             received_bytes=context.received_bytes,
-            batch_ms=tuple(context.batch_durations_ms),
+            batch_ms=tuple(b["duration_ms"] for b in batches),
             overlap_observed=context.busy_observed_at is not None,
-            batches=tuple(context.batch_observations),
+            batches=tuple(batches),
+            index_revision=index_revision,
             accepted_count=sum(b["accepted_count"] for b in context.batch_observations)
             + context.batch_records,
             rejected_count=context.rejected_count,
-            drain_ms=None
-            if context.busy_observed_at is None
-            else max(0, (now - context.busy_observed_at) * 1000),
+            drain_ms=context.drain_ms,
         )
 
 

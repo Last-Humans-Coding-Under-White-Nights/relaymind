@@ -12,6 +12,7 @@ again as a crash with a traceback.
 """
 
 import logging
+from collections.abc import Callable
 
 import uvicorn
 from fastapi import FastAPI
@@ -45,14 +46,41 @@ class _ExpectedAborts(logging.Filter):
 _EXPECTED_ABORTS = _ExpectedAborts()
 
 
-def build_server(app: FastAPI, *, host: str = "127.0.0.1", port: int = 8080) -> uvicorn.Server:
-    """A uvicorn server for app on a validated loopback host."""
+class _StartedServer(uvicorn.Server):
+    def __init__(self, config: uvicorn.Config, on_started: Callable[[], None]):
+        super().__init__(config)
+        self._on_started = on_started
+
+    async def startup(self, sockets=None) -> None:
+        await super().startup(sockets=sockets)
+        if self.started:
+            self._on_started()
+
+
+def build_server(
+    app: FastAPI,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8080,
+    on_started: Callable[[], None] | None = None,
+) -> uvicorn.Server:
+    """A uvicorn server for app on a validated loopback host.
+
+    Enabled launchers pass their owned warm-up's start as on_started; main()
+    supplies it. The absent callback retains ordinary ASGI serving behavior.
+    """
     config = uvicorn.Config(app, host=validate_bind_host(host), port=port, log_level="warning")
     # After the config, which sets up the server loggers; adding the one filter twice is a no-op.
     logging.getLogger("uvicorn.error").addFilter(_EXPECTED_ABORTS)
-    return uvicorn.Server(config)
+    return uvicorn.Server(config) if on_started is None else _StartedServer(config, on_started)
 
 
-def serve(app: FastAPI, *, host: str = "127.0.0.1", port: int = 8080) -> None:
+def serve(
+    app: FastAPI,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8080,
+    on_started: Callable[[], None] | None = None,
+) -> None:
     """Run the gateway until it is stopped."""
-    build_server(app, host=host, port=port).run()
+    build_server(app, host=host, port=port, on_started=on_started).run()

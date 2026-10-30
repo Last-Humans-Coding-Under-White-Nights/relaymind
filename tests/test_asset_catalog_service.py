@@ -114,6 +114,8 @@ def test_launcher_disabled_no_jobs_and_enabled_background_lifespan(tmp_path):
     path.write_text(
         path.read_text() + '\n[recommendations]\nenabled=true\nuser_id="u"\nworkspace_id="w"\n'
         '\n[[assets.sources]]\nsource_id="example"\nkind="local_directory"\npath="ordinary"\n'
+        # RM38: this source-only lifespan fixture performs no startup inference.
+        "\n[placement]\nwarmup=false\ndetect=false\n"
     )
     launched = build_app(load_config(path), local_adapter=ScriptedAdapter(turns=[]))
     service = launched.app.state.asset_catalog
@@ -295,13 +297,17 @@ def test_interrupted_recovery_observes_initial_backoff(tmp_path):
 
 
 def test_inflight_overlap_and_batch_duration_are_observed(tmp_path, monkeypatch):
+    """RM38/AC29: measured pause/drain is separate from the unchanged job wall budget."""
     skill(tmp_path / "source")
     clock, busy = FakeClock(), [False]
+    entered, contexts = threading.Event(), []
     actual = s.capture_source
 
     def overlap(source, **kwargs):
         busy[0] = True
         at(clock, 0.02)
+        contexts.append(kwargs["context"])
+        entered.set()
         kwargs["context"].check()
         at(clock, 0.04)
         return actual(source, **kwargs)
@@ -314,11 +320,19 @@ def test_inflight_overlap_and_batch_duration_are_observed(tmp_path, monkeypatch)
         )
 
         async def run():
-            await service.tick()
+            task = asyncio.create_task(service.tick())
+            assert await asyncio.to_thread(entered.wait, 1)
+            while contexts[0].drain_ms is None:
+                await asyncio.sleep(0)
+            assert not task.done()
+            at(clock, 0.03)
+            busy[0] = False
+            service.scheduler.wake()
+            await task
             outcome = catalog.job_outcomes()[0]
             assert outcome["overlap_observed"]
-            assert outcome["drain_ms"] == pytest.approx(20)
-            assert outcome["batch_ms"] == [pytest.approx(40)]
+            assert outcome["drain_ms"] == pytest.approx(0)
+            assert outcome["batch_ms"] == pytest.approx([20, 30, 10])
             assert outcome["duration_ms"] == pytest.approx(40)
             await service.stop()
 
@@ -597,7 +611,7 @@ def test_repeated_cancel_still_drains_the_thread_before_return(tmp_path, monkeyp
 
 
 def test_cancelled_stop_still_fails_pending_rescans(tmp_path, monkeypatch):
-    """RM34/AC25: waiters get a cancelled failure even when stop() itself is cancelled."""
+    """RM38/AC29 + RM34/AC25: cancelled stop drains before resolving pending rescans."""
     skill(tmp_path / "source")
     entered, release = threading.Event(), threading.Event()
     real = s.capture_source
@@ -621,16 +635,22 @@ def test_cancelled_stop_still_fails_pending_rescans(tmp_path, monkeypatch):
             stopping = asyncio.create_task(service.stop())
             await asyncio.sleep(0.01)
             stopping.cancel()
-            release.set()
-            with pytest.raises(asyncio.CancelledError):
-                await stopping
+            await asyncio.sleep(0.01)
+            stopping.cancel()
+            await asyncio.sleep(0.01)
+            try:
+                assert not stopping.done()
+            finally:
+                release.set()
+                with pytest.raises(asyncio.CancelledError):
+                    await stopping
             with pytest.raises(SourceFailure):
                 await first
             assert pending.done() and isinstance(pending.exception(), SourceFailure)
             assert str(pending.exception()) == "cancelled"
             assert service._pending == {}
-            if service._task is not None and not service._task.done():
-                await service._task
+            assert service._task is not None and service._task.done()
+            run_store.close()
 
         asyncio.run(run())
 

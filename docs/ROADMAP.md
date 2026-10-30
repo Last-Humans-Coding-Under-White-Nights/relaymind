@@ -1048,8 +1048,9 @@ imports, safe internal searchable bodies, atomic shared-SQLite publication,
 source-owned tombstones, retained stale observations, recovery and one bounded
 local worker. `[recommendations]` defaults disabled; enabled catalog work starts
 in the application lifespan. This is development on the explicitly authorized
-reviewed-spec stack while #187's merge remains pending. No pre-warmup serving
-change, qualified external refresh or current host availability is claimed.
+reviewed-spec stack while #187's merge remains pending. #192 alone did not change
+the warm-up serving order; #196's lifecycle work is recorded below. No qualified
+external refresh or current host availability is claimed.
 #193 selection and #194's partial lifecycle implementation are recorded below.
 The AC25 live host/source subcases, full 300-asset measurements,
 Windows/macOS qualification and Matrix rights/cohort/refresh remain open; these
@@ -1072,9 +1073,26 @@ event and index-job schemas, atomic recommendation slot and exact replay receipt
 bounded JSON create/read/event polling, request-owned cancellation, recovery,
 expiry and 30-day parent retention. It publishes a compatible lexical offer
 after actual configured-source acquisition and reports current readiness facts.
-There is no public recommendation cancel, action, feedback or SSE route.
-Operational startup/readiness measurements (#196), qualified host/source
-adapters and the final corpus/whole-task gates remain open.
+Actions and feedback are supplied by #195; public compute cancel and SSE remain
+unavailable. Qualified host/source adapters and the final corpus/whole-task
+gates remain open.
+
+The #196 implementation supplies RM38/AC29 lifecycle infrastructure: a real
+post-listener warm-up task for enabled launchers, pending inference/probe fences,
+prepared matching source/lexical publication, durable eligibility/representation
+bindings, derived-only rebuild/recovery, and cooperative sync/async batch gates
+on the existing single background worker. Foreground recommendation admission
+and the native execution slot remain independent. Actual source and derived jobs
+retain batch, overlap and drain evidence; private feedback/key ownership survives
+restart and derived repair. This does not assert the operational targets: ten
+clean process launches from the genuine full 300-asset catalog, each within
+1,000 ms; every 25-record receipt/update visible within 1,000 ms; the complete
+60-second, two-request/second workload with four import batches, warm p95 within
+300 ms and zero errors/timeouts; and peak incremental memory within 1 GiB across
+startup, rebuild, import and queries remain unmeasured. Real embeddings/rebuild
+and inference contention, actual Apple M1 8 GiB/macOS and named native x86-64
+Windows measurements remain required. Linux fixtures, open sockets and model
+doubles close none of those gates; semantic ready count remains zero.
 
 Specification 0.51 froze the independent M10 recommendation core (spec
 section 1), and 0.52 revised its offer cache and freshness rules

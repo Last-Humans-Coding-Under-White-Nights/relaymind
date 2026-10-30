@@ -1,10 +1,11 @@
 """The startup warm-up of the local model (#124; RM18, RM25, RM27; spec 0.31 sections 6 and 14.1).
 
-At startup, after restart recovery and before the server socket exists,
-the gateway sends one routing-shaped and one skill-shaped generation to
+After restart recovery, the gateway sends routing-shaped and skill-shaped generations to
 the local model, so the first real request does not pay for loading the
 model and for the first prefill of the constant prompt prefix (section
-10). The requests are built by the gateway's own builders
+10). Disabled recommendations retain the before-socket order; enabled
+launchers start this work after lexical serving opens (RM38, spec 14.5).
+The requests are built by the gateway's own builders
 (``Router.build_request`` and ``skill_stage_messages``) over a fixed
 warm-up text, so they are what a run would send. They are not runs: no
 run, no event, no budget, no tool call, and the model's output is
@@ -478,7 +479,7 @@ class IdleProbe:
         return min(max(wait, _IDLE_MIN_SECONDS), _IDLE_MAX_SECONDS)
 
     async def tick(self) -> None:
-        if self._closing or not self.enabled:
+        if self._closing or not self.enabled or self.o.local_startup_pending:
             return
         settings = self.o.placement.settings
         if self._task is not None and self._task.done():
