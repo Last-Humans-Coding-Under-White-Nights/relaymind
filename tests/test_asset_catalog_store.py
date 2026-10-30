@@ -351,3 +351,19 @@ def test_visible_failure_and_recovery_each_increment_the_revision_once(tmp_path)
         assert not catalog.snapshot().assets[0].stale
         assert not publish_local(catalog, tmp_path / "source").changed
         assert catalog.snapshot().catalog_revision == 3
+
+
+def test_derived_only_job_rows_have_a_null_source(tmp_path):
+    """RM34/AC25: IndexJobEventV1 allows source_id null for a derived-only rebuild (spec 8.1)."""
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        with run_store.sql_transaction() as connection:
+            connection.execute(
+                "INSERT INTO asset_catalog_jobs(job_id,source_id,config_digest,state,started_at) "
+                "VALUES('assetjob_derived',NULL,?,'running','2026-10-29T00:00:00.000000Z')",
+                ("0" * 64,),
+            )
+        assert catalog.recover_interrupted_jobs() == 1
+        outcome = catalog.job_outcomes()[0]
+        assert (outcome["source_id"], outcome["state"]) == (None, "interrupted")
+        assert catalog.snapshot().sources == ()

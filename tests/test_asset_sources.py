@@ -643,3 +643,39 @@ def test_json_manifest_rejects_non_finite_numbers():
         sources._json(b'{"version": 1e999}')
     with pytest.raises(sources.SourceFailure):
         sources._json(b'{"version": NaN}')
+
+
+def test_searchable_text_is_nfc_but_identifiers_and_paths_stay_exact(tmp_path):
+    """RM34/AC25: the searchable projection is NFC (spec 4.6); identities are exact.
+
+    Asset/source IDs are opaque identities and original_path must open the exact
+    staged file, so neither is normalized: NFD and NFC names can be distinct files.
+    """
+    import unicodedata
+
+    nfd = unicodedata.normalize("NFD", "Café")
+    nfc = unicodedata.normalize("NFC", "Café")
+    assert nfd != nfc
+
+    # Local folder: description and instruction body are projected as NFC.
+    skill(tmp_path / "local", description=f"{nfd} greeting", body=f"Say {nfd}.")
+    document = capture(tmp_path / "local").documents[0]
+    assert document.record.description == f"{nfc} greeting"
+    assert document.body == f"Say {nfc}."
+
+    # Import: an NFD asset_id, package_id and original_path are kept exactly.
+    root = tmp_path / "import"
+    root.mkdir()
+    (root / f"{nfd}.bin").write_bytes(b"hello")
+    value = record(asset_id=f"example:{nfd}", description=f"{nfd} tool")
+    value["identity"]["package_id"] = nfd
+    for key in ("schema_version", "source_id", "availability", "stale"):
+        value.pop(key)
+    manifest, _ = imported(root, records=[{"record": value, "original_path": f"{nfd}.bin"}])
+    got = capture(manifest, "metadata_import")
+    document = got.documents[0]
+    assert document.record.asset_id == f"example:{nfd}"
+    assert document.record.identity["package_id"] == nfd
+    assert document.record.description == f"{nfc} tool"
+    paths = [f.relative_path for f in got.files]
+    assert f"{nfd}.bin" in paths and f"{nfc}.bin" not in paths

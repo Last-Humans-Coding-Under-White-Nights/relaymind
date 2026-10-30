@@ -2014,7 +2014,7 @@ it before any tool call exists (RM09).
 Run the deterministic catalog checks with disposable files and model doubles:
 
 ```bash
-pytest tests/test_asset_catalog.py tests/test_asset_sources.py tests/test_asset_catalog_store.py tests/test_asset_catalog_service.py tests/test_asset_sources_windows.py
+pytest tests/test_asset_catalog.py tests/test_asset_sources.py tests/test_asset_catalog_store.py tests/test_asset_catalog_service.py tests/test_asset_sources_windows.py tests/test_asset_windows_io_helper.py
 ```
 
 Native Windows capture uses lazily loaded system APIs to open one component
