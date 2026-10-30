@@ -27,6 +27,32 @@ ruff check .
 ruff format --check .
 ```
 
+### CI timing reports
+
+The `check` and `openclaw-plugin` jobs each run on Ubuntu, macOS and Windows.
+Both pytest commands print the 30 slowest setup, call and teardown durations.
+Each core job uploads `core-test-profile-<platform>` with
+`ci-evidence/core-tests.xml`. Each plugin job includes
+`ci-evidence/openclaw-tests.xml` in its existing `openclaw-plugin-<platform>`
+artifact, alongside the release and host lifecycle evidence. Uploads run even
+when a preceding step fails; a failure before pytest may leave no XML report.
+JUnit records individual test durations; the Actions log retains the slow-test
+summary. The host lifecycle JSON already records its subprocess durations.
+
+Both Python setup steps cache pip downloads using `pyproject.toml` as the
+cache dependency key. Installation still runs; this is not a dependency lock.
+The existing npm cache and clean `npm ci` installation remain in place.
+The UI tests launch Chromium's default headless shell, so CI installs it with
+`playwright install --with-deps --only-shell chromium`, including system
+requirements. Test selection and all six platform checks remain unchanged.
+
+The [30 October baseline](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/actions/runs/41135214423)
+put Windows OpenClaw at 18m43s: 592s in Python tests and 400s in the host
+lifecycle, including 195s installing the plugin. These observations do not
+establish savings from the cache or browser change. Compare successful warm
+runs by platform, total job time and runner seconds before changing expensive
+fixtures or coverage.
+
 The live suite needs `llama-server` on PATH and the pinned model
 artifact (see [`models/README.md`](../models/README.md)). It starts and
 stops its own server; nothing below is required for it. Besides the
