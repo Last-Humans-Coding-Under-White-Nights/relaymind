@@ -1,0 +1,155 @@
+{
+  "schema_version": "matrix-qualification-note.v1",
+  "issue": 188,
+  "requirements": [
+    "RM07",
+    "RM12",
+    "RM16",
+    "RM25"
+  ],
+  "specification": "0.50",
+  "date_utc": "2026-10-29",
+  "base_revision": "ba4b33a",
+  "probe_tree_dirty": true,
+  "environment": {
+    "platform": "Linux x86_64; glibc 2.43",
+    "python": "3.14.4",
+    "curl": "8.18.0",
+    "playwright": "1.64.1",
+    "chromium": "156.0.8078.4"
+  },
+  "decision": "blocked_for_cohort_and_scheduled_refresh; single_asset_acquisition_and_integrity_pass",
+  "checks": {
+    "supplied_detail_page": "pass",
+    "documented_zip_download": "pass",
+    "repeat_download_hash_equality": "pass",
+    "repeat_integrity_derivation": "pass",
+    "asset_execution": "not_run",
+    "production_import": "not_run",
+    "100_original_chinese_skills": "not_run",
+    "25_equivalent_function_english_pairs": "not_run",
+    "source_redistribution_permission": "not_run",
+    "scheduled_refresh": "not_run"
+  },
+  "counts": {
+    "distinct_assets_captured": 1,
+    "zip_downloads": 2,
+    "source_provided_chinese_bodies_observed": 1,
+    "archive_entries": 38,
+    "archive_uncompressed_bytes": 246741,
+    "archive_license_or_notice_paths": 0,
+    "ui_default_tag": "HMOS",
+    "ui_reported_default_tag_total": 56,
+    "ui_rendered_card_names": 40,
+    "ui_openharmony_tag_count": 98,
+    "ui_harmony_pc_tag_count": 3031,
+    "verified_100_skill_cohort_size": null,
+    "verified_equivalent_function_pairs": 0,
+    "market_total_unique_original_chinese_skills": null
+  },
+  "captures": [
+    {
+      "captured_at": "2026-10-29T16:23:49.678842Z",
+      "size_bytes": 99960,
+      "sha256": "b11b85a8aecfb4c0743b254de9bd98183cd218f6cf988731ffa5d46393fa15e1"
+    },
+    {
+      "captured_at": "2026-10-29T16:24:42.082100Z",
+      "size_bytes": 99960,
+      "sha256": "b11b85a8aecfb4c0743b254de9bd98183cd218f6cf988731ffa5d46393fa15e1"
+    }
+  ],
+  "resolved_download_url": "https://openharmony-matrix.obs.cn-north-4.myhuaweicloud.com:443/skill/hmos-arkui-develop-skill/1.1.1/hmos-arkui-develop-skill.zip",
+  "source_repository": "https://gitcode.com/HarmonyOS_Skills/harmonyos-agent-skills",
+  "source_subdirectory": "release/02-development/arkui/hmos-arkui-develop-skill",
+  "upstream_commit": null,
+  "displayed_update_date": "2026-10-08",
+  "displayed_version": "1.1.1",
+  "skill_md": {
+    "size_bytes": 7496,
+    "sha256": "1b2b281319c6bb9a175e4ec2d9d2d1b05db3ec3e94f761fe88f15d8722f6492c",
+    "body_language_observation": "Chinese; English frontmatter description"
+  },
+  "license": {
+    "asset_license": "unknown",
+    "redistribution_permission": "not_assessed",
+    "terms_version": "v1.0.0; effective 2025-08-22",
+    "terms_sections_reviewed": [
+      "2.2",
+      "2.3",
+      "4.2",
+      "5.1",
+      "5.2",
+      "6.4",
+      "9.2",
+      "attachment 1 section 5"
+    ],
+    "constraint": "Public download is documented. Per-asset license/NOTICE and permission for redistribution and scheduled use remain unverified; no archive or source text committed."
+  },
+  "domain_overlap": {
+    "status": "not_run",
+    "observation": "Captured skill targets ArkTS/ArkUI code; generic coding/UI overlap is insufficient to establish equivalent-function English pairs.",
+    "english_catalog_path": "evaluation/skills.v1.json",
+    "english_catalog_raw_sha256": "1e89686583aa2334c266bd0b6c26d22129d43a218885b7617e65f2b0bc8670c8",
+    "english_catalog_skills": 195,
+    "english_catalog_cases": 87,
+    "diagnostic_only": {
+      "method": "case-insensitive literal substring in catalog name plus description",
+      "arkui_matches": 0,
+      "arkts_matches": 0,
+      "harmonyos_matches": 0,
+      "web_matches": 4
+    }
+  },
+  "refresh": {
+    "technical_observation": "The documented per-name ZIP route resolved the current version twice. No bulk discovery/version/change contract or source automation permission was qualified.",
+    "eligibility": "blocked_pending_permission_and_inventory",
+    "operator_export": "Same Matrix IDs, original versioned ZIP bytes, capture UTC, source/download URLs and hashes, author and license/NOTICE evidence; no translated or generated substitutions."
+  },
+  "exclusions": [
+    "No login, installation, skill execution, or production dependency.",
+    "No undocumented API endpoint called directly; browser normal page requests were used for rendering.",
+    "No bulk crawl or asset body redistribution; two downloads of one supplied asset only.",
+    "UI counts are filter-specific, may overlap, and do not identify original Chinese bodies or licenses.",
+    "The public plural /api/registry/skills/name route displayed by the UI returned HTTP 404; the guide documents the working singular /skill/name/install route.",
+    "GitCode source access was not established; upstream licensing and commit remain unknown."
+  ],
+  "source_observations": [
+    {
+      "url": "https://matrix.openharmony.cn/",
+      "representation": "http_response",
+      "size_bytes": 517,
+      "sha256": "b9862929112f1347371657e74cef262432e3e86ff3cc8e05894f1fc2f62f6535",
+      "retention": "local_only; not redistributed"
+    },
+    {
+      "url": "https://matrix.openharmony.cn/api/registry/skill/matrix_skill_guide.md",
+      "representation": "http_response",
+      "size_bytes": 10125,
+      "sha256": "a32ea2e67d6841a04dd98b8d1d08f96fe38d07617fe9fcde4437740eaff21837",
+      "retention": "local_only; not redistributed"
+    },
+    {
+      "url": "https://matrix.openharmony.cn/#/skillSquare/details?id=69e1dea2c4357076d28ecb48",
+      "representation": "rendered_body_utf8",
+      "size_bytes": 8714,
+      "sha256": "6f1d5d61fab1c1693ebfa646e9b4da6aac806afc2f314ee9acbbb723165c7b2e",
+      "retention": "local_only; not redistributed"
+    },
+    {
+      "url": "https://matrix.openharmony.cn/#/docs/main?type=使用协议",
+      "representation": "rendered_body_utf8",
+      "size_bytes": 44984,
+      "sha256": "e8e1d1b8073155bb1a40100597cf15912eaf1c5bfb2664dc0acc5e839b2a919b",
+      "retention": "local_only; not redistributed"
+    },
+    {
+      "url": "https://matrix.openharmony.cn/#/skillSquare",
+      "representation": "rendered_body_utf8",
+      "size_bytes": 22767,
+      "sha256": "a27e4e801d72fa7953dc7ecb4b5e5f39a1ca860c4ebad5fef60c50cd47f10041",
+      "retention": "local_only; not redistributed"
+    }
+  ],
+  "scope_decision_required": "Supply a permitted Matrix export/inventory with original Chinese bodies and rights evidence for the 100/25 cohort, or revise that cohort in #187. Keep production acquisition and refresh unqualified until then."
+}

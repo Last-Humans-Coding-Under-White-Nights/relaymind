@@ -1,0 +1,17 @@
+{
+  "schema_version": "matrix-capture-probe.v1",
+  "assets": [
+    {
+      "source_id": "matrix",
+      "asset_id": "69e1dea2c4357076d28ecb48",
+      "name": "hmos-arkui-develop-skill",
+      "version": "1.1.1",
+      "captured_at": "2026-10-29T16:23:49.678842Z",
+      "source_url": "https://matrix.openharmony.cn/#/skillSquare/details?id=69e1dea2c4357076d28ecb48",
+      "download_url": "https://matrix.openharmony.cn/api/registry/skill/hmos-arkui-develop-skill/install?format=zip",
+      "original_path": "relaymind-matrix-hmos-arkui-develop-skill-1.zip",
+      "sha256": "b11b85a8aecfb4c0743b254de9bd98183cd218f6cf988731ffa5d46393fa15e1",
+      "attribution": "HarmonyOS (Matrix publisher); HarmonyOS_Skills/harmonyos-agent-skills (linked upstream)"
+    }
+  ]
+}

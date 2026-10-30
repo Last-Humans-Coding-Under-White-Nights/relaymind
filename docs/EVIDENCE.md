@@ -3561,3 +3561,22 @@ expectation is now a result: relaymind_auto showed 0 local turns of 70
 gateway runs, every one leaving the local stage with reason
 `context_limit`. Its comparison with relaymind_external_only is one
 without local inference.
+
+## 2026-10-29 — Matrix source qualification (#188), Linux
+
+RM07, RM12, RM16, RM25; specification 0.50 sections 8, 12.4 and 13.
+The [qualification record](evidence/2026-10-29-matrix-qualification/README.md)
+and [machine-readable report](evidence/2026-10-29-matrix-qualification/report.json)
+record a documented Matrix ZIP route and two equal-hash captures of the supplied
+`hmos-arkui-develop-skill` 1.1.1 asset. The original archive stays outside the
+repository; no asset was installed or executed. The offline probe repeats its
+integrity derivation, with [source identities and hashes](evidence/2026-10-29-matrix-qualification/integrity.json)
+kept separately from original bytes.
+
+One source-provided Chinese body was observed. The default HMOS UI reported 56
+skills and rendered 40 cards; these filter counts do not establish a 100-skill
+Chinese cohort. The archive had no license/notice filename, and upstream rights
+remain unknown. The 100-skill cohort, 25 equivalent-function English pairs,
+redistribution and scheduled refresh remain unqualified, with the required
+operator export and scope decision documented. This bounded qualification adds
+no product behavior and does not change the section 12.4 benchmark sources.
