@@ -1401,3 +1401,37 @@ def test_referenced_schema_parts_still_reject_invalid_values(path, value):
     target[path[-1]] = value
     with pytest.raises(api().AssetSelectionError):
         api().parse_recommendation_result(raw)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"task_text": "   "},
+        {"task_text": "x" * 8193},
+        {"conversation": [{"role": "user", "text": "\ud800"}]},
+    ],
+)
+def test_cached_offer_request_reports_bad_queries_as_invalid_request(changes):
+    """RM35/AC26: the cached-offer entry point classifies caller input like parse_asset_request."""
+    from relaymind.selection.asset_lexical import OfferCache
+
+    a = api()
+
+    async def run():
+        cache = OfferCache()
+        context = a.SelectorContext(lambda: 0, lambda: None)
+        await cache.publish(
+            snapshot(),
+            scope=request()["scope"],
+            permissions=request()["permissions"],
+            policy=lambda r: True,
+            catalog_revision=1,
+            context=context,
+        )
+        offer = cache.get("discovery", ["skill", "mcp_tool"], catalog_revision=1)
+        envelope = {k: v for k, v in request().items() if k != "catalog"}
+        with pytest.raises(a.AssetSelectionError) as caught:
+            offer.request({**envelope, **changes}, context=context)
+        assert str(caught.value) == "invalid_request"
+
+    asyncio.run(run())
