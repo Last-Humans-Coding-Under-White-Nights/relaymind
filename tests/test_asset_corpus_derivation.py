@@ -141,3 +141,29 @@ def test_rm40_ac31_success_inside_handled_exception_keeps_verified_export(input_
         result = derivation().derive_matrix_export(input_root, input_root / "lock.json", output)
     assert (output / "lock.json").exists()
     assert all(path.exists() for path in result.output_paths)
+
+
+def test_rm40_ac31_matrix_cli_reports_invalid_record_without_a_traceback(input_root, tmp_path):
+    catalog = read(input_root, "catalog")
+    catalog["assets"][0]["record"]["description"] = "bad\x00control"
+    write(input_root, "catalog", catalog)
+    relock(input_root)
+    script = Path(__file__).parents[1] / "scripts/benchmarks/derive_matrix.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--input",
+            str(input_root),
+            "--lock",
+            str(input_root / "lock.json"),
+            "--output",
+            str(tmp_path / "invalid-output"),
+        ],
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+    )
+    assert result.returncode == 1
+    assert json.loads(result.stderr)["status"] == "blocked"
+    assert not (tmp_path / "invalid-output").exists()
