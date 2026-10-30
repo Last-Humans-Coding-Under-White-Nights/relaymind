@@ -18,6 +18,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.55 → 0.56 (#191/#199/#200; RM34/RM35/RM40/RM44;
+  AC25/AC26/AC31/AC36): source-grounded development benchmarks and actual Matrix
+  examples use documented author-defined references without invented human
+  judgments or fixed-size delivery prerequisites. Bounded standalone in-memory
+  ZIP inspection preserves originals separately from projections. Shared mixed
+  catalogs support available language pairs and team algorithms; formal
+  independent qualification, product source choices and resource limits remain.
+
 - Acceptance corpus input tooling (#199; RM40/AC31): assess exact 200-to-300
   source continuity, per-lane and all-target hard-subset cohorts through the
   existing external custodian gate. Pinned offline MCP reproduction reuses the
