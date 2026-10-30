@@ -5,11 +5,9 @@ import json
 
 import pytest
 
-from recommendation_helpers import BODY, SCOPE, setup
+from recommendation_helpers import BODY, SCOPE, claim, client_for, setup
 from relaymind.recommendations.service import CancellationSignal
 from test_chat_disconnect_cancel import Client, response_of
-from test_recommendation_api import client_for
-from test_recommendation_store import claim
 
 
 class Gate:

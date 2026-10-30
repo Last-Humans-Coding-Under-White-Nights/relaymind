@@ -2337,5 +2337,5 @@ choice, feedback, registration or execution route in #194; those actions and
 explicit privacy controls belong to #195. No choice helper is exposed to a
 model. Useful pre-warmup serving order and measured latency/resource gates
 remain #196. The deterministic checks are in
-`tests/test_recommendation_{api,store,races,recovery}.py`; they do not qualify
+`tests/test_recommendation_{api,store,races,recovery,review}.py`; they do not qualify
 a live host, remote source or model.

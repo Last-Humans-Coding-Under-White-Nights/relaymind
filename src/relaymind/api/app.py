@@ -32,7 +32,7 @@ import secrets
 import time
 import traceback
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -165,23 +165,19 @@ def create_app(
 
         probe = IdleProbe(orchestrator, cancel_wait_seconds=native.cancel_wait_seconds)
         app.state.idle_probe = probe
-        probe.start()
-        if recommendations is not None:
-            await recommendations.start()
-        if asset_catalog is not None:
-            asset_catalog.start()
-        try:
+        # Each component's stop is registered before its start, so a failed
+        # start still stops everything already running. Stops run in reverse
+        # order, and one failing stop never skips the others.
+        async with AsyncExitStack() as components:
+            components.push_async_callback(probe.stop)
+            probe.start()
+            if recommendations is not None:
+                components.push_async_callback(recommendations.stop)
+                await recommendations.start()
+            if asset_catalog is not None:
+                components.push_async_callback(asset_catalog.stop)
+                asset_catalog.start()
             yield
-        finally:
-            try:
-                if asset_catalog is not None:
-                    await asset_catalog.stop()
-            finally:
-                try:
-                    if recommendations is not None:
-                        await recommendations.stop()
-                finally:
-                    await probe.stop()
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.application_token = token

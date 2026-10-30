@@ -3,6 +3,10 @@
 Automatic retention deletes the whole private ownership tree. #195 may register
 synchronous dependent-row/cache hooks within that transaction; explicit retained
 erasure will require its protected ErasureDigester, never a plain-hash fallback.
+
+Reads apply retention logically (a row past retain_until is not found) and take
+no write lock; the sweeper owns the physical purge. A read that observes an
+elapsed choice window records the expiry once, in a write transaction.
 """
 
 import copy
@@ -12,54 +16,28 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from relaymind.canonical import canonical_digest, canonical_json
+from relaymind.recommendations.errors import MESSAGES, STATUSES, RecommendationError
+from relaymind.recommendations.limits import MAX_EVENTS_PAGE, recommendation_budgets
 from relaymind.schema_util import freeze_json
+from relaymind.selection.asset_contract import parse_recommendation_result
 from relaymind.store.recommendation_event import validate_event, validate_view
-from relaymind.store.run_store import RunStore, utc_iso
+from relaymind.store.run_store import RunStore, append_event, utc_iso
 
-MESSAGES = {
-    "unauthenticated": "a valid application token is required",
-    "invalid_request": "the recommendation request is invalid",
-    "recommendation_not_found": "the recommendation was not found",
-    "stale_version": "the recommendation version changed",
-    "invalid_state": "the recommendation state does not permit this operation",
-    "idempotency_conflict": "the idempotency key was used with a different request",
-    "recommendation_in_progress": "the recommendation is still computing",
-    "overloaded": "the recommendation service is busy",
-    "recommendation_unavailable": "the recommendation service is unavailable",
-    "deadline_exceeded": "the recommendation deadline was exceeded",
-    "internal_error": "an internal error occurred",
-}
-STATUSES = {
-    "unauthenticated": 401,
-    "invalid_request": 400,
-    "recommendation_not_found": 404,
-    "stale_version": 409,
-    "invalid_state": 409,
-    "idempotency_conflict": 409,
-    "recommendation_in_progress": 409,
-    "overloaded": 429,
-    "recommendation_unavailable": 503,
-    "deadline_exceeded": 504,
-    "internal_error": 500,
-}
+__all__ = [
+    "MESSAGES",
+    "STATUSES",
+    "RecommendationClaim",
+    "RecommendationError",
+    "RecommendationStore",
+    "StoredClaim",
+    "StoredRecommendation",
+    "StoredResponse",
+    "recommendation_budgets",
+]
 
-
-class RecommendationError(Exception):
-    def __init__(self, code: str, recommendation_id: str | None = None):
-        super().__init__(code)
-        self.code, self.recommendation_id = code, recommendation_id
-
-    @property
-    def status(self) -> int:
-        return STATUSES[self.code]
-
-    def inner(self) -> dict:
-        return dict(
-            code=self.code,
-            message=MESSAGES[self.code],
-            run_id=None,
-            recommendation_id=self.recommendation_id,
-        )
+# The columns every lifecycle read needs; accepted_json (the full offer) is read
+# only by the ready transition.
+_VIEW_COLUMNS = "recommendation_id,user_id,workspace_id,state,state_version,view_json,active_ms"
 
 
 @dataclass(frozen=True)
@@ -110,24 +88,9 @@ class RecommendationClaim:
         return canonical_digest(self.key)
 
 
-def recommendation_budgets(
-    total_ms: int = 500, primary_ms: int = 150, fallback: bool = True
-) -> dict:
-    return dict(
-        total_ms=total_ms,
-        primary_ms=primary_ms,
-        fallback_enabled=fallback,
-        candidate_limit=10,
-        display_limit=3,
-        max_catalog_records=1000,
-        max_catalog_bytes=32 * 1024 * 1024,
-        max_result_bytes=1024 * 1024,
-        max_create_bytes=512 * 1024,
-        max_task_bytes=8192,
-        max_conversation_entries=32,
-        max_conversation_bytes=32768,
-        choice_seconds=600,
-        retention_days=30,
+def _expiry_due(row, now) -> bool:
+    return row["state"] == "ready" and json.loads(row["view_json"])["choice_expires_at"] <= utc_iso(
+        now
     )
 
 
@@ -158,20 +121,25 @@ class RecommendationStore:
             db.execute("DELETE FROM recommendations WHERE recommendation_id=?", (rid,))
         return len(ids)
 
-    def _row(self, db, scope, rid):
+    def _row(self, db, scope, rid, *, now=None, columns=_VIEW_COLUMNS):
+        retained = "" if now is None else " AND retain_until>?"
         row = db.execute(
-            "SELECT * FROM recommendations WHERE recommendation_id=? AND user_id=? AND "
-            "workspace_id=?",
-            (rid, scope["user_id"], scope["workspace_id"]),
+            f"SELECT {columns} FROM recommendations WHERE recommendation_id=? AND user_id=? AND "
+            f"workspace_id=?{retained}",
+            (rid, scope["user_id"], scope["workspace_id"])
+            + (() if now is None else (utc_iso(now),)),
         ).fetchone()
         if row is None:
             raise RecommendationError("recommendation_not_found")
         return row
 
-    def _lookup(self, db, claim):
+    def _lookup(self, db, claim, now=None):
+        retained = "" if now is None else " AND r.retain_until>?"
         row = db.execute(
-            "SELECT * FROM recommendation_claims WHERE namespace=? AND key_digest=?",
-            (claim.namespace, claim.key_digest),
+            "SELECT c.request_digest,c.recommendation_id,c.status,c.body_json "
+            "FROM recommendation_claims c JOIN recommendations r USING(recommendation_id) "
+            f"WHERE c.namespace=? AND c.key_digest=?{retained}",
+            (claim.namespace, claim.key_digest) + (() if now is None else (utc_iso(now),)),
         ).fetchone()
         if row is None:
             return None
@@ -185,35 +153,33 @@ class RecommendationStore:
         return StoredClaim(row["recommendation_id"], response)
 
     def lookup_claim(self, claim: RecommendationClaim, *, now: datetime) -> StoredClaim | None:
-        with self.store.sql_transaction() as db:
-            self._purge(db, now)
-            return self._lookup(db, claim)
+        with self.store.sql_read() as db:
+            return self._lookup(db, claim, now)
 
-    def _event(self, db, rid, kind, payload, now, elapsed, *, actor="gateway"):
-        seq = db.execute(
-            "SELECT COALESCE(MAX(seq),0)+1 FROM recommendation_events WHERE recommendation_id=?",
-            (rid,),
-        ).fetchone()[0]
-        event = validate_event(
-            dict(
-                schema_version=1,
-                recommendation_id=rid,
-                seq=seq,
-                timestamp=utc_iso(now),
-                elapsed_ms=max(0, elapsed),
-                event_type=kind,
-                actor=actor,
-                erased=False,
-                payload=payload,
-            )
+    def _event(self, db, rid, kind, payload, now, elapsed, *, actor="gateway", checked=False):
+        return append_event(
+            db,
+            "recommendation_events",
+            "recommendation_id",
+            rid,
+            lambda seq: validate_event(
+                dict(
+                    schema_version=1,
+                    recommendation_id=rid,
+                    seq=seq,
+                    timestamp=utc_iso(now),
+                    elapsed_ms=max(0, elapsed),
+                    event_type=kind,
+                    actor=actor,
+                    erased=False,
+                    payload=payload,
+                ),
+                result_checked=checked,
+            ),
         )
-        db.execute(
-            "INSERT INTO recommendation_events VALUES(?,?,?)", (rid, seq, canonical_json(event))
-        )
-        return event
 
-    def _write(self, db, view, active_ms):
-        view = validate_view(view)
+    def _write(self, db, view, active_ms, *, checked=False):
+        view = validate_view(view, result_checked=checked)
         db.execute(
             "UPDATE recommendations SET state=?,state_version=?,view_json=?,active_ms=? WHERE "
             "recommendation_id=?",
@@ -250,7 +216,7 @@ class RecommendationStore:
             created_at=utc_iso(now),
             ready_at=None,
             choice_expires_at=None,
-            retain_until=utc_iso(now + timedelta(days=30)),
+            retain_until=utc_iso(now + timedelta(days=raw["budgets"]["retention_days"])),
             catalog_revision=raw["catalog_revision"],
             host_snapshot_revision=None,
             decision=None,
@@ -318,7 +284,9 @@ class RecommendationStore:
     ):
         now = now or self.store.clock.utc_now()
         with self.store.sql_transaction() as db:
-            row = self._row(db, scope, recommendation_id)
+            row = self._row(
+                db, scope, recommendation_id, columns="recommendation_id,state,state_version"
+            )
             self._computing(db, row, expected_version)
             if event["event_type"] not in ("selector.started", "selector.finished"):
                 raise RecommendationError("invalid_state", recommendation_id)
@@ -366,29 +334,40 @@ class RecommendationStore:
         code=None,
         commit_guard=lambda: None,
     ):
+        """Commit one terminal transition.
+
+        result is a parsed recommendation result (its to_json_object() is used
+        as is) or a JSON mapping, which is parsed once here.
+        """
         now = now or self.store.clock.utc_now()
         if transition not in ("ready", "failed", "cancelled"):
             raise RecommendationError("invalid_state", recommendation_id)
+        if transition == "ready":
+            result = (
+                result.to_json_object()
+                if hasattr(result, "to_json_object")
+                else parse_recommendation_result(result).to_json_object()
+            )
         with self.store.sql_transaction() as db:
-            row = self._row(db, scope, recommendation_id)
+            columns = _VIEW_COLUMNS + (",accepted_json" if transition == "ready" else "")
+            row = self._row(db, scope, recommendation_id, columns=columns)
             self._computing(db, row, expected_version)
             view = json.loads(row["view_json"])
             view.update(state=transition, state_version=expected_version + 1)
             if transition == "ready":
-                from relaymind.selection.asset_contract import parse_recommendation_result
-
-                result = parse_recommendation_result(result).to_json_object()
                 if result["catalog_revision"] != view["catalog_revision"]:
                     raise RecommendationError("invalid_state", recommendation_id)
-                offered = {r["asset_id"]: r for r in json.loads(row["accepted_json"])["catalog"]}
+                offer = json.loads(row["accepted_json"])
+                budgets = offer["budgets"]
+                offered = {r["asset_id"]: r for r in offer["catalog"]}
                 view.update(
                     result=result,
                     decision=result["decision"],
                     ready_at=utc_iso(now),
-                    choice_expires_at=utc_iso(now + timedelta(seconds=600)),
+                    choice_expires_at=utc_iso(now + timedelta(seconds=budgets["choice_seconds"])),
                     displayed_candidates=[
                         dict(candidate=c, asset=offered[c["asset_id"]])
-                        for c in result["final_candidates"][:3]
+                        for c in result["final_candidates"][: budgets["display_limit"]]
                     ],
                 )
                 payload = dict(
@@ -417,8 +396,9 @@ class RecommendationStore:
                     active_ms=active_ms,
                     attempts=list(attempts),
                 )
-            obj = self._write(db, view, active_ms)
-            self._event(db, recommendation_id, transition, payload, now, active_ms)
+            # The result was parsed once above; the view and event checks reuse that.
+            obj = self._write(db, view, active_ms, checked=True)
+            self._event(db, recommendation_id, transition, payload, now, active_ms, checked=True)
             response = receipt or StoredResponse(200, obj.view)
             encoded = canonical_json(response.body)
             # Final guard also fences serialization and all writes before COMMIT.
@@ -433,6 +413,24 @@ class RecommendationStore:
             )
             commit_guard()
             return obj
+
+    def cancel_if_computing(self, scope, recommendation_id, *, now, active_ms, attempts, reason):
+        """Record a gateway cancel only while the object still computes; else no change."""
+        try:
+            return self.finish(
+                scope,
+                recommendation_id,
+                0,
+                "cancelled",
+                now=now,
+                active_ms=active_ms,
+                attempts=attempts,
+                reason=reason,
+            )
+        except RecommendationError as exc:
+            if exc.code in ("invalid_state", "stale_version", "recommendation_not_found"):
+                return None
+            raise
 
     def _expire(self, db, row, now):
         view = json.loads(row["view_json"])
@@ -451,30 +449,32 @@ class RecommendationStore:
             )
         return StoredRecommendation(validate_view(view))
 
-    def get(self, scope, recommendation_id, *, now):
+    def _observe(self, scope, rid, now, read):
+        """Run read(db, view) on the current view, recording a due expiry first.
+
+        Only a read that finds an elapsed choice window takes the write lock.
+        """
+        with self.store.sql_read() as db:
+            row = self._row(db, scope, rid, now=now)
+            if not _expiry_due(row, now):
+                return read(db, StoredRecommendation(validate_view(json.loads(row["view_json"]))))
         with self.store.sql_transaction() as db:
-            self._purge(db, now)
-            try:
-                row = self._row(db, scope, recommendation_id)
-            except RecommendationError:
-                result = None
-            else:
-                result = self._expire(db, row, now)
-        if result is None:
-            raise RecommendationError("recommendation_not_found")
-        return result
+            row = self._row(db, scope, rid, now=now)
+            return read(db, self._expire(db, row, now))
+
+    def get(self, scope, recommendation_id, *, now):
+        return self._observe(scope, recommendation_id, now, lambda db, stored: stored)
 
     def events(self, scope, recommendation_id, *, after_seq, limit, now):
         if (
             type(after_seq) is not int
             or after_seq < 0
             or type(limit) is not int
-            or not 1 <= limit <= 1000
+            or not 1 <= limit <= MAX_EVENTS_PAGE
         ):
             raise RecommendationError("invalid_request")
-        self.get(scope, recommendation_id, now=now)
-        with self.store.sql_transaction() as db:
-            self._row(db, scope, recommendation_id)
+
+        def page(db, _stored):
             rows = db.execute(
                 "SELECT event_json FROM recommendation_events WHERE recommendation_id=? AND "
                 "seq>? ORDER BY seq LIMIT ?",
@@ -491,31 +491,38 @@ class RecommendationStore:
                 )
             )
 
+        return self._observe(scope, recommendation_id, now, page)
+
     def sweep(self, *, now):
         with self.store.sql_transaction() as db:
             purged = self._purge(db, now)
-            rows = db.execute("SELECT * FROM recommendations WHERE state='ready'").fetchall()
+            rows = db.execute(
+                f"SELECT {_VIEW_COLUMNS} FROM recommendations WHERE state='ready' AND "
+                "json_extract(view_json,'$.choice_expires_at')<=?",
+                (utc_iso(now),),
+            ).fetchall()
             expired = sum(self._expire(db, r, now).view["state"] == "expired" for r in rows)
             return dict(purged=purged, expired=expired)
 
     def recover(self, *, now):
         with self.store.sql_transaction() as db:
             self._purge(db, now)
-            rows = db.execute("SELECT * FROM recommendations WHERE state='computing'").fetchall()
+            rows = db.execute(
+                "SELECT recommendation_id,user_id,workspace_id,state_version,active_ms "
+                "FROM recommendations WHERE state='computing'"
+            ).fetchall()
             for row in rows:
-                accepted = json.loads(row["accepted_json"])
-                events = db.execute(
-                    "SELECT event_json FROM recommendation_events WHERE recommendation_id=? "
-                    "ORDER BY seq",
-                    (row["recommendation_id"],),
-                ).fetchall()
                 attempts = [
                     json.loads(e[0])["payload"]["attempt_record"]
-                    for e in events
-                    if json.loads(e[0])["event_type"] == "selector.finished"
+                    for e in db.execute(
+                        "SELECT event_json FROM recommendation_events WHERE recommendation_id=? "
+                        "AND json_extract(event_json,'$.event_type')='selector.finished' "
+                        "ORDER BY seq",
+                        (row["recommendation_id"],),
+                    )
                 ]
                 self.finish(
-                    accepted["scope"],
+                    dict(user_id=row["user_id"], workspace_id=row["workspace_id"]),
                     row["recommendation_id"],
                     row["state_version"],
                     "failed",

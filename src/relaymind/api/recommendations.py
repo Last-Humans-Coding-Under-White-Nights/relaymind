@@ -1,43 +1,38 @@
 """Bounded independent JSON recommendation API (RM36/AC27, section 7.6)."""
 
 import asyncio
-import json
-import math
 import re
 from collections.abc import Mapping
 from uuid import UUID
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse
 
+from relaymind.api.app import _disconnect, _left, _log_internal
 from relaymind.api.auth import require_bearer_token
 from relaymind.api.errors import ApiError
 from relaymind.api.idempotency import APPLICATION_CALLER, idempotency_key
 from relaymind.assets.catalog import check_language_tags
 from relaymind.canonical import canonical_digest
-from relaymind.recommendations.service import CancellationSignal, RecommendationService
+from relaymind.recommendations.errors import RecommendationError
+from relaymind.recommendations.limits import (
+    DEFAULT_EVENTS_PAGE,
+    MAX_CONVERSATION_BYTES,
+    MAX_CONVERSATION_ENTRIES,
+    MAX_CREATE_BYTES,
+    MAX_TASK_BYTES,
+)
+from relaymind.recommendations.service import (
+    CancellationSignal,
+    RecommendationService,
+    readiness_body,
+)
 from relaymind.redaction import scrub
 from relaymind.selection.asset_chain import RecommendationFailure, SelectionBudget
-from relaymind.store.recommendations import RecommendationClaim, RecommendationError
+from relaymind.selection.asset_http import strict_json
+from relaymind.store.recommendations import RecommendationClaim
 
 ENDPOINT = "/relay/v1/recommendations"
-MAX_CREATE_BYTES = 512 * 1024
-
-
-def _pairs(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError
-        result[key] = value
-    return result
-
-
-def _float(value):
-    result = float(value)
-    if not math.isfinite(result):
-        raise ValueError
-    return result
 
 
 def parse_create(raw: bytes) -> dict:
@@ -45,12 +40,7 @@ def parse_create(raw: bytes) -> dict:
     try:
         if len(raw) > MAX_CREATE_BYTES:
             raise ValueError
-        value = json.loads(
-            raw.decode("utf-8"),
-            object_pairs_hook=_pairs,
-            parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
-            parse_float=_float,
-        )
+        value = strict_json(raw)
         required = {"schema_version", "task_text", "requested_kinds", "selection_scope"}
         optional = {"conversation", "language_tags", "code_switched", "host_snapshot_revision"}
         if (
@@ -77,7 +67,7 @@ def parse_create(raw: bytes) -> dict:
         if (
             not isinstance(task, str)
             or not task.strip()
-            or not 1 <= len(task.encode("utf-8")) <= 8192
+            or not 1 <= len(task.encode("utf-8")) <= MAX_TASK_BYTES
         ):
             raise ValueError
         kinds = value["requested_kinds"]
@@ -90,7 +80,7 @@ def parse_create(raw: bytes) -> dict:
             raise ValueError
         check_language_tags(value["language_tags"])
         conversation = value["conversation"]
-        if not isinstance(conversation, list) or len(conversation) > 32:
+        if not isinstance(conversation, list) or len(conversation) > MAX_CONVERSATION_ENTRIES:
             raise ValueError
         size = 0
         for message in conversation:
@@ -102,7 +92,7 @@ def parse_create(raw: bytes) -> dict:
             ):
                 raise ValueError
             size += len(message["text"].encode("utf-8"))
-        if size > 32768:
+        if size > MAX_CONVERSATION_BYTES:
             raise ValueError
         return value
     except (ValueError, TypeError, KeyError, RecursionError, UnicodeError, OverflowError):
@@ -145,33 +135,8 @@ def _query(request, *, events=False):
     for text in values.values():
         if not re.fullmatch(r"[0-9]+", text):
             raise RecommendationError("invalid_request")
-    try:
-        after = int(values.get("after_seq", "0"))
-        limit = int(values.get("limit", "100"))
-    except ValueError:
-        raise RecommendationError("invalid_request") from None
-    if not 1 <= limit <= 1000:
-        raise RecommendationError("invalid_request")
-    return after, limit
-
-
-async def _disconnect(request):
-    while (await request.receive())["type"] != "http.disconnect":
-        pass
-
-
-def _disabled_readiness():
-    return dict(
-        schema_version=1,
-        state="unavailable",
-        reason="disabled",
-        catalog_revision=None,
-        catalog_size=0,
-        lexical_ready=False,
-        semantic_coverage=dict(ready=0, total=0),
-        pending_jobs=0,
-        failed_jobs=0,
-    )
+    # The store owns the page-size range check (section 14.5).
+    return int(values.get("after_seq", "0")), int(values.get("limit", str(DEFAULT_EVENTS_PAGE)))
 
 
 def install_recommendation_routes(
@@ -200,9 +165,11 @@ def install_recommendation_routes(
                     if failure.code == "deadline_exceeded"
                     else "recommendation_unavailable"
                 )
-            except Exception:
+            except Exception as exc:
+                _log_internal(request, exc)
                 error = RecommendationError("internal_error")
-            return JSONResponse({"error": error.inner()}, status_code=error.status)
+            headers = {"WWW-Authenticate": "Bearer"} if error.code == "unauthenticated" else {}
+            return JSONResponse({"error": error.inner()}, status_code=error.status, headers=headers)
 
         return wrapped
 
@@ -230,12 +197,7 @@ def install_recommendation_routes(
         watcher = asyncio.create_task(_disconnect(request))
         try:
             done, _ = await asyncio.wait((task, watcher), return_when=asyncio.FIRST_COMPLETED)
-            if (
-                watcher in done
-                and not watcher.cancelled()
-                and watcher.exception() is None
-                and not task.done()
-            ):
+            if watcher in done and _left(watcher) and not task.done():
                 signal.reason = "disconnect"
                 budget.cancel()
                 if signal.recommendation_id:
@@ -252,17 +214,18 @@ def install_recommendation_routes(
             else:
                 task.cancel()
             await asyncio.gather(task, return_exceptions=True)
-            recorded = service.store.lookup_claim(claim, now=service.clock.utc_now())
-            if recorded is not None and recorded.response is not None:
-                return JSONResponse(recorded.response.body, status_code=recorded.response.status)
-            return Response(status_code=200)
+            recorded = service.recorded_response(claim)
+            if recorded is None:
+                # Nothing was accepted: the cancellation is the outcome, never an empty 200.
+                raise
+            return JSONResponse(recorded.body, status_code=recorded.status)
         finally:
             watcher.cancel()
             await asyncio.gather(watcher, return_exceptions=True)
 
     async def readiness(request):
         _query(request)
-        return JSONResponse(service.readiness() if service else _disabled_readiness())
+        return JSONResponse(service.readiness() if service else readiness_body())
 
     def object_id(request):
         raw = request.path_params["recommendation_id"]
@@ -277,24 +240,14 @@ def install_recommendation_routes(
         _query(request)
         if service is None:
             raise RecommendationError("recommendation_not_found")
-        return JSONResponse(
-            service.store.get(
-                configured_scope, object_id(request), now=service.clock.utc_now()
-            ).view
-        )
+        return JSONResponse(service.get(configured_scope, object_id(request)))
 
     async def events(request):
         after, limit = _query(request, events=True)
         if service is None:
             raise RecommendationError("recommendation_not_found")
         return JSONResponse(
-            service.store.events(
-                configured_scope,
-                object_id(request),
-                after_seq=after,
-                limit=limit,
-                now=service.clock.utc_now(),
-            )
+            service.events(configured_scope, object_id(request), after_seq=after, limit=limit)
         )
 
     app.add_api_route(ENDPOINT, guarded(create), methods=["POST"])

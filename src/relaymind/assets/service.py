@@ -28,6 +28,10 @@ _LOGGER = logging.getLogger(__name__)
 _BUSY_RETRY_SECONDS = 0.1
 
 
+async def _no_change_observer() -> None:
+    """The default change observer: nothing derives from the catalog."""
+
+
 class AssetCatalogService:
     def __init__(
         self,
@@ -41,7 +45,7 @@ class AssetCatalogService:
         self.settings, self.store = settings, store
         self.clock = clock or TraceClock()
         self.busy = busy
-        self.after_change = after_change
+        self.after_change = after_change or _no_change_observer
         self._sources = {s.source_id: s for s in settings.sources}
         self._next = dict.fromkeys(self._sources, 0.0)
         self._failures = dict.fromkeys(self._sources, 0)
@@ -87,6 +91,18 @@ class AssetCatalogService:
             self._stopping = False
             self._task = asyncio.create_task(self._loop(), name="asset-catalog")
             self._task.add_done_callback(_log_worker_end)
+
+    async def _notify_changed(self) -> None:
+        """Tell the derived-cache observer the catalog may have changed.
+
+        Failures change visible stale state too (and so the revision), so every
+        finished job notifies. The observer has separate ownership: its failure
+        is logged and never turns committed source evidence into a failure.
+        """
+        try:
+            await self.after_change()
+        except Exception:
+            _LOGGER.exception("asset catalog derived preparation failed")
 
     async def stop(self) -> None:
         self._stopping = True
@@ -244,8 +260,7 @@ class AssetCatalogService:
                     future,
                     SourceFailure("cancelled", rejected_count=0),
                 )
-                if self.after_change is not None:
-                    await self.after_change()
+                await self._notify_changed()
                 raise
             except Exception as exc:
                 failure = (
@@ -255,23 +270,14 @@ class AssetCatalogService:
                     else SourceFailure("index_error", rejected_count=0)
                 )
                 self._fail(source_id, job_id, context, started, future, failure)
-                if self.after_change is not None:
-                    await self.after_change()
+                await self._notify_changed()
             else:
-                # Publication and its job evidence are already committed. A
-                # derived-cache observer has separate ownership and cannot
-                # convert successful acquisition into a source failure.
                 try:
-                    if self.after_change is not None:
-                        await self.after_change()
-                except asyncio.CancelledError:
+                    await self._notify_changed()
+                finally:
+                    # Even a cancelled observer leaves the committed result delivered.
                     if future is not None and not future.done():
                         future.set_result(result)
-                    raise
-                except Exception:
-                    _LOGGER.exception("asset catalog derived preparation failed")
-                if future is not None and not future.done():
-                    future.set_result(result)
             finally:
                 self._active_future = None
                 if future is not None and self._pending.get(source_id) is future:

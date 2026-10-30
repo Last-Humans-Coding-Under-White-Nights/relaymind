@@ -3,21 +3,9 @@
 import asyncio
 import json
 
-import httpx
 import pytest
 
-from recommendation_helpers import BODY, setup
-
-
-async def client_for(app):
-    return httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://127.0.0.1",
-        headers={
-            "Authorization": "Bearer " + app.state.application_token,
-            "Idempotency-Key": "key",
-        },
-    )
+from recommendation_helpers import BODY, client_for, setup
 
 
 def test_create_poll_readiness_and_exact_defaults_replay(tmp_path):

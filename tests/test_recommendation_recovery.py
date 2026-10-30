@@ -6,10 +6,17 @@ from datetime import timedelta
 
 import pytest
 
-from recommendation_helpers import BODY, SCOPE, setup
+from recommendation_helpers import (
+    BODY,
+    NOW,
+    SCOPE,
+    accepted,
+    claim,
+    client_for,
+    empty_result,
+    setup,
+)
 from relaymind.store import RunStore
-from test_recommendation_api import client_for
-from test_recommendation_store import NOW, accepted, claim, empty_result
 
 
 def test_restart_records_one_interrupted_receipt_without_compute(tmp_path):
@@ -136,7 +143,7 @@ def test_configured_success_proof_and_stale_refresh(tmp_path):
 
 def test_production_source_observer_publishes_cache_and_actual_job_events(tmp_path):
     from relaymind.assets.service import AssetCatalogService
-    from relaymind.store.recommendation_event import validate_job_event
+    from relaymind.store.index_job_event import validate_job_event
 
     async def go():
         app, service, runs, catalog = setup(tmp_path, populate=False)

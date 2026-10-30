@@ -356,7 +356,7 @@ MIGRATIONS: tuple[str, ...] = (
     );
     CREATE TABLE recommendation_slot (
         singleton INTEGER PRIMARY KEY CHECK(singleton=1),
-        recommendation_id TEXT UNIQUE REFERENCES recommendations ON DELETE CASCADE
+        recommendation_id TEXT UNIQUE REFERENCES recommendations ON DELETE SET NULL
     );
     INSERT INTO recommendation_slot VALUES(1,NULL);
     CREATE INDEX recommendation_retention ON recommendations(retain_until);
@@ -367,6 +367,26 @@ MIGRATIONS: tuple[str, ...] = (
     );
     """,
 )
+
+
+def append_event(
+    connection: sqlite3.Connection,
+    table: str,
+    key_column: str,
+    key: str,
+    make: Callable[[int], Mapping[str, Any]],
+) -> Mapping[str, Any]:
+    """Append one owner's next event; make(seq) returns the validated event.
+
+    The sequence starts at 1 per owner and is assigned in the caller's
+    transaction, so concurrent writers never share a number.
+    """
+    seq = connection.execute(
+        f"SELECT COALESCE(MAX(seq),0)+1 FROM {table} WHERE {key_column}=?", (key,)
+    ).fetchone()[0]
+    event = make(seq)
+    connection.execute(f"INSERT INTO {table} VALUES(?,?,?)", (key, seq, canonical_json(event)))
+    return event
 
 
 class RunStoreError(RuntimeError):
@@ -784,6 +804,23 @@ class RunStore:
         """
         with self._write():
             yield self._conn
+
+    @contextmanager
+    def sql_read(self) -> Iterator[sqlite3.Connection]:
+        """A read-only snapshot under the store lock; it never takes the write lock.
+
+        Inside an open write it joins that transaction, like sql_transaction.
+        """
+        with self._lock:
+            self._check_open()
+            if self._depth:
+                yield self._conn
+                return
+            self._conn.execute("BEGIN DEFERRED")
+            try:
+                yield self._conn
+            finally:
+                self._rollback()
 
     # -- idle maintenance slot (RM17, RM27) ---------------------------------
 

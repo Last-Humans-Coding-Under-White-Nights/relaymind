@@ -2,72 +2,12 @@
 
 import copy
 import sqlite3
-import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import pytest
 
+from recommendation_helpers import NOW, SCOPE, accepted, claim, empty_result
 from relaymind.store import RunStore
-
-NOW = datetime(2026, 10, 29, tzinfo=UTC)
-SCOPE = {"user_id": "u", "workspace_id": "w"}
-
-
-def accepted(**changes):
-    from relaymind.store.recommendations import recommendation_budgets
-
-    value = dict(
-        recommendation_id=str(uuid.uuid4()),
-        task_id="a" * 64,
-        task_text="greet",
-        conversation=[],
-        scope=SCOPE,
-        budgets=recommendation_budgets(),
-        configured_primary={"name": "lexical", "version": "1"},
-        config_digest="b" * 64,
-        catalog_revision=1,
-        host_snapshot_revision=None,
-        requested_kinds=["skill"],
-        selection_scope="discovery",
-        language_tags=[],
-        code_switched=False,
-        catalog=[],
-        created_at=NOW,
-    )
-    return value | changes
-
-
-def claim(key="key", digest="c" * 64, scope=None):
-    from relaymind.store.recommendations import RecommendationClaim
-
-    return RecommendationClaim(
-        scope or SCOPE, "application", "POST", "/relay/v1/recommendations", None, key, digest
-    )
-
-
-def empty_result():
-    return dict(
-        schema_version=1,
-        decision="empty_catalog",
-        catalog_revision=1,
-        host_snapshot_revision=None,
-        attempts=[],
-        primary_attempt=None,
-        base_candidates=[],
-        base_decision="empty_catalog",
-        final_candidates=[],
-        final_decision="empty_catalog",
-        fallback_reason=None,
-        adaptation=None,
-        admission={
-            "outcome": "accepted",
-            "rechecked_catalog_revision": 1,
-            "checked_at": NOW.isoformat(),
-        },
-        observed_ms=1,
-        embeddings=[],
-        host_run_ids=[],
-    )
 
 
 def test_atomic_lifecycle_replay_expiry_and_retention():
@@ -151,11 +91,8 @@ def test_slot_scope_cas_and_rollback_across_connections(tmp_path):
 
 
 def test_closed_evidence_and_guard_rollback():
-    from relaymind.store.recommendation_event import (
-        validate_event,
-        validate_job_event,
-        validate_view,
-    )
+    from relaymind.store.index_job_event import validate_job_event
+    from relaymind.store.recommendation_event import validate_event, validate_view
     from relaymind.store.recommendations import RecommendationStore
 
     with RunStore() as runs:
@@ -300,19 +237,6 @@ def test_attempt_events_version_fence_and_atomic_begin_rollback():
         events = store.events(SCOPE, rid, after_seq=0, limit=100, now=NOW)["events"]
         assert [e["seq"] for e in events] == [1, 2, 3]
         assert [e["elapsed_ms"] for e in events] == [0, 2, 3]
-
-
-def test_lazy_retention_read_purges_even_when_returning_not_found():
-    """RM36/AC27: absence must not roll back the lazy privacy purge."""
-    from relaymind.store.recommendations import RecommendationStore
-
-    with RunStore() as runs:
-        store = RecommendationStore(runs)
-        rid = store.begin(accepted(), claim()).view["recommendation_id"]
-        with pytest.raises(Exception, match="recommendation_not_found"):
-            store.get(SCOPE, rid, now=NOW + timedelta(days=30))
-        with runs.sql_transaction() as db:
-            assert db.execute("SELECT count(*) FROM recommendations").fetchone()[0] == 0
 
 
 def test_acceptance_final_budget_guard_rolls_back_object_key_and_slot():

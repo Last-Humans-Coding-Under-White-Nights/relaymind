@@ -15,6 +15,7 @@ from relaymind.assets.catalog import (
     SearchDocument,
     SourceCapture,
     SourceInventory,
+    acquisition_budgets,
     failure_exclusions,
     project_asset,
     projection_digest,
@@ -25,8 +26,8 @@ from relaymind.assets.catalog import (
 from relaymind.canonical import canonical_json
 from relaymind.redaction import Redactor
 from relaymind.schema_util import freeze_json
-from relaymind.store.recommendation_event import validate_job_event
-from relaymind.store.run_store import RunStore, utc_iso
+from relaymind.store.index_job_event import CANCELLED_REASONS, FAILED_REASONS, validate_job_event
+from relaymind.store.run_store import RunStore, append_event, utc_iso
 
 # The snapshot-visible source fields. Observation times (captured_at,
 # last_success_at) are not content identity and never bump the revision.
@@ -210,7 +211,7 @@ class AssetCatalogStore:
 
     def revision(self) -> int:
         """Cheap current revision pin; a snapshot is validated at publication."""
-        with self.store.sql_transaction() as connection:
+        with self.store.sql_read() as connection:
             try:
                 incompatible = connection.execute(f"SELECT 1 {_STALE_MISMATCH} LIMIT 1").fetchone()
             except sqlite3.Error:
@@ -528,26 +529,27 @@ class AssetCatalogStore:
             )
 
     def _job_event(self, connection, job_id, event_type, payload, *, timestamp=None):
-        seq = connection.execute(
-            "SELECT COALESCE(MAX(seq),0)+1 FROM asset_index_job_events WHERE job_id=?", (job_id,)
-        ).fetchone()[0]
-        event = validate_job_event(
-            dict(
-                schema_version=1,
-                job_id=job_id,
-                seq=seq,
-                timestamp=timestamp or utc_iso(self.store.clock.utc_now()),
-                event_type=event_type,
-                payload=payload,
-            )
-        )
-        connection.execute(
-            "INSERT INTO asset_index_job_events VALUES(?,?,?)", (job_id, seq, canonical_json(event))
+        stamp = timestamp or utc_iso(self.store.clock.utc_now())
+        append_event(
+            connection,
+            "asset_index_job_events",
+            "job_id",
+            job_id,
+            lambda seq: validate_job_event(
+                dict(
+                    schema_version=1,
+                    job_id=job_id,
+                    seq=seq,
+                    timestamp=stamp,
+                    event_type=event_type,
+                    payload=payload,
+                )
+            ),
         )
 
     def job_events(self, job_id: str) -> tuple[Mapping, ...]:
         """Actual evidence only; legacy jobs may have unavailable initial history."""
-        with self.store.sql_transaction() as connection:
+        with self.store.sql_read() as connection:
             return tuple(
                 validate_job_event(json.loads(row[0]))
                 for row in connection.execute(
@@ -581,19 +583,7 @@ class AssetCatalogStore:
                     catalog_revision=revision,
                     config_digest=config_digest,
                     job_kind="refresh",
-                    budgets=dict(
-                        max_requests=1000,
-                        max_records=1000,
-                        max_received_bytes=100 * 1024 * 1024,
-                        max_asset_bytes=10 * 1024 * 1024,
-                        max_metadata_bytes=4 * 1024 * 1024,
-                        read_buffer_bytes=1024 * 1024,
-                        exchange_seconds=10,
-                        job_seconds=60,
-                        workers=1,
-                        cpu_batch_ms=50,
-                        background_gpu_with_llama=False,
-                    ),
+                    budgets=acquisition_budgets(),
                 ),
             )
             self._job_event(
@@ -659,27 +649,13 @@ class AssetCatalogStore:
                     job_id,
                     "cancelled",
                     dict(
-                        reason=reason if reason in ("shutdown", "operator") else "operator",
+                        reason=reason if reason in CANCELLED_REASONS else "operator",
                         duration_ms=duration_ms,
                         retained_catalog_revision=revision,
                     ),
                 )
             else:
-                safe_reason = (
-                    reason
-                    if reason
-                    in (
-                        "interrupted",
-                        "deadline",
-                        "size_limit",
-                        "record_limit",
-                        "request_limit",
-                        "invalid_data",
-                        "source_unavailable",
-                        "index_error",
-                    )
-                    else "index_error"
-                )
+                safe_reason = reason if reason in FAILED_REASONS else "index_error"
                 self._job_event(
                     connection,
                     job_id,
@@ -714,6 +690,33 @@ class AssetCatalogStore:
                 "NOT IN (SELECT job_id FROM asset_catalog_jobs WHERE state!='running' "
                 "ORDER BY started_at DESC,job_id DESC LIMIT 1000)"
             )
+
+    def job_counts(self) -> dict[str, int]:
+        """How many jobs are in each state, for readiness, without loading their history."""
+        with self.store.sql_read() as connection:
+            return {
+                row[0]: row[1]
+                for row in connection.execute(
+                    "SELECT state, COUNT(*) FROM asset_catalog_jobs GROUP BY state"
+                )
+            }
+
+    def snapshot_with_provenance(self) -> tuple[CatalogSnapshot, dict[str, Mapping]]:
+        """One consistent read: the snapshot and each source's provenance row."""
+        with self.store.sql_transaction():
+            snapshot = self.snapshot()
+            rows = self.source_provenance()
+        return snapshot, rows
+
+    def source_provenance(self) -> dict[str, Mapping]:
+        with self.store.sql_read() as connection:
+            return {
+                row["source_id"]: dict(row)
+                for row in connection.execute(
+                    "SELECT source_id,config_digest,last_success_at,captured_at,content_hash "
+                    "FROM asset_catalog_sources"
+                )
+            }
 
     def job_outcomes(self) -> tuple[dict[str, Any], ...]:
         with self.store.sql_transaction() as connection:
