@@ -7,6 +7,7 @@ on:
   # No base-branch filter: stacked PRs (feature branch onto feature
   # branch) must get CI too.
   pull_request:
+  workflow_dispatch:
 
 jobs:
   check:
@@ -17,6 +18,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: e9048cf4036e283f17ee607976f6444ee25f43bc
+
+      - name: Verify source identity
+        shell: bash
+        run: |
+          source_revision="$(git rev-parse HEAD)"
+          echo "Source revision: $source_revision"
+          echo "Source tree: $(git rev-parse 'HEAD^{tree}')"
+          test "$source_revision" = "e9048cf4036e283f17ee607976f6444ee25f43bc"
 
       - uses: actions/setup-python@v5
         with:
@@ -59,6 +70,16 @@ jobs:
       RELAYMIND_OPENCLAW_NODE: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: e9048cf4036e283f17ee607976f6444ee25f43bc
+
+      - name: Verify source identity
+        shell: bash
+        run: |
+          source_revision="$(git rev-parse HEAD)"
+          echo "Source revision: $source_revision"
+          echo "Source tree: $(git rev-parse 'HEAD^{tree}')"
+          test "$source_revision" = "e9048cf4036e283f17ee607976f6444ee25f43bc"
 
       - uses: actions/setup-node@v4
         with:
