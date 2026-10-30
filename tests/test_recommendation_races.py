@@ -399,11 +399,29 @@ def test_total_timeout_persists_dispatched_primary_measurement_once(tmp_path):
 
 
 def test_total_timeout_during_floor_preserves_both_ordered_attempts(tmp_path, monkeypatch):
-    """RM36/AC27: a completed primary and timed floor each appear exactly once."""
+    """RM36/AC27: an early timer wake still reaches the real total deadline."""
+    from helpers import FakeClock
     from relaymind.assets.settings import RecommendationSettings
     from relaymind.recommendations import service as service_module
+    from relaymind.selection.asset_chain import SelectionBudget
 
     async def go():
+        clock = FakeClock()
+        timer_calls = 0
+
+        async def early_once(_seconds):
+            nonlocal timer_calls
+            timer_calls += 1
+            if timer_calls == 1:
+                # The primary completes and cancels its unused timer.
+                await asyncio.Event().wait()
+            elif timer_calls == 2:
+                # Emulate a platform timer waking before monotonic deadline.
+                await asyncio.sleep(0)
+            else:
+                clock.advance(0.08)
+                await asyncio.sleep(0)
+
         primary = Gate(fail=True)
         primary.release.set()
         floor = MeasuredGate()
@@ -412,7 +430,8 @@ def test_total_timeout_during_floor_preserves_both_ordered_attempts(tmp_path, mo
         settings = RecommendationSettings(
             enabled=True, user_id="u", workspace_id="w", total_ms=80, primary_ms=25
         )
-        app, service, runs, _ = setup(tmp_path, settings=settings, primary=primary)
+        app, service, runs, _ = setup(tmp_path, settings=settings, primary=primary, clock=clock)
+        service.new_budget = lambda: SelectionBudget(80, clock=clock, sleep=early_once)
         await service.refresh_catalog()
         async with await client_for(app) as client:
             first = await client.post("/relay/v1/recommendations", json=BODY)

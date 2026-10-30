@@ -161,11 +161,18 @@ async def _bounded(work: Awaitable, budget: SelectionBudget, deadline: float) ->
     timer = asyncio.create_task(budget.sleep(max(0, deadline - budget.clock.monotonic())))
     cancel = asyncio.create_task(budget.wait_cancelled())
     try:
-        done, _ = await asyncio.wait((task, timer, cancel), return_when=asyncio.FIRST_COMPLETED)
-        budget.check()  # Cancellation always wins ties with result/timeout.
-        if budget.clock.monotonic() >= deadline or task not in done:
-            raise AttemptFailure("timeout", "deadline_exceeded")
-        return task.result()
+        while True:
+            done, _ = await asyncio.wait((task, timer, cancel), return_when=asyncio.FIRST_COMPLETED)
+            budget.check()  # Cancellation always wins ties with result/timeout.
+            remaining = deadline - budget.clock.monotonic()
+            if remaining <= 0:
+                raise AttemptFailure("timeout", "deadline_exceeded")
+            if task in done:
+                return task.result()
+            # A platform timer can wake before the absolute clock deadline.
+            # Keep the same attempt alive for its remaining allowance.
+            if timer in done:
+                timer = asyncio.create_task(budget.sleep(remaining))
     finally:
         # Do not await cancellation-resistant selector cleanup past service time.
         for pending in (task, timer, cancel):
