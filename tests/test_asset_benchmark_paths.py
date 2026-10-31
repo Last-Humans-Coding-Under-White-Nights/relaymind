@@ -2,6 +2,7 @@
 
 import asyncio
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -32,11 +33,21 @@ def test_owned_report_snapshot_accepts_os_temp_ancestor_alias(tmp_path, monkeypa
     alias = tmp_path / "os-temp-alias"
     _symlink_to(alias, physical, target_is_directory=True)
     config = fixture_config(tmp_path, repetitions=1, warmups=0)
+    from relaymind.evaluation import asset_evidence
+
+    original_load = asset_evidence.load_asset_release
+
+    def load_from_owned_physical_root(lock_path, **kwargs):
+        # RM40/AC31: the strict Windows reader must never see the OS alias.
+        assert Path(lock_path).is_relative_to(physical)
+        return original_load(lock_path, **kwargs)
+
+    monkeypatch.setattr(asset_evidence, "load_asset_release", load_from_owned_physical_root)
     # Use the actual TemporaryDirectory implementation and its default root.
     monkeypatch.setattr(tempfile, "tempdir", str(alias))
     report = asyncio.run(run_asset_benchmark(config))
     assert report.data["status"] == "completed"
-    assert report.inputs is not None
+    assert report.inputs is not None, report.input_error
     assert len(report.data["results"]) == len(report.data["planned_slots"]) == 1
     assert list(physical.iterdir()) == []
     output = tmp_path / "report.json"
@@ -72,7 +83,8 @@ def test_requested_output_alias_is_still_refused(tmp_path, location):
     assert not (physical / "nested").exists()
 
 
-def test_replaced_owned_temp_root_is_not_followed(tmp_path, monkeypatch):
+@pytest.mark.parametrize("prefix", ["asset-report-inputs-", "asset-compare-"])
+def test_replaced_owned_temp_root_is_not_followed(tmp_path, monkeypatch, prefix):
     """The OS ancestor alias exception must not trust a replaced owned leaf."""
     from contextlib import contextmanager
     from pathlib import Path
@@ -86,7 +98,7 @@ def test_replaced_owned_temp_root_is_not_followed(tmp_path, monkeypatch):
     def replaced_root(*args, **kwargs):
         with temporary_directory(*args, **kwargs) as directory:
             root = Path(directory)
-            replace = kwargs.get("prefix") == "asset-report-inputs-"
+            replace = kwargs.get("prefix") == prefix
             if replace:
                 root.rmdir()
                 _symlink_to(root, outside, target_is_directory=True)
@@ -98,6 +110,10 @@ def test_replaced_owned_temp_root_is_not_followed(tmp_path, monkeypatch):
                     root.mkdir()
 
     monkeypatch.setattr(tempfile, "TemporaryDirectory", replaced_root)
-    with pytest.raises(AssetCorpusError, match="^unsafe_file$"):
-        asyncio.run(run_asset_benchmark(config))
+    if prefix == "asset-report-inputs-":
+        with pytest.raises(AssetCorpusError, match="^unsafe_file$"):
+            asyncio.run(run_asset_benchmark(config))
+    else:
+        report = asyncio.run(run_asset_benchmark(config))
+        assert report.inputs is None and report.input_error == "evidence_unverified"
     assert list(outside.iterdir()) == []

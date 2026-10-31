@@ -48,6 +48,28 @@ def _sorted_ids(validator, enabled, instance, schema):
         yield ValidationError("unsorted_id_set")
 
 
+def _gpu_order(validator, enabled, instance, schema):
+    if not enabled or not isinstance(instance, list):
+        return
+    if not all(
+        isinstance(item, Mapping)
+        and all(
+            field in item and isinstance(item[field], (str, type(None)))
+            for field in ("model", "device", "cores")
+        )
+        for item in instance
+    ):
+        return
+    keys = [
+        tuple(
+            (item[field] is not None, item[field] or "") for field in ("model", "device", "cores")
+        )
+        for item in instance
+    ]
+    if keys != sorted(set(keys)):
+        yield ValidationError("unsorted_gpu")
+
+
 def asset_dimension_sort_key(dimensions: Mapping) -> tuple:
     """Published dimensions order; stale null<false<true and size is numeric."""
     return (
@@ -63,7 +85,13 @@ def asset_dimension_sort_key(dimensions: Mapping) -> tuple:
 
 
 _Validator = extend(
-    StrictValidator, {"x-maxBytes": _max_bytes, "x-relative": _relative, "x-sorted": _sorted_ids}
+    StrictValidator,
+    {
+        "x-maxBytes": _max_bytes,
+        "x-relative": _relative,
+        "x-sorted": _sorted_ids,
+        "x-gpu-order": _gpu_order,
+    },
 )
 _SCHEMAS = {
     name: load_packaged_schema("relaymind.evaluation", f"asset_benchmark_{name}.v1.json")
