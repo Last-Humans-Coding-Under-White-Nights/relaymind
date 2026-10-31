@@ -35,6 +35,7 @@ from relaymind.evaluation.asset_corpus_io import (
     document,
     matches_original,
     read_local,
+    read_local_files,
     relative_path,
 )
 from relaymind.evaluation.asset_evidence import (
@@ -94,14 +95,15 @@ def benchmark_inventories() -> dict:
     # An editable install imports the very files just hashed; reading them a
     # second time cannot disagree, so only a separate installation is reread.
     same_tree = imported_root.resolve() == (root / "src/relaymind").resolve()
-    expected = set()
-    for item in inventories["runner_inventory"]["files"]:
-        if item["path"].startswith("src/relaymind/"):
-            relative = item["path"].removeprefix("src/relaymind/")
-            expected.add(relative)
-            if same_tree:
-                continue
-            payload = read_local(imported_root, relative, CONFIG_BYTES)
+    members = {
+        item["path"].removeprefix("src/relaymind/"): item
+        for item in inventories["runner_inventory"]["files"]
+        if item["path"].startswith("src/relaymind/")
+    }
+    expected = set(members)
+    if not same_tree:
+        payloads = read_local_files(imported_root, list(members), CONFIG_BYTES)
+        for item, payload in zip(members.values(), payloads, strict=True):
             if not matches_original(payload, item["sha256"], item["bytes"]):
                 raise AssetCorpusError("installed_runner_mismatch")
     actual = {
@@ -888,28 +890,25 @@ def _write_bundle(report: AssetBenchmarkReport, path: Path) -> dict:
     # Code files are explicit original-byte resolver commitments. No compare
     # command reads the current checkout or trusts a saved implementation grade.
     root = benchmark_repository_root()
-    copied = set()
+    copied = {}
     for inventory in config.inventories.values():
         for item in inventory["files"]:
-            id = file_evidence_id(item["path"])
-            key = (id, item["sha256"])
-            if key in copied:
-                continue
-            copied.add(key)
-            payload = read_local(root, item["path"], CONFIG_BYTES)
-            if not matches_original(payload, item["sha256"], item["bytes"]):
-                raise AssetCorpusError("runner_changed")
-            relative = f"{private.name}/files/{item['sha256']}"
-            atomic_bytes(base / relative, payload, limit=CONFIG_BYTES)
-            resolver_entries.append(
-                dict(
-                    id=id,
-                    hash_kind="original",
-                    hash=item["sha256"],
-                    bytes=len(payload),
-                    path=relative,
-                )
+            copied.setdefault((file_evidence_id(item["path"]), item["sha256"]), item)
+    payloads = read_local_files(root, [item["path"] for item in copied.values()], CONFIG_BYTES)
+    for ((id, _), item), payload in zip(copied.items(), payloads, strict=True):
+        if not matches_original(payload, item["sha256"], item["bytes"]):
+            raise AssetCorpusError("runner_changed")
+        relative = f"{private.name}/files/{item['sha256']}"
+        atomic_bytes(base / relative, payload, limit=CONFIG_BYTES)
+        resolver_entries.append(
+            dict(
+                id=id,
+                hash_kind="original",
+                hash=item["sha256"],
+                bytes=len(payload),
+                path=relative,
             )
+        )
     resolver = dict(
         schema_version=1,
         entries=sorted(resolver_entries, key=lambda e: (e["id"], e["hash_kind"], e["hash"])),
