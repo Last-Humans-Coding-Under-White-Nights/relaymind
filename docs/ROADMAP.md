@@ -1047,15 +1047,16 @@ and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
 imports, safe internal searchable bodies, atomic shared-SQLite publication,
 source-owned tombstones, retained stale observations, recovery and one bounded
 local worker. `[recommendations]` defaults disabled; enabled catalog work starts
-in the application lifespan. This is development on the explicitly authorized
-reviewed-spec stack while #187's merge remains pending. #192 alone did not change
-the warm-up serving order; #196's lifecycle work is recorded below. No qualified
-external refresh or current host availability is claimed.
+in the application lifespan. The #187 foundation merged in #212. The three
+#192 catalog criteria, discovery, atomic change visibility and honest provenance
+without execution, are implemented and verified. #192 alone did not change the
+warm-up serving order; #196's lifecycle work is recorded below. The qualified
+#203 GitHub refresh profile is recorded below; catalog discovery supplies no
+host availability or execution authority.
 #193 selection and #194's partial lifecycle implementation are recorded below.
-The AC25 live host/source subcases, full 300-asset measurements,
-Windows/macOS qualification and Matrix rights/cohort/refresh remain open; these
-deterministic catalog tests do not close #192's qualified adapter gates or the
-formal independent corpus/acceptance gates.
+The AC25 live host subcases, full 300-asset measurements, Windows/macOS
+qualification, Matrix rights/cohort/refresh and formal independent corpus gates
+remain separate from #192's completed catalog criteria.
 
 The #193 selection component implements RM35/AC26: separate closed selection
 v2 and recommendation-result schemas, projection-only lexical ranking, strict
