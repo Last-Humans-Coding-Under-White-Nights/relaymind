@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Operations and platform run kit (#242, toward #241, #235, #234; RM38, RM39, RM44; AC29, AC37):
+  - `scripts/asset_operations_run.py startup` measures ten real `relaymind serve` startups over a generated bilingual catalog, using the existing AC29 driver, and samples resident memory.
+  - `platform` builds an `AssetPlatformReportV1` from install-check and ordinary installed-host records.
+  - All output is labeled `fixture`.
 - Section 12.6.5 verifier closure and episode driver (#229, #202, #205, #207):
   - The frozen corpus is verified from the input manifest, and host tasks and episodes are bound to it.
   - Off/on adaptation configurations are checked as a named ablation.

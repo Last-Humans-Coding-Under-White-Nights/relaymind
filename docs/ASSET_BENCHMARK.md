@@ -682,3 +682,36 @@ report likewise blocks until it is bound to the `asset_operations` workload
 grader and the actual Apple Silicon macOS / native Windows review. Genuine
 episodes, paired host tasks and platform runs need real independent corpora,
 hosts and hardware; fixture runs establish no measured result.
+
+## Operations and platform run kit (#242)
+
+`scripts/asset_operations_run.py` prepares the real-world AC29 and AC37 runs.
+It does not perform them. Every report it writes is labeled `fixture`.
+
+- `startup` generates a bilingual development catalog of `--assets` skills. It
+  then starts a real `relaymind serve` process ten times through the existing
+  AC29 startup driver (`measure_startups`) and records each process's resident
+  memory. Pass your own TOML in `--base-config`, holding the store, skills,
+  sandbox and model tables. The kit adds `[server]`, `[recommendations]` and the
+  catalog source itself, and refuses a base config that already has them.
+- `platform` turns an install-check record from
+  `scripts/openclaw_install_check.py`, plus an optional ordinary installed-host
+  capture, into an `AssetPlatformReportV1`:
+  - Install, configure and uninstall come from the lifecycle steps. A failed
+    cleanup step or any leftover fails uninstall.
+  - Recommend, choose, feedback, delete, reset and skill use come from the
+    ordinary capture.
+  - Restart and MCP use stay `not_run`.
+
+```bash
+python scripts/asset_operations_run.py startup --base-config base.toml \
+  --work /tmp/ops --assets 100 --output startup.json
+python scripts/asset_operations_run.py platform --install-check install-check.json \
+  --ordinary ordinary.json --input-manifest inputs.json --platform environment.json \
+  --output platform.json
+```
+
+The full 60-second mixed workload (`run_workload`) still needs rescan and
+rebuild hooks into a running process. The AC29 and AC37 numbers that count
+come only from the Apple M1 8 GiB macOS and native x86-64 Windows machines;
+those runs remain open in #241 and #234.
