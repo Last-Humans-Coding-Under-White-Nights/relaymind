@@ -10,7 +10,6 @@ import asyncio
 import importlib.util
 import json
 import os
-
 import sys
 import time
 from pathlib import Path
@@ -367,7 +366,6 @@ def test_the_platform_command_produces_a_report_the_grader_accepts(tmp_path):
 
 def test_the_platform_command_refuses_an_unregistered_record(tmp_path):
     from test_asset_whole_task_inputs import Bundle
-
     from whole_task_helpers import ENVIRONMENT as LOCKED
 
     bundle = Bundle(tmp_path)
