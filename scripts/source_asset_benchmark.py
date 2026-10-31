@@ -120,11 +120,15 @@ def main() -> int:
             candidates = row["evaluated_candidates"][:3]
             catalog_assets = {
                 a["record"]["asset_id"]: a["record"]
-                for a in (report.get("catalog_document") or {}).get("assets", [])
-                if "record" in a
+                for a in ((report.get("catalog_document") or {}).get("assets") or [])
+                if isinstance(a, dict)
+                and isinstance(a.get("record"), dict)
+                and "asset_id" in a["record"]
             }
             catalog = catalog_assets or {
-                r["asset_id"]: r for r in (row.get("request") or {}).get("catalog", [])
+                r["asset_id"]: r
+                for r in ((row.get("request") or {}).get("catalog") or [])
+                if isinstance(r, dict) and "asset_id" in r
             }
             for n, candidate in enumerate(candidates, 1):
                 record = catalog.get(candidate["asset_id"], {})

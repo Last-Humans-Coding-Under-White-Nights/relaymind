@@ -84,8 +84,10 @@ def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatal
         license_id = row.pop("license_file_id", None)
         version = row.pop("version", None)
         if (
-            (metadata_id is not None and not isinstance(metadata_id, str))
-            or (license_id is not None and not isinstance(license_id, str))
+            not isinstance(file_id, str)
+            or not file_id
+            or (metadata_id is not None and (not isinstance(metadata_id, str) or not metadata_id))
+            or (license_id is not None and (not isinstance(license_id, str) or not license_id))
             or (version is not None and not isinstance(version, str))
         ):
             raise AssetCorpusError("invalid_source_recipe")
