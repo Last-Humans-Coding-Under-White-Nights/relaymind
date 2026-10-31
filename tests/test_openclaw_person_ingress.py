@@ -1389,3 +1389,26 @@ def test_proxy_configuration_bounds(tmp_path, ports, accounts, reason):
         good[0]["email"] = "alice@elsewhere.example"
     with pytest.raises(ValueError, match=reason):
         module().proxy_configuration("10.0.0.5", *ports, good, "k" * 32, tmp_path)
+
+
+@pytest.mark.parametrize("extra", [-1, 1])
+def test_release_executable_that_differs_from_its_declared_size_is_artifact_expansion(
+    tmp_path, monkeypatch, extra
+):
+    """#224 review: a member shorter or longer than its header never installs."""
+    import io
+    import tarfile
+
+    api = module()
+    archive, size, digest = _archive(tmp_path, [("bin/authcrunch", b"#!binary", "file")])
+    monkeypatch.setattr(api, "AUTHCRUNCH_BYTES", size)
+    monkeypatch.setattr(api, "AUTHCRUNCH_SHA256", digest)
+    real = tarfile.TarFile.extractfile
+
+    def extractfile(self, member):
+        data = real(self, member).read()
+        return io.BytesIO(data[:-1] if extra < 0 else data + b"x")
+
+    monkeypatch.setattr(tarfile.TarFile, "extractfile", extractfile)
+    with pytest.raises(ValueError, match="artifact_expansion"):
+        api.install_authcrunch(archive, tmp_path / "bin")
