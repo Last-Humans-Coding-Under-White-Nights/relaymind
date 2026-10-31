@@ -60,12 +60,23 @@ def main() -> int:
     write_asset_benchmark_report(report, output / "capture.json")
     print("after write inputs present:", report.inputs is not None)
     print("after write input_error:", report.input_error)
-    if report.inputs is None:
-        manifest = output / "capture.json.inputs.json"
-        try:
-            verify_benchmark_inputs(report.data, manifest)
-        except BaseException:
-            traceback.print_exc()
+
+    previous = tempfile.tempdir
+    tempfile.tempdir = str(alias)
+    try:
+        with tempfile.TemporaryDirectory(prefix="asset-report-inputs-") as again:
+            temporary_root = Path(again)
+            root = temporary_root.parent.resolve(strict=True) / temporary_root.name
+            write_asset_benchmark_report(report, root / "capture.json")
+            print("in-temp inputs present:", report.inputs is not None)
+            print("in-temp input_error:", report.input_error)
+            if report.inputs is None:
+                try:
+                    verify_benchmark_inputs(report.data, root / "capture.json.inputs.json")
+                except BaseException:
+                    traceback.print_exc()
+    finally:
+        tempfile.tempdir = previous
     return 0
 
 
