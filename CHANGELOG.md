@@ -30,6 +30,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.64 → 0.65 (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
+  AC25/AC28/AC30/AC31/AC35–AC37): defines native skill loaded-byte delivery,
+  immutable-pin versus removal semantics and the later-use authority fence;
+  separates deterministic functional evidence from live-model capability.
+  Defines the conditional direct MCP-use request, exact native binding,
+  lifecycle/approval fences and qualification gates without activating it;
+  automated native UI decisions remain functional evidence, never human approval.
+  Requires source-bound pinned native host configuration validation with
+  ECMAScript regex semantics and explicit provider/sampling/budget schema binding.
+  Runtime snapshots and all outstanding acceptance gates remain closed.
 - Specification 0.63 → 0.64 (RM42/RM44; AC33/AC36): names the reset evidence
   document of section 12.6.5 (`reset:<episode_id>`, holding the before/after
   preimages), so adaptation reports can be graded offline end to end.
