@@ -34,6 +34,14 @@ examples or algorithm comparisons. Synthetic inputs under tests/fixtures remain
 fixtures regardless of size. No development report asserts independent formal
 qualification or native-platform acceptance.
 
+For this independently qualified profile, the current input counts are **0/100
+original Chinese Matrix skills, 0/100 original English skills, 0/100 genuine
+MCP tools and 0/25 reviewed function-equivalent pairs**. There are no
+independently qualified authored cases, independent human judgments or
+custodian review records. Each required lane still needs 200 independent
+original positives, 50 negatives and 30 ambiguous cases; the two
+cross-language lanes also need their independently reviewed hard subsets.
+
 ## Supply a release
 
 Use the exact four closed formats in `src/relaymind/evaluation/schemas/`:

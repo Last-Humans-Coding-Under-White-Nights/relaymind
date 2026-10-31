@@ -195,7 +195,7 @@
           "neither_hit",
           "hit3_difference",
           "confident_precision_difference",
-          "coverage_difference",
+          "confident_coverage_difference",
           "a",
           "b"
         ],
@@ -247,7 +247,7 @@
               }
             ]
           },
-          "coverage_difference": {
+          "confident_coverage_difference": {
             "anyOf": [
               {
                 "type": "number",
@@ -1410,7 +1410,7 @@
       "required": [
         "dimensions",
         "planned",
-        "completed",
+        "ready",
         "failed",
         "cancelled",
         "not_run",
@@ -1439,7 +1439,7 @@
           "type": "integer",
           "minimum": 0
         },
-        "completed": {
+        "ready": {
           "type": "integer",
           "minimum": 0
         },
@@ -1736,17 +1736,24 @@
                 "additionalProperties": false,
                 "required": [
                   "model",
-                  "device"
+                  "device",
+                  "cores"
                 ],
                 "properties": {
                   "model": {
-                    "type": "string",
+                    "type": ["string", "null"],
                     "minLength": 1,
                     "maxLength": 256,
                     "x-maxBytes": 256
                   },
                   "device": {
-                    "type": "string",
+                    "type": ["string", "null"],
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "x-maxBytes": 256
+                  },
+                  "cores": {
+                    "type": ["string", "null"],
                     "minLength": 1,
                     "maxLength": 256,
                     "x-maxBytes": 256
@@ -1754,6 +1761,7 @@
                 }
               },
               "maxItems": 10000,
+              "x-gpu-order": true,
               "uniqueItems": true
             },
             {
