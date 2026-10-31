@@ -7,6 +7,10 @@
   and emit explicit user-choice stdout receipts (RM34/RM40/RM44). Start with the
   [source tutorial](../docs/SOURCE_BENCHMARK.md); choice does not modify the report
   or execute an asset. Source compare has no Markdown option.
+- `asset_whole_task.py` — plan and grade the spec 0.60 section 12.6.5 host trial,
+  adaptation episode and platform exports (`plan-host`, `grade-host`,
+  `grade-adaptation`, `grade-platform`); offline only, see
+  `docs/ASSET_BENCHMARK.md`.
 - `asset_selection_benchmark.py` — formal locked-profile run, explicit optional
   preparation and offline JSON/Markdown comparison (RM35/RM40/RM44). The
   [formal guide](../docs/ASSET_BENCHMARK.md) covers resolver/privacy commitments,

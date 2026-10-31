@@ -1290,8 +1290,13 @@ HOST-EXACT-SKILL-USE and later approval/currentness gates remain open. Full
 adaptation episode, whole-task and platform exports authorize the independent
 drivers/graders. Exact freeze companions, three-correction chronology, complete
 paired probe/three-arm denominators, per-model costs and evidence-bound reset
-remain required. Schema/driver implementation is planned; no new measured gate
-is claimed. Read-only native RPC and genuine MCP qualification probes do not
+remain required. The closed schemas, deterministic three-arm plan, conserving
+host driver and offline graders are implemented (`asset_whole_task.py`,
+`asset_episode_export.py`, `asset_platform_export.py`,
+`scripts/asset_whole_task.py`; see docs/ASSET_BENCHMARK.md) and verified only
+over explicitly fixture-qualified documents. No qualified-evidence verifier
+exists yet, so qualified acceptance grades blocked, never pass; no new measured
+gate is claimed. Read-only native RPC and genuine MCP qualification probes do not
 enable runtime snapshots or further host operations. The separate spec0.62
 direct-action profile above is qualified; exact selected skill/MCP use and
 post-approval currentness still require their own qualification. Missing genuine

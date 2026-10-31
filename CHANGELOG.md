@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Spec 0.60 section 12.6.5 exports (#198/#202/#204/#205/#206; RM16, RM37–RM44;
+  AC28–AC37): closed host freeze, task, report, adaptation episode and platform
+  schemas; a deterministic three-arm plan and conserving host driver; offline
+  graders that recompute every summary; companion input-manifest resolution with
+  blocked/rejected exits (`scripts/asset_whole_task.py`). Fixture-verified tooling
+  only; no measured result or acceptance is claimed.
+
 - Activate two independently reviewed exact Linux CPU embedding identities;
   record ordinary native launch and provisional 412/128 benchmark results,
   including partial indexing, lexical fallback and the observed quality regression.

@@ -566,3 +566,67 @@ resource and cost quantities not comparable. Its Markdown renderer uses only the
 comparison object. Unknown CPU/memory and incomplete costs remain unknown;
 setup inference is never added to query inference a second time. Historical
 comparison objects retain their original closed shape and are not upgraded.
+
+## Whole-host trials, adaptation episodes and platform exports (spec 0.60 section 12.6.5)
+
+These offline tools serve #198 (early installed-skill trial), #202 (adaptation
+episodes), #205 (paired whole-host tasks) and #206 (platform lifecycle). They
+check frozen inputs, plan runs deterministically and grade exported reports.
+They do not run a host, grant an approval, execute a tool or create a measured
+result: the host executor is supplied by the caller, and only the host executes
+tools. Every summary is recomputed from the verified rows; a stored summary that
+differs is rejected.
+
+| Command | What it does |
+| --- | --- |
+| `python scripts/asset_whole_task.py plan-host --tasks T --freeze F --output P` | Verifies `AssetHostTasksV1` against its `HostFreezeV1` and writes the three-arm plan: tasks in frozen UTF-8 order, arms ordered by SHA-256 of `{seed,task_id,arm}` |
+| `python scripts/asset_whole_task.py grade-host --report R --inputs M [--resolver X] --output O` | Resolves the companion input manifest, then verifies and regrades an `AssetHostReportV1` |
+| `python scripts/asset_whole_task.py grade-platform --report R --inputs M [--resolver X] --output O` | The same for an `AssetPlatformReportV1` (eleven lifecycle steps in fixed order) |
+| `python scripts/asset_whole_task.py grade-adaptation --report R --inputs M --lock L --evidence-root E [--resolver X] --output O` | Regrades an `AssetAdaptationReportV1`; probe labels come from the verified corpus lock `L`, which must match `dataset_lock_digest` |
+
+Exit codes: `0` the gate passed or is `not_applicable` (fixture platform or
+adaptation report); `1` a known gate failure; `2` the report or an input was
+rejected (a digest, identity, order or arithmetic contradiction); `3` blocked
+(a required document, configuration, inventory preimage or evidence is
+missing). Blocked is never reported as a pass. The output file always records
+`status`, `gate` and a fixed safe `reason`.
+
+**Inputs.** The manifest is section 12.6.2's `InputManifestV1`, with document
+kinds extended (only here) by `host_tasks`, `host_freeze`, `episodes` and
+`episode_freeze`. It must hold exactly one `environment_lock`,
+`runner_inventory` and `protocol_inventory`; the root input named by the
+report's `input_digest`; its freeze; and every configuration digest the freeze
+names, as `referenced_config:<digest>` (plain strict JSON, 4 MiB). Inventory
+preimages resolve only through an explicit `--resolver`. The runner inventory
+is the whole `src/relaymind` Python package plus `pyproject.toml` and
+`scripts/asset_whole_task.py`. Its package members must equal the running
+grader, and the other files must match reviewed bytes.
+
+**What is checked.**
+
+- Host trial: the three arms share provider, model, sampling and provider
+  configuration, and only the `recommendations` arm has a recommendation
+  configuration. Task policies, permissions and budgets digests, asset
+  bindings and rubrics bind to the freeze. Rows equal the plan, and `not_run`
+  rows carry no work. Success needs a host session and execution evidence.
+  Attempt ordinals are consecutive and attempt IDs unique report-wide.
+  Totals are normalized only from evidenced token relationships. Unknown
+  verdicts or costs block, and a known positive cost difference fails.
+- Adaptation: three chronological corrections, held-out paraphrase/control
+  probes in `(kind, case_id)` order, recomputed probe grades, and full planned
+  denominators (paraphrase target 0.90, control loss at most 0.02). Reset
+  digests are verified against their before/after preimages; without a
+  preimage a reset counts as unknown.
+- Platform: steps `install` … `uninstall` exactly once and in order. A passed
+  step needs receipts, and the dedicated operations/approvals references must
+  equal registry entries.
+
+**Current limits (no acceptance is reachable yet).** No reviewed qualified-
+evidence verifier exists for these exports, so a qualified acceptance report
+is graded `blocked`, never `pass`. A measured platform report likewise blocks
+until it is bound to the `asset_operations` workload grader and the actual
+Apple Silicon macOS / native Windows review. The command line has no input
+for reset preimages, because their evidence format is not yet specified; the
+library API (`grade_adaptation_report(..., reset_preimages=...)`) accepts them.
+Probe rows check status, slot, revision and grade. The offer/request digest
+recomputation of the retrieval grader is not yet applied to probes.
