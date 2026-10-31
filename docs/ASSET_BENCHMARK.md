@@ -638,10 +638,13 @@ baselines, applies the three corrections through the product feedback store
 (each bound to its `feedback.recorded` event), runs the paired probes, resets
 feedback through the real lifecycle and repeats the reset probes. Every
 invocation has its own idempotency claim. Reset preimages come only from ready
-results; a failed reset probe leaves the reset unknown. A refused correction,
-an exception or an interruption ends only that episode: completed work is
-kept, the rest stays `not_run` with a fixed reason, and later episodes still
-run. Its evaluation-only action registration is never person or host
+results; a failed reset probe leaves the reset unknown. A refused correction
+or an exception ends only that episode: completed work is kept, the rest stays
+`not_run` with a fixed reason, and later episodes still run. An interruption
+(the caller's interruption check or a cancelled task) is checked before every
+probe and correction. It ends the whole run: the current episode is recorded as
+`cancelled`, and every later planned episode is `not_run` with reason
+`interrupted`. Its evaluation-only action registration is never person or host
 evidence, so the driver refuses `qualified`. Any dispatched probe, ready or
 failed, must carry its exact offer; and every supplied reset document must be
 canonical JSON for a planned episode, whether or not a reset is claimed.
