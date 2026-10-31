@@ -18,6 +18,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.59 → 0.60 (#198/#202/#204/#205/#206; RM16/RM38–RM44;
+  AC29–AC37): define closed adaptation episode, whole-host three-arm and
+  platform exports, exact freeze/companion resolution, conserved observations
+  and deterministic cost/quality/reset arithmetic. Reuse native execution,
+  existing product rows and the operational grader. Tooling implementation is
+  authorized; host activation remains denied until a later qualified
+  person/session/immutable-use contract. No provider or budget change.
+
+- Specification 0.58 → 0.59 (#203; RM34/RM38/RM43; AC25/AC29/AC34):
+  define the installed public GitHub Git skill-source profile with immutable
+  original/manifest/rights verification, complete scoped removal proof, closed
+  origins/credentials and mandatory persisted cooldown. Reuse the existing single
+  worker, atomic publication and stale/recovery evidence. Matrix market refresh
+  and independent corpus, host, platform/resource and full-M10 gates remain
+  separately assessed. No provider, budget or public wire revision. The actual
+  six-skill acquisition qualifies this narrow profile; runtime activation and
+  repeated scheduled product refresh remain pending.
+
+- Dormant OpenClaw recommendation libraries (#197; RM36, RM37, RM39;
+  AC27/AC28 and partial AC30): bounded single-attempt clients, lossless revision
+  and event decoding, closed protocol checks, inert recorded-evidence rendering
+  and a default-deny controller. Explicit fixtures exercise the actual gateway;
+  production command registration, snapshots, exact skill/MCP use and full host
+  acceptance remain unavailable pending qualification and a normative revision.
+
 - Specification 0.57 → 0.58 (#201/#202; RM37/RM38/RM41/RM42;
   AC28/AC29/AC32/AC33): publish the closed local embedding manifest and
   hybrid/adaptation semantic configurations. Specify deterministic representation,

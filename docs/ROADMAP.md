@@ -1136,6 +1136,16 @@ source or host gates. The hybrid selector and adaptation keep the trial and
 data dependencies in the table below. Partial PRs must state their retained
 acceptance and cannot auto-close incomplete issues.
 
+#203 source qualification checkpoint (spec 0.59): the reviewed fixed public
+GitHub Git skill profile has an actual complete six-skill/twelve-file acquisition
+plus root MIT evidence, 17 serial GETs and two ref observations separated by
+704.62 seconds. The commit remained 849c1be; change was not observed. Section
+4.6.1.1 defines this installed protocol profile; runtime transport/scheduling
+activation and a real second periodic product job remain pending. Existing
+local/import sources remain supported. No AC29/AC34 full workload/platform pass,
+Matrix market refresh or corpus substitution is inferred. Acquisition evidence
+is in [the source record](evidence/2026-10-30-github-skill-source/README.md).
+
 The table retains direct issue dependencies and existing foundations. New IDs
 are normative in 0.51; all paths/feature components remain planned until their
 implementation lands.
@@ -1179,3 +1189,23 @@ not close full #195 host acceptance: HOST-ACTION-AUTHORITY and
 HOST-EXACT-SKILL-USE remain blocked, as do later host approval/use gates.
 Native platform security execution and final full-check evidence are reported
 separately; Linux backend doubles do not substitute for them.
+
+#197 first-slice status (RM36, RM37, RM39; AC27/AC28, partial AC30): the
+package includes dormant recommendation/action clients, closed lossless protocol
+validation, inert evidence rendering and an unregistered controller whose host
+boundary denies by default. Deterministic action-session injection and actual
+loopback gateway tests cover client behavior; no production host authority,
+command registration, runtime snapshot or exact skill/MCP use is supplied.
+HOST-ACTION-AUTHORITY, HOST-EXACT-SKILL-USE and the remaining host approval,
+currentness/platform gates remain open; full #197/AC30 is not complete.
+
+#198/#202/#204/#205/#206 evaluation contract checkpoint (spec 0.60): closed
+adaptation episode, whole-task and platform exports authorize the independent
+drivers/graders. Exact freeze companions, three-correction chronology, complete
+paired probe/three-arm denominators, per-model costs and evidence-bound reset
+remain required. Schema/driver implementation is planned; no new measured gate
+is claimed. Read-only native RPC and genuine MCP qualification probes do not
+enable production host actions or runtime snapshots. Personal authenticated
+ingress, exact selected skill/MCP use and post-approval currentness must qualify
+before the later native adapter activation revision. Missing genuine inputs do
+not block tooling implementation or explicitly unqualified fixture runs.
