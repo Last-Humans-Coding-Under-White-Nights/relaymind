@@ -104,6 +104,34 @@ def preparation_binding(
     )
 
 
+def request_preparation_binding(selector: Mapping, request: Mapping) -> dict:
+    """The preparation binding a v2 request's pinned offer must match."""
+    return preparation_binding(
+        selector=selector,
+        catalog_revision=request["catalog_revision"],
+        catalog=list(request["catalog"]),
+        scope=request["scope"],
+        permissions=request["permissions"],
+        selection_scope=request["selection_scope"],
+        requested_kinds=request["requested_kinds"],
+    )
+
+
+def _not_applicable(config: Mapping) -> dict:
+    return dict(
+        config=config,
+        binding=None,
+        preparation_id=None,
+        status="not_applicable",
+        reason=None,
+        index_revision=None,
+        observed_ms=None,
+        cleanup_ms=None,
+        exchanges=[],
+        observed_costs=[],
+    )
+
+
 def _binding(value):
     for item in (*value["selector"].values(), *value["scope"].values(), *value["permissions"]):
         text(item, 256)
@@ -173,18 +201,7 @@ async def prepare_asset_index(
 ) -> dict:
     """Perform one finite lifecycle, retaining ordered exchanges and unknown costs."""
     config = normalize_preparation(config)
-    record = dict(
-        config=config,
-        binding=None,
-        preparation_id=None,
-        status="not_applicable",
-        reason=None,
-        index_revision=None,
-        observed_ms=None,
-        cleanup_ms=None,
-        exchanges=[],
-        observed_costs=[],
-    )
+    record = _not_applicable(config)
     if config["mode"] == "none":
         return record
     started = clock()
@@ -306,19 +323,7 @@ def validate_preparation_record(
     if normalized != record["config"] or config is not None and normalized != config:
         raise ValueError("preparation_config_binding")
     if normalized["mode"] == "none":
-        expected = dict(
-            config=normalized,
-            binding=None,
-            preparation_id=None,
-            status="not_applicable",
-            reason=None,
-            index_revision=None,
-            observed_ms=None,
-            cleanup_ms=None,
-            exchanges=[],
-            observed_costs=[],
-        )
-        if record != expected:
+        if record != _not_applicable(normalized):
             raise ValueError("invalid_preparation_record")
         return
     if binding is not None and record["binding"] != binding:
@@ -454,22 +459,17 @@ class PreparedAssetSelector:
         self.name, self.version = primary.name, primary.version
 
     async def select(self, request, context: SelectorContext) -> object:
-        binding = preparation_binding(
-            selector=dict(name=self.name, version=self.version),
-            catalog_revision=request.data["catalog_revision"],
-            catalog=list(request.data["catalog"]),
-            scope=request.data["scope"],
-            permissions=request.data["permissions"],
-            selection_scope=request.data["selection_scope"],
-            requested_kinds=request.data["requested_kinds"],
+        binding = request_preparation_binding(
+            dict(name=self.name, version=self.version), request.data
         )
         if self.preparation["status"] != "ready" or binding != self.preparation["binding"]:
             raise AttemptFailure("stale", "stale_result")
         raw = await self.primary.select(request, context)
-        result = parse_asset_result(raw).to_json_object()
+        parsed = parse_asset_result(raw)
+        result = parsed.to_json_object()
         if (
             result["outcome"] in ("ranked", "no_match")
             and result["index_revision"] != self.preparation["index_revision"]
         ):
-            raise AttemptFailure("stale", "stale_result", parse_asset_result(raw))
+            raise AttemptFailure("stale", "stale_result", parsed)
         return raw

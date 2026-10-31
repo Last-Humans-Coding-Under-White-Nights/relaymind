@@ -120,6 +120,18 @@ def resolve_reference(
     return payload
 
 
+def file_evidence_id(path: str) -> str:
+    """The resolver ID of one inventory file's original bytes."""
+    return "file:" + hashlib.sha256(path.encode()).hexdigest()
+
+
+def selector_identity(primary: str, name: str | None, version: str | None) -> dict:
+    """The report selector of the configured primary: built-in lexical or HTTP."""
+    if primary == "lexical":
+        return dict(name="lexical", version="1", transport="in_process")
+    return dict(name=name, version=version, transport="http")
+
+
 def file_inventory(root: Path, *, protocol: bool = False) -> dict:
     root = Path(root)
     paths = (
@@ -553,10 +565,8 @@ def verify_benchmark_inputs(
         raise AssetCorpusError("effective_defaults")
     if normal["track"] == "primary_only" and (normal["fallback"] or normal["adaptation_enabled"]):
         raise AssetCorpusError("primary_policy")
-    expected_selector = (
-        dict(name="lexical", version="1", transport="in_process")
-        if settings["primary"] == "lexical"
-        else dict(name=settings["name"], version=settings["version"], transport="http")
+    expected_selector = selector_identity(
+        settings["primary"], settings["name"], settings["version"]
     )
     if normal["selector"] != expected_selector or report["artifacts"] != effective["artifacts"]:
         raise AssetCorpusError("selector_binding")
@@ -586,10 +596,15 @@ def verify_benchmark_inputs(
         ):
             raise AssetCorpusError("inventory_membership")
         for item in inventory["files"]:
-            file_id = "file:" + hashlib.sha256(item["path"].encode()).hexdigest()
             if resolver is None:
                 raise AssetCorpusError("input_unresolved")
-            resolver.read(file_id, "original", item["sha256"], item["bytes"], limit=CONFIG_BYTES)
+            resolver.read(
+                file_evidence_id(item["path"]),
+                "original",
+                item["sha256"],
+                item["bytes"],
+                limit=CONFIG_BYTES,
+            )
         digest = canonical_digest(inventory)
         if report["implementation"][key] != digest or effective["generator"][key] != digest:
             raise AssetCorpusError("inventory_binding")

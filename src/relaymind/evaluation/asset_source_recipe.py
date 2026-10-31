@@ -1,12 +1,11 @@
 """Reproduce source catalogs from pinned acquisition recipes, not completed labels."""
 
-import hashlib
 import json
 import re
 from collections.abc import Mapping
 from pathlib import Path
 
-from relaymind.evaluation.asset_corpus_io import MIB, AssetCorpusError, read_local
+from relaymind.evaluation.asset_corpus_io import MIB, AssetCorpusError, matches_original, read_local
 from relaymind.evaluation.asset_source_catalog import (
     SourceCatalogResult,
     SourceOriginal,
@@ -45,7 +44,7 @@ def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatal
                 row["sha256"] + ".original",
                 4 * MIB if row.get("kind") == "metadata" else 10 * MIB,
             )
-            if len(payload) != row["bytes"] or hashlib.sha256(payload).hexdigest() != row["sha256"]:
+            if not matches_original(payload, row["sha256"], row["bytes"]):
                 raise AssetCorpusError("source_digest_mismatch")
             retained[file_id] = payload
             if sum(len(v) for v in retained.values()) > 100 * MIB:
