@@ -170,3 +170,40 @@ it("denies revoked gateway action registration before any native skill dispatch"
   expect(f.calls).toHaveLength(0);
   expect(f.replies[0]?.[0]).toBe(false);
 });
+
+// Spec 0.63 7.6.1: choice expiry is rechecked before each native dispatch.
+it.each([
+  ["before activation", 2, 0, false],
+  ["after activation, before the exact read", 3, 1, true],
+])(
+  "stops when the choice expires %s",
+  async (_when, expiringRead, dispatched, partial) => {
+    const f = setup();
+    const base = Date.parse("2026-10-31T00:00:00Z");
+    let reads = 0;
+    // Each registration read takes one second; the choice expires during the
+    // given read, after the initial validity check already passed.
+    f.view.choice_expires_at = new Date(
+      base + expiringRead * 1000 - 500,
+    ).toISOString();
+    f.deps.wallNow = () => base + reads * 1000;
+    f.deps.actionClient = async () => ({
+      listFeedback: async () => {
+        reads += 1;
+        return {
+          schema_version: 1,
+          records: [],
+          feedback_revision: 0n,
+          next_after_id: null,
+        };
+      },
+    });
+    await f.handler()(f.options);
+    expect(f.calls).toHaveLength(dispatched);
+    expect(f.replies[0]?.[0]).toBe(false);
+    if (partial)
+      expect(f.replies[0]?.[2]).toMatchObject({
+        details: { selectionMayHaveChanged: true },
+      });
+  },
+);

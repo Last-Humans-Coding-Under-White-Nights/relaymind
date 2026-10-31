@@ -111,6 +111,11 @@ export function createNativeSkillHandler(dependencies: Dependencies) {
           item.revision === revision,
       );
       if (!selected) throw Error();
+      // Spec 0.63: a choice that expires while preparation awaits dispatches
+      // nothing further; after activation the partial-selection error stands.
+      const unexpired = () => {
+        if (dependencies.wallNow() >= expires) throw Error();
+      };
       const dispatch =
         dependencies.dispatch ??
         (await import("openclaw/plugin-sdk/gateway-method-runtime"))
@@ -125,6 +130,7 @@ export function createNativeSkillHandler(dependencies: Dependencies) {
       current();
       // Even a lost native response may follow a committed next-turn selection.
       await registeredCurrent();
+      unexpired();
       selectionMayHaveChanged = true;
       const activated = await dispatch(
         "skills.library.activate",
@@ -145,6 +151,7 @@ export function createNativeSkillHandler(dependencies: Dependencies) {
       )
         throw Error();
       await registeredCurrent();
+      unexpired();
       const result = await dispatch(
         "skills.library.read",
         { sessionKey, skillId, revision },
