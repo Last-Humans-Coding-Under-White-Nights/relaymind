@@ -1,0 +1,12 @@
+schema_version = 1
+lock = "lock.json"
+lock_digest = "a6db15bc9500f8610e52c675c9f57a5fdaa44586f3d2f3245a26b235d178749b"
+production_config = "third-party-production.toml"
+production_config_digest = "3319e1d250fa7463d24163652f4107597e45141de2db63d3249854a59f8ec724"
+split = "development"
+track = "primary_only"
+seed = 20261030
+repetitions = 2
+warmups = 1
+environment_lock = "environment.json"
+environment_lock_digest = "3ad72be6d34464cb38c38a2c9485136841c68f1041a8e110155a8f27808fa497"
