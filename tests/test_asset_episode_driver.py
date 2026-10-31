@@ -492,3 +492,26 @@ def test_declared_inference_cost_requires_the_offer(tmp_path):
             reset_preimages=reset_preimages(evidence),
             offers=offers_for(tmp_path, release),
         )
+
+
+# --- #232 review (ArcsinX, 1 Nov) ------------------------------------------------
+
+
+def test_a_one_shot_interruption_still_ends_the_whole_run(tmp_path):
+    calls = []
+
+    def once():
+        calls.append(1)
+        return len(calls) == 1
+
+    release, freeze, episodes, report, evidence = run(tmp_path, interrupted=once, episode_count=2)
+    assert [e["status"] for e in report["episodes"]] == ["not_run", "not_run"]
+    assert {e["reason"] for e in report["episodes"]} == {"interrupted"}
+
+
+def test_a_not_run_episode_never_needs_its_labels(tmp_path):
+    from relaymind.evaluation.asset_episode_driver import _not_run_episode
+
+    release, freeze, episodes, arms = setup(tmp_path)
+    result = _not_run_episode(episodes["episodes"][0], {}, "interrupted")
+    assert result["status"] == "not_run" and result["probes"]

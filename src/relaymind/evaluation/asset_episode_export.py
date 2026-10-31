@@ -370,7 +370,7 @@ def grade_adaptation_report(
     # Every supplied reset document is checked, whether or not a reset is claimed.
     planned = {e["id"]: e for e in episodes["episodes"]}
     for episode_id, pair in (reset_preimages or {}).items():
-        if episode_id not in planned or len(pair) != 2:
+        if episode_id not in planned or not isinstance(pair, (tuple, list)) or len(pair) != 2:
             raise WholeTaskRejected("reset_evidence")
         for items in pair:
             _check_reset_preimage(items, planned[episode_id]["reset_probe_case_ids"])
