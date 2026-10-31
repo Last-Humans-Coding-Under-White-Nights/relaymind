@@ -3,7 +3,7 @@
 export function installNativeSocketObserver(target = window, extraMethods = []) {
   const Original = target.WebSocket;
   const origin = target.location.origin;
-  if (!Array.isArray(extraMethods) || extraMethods.some(method => !["relaymind.recommendations", "relaymind.skill", "skills.library.save", "skills.library.list", "sessions.messages.subscribe", "chat.send", "chat.history", "skills.library.read", "skills.library.mutate", "skills.library.activate"].includes(method))) throw new Error("invalid_fixture_method");
+  if (!Array.isArray(extraMethods) || extraMethods.some(method => !["relaymind.recommendations", "relaymind.skill", "skills.library.save", "skills.library.list", "sessions.messages.subscribe", "chat.send", "skills.library.read", "skills.library.mutate", "skills.library.activate"].includes(method))) throw new Error("invalid_fixture_method");
   const methods = new Set(["rmqualification.person", "sessions.create", "sessions.reset", ...extraMethods]);
   let socket, socketId, ready = false, retired = false;
   const pending = new Map(), used = new Set(), completed = new Map();
@@ -35,7 +35,7 @@ export function installNativeSocketObserver(target = window, extraMethods = []) 
           if (value && turns.has(value.runId) && turns.get(value.runId) === value.sessionKey &&
               ["final", "error", "aborted"].includes(value.state)) {
             const events = terminalEvents.get(value.runId) ?? [];
-            if (events.length < 2 && event.data.length <= 1048576) events.push(value);
+            if (events.length < 2 && event.data.length <= 1048576) events.push({...value, socket_id: socketId});
             terminalEvents.set(value.runId, events);
           }
           return;

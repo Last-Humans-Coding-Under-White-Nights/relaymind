@@ -10,6 +10,8 @@ import subprocess
 import sys
 import time
 import uuid
+from contextlib import contextmanager
+from functools import wraps
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -25,6 +27,61 @@ def base_module():
 
 
 BASE = base_module()
+
+
+HOST_EVENT_WAIT_SECONDS = BASE.person_module().HOST_EVENT_WAIT_SECONDS
+ORDINARY_FAILURE_STEPS = frozenset(
+    {
+        "configure",
+        "install",
+        "sources",
+        "persons_ready",
+        "save_library_skill",
+        "entry_read",
+        "ui_actions",
+        "select_library_skill",
+        "negative_actions",
+        "retirement_prepared",
+        "retirement_attempt",
+        "retirement_abort",
+        "finalize",
+    }
+)
+
+
+def ordinary_error_class(error):
+    # native_rpc translates browser errors into safe ValueErrors. Inspect its
+    # original exception only for classification; never export exception text.
+    original = error
+    if isinstance(error, ValueError) and str(error).startswith("native_rpc_"):
+        original = error.__context__ or error
+    classes = type(original).__mro__
+    browser_classes = {c.__name__ for c in classes if c.__module__.startswith("playwright.")}
+    if "TimeoutError" in browser_classes:
+        return "playwright_timeout"
+    if "TargetClosedError" in browser_classes or (
+        "Error" in browser_classes
+        and (
+            "Target closed" in str(original)
+            or "Target page, context or browser has been closed" in str(original)
+        )
+    ):
+        return "playwright_target_closed"
+    if browser_classes:
+        return "playwright_error"
+    return "value_error" if isinstance(error, ValueError) else "other"
+
+
+def ordinary_step(name):
+    def decorate(method):
+        @wraps(method)
+        def run(self, *args, **kwargs):
+            with self.step(name):
+                return method(self, *args, **kwargs)
+
+        return run
+
+    return decorate
 
 
 def private_json(path, data):
@@ -254,7 +311,81 @@ _CASE_FIELDS = {
     "requests",
     "terminal",
     "observed",
+    "subscription",
+    "provider_attempts",
+    "advertised_revision",
+    "failure_reason",
 }
+
+
+def read_observer_events(path, start=0):
+    """RM39/AC30: reread a torn tail once; every committed record is strict."""
+    for attempt in range(2):
+        with path.open("rb") as source:
+            data = source.read(8 * 1024 * 1024 + 1)
+        if len(data) > 8 * 1024 * 1024:
+            raise ValueError("ordinary_skill_native_event_invalid")
+        data = data[start:]
+        lines = data.split(b"\n")
+        complete, tail = lines[:-1], lines[-1]
+        events = []
+        for line in complete:
+            try:
+                value = json.loads(line)
+            except (ValueError, UnicodeError):
+                raise ValueError("ordinary_skill_native_event_invalid") from None
+            if not isinstance(value, dict):
+                raise ValueError("ordinary_skill_native_event_invalid")
+            events.append(value)
+        if not tail or attempt:
+            return events
+        time.sleep(0.05)
+
+
+def selected_pin(listed, mapping):
+    try:
+        if listed["frame"]["ok"] is not True:
+            raise ValueError("ordinary_skill_control_failed")
+        pins = listed["frame"]["payload"]["session"]["selections"]
+        matching = [
+            pin
+            for pin in pins
+            if pin["skillId"] == mapping["skillId"] and pin["revision"] == mapping["revision"]
+        ]
+        if len(matching) == 1 and isinstance(matching[0]["name"], str) and matching[0]["name"]:
+            return matching[0]
+    except (KeyError, TypeError):
+        pass
+    raise ValueError("ordinary_skill_control_failed")
+
+
+def bounded_skill_content(content):
+    if not isinstance(content, str) or not content or len(content.encode("utf-8")) > 256 * 1024:
+        raise ValueError("ordinary_skill_read_failed")
+    return content
+
+
+def advertised_skill(requests, selected):
+    """Return the one native advertisement for this skill, including its revision."""
+    found = []
+    if not requests:
+        return None
+    for message in requests[0]["body"]["messages"]:
+        if message["role"] != "system":
+            continue
+        for block in re.findall(r"<skill>\s*(.*?)\s*</skill>", message["content"], re.S):
+            name = re.search(r"<name>(.*?)</name>", block, re.S)
+            location = re.search(r"<location>(.*?)</location>", block, re.S)
+            if name and location:
+                match = re.search(
+                    r"/skill-library/"
+                    + re.escape(selected["skillId"])
+                    + r"/revisions/([a-f0-9]{64})/SKILL\.md$",
+                    location.group(1).strip(),
+                )
+                if match:
+                    found.append((name.group(1).strip(), match.group(1)))
+    return found[0] if len(found) == 1 else None
 
 
 def _text_content(content):
@@ -292,12 +423,12 @@ def _loaded_round_trip(case, *, require_selected=True):
     first, second = [item["body"]["messages"] for item in case["requests"]]
     if any(message["role"] == "tool" for message in first):
         return False
-    # Native advertisement must associate the requested name with the selected
-    # immutable revision path, not merely contain an echoed expected marker.
-    path = f"/skill-library/{selected['skillId']}/revisions/{selected['revision']}/SKILL.md"
-    advertisements = [message["content"] for message in first if message["role"] == "system"]
-    if not any(
-        path in text and f"<name>{selected['name']}</name>" in text for text in advertisements
+    advertisement = advertised_skill(case["requests"], selected)
+    if (
+        advertisement is None
+        or advertisement[0] != selected["name"]
+        or advertisement[1] != case["advertised_revision"]
+        or (require_selected and advertisement[1] != selected["revision"])
     ):
         return False
     results = [message for message in second if message["role"] == "tool"]
@@ -381,7 +512,7 @@ def _control_observed(case):
     )
 
 
-def ordinary_skill_loaded_use_pass(capture):
+def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
     """RM39/AC30 observation completeness, NOT skill_loaded_use qualification.
 
     A true result proves a deterministic native loaded-byte round trip and
@@ -419,7 +550,7 @@ def ordinary_skill_loaded_use_pass(capture):
             )
         }
         for case in cases:
-            if set(case) != _CASE_FIELDS:
+            if set(case) != _CASE_FIELDS or case["failure_reason"] is not None:
                 return False
             for scope in (case["before"], case["current"]):
                 if set(scope) != set(_SCOPE_FIELDS) or not all(
@@ -430,7 +561,7 @@ def ordinary_skill_loaded_use_pass(capture):
             if (
                 not _SKILL_ID.fullmatch(selected["skillId"])
                 or not _REVISION.fullmatch(selected["revision"])
-                or not selected["content"]
+                or not bounded_skill_content(selected["content"])
                 or not selected["name"]
                 or hashlib.sha256(selected["content"].encode("utf-8")).hexdigest()
                 != selected["content_sha256"]
@@ -442,6 +573,7 @@ def ordinary_skill_loaded_use_pass(capture):
                 or read["payload"]["content"] != selected["content"]
                 or read["payload"]["entry"]["skillId"] != selected["skillId"]
                 or read["payload"]["entry"]["revision"] != selected["revision"]
+                or read["payload"]["entry"]["name"] != selected["name"]
             ):
                 return False
             expected = dict(
@@ -479,6 +611,27 @@ def ordinary_skill_loaded_use_pass(capture):
                 ):
                     return False
             chat, terminal = case["chat"], case["terminal"]
+            subscription = case["subscription"]
+            if (
+                subscription["ok"] is not True
+                or subscription["subscribed"] is not True
+                or subscription["key"] != case["current"]["sessionKey"]
+                or not isinstance(subscription["socket_id"], str)
+                or not subscription["socket_id"]
+                or subscription["socket_id"] != chat["socket_id"]
+                or (terminal and terminal["socket_id"] != subscription["socket_id"])
+            ):
+                return False
+            receiver_pairs = [(a["idempotency_key"], a["run_id"]) for a in case["requests"]]
+            provider_pairs = [(a["idempotencyKey"], a["runId"]) for a in case["provider_attempts"]]
+            if (
+                len(provider_pairs) != len(receiver_pairs)
+                or sorted(provider_pairs) != sorted(receiver_pairs)
+                or any(
+                    a["event"] != "relaymind.inference_attempt" for a in case["provider_attempts"]
+                )
+            ):
+                return False
             if (
                 chat["params"]["sessionKey"] != case["current"]["sessionKey"]
                 or chat["params"]["message"] != case["task"]
@@ -517,7 +670,7 @@ def ordinary_skill_loaded_use_pass(capture):
                 if attempt["status"] != 200 or attempt["body"]["model"] != "relaymind-client-tools":
                     return False
                 if not any(
-                    message["role"] == "user" and case["task"] in _text_content(message["content"])
+                    message["role"] == "user" and case["task"] == _text_content(message["content"])
                     for message in attempt["body"]["messages"]
                 ):
                     return False
@@ -553,10 +706,14 @@ def ordinary_skill_loaded_use_pass(capture):
             observed = loaded_use_observation(case)
             if case["observed"] != observed:
                 return False
-            if case["case"] == "positive" and (
-                observed != "loaded_pinned_revision"
-                or terminal["state"] != "final"
-                or _text_content(terminal["message"]["content"]) != LOADED_USE_FINAL
+            if (
+                require_positive
+                and case["case"] == "positive"
+                and (
+                    observed != "loaded_pinned_revision"
+                    or terminal["state"] != "final"
+                    or _text_content(terminal["message"]["content"]) != LOADED_USE_FINAL
+                )
             ):
                 return False
         return True
@@ -572,9 +729,11 @@ class LoadedUseGatewayObservation:
         self.selected = None
         self.task = None
         self.generations = 0
+        self.window_start = 0
 
     def begin(self, selected, task):
-        self.selected, self.task, self.generations = selected, task, 0
+        self.selected, self.task, self.generations = dict(selected), task, 0
+        self.window_start = len(self.requests)
 
     def generate(self, request):
         from gateway_helpers import text_turn, tool_turn
@@ -584,7 +743,7 @@ class LoadedUseGatewayObservation:
             raise ValueError("ordinary_skill_generation_bound")
         messages = request.messages
         if not any(
-            message.role.value == "user" and self.task in (message.content or "")
+            message.role.value == "user" and self.task == (message.content or "")
             for message in messages
         ):
             raise ValueError("ordinary_skill_task_mismatch")
@@ -602,7 +761,7 @@ class LoadedUseGatewayObservation:
                     if path in block and name:
                         names.append(name.group(1).strip())
             if len(names) == 1 and "skills_read" in {tool.name for tool in request.tool_schemas}:
-                self.selected["name"] = names[0]
+                self.advertised_name = names[0]
                 return tool_turn(
                     "skills_read", call_id="read" + secrets.token_hex(12), name=names[0]
                 )
@@ -635,20 +794,28 @@ def loaded_use_gateway(work, recommendations):
     async def capture_model_request(request, call_next):
         if request.url.path != "/v1/chat/completions":
             return await call_next(request)
-        if len(observation.requests) >= 8:
-            from starlette.responses import JSONResponse
+        from starlette.responses import JSONResponse
 
+        if len(observation.requests) >= 24:
             return JSONResponse({"error": "observation_request_bound"}, status_code=429)
-        body = await request.body()
-        if len(body) > 1024 * 1024:
-            from starlette.responses import JSONResponse
-
-            return JSONResponse({"error": "observation_byte_bound"}, status_code=413)
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > 1024 * 1024:
+                return JSONResponse({"error": "observation_byte_bound"}, status_code=413)
+            body.extend(chunk)
+        # Starlette replays the bounded body to downstream request validation.
+        request._body = bytes(body)
         record = dict(
             request_id=str(uuid.uuid4()),
             idempotency_key=request.headers.get("Idempotency-Key"),
             body=json.loads(body),
         )
+        overflow = len(observation.requests) - observation.window_start >= 4
+        if overflow:
+            # One retained overflow per window; repeated rejection cannot fill the global cap.
+            if len(observation.requests) - observation.window_start == 4:
+                observation.requests.append(dict(record, status=429, run_id=None))
+            return JSONResponse({"error": "observation_request_bound"}, status_code=429)
         observation.requests.append(record)
         response = await call_next(request)
         record.update(
@@ -665,7 +832,33 @@ class OrdinaryComposition(BASE.ActionComposition):
         self.archive, self.runs = archive.resolve(strict=True), runs
         self.skill_text, self.skill_asset = skill_text, skill_asset
         self.observation = observation
+        self._failure = {}
 
+    @contextmanager
+    def step(self, name):
+        if name not in ORDINARY_FAILURE_STEPS:
+            raise ValueError("ordinary_step_failed")
+        try:
+            yield
+        except Exception as error:
+            if self._failure:
+                raise
+            error_class = ordinary_error_class(error)
+            self._failure = dict(ordinary_failure_step=name, ordinary_error_class=error_class)
+            if isinstance(error, TimeoutError) and str(error) == "overall_deadline_exceeded":
+                raise
+            if error_class.startswith("playwright_"):
+                raise ValueError("ordinary_" + error_class) from None
+            if isinstance(error, ValueError) and str(error) in (
+                self.failure_reasons() | BASE.person_module().SAFE_REASONS
+            ):
+                raise
+            raise ValueError("ordinary_step_failed") from None
+
+    def failure_diagnostics(self):
+        return dict(self._failure)
+
+    @ordinary_step("configure")
     def configure(self, config, work, origin):
         super().configure(config, work, origin)
         # No companion factory is installed in this run.
@@ -679,7 +872,6 @@ class OrdinaryComposition(BASE.ActionComposition):
         config["plugins"]["load"]["paths"].append(str(observer))
         config["plugins"]["entries"]["relaymind-ordinary-observer"] = dict(
             enabled=True,
-            hooks=dict(allowConversationAccess=True),
             config=dict(eventFile=str(self.event_file)),
         )
         config["gateway"]["controlUi"]["experimental"] = dict(customPlugins=True)
@@ -689,10 +881,16 @@ class OrdinaryComposition(BASE.ActionComposition):
         )
         config["tools"] = dict(allow=["skills_read"], toolSearch=False)
         self.host_config_path = work / "openclaw.json"
+        self.provider_attempt_file = work / "provider-attempts.jsonl"
+        self.provider_attempt_file.write_bytes(b"")
+        self.provider_attempt_file.chmod(0o600)
+        if self.observation is not None:
+            self.config["diagnosticsPath"] = str(self.provider_attempt_file)
 
     def environment(self):
         return dict(super().environment(), RELAYMIND_APP_TOKEN=self.application_token)
 
+    @ordinary_step("install")
     def prepare_host(self, host, environment, work, config_path):
         # Operator installation is the ordinary pinned CLI, no constructor override.
         log = work / "private-ordinary-install.log"
@@ -721,14 +919,20 @@ class OrdinaryComposition(BASE.ActionComposition):
             raise ValueError("ordinary_install_failed")
         self.host_config = json.loads(config_path.read_bytes())
 
+    @ordinary_step("sources")
     def source_paths(self):
         return super().source_paths() + [
             Path(__file__),
-            *sorted((Path(__file__).parent / "observer").iterdir()),
+            Path(__file__).parent / "observer" / "probe.mjs",
+            Path(__file__).parent / "observer" / "openclaw.plugin.json",
         ]
 
     def failure_reasons(self):
         return super().failure_reasons() | {
+            "ordinary_step_failed",
+            "ordinary_playwright_timeout",
+            "ordinary_playwright_target_closed",
+            "ordinary_playwright_error",
             "ordinary_install_failed",
             "ordinary_entry_unavailable",
             "ordinary_guard_refused",
@@ -744,6 +948,9 @@ class OrdinaryComposition(BASE.ActionComposition):
             "ordinary_skill_scope_changed",
             "ordinary_skill_read_failed",
             "ordinary_skill_control_failed",
+            "ordinary_skill_generation_bound",
+            "ordinary_skill_task_mismatch",
+            "ordinary_skill_native_event_invalid",
         }
 
     def observe_backend(self):
@@ -776,6 +983,7 @@ class OrdinaryComposition(BASE.ActionComposition):
                 ],
             )
 
+    @ordinary_step("persons_ready")
     def persons_ready(self, rpc, pages, sessions, capture):
         account = capture["accounts"][0]
         person = next(
@@ -798,136 +1006,146 @@ class OrdinaryComposition(BASE.ActionComposition):
             dict.fromkeys([*self.host_config["plugins"]["allow"], "relaymind"])
         )
         skill = self.save_library_skill(rpc, pages[0], sessions[0])
-        capture["ordinary_skill"] = skill
-        self.config["recommendations"]["skills"] = [skill["mapping"]]
-        self.host_config["plugins"]["entries"]["relaymind"] = dict(enabled=True, config=self.config)
-        private_json(self.host_config_path, self.host_config)
-        value = dict(
-            installation=self.installation, default_registration=True, constructor_override=False
-        )
-        capture["ordinary_actions"] = value
-        deadline = time.monotonic() + 25
-        while True:
-            probe = rpc(
-                pages[0],
-                "relaymind.recommendations",
-                dict(
-                    sessions[0],
-                    input=dict(kind="listFeedback", page=dict(limit=1)),
-                    idempotencyKey="ordinary-entry-read",
-                ),
+        with self.step("entry_read"):
+            capture["ordinary_skill"] = skill
+            self.config["recommendations"]["skills"] = [skill["mapping"]]
+            self.host_config["plugins"]["entries"]["relaymind"] = dict(
+                enabled=True, config=self.config
             )
-            if probe["frame"].get("ok") is True:
-                value["entry_read"] = probe
-                events = [json.loads(line) for line in self.event_file.read_bytes().splitlines()]
-                attempts = [
-                    event
-                    for event in events
-                    if event["kind"] == "http_attempt" and event["path"] == "/relay/v1/feedback"
-                ]
-                if not any(
-                    any(
-                        result["kind"] == "http"
-                        and result.get("attempt_id") == attempt["attempt_id"]
-                        and result["status"] == 200
-                        for result in events
-                    )
-                    for attempt in attempts
-                ):
-                    raise ValueError("ordinary_observer_blind")
-                value["entry_events"] = events
-                break
-            error = probe["frame"].get("error") or {}
-            details = error.get("details") or {}
-            pending_scope = error.get("code") == "FORBIDDEN" and details == {
-                "code": "MISSING_SCOPE",
-                "missingScope": "operator.admin",
-                "requiredScopes": ["operator.admin"],
-            }
-            message = error.get("message", "")
-            safe_messages = {
-                "missing scope: operator.admin",
-                "missing scope: operator.write",
-                "Gateway requester authority changed",
-                "native_action_unavailable",
-                "unknown method: relaymind.recommendations",
-            }
-            value.setdefault("entry_failures", []).append(
-                {
-                    "request_id": probe["id"],
-                    "socket_id": probe["socket_id"],
-                    "error_code": error.get("code"),
-                    "message": message
-                    if message in safe_messages
-                    else "unclassified_native_refusal",
-                    "pending_publication": pending_scope,
+            private_json(self.host_config_path, self.host_config)
+            value = dict(
+                installation=self.installation,
+                default_registration=True,
+                constructor_override=False,
+            )
+            capture["ordinary_actions"] = value
+            deadline = time.monotonic() + 25
+            while True:
+                probe = rpc(
+                    pages[0],
+                    "relaymind.recommendations",
+                    dict(
+                        sessions[0],
+                        input=dict(kind="listFeedback", page=dict(limit=1)),
+                        idempotencyKey="ordinary-entry-read",
+                    ),
+                )
+                if probe["frame"].get("ok") is True:
+                    value["entry_read"] = probe
+                    events = read_observer_events(self.event_file)
+                    attempts = [
+                        event
+                        for event in events
+                        if event["kind"] == "http_attempt" and event["path"] == "/relay/v1/feedback"
+                    ]
+                    if not any(
+                        any(
+                            result["kind"] == "http"
+                            and result.get("attempt_id") == attempt["attempt_id"]
+                            and result["status"] == 200
+                            for result in events
+                        )
+                        for attempt in attempts
+                    ):
+                        raise ValueError("ordinary_observer_blind")
+                    value["entry_events"] = events
+                    break
+                error = probe["frame"].get("error") or {}
+                details = error.get("details") or {}
+                pending_scope = error.get("code") == "FORBIDDEN" and details == {
+                    "code": "MISSING_SCOPE",
+                    "missingScope": "operator.admin",
+                    "requiredScopes": ["operator.admin"],
                 }
-            )
-            if not pending_scope and message != "unknown method: relaymind.recommendations":
-                raise ValueError("ordinary_guard_refused")
-            if time.monotonic() >= deadline:
-                raise ValueError("ordinary_entry_unavailable")
-            pages[0].wait_for_timeout(500)
-        value["production_registry_enabled"] = True
-        ui_page = pages[0].context.new_page()
-        try:
-            suffix = sessions[0]["sessionKey"].removeprefix("agent:main:")
-            if "/" in suffix or not suffix.startswith("person-"):
-                raise ValueError("ordinary_guard_refused")
-            ui_page.goto(self.origin + "/chat/main/" + suffix, wait_until="domcontentloaded")
-            deadline = time.monotonic() + 20
-            while not ui_page.evaluate("() => window.__rmPersonWire?.state().ready === true"):
+                message = error.get("message", "")
+                safe_messages = {
+                    "missing scope: operator.admin",
+                    "missing scope: operator.write",
+                    "Gateway requester authority changed",
+                    "native_action_unavailable",
+                    "unknown method: relaymind.recommendations",
+                }
+                value.setdefault("entry_failures", []).append(
+                    {
+                        "request_id": probe["id"],
+                        "socket_id": probe["socket_id"],
+                        "error_code": error.get("code"),
+                        "message": message
+                        if message in safe_messages
+                        else "unclassified_native_refusal",
+                        "pending_publication": pending_scope,
+                    }
+                )
+                if not pending_scope and message != "unknown method: relaymind.recommendations":
+                    raise ValueError("ordinary_guard_refused")
                 if time.monotonic() >= deadline:
                     raise ValueError("ordinary_entry_unavailable")
-                ui_page.wait_for_timeout(100)
-            ui_person = rpc(ui_page, "rmqualification.person", sessions[0])
-            payload = ui_person["frame"].get("payload") or {}
-            if ui_person["frame"].get("ok") is not True or any(
-                payload.get(field) != person.get(field)
-                for field in (
-                    "profileId",
-                    "authenticatedUserId",
-                    "sessionKey",
-                    "sessionId",
-                    "lifecycleRevision",
-                    "workspaceDir",
+                pages[0].wait_for_timeout(500)
+        with self.step("ui_actions"):
+            value["production_registry_enabled"] = True
+            ui_page = pages[0].context.new_page()
+            try:
+                suffix = sessions[0]["sessionKey"].removeprefix("agent:main:")
+                if "/" in suffix or not suffix.startswith("person-"):
+                    raise ValueError("ordinary_guard_refused")
+                ui_page.goto(self.origin + "/chat/main/" + suffix, wait_until="domcontentloaded")
+                deadline = time.monotonic() + 20
+                while not ui_page.evaluate("() => window.__rmPersonWire?.state().ready === true"):
+                    if time.monotonic() >= deadline:
+                        raise ValueError("ordinary_entry_unavailable")
+                    ui_page.wait_for_timeout(100)
+                ui_person = rpc(ui_page, "rmqualification.person", sessions[0])
+                payload = ui_person["frame"].get("payload") or {}
+                if ui_person["frame"].get("ok") is not True or any(
+                    payload.get(field) != person.get(field)
+                    for field in (
+                        "profileId",
+                        "authenticatedUserId",
+                        "sessionKey",
+                        "sessionId",
+                        "lifecycleRevision",
+                        "workspaceDir",
+                    )
+                ):
+                    raise ValueError("ordinary_guard_refused")
+                value["ui_person"] = ui_person
+                value["ui"] = run_ui(ui_page, sessions[0], self.observe_backend)
+                self.select_library_skill(rpc, pages, sessions, ui_page, capture["ordinary_skill"])
+                if self.observation is not None:
+                    self.observe_loaded_use(rpc, pages[0], sessions[0], capture)
+            except Exception:
+                try:
+                    ui_page.close()
+                except TimeoutError:
+                    raise  # Never swallow the overall SIGALRM during cleanup.
+                except Exception:
+                    pass  # A closed page cannot replace the original failure.
+                raise
+        with self.step("negative_actions"):
+            self.ui_page = ui_page
+            self.ui_person = ui_person
+            value["positive_events"] = read_observer_events(self.event_file)
+            start = len(self.event_file.read_bytes())
+            negative = []
+            for target in (sessions[0], sessions[1]):
+                observed = rpc(
+                    pages[1],
+                    "relaymind.recommendations",
+                    dict(
+                        target,
+                        input=dict(kind="listFeedback", page=dict(limit=1)),
+                        idempotencyKey=secrets.token_hex(16),
+                    ),
                 )
+                negative.append(dict(observed=observed, target=target))
+            value["negative_receipts"] = negative
+            value["negative_events"] = read_observer_events(self.event_file, start)
+            if any(item["observed"]["frame"].get("ok") is not False for item in negative) or any(
+                event["kind"] == "http_attempt" for event in value["negative_events"]
             ):
-                raise ValueError("ordinary_guard_refused")
-            value["ui_person"] = ui_person
-            value["ui"] = run_ui(ui_page, sessions[0], self.observe_backend)
-            self.select_library_skill(rpc, pages, sessions, ui_page, capture["ordinary_skill"])
-            self.observe_loaded_use(rpc, pages[0], sessions[0], capture)
-        except Exception:
-            ui_page.close()
-            raise
-        self.ui_page = ui_page
-        self.ui_person = ui_person
-        value["positive_events"] = [
-            json.loads(line) for line in self.event_file.read_bytes().splitlines()
-        ]
-        start = len(self.event_file.read_bytes())
-        negative = []
-        for target in (sessions[0], sessions[1]):
-            observed = rpc(
-                pages[1],
-                "relaymind.recommendations",
-                dict(
-                    target,
-                    input=dict(kind="listFeedback", page=dict(limit=1)),
-                    idempotencyKey=secrets.token_hex(16),
-                ),
-            )
-            negative.append(dict(observed=observed, target=target))
-        value["negative_receipts"] = negative
-        value["negative_events"] = [
-            json.loads(line) for line in self.event_file.read_bytes()[start:].splitlines()
-        ]
-        if any(item["observed"]["frame"].get("ok") is not False for item in negative) or any(
-            event["kind"] == "http_attempt" for event in value["negative_events"]
-        ):
-            raise ValueError("ordinary_zero_http_failed")
+                raise ValueError("ordinary_zero_http_failed")
 
+    @ordinary_step("save_library_skill")
     def save_library_skill(self, rpc, page, session):
         """Save the gateway's exact fixture SKILL.md into this person's library."""
         saved = rpc(
@@ -961,6 +1179,7 @@ class OrdinaryComposition(BASE.ActionComposition):
             ),
         )
 
+    @ordinary_step("select_library_skill")
     def select_library_skill(self, rpc, pages, sessions, ui_page, skill):
         """Exact selection through the bridge, the official UI and two refusals."""
         views = self.observe_backend()["views"]
@@ -1007,6 +1226,7 @@ class OrdinaryComposition(BASE.ActionComposition):
             skill["ui_status"] = "selected"
         except Exception:
             skill["ui_status"] = "unavailable"
+            raise
         listed = rpc(pages[0], "skills.library.list", dict(sessionKey=sessions[0]["sessionKey"]))
         skill["library_list"] = dict(
             ok=listed["frame"].get("ok") is True, payload=listed["frame"].get("payload")
@@ -1025,17 +1245,29 @@ class OrdinaryComposition(BASE.ActionComposition):
             or subscription["frame"]["payload"].get("key") != case["current"]["sessionKey"]
         ):
             raise ValueError("ordinary_skill_subscription_failed")
+        case["subscription"] = dict(
+            ok=True,
+            subscribed=True,
+            key=subscription["frame"]["payload"]["key"],
+            socket_id=subscription["socket_id"],
+        )
         self.observation.begin(case["selected"], case["task"])
         start = len(self.observation.requests)
-        event_start = len(self.event_file.read_bytes())
         params = dict(
             sessionKey=case["current"]["sessionKey"],
             message=case["task"],
             idempotencyKey=str(uuid.uuid4()),
         )
         sent = rpc(page, "chat.send", params)
-        case["chat"] = dict(params=params, frame=sent["frame"])
-        case.update(tools=[], requests=[], terminal={}, observed="incomplete")
+        case["chat"] = dict(params=params, frame=sent["frame"], socket_id=sent["socket_id"])
+        case.update(
+            tools=[],
+            requests=[],
+            provider_attempts=[],
+            advertised_revision=None,
+            terminal={},
+            observed="incomplete",
+        )
         if sent["frame"].get("ok") is False:
             case["observed"] = "refused"
             return
@@ -1051,13 +1283,12 @@ class OrdinaryComposition(BASE.ActionComposition):
                 break
             page.wait_for_timeout(100)
         else:
-            events = [
-                json.loads(line) for line in self.event_file.read_bytes()[event_start:].splitlines()
-            ]
+            events = read_observer_events(self.event_file)
             case["tools"] = [
                 dict(event=event["event"], context=event["context"])
                 for event in events
                 if event.get("kind") == "native_skill_tool"
+                and event.get("context", {}).get("runId") == params["idempotencyKey"]
             ]
             case["requests"] = self.observation.requests[start:]
             raise ValueError("ordinary_skill_turn_timeout")
@@ -1065,13 +1296,12 @@ class OrdinaryComposition(BASE.ActionComposition):
         # after the terminal event before reading the passive capture file.
         deadline = time.monotonic() + 3
         while True:
-            events = [
-                json.loads(line) for line in self.event_file.read_bytes()[event_start:].splitlines()
-            ]
+            events = read_observer_events(self.event_file)
             case["tools"] = [
                 dict(event=event["event"], context=event["context"])
                 for event in events
                 if event.get("kind") == "native_skill_tool"
+                and event.get("context", {}).get("runId") == params["idempotencyKey"]
             ]
             case["requests"] = self.observation.requests[start:]
             has_result = any(
@@ -1079,8 +1309,19 @@ class OrdinaryComposition(BASE.ActionComposition):
                 for attempt in case["requests"]
                 for message in attempt["body"]["messages"]
             )
-            if case["tools"] or not has_result or time.monotonic() >= deadline:
+            case["provider_attempts"] = [
+                record
+                for record in read_observer_events(self.provider_attempt_file)
+                if record.get("idempotencyKey") in {a["idempotency_key"] for a in case["requests"]}
+            ]
+            advertisement = advertised_skill(case["requests"], case["selected"])
+            case["advertised_revision"] = advertisement[1] if advertisement else None
+            if (case["tools"] or not has_result) and len(case["provider_attempts"]) == len(
+                case["requests"]
+            ):
                 break
+            if time.monotonic() >= deadline:
+                raise ValueError("ordinary_skill_turn_timeout")
             page.wait_for_timeout(50)
         after = rpc(page, "rmqualification.person", session)
         if (
@@ -1138,16 +1379,11 @@ class OrdinaryComposition(BASE.ActionComposition):
                 raise ValueError("ordinary_skill_read_failed")
             payload = read["frame"]["payload"]
             listed = rpc(page, "skills.library.list", dict(sessionKey=scope["sessionKey"]))
-            pins = listed["frame"]["payload"]["session"]["selections"]
-            pin = next(
-                pin
-                for pin in pins
-                if pin["skillId"] == mapping["skillId"] and pin["revision"] == mapping["revision"]
-            )
+            pin = selected_pin(listed, mapping)
             selected = dict(
                 skillId=mapping["skillId"],
                 revision=mapping["revision"],
-                content=payload["content"],
+                content=bounded_skill_content(payload["content"]),
                 content_sha256=skill["content_sha256"],
                 name=pin["name"],
                 read=dict(ok=True, payload=payload),
@@ -1165,6 +1401,10 @@ class OrdinaryComposition(BASE.ActionComposition):
                 requests=[],
                 terminal={},
                 observed="incomplete",
+                subscription={},
+                provider_attempts=[],
+                advertised_revision=None,
+                failure_reason=None,
             )
             value["cases"].append(case)
             if name == "stale":
@@ -1209,19 +1449,26 @@ class OrdinaryComposition(BASE.ActionComposition):
                     }
             if not _control_observed(case):
                 raise ValueError("ordinary_skill_control_failed")
-            self.loaded_use_turn(rpc, page, selected_session, case)
+            try:
+                self.loaded_use_turn(rpc, page, selected_session, case)
+            except ValueError as error:
+                if str(error) not in self.failure_reasons():
+                    raise
+                case["failure_reason"] = str(error)
+                case["observed"] = "incomplete"
 
     def native_events(self):
         path = self.work / "native-events.jsonl"
-        return [json.loads(line) for line in path.read_bytes().splitlines()]
+        return read_observer_events(path)
 
+    @ordinary_step("retirement_prepared")
     def before_retirement(self, page, session):
         self.retirement_start = len(self.event_file.read_bytes())
         self.ui_guard_request = self.ui_page.evaluate(
             "params => window.__rmPersonWire.startRpc('rmqualification.person',params)",
             dict(session, hold=True),
         )
-        deadline = time.monotonic() + 3
+        deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
         while not any(
             event.get("requestId") == self.ui_guard_request and event.get("phase") == "prepared"
             for event in self.native_events()
@@ -1229,28 +1476,24 @@ class OrdinaryComposition(BASE.ActionComposition):
             if time.monotonic() >= deadline:
                 raise ValueError("ordinary_abort_unobserved")
             time.sleep(0.01)
-        super().before_retirement(self.ui_page, session)
-        events = [
-            json.loads(line)
-            for line in self.event_file.read_bytes()[self.retirement_start :].splitlines()
-        ]
-        attempts = [
-            event
-            for event in events
-            if event["kind"] == "http_attempt" and event["path"] == "/relay/v1/feedback"
-        ]
-        if len(attempts) != 1:
-            raise ValueError("ordinary_abort_unobserved")
-        self.held_attempt = attempts[0]
+        with self.step("retirement_attempt"):
+            super().before_retirement(self.ui_page, session)
+            events = read_observer_events(self.event_file, self.retirement_start)
+            attempts = [
+                event
+                for event in events
+                if event["kind"] == "http_attempt" and event["path"] == "/relay/v1/feedback"
+            ]
+            if len(attempts) != 1:
+                raise ValueError("ordinary_abort_unobserved")
+            self.held_attempt = attempts[0]
 
+    @ordinary_step("retirement_abort")
     def after_retirement(self, capture):
         self.release.set()
-        deadline = time.monotonic() + 3
+        deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
         while time.monotonic() < deadline:
-            events = [
-                json.loads(line)
-                for line in self.event_file.read_bytes()[self.retirement_start :].splitlines()
-            ]
+            events = read_observer_events(self.event_file, self.retirement_start)
             failures = [
                 event
                 for event in events
@@ -1285,6 +1528,7 @@ class OrdinaryComposition(BASE.ActionComposition):
             time.sleep(0.01)
         raise ValueError("ordinary_abort_unobserved")
 
+    @ordinary_step("finalize")
     def finalize(self, capture):
         relevant = [
             event
@@ -1336,6 +1580,23 @@ def run_ui(page, session, observe):
     )
 
 
+def finish_capture(capture, code, *, observe=False):
+    """RM39/AC30: observation outcomes do not extend ordinary qualification."""
+    capture["checks"]["ordinary_actions"] = ordinary_pass(capture)
+    capture["checks"]["ordinary_skill"] = ordinary_skill_pass(capture)
+    if observe:
+        capture["checks"]["ordinary_skill_loaded_use_observation"] = ordinary_skill_loaded_use_pass(
+            capture
+        )
+        capture["checks"]["ordinary_skill_observation_complete"] = ordinary_skill_loaded_use_pass(
+            capture, require_positive=False
+        )
+        if not capture["checks"]["ordinary_skill_observation_complete"]:
+            return 2
+    passed = all(capture["checks"][key] for key in ("ordinary_actions", "ordinary_skill"))
+    return 0 if code == 0 and passed else 2
+
+
 def main(argv=None):
     import argparse
     import threading
@@ -1353,6 +1614,7 @@ def main(argv=None):
     parser.add_argument("--tarball", type=Path, required=True)
     parser.add_argument("--work-dir", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--observe-loaded-use", action="store_true")
     args = parser.parse_args(argv)
     backend = args.work_dir.parent / (args.work_dir.name + "-gateway")
     backend.mkdir(mode=0o700)
@@ -1386,7 +1648,7 @@ def main(argv=None):
     async def hold_private_read(request, call_next):
         if hold.is_set() and request.method == "GET" and request.url.path == "/relay/v1/feedback":
             entered.set()
-            await asyncio.to_thread(release.wait, 5)
+            await asyncio.to_thread(release.wait, HOST_EVENT_WAIT_SECONDS)
         return await call_next(request)
 
     asyncio.run(service.refresh_catalog())
@@ -1404,7 +1666,7 @@ def main(argv=None):
                 release,
                 archive=args.tarball,
                 runs=runs,
-                observation=observation,
+                observation=observation if args.observe_loaded_use else None,
                 skill_text=skill_text,
                 skill_asset=dict(
                     asset_id=record.asset_id,
@@ -1416,23 +1678,9 @@ def main(argv=None):
                 args.work_dir, args.out, extension=extension
             )
         capture = json.loads(args.out.read_bytes())
-        if code == 0:
-            extension.finalize(capture)
-        capture["checks"]["ordinary_actions"] = ordinary_pass(capture)
-        capture["checks"]["ordinary_skill"] = ordinary_skill_pass(capture)
-        capture["checks"]["ordinary_skill_loaded_use_observation"] = ordinary_skill_loaded_use_pass(
-            capture
-        )
+        result = finish_capture(capture, code, observe=args.observe_loaded_use)
         BASE.person_module().write_capture(args.out, capture)
-        passed = all(
-            capture["checks"][key]
-            for key in (
-                "ordinary_actions",
-                "ordinary_skill",
-                "ordinary_skill_loaded_use_observation",
-            )
-        )
-        return 0 if code == 0 and passed else 2
+        return result
     finally:
         release.set()
         asyncio.run(service.stop())

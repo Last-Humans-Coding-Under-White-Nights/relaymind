@@ -346,6 +346,7 @@ def test_the_browser_observer_allows_every_method_the_ordinary_run_calls():
     requested = re.search(r"installNativeSocketObserver\(window, \[(.*?)\]\)", person, re.S)
     extras = set(re.findall(r'"([a-z.]+)"', requested.group(1)))
     base = {"rmqualification.person", "sessions.create", "sessions.reset"}
+    assert extras <= called
     assert called <= base | extras
     allowed = re.search(r"some\(method => !\[(.*?)\]\.includes", wire).group(1)
     assert extras <= set(re.findall(r'"([a-z.]+)"', allowed))
@@ -377,7 +378,10 @@ def loaded_fixture(api):
             name="Hello World",
             read=dict(
                 ok=True,
-                payload=dict(entry=dict(skillId=skill_id, revision=REVISION), content=CONTENT),
+                payload=dict(
+                    entry=dict(skillId=skill_id, revision=REVISION, name="Hello World"),
+                    content=CONTENT,
+                ),
             ),
         )
         run_id, task = f"host-{name}", f"task-{name}"
@@ -485,6 +489,7 @@ def loaded_fixture(api):
                 ),
                 intervention=intervention,
                 chat=dict(
+                    socket_id="socket",
                     params=dict(
                         sessionKey=current["sessionKey"], message=task, idempotencyKey=run_id
                     ),
@@ -492,7 +497,21 @@ def loaded_fixture(api):
                 ),
                 tools=[tool],
                 requests=attempts,
+                provider_attempts=[
+                    dict(
+                        idempotencyKey=a["idempotency_key"],
+                        runId=a["run_id"],
+                        event="relaymind.inference_attempt",
+                    )
+                    for a in attempts
+                ],
+                advertised_revision=REVISION,
+                failure_reason=None,
+                subscription=dict(
+                    ok=True, subscribed=True, key=current["sessionKey"], socket_id="socket"
+                ),
                 terminal=dict(
+                    socket_id="socket",
                     runId=run_id,
                     sessionKey=current["sessionKey"],
                     state="final",
@@ -665,6 +684,7 @@ def test_controls_are_observations_without_rejection_requirement(observed):
     case = capture["ordinary_skill_loaded_use"]["cases"][3]
     case["tools"] = []
     case["requests"] = case["requests"][:1]
+    case["provider_attempts"] = case["provider_attempts"][:1]
     case["observed"] = observed
     if observed == "refused":
         case["terminal"]["state"] = "error"
@@ -768,6 +788,8 @@ def test_host_uses_packaged_provider_and_only_native_skill_read(tmp_path):
     assert config["agents"]["defaults"]["model"]["primary"] == "relaymind/relaymind-client-tools"
     assert config["tools"]["allow"] == ["skills_read"]
     assert extension.environment()["RELAYMIND_APP_TOKEN"] == "app"
+    assert "hooks" not in config["plugins"]["entries"]["relaymind-ordinary-observer"]
+    assert all(path.name != "probe.test.ts" for path in extension.source_paths())
 
 
 def test_control_native_activation_is_retained_as_native_not_bridge_receipt():
@@ -814,6 +836,10 @@ def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(tmp_p
     )
     extension.event_file = tmp_path / "events.jsonl"
     extension.event_file.write_text("")
+    extension.provider_attempt_file = tmp_path / "attempts.jsonl"
+    extension.provider_attempt_file.write_text(
+        "".join(json.dumps(a) + "\n" for a in case["provider_attempts"])
+    )
     records = []
     extension.observation = SimpleNamespace(requests=records, begin=lambda selected, task: None)
     terminal = {}
@@ -822,7 +848,10 @@ def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(tmp_p
     def rpc(page, method, params):
         calls.append((method, params))
         if method == "sessions.messages.subscribe":
-            return dict(frame=dict(ok=True, payload=dict(subscribed=True, key=params["key"])))
+            return dict(
+                socket_id="socket",
+                frame=dict(ok=True, payload=dict(subscribed=True, key=params["key"])),
+            )
         if method == "chat.send":
             assert calls[0][0] == "sessions.messages.subscribe"
             run_id = params["idempotencyKey"]
@@ -833,7 +862,7 @@ def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(tmp_p
             )
             records.extend(copy.deepcopy(case["requests"]))
             terminal.update(case["terminal"], runId=run_id)
-            return dict(frame=dict(ok=True, payload=dict(runId=run_id)))
+            return dict(socket_id="socket", frame=dict(ok=True, payload=dict(runId=run_id)))
         assert method == "rmqualification.person"
         return dict(frame=dict(ok=True, payload=case["current"]))
 
@@ -880,6 +909,7 @@ def test_native_turn_wait_is_bounded(tmp_path):
     with pytest.raises(ValueError, match="ordinary_skill_turn_timeout"):
         extension.loaded_use_turn(
             lambda page, method, params: dict(
+                socket_id="socket",
                 frame=dict(
                     ok=True,
                     payload=(
@@ -887,7 +917,7 @@ def test_native_turn_wait_is_bounded(tmp_path):
                         if method == "sessions.messages.subscribe"
                         else dict(runId=params["idempotencyKey"])
                     ),
-                )
+                ),
             ),
             SimpleNamespace(evaluate=lambda *args: []),
             {},
@@ -934,7 +964,7 @@ def test_control_refusal_before_inference_is_observed_without_inventing_a_gatewa
     api = module()
     capture = loaded_fixture(api)
     case = capture["ordinary_skill_loaded_use"]["cases"][3]
-    case.update(tools=[], requests=[], observed="refused")
+    case.update(tools=[], requests=[], provider_attempts=[], observed="refused")
     case["terminal"]["state"] = "error"
     assert api.ordinary_skill_loaded_use_pass(capture)
 
@@ -966,12 +996,20 @@ def test_timeout_retains_received_gateway_attempts(tmp_path):
 
     def send(page, method, params):
         if method == "sessions.messages.subscribe":
-            return dict(frame=dict(ok=True, payload=dict(subscribed=True, key=params["key"])))
+            return dict(
+                socket_id="socket",
+                frame=dict(ok=True, payload=dict(subscribed=True, key=params["key"])),
+            )
+        observed_tool["context"]["runId"] = observed_tool["event"]["runId"] = params[
+            "idempotencyKey"
+        ]
         requests.append(dict(request_id="retained-attempt"))
         extension.event_file.write_text(
             json.dumps(dict(kind="native_skill_tool", **observed_tool)) + "\n"
         )
-        return dict(frame=dict(ok=True, payload=dict(runId=params["idempotencyKey"])))
+        return dict(
+            socket_id="socket", frame=dict(ok=True, payload=dict(runId=params["idempotencyKey"]))
+        )
 
     with pytest.raises(ValueError, match="ordinary_skill_turn_timeout"):
         extension.loaded_use_turn(
@@ -1021,3 +1059,780 @@ def test_native_turn_refuses_to_run_when_session_subscription_is_denied(tmp_path
             denied, None, {}, loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
         )
     assert calls == ["sessions.messages.subscribe"]
+
+
+FAILURE_STEPS = {
+    "configure",
+    "install",
+    "sources",
+    "persons_ready",
+    "save_library_skill",
+    "entry_read",
+    "ui_actions",
+    "select_library_skill",
+    "negative_actions",
+    "retirement_prepared",
+    "retirement_attempt",
+    "retirement_abort",
+    "finalize",
+}
+
+
+def extension_fixture(api, tmp_path):
+    archive = tmp_path / "release.tgz"
+    archive.write_bytes(b"disposable archive")
+    return api.OrdinaryComposition(
+        "http://127.0.0.1:12345/v1",
+        "app",
+        "action",
+        *[threading.Event() for _ in range(3)],
+        archive=archive,
+        runs=None,
+        skill_text=CONTENT,
+        skill_asset=dict(
+            asset_id="example:hello-world",
+            content_hash="0" * 64,
+            source_version=None,
+        ),
+    )
+
+
+@pytest.mark.parametrize("step", sorted(FAILURE_STEPS))
+@pytest.mark.parametrize(
+    "error_kind",
+    [
+        "playwright_timeout",
+        "playwright_target_closed",
+        "playwright_error",
+        "value_error",
+        "other",
+    ],
+)
+def test_ordinary_failure_diagnostics_are_closed_and_private(tmp_path, step, error_kind):
+    """RM12/RM16/RM39 AC30: every substep exports only fixed discriminators."""
+    from playwright._impl._errors import TargetClosedError
+    from playwright.sync_api import Error
+    from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    classes = dict(
+        playwright_timeout=PlaywrightTimeout,
+        playwright_target_closed=TargetClosedError,
+        playwright_error=Error,
+        value_error=ValueError,
+        other=RuntimeError,
+    )
+    with pytest.raises(ValueError) as caught:
+        with extension.step(step):
+            raise classes[error_kind]("https://private.example/secret?token=credential")
+    assert str(caught.value) == (
+        "ordinary_" + error_kind if error_kind.startswith("playwright_") else "ordinary_step_failed"
+    )
+    assert str(caught.value) in extension.failure_reasons()
+    assert extension.failure_diagnostics() == {
+        "ordinary_failure_step": step,
+        "ordinary_error_class": error_kind,
+    }
+    assert api.ORDINARY_FAILURE_STEPS == FAILURE_STEPS
+
+
+def test_ordinary_deadline_is_never_reclassified_or_swallowed(tmp_path):
+    """RM16/RM39 AC30: nested step reporting cannot replace SIGALRM's reason."""
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    with pytest.raises(TimeoutError, match="^overall_deadline_exceeded$"):
+        with extension.step("persons_ready"):
+            with extension.step("select_library_skill"):
+                raise TimeoutError("overall_deadline_exceeded")
+    assert extension.failure_diagnostics() == {
+        "ordinary_failure_step": "select_library_skill",
+        "ordinary_error_class": "other",
+    }
+
+
+def test_library_save_reports_the_actual_substep(tmp_path):
+    """RM12/RM39 AC30: RPC exception translation retains the original browser class."""
+    from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+
+    class Page:
+        def evaluate(self, *args):
+            raise PlaywrightTimeout("private browser URL and credential")
+
+    with pytest.raises(ValueError, match="^ordinary_playwright_timeout$"):
+        extension.save_library_skill(api.BASE.person_module().native_rpc, Page(), {})
+    assert extension.failure_diagnostics() == {
+        "ordinary_failure_step": "save_library_skill",
+        "ordinary_error_class": "playwright_timeout",
+    }
+
+
+@pytest.mark.parametrize("error_kind", ["deadline", "timeout", "closed"])
+def test_library_selection_wait_cannot_swallow_browser_failure(tmp_path, monkeypatch, error_kind):
+    """RM16/RM39 AC30: an unobserved UI selection fails at its original substep."""
+    from playwright._impl._errors import TargetClosedError
+    from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    monkeypatch.setattr(
+        extension,
+        "observe_backend",
+        lambda: {
+            "views": [{"state": "chosen", "recommendation_id": "r"}],
+        },
+    )
+    errors = dict(
+        deadline=TimeoutError("overall_deadline_exceeded"),
+        timeout=PlaywrightTimeout("private"),
+        closed=TargetClosedError("private"),
+    )
+
+    class Page:
+        def get_by_role(self, *args, **kwargs):
+            return self
+
+        def get_by_text(self, *args, **kwargs):
+            return self
+
+        def click(self):
+            pass
+
+        def select_option(self, **kwargs):
+            pass
+
+        def wait_for(self, **kwargs):
+            raise errors[error_kind]
+
+    def rpc(*args):
+        return {"frame": {"ok": True, "payload": {}}}
+
+    skill = skill_fixture(api)["ordinary_skill"]
+    expected = (
+        "overall_deadline_exceeded"
+        if error_kind == "deadline"
+        else (
+            "ordinary_playwright_timeout"
+            if error_kind == "timeout"
+            else "ordinary_playwright_target_closed"
+        )
+    )
+    with pytest.raises((ValueError, TimeoutError), match="^" + expected + "$"):
+        extension.select_library_skill(
+            rpc, [Page(), Page()], [{"sessionKey": "s"}, {}], Page(), skill
+        )
+    assert extension.failure_diagnostics()["ordinary_failure_step"] == "select_library_skill"
+
+
+@pytest.mark.parametrize("arrives", [True, False])
+def test_retirement_wait_allows_loaded_runner_but_stays_bounded(tmp_path, monkeypatch, arrives):
+    """RM16/RM39 AC30: delayed original abort evidence passes; absent evidence times out."""
+    import json
+
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    retirement = fixture(api)["ordinary_actions"]["retirement"]
+    extension.event_file = tmp_path / "events.jsonl"
+    extension.event_file.write_text("")
+    extension.retirement_start = 0
+    extension.held_attempt = retirement["attempt"]
+    extension.held_request = "held"
+    extension.ui_guard_request = retirement["ui_guard_request"]
+    extension.ui_person = {
+        "frame": {"payload": {"connectionId": retirement["connection_id"]}},
+        "socket_id": retirement["native_socket_id"],
+    }
+    extension.entered.set()
+    clock = [0.0]
+    monkeypatch.setattr(api.time, "monotonic", lambda: clock[0])
+
+    def sleep(seconds):
+        clock[0] += seconds
+        if arrives and clock[0] >= 4:
+            extension.event_file.write_text(json.dumps(retirement["fetch_failures"][0]) + "\n")
+
+    monkeypatch.setattr(api.time, "sleep", sleep)
+    monkeypatch.setattr(extension, "native_events", lambda: [retirement["ui_retired"]])
+    capture = {"ordinary_actions": {}}
+    if arrives:
+        extension.after_retirement(capture)
+        assert (
+            capture["ordinary_actions"]["retirement"]["fetch_failures"]
+            == retirement["fetch_failures"]
+        )
+        assert 4 <= clock[0] < 10
+    else:
+        with pytest.raises(ValueError, match="^ordinary_abort_unobserved$"):
+            extension.after_retirement(capture)
+        assert 10 <= clock[0] < 10.1
+        assert extension.failure_diagnostics() == {
+            "ordinary_failure_step": "retirement_abort",
+            "ordinary_error_class": "value_error",
+        }
+
+
+@pytest.mark.parametrize("stage", ["retirement_prepared", "retirement_attempt"])
+@pytest.mark.parametrize("arrives", [True, False])
+def test_retirement_preparation_waits_for_original_host_events(
+    tmp_path,
+    monkeypatch,
+    stage,
+    arrives,
+):
+    """RM16/RM39 AC30: each wait accepts late original evidence and fails without it."""
+    import json
+
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    extension.event_file = tmp_path / "events.jsonl"
+    extension.event_file.write_text("")
+    clock = [0.0]
+    monkeypatch.setattr(api.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(api.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+
+    class Page:
+        def evaluate(self, expression, params):
+            return "guard" if "rmqualification.person" in expression else "action"
+
+    extension.ui_page = Page()
+    monkeypatch.setattr(
+        extension,
+        "native_events",
+        lambda: (
+            [{"requestId": "guard", "phase": "prepared"}]
+            if stage != "retirement_prepared" or (arrives and clock[0] >= 4)
+            else []
+        ),
+    )
+
+    class Entered:
+        def wait(self, timeout):
+            if stage == "retirement_attempt":
+                clock[0] += min(4, timeout) if arrives else timeout
+                if not arrives or timeout < 4:
+                    return False
+            extension.event_file.write_text(
+                json.dumps(
+                    {
+                        "kind": "http_attempt",
+                        "path": "/relay/v1/feedback",
+                        "attempt_id": "original",
+                    }
+                )
+                + "\n"
+            )
+            return True
+
+    extension.entered = Entered()
+    if arrives:
+        extension.before_retirement(Page(), {})
+        assert extension.held_attempt["attempt_id"] == "original"
+        assert 4 <= clock[0] < 10
+    else:
+        expected = (
+            "ordinary_abort_unobserved"
+            if stage == "retirement_prepared"
+            else "composed_hold_not_observed"
+        )
+        with pytest.raises(ValueError, match="^" + expected + "$"):
+            extension.before_retirement(Page(), {})
+        assert 10 <= clock[0] < 10.1
+        assert extension.failure_diagnostics() == {
+            "ordinary_failure_step": stage,
+            "ordinary_error_class": "value_error",
+        }
+
+
+@pytest.mark.parametrize(
+    "stage",
+    [
+        "save_library_skill",
+        "entry_read",
+        "ui_actions",
+        "select_library_skill",
+        "negative_actions",
+        "cleanup_deadline",
+    ],
+)
+def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
+    tmp_path, monkeypatch, stage
+):
+    """RM12/RM16/RM39 AC30: real extension hook wiring retains the failing operation."""
+    import json
+
+    from playwright.sync_api import Error
+
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    capture = fixture(api)
+    person = next(
+        e["payload"]
+        for e in capture["events"]
+        if e["id"] == capture["accounts"][0]["rpc_evidence_id"]
+    )
+    person["workspaceDir"] = str(tmp_path)
+    extension.config = {"recommendations": {}}
+    extension.host_config = {"plugins": {"allow": [], "entries": {}}}
+    extension.host_config_path = tmp_path / "host.json"
+    extension.installation = {}
+    extension.origin = "https://fixture.test"
+    extension.event_file = tmp_path / "events.jsonl"
+    extension.event_file.write_text(
+        "\n".join(
+            json.dumps(e)
+            for e in [
+                {"kind": "http_attempt", "path": "/relay/v1/feedback", "attempt_id": "entry"},
+                {"kind": "http", "attempt_id": "entry", "status": 200},
+            ]
+        )
+        + "\n"
+    )
+    monkeypatch.setattr(
+        extension,
+        "observe_backend",
+        lambda: {
+            "views": [{"state": "chosen", "recommendation_id": "r"}],
+        },
+    )
+
+    def fail():
+        raise Error("private URL and credential")
+
+    class Page:
+        @property
+        def context(self):
+            return self
+
+        def new_page(self):
+            return self
+
+        def goto(self, *args, **kwargs):
+            if stage in {"ui_actions", "cleanup_deadline"}:
+                fail()
+
+        def evaluate(self, *args):
+            return True
+
+        def close(self):
+            if stage == "cleanup_deadline":
+                raise TimeoutError("overall_deadline_exceeded")
+            fail()  # Cleanup must not replace the original failure's class/step.
+
+        def get_by_role(self, *args, **kwargs):
+            if stage == "select_library_skill":
+                fail()
+            return self
+
+        def get_by_text(self, *args, **kwargs):
+            return self
+
+        def click(self):
+            pass
+
+        def select_option(self, **kwargs):
+            pass
+
+        def wait_for(self, **kwargs):
+            pass
+
+    def rpc(page, method, params):
+        if method == "skills.library.save":
+            if stage == "save_library_skill":
+                fail()
+            payload = {"skillId": SKILL_ID, "revision": REVISION}
+        elif method == "relaymind.recommendations":
+            if stage == "entry_read" or (
+                stage == "negative_actions" and params["idempotencyKey"] != "ordinary-entry-read"
+            ):
+                fail()
+            payload = {}
+        elif method == "rmqualification.person":
+            payload = person
+        else:
+            payload = {}
+        return {"frame": {"ok": True, "payload": payload}}
+
+    monkeypatch.setattr(api, "run_ui", lambda *args: {})
+    sessions = [{"sessionKey": "agent:main:person-a"}, {"sessionKey": "agent:main:person-b"}]
+    expected = (
+        "overall_deadline_exceeded" if stage == "cleanup_deadline" else "ordinary_playwright_error"
+    )
+    with pytest.raises((ValueError, TimeoutError), match="^" + expected + "$"):
+        extension.persons_ready(rpc, [Page(), Page()], sessions, capture)
+    assert extension.failure_diagnostics() == {
+        "ordinary_failure_step": "ui_actions" if stage == "cleanup_deadline" else stage,
+        "ordinary_error_class": "other" if stage == "cleanup_deadline" else "playwright_error",
+    }
+
+
+@pytest.mark.parametrize("observe", [False, True])
+@pytest.mark.parametrize("outcome", ["not_loaded", "refused", "loaded_other_bytes"])
+def test_observation_outcome_does_not_change_ordinary_exit(observe, outcome):
+    """RM39/AC30 F2: opt-in observations never change ordinary qualification."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][0]
+    case["observed"] = outcome
+    if outcome == "loaded_other_bytes":
+        case["tools"][0]["event"]["result"]["content"][0]["text"] = "other bytes"
+        case["requests"][1]["body"]["messages"][-1]["content"] = "other bytes"
+    else:
+        case["tools"] = []
+        case["requests"] = case["requests"][:1]
+        case["provider_attempts"] = case["provider_attempts"][:1]
+        if outcome == "refused":
+            case["terminal"]["state"] = "error"
+    assert api.finish_capture(capture, 0, observe=observe) == 0
+    assert ("ordinary_skill_loaded_use_observation" in capture["checks"]) is observe
+    assert api.finish_capture(capture, 2, observe=observe) == 2
+
+
+def test_observation_is_opt_in_cli_and_separate_ci_step():
+    """RM39/AC30 F2: ordinary CI retains its criterion; observation has its own artifact."""
+    root = Path(__file__).resolve().parents[1]
+    source = Path(module().__file__).read_text()
+    assert 'parser.add_argument("--observe-loaded-use", action="store_true")' in source
+    ci = (root / ".github/workflows/ci.yml").read_text()
+    assert "--observe-loaded-use" in ci
+    assert "openclaw-loaded-use-observation-ubuntu" in ci
+    assert "continue-on-error" not in ci
+
+
+@pytest.mark.parametrize("tail", [b'{"kind":', b'{"kind":"late"}'])
+def test_event_reader_rereads_only_unterminated_tail(tmp_path, monkeypatch, tail):
+    """RM39/AC30 F1: one bounded reread completes a concurrent append."""
+    api = module()
+    path = tmp_path / "events"
+    path.write_bytes(b'{"kind":"first"}\n' + tail)
+    waits = []
+
+    def wait(seconds):
+        waits.append(seconds)
+        path.write_bytes(b'{"kind":"first"}\n{"kind":"late"}\n')
+
+    monkeypatch.setattr(api.time, "sleep", wait)
+    assert api.read_observer_events(path) == [dict(kind="first"), dict(kind="late")]
+    assert waits == [0.05]
+
+
+@pytest.mark.parametrize("data", [b"bad\n", b"{}\nbad\n", b"bad\n{", b"\xff\n", b"[]\n"])
+def test_event_reader_refuses_every_malformed_complete_record(tmp_path, data):
+    """RM39/AC30 F1: malformed committed records cannot be skipped."""
+    api = module()
+    path = tmp_path / "events"
+    path.write_bytes(data)
+    with pytest.raises(ValueError, match="^ordinary_skill_native_event_invalid$"):
+        api.read_observer_events(path)
+
+
+def test_event_reader_never_retries_an_unfinished_tail_more_than_once(tmp_path, monkeypatch):
+    """RM39/AC30 F1: a still-torn tail is ignored for this poll only."""
+    api = module()
+    path = tmp_path / "events"
+    path.write_bytes(b'{}\n{"kind":')
+    waits = []
+    monkeypatch.setattr(api.time, "sleep", waits.append)
+    assert api.read_observer_events(path) == [{}]
+    assert waits == [0.05]
+
+
+def test_other_advertised_revision_is_a_correlated_control_observation():
+    """RM39/AC30 F3: a changed head is observed without claiming rejection."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][1]
+    case["advertised_revision"] = "b" * 64
+    for attempt in case["requests"]:
+        attempt["body"]["messages"][0]["content"] = attempt["body"]["messages"][0][
+            "content"
+        ].replace(REVISION, "b" * 64)
+    case["tools"][0]["event"]["result"]["content"][0]["text"] = "new head"
+    case["requests"][1]["body"]["messages"][-1]["content"] = "new head"
+    case["observed"] = "loaded_other_bytes"
+    assert api.ordinary_skill_loaded_use_pass(capture)
+    case["advertised_revision"] = "invalid"
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+def test_swapped_gateway_run_ids_fail_provider_bijection():
+    """RM39/AC30 F4: independently recorded response IDs bind each HTTP attempt."""
+    api = module()
+    capture = loaded_fixture(api)
+    first, second = [c["requests"][0] for c in capture["ordinary_skill_loaded_use"]["cases"][:2]]
+    first["run_id"], second["run_id"] = second["run_id"], first["run_id"]
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+def test_forged_advertised_name_cannot_replace_native_pin_name():
+    """RM39/AC30 F5: consistent advertisement forgery cannot alter native evidence."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][0]
+    case["selected"]["name"] = "forged"
+    case["tools"][0]["event"]["params"]["name"] = "forged"
+    for attempt in case["requests"]:
+        for message in attempt["body"]["messages"]:
+            if message["role"] == "system":
+                message["content"] = message["content"].replace("Hello World", "forged")
+            for call in message.get("tool_calls", []):
+                call["function"]["arguments"] = '{"name":"forged"}'
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+@pytest.mark.parametrize("field", ["subscription", "chat", "terminal"])
+def test_turn_socket_provenance_cannot_be_swapped(field):
+    """RM39/AC30 F7: subscribe, send, and terminal share the native socket."""
+    api = module()
+    capture = loaded_fixture(api)
+    capture["ordinary_skill_loaded_use"]["cases"][0][field]["socket_id"] = "foreign"
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+def test_observation_failure_reasons_are_closed(tmp_path):
+    """RM39/AC30 F10: harness failures retain useful fixed safe reasons."""
+    api = module()
+    assert {
+        "ordinary_skill_generation_bound",
+        "ordinary_skill_task_mismatch",
+        "ordinary_skill_native_event_invalid",
+    } <= extension_fixture(api, tmp_path).failure_reasons()
+
+
+def turn_fixture(api, tmp_path, monkeypatch, *, deliver):
+    """Drive the real collector around a terminal and asynchronous native hook."""
+    import copy
+    import json
+    from types import SimpleNamespace
+
+    extension = extension_fixture(api, tmp_path)
+    extension.event_file = tmp_path / "events.jsonl"
+    extension.event_file.write_text("")
+    extension.provider_attempt_file = tmp_path / "attempts.jsonl"
+    extension.provider_attempt_file.write_text("")
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    expected = copy.deepcopy(case)
+    observation = api.LoadedUseGatewayObservation()
+    extension.observation = observation
+    clock = [0.0]
+    monkeypatch.setattr(api.time, "monotonic", lambda: clock[0])
+
+    def rpc(page, method, params):
+        if method == "sessions.messages.subscribe":
+            return dict(
+                socket_id="socket",
+                frame=dict(ok=True, payload=dict(subscribed=True, key=params["key"])),
+            )
+        if method == "rmqualification.person":
+            return dict(frame=dict(ok=True, payload=case["current"]))
+        host_id = params["idempotencyKey"]
+        expected["terminal"]["runId"] = host_id
+        expected["tools"][0]["event"]["runId"] = host_id
+        expected["tools"][0]["context"]["runId"] = host_id
+        observation.requests.extend(expected["requests"])
+        extension.provider_attempt_file.write_text(
+            "".join(json.dumps(a) + "\n" for a in expected["provider_attempts"])
+        )
+        foreign = copy.deepcopy(expected["tools"][0])
+        foreign["context"]["runId"] = "previous-case"
+        events = [dict(kind="native_skill_tool", **foreign)]
+        if deliver:
+            events.append(dict(kind="native_skill_tool", **expected["tools"][0]))
+        extension.event_file.write_text("".join(json.dumps(e) + "\n" for e in events))
+        return dict(socket_id="socket", frame=dict(ok=True, payload=dict(runId=host_id)))
+
+    def wait(ms):
+        clock[0] += ms / 1000
+
+    page = SimpleNamespace(evaluate=lambda *a: [expected["terminal"]], wait_for_timeout=wait)
+    return extension, case, rpc, page, expected
+
+
+def test_missing_async_hook_stays_incomplete_and_preserves_requests(tmp_path, monkeypatch):
+    """RM39/AC30 F6: a missing hook is not a truthful not_loaded control."""
+    api = module()
+    extension, case, rpc, page, _ = turn_fixture(api, tmp_path, monkeypatch, deliver=False)
+    with pytest.raises(ValueError, match="^ordinary_skill_turn_timeout$"):
+        extension.loaded_use_turn(rpc, page, {}, case)
+    assert case["observed"] == "incomplete"
+    assert len(case["requests"]) == 2
+    assert case["tools"] == []
+
+
+def test_late_foreign_hook_does_not_poison_next_case(tmp_path, monkeypatch):
+    """RM39/AC30 F6/F7: collect by host run and retain socket receipts."""
+    api = module()
+    extension, case, rpc, page, expected = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+    extension.loaded_use_turn(rpc, page, {}, case)
+    assert case["tools"] == expected["tools"]
+    assert case["subscription"] == expected["subscription"]
+    assert case["provider_attempts"] == expected["provider_attempts"]
+    assert case["observed"] == "loaded_pinned_revision"
+
+
+def test_one_turn_request_overflow_does_not_starve_later_controls(tmp_path):
+    """RM39/AC30 F9: each turn gets a fresh bounded HTTP window."""
+    from api_helpers import call
+    from recommendation_helpers import setup
+
+    api = module()
+    _, service, runs, _ = setup(tmp_path)
+    app, gateway, observation = api.loaded_use_gateway(tmp_path / "inference", service)
+    try:
+        for case in loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"]:
+            observation.begin(case["selected"], case["task"])
+            for i in range(5):
+                response = call(
+                    app,
+                    "POST",
+                    "/v1/chat/completions",
+                    json_body=case["requests"][0]["body"],
+                    headers={"Idempotency-Key": case["case"]},
+                    raise_app_exceptions=False,
+                )
+                assert response.status_code == (429 if i == 4 else 200)
+            assert observation.requests[-1]["status"] == 429
+    finally:
+        gateway.store.close()
+        runs.close()
+
+
+def test_scripted_model_does_not_write_native_selected_evidence():
+    """RM39/AC30 F5: the model may propose an advertised name, never rewrite the pin."""
+    import copy
+    from types import SimpleNamespace as NS
+
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    before = copy.deepcopy(case["selected"])
+    observation = api.LoadedUseGatewayObservation()
+    observation.begin(case["selected"], case["task"])
+    messages = [
+        NS(role=NS(value=m["role"]), content=m["content"].replace("Hello World", "advertised"))
+        for m in case["requests"][0]["body"]["messages"]
+    ]
+    observation.generate(NS(messages=messages, tool_schemas=[NS(name="skills_read")]))
+    assert case["selected"] == before
+
+
+def test_observation_fixture_error_is_not_silenced():
+    """RM39/AC30 F2: separate CI fails a broken harness, never a truthful outcome."""
+    api = module()
+    capture = loaded_fixture(api)
+    capture["ordinary_skill_loaded_use"]["cases"][1]["tools"] = []
+    assert api.finish_capture(capture, 0, observe=True) == 2
+
+
+def test_native_content_retention_is_bounded():
+    """RM39/AC30 F11: retain at most the bounded native SKILL.md text."""
+    api = module()
+    assert api.bounded_skill_content("中文") == "中文"
+    with pytest.raises(ValueError, match="^ordinary_skill_read_failed$"):
+        api.bounded_skill_content("中" * (256 * 1024))
+
+
+@pytest.mark.parametrize("pins", [[], [dict(skillId=SKILL_ID, revision="b" * 64, name="other")]])
+def test_missing_native_pin_has_a_fixed_control_failure(pins):
+    """RM39/AC30 F10: absent pinned revision never leaks StopIteration."""
+    api = module()
+    with pytest.raises(ValueError, match="^ordinary_skill_control_failed$"):
+        api.selected_pin(
+            dict(frame=dict(ok=True, payload=dict(session=dict(selections=pins)))),
+            dict(skillId=SKILL_ID, revision=REVISION),
+        )
+
+
+def test_observation_continues_controls_after_a_turn_fixture_failure(tmp_path, monkeypatch):
+    """RM39/AC30 F6/F9: one incomplete turn retains evidence without starving later cases."""
+    api = module()
+    capture = loaded_fixture(api)
+    expected = capture["ordinary_skill_loaded_use"]["cases"]
+    extension = extension_fixture(api, tmp_path)
+    current = [0]
+    visited = []
+
+    def rpc(page, method, params):
+        if method == "sessions.create":
+            current[0] += 1
+        case = expected[current[0]]
+        selected = case["selected"]
+        if method == "sessions.create":
+            scope = case["before"]
+            return dict(
+                id="create",
+                socket_id="socket",
+                frame=dict(
+                    id="create",
+                    ok=True,
+                    payload=dict(
+                        key=scope["sessionKey"],
+                        sessionId=scope["sessionId"],
+                        entry=dict(lifecycleRevision=scope["lifecycleRevision"]),
+                    ),
+                ),
+            )
+        if method == "rmqualification.person":
+            scope = (
+                case["current"]
+                if "expectedLifecycleRevision" in params
+                and params["expectedLifecycleRevision"] == "L1"
+                else case["before"]
+            )
+            return dict(frame=dict(ok=True, payload=scope))
+        if method == "skills.library.read":
+            return dict(frame=selected["read"])
+        if method == "skills.library.list":
+            return dict(
+                frame=dict(
+                    ok=True,
+                    payload=dict(
+                        session=dict(
+                            selections=[
+                                dict(
+                                    skillId=selected["skillId"],
+                                    revision=REVISION,
+                                    name=selected["name"],
+                                )
+                            ]
+                        )
+                    ),
+                )
+            )
+        if method == "skills.library.activate":
+            return dict(frame=case["selection"])
+        return dict(frame=case["intervention"]["frame"])
+
+    def save(*args):
+        case = expected[current[0]]
+        case["selected"]["read"]["payload"]["entry"]["slug"] = "fixture"
+        return dict(
+            mapping=dict(skillId=case["selected"]["skillId"], revision=REVISION),
+            content_sha256=case["selected"]["content_sha256"],
+        )
+
+    monkeypatch.setattr(extension, "save_library_skill", save)
+
+    def turn(rpc, page, session, case):
+        visited.append(case["case"])
+        case["requests"] = [dict(status=429)]
+        if case["case"] == "positive":
+            raise ValueError("ordinary_skill_turn_timeout")
+
+    monkeypatch.setattr(extension, "loaded_use_turn", turn)
+    extension.observe_loaded_use(rpc, None, {}, capture)
+    assert visited == ["positive", "stale", "deleted", "reset"]
+    partial = capture["ordinary_skill_loaded_use"]["cases"][0]
+    assert partial["observed"] == "incomplete"
+    assert partial["failure_reason"] == "ordinary_skill_turn_timeout"
+    assert partial["requests"] == [dict(status=429)]
+
+
+def test_task_substring_does_not_bind_a_different_native_user_message():
+    """RM39/AC30: a quoted or embedded task is not the dispatched task identity."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][0]
+    case["requests"][0]["body"]["messages"][1]["content"] = "Quoted task: " + case["task"]
+    assert not api.ordinary_skill_loaded_use_pass(capture)

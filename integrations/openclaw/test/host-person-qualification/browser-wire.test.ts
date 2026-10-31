@@ -127,7 +127,7 @@ it("#197 permits the Skill Library methods the ordinary qualification calls", as
 });
 
 it("RM39/AC30 observes terminal chat events only for turns sent by this fixture", async () => {
-  const methods = ["sessions.messages.subscribe", "chat.send", "chat.history", "skills.library.read", "skills.library.mutate", "skills.library.activate"];
+  const methods = ["sessions.messages.subscribe", "chat.send", "skills.library.read", "skills.library.mutate", "skills.library.activate"];
   const f = await fixture(methods);
   for (const method of methods) await f.target.__rmPersonWire.rpc(method, method === "chat.send" ? { sessionKey: "s", idempotencyKey: "owned-run" } : {});
   const emit = (payload: unknown) => f.socket.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "event", event: "chat", payload }) }));
@@ -135,6 +135,14 @@ it("RM39/AC30 observes terminal chat events only for turns sent by this fixture"
   emit({ runId: "owned-run", sessionKey: "foreign", state: "final" });
   emit({ runId: "owned-run", sessionKey: "s", state: "delta" });
   emit({ runId: "owned-run", sessionKey: "s", state: "final", message: { role: "assistant", content: "done" } });
-  expect(f.target.__rmPersonWire.turnEvents("owned-run")).toEqual([{ runId: "owned-run", sessionKey: "s", state: "final", message: { role: "assistant", content: "done" } }]);
+  expect(f.target.__rmPersonWire.turnEvents("owned-run")).toEqual([{ socket_id: expect.any(String), runId: "owned-run", sessionKey: "s", state: "final", message: { role: "assistant", content: "done" } }]);
   expect(f.target.__rmPersonWire.turnEvents("foreign")).toEqual([]);
+});
+
+it("RM39/AC30 caps native observation at four turns and refuses unused chat history", async () => {
+  const f = await fixture(["chat.send"]);
+  for (let i = 0; i < 4; i++) await f.target.__rmPersonWire.rpc("chat.send", { sessionKey: `s${i}`, idempotencyKey: `run${i}` });
+  await expect(f.target.__rmPersonWire.rpc("chat.send", { sessionKey: "s4", idempotencyKey: "run4" })).rejects.toThrow("native_turn_bound");
+  expect(f.requests).toHaveLength(4);
+  expect(() => installNativeSocketObserver(f.target, ["chat.history"])).toThrow("invalid_fixture_method");
 });
