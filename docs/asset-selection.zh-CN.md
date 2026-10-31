@@ -1,0 +1,183 @@
+# 推荐技能与工具
+
+[English](asset-selection.md) · [源数据基准教程](SOURCE_BENCHMARK.md) ·
+[第三方协议与正式基准](ASSET_BENCHMARK.md)
+
+推荐功能从你配置的资产库发现并排序技能和 MCP 工具。推荐不会安装软件包、执行工具，
+也不会批准修改操作（RM34–RM44）。
+
+| 我想要…… | 从这里开始 |
+| --- | --- |
+| 使用自己的技能或 MCP 工具 | [本地配置](#使用自己的资产库)、[导入格式](TESTING.md#independent-asset-catalog-discovery-192-rm34ac25) |
+| 开发替换算法 | [完整候选集 v2 协议](ASSET_BENCHMARK.md#the-skilltool-v2-boundary) |
+| 准备外部索引 | [索引就绪](#接入团队算法)、[完整生命周期](ASSET_BENCHMARK.md#index-readiness-and-setup-cost) |
+| 比较算法和语言组合 | [源数据流程](SOURCE_BENCHMARK.md#run-identical-cases-and-compare)、[正式格式](ASSET_BENCHMARK.md#built-in-team-a-and-team-b-on-the-same-fixture) |
+| 明确选择一个结果 | [基准与用户选择](#基准与用户选择) |
+| 检查数据或恢复访问 | [隐私与恢复参考](asset-privacy-security.md) |
+
+## 选择正确的接口
+
+| | 托管选择 v1 | 独立推荐 v2 |
+| --- | --- | --- |
+| 配置 | `[selection]` | `[recommendations]` 与显式资产源 |
+| 示例 | `scripts/example_selector.py` | `scripts/example_asset_selector.py` |
+| 用途 | 为托管流程路由技能 | 提议技能与 MCP 工具 |
+| 权限 | 网关规则仍然有效 | 不授予宿主执行或审批权限 |
+
+v2 是独立协议，不能只改名称就替换 v1。已发布的 schema：
+[请求](../src/relaymind/selection/schemas/selection_request.v2.json)、
+[结果](../src/relaymind/selection/schemas/selection_result.v2.json)、
+[资产记录](../src/relaymind/store/schemas/asset_record.v1.json)、
+[准备请求](../src/relaymind/selection/schemas/asset_preparation_request.v1.json)、
+[准备响应](../src/relaymind/selection/schemas/asset_preparation_response.v1.json)。
+
+流程为：配置资产源 → 已提交的词法目录 → 完整候选集 v2 请求 → 网关验证 → 候选列表/
+用户选择 → 单独完成资格验证的宿主使用。需要索引的外部算法在基准查询前显式准备；
+普通查询不会自动探测或构建外部索引。
+
+## 使用自己的资产库
+
+在仓库根目录手动安装 Python 3.12+ 环境和项目依赖：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+```
+
+Windows 使用 `.venv\Scripts\Activate.ps1` 激活环境。下面使用 POSIX shell 和显式私有
+目录；Windows 请使用对应的本地路径。创建
+`/var/tmp/relaymind-customer/ordinary-skills/greeting/SKILL.md`：
+
+```markdown
+---
+name: Greeting Helper
+description: Help write a short greeting in English or Chinese
+metadata:
+  version: "1.0"
+  languages: [en, zh-CN]
+  dependencies: []
+---
+Write a greeting in the requested language.
+```
+
+保存 `/var/tmp/relaymind-customer/relaymind.toml`：
+
+```toml
+[server]
+host = "127.0.0.1"
+port = 8087
+[store]
+path = "/var/tmp/relaymind-customer/relaymind.sqlite3"
+[external_model]
+base_url = "http://127.0.0.1:1/v1"
+model = "unused-by-retrieval"
+context_limit = 4096
+[recommendations]
+enabled = true
+user_id = "customer"
+workspace_id = "local-library"
+primary = "lexical"
+total_ms = 500
+primary_ms = 150
+[[assets.sources]]
+source_id = "my-skills"
+kind = "local_directory"
+path = "ordinary-skills"
+```
+
+配置解析要求声明一个模型；此示例的检索不访问该端点，也不需要本地模型、下载或外部
+推理。在仓库根目录运行
+`relaymind serve --config /var/tmp/relaymind-customer/relaymind.toml`。
+在另一个终端输入启动时显示的应用令牌，输入不会回显：
+
+```bash
+read -r -s -p 'Application token: ' RELAYMIND_TOKEN
+printf '\n'
+curl -sS http://127.0.0.1:8087/relay/v1/recommendations/readiness \
+  -H "Authorization: Bearer $RELAYMIND_TOKEN"
+curl -sS http://127.0.0.1:8087/relay/v1/recommendations \
+  -H "Authorization: Bearer $RELAYMIND_TOKEN" -H 'Idempotency-Key: greeting-001' \
+  -H 'Content-Type: application/json' \
+  --data-binary '{"schema_version":1,"task_text":"Find a greeting skill","requested_kinds":["skill"],"selection_scope":"discovery"}'
+```
+
+等待 `state=ready, reason=usable_catalog`，HTTP 200 本身不代表目录可用。
+查看 `displayed_candidates` 与 `result.attempts`；词法匹配需要用户选择。
+同一幂等键返回历史 POST 收据，新任务使用新键。
+[GET 轮询、事件和重启](TESTING.md#recommendation-json-lifecycle-194-rm36ac27)
+使用响应中的推荐 ID；重启后使用新的应用令牌。
+
+本地发现只读取根目录 SKILL.md 或直属子目录软件包，不执行指令和依赖。
+名称、路径、UTF-8/front matter 及固定大小上限均会检查。
+[显式元数据导入](TESTING.md#independent-asset-catalog-discovery-192-rm34ac25)
+也支持自己的工具和其他资产库，保留原始字节哈希、来源及源拥有的删除记录。
+元数据里的来源 URL 不会自动抓取。本地扫描默认每 30 秒进行；刷新失败保留带过时
+标记的上一份有效数据。远程刷新只接受[已安装且完成资格验证的配置](TESTING.md#qualified-public-source-refresh-spec-059-rm34rm38rm43)。
+发现记录的可用性 `unknown` 不等于已经安装或可执行。
+
+## 接入团队算法
+
+在独立终端启动所需示例，再按教程生成
+[生产与准备配置](SOURCE_BENCHMARK.md#connect-an-external-selector-and-declare-readiness)：
+
+```bash
+python scripts/example_asset_selector.py --port 8933
+python scripts/example_asset_selector.py --port 8934 --preparation-path /index
+```
+
+在 `[recommendations]` 中设置查询 URL 与响应中完全一致的名称/版本。
+两个示例均为 `example_lexical/1`；算法行为改变时更新版本。
+各团队收到同一份有序的完整有效候选集，不收到目标标签或完整私有技能正文。
+示例验证接入协议，不证明跨语言语义效果。
+
+网关词法目录就绪、HTTP 服务开始监听、团队索引就绪是三件不同的事。
+单个准备 URL 接收 POST JSON `operation=prepare|status|cancel`，使用相同的 ID、
+binding、profile。只有 prepare 启动工作；status/cancel 的 catalog/budget 为 null。
+没有独立的 `/status` 或 `/cancel` 路由。binding 绑定目录摘要/版本、作用域、权限、
+资产种类及算法身份；查询必须返回对应的索引版本。取消确认不等于索引就绪，
+也不等于本地计算已经完成清理。
+
+## 基准与用户选择
+
+先完成[离线构建/获取](SOURCE_BENCHMARK.md#acquire-and-reproduce-the-data)和
+[配置生成](SOURCE_BENCHMARK.md#connect-an-external-selector-and-declare-readiness)。
+示例目录已存在时，在所有命令中换用一个新的私有输出根目录。
+教程提供 builtin、无状态 HTTP 与索引 HTTP 的完整运行命令，路径如下：
+
+```bash
+python scripts/source_asset_benchmark.py run \
+  --catalog /var/tmp/rm-g1-source-guide/catalog-v2/catalog.json \
+  --cases evaluation/assets/matrix-development/cases.v2.json \
+  --evidence-root /var/tmp/rm-g1-source-guide/catalog-v2 \
+  --production /var/tmp/rm-g1-source-guide/catalog-v2/builtin-production.toml \
+  --track service --output /var/tmp/rm-g1-source-guide/builtin-service.json
+python scripts/source_asset_benchmark.py compare \
+  --left /var/tmp/rm-g1-source-guide/builtin-service.json \
+  --right /var/tmp/rm-g1-source-guide/cold-service.json \
+  --output /var/tmp/rm-g1-source-guide/comparison.json
+python scripts/source_asset_benchmark.py choose \
+  --report /var/tmp/rm-g1-source-guide/builtin-service.json \
+  --case capability-01-zh > /var/tmp/rm-g1-source-guide/choice.json
+```
+
+源数据 compare 只输出内部 **JSON**。单独的
+[正式流程](ASSET_BENCHMARK.md#built-in-team-a-and-team-b-on-the-same-fixture)
+使用锁定输入，并通过 `asset_selection_benchmark.py compare ... --output ... --markdown ...`
+输出 JSON/Markdown。策略、轨道、用例和目录必须相同；服务回退成功不能算作主算法成功。
+cold/reuse 不兼容；必要准备失败时保留全部 not_run 槽位并以非零状态退出。
+第三方未提供的成本仍为未知。
+
+`choose` 向 stderr 显示选项，输入数字选择、输入 `0` 拒绝，或按 Ctrl-C 中断。
+重定向保存的是新的 stdout 收据，不修改运行报告，不向后端写入反馈，也不改变宿主状态。
+收据包含 `action_executed=false`。`ranked/choice_required` 展示候选；confident 不执行；
+no_match 是终止的弃权。主算法未就绪、失败或超时时，可在剩余预算内使用一次已配置的
+词法回退，实际尝试分别记录。
+
+[412 资产/128 用例开发集](SOURCE_BENCHMARK.md#recorded-development-results)包含技能和 MCP、
+en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰项、负例和歧义。
+原始正文语言和描述语言分别记录，缺失的 MCP 语言组合明确列出。
+不共享拉丁标识的中文内存泄漏请求仍未命中英文原始目标；这些诊断不证明翻译能力、
+语义质量或独立人工标注达标。开始使用工具不要求客户提供外部数据集或人工评审组。
+生产语义模型资格验证，以及已安装宿主的 M10 执行、审批、纠正演练仍是单独的工作；
+参见[当前状态](ROADMAP.md#m10--multilingual-asset-recommendations-spec-061)。

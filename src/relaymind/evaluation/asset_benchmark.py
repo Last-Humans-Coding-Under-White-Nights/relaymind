@@ -13,14 +13,13 @@ import tempfile
 import tomllib
 import uuid
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from relaymind.assets.catalog import CatalogSnapshot, validate_asset_record
-from relaymind.assets.settings import parse_asset_settings
-from relaymind.canonical import canonical_digest
+from relaymind.canonical import canonical_digest, canonical_json
 from relaymind.evaluation.asset_benchmark_io import (
     CONFIG_BYTES,
     REPORT_BYTES,
@@ -36,6 +35,7 @@ from relaymind.evaluation.asset_corpus_io import (
     document,
     matches_original,
     read_local,
+    read_local_files,
     relative_path,
 )
 from relaymind.evaluation.asset_evidence import (
@@ -44,17 +44,19 @@ from relaymind.evaluation.asset_evidence import (
     VerifiedBenchmarkInputs,
     collect_benchmark_environment,
     effective_asset_config,
+    effective_selector_identity,
     file_evidence_id,
     file_inventory,
-    selector_identity,
+    semantic_config_documents,
     source_proof,
     validate_definition,
     verify_benchmark_inputs,
 )
 from relaymind.evaluation.asset_metrics import grade_asset_result, summarize_asset_rows
+from relaymind.evaluation.asset_native_runtime import NativeBenchmarkRuntime
 from relaymind.evaluation.asset_schedule import plan_asset_slots, validate_asset_rows
 from relaymind.evaluation.environment import application_revision
-from relaymind.launcher import load_config
+from relaymind.launcher import parse_launcher_config
 from relaymind.recommendations.errors import RecommendationError
 from relaymind.recommendations.service import CancellationSignal, RecommendationService
 from relaymind.selection.asset_contract import SelectorContext
@@ -66,7 +68,7 @@ from relaymind.selection.asset_preparation import (
     preparation_binding,
     prepare_asset_index,
 )
-from relaymind.store.recommendations import RecommendationClaim, RecommendationStore
+from relaymind.store.recommendations import RecommendationClaim
 from relaymind.store.run_store import RunStore, TraceClock
 
 
@@ -90,12 +92,18 @@ def benchmark_inventories() -> dict:
     import relaymind
 
     imported_root = Path(relaymind.__file__).absolute().parent
-    expected = set()
-    for item in inventories["runner_inventory"]["files"]:
-        if item["path"].startswith("src/relaymind/"):
-            relative = item["path"].removeprefix("src/relaymind/")
-            expected.add(relative)
-            payload = read_local(imported_root, relative, CONFIG_BYTES)
+    # An editable install imports the very files just hashed; reading them a
+    # second time cannot disagree, so only a separate installation is reread.
+    same_tree = imported_root.resolve() == (root / "src/relaymind").resolve()
+    members = {
+        item["path"].removeprefix("src/relaymind/"): item
+        for item in inventories["runner_inventory"]["files"]
+        if item["path"].startswith("src/relaymind/")
+    }
+    expected = set(members)
+    if not same_tree:
+        payloads = read_local_files(imported_root, list(members), CONFIG_BYTES)
+        for item, payload in zip(members.values(), payloads, strict=True):
             if not matches_original(payload, item["sha256"], item["bytes"]):
                 raise AssetCorpusError("installed_runner_mismatch")
     actual = {
@@ -121,7 +129,7 @@ class AssetBenchmarkConfig:
 
 
 def _load_production_config(path: Path):
-    """Give the production validator one bounded immutable private snapshot."""
+    """Parse one bounded snapshot without relocating its semantic/source roots."""
     path = Path(path).absolute()
     payload = read_local(path.parent, path.name, CONFIG_BYTES)
     try:
@@ -130,17 +138,10 @@ def _load_production_config(path: Path):
         raise AssetCorpusError("invalid_production_config") from None
     if raw.get("user_actions"):
         raise AssetCorpusError("evaluation_action_credentials_forbidden")
-    with tempfile.TemporaryDirectory(prefix="asset-production-config-") as directory:
-        snapshot = Path(directory) / "production.toml"
-        snapshot.write_bytes(payload)
-        production = load_config(snapshot)
-    # The launcher resolves only assets and action credentials relative to the
-    # file. Credentials are forbidden above. Reuse that same production assets
-    # parser at the original root; never invent a benchmark settings dialect.
-    assets = parse_asset_settings(
-        raw.get("assets", {}), raw.get("asset_refresh", {}), config_dir=path.parent
-    )
-    return replace(production, assets=assets)
+    production = parse_launcher_config(raw, config_dir=path.parent)
+    if production.asset_semantics is not None and production.asset_semantics.adaptation_enabled:
+        raise AssetCorpusError("adaptation_unavailable")
+    return production
 
 
 def _load_benchmark_release(lock_path: Path):
@@ -227,7 +228,9 @@ def load_benchmark_config(path: Path) -> AssetBenchmarkConfig:
         read_local(path.parent, raw[key], CONFIG_BYTES)
     production = _load_production_config(path.parent / raw["production_config"])
     normalize_preparation(
-        raw.get("preparation"), http_primary=production.recommendations.primary == "http"
+        raw.get("preparation"),
+        http_primary=production.recommendations.primary == "http",
+        local_primary=production.recommendations.primary == "hybrid",
     )
     if raw["track"] == "primary_only" and production.recommendations.fallback:
         raise AssetCorpusError("primary_policy")
@@ -238,7 +241,7 @@ def load_benchmark_config(path: Path) -> AssetBenchmarkConfig:
     validate_definition("Environment", environment)
     if canonical_digest(environment) != raw["environment_lock_digest"]:
         raise AssetCorpusError("environment_digest")
-    observed = collect_benchmark_environment()
+    observed = collect_benchmark_environment(production=production)
     for key, value in environment.items():
         if value is not None and value != observed[key]:
             raise AssetCorpusError("environment_lock_mismatch")
@@ -300,6 +303,15 @@ class AssetBenchmarkReport:
         return copy.deepcopy(self.data)
 
 
+def terminal_payload(service, scope, recommendation_id, event_types) -> dict:
+    """The last terminal event payload of one recommendation, or no evidence."""
+    events = service.events(scope, recommendation_id, after_seq=0, limit=1000)["events"]
+    return next(
+        (e["payload"] for e in reversed(events) if e["event_type"] in event_types),
+        dict(attempts=[], embeddings=[]),
+    )
+
+
 def _not_run(slot, label, reason="interrupted") -> dict:
     return dict(
         slot=dict(slot),
@@ -321,20 +333,23 @@ def _not_run(slot, label, reason="interrupted") -> dict:
 def _normal(config: AssetBenchmarkConfig) -> dict:
     effective = config.effective
     s = config.production.recommendations
+    selector = effective_selector_identity(effective)
     return dict(
         **{k: config.data[k] for k in ("split", "track", "seed", "repetitions", "warmups")},
         scope={k: getattr(s, k) for k in ("user_id", "workspace_id")},
         permissions=effective["permissions"],
         selection_scope=effective["selection_scope"],
         requested_kinds=effective["requested_kinds"],
-        selector=selector_identity(s.primary, s.name, s.version),
+        selector=selector,
         budgets=effective["budgets"],
         fallback=s.fallback,
         adaptation_enabled=False,
         adaptation_config_digest=None,
         production_config_digest=canonical_digest(effective),
         preparation=normalize_preparation(
-            config.data.get("preparation"), http_primary=s.primary == "http"
+            config.data.get("preparation"),
+            http_primary=s.primary == "http",
+            local_primary=s.primary == "hybrid",
         ),
     )
 
@@ -366,15 +381,6 @@ def stable_request_digest(request: Mapping) -> str:
     )
 
 
-def terminal_payload(service, scope, recommendation_id: str, event_types) -> dict:
-    """The payload of the last terminal event of the given types, or no attempts."""
-    events = service.events(scope, recommendation_id, after_seq=0, limit=1000)["events"]
-    return next(
-        (e["payload"] for e in reversed(events) if e["event_type"] in event_types),
-        dict(attempts=[], embeddings=[]),
-    )
-
-
 async def prepare_benchmark_index(
     config: AssetBenchmarkConfig, *, interrupted=lambda: False
 ) -> dict:
@@ -382,6 +388,21 @@ async def prepare_benchmark_index(
     normal = _normal(config)
     if normal["preparation"]["mode"] == "none":
         return await prepare_asset_index(normal["preparation"], None, [])
+    if normal["preparation"]["mode"] == "local":
+        runtime = await NativeBenchmarkRuntime.create(
+            config.production,
+            config.release,
+            config.effective,
+            requested_kinds=normal["requested_kinds"],
+        )
+        try:
+            return await runtime.prepare_local(
+                normal["preparation"],
+                requested_kinds=normal["requested_kinds"],
+                cancelled=interrupted,
+            )
+        finally:
+            await runtime.close()
     provider = _LockedProjectionProvider(config.release, config.effective)
     try:
         await provider.publish()
@@ -403,7 +424,7 @@ async def run_asset_benchmark(
         cases, seed=normal["seed"], repetitions=normal["repetitions"], warmups=normal["warmups"]
     )
     qualification = assess_asset_release(config.release)
-    observed = collect_benchmark_environment()
+    observed = collect_benchmark_environment(production=config.production)
     if any(v is not None and observed[k] != v for k, v in config.environment.items()):
         raise AssetCorpusError("environment_lock_mismatch")
     if benchmark_inventories() != config.inventories:
@@ -413,173 +434,236 @@ async def run_asset_benchmark(
     status = "completed"
     preparation = await prepare_asset_index(normalize_preparation(None), None, [])
     primary = None
+    runtime = None
     try:
-        await provider.publish()
-        if normal["preparation"]["mode"] == "http":
-            binding, catalog = _offer_binding(provider, normal)
-            preparation = await prepare_asset_index(
-                normal["preparation"], binding, catalog, cancelled=interrupted
-            )
-            if preparation["status"] != "ready":
-                status = "interrupted" if preparation["status"] == "cancelled" else "blocked"
-            else:
-                primary = PreparedAssetSelector(
-                    build_asset_selector(config.production.recommendations), preparation
+        try:
+            if config.production.asset_semantics is not None:
+                runtime = await NativeBenchmarkRuntime.create(
+                    config.production,
+                    config.release,
+                    config.effective,
+                    requested_kinds=normal["requested_kinds"],
                 )
-    except Exception:
-        status = "blocked"
-    try:
-        with tempfile.TemporaryDirectory(prefix="asset-benchmark-") as directory:
-            runs = RunStore(Path(directory) / "evaluation.sqlite3")
-            service = RecommendationService(
-                RecommendationStore(runs),
-                provider,
-                config.production.recommendations,
-                primary=primary,
-            )
-            try:
-                for slot in slots:
-                    label = labels[slot["case_id"]]
-                    if status != "completed" or interrupted():
-                        if status == "completed":
-                            status = "interrupted"
-                        rows.append(
-                            _not_run(
-                                slot, label, "blocked" if status == "blocked" else "interrupted"
-                            )
-                        )
-                        continue
-                    case = cases[slot["case_id"]]
-                    request = dict(
-                        schema_version=1,
-                        task_text=case["task_text"],
-                        conversation=list(case["conversation"]),
+                provider = runtime.provider
+                if normal["preparation"]["mode"] == "local":
+                    preparation = await runtime.prepare_local(
+                        normal["preparation"],
                         requested_kinds=normal["requested_kinds"],
-                        selection_scope=normal["selection_scope"],
-                        host_snapshot_revision=None,
-                        language_tags=list(case["language_tags"]),
-                        code_switched=case["code_switched"],
+                        cancelled=interrupted,
                     )
-                    budget = service.new_budget()
-                    row = _not_run(slot, label)
-                    try:
-                        offer = service.precheck(request)
-                        # Same production offer.request envelope as service.create;
-                        # volatile ID/deadline fields alone are removed from digest.
-                        envelope = dict(
-                            request,
-                            schema_version=2,
-                            recommendation_id=str(uuid.uuid4()),
-                            task_id=canonical_digest(
-                                dict(
-                                    task_text=request["task_text"],
-                                    conversation=request["conversation"],
+                    if preparation["status"] not in ("ready", "not_applicable"):
+                        status = (
+                            "interrupted" if preparation["status"] == "cancelled" else "blocked"
+                        )
+                    elif preparation["status"] == "ready":
+                        primary = PreparedAssetSelector(runtime.service.primary, preparation)
+                else:
+                    # Native inference/index construction requires explicit local
+                    # preparation. The ordinary lexical floor still has its cache.
+                    await runtime.worker.rebuild()
+            else:
+                await provider.publish()
+            if normal["preparation"]["mode"] == "http":
+                offer = provider.pin(normal["requested_kinds"])
+                catalog = list(offer.catalog)
+                binding = preparation_binding(
+                    selector={k: normal["selector"][k] for k in ("name", "version")},
+                    catalog_revision=offer.catalog_revision,
+                    catalog=catalog,
+                    scope=normal["scope"],
+                    permissions=normal["permissions"],
+                    selection_scope=normal["selection_scope"],
+                    requested_kinds=normal["requested_kinds"],
+                )
+                preparation = await prepare_asset_index(
+                    normal["preparation"], binding, catalog, cancelled=interrupted
+                )
+                if preparation["status"] != "ready":
+                    status = "interrupted" if preparation["status"] == "cancelled" else "blocked"
+                else:
+                    primary = PreparedAssetSelector(
+                        build_asset_selector(config.production.recommendations), preparation
+                    )
+        except Exception:
+            status = "blocked"
+        try:
+            with tempfile.TemporaryDirectory(prefix="asset-benchmark-") as directory:
+                runs = (
+                    runtime.runs
+                    if runtime is not None
+                    else RunStore(Path(directory) / "evaluation.sqlite3")
+                )
+                service = (
+                    runtime.service
+                    if runtime is not None
+                    else RecommendationService.for_provider(
+                        runs,
+                        provider,
+                        config.production.recommendations,
+                    )
+                )
+                if primary is not None:
+                    service.primary = primary
+                try:
+                    for slot in slots:
+                        label = labels[slot["case_id"]]
+                        if status != "completed" or interrupted():
+                            if status == "completed":
+                                status = "interrupted"
+                            rows.append(
+                                _not_run(
+                                    slot, label, "blocked" if status == "blocked" else "interrupted"
                                 )
-                            ),
-                            scope=provider.scope,
-                            permissions=list(provider.permissions),
-                            catalog_revision=offer.catalog_revision,
-                            deadline_ms=budget.remaining_ms(),
-                            candidate_limit=normal["budgets"]["candidate_limit"],
-                        )
-                        selection = offer.request(
-                            envelope, context=SelectorContext(budget.clock.monotonic, budget.check)
-                        )
-                        row.update(
-                            request_digest=stable_request_digest(selection.to_json_object()),
-                            offered_projection_digest=canonical_digest(list(offer.catalog)),
-                            catalog_revision=offer.catalog_revision,
-                        )
-                        claim = RecommendationClaim(
-                            provider.scope,
-                            "evaluation",
-                            "POST",
-                            "/relay/v1/recommendations",
-                            None,
-                            str(slot["ordinal"]),
-                            canonical_digest(request),
-                        )
-                        cancel = CancellationSignal()
-                        response = await service.create(request, claim, budget, cancel)
-                        body = (
-                            dict(service.get(provider.scope, cancel.recommendation_id))
-                            if cancel.recommendation_id is not None
-                            else dict(response.body)
-                        )
-                        if body.get("state") == "ready":
-                            result = dict(body["result"])
-                            row.update(
-                                status="ready",
-                                reason=None,
-                                result=result,
-                                attempts=list(result["attempts"]),
-                                embeddings=list(result["embeddings"]),
                             )
-                        else:
-                            terminal = terminal_payload(
-                                service,
-                                provider.scope,
-                                body["recommendation_id"],
-                                ("failed", "cancelled"),
-                            )
-                            row.update(
-                                status="cancelled"
-                                if body.get("state") == "cancelled"
-                                else "failed",
-                                reason=(body.get("error") or {}).get(
-                                    "code", "recommendation_unavailable"
+                            continue
+                        case = cases[slot["case_id"]]
+                        request = dict(
+                            schema_version=1,
+                            task_text=case["task_text"],
+                            conversation=list(case["conversation"]),
+                            requested_kinds=normal["requested_kinds"],
+                            selection_scope=normal["selection_scope"],
+                            host_snapshot_revision=None,
+                            language_tags=list(case["language_tags"]),
+                            code_switched=case["code_switched"],
+                        )
+                        budget = service.new_budget()
+                        row = _not_run(slot, label)
+                        try:
+                            offer = service.precheck(request)
+                            # Same production offer.request envelope as service.create;
+                            # volatile ID/deadline fields alone are removed from digest.
+                            envelope = dict(
+                                request,
+                                schema_version=2,
+                                recommendation_id=str(uuid.uuid4()),
+                                task_id=canonical_digest(
+                                    dict(
+                                        task_text=request["task_text"],
+                                        conversation=request["conversation"],
+                                    )
                                 ),
-                                attempts=list(terminal["attempts"]),
-                                embeddings=list(terminal.get("embeddings", [])),
+                                scope=provider.scope,
+                                permissions=list(provider.permissions),
+                                catalog_revision=offer.catalog_revision,
+                                deadline_ms=budget.remaining_ms(),
+                                candidate_limit=normal["budgets"]["candidate_limit"],
                             )
-                        row["observed_ms"] = budget.elapsed_ms()
-                    except RecommendationError as failure:
-                        row.update(
-                            status="failed", reason=failure.code, observed_ms=budget.elapsed_ms()
-                        )
-                    except asyncio.CancelledError:
-                        row.update(
-                            status="cancelled", reason="cancelled", observed_ms=budget.elapsed_ms()
-                        )
-                        if cancel.recommendation_id is not None:
-                            terminal = terminal_payload(
-                                service, provider.scope, cancel.recommendation_id, ("cancelled",)
+                            selection = offer.request(
+                                envelope,
+                                context=SelectorContext(budget.clock.monotonic, budget.check),
                             )
                             row.update(
-                                attempts=list(terminal["attempts"]),
-                                embeddings=list(terminal.get("embeddings", [])),
+                                request_digest=stable_request_digest(selection.to_json_object()),
+                                offered_projection_digest=canonical_digest(list(offer.catalog)),
+                                catalog_revision=offer.catalog_revision,
                             )
-                        status = "interrupted"
-                    except Exception:
-                        row.update(
-                            status="failed",
-                            reason="internal_error",
-                            observed_ms=budget.elapsed_ms(),
-                        )
-                        status = "blocked"
-                    except KeyboardInterrupt:
-                        row.update(
-                            status="cancelled", reason="cancelled", observed_ms=budget.elapsed_ms()
-                        )
-                        status = "interrupted"
-                    # Actual observed no-dispatch is zero inference only for the
-                    # admitted initial empty catalog, never an unavailable catalog.
-                    if row["result"] is not None and row["result"]["decision"] == "empty_catalog":
-                        row["observed_costs"] = [
-                            dict(
-                                provenance="observed",
-                                value=dict(LexicalAssetSelector.observed_cost),
+                            claim = RecommendationClaim(
+                                provider.scope,
+                                "evaluation",
+                                "POST",
+                                "/relay/v1/recommendations",
+                                None,
+                                str(slot["ordinal"]),
+                                canonical_digest(request),
                             )
-                        ]
-                    row["grade"] = grade_asset_result(label, row["result"])
-                    rows.append(row)
-            finally:
-                await service.stop()
-                runs.close()
-    except Exception:
-        status = "blocked"
-        for slot in slots[len(rows) :]:
-            rows.append(_not_run(slot, labels[slot["case_id"]], "blocked"))
+                            cancel = CancellationSignal()
+                            response = await service.create(request, claim, budget, cancel)
+                            body = (
+                                dict(service.get(provider.scope, cancel.recommendation_id))
+                                if cancel.recommendation_id is not None
+                                else dict(response.body)
+                            )
+                            if body.get("state") == "ready":
+                                result = dict(body["result"])
+                                row.update(
+                                    status="ready",
+                                    reason=None,
+                                    result=result,
+                                    attempts=list(result["attempts"]),
+                                    embeddings=list(result["embeddings"]),
+                                )
+                            else:
+                                terminal = terminal_payload(
+                                    service,
+                                    provider.scope,
+                                    body["recommendation_id"],
+                                    ("failed", "cancelled"),
+                                )
+                                row.update(
+                                    status="cancelled"
+                                    if body.get("state") == "cancelled"
+                                    else "failed",
+                                    reason=(body.get("error") or {}).get(
+                                        "code", "recommendation_unavailable"
+                                    ),
+                                    attempts=list(terminal["attempts"]),
+                                    embeddings=list(terminal.get("embeddings", [])),
+                                )
+                            row["observed_ms"] = budget.elapsed_ms()
+                        except RecommendationError as failure:
+                            row.update(
+                                status="failed",
+                                reason=failure.code,
+                                observed_ms=budget.elapsed_ms(),
+                            )
+                        except asyncio.CancelledError:
+                            row.update(
+                                status="cancelled",
+                                reason="cancelled",
+                                observed_ms=budget.elapsed_ms(),
+                            )
+                            if cancel.recommendation_id is not None:
+                                terminal = terminal_payload(
+                                    service,
+                                    provider.scope,
+                                    cancel.recommendation_id,
+                                    ("cancelled",),
+                                )
+                                row.update(
+                                    attempts=list(terminal["attempts"]),
+                                    embeddings=list(terminal.get("embeddings", [])),
+                                )
+                            status = "interrupted"
+                        except Exception:
+                            row.update(
+                                status="failed",
+                                reason="internal_error",
+                                observed_ms=budget.elapsed_ms(),
+                            )
+                            status = "blocked"
+                        except KeyboardInterrupt:
+                            row.update(
+                                status="cancelled",
+                                reason="cancelled",
+                                observed_ms=budget.elapsed_ms(),
+                            )
+                            status = "interrupted"
+                        # Actual observed no-dispatch is zero inference only for the
+                        # admitted initial empty catalog, never an unavailable catalog.
+                        if (
+                            row["result"] is not None
+                            and row["result"]["decision"] == "empty_catalog"
+                        ):
+                            row["observed_costs"] = [
+                                dict(
+                                    provenance="observed",
+                                    value=dict(LexicalAssetSelector.observed_cost),
+                                )
+                            ]
+                        row["grade"] = grade_asset_result(label, row["result"])
+                        rows.append(row)
+                finally:
+                    if runtime is None:
+                        await service.stop()
+                        runs.close()
+        except Exception:
+            status = "blocked"
+            for slot in slots[len(rows) :]:
+                rows.append(_not_run(slot, labels[slot["case_id"]], "blocked"))
+    finally:
+        if runtime is not None:
+            await runtime.close()
     validate_asset_rows(slots, rows)
     root = benchmark_repository_root()
     revision = application_revision(root)
@@ -590,6 +674,8 @@ async def run_asset_benchmark(
         "source_policy_review_unverified",
         "cost_coverage_unknown",
     }
+    if normal["preparation"]["mode"] == "local":
+        limits.add("native_static_validation_outside_timing")
     if any(row["request_digest"] is None for row in rows):
         limits.add("offer_observation_incomplete")
     if qualification.status != "qualified":
@@ -616,7 +702,7 @@ async def run_asset_benchmark(
             runner_digest=canonical_digest(config.inventories["runner_inventory"]),
             protocol_digest=canonical_digest(config.inventories["protocol_inventory"]),
         ),
-        artifacts=[],
+        artifacts=copy.deepcopy(config.effective["artifacts"]),
         planned_slots=slots,
         results=rows,
         summaries=summarize_asset_rows(
@@ -661,14 +747,22 @@ def _write_bundle(report: AssetBenchmarkReport, path: Path) -> dict:
     resolver_entries = []
 
     def save_document(id, kind, document, *, public=True):
-        payload = json_bytes(document)
+        payload = (
+            canonical_json(document).encode("utf-8")
+            if kind == "referenced_config"
+            else json_bytes(document)
+        )
         digest = canonical_digest(document)
         relative = (
             f"{bundle}/documents/{kind}-{digest}.json"
             if public
             else f"{private.name}/documents/{kind}-{digest}.json"
         )
-        atomic_bytes(base / relative, payload, limit=64 * 1024 * 1024)
+        atomic_bytes(
+            base / relative,
+            payload,
+            limit=65536 if kind == "referenced_config" else 64 * 1024 * 1024,
+        )
         documents.append(
             dict(
                 id=id,
@@ -693,6 +787,10 @@ def _write_bundle(report: AssetBenchmarkReport, path: Path) -> dict:
     save_document("benchmark_config", "benchmark_config", normalized)
     save_document("effective_config", "effective_config", config.effective)
     save_document("environment_lock", "environment_lock", config.environment_lock)
+    for id, value in sorted(semantic_config_documents(config.production).items()):
+        # Embedded config locators/provenance may be private. Preserve exact
+        # preimages through the explicit resolver, never a public launcher dump.
+        save_document(id, "referenced_config", value, public=False)
     for kind, value in config.inventories.items():
         save_document(kind, kind, value)
     all_releases = [config.release, *config.release.related_releases]
@@ -792,28 +890,25 @@ def _write_bundle(report: AssetBenchmarkReport, path: Path) -> dict:
     # Code files are explicit original-byte resolver commitments. No compare
     # command reads the current checkout or trusts a saved implementation grade.
     root = benchmark_repository_root()
-    copied = set()
+    copied = {}
     for inventory in config.inventories.values():
         for item in inventory["files"]:
-            id = file_evidence_id(item["path"])
-            key = (id, item["sha256"])
-            if key in copied:
-                continue
-            copied.add(key)
-            payload = read_local(root, item["path"], CONFIG_BYTES)
-            if not matches_original(payload, item["sha256"], item["bytes"]):
-                raise AssetCorpusError("runner_changed")
-            relative = f"{private.name}/files/{item['sha256']}"
-            atomic_bytes(base / relative, payload, limit=CONFIG_BYTES)
-            resolver_entries.append(
-                dict(
-                    id=id,
-                    hash_kind="original",
-                    hash=item["sha256"],
-                    bytes=len(payload),
-                    path=relative,
-                )
+            copied.setdefault((file_evidence_id(item["path"]), item["sha256"]), item)
+    payloads = read_local_files(root, [item["path"] for item in copied.values()], CONFIG_BYTES)
+    for ((id, _), item), payload in zip(copied.items(), payloads, strict=True):
+        if not matches_original(payload, item["sha256"], item["bytes"]):
+            raise AssetCorpusError("runner_changed")
+        relative = f"{private.name}/files/{item['sha256']}"
+        atomic_bytes(base / relative, payload, limit=CONFIG_BYTES)
+        resolver_entries.append(
+            dict(
+                id=id,
+                hash_kind="original",
+                hash=item["sha256"],
+                bytes=len(payload),
+                path=relative,
             )
+        )
     resolver = dict(
         schema_version=1,
         entries=sorted(resolver_entries, key=lambda e: (e["id"], e["hash_kind"], e["hash"])),

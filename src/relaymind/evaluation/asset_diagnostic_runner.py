@@ -1,6 +1,7 @@
 """Source-grounded runs through the production service and shared benchmark helpers."""
 
 import asyncio
+import copy
 import math
 import tempfile
 import time
@@ -20,21 +21,37 @@ from relaymind.evaluation.asset_benchmark import (
     terminal_payload,
 )
 from relaymind.evaluation.asset_benchmark_io import REPORT_BYTES, validate_benchmark_document
+from relaymind.evaluation.asset_comparison import (
+    configuration_runtime,
+    runtime_record,
+    validate_attempt_evidence,
+    validate_native_preparation,
+)
 from relaymind.evaluation.asset_corpus_io import _VALIDATORS, AssetCorpusError
 from relaymind.evaluation.asset_costs import summarize_asset_costs
 from relaymind.evaluation.asset_diagnostic import QUERY_LANGUAGE_TAGS, VerifiedDiagnostic
 from relaymind.evaluation.asset_evidence import (
+    collect_benchmark_environment,
     compatibility_policy,
     effective_asset_config,
+    effective_selector_identity,
     file_inventory,
+    semantic_config_documents,
+    validate_effective_integrity,
+    verify_compiled_asset_inventory,
 )
 from relaymind.evaluation.asset_metrics import grade_asset_result, primary_asset_result
+from relaymind.evaluation.asset_native_runtime import NativeBenchmarkRuntime
 from relaymind.evaluation.asset_schedule import plan_asset_slots, validate_asset_rows
 from relaymind.evaluation.asset_source_catalog import source_language
 from relaymind.evaluation.asset_splits import classify_latin_overlap, input_identity
 from relaymind.recommendations.errors import RecommendationError
 from relaymind.recommendations.service import CancellationSignal, RecommendationService
-from relaymind.selection.asset_contract import SelectorContext, parse_recommendation_result
+from relaymind.selection.asset_contract import (
+    SelectorContext,
+    parse_asset_request,
+    parse_recommendation_result,
+)
 from relaymind.selection.asset_factory import build_asset_selector
 from relaymind.selection.asset_lexical import LexicalAssetSelector
 from relaymind.selection.asset_preparation import (
@@ -46,7 +63,7 @@ from relaymind.selection.asset_preparation import (
     request_preparation_binding,
     validate_preparation_record,
 )
-from relaymind.store.recommendations import RecommendationClaim, RecommendationStore
+from relaymind.store.recommendations import RecommendationClaim
 from relaymind.store.run_store import RunStore
 
 
@@ -138,10 +155,12 @@ async def run_source_benchmark(
     slots = plan_asset_slots(cases, seed=seed, repetitions=repetitions, warmups=0)
     production = _load_production_config(Path(production_config))
     setup_config = normalize_preparation(
-        preparation, http_primary=production.recommendations.primary == "http"
+        preparation,
+        http_primary=production.recommendations.primary == "http",
+        local_primary=production.recommendations.primary == "hybrid",
     )
     kinds = sorted({k for c in cases.values() for k in c["requested_kinds"]})
-    if setup_config["mode"] == "http" and any(
+    if setup_config["mode"] != "none" and any(
         sorted(c["requested_kinds"]) != kinds for c in cases.values()
     ):
         raise AssetCorpusError("incompatible_preparation_workload")
@@ -157,182 +176,218 @@ async def run_source_benchmark(
     if not all(e["eligible"] for e in effective["eligibility"]):
         raise AssetCorpusError("catalog_source_not_enabled")
     provider = _LockedProjectionProvider(inputs, effective)
+    environment = collect_benchmark_environment(production=production)
     started = time.monotonic()
-    await provider.publish()
-    preparation_ms = (time.monotonic() - started) * 1000
-    rows = []
-    retained_bytes = 0
-    status = "completed"
-    prepared_primary = None
-    setup = await prepare_asset_index(normalize_preparation(None), None, [])
-    if setup_config["mode"] == "http":
-        offer = provider.pin(kinds)
-        setup = await prepare_asset_index(
-            setup_config,
-            _source_binding(effective, list(offer.catalog), offer.catalog_revision, kinds),
-            list(offer.catalog),
-        )
-        if setup["status"] != "ready":
-            status = "interrupted" if setup["status"] == "cancelled" else "blocked"
-        else:
-            prepared_primary = PreparedAssetSelector(
-                build_asset_selector(production.recommendations), setup
+    runtime = None
+    try:
+        if production.asset_semantics is not None:
+            runtime = await NativeBenchmarkRuntime.create(
+                production, inputs, effective, requested_kinds=kinds
             )
-    with tempfile.TemporaryDirectory(prefix="source-benchmark-") as directory:
-        runs = RunStore(Path(directory) / "disposable.sqlite3")
-        service = RecommendationService(
-            RecommendationStore(runs), provider, production.recommendations
-        )
-        try:
-            for slot in slots:
-                case = cases[slot["case_id"]]
-                label = {
-                    "class": case["reference_class"],
-                    "acceptable_asset_ids": list(case["acceptable_asset_ids"]),
-                }
-                row = _not_run(slot, label)
-                row.update(
-                    user_choice=None,
-                    acceptable_asset_ids=list(case["acceptable_asset_ids"]),
-                    reference_kind=case["reference_kind"],
-                    query_language=case["query_language"],
-                    request=None,
-                    terminal_observation=None,
-                    evaluated_decision=None,
-                    evaluated_candidates=[],
+            provider = runtime.provider
+            if setup_config["mode"] != "local":
+                await runtime.worker.rebuild()
+        else:
+            await provider.publish()
+        preparation_ms = (time.monotonic() - started) * 1000
+        rows = []
+        retained_bytes = 0
+        status = "completed"
+        prepared_primary = None
+        setup = await prepare_asset_index(normalize_preparation(None), None, [])
+        if setup_config["mode"] == "local":
+            setup = await runtime.prepare_local(setup_config, requested_kinds=kinds)
+            if setup["status"] not in ("ready", "not_applicable"):
+                status = "interrupted" if setup["status"] == "cancelled" else "blocked"
+            elif setup["status"] == "ready":
+                prepared_primary = PreparedAssetSelector(runtime.service.primary, setup)
+        elif setup_config["mode"] == "http":
+            offer = provider.pin(kinds)
+            setup = await prepare_asset_index(
+                setup_config,
+                _source_binding(effective, list(offer.catalog), offer.catalog_revision, kinds),
+                list(offer.catalog),
+            )
+            if setup["status"] != "ready":
+                status = "interrupted" if setup["status"] == "cancelled" else "blocked"
+            else:
+                prepared_primary = PreparedAssetSelector(
+                    build_asset_selector(production.recommendations), setup
                 )
-                row["hard_subset"], row["latin_token_intersections"] = _latin_overlap(
-                    case, inputs.catalog, unicodedata.unidata_version
-                )
-                if status != "completed":
-                    row["reason"] = (
-                        "interrupted" if status == "interrupted" else "preparation_unavailable"
-                    )
-                    rows.append(row)
-                    continue
-                language = case["query_language"]
-                request = dict(
-                    schema_version=1,
-                    task_text=case["task_text"],
-                    conversation=list(case["conversation"]),
-                    requested_kinds=list(case["requested_kinds"]),
-                    selection_scope="discovery",
-                    host_snapshot_revision=None,
-                    language_tags=list(QUERY_LANGUAGE_TAGS[language]),
-                    code_switched=language == "mixed",
-                )
-                budget = service.new_budget()
-                cancel = CancellationSignal()
-                try:
-                    offer = service.precheck(request)
-                    envelope = dict(
-                        request,
-                        schema_version=2,
-                        recommendation_id=str(uuid.uuid4()),
-                        task_id=case["id"],
-                        scope=provider.scope,
-                        permissions=list(provider.permissions),
-                        catalog_revision=offer.catalog_revision,
-                        deadline_ms=budget.remaining_ms(),
-                        candidate_limit=10,
-                    )
-                    selection = offer.request(
-                        envelope, context=SelectorContext(budget.clock.monotonic, budget.check)
-                    )
+        with tempfile.TemporaryDirectory(prefix="source-benchmark-") as directory:
+            runs = (
+                runtime.runs
+                if runtime is not None
+                else RunStore(Path(directory) / "disposable.sqlite3")
+            )
+            service = (
+                runtime.service
+                if runtime is not None
+                else RecommendationService.for_provider(runs, provider, production.recommendations)
+            )
+            native_primary = service.primary if runtime is not None else None
+            try:
+                for slot in slots:
+                    case = cases[slot["case_id"]]
+                    label = {
+                        "class": case["reference_class"],
+                        "acceptable_asset_ids": list(case["acceptable_asset_ids"]),
+                    }
+                    row = _not_run(slot, label)
                     row.update(
-                        request_digest=stable_request_digest(selection.to_json_object()),
-                        offered_projection_digest=canonical_digest(list(offer.catalog)),
-                        catalog_revision=offer.catalog_revision,
+                        user_choice=None,
+                        acceptable_asset_ids=list(case["acceptable_asset_ids"]),
+                        reference_kind=case["reference_kind"],
+                        query_language=case["query_language"],
+                        request=None,
+                        terminal_observation=None,
+                        evaluated_decision=None,
+                        evaluated_candidates=[],
                     )
-                    primary = prepared_primary or (
-                        LexicalAssetSelector(offer.index)
-                        if production.recommendations.primary == "lexical"
-                        else build_asset_selector(production.recommendations)
+                    row["hard_subset"], row["latin_token_intersections"] = _latin_overlap(
+                        case, inputs.catalog, unicodedata.unidata_version
                     )
-                    service.primary = _ObservedPrimary(primary, row)
-                    claim = RecommendationClaim(
-                        provider.scope,
-                        "source-development",
-                        "POST",
-                        "/relay/v1/recommendations",
-                        None,
-                        str(slot["ordinal"]),
-                        canonical_digest(request),
-                    )
-                    response = await service.create(request, claim, budget, cancel)
-                    body = (
-                        dict(service.get(provider.scope, cancel.recommendation_id))
-                        if cancel.recommendation_id
-                        else dict(response.body)
-                    )
-                    if body.get("state") == "ready":
-                        result = dict(body["result"])
-                        row.update(
-                            status="ready",
-                            reason=None,
-                            result=result,
-                            attempts=list(result["attempts"]),
-                            embeddings=list(result["embeddings"]),
+                    if status != "completed":
+                        row["reason"] = (
+                            "interrupted" if status == "interrupted" else "preparation_unavailable"
                         )
-                    else:
-                        terminal = terminal_payload(
-                            service,
+                        rows.append(row)
+                        continue
+                    language = case["query_language"]
+                    request = dict(
+                        schema_version=1,
+                        task_text=case["task_text"],
+                        conversation=list(case["conversation"]),
+                        requested_kinds=list(case["requested_kinds"]),
+                        selection_scope="discovery",
+                        host_snapshot_revision=None,
+                        language_tags=list(QUERY_LANGUAGE_TAGS[language]),
+                        code_switched=language == "mixed",
+                    )
+                    budget = service.new_budget()
+                    cancel = CancellationSignal()
+                    try:
+                        offer = service.precheck(request)
+                        envelope = dict(
+                            request,
+                            schema_version=2,
+                            recommendation_id=str(uuid.uuid4()),
+                            task_id=case["id"],
+                            scope=provider.scope,
+                            permissions=list(provider.permissions),
+                            catalog_revision=offer.catalog_revision,
+                            deadline_ms=budget.remaining_ms(),
+                            candidate_limit=10,
+                        )
+                        selection = offer.request(
+                            envelope, context=SelectorContext(budget.clock.monotonic, budget.check)
+                        )
+                        row.update(
+                            request_digest=stable_request_digest(selection.to_json_object()),
+                            offered_projection_digest=canonical_digest(list(offer.catalog)),
+                            catalog_revision=offer.catalog_revision,
+                        )
+                        primary = (
+                            prepared_primary
+                            or native_primary
+                            or (
+                                LexicalAssetSelector(offer.index)
+                                if production.recommendations.primary == "lexical"
+                                else build_asset_selector(production.recommendations)
+                            )
+                        )
+                        service.primary = _ObservedPrimary(primary, row)
+                        claim = RecommendationClaim(
                             provider.scope,
-                            body["recommendation_id"],
-                            ("failed", "cancelled"),
+                            "source-development",
+                            "POST",
+                            "/relay/v1/recommendations",
+                            None,
+                            str(slot["ordinal"]),
+                            canonical_digest(request),
                         )
-                        row.update(
-                            status="cancelled" if body.get("state") == "cancelled" else "failed",
-                            reason=(body.get("error") or {}).get(
-                                "code", "recommendation_unavailable"
-                            ),
-                            terminal_observation=terminal,
-                            attempts=list(terminal["attempts"]),
-                            embeddings=list(terminal.get("embeddings", [])),
+                        response = await service.create(request, claim, budget, cancel)
+                        body = (
+                            dict(service.get(provider.scope, cancel.recommendation_id))
+                            if cancel.recommendation_id
+                            else dict(response.body)
                         )
-                except RecommendationError as exc:
-                    row.update(status="failed", reason=exc.code)
-                except asyncio.CancelledError:
-                    # Service.create commits its cancellation before propagating it.
-                    # Retain that terminal observation before the temporary store closes.
-                    status = "interrupted"
-                    row.update(status="cancelled", reason="cancelled")
-                    if cancel.recommendation_id is not None:
-                        terminal = terminal_payload(
-                            service, provider.scope, cancel.recommendation_id, ("cancelled",)
-                        )
-                        row.update(
-                            terminal_observation=terminal,
-                            attempts=list(terminal["attempts"]),
-                            embeddings=list(terminal.get("embeddings", [])),
-                        )
-                finally:
-                    row["observed_ms"] = budget.elapsed_ms()
-                    # The gateway fences late results; drain its owned selector tasks
-                    # before disposable persistence can disappear.
-                    await budget.drain(0.1)
-                evaluated = primary_asset_result(row) if track == "primary_only" else row["result"]
-                if evaluated is not None:
-                    row.update(
-                        evaluated_decision=evaluated["final_decision"],
-                        evaluated_candidates=list(evaluated["final_candidates"]),
+                        if body.get("state") == "ready":
+                            result = dict(body["result"])
+                            row.update(
+                                status="ready",
+                                reason=None,
+                                result=result,
+                                attempts=list(result["attempts"]),
+                                embeddings=list(result["embeddings"]),
+                            )
+                        else:
+                            terminal = terminal_payload(
+                                service,
+                                provider.scope,
+                                body["recommendation_id"],
+                                ("failed", "cancelled"),
+                            )
+                            row.update(
+                                status="cancelled"
+                                if body.get("state") == "cancelled"
+                                else "failed",
+                                reason=(body.get("error") or {}).get(
+                                    "code", "recommendation_unavailable"
+                                ),
+                                terminal_observation=terminal,
+                                attempts=list(terminal["attempts"]),
+                                embeddings=list(terminal.get("embeddings", [])),
+                            )
+                    except RecommendationError as exc:
+                        row.update(status="failed", reason=exc.code)
+                    except asyncio.CancelledError:
+                        # Service.create commits its cancellation before propagating it.
+                        # Retain that terminal observation before the temporary store closes.
+                        status = "interrupted"
+                        row.update(status="cancelled", reason="cancelled")
+                        if cancel.recommendation_id is not None:
+                            terminal = terminal_payload(
+                                service, provider.scope, cancel.recommendation_id, ("cancelled",)
+                            )
+                            row.update(
+                                terminal_observation=terminal,
+                                attempts=list(terminal["attempts"]),
+                                embeddings=list(terminal.get("embeddings", [])),
+                            )
+                    finally:
+                        row["observed_ms"] = budget.elapsed_ms()
+                        # The gateway fences late results; drain its owned selector tasks
+                        # before disposable persistence can disappear.
+                        await budget.drain(0.1)
+                    evaluated = (
+                        primary_asset_result(row) if track == "primary_only" else row["result"]
                     )
-                row["grade"] = grade_asset_result(label, evaluated)
-                if case["id"] in choices:
-                    visible = {c["asset_id"] for c in row["evaluated_candidates"][:3]}
-                    if (
-                        row["evaluated_decision"] != "choice_required"
-                        or choices[case["id"]] not in visible
-                    ):
-                        raise AssetCorpusError("invalid_user_choice")
-                    row["user_choice"] = choices[case["id"]]
-                retained_bytes += len(canonical_json(row).encode())
-                if retained_bytes > REPORT_BYTES:
-                    raise AssetCorpusError("report_limit")
-                rows.append(row)
-        finally:
-            await service.stop()
-            runs.close()
+                    if evaluated is not None:
+                        row.update(
+                            evaluated_decision=evaluated["final_decision"],
+                            evaluated_candidates=list(evaluated["final_candidates"]),
+                        )
+                    row["grade"] = grade_asset_result(label, evaluated)
+                    if case["id"] in choices:
+                        visible = {c["asset_id"] for c in row["evaluated_candidates"][:3]}
+                        if (
+                            row["evaluated_decision"] != "choice_required"
+                            or choices[case["id"]] not in visible
+                        ):
+                            raise AssetCorpusError("invalid_user_choice")
+                        row["user_choice"] = choices[case["id"]]
+                    retained_bytes += len(canonical_json(row).encode())
+                    if retained_bytes > REPORT_BYTES:
+                        raise AssetCorpusError("report_limit")
+                    rows.append(row)
+            finally:
+                if runtime is None:
+                    await service.stop()
+                    runs.close()
+    finally:
+        if runtime is not None:
+            await runtime.close()
     validate_asset_rows(slots, rows)
     pairs = _language_pairs(rows, inputs.catalog)
     assets = {a["record"]["asset_id"]: a for a in inputs.catalog["assets"]}
@@ -351,6 +406,11 @@ async def run_source_benchmark(
         policy_digest=canonical_digest(compatibility_policy(effective)),
         runner_digest=canonical_digest(runner),
         protocol_digest=canonical_digest(protocol),
+        runner_inventory=runner,
+        protocol_inventory=protocol,
+        configuration_documents=semantic_config_documents(production),
+        environment=environment,
+        environment_digest=canonical_digest(environment),
         track=track,
         seed=seed,
         repetitions=repetitions,
@@ -377,7 +437,14 @@ async def run_source_benchmark(
         rows=rows,
         latency=summarize_source_latency(rows),
         costs=summarize_asset_costs(rows),
-        limits=["independent_annotation_not_asserted", "resource_coverage_unknown"],
+        limits=sorted(
+            {"independent_annotation_not_asserted", "resource_coverage_unknown"}
+            | (
+                {"native_static_validation_outside_timing"}
+                if setup_config["mode"] == "local"
+                else set()
+            )
+        ),
     )
     if len(canonical_json(report).encode()) > REPORT_BYTES:
         raise AssetCorpusError("report_limit")
@@ -422,8 +489,9 @@ def _language_pairs(rows, catalog):
 
 def _source_binding(effective, catalog, revision, kinds):
     settings = effective["recommendations"]
+    selector = effective_selector_identity(effective)
     return preparation_binding(
-        selector={k: settings[k] for k in ("name", "version")},
+        selector={k: selector[k] for k in ("name", "version")},
         catalog_revision=revision,
         catalog=catalog,
         scope={k: settings[k] for k in ("user_id", "workspace_id")},
@@ -496,7 +564,43 @@ def _produced_by_admitted_attempt(result: Mapping) -> bool:
     )
 
 
-def _verify_development_report(report: Mapping) -> None:
+def _development_runtime(report):
+    """Verify current internal evidence; old stateless artifacts remain historical."""
+    effective = report["effective_config"]
+    validate_effective_integrity(effective)
+    keys = {
+        "environment",
+        "environment_digest",
+        "configuration_documents",
+        "runner_inventory",
+        "protocol_inventory",
+    }
+    present = keys & report.keys()
+    if (
+        not present
+        and effective["recommendations"]["primary"] != "hybrid"
+        and not effective["references"]
+    ):
+        return None
+    if present != keys or canonical_digest(report["environment"]) != report["environment_digest"]:
+        raise ValueError("runtime_evidence_missing")
+    for kind, field in (
+        ("runner_inventory", "runner_digest"),
+        ("protocol_inventory", "protocol_digest"),
+    ):
+        verify_compiled_asset_inventory(kind, report[kind])
+        if (
+            canonical_digest(report[kind]) != report[field]
+            or effective["generator"][field] != report[field]
+        ):
+            raise ValueError("inventory_binding")
+    return configuration_runtime(
+        effective, report["configuration_documents"], report["environment"]
+    )
+
+
+def _verify_development_report(report: Mapping) -> dict | None:
+    """Verify one development report and return its checked runtime projection."""
     try:
         doc, catalog = report["input_document"], report["catalog_document"]
         if not _VALIDATORS["diagnostic"].is_valid(doc) or not _VALIDATORS["catalog_set"].is_valid(
@@ -519,21 +623,25 @@ def _verify_development_report(report: Mapping) -> None:
             != report["policy_digest"]
         ):
             raise ValueError
+        runtime = _development_runtime(report)
         cases = {c["id"]: c for c in doc["cases"]}
         setup = report["preparation"]
         validate_benchmark_document("report", setup, definition="PreparationRecord")
         kinds = sorted({k for c in cases.values() for k in c["requested_kinds"]})
         binding = None
-        if setup["config"]["mode"] == "http":
-            if report["effective_config"]["recommendations"]["primary"] != "http" or any(
-                sorted(c["requested_kinds"]) != kinds for c in cases.values()
-            ):
+        if setup["config"]["mode"] != "none":
+            if report["effective_config"]["recommendations"]["primary"] != (
+                {"http": "http", "local": "hybrid"}[setup["config"]["mode"]]
+            ) or any(sorted(c["requested_kinds"]) != kinds for c in cases.values()):
                 raise ValueError
             offered = [a["record"] for a in catalog["assets"] if a["record"]["kind"] in kinds]
             binding = _source_binding(
                 report["effective_config"], offered, 1 if catalog["assets"] else 0, kinds
             )
         validate_preparation_record(setup, binding=binding)
+        validate_native_preparation(
+            setup, report["effective_config"], report.get("configuration_documents", {})
+        )
         if setup["status"] not in ("ready", "not_applicable") and any(
             r["status"] != "not_run" for r in report["rows"]
         ):
@@ -614,11 +722,26 @@ def _verify_development_report(report: Mapping) -> None:
                 ):
                     raise ValueError
                 if (
-                    setup["config"]["mode"] == "http"
+                    setup["config"]["mode"] != "none"
                     and request_preparation_binding(binding["selector"], request) != binding
                 ):
                     raise ValueError
-            elif row["attempts"] and row["attempts"][0]["outcome"] in ("ranked", "no_match"):
+                validate_attempt_evidence(
+                    row,
+                    parse_asset_request(request),
+                    offered,
+                    report["effective_config"],
+                    dict(
+                        selector=effective_selector_identity(report["effective_config"]),
+                        fallback=report["effective_config"]["recommendations"]["fallback"],
+                        preparation=setup["config"],
+                    ),
+                    setup,
+                    report.get("configuration_documents", {}),
+                )
+            elif row["embeddings"] or (
+                row["attempts"] and row["attempts"][0]["outcome"] in ("ranked", "no_match")
+            ):
                 raise ValueError
             if row["attempts"] or row["result"] is not None:
                 if canonical_digest(offered) != row["offered_projection_digest"]:
@@ -630,7 +753,7 @@ def _verify_development_report(report: Mapping) -> None:
                 retained_candidates += row["result"]["final_candidates"]
             for ordinal, attempt in enumerate(row["attempts"]):
                 if (
-                    setup["config"]["mode"] == "http"
+                    setup["config"]["mode"] != "none"
                     and ordinal == 0
                     and attempt["outcome"] in ("ranked", "no_match")
                     and attempt["result"]["index_revision"] != setup["index_revision"]
@@ -662,6 +785,7 @@ def _verify_development_report(report: Mapping) -> None:
             raise ValueError
     except (ValueError, TypeError, KeyError, IndexError, AttributeError, RecursionError):
         raise AssetCorpusError("invalid_development_report") from None
+    return runtime
 
 
 def compare_source_benchmarks(left: Mapping, right: Mapping) -> dict:
@@ -675,17 +799,38 @@ def compare_source_benchmarks(left: Mapping, right: Mapping) -> dict:
         "seed",
         "repetitions",
         "slots",
+        "runner_digest",
+        "protocol_digest",
     )
     if any(left.get(k) != right.get(k) for k in keys):
         raise AssetCorpusError("incompatible_development_runs")
-    _verify_development_report(left)
-    _verify_development_report(right)
+    runtimes = [_verify_development_report(report) for report in (left, right)]
     if preparation_policy_mismatches(left["preparation"]["config"], right["preparation"]["config"]):
         raise AssetCorpusError("incompatible_development_runs")
+    if any(runtime is None for runtime in runtimes):
+        if any(runtime is not None and runtime["use"] == "used" for runtime in runtimes):
+            raise AssetCorpusError("incompatible_development_runs")
+    elif runtimes[0]["use"] == runtimes[1]["use"] == "used":
+        if any(
+            runtimes[0][key] != runtimes[1][key]
+            for key in ("backend", "version", "build", "device")
+        ):
+            raise AssetCorpusError("incompatible_development_runs")
+    if runtimes[0] is not None and runtimes[1] is not None:
+        if any(
+            left["environment"][key] != right["environment"][key]
+            for key in ("python", "dependencies_digest")
+        ):
+            raise AssetCorpusError("incompatible_development_runs")
     return dict(
         profile="source_grounded_development",
         compatible=True,
         acceptance_eligible=False,
+        runtime={
+            "left": copy.deepcopy(runtimes[0] or runtime_record("unknown")),
+            "right": copy.deepcopy(runtimes[1] or runtime_record("unknown")),
+        },
+        performance_comparable=False,
         catalog_digest=left["catalog_digest"],
         cases_digest=left["cases_digest"],
         left=left["summary"],

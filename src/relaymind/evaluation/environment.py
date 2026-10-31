@@ -6,6 +6,8 @@ hand. Runtime facts (threads, slots, model load time) are read from the
 llama-server log of the run.
 """
 
+import copy
+import functools
 import json
 import os
 import platform
@@ -120,7 +122,16 @@ def _other() -> dict[str, Any]:
 
 
 def machine_manifest() -> dict[str, Any]:
-    """OS, CPU, GPU, RAM, and Python of this machine (section 12.2)."""
+    """OS, CPU, GPU, RAM, and Python of this machine (section 12.2).
+
+    The facts cannot change while a process runs, so the system tools
+    (system_profiler, PowerShell) are asked once; every caller gets a copy.
+    """
+    return copy.deepcopy(_machine_facts())
+
+
+@functools.cache
+def _machine_facts() -> dict[str, Any]:
     if sys.platform == "darwin":
         details = _darwin()
     elif os.name == "nt":

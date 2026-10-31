@@ -1040,7 +1040,16 @@ listed here so the current order can be traced to its reason.
   so it does not wait for the plugin.
 
 
-## M10 — Multilingual asset recommendations (spec 0.59)
+## M10 — Multilingual asset recommendations (spec 0.61)
+
+#207 customer documentation now has [English](asset-selection.md) and
+[简体中文](asset-selection.zh-CN.md) entry guides, v1/v2 migration and third-party
+index readiness navigation, exact source JSON versus formal JSON/Markdown
+workflows, explicit stdout-only choice receipts, and a focused
+[privacy/recovery reference](asset-privacy-security.md). The packaged bilingual
+M10 skill/MCP, real approval and correction walkthrough still requires the final
+qualified host contract/artifact and actual installed-host exercises. These
+repository guides do not claim that remaining walkthrough or close #207.
 
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
@@ -1166,7 +1175,8 @@ model and platform deliverables stay open. Development completion of
 loader, cooperative hybrid ranking/vector lifecycle and private explicit-correction
 adaptation/reset backend are implemented. Native loading reacquires the same CPU
 owner and retains actual cancellation/drain evidence. The production embedding
-qualification registry remains empty: no ordinary-config activation or portable
+qualification registry now contains two exact reviewed Linux CPU identities;
+fresh ordinary hybrid activation is recorded in the model evidence. No portable
 qualified model is claimed. Historical 47-asset/36-case native development results
 remain provisional, distinct from the current 412-asset/128-case source benchmark.
 Real host correction authority, formal chronological episodes and final quality,
@@ -1231,3 +1241,39 @@ not close full #195 host acceptance: HOST-ACTION-AUTHORITY and
 HOST-EXACT-SKILL-USE remain blocked, as do later host approval/use gates.
 Native platform security execution and final full-check evidence are reported
 separately; Linux backend doubles do not substitute for them.
+
+#197 first-slice status (RM36, RM37, RM39; AC27/AC28, partial AC30): the
+package includes dormant recommendation/action clients, closed lossless protocol
+validation, inert evidence rendering and an unregistered controller whose host
+boundary denies by default. Deterministic action-session injection and actual
+loopback gateway tests cover client behavior; no production host authority,
+command registration, runtime snapshot or exact skill/MCP use is supplied.
+HOST-ACTION-AUTHORITY, HOST-EXACT-SKILL-USE and the remaining host approval,
+currentness/platform gates remain open; full #197/AC30 is not complete.
+
+#198/#202/#204/#205/#206 evaluation contract checkpoint (spec 0.60): closed
+adaptation episode, whole-task and platform exports authorize the independent
+drivers/graders. Exact freeze companions, three-correction chronology, complete
+paired probe/three-arm denominators, per-model costs and evidence-bound reset
+remain required. Schema/driver implementation is planned; no new measured gate
+is claimed. Read-only native RPC and genuine MCP qualification probes do not
+enable production host actions or runtime snapshots. Personal authenticated
+ingress, exact selected skill/MCP use and post-approval currentness must qualify
+before the later native adapter activation revision. Missing genuine inputs do
+not block tooling implementation or explicitly unqualified fixture runs.
+
+#201 native benchmark contract checkpoint (spec 0.61): explicit local-cold
+preparation records actual gateway worker jobs/readiness, setup and owned cleanup
+without fabricated HTTP or hidden query initialization. Narrow runtime
+applicability permits a verified local selector runtime versus corroborated
+non-use, with a closed per-arm runtime display for the comparison-only renderer.
+Native build/device/execution controls, Python/dependencies,
+source/label/policy and normal machine equality stay enforced. Existing 0.58
+semantic documents and artifact/reference slots suffice. Parser/factory/offline
+closure, local preparation and native comparison/runtime-display tooling are
+implemented with explicit deterministic qualification fixtures; ordinary
+artifact activation has independent exact-key review and a fresh unmodified
+console-launch proof. The full 412/128 provisional source runs retain the
+observed hybrid quality regression, primary failure and lexical fallback. No
+host correction authority, dataset/hardware-wide qualification,
+new numerical threshold or final-M10 pass is supplied by this contract.

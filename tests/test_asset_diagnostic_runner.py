@@ -283,7 +283,8 @@ def test_rm40_compare_rejects_erased_failed_primary_with_retained_floor_result(
     """RM35/RM40: the admitted floor result retains its consumed failed primary."""
 
     class Slow:
-        name, version, builtin, mechanism = "example_lexical", "1", True, "slow_test"
+        # The timeout double retains the configured HTTP transport identity.
+        name, version, builtin, mechanism = "example_lexical", "1", False, "http"
 
         async def select(self, request, context):
             await asyncio.sleep(0.1)
@@ -339,6 +340,15 @@ def test_rm40_cancellation_conserves_planned_slots_and_consumed_attempts(
                 drained.append(True)
 
     monkeypatch.setattr(api(), "LexicalAssetSelector", Interruptible)
+    # The machine facts are real but collected before the timed window: on
+    # Windows the operating system queries alone can take seconds, and the
+    # 2 s guards below bound only dispatch and cancellation.
+    environment = api().collect_benchmark_environment(
+        production=api()._load_production_config(production(development_input))
+    )
+    monkeypatch.setattr(
+        api(), "collect_benchmark_environment", lambda *, production: copy.deepcopy(environment)
+    )
 
     async def interrupt():
         task = asyncio.create_task(
@@ -369,6 +379,7 @@ def test_rm40_cancellation_conserves_planned_slots_and_consumed_attempts(
     assert report["latency"]["unknown"] == 2 - completed
     assert report["latency"]["known"] == completed + 1
     assert drained == [True]
+    assert report["environment"] == environment
     assert api().compare_source_benchmarks(report, copy.deepcopy(report))["compatible"]
 
 

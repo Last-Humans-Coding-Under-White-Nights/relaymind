@@ -303,6 +303,18 @@ def load_config(path: Path | str, *, embedding_loader=None) -> LauncherConfig:
         raise LaunchError(f"cannot read {path}: {reason}") from exc
     except tomllib.TOMLDecodeError as exc:
         raise LaunchError(f"{path} is not valid TOML: {exc}") from exc
+    return parse_launcher_config(
+        raw, config_dir=path.absolute().parent, embedding_loader=embedding_loader
+    )
+
+
+def parse_launcher_config(
+    raw: Mapping[str, Any], *, config_dir: Path, embedding_loader=None
+) -> LauncherConfig:
+    """Validate captured production values with their original locator root."""
+    if not isinstance(raw, Mapping):
+        raise LaunchError("configuration must be a table")
+    config_dir = Path(config_dir).absolute()
     unknown = sorted(set(raw) - set(_TABLES))
     if unknown:
         raise LaunchError(f"unknown table: {', '.join(unknown)}")
@@ -311,13 +323,13 @@ def load_config(path: Path | str, *, embedding_loader=None) -> LauncherConfig:
         "user_actions",
         lambda: parse_user_action_settings(
             tables["user_actions"],
-            config_dir=path.absolute().parent,
+            config_dir=config_dir,
         ),
     )
     assets = _settings(
         "assets",
         lambda: parse_asset_settings(
-            tables["assets"], tables["asset_refresh"], config_dir=path.absolute().parent
+            tables["assets"], tables["asset_refresh"], config_dir=config_dir
         ),
     )
     recommendations = _settings(
@@ -336,7 +348,7 @@ def load_config(path: Path | str, *, embedding_loader=None) -> LauncherConfig:
         lambda: load_semantic_bundle(
             tables["asset_hybrid"],
             tables["asset_adaptation"],
-            config_dir=path.absolute().parent,
+            config_dir=config_dir,
             loader=embedding_loader,
         ),
     )

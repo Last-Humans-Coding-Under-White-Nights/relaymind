@@ -133,6 +133,17 @@ owns (`request_cancel`), the same path as the native cancel (section 7.4).
 Lower layers must not import higher ones. The store must not depend on
 adapters. Adapters must not depend on SQLite.
 
+## Independent asset recommendations
+
+Sources discover and atomically publish safe catalog metadata; the existing
+worker owns derived indexing. A v2 selector receives the full eligible offer and
+proposes a shortlist. The gateway owns budgets, admission and the separately
+attributed lexical floor. The recommendation API stores lifecycle/evidence;
+explicit choice does not execute an asset. Qualified host authority remains a
+separate boundary. See [customer setup](asset-selection.md),
+[v2 and preparation contracts](ASSET_BENCHMARK.md),
+[source diagnostics](SOURCE_BENCHMARK.md) and [privacy ownership](asset-privacy-security.md).
+
 ## Qualified remote skill refresh (RM34/RM38/RM43)
 
 `assets/remote_contracts.py` owns the reviewed installed
@@ -168,8 +179,10 @@ metadata, preserving both source content and provider cooldown.
 The optional section 6.1 artifact loader verifies bounded local originals and
 exact runtime/device identities before a reviewed qualification decision.
 `embedding_bundle.py` binds semantic configurations to effective launch identity;
-the production qualification registry is empty. No supplied config/evidence flag,
-model URL, environment default or arbitrary backend import can activate it.
+the production qualification registry holds the two exact reviewed Linux CPU
+identities for the pinned multilingual bundle. No supplied config/evidence flag,
+model URL, environment default, arbitrary backend import or different build,
+device or semantic config can activate it.
 
 Hybrid query representations, document vectors and bounded correction similarity
 use the same pinned local backend with separate inference observations. The

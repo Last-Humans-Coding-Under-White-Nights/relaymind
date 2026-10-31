@@ -4,6 +4,8 @@ Hashes establish integrity only. This module never grants source access, infers
 human review or fetches artifacts. Private source locators are attestation data.
 """
 
+import copy
+import functools
 import hashlib
 import importlib.metadata
 import tempfile
@@ -27,6 +29,7 @@ from relaymind.evaluation.asset_corpus_io import (
     AssetCorpusError,
     parse_json,
     read_local,
+    read_local_files,
     relative_path,
 )
 from relaymind.evaluation.environment import machine_manifest
@@ -41,11 +44,30 @@ def validate_definition(name: str, value: Mapping) -> dict:
     return validate_benchmark_document("report", value, definition=name)
 
 
-def semantic_document(payload: bytes, format: str) -> dict:
+def semantic_document(payload: bytes, format: str, *, semantic: bool = False) -> dict:
     try:
-        value = parse_json(payload) if format == "json" else tomllib.loads(payload.decode("utf-8"))
+        if semantic:
+            from relaymind.assets.embedding_manifest import (
+                parse_semantic_json,
+                semantic_document_copy,
+            )
+
+            if len(payload) > 65536:
+                raise AssetCorpusError("configuration_limit")
+            value = (
+                parse_semantic_json(payload)
+                if format == "json"
+                else semantic_document_copy(tomllib.loads(payload.decode("utf-8")))
+            )
+        else:
+            value = (
+                parse_json(payload) if format == "json" else tomllib.loads(payload.decode("utf-8"))
+            )
         canonical_digest(value)
         return value
+    except AssetCorpusError:
+        # A specific limit reason (AssetCorpusError is a ValueError) stays visible.
+        raise
     except (ValueError, TypeError, UnicodeError):
         raise AssetCorpusError("invalid_document") from None
 
@@ -99,6 +121,8 @@ def resolve_reference(
     limit = (
         ORIGINAL_BYTES
         if evidence
+        else 65536
+        if item["kind"] == "referenced_config"
         else DOCUMENT_BYTES
         if item["kind"] in ("catalog", "cases", "labels")
         else CONFIG_BYTES
@@ -125,13 +149,6 @@ def file_evidence_id(path: str) -> str:
     return "file:" + hashlib.sha256(path.encode()).hexdigest()
 
 
-def selector_identity(primary: str, name: str | None, version: str | None) -> dict:
-    """The report selector of the configured primary: built-in lexical or HTTP."""
-    if primary == "lexical":
-        return dict(name="lexical", version="1", transport="in_process")
-    return dict(name=name, version=version, transport="http")
-
-
 def file_inventory(root: Path, *, protocol: bool = False) -> dict:
     root = Path(root)
     paths = (
@@ -147,14 +164,11 @@ def file_inventory(root: Path, *, protocol: bool = False) -> dict:
     )
     if len(paths) > 10000:
         raise AssetCorpusError("inventory_limit")
-    files = []
-    for path in sorted(set(paths), key=lambda p: p.as_posix()):
-        payload = read_local(root, path.as_posix(), CONFIG_BYTES)
-        files.append(
-            dict(
-                path=path.as_posix(), sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload)
-            )
-        )
+    names = sorted({path.as_posix() for path in paths})
+    files = [
+        dict(path=name, sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload))
+        for name, payload in zip(names, read_local_files(root, names, CONFIG_BYTES), strict=True)
+    ]
     return dict(schema_version=1, files=files)
 
 
@@ -175,6 +189,12 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed native 0.61 activation registry clarification.
+            ("0ca7d5cdf2a842dc636525d372cafd7ed9c1e63400788e844ff0a3b2ebf37d7d", 569761),
+            # Reviewed native0.61 and corrected Source/master union (9c1c0ddb).
+            ("0fe6b740ad6303782112c39dbb98b193ff242b88ad0e5ec708eb6a779770fc71", 569529),
+            # Reviewed normative0.61 local preparation and runtime display (082202f).
+            ("070693f5fd489a9076e6a663575d7af986cc92a8bac6623789ce20c6ae305912", 568282),
             # Reviewed Source 0.59 and master benchmark union (cd7b8a95).
             ("184d14da9cfca536769744967fdf87811b7fcbaf6de0603e17943f8f59f70d86", 527306),
             # Reviewed normative0.59 semantic and qualified-refresh contracts.
@@ -207,13 +227,17 @@ def verify_compiled_asset_inventory(kind: str, inventory: Mapping) -> None:
         if kind == "runner_inventory"
         else {"docs/SPECIFICATION.md"}
     )
-    expected = {}
-    for path in package_root.rglob(suffix):
-        if "__pycache__" in path.parts:
-            continue
-        relative = path.relative_to(package_root).as_posix()
-        payload = read_local(package_root, relative, CONFIG_BYTES)
-        expected["src/relaymind/" + relative] = (hashlib.sha256(payload).hexdigest(), len(payload))
+    members = sorted(
+        path.relative_to(package_root).as_posix()
+        for path in package_root.rglob(suffix)
+        if "__pycache__" not in path.parts
+    )
+    expected = {
+        "src/relaymind/" + relative: (hashlib.sha256(payload).hexdigest(), len(payload))
+        for relative, payload in zip(
+            members, read_local_files(package_root, members, CONFIG_BYTES), strict=True
+        )
+    }
     supplied = {item["path"]: (item["sha256"], item["bytes"]) for item in inventory["files"]}
     if len(supplied) != len(inventory["files"]) or set(supplied) != set(expected) | anchors:
         raise AssetCorpusError("inventory_membership")
@@ -223,13 +247,20 @@ def verify_compiled_asset_inventory(kind: str, inventory: Mapping) -> None:
         raise AssetCorpusError("unsupported_generator")
 
 
-def collect_benchmark_environment() -> dict:
-    facts = machine_manifest()
-    dependencies = sorted(
-        (d.metadata["Name"].lower(), d.version)
-        for d in importlib.metadata.distributions()
-        if d.metadata.get("Name")
+@functools.cache
+def _dependencies_digest() -> str:
+    """The installed distributions this process imports from, scanned once."""
+    return canonical_digest(
+        sorted(
+            (d.metadata["Name"].lower(), d.version)
+            for d in importlib.metadata.distributions()
+            if d.metadata.get("Name")
+        )
     )
+
+
+def collect_benchmark_environment(*, production: "LauncherConfig | None" = None) -> dict:
+    facts = machine_manifest()
     # The standard collector cannot establish GPU absence on every platform.
     # Leave that unknown rather than inventing a performance match.
     gpu = facts["gpu"]
@@ -250,12 +281,62 @@ def collect_benchmark_environment() -> dict:
         ram_bytes=facts["ram_bytes"],
         gpu=gpu,
         python=facts["python"],
-        dependencies_digest=canonical_digest(dependencies),
+        dependencies_digest=_dependencies_digest(),
         runtime=None,
         runtime_version=None,
         runtime_config_digest=None,
     )
+    if production is not None and production.recommendations.primary == "hybrid":
+        semantic = production.asset_semantics
+        if semantic is None or semantic.hybrid is None:
+            raise AssetCorpusError("semantic_configuration")
+        manifest = semantic.hybrid.manifest
+        value.update(
+            runtime=manifest.data["runtime"]["backend"],
+            runtime_version=manifest.data["runtime"]["version"],
+            runtime_config_digest=manifest.manifest_digest,
+        )
     return validate_definition("Environment", value)
+
+
+def _semantic_projection(semantics) -> tuple[list, list, dict]:
+    references, artifacts, documents = {}, {}, {}
+
+    def reference(role, value):
+        raw = copy.deepcopy(value)
+        id = "referenced_config:" + canonical_digest(raw)
+        documents[id] = raw
+        references[(role, id)] = dict(role=role, document_id=id)
+
+    def artifact(role, identity, digest):
+        value = dict(role=role, **dict(identity), digest=digest, provenance="observed")
+        artifacts[(role, value["name"], value["version"], digest)] = value
+
+    if semantics is not None:
+        for name in ("hybrid", "adaptation"):
+            config = getattr(semantics, name)
+            if config is None:
+                continue
+            manifest = config.manifest
+            reference("embedding", manifest.data)
+            reference("index_config" if name == "hybrid" else "adaptation", config.data)
+            artifact(
+                "embedding" if name == "hybrid" else "adaptation",
+                manifest.data["model"],
+                manifest.artifact_hash,
+            )
+            if name == "hybrid":
+                artifact("index_config", config.data["identity"], config.digest)
+    return (
+        [references[key] for key in sorted(references)],
+        [artifacts[key] for key in sorted(artifacts)],
+        documents,
+    )
+
+
+def semantic_config_documents(production: "LauncherConfig") -> dict:
+    """Exact validated semantic preimages; no launcher, credentials or downloads."""
+    return _semantic_projection(production.asset_semantics)[2]
 
 
 def effective_asset_config(
@@ -270,6 +351,9 @@ def effective_asset_config(
     settings = production.recommendations
     if not settings.enabled or not settings.user_id or not settings.workspace_id:
         raise AssetCorpusError("recommendations_disabled")
+    if production.asset_semantics is not None and production.asset_semantics.adaptation_enabled:
+        raise AssetCorpusError("adaptation_unavailable")
+    references, artifacts, _ = _semantic_projection(production.asset_semantics)
     source_ids = {s.source_id for s in production.assets.sources}
     sources = [
         dict(
@@ -305,11 +389,26 @@ def effective_asset_config(
         sources=sources,
         refresh=asdict(production.assets.refresh),
         eligibility=sorted(eligibility, key=lambda e: e["asset_id"]),
-        references=[],
+        references=references,
         adaptation=dict(enabled=False, config_digest=None),
-        artifacts=[],
+        artifacts=artifacts,
     )
     return validate_definition("EffectiveConfigV1", value)
+
+
+def effective_selector_identity(effective: Mapping) -> dict:
+    """Selector identity from existing verified effective/artifact slots."""
+    settings = effective["recommendations"]
+    if settings["primary"] == "lexical":
+        return dict(name="lexical", version="1", transport="in_process")
+    if settings["primary"] == "hybrid":
+        identities = [item for item in effective["artifacts"] if item["role"] == "index_config"]
+        if len(identities) != 1 or identities[0]["provenance"] != "observed":
+            raise AssetCorpusError("selector_binding")
+        return dict(
+            name=identities[0]["name"], version=identities[0]["version"], transport="in_process"
+        )
+    return dict(name=settings["name"], version=settings["version"], transport="http")
 
 
 def source_proof(production: "LauncherConfig", effective: Mapping) -> dict:
@@ -429,9 +528,17 @@ def validate_effective_integrity(effective: Mapping) -> None:
     settings = effective["recommendations"]
     from relaymind.assets.settings import parse_recommendation_settings
 
-    parse_recommendation_settings(settings, source_count=len(effective["sources"]))
     if effective["adaptation"]["enabled"] or effective["adaptation"]["config_digest"] is not None:
         raise AssetCorpusError("adaptation_unavailable")
+    reference = {}
+    for item in effective["references"]:
+        reference.setdefault(item["role"], item["document_id"])
+    hybrid = (
+        dict(manifest=reference["embedding"], config=reference["index_config"])
+        if "embedding" in reference and "index_config" in reference
+        else None
+    )
+    parse_recommendation_settings(settings, source_count=len(effective["sources"]), hybrid=hybrid)
     if (
         effective["refresh"]["backoff_max_seconds"]
         < effective["refresh"]["backoff_initial_seconds"]
@@ -455,18 +562,85 @@ def verify_asset_configuration_closure(
         raise AssetCorpusError("input_unresolved")
     if supplied != required:
         raise AssetCorpusError("configuration_closure")
-    # The compiled production parser/factory currently supports lexical and
-    # strict HTTP primaries, neither owning a local runtime/artifact config.
-    # No applicable qualified referenced-config schema exists for either one.
-    # Reject even resolved unknown preimages rather than inventing a permissive
-    # model/config dialect or treating a reported JSON version as qualification.
-    if required:
+    if not required:
+        if effective["recommendations"]["primary"] == "hybrid":
+            raise AssetCorpusError("input_unresolved")
+        if any(
+            environment[key] is not None
+            for key in ("runtime", "runtime_version", "runtime_config_digest")
+        ):
+            raise AssetCorpusError("runtime_not_configured")
+        return
+    from types import SimpleNamespace
+
+    from relaymind.assets.embedding_config import (
+        validate_adaptation_config,
+        validate_hybrid_config,
+    )
+    from relaymind.assets.embedding_manifest import validate_embedding_manifest
+
+    refs = {}
+    for item in effective["references"]:
+        refs.setdefault(item["role"], []).append(item["document_id"])
+    if set(refs) - {"embedding", "index_config", "adaptation"}:
         raise AssetCorpusError("unsupported_configuration")
-    if any(
-        environment[key] is not None
-        for key in ("runtime", "runtime_version", "runtime_config_digest")
-    ):
-        raise AssetCorpusError("runtime_not_configured")
+    if len(refs.get("index_config", [])) > 1 or len(refs.get("adaptation", [])) > 1:
+        raise AssetCorpusError("configuration_closure")
+    try:
+        for item in manifest["documents"]:
+            if item["id"] not in required:
+                continue
+            if item["bytes"] > 65536:
+                raise AssetCorpusError("configuration_limit")
+            if item["id"] != "referenced_config:" + canonical_digest(documents[item["id"]]):
+                raise AssetCorpusError("configuration_binding")
+        manifests = {}
+        for id in refs.get("embedding", []):
+            parsed = validate_embedding_manifest(documents[id])
+            if id != "referenced_config:" + parsed.manifest_digest:
+                raise AssetCorpusError("configuration_binding")
+            manifests[parsed.manifest_digest] = parsed
+        configs = {}
+        used = set()
+        for role, name, validate in (
+            ("index_config", "hybrid", validate_hybrid_config),
+            ("adaptation", "adaptation", validate_adaptation_config),
+        ):
+            ids = refs.get(role, [])
+            if not ids:
+                configs[name] = None
+                continue
+            raw = documents[ids[0]]
+            digest = raw["manifest_digest"]
+            if digest not in manifests:
+                raise AssetCorpusError("input_unresolved")
+            configs[name] = validate(raw, manifests[digest])
+            used.add(digest)
+        if used != set(manifests):
+            raise AssetCorpusError("configuration_closure")
+        semantics = SimpleNamespace(**configs)
+        expected_refs, expected_artifacts, _ = _semantic_projection(semantics)
+        if effective["references"] != expected_refs or effective["artifacts"] != expected_artifacts:
+            raise AssetCorpusError("configuration_binding")
+        if effective["recommendations"]["primary"] == "hybrid":
+            if semantics.hybrid is None:
+                raise AssetCorpusError("input_unresolved")
+            parsed = semantics.hybrid.manifest
+            if (
+                environment["runtime"] != parsed.data["runtime"]["backend"]
+                or environment["runtime_version"] != parsed.data["runtime"]["version"]
+                or environment["runtime_config_digest"] != parsed.manifest_digest
+            ):
+                raise AssetCorpusError("runtime_configuration")
+        elif any(
+            environment[key] is not None
+            for key in ("runtime", "runtime_version", "runtime_config_digest")
+        ):
+            raise AssetCorpusError("runtime_not_configured")
+    except AssetCorpusError:
+        raise
+    except (ValueError, TypeError, KeyError, OverflowError):
+        raise AssetCorpusError("semantic_configuration") from None
 
 
 def source_locator_is_absolute(locator: str) -> bool:
@@ -511,7 +685,9 @@ def verify_benchmark_inputs(
                 )
                 if item["id"] != expected:
                     raise AssetCorpusError("document_identity")
-                documents[item["id"]] = semantic_document(raw, item["format"])
+                documents[item["id"]] = semantic_document(
+                    raw, item["format"], semantic=item["kind"] == "referenced_config"
+                )
                 raw_documents[item["id"]] = raw
             else:
                 evidence[item["id"]] = raw
@@ -573,9 +749,7 @@ def verify_benchmark_inputs(
         raise AssetCorpusError("effective_defaults")
     if normal["track"] == "primary_only" and (normal["fallback"] or normal["adaptation_enabled"]):
         raise AssetCorpusError("primary_policy")
-    expected_selector = selector_identity(
-        settings["primary"], settings["name"], settings["version"]
-    )
+    expected_selector = effective_selector_identity(effective)
     if normal["selector"] != expected_selector or report["artifacts"] != effective["artifacts"]:
         raise AssetCorpusError("selector_binding")
     if settings["url"] is not None:

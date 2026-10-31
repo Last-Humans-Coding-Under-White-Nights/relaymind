@@ -116,9 +116,14 @@ or implementation requires fresh verification and qualification. Install the
 optional backend explicitly with `pip install -e '.[embeddings]'` in an
 isolated development environment.
 
-The production qualification registry is empty. Supplying these files does
-not activate them: startup refuses an unqualified supplied semantic config,
-including a supplied disabled config. Deterministic tests inject trusted
+The production registry contains two exact reviewed identities for the separate
+[Linux CPU activation bundle](embeddings/multilingual-e5-small-linux-x86_64.manifest.json):
+[hybrid](embeddings/multilingual-e5-small-linux-x86_64.hybrid.json) and
+[adaptation](embeddings/multilingual-e5-small-linux-x86_64.adaptation.json).
+The historical development manifest above remains unqualified. Startup refuses
+any unqualified supplied config, including a disabled one. These keys bind the
+exact runtime build and physical device string; they do not authorize other
+hardware or a changed implementation. Deterministic tests inject trusted
 backend/qualification objects through Python constructors. The separate live
 test `tests/test_embedding_onnx_live.py` uses explicitly downloaded verified
 files and makes actual native inference calls; it never downloads assets or
@@ -144,3 +149,21 @@ not a new inference result or production qualification. Historical 47/36 reports
 remain bound to their executed manifests; they are not results for the current
 412-asset/128-case working catalog. Larger native shape/peak and missed CPU-target
 observations remain separate limitations rather than a universal resource pass.
+
+The [ordinary activation record](../docs/evidence/m10-native-activation-20261031.json)
+records a fresh console launch and real English, Chinese and mixed-language
+queries without injected qualification. On the frozen 412-asset/128-case source
+set, service runs completed with no failed rows. Hybrid Hit@3 was 46/116 versus
+lexical 63/116: this regression and one native primary failure followed by the
+lexical floor are retained. This is reproducible provisional evidence, not a
+quality or performance pass.
+
+To install this exact bundle, copy its three JSON files to a private directory,
+then download each manifest file from
+`https://huggingface.co/intfloat/multilingual-e5-small/resolve/614241f622f53c4eeff9890bdc4f31cfecc418b3/<path>`
+into that directory, preserving relative paths. Install the optional
+`embeddings` dependencies explicitly. This bundle was measured with ONNX Runtime
+1.31.1, tokenizers 0.23.3 and NumPy 2.5.4; another native build or device fails
+closed. Configure `[asset_hybrid]` with the manifest and hybrid config paths;
+see [native benchmark setup](../docs/ASSET_BENCHMARK.md#local-native-preparation-and-runtime-evidence).
+No model weights or downloaded source bodies are included in Git.

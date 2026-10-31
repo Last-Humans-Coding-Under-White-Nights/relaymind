@@ -10,6 +10,15 @@ confirmation, and every decision is shown in a trace.
 It speaks the OpenAI Chat Completions API, so any OpenAI client can use
 it.
 
+## Skill and tool recommendations
+
+Bring your own local skills or metadata-imported tools, connect a v2 HTTP
+selector, and compare it against the same offered catalog:
+[English setup](docs/asset-selection.md) · [简体中文指南](docs/asset-selection.zh-CN.md).
+The [source-backed benchmark](docs/SOURCE_BENCHMARK.md) provides a development
+dataset; it is not a prerequisite for your own library. Recommendations and
+explicit choice receipts grant no host execution or mutation approval.
+
 ## What it does
 
 - **Skills and tools.** A skill is a small instruction package that

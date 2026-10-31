@@ -2,6 +2,8 @@
 
 from collections.abc import Mapping, Sequence
 
+from relaymind.canonical import canonical_json
+
 METRICS = (
     "input_tokens",
     "output_tokens",
@@ -63,7 +65,17 @@ def summarize_asset_costs(rows: Sequence[Mapping]) -> list[dict]:
                 complete = len(selected) >= expected and all(v is not None for v in selected)
                 if metric in ("cpu_ms", "peak_bytes") and resources.get(metric) is not None:
                     complete = complete and resources["coverage"] == "complete"
-                if row["embeddings"] and not row["observed_costs"]:
+                # The verified built-in has exactly one query invocation and
+                # its attempt contains that observation inclusively. Count it
+                # once; arbitrary unbound embedding arrays stay incomplete.
+                native = [a for a in row["attempts"] if a.get("mechanism") == "hybrid_weighted_rrf"]
+                inclusive = (
+                    len(native) == 1
+                    and len(row["embeddings"]) == 1
+                    and canonical_json(native[0]["cost_observations"])
+                    == canonical_json(row["embeddings"][0]["cost_observations"])
+                )
+                if row["embeddings"] and not row["observed_costs"] and not inclusive:
                     # V1 has no attempt/embedding containment identity. Preserve
                     # admitted attempt components once, but require a verified
                     # whole-slot observation before asserting complete coverage.
