@@ -1268,7 +1268,7 @@ without fabricated HTTP or hidden query initialization. Narrow runtime
 applicability permits a verified local selector runtime versus corroborated
 non-use, with a closed per-arm runtime display for the comparison-only renderer.
 Native build/device/execution controls, Python/dependencies,
-source/label/policy and normal machine equality stay enforced. Existing0.58
+source/label/policy and normal machine equality stay enforced. Existing 0.58
 semantic documents and artifact/reference slots suffice. Parser/factory/offline
 closure, local preparation and native comparison/runtime-display tooling are
 implemented with explicit deterministic qualification fixtures; ordinary

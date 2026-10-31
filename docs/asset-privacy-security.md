@@ -104,8 +104,10 @@ actual misses, primary timeouts, service floors and unknown costs. The
 [versioned public-source record](evidence/2026-10-30-github-skill-source/README.md)
 separates acquisition from the actual two scheduled product jobs and fixture
 failure/recovery tests. None establishes a whole-market or platform/resource pass.
-The production semantic qualification registry remains empty; local model
-activation and native benchmark comparison are not a documented working route
-here. The M10 installed host/approval/correction walkthrough, independent quality
+The production semantic qualification registry contains only the two exact
+reviewed Linux CPU identities for the pinned multilingual bundle; other
+artifacts, runtimes and devices remain unqualified. The native benchmark
+comparison records that exact scope. The M10 installed host/approval/correction
+walkthrough, independent quality
 and whole-task evaluation, and operational macOS/native Windows gates remain
 specific separate deliverables in [ROADMAP](ROADMAP.md#m10--multilingual-asset-recommendations-spec-061).
