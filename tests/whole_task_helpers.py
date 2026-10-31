@@ -264,3 +264,29 @@ def expanded_release(root, case_count=8):
     lock["digest"] = canonical_digest(lock)
     write("lock", lock)
     return root
+
+
+def effective_pair(adaptation_digest: str) -> tuple[dict, dict]:
+    """Off/on EffectiveConfigV1 from the fixture production config (fixture only)."""
+    import tomllib
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from relaymind import launcher
+    from relaymind.evaluation import asset_evidence
+
+    path = (
+        Path(__file__).resolve().parent / "fixtures" / "asset-benchmark" / "builtin-production.toml"
+    )
+    production = launcher.parse_launcher_config(
+        tomllib.loads(path.read_text(encoding="utf-8")), config_dir=path.parent
+    )
+    off = asset_evidence.effective_asset_config(
+        production,
+        SimpleNamespace(catalog={"assets": []}),
+        runner_digest="a" * 64,
+        protocol_digest="b" * 64,
+    )
+    on = copy.deepcopy(off)
+    on["adaptation"] = dict(enabled=True, config_digest=adaptation_digest)
+    return off, on

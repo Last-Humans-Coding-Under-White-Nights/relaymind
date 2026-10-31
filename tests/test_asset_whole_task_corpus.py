@@ -173,3 +173,59 @@ def test_a_present_correction_target_with_other_bytes_rejects(corpus):
     doc = episodes(release, dict(asset_id="calendar", content_hash="0" * 64))
     with pytest.raises(WholeTaskRejected, match="asset_binding"):
         bind_episodes(doc, release)
+
+
+# --- adaptation configuration semantics (#229, #202) -----------------------------
+
+
+def ablation(change_off=None, change_on=None):
+    from whole_task_helpers import effective_pair
+
+    adaptation = {"fixture_adaptation_config": 1}
+    off, on = effective_pair(canonical_digest(adaptation))
+    if change_off:
+        change_off(off)
+    if change_on:
+        change_on(on)
+    freeze = dict(
+        schema_version=1,
+        off_config_digest=canonical_digest(off),
+        on_config_digest=canonical_digest(on),
+        adaptation_config_digest=canonical_digest(adaptation),
+        seed=1,
+    )
+    configs = {canonical_digest(v): v for v in (off, on, adaptation)}
+    return freeze, configs
+
+
+def test_off_and_on_effective_configs_differ_only_in_adaptation():
+    from relaymind.evaluation.asset_whole_task_corpus import verify_episode_configs
+
+    verify_episode_configs(*ablation())
+
+
+@pytest.mark.parametrize(
+    "change_off, change_on",
+    [
+        (lambda c: c.update(adaptation=dict(enabled=True, config_digest="a" * 64)), None),
+        (None, lambda c: c.update(adaptation=dict(enabled=True, config_digest="b" * 64))),
+        (None, lambda c: c.update(adaptation=dict(enabled=False, config_digest=None))),
+        (None, lambda c: c.update(permissions=["demo.read"])),
+        (None, lambda c: c["recommendations"].update(total_ms=999)),
+        (None, lambda c: c.update(selection_scope="runtime")),
+    ],
+)
+def test_any_other_off_on_difference_rejects(change_off, change_on):
+    from relaymind.evaluation.asset_whole_task_corpus import verify_episode_configs
+
+    with pytest.raises(WholeTaskRejected, match="ablation_policy|episode_config"):
+        verify_episode_configs(*ablation(change_off, change_on))
+
+
+def test_a_settings_bag_is_not_an_effective_config():
+    from relaymind.evaluation.asset_whole_task_corpus import verify_episode_configs
+
+    freeze, configs = ablation()
+    configs[freeze["off_config_digest"]] = {"enabled": True}
+    with pytest.raises(WholeTaskRejected, match="episode_config"):
+        verify_episode_configs(freeze, configs)

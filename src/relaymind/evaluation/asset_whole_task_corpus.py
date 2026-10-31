@@ -174,3 +174,47 @@ def bind_episodes(episodes: Mapping, release: VerifiedAssetRelease) -> None:
                 correction["schema_hash"],
             ):
                 raise WholeTaskRejected("asset_binding")
+
+
+def _effective(value: object) -> dict:
+    from relaymind.evaluation.asset_evidence import validate_definition
+
+    try:
+        return validate_definition("EffectiveConfigV1", value)
+    except (ValueError, AssetCorpusError):
+        raise WholeTaskRejected("episode_config") from None
+
+
+def verify_episode_configs(freeze: Mapping, configs: Mapping[str, Mapping]) -> None:
+    """Off/on are complete effective configurations differing only in adaptation.
+
+    Section 12.6.5: off and on are EffectiveConfigV1 with their referenced
+    closure. They share catalog, selector, scope, budgets, fallback and
+    sources, and differ only in the declared adaptation enablement; the on arm
+    binds the frozen semantic adaptation configuration. This named ablation is
+    the only place the retrieval rule against adaptation is relaxed.
+    """
+    from relaymind.evaluation.asset_evidence import (
+        compatibility_policy,
+        validate_effective_integrity,
+    )
+
+    off = _effective(configs[freeze["off_config_digest"]])
+    on = _effective(configs[freeze["on_config_digest"]])
+    if off["adaptation"] != dict(enabled=False, config_digest=None) or on["adaptation"] != dict(
+        enabled=True, config_digest=freeze["adaptation_config_digest"]
+    ):
+        raise WholeTaskRejected("ablation_policy")
+    disabled = dict(on, adaptation=dict(enabled=False, config_digest=None))
+    try:
+        validate_effective_integrity(off)
+        validate_effective_integrity(disabled)
+    except (ValueError, AssetCorpusError):
+        raise WholeTaskRejected("episode_config") from None
+    if (
+        compatibility_policy(off) != compatibility_policy(disabled)
+        or off["references"] != on["references"]
+        or off["artifacts"] != on["artifacts"]
+        or off["generator"] != on["generator"]
+    ):
+        raise WholeTaskRejected("ablation_policy")

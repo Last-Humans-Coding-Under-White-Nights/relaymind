@@ -38,6 +38,7 @@ from relaymind.evaluation.asset_whole_task_corpus import (
     bind_host_tasks,
     release_labels,
     resolve_corpus,
+    verify_episode_configs,
 )
 
 SINGLETONS = ("environment_lock", "runner_inventory", "protocol_inventory")
@@ -52,7 +53,11 @@ _SHAPES = {
 # What this revision does not verify; always reported next to a grade.
 UNVERIFIED = {
     "host": ("configuration_semantics", "qualified_evidence_review"),
-    "adaptation": ("probe_offer_binding", "qualified_evidence_review"),
+    "adaptation": (
+        "adaptation_config_semantics",
+        "probe_offer_binding",
+        "qualified_evidence_review",
+    ),
 }
 _UNRESOLVED = {"input_unresolved", "unsafe_file", "missing_file"}
 
@@ -245,6 +250,8 @@ def resolve_whole_task_inputs(
         if key not in documents:
             raise WholeTaskBlocked("referenced_config_unresolved")
         configs[digest] = documents[key]
+    if kind == "adaptation":
+        verify_episode_configs(freeze, configs)
     environment = validate_definition("Environment", documents["environment_lock"])
     observed = report["environment"] if "environment" in report else report["platform"]
     if any(value is not None and value != observed[k] for k, value in environment.items()):
