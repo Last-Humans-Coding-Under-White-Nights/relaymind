@@ -79,3 +79,13 @@ def test_rm40_file_inventory_opens_the_tree_once(tmp_path, monkeypatch):
         "src/relaymind/sub/mod.py",
     ]
     assert len(opened) == 1
+
+
+def test_an_oversized_semantic_document_keeps_its_limit_reason():
+    """#226 review: configuration_limit is not masked as invalid_document."""
+    from relaymind.evaluation.asset_corpus_io import AssetCorpusError
+    from relaymind.evaluation.asset_evidence import semantic_document
+
+    payload = b'{"x":"' + b"a" * 70000 + b'"}'
+    with pytest.raises(AssetCorpusError, match="^configuration_limit$"):
+        semantic_document(payload, "json", semantic=True)
