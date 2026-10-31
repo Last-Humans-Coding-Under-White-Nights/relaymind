@@ -1277,11 +1277,12 @@ capture remains the record of the earlier revision. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
 customer acceptance. The person-ingress harness hardening raised in the #224 review
 (#228) changed evidence-bound harness files; a fresh ordinary installed-host
-run with the hardened harness and the same adapter bytes (CI run 41229614966)
-passed the ordinary-pass predicate with all 15 harness sources matching. Its
+run with the hardened harness, including the fixes from the #231 reviews, and the
+same adapter bytes (CI run 41242168914, commit ac716a8) passed the ordinary-pass
+predicate with all 15 harness sources matching. Its
 unmodified capture is
 [openclaw-native-actions-20261101-harness.json](evidence/m10/openclaw-native-actions-20261101-harness.json)
-(SHA-256 `8e50cd026bb7da7fa6cb0f8ab93c1209d7e56c6cb793bf9fa81eccb24f1087bb`), which the registry's evidence revision now names.
+(SHA-256 `27c2d8a1d36d59e68295b06c64e55eebca0ed31e22e6173ca34a6ee04adcd238`), which the registry's evidence revision now names.
 
 #197 first-slice status (RM36, RM37, RM39; AC27/AC28, partial AC30): the
 package includes dormant recommendation/action clients, closed lossless protocol
