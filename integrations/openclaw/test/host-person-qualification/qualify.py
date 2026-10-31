@@ -6,6 +6,7 @@ synthetic forwarding address, actor row, external account or human claim.
 
 import ipaddress
 import json
+import secrets
 import subprocess
 import time
 from pathlib import Path
@@ -575,7 +576,6 @@ def _wait_listener(process, address: str, port: int) -> None:
 
 
 def _run_private_trial(work: Path, address: str, capture: dict) -> None:
-    import secrets
     import socket
     import sys
     import time
@@ -938,15 +938,7 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                         time.sleep(0.05)
                     mark(prefix + "_pairing")
                     capture["phase"] = prefix + "_session"
-                    created = rpc(
-                        page,
-                        "sessions.create",
-                        dict(
-                            agentId="main",
-                            key="agent:main:person-" + secrets.token_hex(8),
-                            label="Disposable person qualification",
-                        ),
-                    )
+                    created = rpc(page, "sessions.create", session_create_params())
                     if created["frame"].get("ok") is not True:
                         raise ValueError("native_session_create_denied")
                     session = created["frame"]["payload"]
@@ -1093,6 +1085,16 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
             log.close()
         if any(secret in json.dumps(capture) for secret in secrets_to_exclude):
             raise ValueError("credential_export_refused")
+
+
+def session_create_params() -> dict:
+    """One disposable session per account; the host refuses a label another session holds."""
+    token = secrets.token_hex(8)
+    return dict(
+        agentId="main",
+        key="agent:main:person-" + token,
+        label="Disposable person qualification " + token,
+    )
 
 
 def run_qualification(work: Path, output: Path) -> int:

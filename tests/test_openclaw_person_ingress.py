@@ -679,3 +679,15 @@ def test_native_create_export_keeps_only_bounded_nonsecret_binding():
     for changed in [dict(id="wrong"), dict(socket_id=""), dict(socket_id="a" * 1025)]:
         with pytest.raises(ValueError, match="native_session_create_binding"):
             api.session_create_receipt(observed | changed, "fixture@example.test")
+
+
+def test_each_account_session_has_its_own_key_and_label():
+    """RM37/AC28: the host refuses a second session that reuses a label."""
+    m = module()
+    first = m.session_create_params()
+    second = m.session_create_params()
+    assert first["agentId"] == second["agentId"] == "main"
+    assert first["key"] != second["key"]
+    assert first["label"] != second["label"]
+    assert first["key"].startswith("agent:main:person-")
+    assert 0 < len(first["label"]) <= 512
