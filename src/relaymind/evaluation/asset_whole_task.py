@@ -241,7 +241,7 @@ def _check_attempts(row: Mapping, seen: set[str]) -> None:
         seen.add(attempt["id"])
         if attempt["calls"] and not attempt["evidence_ids"]:
             raise WholeTaskRejected("dispatch_evidence")
-        if attempt["usage_provenance"] == "unknown" and any(
+        counted = any(
             attempt[k] is not None
             for k in (
                 "input_tokens",
@@ -250,7 +250,10 @@ def _check_attempts(row: Mapping, seen: set[str]) -> None:
                 "reasoning_tokens",
                 "total_tokens",
             )
-        ):
+        )
+        # Unknown provenance carries no counts; an observed or reported claim
+        # needs at least one count it observed or was told.
+        if counted != (attempt["usage_provenance"] != "unknown"):
             raise WholeTaskRejected("usage_provenance")
         start, end = attempt["started_at"], attempt["ended_at"]
         if start is not None and end is not None and _instant(end) < _instant(start):
@@ -265,6 +268,7 @@ def _check_row(row: Mapping, config: Mapping, seen: set[str]) -> None:
             any(row[k] is not None for k in _NOT_RUN_NULLS)
             or row["attempts"]
             or row["recommendation_ids"]
+            or row["evidence_ids"]
         ):
             raise WholeTaskRejected("not_run_work")
     if status in ("failed", "timeout", "cancelled") and row["success"] is True:
@@ -272,10 +276,11 @@ def _check_row(row: Mapping, config: Mapping, seen: set[str]) -> None:
     if row["success"] is True and (row["host_session_id"] is None or not row["evidence_ids"]):
         # A proposed tool or gateway trace alone is not task success.
         raise WholeTaskRejected("success_evidence")
-    elapsed = row["elapsed_ms"]
-    if elapsed is not None and any(
-        row[k] is not None and row[k] > elapsed for k in ("active_ms", "human_wait_ms")
-    ):
+    # Active time and human wait are disjoint parts of elapsed wall time, so
+    # together they fit inside it, and neither is claimed without it.
+    elapsed, parts = row["elapsed_ms"], [row["active_ms"], row["human_wait_ms"]]
+    known = [part for part in parts if part is not None]
+    if known and (elapsed is None or sum(known) > elapsed):
         raise WholeTaskRejected("row_timing")
     if config["recommendation_config_digest"] is None and row["recommendation_ids"]:
         raise WholeTaskRejected("recommendation_arm")
@@ -412,7 +417,6 @@ def host_summary(report: Mapping, tasks: Mapping, freeze: Mapping) -> dict:
         lane_rows = [r for r in report["rows"] if r["task_id"] in set(ids)]
         own = _summarize(lane_rows, ids, acceptance_ok)
         own["lane"] = lane
-        own["planned_tasks"] = own.pop("planned_tasks")
         lanes.append(
             {
                 k: own[k]
@@ -431,6 +435,9 @@ def host_summary(report: Mapping, tasks: Mapping, freeze: Mapping) -> dict:
             }
         )
     summary["lanes"] = lanes
+    # Spec 12.6: no overall average hides a failed lane.
+    if any(lane["gate"] == "fail" for lane in lanes):
+        summary["gate"] = "fail"
     return summary
 
 
