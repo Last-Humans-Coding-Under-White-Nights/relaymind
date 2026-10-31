@@ -321,7 +321,7 @@ def test_trial_exit_distinguishes_blocked_environment_from_harness_failure():
     assert api.trial_outcome(api.blocked_capture("exact_route_unqualified")) == 1
 
 
-@pytest.mark.parametrize("case", ["healthy", "environment", "fixture", "harness"])
+@pytest.mark.parametrize("case", ["healthy", "environment", "fixture", "harness", "proof"])
 def test_cli_publishes_the_trial_outcome_and_preserves_failure(tmp_path, monkeypatch, case):
     """RM39/AC35 F1/F4: only understood blocked outcomes exit zero."""
     from test_openclaw_ordinary_channel import module as ordinary_module
@@ -337,8 +337,13 @@ def test_cli_publishes_the_trial_outcome_and_preserves_failure(tmp_path, monkeyp
         original["mcp_use"]["server_events"] = []
         expected_status, expected_reason = "failed", "fixture_failed"
     elif case == "harness":
+        # Setup failed before discovery ran: not a fixture or proof failure.
         original = {"status": "failed", "reason": "qualification_failed"}
-        exit_code, expected_status, expected_reason = 2, "failed", "fixture_failed"
+        exit_code, expected_status, expected_reason = 2, "failed", "person_setup_failed"
+    elif case == "proof":
+        # Healthy discovery, then the person proof failed (N3).
+        original = dict(original, status="failed", reason="person_composition_unverified")
+        exit_code, expected_status, expected_reason = 2, "failed", "person_proof_failed"
 
     output = tmp_path / "published.json"
 
@@ -710,3 +715,17 @@ def test_pinned_host_launches_both_stdio_servers_without_any_mutation(tmp_path):
     assert {e["server"] for e in events if e["kind"] == "list"} == {"alpha.one", "alpha?one"}
     assert all(e["kind"] not in {"call", "effect"} for e in events)
     assert not any(tmp_path.glob("mcp-sandbox-*.jsonl"))
+
+
+def test_the_pin_never_requires_an_output_for_a_declaration_file():
+    """RM39/AC35 N1: tsc emits no JavaScript for a .d.ts input."""
+    required = module("grade").required_sources()
+    assert not [path for path in required if path.endswith(".d.js")]
+    package = ROOT / "integrations/openclaw"
+    for source in (package / "src").rglob("*.ts"):
+        output = (
+            (package / "dist" / source.relative_to(package / "src").with_suffix(".js"))
+            .relative_to(ROOT)
+            .as_posix()
+        )
+        assert (output in required) == (not source.name.endswith(".d.ts"))

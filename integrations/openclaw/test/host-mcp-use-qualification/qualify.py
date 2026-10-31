@@ -257,8 +257,14 @@ def main(argv=None) -> int:
     capture["functional_exact_use"] = GRADE.mcp_use_pass(capture)
     outcome = trial_outcome(capture)
     capture["fixture_discovery_pass"] = GRADE.fixture_discovery_pass(capture)
-    if outcome and not capture["fixture_discovery_pass"]:
-        capture["reason"] = "fixture_failed"
+    if outcome:
+        # Name what actually failed; the nested capture keeps its own reason.
+        if "person_setup_reason" in capture:
+            capture["reason"] = "person_setup_failed"
+        elif not capture["fixture_discovery_pass"]:
+            capture["reason"] = "fixture_failed"
+        else:
+            capture["reason"] = "person_proof_failed"
     capture["status"] = (
         "passed"
         if capture["functional_exact_use"] and outcome == 0

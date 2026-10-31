@@ -27,7 +27,7 @@ outer limit leaves a minute for cleanup/export. An understood unavailable
 environment or completed, healthy discovery with an unsupported exact-use route
 returns zero with `status: blocked`; that exit code is not qualification.
 Harness/fixture errors return nonzero and fail CI; missing artifacts also fail
-the upload. Failed discovery is recorded as `fixture_failed`.
+the upload. A failed run names what failed: `person_setup_failed` when setup failed before discovery, `fixture_failed` when discovery failed, and `person_proof_failed` when discovery was healthy but the person proof failed. The nested capture keeps its own reason.
 
 Two disposable stdio servers, `alpha.one` and `alpha?one`, both advertise
 `append`. OpenClaw owns their launch, transport and inventory. The fixture logs

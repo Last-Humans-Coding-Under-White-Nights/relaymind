@@ -2713,7 +2713,7 @@ Ubuntu CI step has a four-minute timeout around a 180-second person trial and
 uploads a separate capture. Typical person captures took 43–65 seconds, plus up
 to 30 seconds for MCP probing. Harness/fixture errors and missing artifacts fail
 CI; understood environmental blocks and healthy discovery with an unsupported
-exact-use route return zero. Discovery failure is recorded as `fixture_failed`.
+exact-use route return zero. A failed run names what failed: `person_setup_failed` when setup failed before discovery, `fixture_failed` when discovery failed, and `person_proof_failed` when discovery was healthy but the person proof failed. The nested capture keeps its own reason.
 The local host smoke test is enabled with `RELAYMIND_OPENCLAW_NODE=1`; the default
 Python suite includes evidence mutation and browser driver tests.
 

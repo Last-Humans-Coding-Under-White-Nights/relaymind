@@ -77,6 +77,10 @@ def required_sources() -> set[str]:
     ]
     # Derive expected outputs from sources, never from a possibly absent dist/.
     for source in sorted((package / "src").rglob("*.ts")):
+        if source.name.endswith(".d.ts"):
+            # A declaration input has no emitted JavaScript; pin the source only.
+            files.append(source)
+            continue
         files.extend(
             [source, package / "dist" / source.relative_to(package / "src").with_suffix(".js")]
         )
