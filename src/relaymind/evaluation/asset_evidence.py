@@ -29,6 +29,7 @@ from relaymind.evaluation.asset_corpus_io import (
     AssetCorpusError,
     parse_json,
     read_local,
+    read_local_files,
     relative_path,
 )
 from relaymind.evaluation.environment import machine_manifest
@@ -160,14 +161,11 @@ def file_inventory(root: Path, *, protocol: bool = False) -> dict:
     )
     if len(paths) > 10000:
         raise AssetCorpusError("inventory_limit")
-    files = []
-    for path in sorted(set(paths), key=lambda p: p.as_posix()):
-        payload = read_local(root, path.as_posix(), CONFIG_BYTES)
-        files.append(
-            dict(
-                path=path.as_posix(), sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload)
-            )
-        )
+    names = sorted({path.as_posix() for path in paths})
+    files = [
+        dict(path=name, sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload))
+        for name, payload in zip(names, read_local_files(root, names, CONFIG_BYTES), strict=True)
+    ]
     return dict(schema_version=1, files=files)
 
 
@@ -235,13 +233,17 @@ def verify_compiled_asset_inventory(kind: str, inventory: Mapping) -> None:
         if kind == "runner_inventory"
         else {"docs/SPECIFICATION.md"}
     )
-    expected = {}
-    for path in package_root.rglob(suffix):
-        if "__pycache__" in path.parts:
-            continue
-        relative = path.relative_to(package_root).as_posix()
-        payload = read_local(package_root, relative, CONFIG_BYTES)
-        expected["src/relaymind/" + relative] = (hashlib.sha256(payload).hexdigest(), len(payload))
+    members = sorted(
+        path.relative_to(package_root).as_posix()
+        for path in package_root.rglob(suffix)
+        if "__pycache__" not in path.parts
+    )
+    expected = {
+        "src/relaymind/" + relative: (hashlib.sha256(payload).hexdigest(), len(payload))
+        for relative, payload in zip(
+            members, read_local_files(package_root, members, CONFIG_BYTES), strict=True
+        )
+    }
     supplied = {item["path"]: (item["sha256"], item["bytes"]) for item in inventory["files"]}
     if len(supplied) != len(inventory["files"]) or set(supplied) != set(expected) | anchors:
         raise AssetCorpusError("inventory_membership")
