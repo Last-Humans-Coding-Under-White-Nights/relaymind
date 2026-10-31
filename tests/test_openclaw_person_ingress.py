@@ -1172,7 +1172,7 @@ def test_the_trial_reads_host_replies_only_through_the_checked_helpers():
 # --- #224 review (31 Oct 19:00): harness setup failures keep their reasons -------
 
 
-@pytest.mark.parametrize("stdout", [b"not json", b"\xff\xfe", b'{"not": "a list"}'])
+@pytest.mark.parametrize("stdout", [b"not json", b"\xff\xfe", b"\xff", b'{"not": "a list"}'])
 def test_unreadable_network_inventory_is_network_inventory_invalid(monkeypatch, stdout):
     import subprocess
 
@@ -1211,12 +1211,93 @@ def test_malformed_interface_records_are_network_inventory_invalid(interfaces):
         module().eligible_private_ipv4(interfaces)
 
 
-def test_the_trial_checks_browser_reply_shapes_before_reading_them():
-    import inspect
+@pytest.mark.parametrize(
+    "observed",
+    [
+        None,
+        {"id": "r", "frame": []},
+        {"frame": {}},
+        {"id": None, "socket_id": "s", "frame": {"id": None}},
+        {"id": 1, "socket_id": "s", "frame": {"id": 1}},
+        {"id": "r", "frame": {"id": "r"}},
+        {"id": "", "socket_id": "s", "frame": {"id": ""}},
+        {"id": "r", "socket_id": "s", "frame": {"id": "other"}},
+    ],
+)
+def test_malformed_browser_replies_are_native_response_binding(observed):
+    class Page:
+        def evaluate(self, *args):
+            return observed
 
-    source = inspect.getsource(module()._run_private_trial)
-    assert "isinstance(observed, dict)" in source
-    assert 'isinstance(observed.get("frame"), dict)' in source
+    with pytest.raises(ValueError, match="^native_response_binding$"):
+        module().native_rpc(Page(), "m", {})
+
+
+@pytest.mark.parametrize("ok", [True, False])
+def test_bound_browser_replies_are_accepted(ok):
+    frame = {"id": "r", "ok": ok} if ok else {"id": "r", "ok": False, "error": {"code": "X"}}
+    observed = {"id": "r", "socket_id": "s", "frame": frame}
+
+    class Page:
+        def evaluate(self, *args):
+            return observed
+
+    assert module().native_rpc(Page(), "m", {}) is observed
+
+
+@pytest.mark.parametrize(
+    "message, reason",
+    [
+        ("Page.evaluate: Error: native_rpc_timeout", "native_rpc_timeout"),
+        ("Page.evaluate: Error: native_socket_retired", "native_socket_retired"),
+        ("Page.evaluate: Target closed /secret/path", "native_rpc_transport"),
+    ],
+)
+def test_rpc_transport_rejection_keeps_a_fixed_reason(message, reason):
+    api = module()
+
+    class Page:
+        def evaluate(self, *args):
+            raise RuntimeError(message)
+
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        api.native_rpc(Page(), "m", {})
+    assert reason in api.SAFE_REASONS
+
+
+def test_the_overall_deadline_passes_through_an_rpc():
+    class Page:
+        def evaluate(self, *args):
+            raise TimeoutError("overall_deadline_exceeded")
+
+    with pytest.raises(TimeoutError, match="overall_deadline_exceeded"):
+        module().native_rpc(Page(), "m", {})
+
+
+@pytest.mark.parametrize(
+    "failure, reason",
+    [
+        ("missing", "network_inventory_unavailable"),
+        ("exit", "network_inventory_unavailable"),
+        ("timeout", "network_inventory_deadline"),
+    ],
+)
+def test_network_discovery_command_failures_keep_their_reasons(monkeypatch, failure, reason):
+    import subprocess
+
+    api = module()
+
+    def run(*args, **kwargs):
+        if failure == "missing":
+            raise FileNotFoundError("ip")
+        if failure == "exit":
+            raise subprocess.CalledProcessError(1, ["ip"])
+        raise subprocess.TimeoutExpired(["ip"], 5)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        api.discover_network()
+    assert reason in api.SAFE_REASONS
 
 
 @pytest.mark.parametrize("failure", ["url_timeout", "socket_timeout"])
