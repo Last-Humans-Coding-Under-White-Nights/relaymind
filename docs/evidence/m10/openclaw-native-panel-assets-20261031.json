@@ -1,0 +1,166 @@
+{
+  "qualification": "packaged_ui_assets_only",
+  "host_version": "2026.10.7",
+  "person_qualified": false,
+  "action_qualified": false,
+  "production_registry_enabled": false,
+  "archive_sha256": "1b1b5fd3dbf4bab0c1e4a07dc0062d5ff88dec1ebf20a887f6397ac0f9d3a4de",
+  "archive_manifest_members": 41,
+  "ordinary_install_steps": [
+    {
+      "step": [
+        "plugins",
+        "install"
+      ],
+      "exit_code": 0
+    },
+    {
+      "step": [
+        "config",
+        "set"
+      ],
+      "exit_code": 0
+    },
+    {
+      "step": [
+        "plugins",
+        "enable"
+      ],
+      "exit_code": 0
+    },
+    {
+      "step": [
+        "config",
+        "set",
+        "agents.defaults.model.primary"
+      ],
+      "exit_code": 0,
+      "inference": false
+    },
+    {
+      "step": [
+        "plugins",
+        "install",
+        "final-repair-archive"
+      ],
+      "exit_code": 0,
+      "archive_sha256": "1b1b5fd3dbf4bab0c1e4a07dc0062d5ff88dec1ebf20a887f6397ac0f9d3a4de"
+    }
+  ],
+  "receipts": [
+    {
+      "qualification": "packaged_ui_assets_only",
+      "person_qualified": false,
+      "action_qualified": false,
+      "host_version": "2026.10.7",
+      "origin": "http://127.0.0.1:53137",
+      "artifact_sha256": "1b1b5fd3dbf4bab0c1e4a07dc0062d5ff88dec1ebf20a887f6397ac0f9d3a4de",
+      "locale": "en-US",
+      "secure_context": true,
+      "labels": [
+        "Recommend",
+        "Useful",
+        "Inspect feedback",
+        "Reset feedback",
+        "MCP execution remains owned by the host and is unavailable through this adapter."
+      ],
+      "labs_before": false,
+      "actual_owner_browser": true,
+      "network_assets": [
+        {
+          "locale": "en-US",
+          "path": "/__openclaw__/plugins/control-ui/relaymind/144a2ef122736d9f55127b65375d0c25b10121d4418bc330c970055e5bee1f7d/control-ui.js",
+          "origin": "http://127.0.0.1:53137",
+          "status": 200,
+          "sha256": "3e295d24dcdd0520c105042a7800263dd557217d0704ac31eb0e6b1afd67f3ed",
+          "member": "package/dist/control-ui/control-ui.js",
+          "bytes": 20152
+        },
+        {
+          "locale": "en-US",
+          "path": "/__openclaw__/plugins/control-ui/relaymind/144a2ef122736d9f55127b65375d0c25b10121d4418bc330c970055e5bee1f7d/recommendation-json.js",
+          "origin": "http://127.0.0.1:53137",
+          "status": 200,
+          "sha256": "4e348f374ae84eb26f5b8d2996972260ff4aa538f727170b4e9353947f3cfc91",
+          "member": "package/dist/control-ui/recommendation-json.js",
+          "bytes": 8952
+        },
+        {
+          "locale": "en-US",
+          "path": "/__openclaw__/plugins/control-ui/relaymind/144a2ef122736d9f55127b65375d0c25b10121d4418bc330c970055e5bee1f7d/control-ui.js",
+          "origin": "http://127.0.0.1:53137",
+          "status": 200,
+          "sha256": "3e295d24dcdd0520c105042a7800263dd557217d0704ac31eb0e6b1afd67f3ed",
+          "member": "package/dist/control-ui/control-ui.js",
+          "bytes": 20152
+        },
+        {
+          "locale": "en-US",
+          "path": "/__openclaw__/plugins/control-ui/relaymind/144a2ef122736d9f55127b65375d0c25b10121d4418bc330c970055e5bee1f7d/recommendation-json.js",
+          "origin": "http://127.0.0.1:53137",
+          "status": 200,
+          "sha256": "4e348f374ae84eb26f5b8d2996972260ff4aa538f727170b4e9353947f3cfc91",
+          "member": "package/dist/control-ui/recommendation-json.js",
+          "bytes": 8952
+        }
+      ]
+    },
+    {
+      "qualification": "packaged_ui_assets_only",
+      "person_qualified": false,
+      "action_qualified": false,
+      "host_version": "2026.10.7",
+      "origin": "http://127.0.0.1:53137",
+      "artifact_sha256": "1b1b5fd3dbf4bab0c1e4a07dc0062d5ff88dec1ebf20a887f6397ac0f9d3a4de",
+      "locale": "zh-CN",
+      "secure_context": true,
+      "labels": [
+        "\u63a8\u8350",
+        "\u6709\u5e2e\u52a9",
+        "\u67e5\u770b\u53cd\u9988",
+        "\u6e05\u9664\u53cd\u9988",
+        "MCP \u6267\u884c\u4ecd\u7531\u5bbf\u4e3b\u8d1f\u8d23\uff1b\u6b64\u9002\u914d\u5668\u5c1a\u4e0d\u63d0\u4f9b\u8be5\u64cd\u4f5c\u3002"
+      ],
+      "labs_before": null,
+      "actual_owner_browser": true,
+      "network_assets": [
+        {
+          "locale": "zh-CN",
+          "path": "/__openclaw__/plugins/control-ui/relaymind/144a2ef122736d9f55127b65375d0c25b10121d4418bc330c970055e5bee1f7d/control-ui.js",
+          "origin": "http://127.0.0.1:53137",
+          "status": 200,
+          "sha256": "3e295d24dcdd0520c105042a7800263dd557217d0704ac31eb0e6b1afd67f3ed",
+          "member": "package/dist/control-ui/control-ui.js",
+          "bytes": 20152
+        },
+        {
+          "locale": "zh-CN",
+          "path": "/__openclaw__/plugins/control-ui/relaymind/144a2ef122736d9f55127b65375d0c25b10121d4418bc330c970055e5bee1f7d/recommendation-json.js",
+          "origin": "http://127.0.0.1:53137",
+          "status": 200,
+          "sha256": "4e348f374ae84eb26f5b8d2996972260ff4aa538f727170b4e9353947f3cfc91",
+          "member": "package/dist/control-ui/recommendation-json.js",
+          "bytes": 8952
+        },
+        {
+          "locale": "zh-CN",
+          "path": "/__openclaw__/plugins/control-ui/relaymind/144a2ef122736d9f55127b65375d0c25b10121d4418bc330c970055e5bee1f7d/control-ui.js",
+          "origin": "http://127.0.0.1:53137",
+          "status": 200,
+          "sha256": "3e295d24dcdd0520c105042a7800263dd557217d0704ac31eb0e6b1afd67f3ed",
+          "member": "package/dist/control-ui/control-ui.js",
+          "bytes": 20152
+        },
+        {
+          "locale": "zh-CN",
+          "path": "/__openclaw__/plugins/control-ui/relaymind/144a2ef122736d9f55127b65375d0c25b10121d4418bc330c970055e5bee1f7d/recommendation-json.js",
+          "origin": "http://127.0.0.1:53137",
+          "status": 200,
+          "sha256": "4e348f374ae84eb26f5b8d2996972260ff4aa538f727170b4e9353947f3cfc91",
+          "member": "package/dist/control-ui/recommendation-json.js",
+          "bytes": 8952
+        }
+      ]
+    }
+  ]
+}

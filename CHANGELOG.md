@@ -7,12 +7,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 - CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process.
+- Spec 0.60 section 12.6.5 exports (#198/#202/#204/#205/#206; RM16, RM38–RM44;
+  AC29–AC37): closed host freeze, task, report, adaptation episode and platform
+  schemas; a deterministic three-arm plan and conserving host driver; offline
+  graders that recompute every summary; companion input-manifest resolution with
+  blocked/rejected exits (`scripts/asset_whole_task.py`). Fixture-verified tooling
+  only; no measured result or acceptance is claimed. Remaining verifier gaps: #229.
+
+- Activate two independently reviewed exact Linux CPU embedding identities;
+  record ordinary native launch and provisional 412/128 benchmark results,
+  including partial indexing, lexical fallback and the observed quality regression.
+
 ### Changed
+
+- Specification 0.62 → 0.63 (RM37/RM39; AC28/AC30): adds the optional expected-scope
+  headers and the scope_mismatch error, checked before any read or write; requires the
+  native adapter to send its binding's scope on every gateway request; clarifies that
+  write privilege and target-agent access are resolved for the actual caller, not
+  required of unrelated roles, and that exact skill selection rechecks choice expiry
+  before each native dispatch.
+- Specification 0.61 → 0.62 (RM37/RM39; AC28/AC30): names the pinned
+  authenticated native action channel and explicit profile/workspace registration,
+  preserves direct choice/feedback/privacy and distributed-commit semantics, and
+  specifies exact native Skill Library selection/read separately from loaded-use.
+  Runtime snapshots and native MCP activation retain their existing qualification gates.
+
+
 
 - Specification 0.55 → 0.56 (RM40/RM44; AC31/AC36; review #219):
   names `Case.conversation` and attempt/embedding `cost_observations` as
   order-preserving arrays for canonical hashing. Types `Rate.value` and Wilson
   bounds as `nonnegative_number`, consistent with their existing [0, 1] limits.
+
+- The 0.57 reconciliation carried these master 0.56 benchmark clarifications
+  and the parallel source-grounded 0.56 additions below as distinct histories.
 
 - Specification 0.52 → 0.53 (RM16, RM38/AC29; #196, review #218):
   fixed 500 ms request slots admit measured dispatch delay within the original
@@ -23,6 +51,104 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   All samples, failure denominators and outstanding live qualification gates remain.
 
 ### Added
+
+- Native retrieval benchmark tooling (#201; RM16/RM35/RM38/RM40/RM41/RM44;
+  AC26/AC29/AC31/AC32): shared semantic factory/parser and offline preimages,
+  explicit local preparation, native/floor cost conservation and self-contained
+  runtime comparison evidence. The registry now holds the two exact reviewed
+  Linux CPU identities; other artifacts, actual cross-platform native controls
+  and final acceptance remain separate.
+
+- Customer recommendation guides (#207; RM34–RM44/AC25–AC37): English and
+  Chinese entry/navigation, v1/v2 migration, current HTTP index preparation,
+  source JSON and formal JSON/Markdown workflows, explicit choice receipts and
+  source/privacy/recovery boundaries. Installed M10 host walkthrough acceptance
+  remains separate; no runtime, qualification or budget change.
+
+- Specification 0.60 → 0.61 (#201/#200; RM16/RM35/RM38/RM40/RM41/RM44;
+  AC26/AC29/AC31/AC32): add explicit cold local native preparation using existing
+  worker events/readiness, actual setup/cleanup timing and unknown-aware costs.
+  Define narrow native-versus-unused runtime applicability, a closed self-contained
+  comparison runtime display, and invariant native build/device/execution controls. Preserve none/HTTP, semantic/artifact/Row,
+  source-proof and 0.60 episode/host/platform contracts and all acceptance gates.
+  This publishes tooling contracts, not model activation or measured acceptance.
+
+- Specification 0.59 → 0.60 (#198/#202/#204/#205/#206; RM16/RM38–RM44;
+  AC29–AC37): define closed adaptation episode, whole-host three-arm and
+  platform exports, exact freeze/companion resolution, conserved observations
+  and deterministic cost/quality/reset arithmetic. Reuse native execution,
+  existing product rows and the operational grader. Tooling implementation is
+  authorized; host activation remains denied until a later qualified
+  person/session/immutable-use contract. No provider or budget change.
+
+- Local semantic retrieval and correction backends (#201/#202; RM38/RM41/RM42;
+  AC29/AC32/AC33): pinned local artifacts, deterministic segmented representations,
+  revisioned hybrid vectors/fusion, measured inference and bounded private
+  correction voting/reset share the existing source/derived worker. Native load
+  CPU ownership and cancellation remain explicit. At this backend checkpoint the
+  production embedding qualification registry was empty; it now holds the two
+  reviewed Linux CPU identities (above). Host correction authority, formal
+  episodes and final quality/platform gates remain open.
+
+- #203 (RM34/RM38/RM43; AC25/AC29/AC34): activate the reviewed installed
+  public GitHub skills profile through bounded immutable acquisition and the
+  existing source worker. Preserve explicit owned removals, stale/recovery
+  evidence, profile-keyed provider cooldown across restart/rescan, isolated
+  credentials and unchanged job budgets. Record two actual scheduled source
+  jobs separately from fixture lifecycle tests and outstanding full-M10 gates.
+
+- Specification 0.58 → 0.59 (#203; RM34/RM38/RM43; AC25/AC29/AC34):
+  define the installed public GitHub Git skill-source profile with immutable
+  original/manifest/rights verification, complete scoped removal proof, closed
+  origins/credentials and mandatory persisted cooldown. Reuse the existing single
+  worker, atomic publication and stale/recovery evidence. Matrix market refresh
+  and independent corpus, host, platform/resource and full-M10 gates remain
+  separately assessed. No provider, budget or public wire revision. The actual
+  six-skill acquisition qualifies this narrow profile; runtime activation and
+  repeated scheduled product refresh remain pending.
+
+- Dormant OpenClaw recommendation libraries (#197; RM36, RM37, RM39;
+  AC27/AC28 and partial AC30): bounded single-attempt clients, lossless revision
+  and event decoding, closed protocol checks, inert recorded-evidence rendering
+  and a default-deny controller. Explicit fixtures exercise the actual gateway;
+  production command registration, snapshots, exact skill/MCP use and full host
+  acceptance remain unavailable pending qualification and a normative revision.
+
+- Specification 0.57 → 0.58 (#201/#202; RM37/RM38/RM41/RM42;
+  AC28/AC29/AC32/AC33): publish the closed local embedding manifest and
+  hybrid/adaptation semantic configurations. Specify deterministic representation,
+  byte and ordered-segmentation identities, vector/fusion and bounded correction
+  voting, reviewed activation with no initially qualified artifact, and fail-closed
+  adaptation with actual inference evidence on failure. Existing recommendation
+  wire versions/errors and corpus/benchmark contracts are retained. Model/runtime/
+  device quality and operational qualification remain open.
+
+- Source-grounded asset benchmark delivery (#191/#199/#200; RM35/RM40/RM44;
+  AC26/AC31/AC36): pinned acquisition/build and a 412-asset working catalog
+  (87 Matrix skills, 194 original-English SkillsBench skills, 131 genuine MCP
+  tools), 128 preregistered Chinese/English/mixed references, and shared
+  production-path builtin/team run/compare with explicit index readiness.
+  Preserve actual primary timeouts, blocked setup, unknown costs and historical
+  report hashes. Developer-authored references support the working development
+  profile; independent formal corpus, host/human and platform gates remain
+  separate. Reproduction, team integration and shortlist guides are included.
+
+- Specification 0.56 → 0.57 (#191/#199/#200; RM35/RM40; AC26/AC31):
+  optional explicit loopback index prepare/status/cancel binds the exact offered
+  catalog and scope, with bounded cold/reuse preparation and separate readiness,
+  wall-time and observed/reported costs. Stateless mode remains explicit;
+  selection v2 stays unchanged. Closed benchmark config/report/comparison
+  preparation records and protocol identities preserve historical truth.
+  Other original skill origins are permitted only in source-grounded development;
+  independent qualified sources, minima and all numerical gates are unchanged.
+
+- Specification 0.55 → 0.56 (#191/#199/#200; RM34/RM35/RM40/RM44;
+  AC25/AC26/AC31/AC36): source-grounded development benchmarks and actual Matrix
+  examples use documented author-defined references without invented human
+  judgments or fixed-size delivery prerequisites. Bounded standalone in-memory
+  ZIP inspection preserves originals separately from projections. Shared mixed
+  catalogs support available language pairs and team algorithms; formal
+  independent qualification, product source choices and resource limits remain.
 
 - Acceptance corpus input tooling (#199; RM40/AC31): assess exact 200-to-300
   source continuity, per-lane and all-target hard-subset cohorts through the

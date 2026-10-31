@@ -91,9 +91,23 @@ def parse_asset_settings(
         source_id = text(raw.get("source_id"), 256)
         kind = raw.get("kind")
         if kind == "qualified_remote":
-            raise ValueError(
-                "qualified_remote requires a qualified permitted adapter; none is qualified"
+            from relaymind.assets.remote_contracts import (
+                resolve_remote_profile,
+                validate_secret_ref,
             )
+
+            profile = resolve_remote_profile(raw.get("adapter_contract"))
+            if raw.get("path") is not None:
+                raise ValueError("qualified remote path must be null")
+            validate_secret_ref(raw.get("secret_ref"))
+            if timings.remote_seconds < profile.minimum_poll_seconds:
+                raise ValueError("remote interval below installed profile minimum")
+            if any(s.adapter_contract == profile.profile_id for s in sources):
+                raise ValueError("duplicate installed remote profile")
+            sources.append(
+                SourceConfig(source_id, kind, None, profile.profile_id, raw.get("secret_ref"))
+            )
+            continue
         if kind not in ("local_directory", "metadata_import"):
             raise ValueError("assets.sources kind must be local_directory or metadata_import")
         if raw.get("adapter_contract") is not None or raw.get("secret_ref") is not None:
@@ -108,6 +122,11 @@ def parse_asset_settings(
     return AssetSettings(tuple(sources), timings)
 
 
+def _bounded_path(value: object, label: str) -> None:
+    if not isinstance(value, str) or not value or len(value.encode("utf-8")) > 2048:
+        raise ValueError(f"{label} must be a bounded path")
+
+
 def parse_recommendation_settings(
     value: Mapping[str, object],
     *,
@@ -118,12 +137,16 @@ def parse_recommendation_settings(
     _closed(value, RECOMMENDATION_FIELDS, "recommendations")
     hybrid = _closed(hybrid or {}, HYBRID_FIELDS, "asset_hybrid")
     adaptation = _closed(adaptation or {}, ADAPTATION_FIELDS, "asset_adaptation")
-    if hybrid:
-        raise ValueError("asset_hybrid artifacts are not qualified; hybrid is unavailable")
+    if hybrid and set(hybrid) != HYBRID_FIELDS:
+        raise ValueError("asset_hybrid requires manifest and config")
+    for key, val in hybrid.items():
+        _bounded_path(val, f"asset_hybrid {key}")
     if "enabled" in adaptation and type(adaptation["enabled"]) is not bool:
         raise ValueError("asset_adaptation enabled must be boolean")
-    if adaptation.get("enabled") or "config" in adaptation:
-        raise ValueError("asset_adaptation artifacts are not qualified; adaptation is unavailable")
+    if adaptation.get("enabled") and "config" not in adaptation:
+        raise ValueError("asset_adaptation enabled requires config")
+    if "config" in adaptation:
+        _bounded_path(adaptation["config"], "asset_adaptation config")
     raw = {**vars(RecommendationSettings()), **value}
     for key in ("enabled", "fallback"):
         if type(raw[key]) is not bool:
@@ -134,8 +157,8 @@ def parse_recommendation_settings(
         raise ValueError("recommendations primary_ms must not exceed total_ms")
     if raw["primary"] not in ("lexical", "hybrid", "http"):
         raise ValueError("recommendations primary must be lexical, hybrid or http")
-    if raw["primary"] == "hybrid":
-        raise ValueError("hybrid artifacts are not qualified; choose lexical or http")
+    if raw["primary"] == "hybrid" and not hybrid:
+        raise ValueError("hybrid artifacts are not qualified; manifest/config are required")
     for key in ("user_id", "workspace_id", "name", "version"):
         if raw[key] is not None:
             text(raw[key], 256)

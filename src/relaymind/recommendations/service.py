@@ -82,6 +82,7 @@ class CatalogProvider:
         self._refresh_epoch = 0
         self._refresh_lock = asyncio.Lock()
         self.lifecycle = IndexLifecycle(self)
+        self.semantic_index = None
 
     @property
     def policy(self) -> Callable:
@@ -312,6 +313,13 @@ class CatalogProvider:
                 self.reason or "no_lexical_generation",
                 False,
             )
+        semantic_ready = 0
+        if lexical and self.semantic_index is not None:
+            pinned = self.semantic_index.pin()
+            semantic_ready = sum(
+                self.semantic_index.compatible(r, publication=pinned) is not None
+                for r in offer.catalog
+            )
         jobs = self.store.job_counts()
         return readiness_body(
             state=state,
@@ -319,6 +327,7 @@ class CatalogProvider:
             catalog_revision=self.known_revision,
             catalog_size=size,
             lexical_ready=lexical,
+            semantic_coverage=dict(ready=semantic_ready, total=size),
             pending_jobs=jobs.get("running", 0),
             failed_jobs=jobs.get("failed", 0) + jobs.get("interrupted", 0),
         )
@@ -345,6 +354,7 @@ class _Work:
     attempts: list = field(default_factory=list)
     # The dispatched attempt that has not finished yet, and when it started.
     in_flight: tuple[AttemptStarted, float] | None = None
+    finish_observer: object = None
 
     def terminal_attempts(self) -> list:
         """Finished attempts plus a cancelled record for one still in flight."""
@@ -365,12 +375,15 @@ class RecommendationService:
         settings: RecommendationSettings,
         *,
         primary=None,
+        adaptation=None,
+        semantic_identity=None,
         redactor: Redactor | None = None,
         clock: TraceClock | None = None,
     ):
         self.store, self.provider, self.settings = store, provider, settings
         self.scope = dict(provider.scope)
         self.primary = primary
+        self.adaptation = adaptation
         self.redactor = redactor or Redactor()
         self.clock = clock or store.store.clock
         self.sweep_seconds = 30.0
@@ -382,8 +395,22 @@ class RecommendationService:
             self.redactor.redact(dict(settings=vars(settings), permissions=provider.permissions))
         )
         self._configured_primary = (
-            None if settings.primary == "lexical" else build_asset_selector(settings)
+            None
+            if settings.primary == "lexical" or primary is not None
+            else build_asset_selector(settings)
         )
+        self.embedding_lifecycle = None
+        if semantic_identity is not None:
+            self._config_digest = canonical_digest(
+                dict(
+                    base=self._config_digest,
+                    sources=provider.generation_config(),
+                    semantics=semantic_identity,
+                    budgets=recommendation_budgets(
+                        settings.total_ms, settings.primary_ms, settings.fallback
+                    ),
+                )
+            )
 
     @classmethod
     def from_config(
@@ -394,6 +421,7 @@ class RecommendationService:
         *,
         permissions: Sequence[str],
         redactor: Redactor | None = None,
+        semantics=None,
     ) -> "RecommendationService":
         """The service for one configured scope over the shared run store."""
         provider = CatalogProvider(
@@ -402,7 +430,53 @@ class RecommendationService:
             scope=dict(user_id=settings.user_id, workspace_id=settings.workspace_id),
             permissions=tuple(sorted(permissions)),
         )
-        return cls(RecommendationStore(run_store), provider, settings, redactor=redactor)
+        return cls.for_provider(
+            run_store, provider, settings, redactor=redactor, semantics=semantics
+        )
+
+    @classmethod
+    def for_provider(
+        cls,
+        run_store: RunStore,
+        provider: CatalogProvider,
+        settings: RecommendationSettings,
+        *,
+        redactor: Redactor | None = None,
+        semantics=None,
+    ) -> "RecommendationService":
+        """Shared production construction over an already owned catalog provider."""
+        primary = None
+        owner = None
+        if semantics is not None:
+            from relaymind.assets.embedding_bundle import SemanticLifecycle
+
+            if settings.primary == "hybrid":
+                from relaymind.assets.embedding_lifecycle import EmbeddingIndexLifecycle
+                from relaymind.selection.asset_hybrid import HybridAssetSelector, HybridIndex
+                from relaymind.store.asset_vectors import AssetVectorStore
+
+                if semantics.hybrid is None:
+                    raise ValueError("hybrid requires qualified manifest/config")
+                index = HybridIndex(semantics.hybrid, provider.scope)
+                primary = HybridAssetSelector(semantics.hybrid, index, None)
+                provider.semantic_index = index
+                owner = EmbeddingIndexLifecycle(
+                    provider, primary, AssetVectorStore(run_store), semantics.loader
+                )
+            lifecycle = SemanticLifecycle(semantics, provider, owner)
+        service = cls(
+            RecommendationStore(run_store),
+            provider,
+            settings,
+            primary=primary,
+            redactor=redactor,
+            semantic_identity=None if semantics is None else semantics.identity(),
+        )
+        if semantics is not None and (owner is not None or semantics.adaptation_enabled):
+            service.embedding_lifecycle = lifecycle
+            # Both queued semantic jobs and accepted requests bind this same effective identity.
+            lifecycle.config_digest = service._config_digest
+        return service
 
     def new_budget(self):
         return SelectionBudget(self.settings.total_ms, clock=self.clock)
@@ -449,6 +523,8 @@ class RecommendationService:
             self._sweeper.cancel()
             await asyncio.gather(self._sweeper, return_exceptions=True)
             self._sweeper = None
+        if self.adaptation is not None:
+            self.adaptation.close()
 
     def readiness(self):
         return self.provider.readiness()
@@ -517,8 +593,8 @@ class RecommendationService:
         self._active[rid] = work
 
         def observe(event):
-            budget.check()
             if isinstance(event, AttemptStarted):
+                budget.check()
                 work.in_flight = (event, budget.clock.monotonic())
                 payload = dict(
                     attempt=event.attempt,
@@ -528,9 +604,19 @@ class RecommendationService:
                 )
                 kind = "selector.started"
             elif isinstance(event, AttemptFinished):
+                if budget._terminal or any(
+                    r["attempt"] == event.attempt_record["attempt"] for r in work.attempts
+                ):
+                    return
+                # Already observed inference may be flushed after the work clock
+                # stops, before the terminal fence; no additional work is admitted.
+                if not event.embeddings and not event.flush_after_stop:
+                    budget.check()
                 work.in_flight = None
                 work.attempts.append(event.attempt_record)
-                payload = dict(attempt_record=event.attempt_record, embeddings=[])
+                payload = dict(
+                    attempt_record=event.attempt_record, embeddings=list(event.embeddings)
+                )
                 kind = "selector.finished"
             else:
                 raise TypeError("unexpected selection event")
@@ -543,6 +629,8 @@ class RecommendationService:
                 active_ms=budget.elapsed_ms(),
             )
 
+        work.finish_observer = observe
+        result = None
         try:
             result = await select_assets(
                 selection,
@@ -556,10 +644,13 @@ class RecommendationService:
                 trusted_scope=self.scope,
                 trusted_permissions=self.provider.permissions,
                 observe=observe,
+                adaptation=self.adaptation,
             )
 
             def guard():
                 budget.check()
+                if result.commit_guard is not None:
+                    result.commit_guard()
                 current = self.provider.current()
                 if current.catalog_revision != offer.catalog_revision:
                     raise RecommendationFailure("recommendation_unavailable", "stale_result")
@@ -622,6 +713,8 @@ class RecommendationService:
             else:
                 self._terminal_failure(rid, work, "internal_error", "internal")
         finally:
+            if result is not None and result.release is not None:
+                result.release()
             self._active.pop(rid, None)
         response = self.store.lookup_claim(claim, now=self.clock.utc_now())
         if response is None or response.response is None:
@@ -676,6 +769,15 @@ class RecommendationService:
             return
         work.signal.reason = reason
         work.budget.cancel()
-        self._terminal_cancel(recommendation_id, work, reason)
+        # One SQL owner orders available finish evidence before cancellation.
+        # The progress closure fences native dispatch and contains counters only.
+        with self.store.store.sql_transaction():
+            if work.in_flight is not None and work.finish_observer is not None:
+                started, _ = work.in_flight
+                if started.progress is not None:
+                    finished = started.progress("cancelled")
+                    if finished.embeddings or finished.flush_after_stop:
+                        work.finish_observer(finished)
+            self._terminal_cancel(recommendation_id, work, reason)
         if work.task is not asyncio.current_task() and not work.task.done():
             work.task.cancel()

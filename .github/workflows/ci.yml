@@ -7,6 +7,7 @@ on:
   # No base-branch filter: stacked PRs (feature branch onto feature
   # branch) must get CI too.
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -130,6 +131,29 @@ jobs:
         working-directory: integrations/openclaw
         run: npm run pack:release -- ../../release/openclaw
 
+      - name: Install browser for plugin UI tests
+        run: playwright install --with-deps --only-shell chromium
+
+      # Disposable signed-session accounts exercise person mechanics and the
+      # production action factories. The shipped qualification registry stays closed.
+      - name: Native person ingress fixture
+        if: matrix.os == 'ubuntu-latest'
+        timeout-minutes: 12
+        run: |
+          python integrations/openclaw/test/host-ordinary-qualification/qualify.py \
+            --tarball "release/openclaw/$(node -p "require('./release/openclaw/release.json').filename")" \
+            --work-dir "${RUNNER_TEMP}/relaymind-person-qualification" \
+            --out ci-evidence/openclaw-person-ingress-ubuntu.json
+
+      - name: Upload native action fixture result immediately
+        uses: actions/upload-artifact@v4
+        if: always() && matrix.os == 'ubuntu-latest'
+        with:
+          name: openclaw-native-actions-ubuntu-${{ github.run_attempt }}
+          path: ci-evidence/openclaw-person-ingress-ubuntu.json
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Transport, plugin, and artifact tiers
         run: >
           pytest tests/test_openclaw_host_transport.py tests/test_openclaw_plugin.py
@@ -145,6 +169,12 @@ jobs:
           tests/test_openclaw_eval_apple_m1.py
           tests/test_openclaw_command_qualification.py
           tests/test_openclaw_mcp_qualification.py
+          tests/test_openclaw_person_ingress.py
+          tests/test_openclaw_asset_commands.py
+          tests/test_openclaw_native_actions.py
+          tests/test_openclaw_composed_actions.py
+          tests/test_openclaw_recommendation_ui.py
+          tests/test_openclaw_ordinary_channel.py
           --durations=30 --junitxml=ci-evidence/openclaw-tests.xml
 
       - name: Pinned host lifecycle (install, inspect, round trips, removal)

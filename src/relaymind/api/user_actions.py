@@ -173,7 +173,9 @@ def install_action_routes(app: FastAPI, service) -> None:
         return store
 
     def guarded(handler):
-        return guarded_route(app, handler, authenticate=authenticate)
+        return guarded_route(
+            app, handler, authenticate=authenticate, scope=service.scope if service else None
+        )
 
     async def run_storage(operation, *args, **kwargs):
         # Take the time in the worker: waiting for dispatch cannot extend expiry.

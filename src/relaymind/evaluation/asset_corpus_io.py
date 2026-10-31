@@ -1,8 +1,9 @@
 """Bounded ordinary local input for RM40/AC31; locators never execute."""
 
+import hashlib
 import json
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -45,18 +46,49 @@ def relative_path(value: str) -> str:
     return value
 
 
+def matches_original(payload: bytes, sha256: str, size: int) -> bool:
+    """True when payload has exactly the committed byte count and SHA-256."""
+    return len(payload) == size and hashlib.sha256(payload).hexdigest() == sha256
+
+
 def read_local(root: Path, relative: str, limit: int) -> bytes:
     """Read in ≤1 MiB chunks, fencing identity, growth and root replacement."""
-    relative_path(relative)
-    tree = file = None
+    return read_local_files(root, [relative], limit)[0]
+
+
+def read_local_files(root: Path, relatives: Sequence[str], limit: int) -> list[bytes]:
+    """read_local for several files under one root through one held tree.
+
+    Every file keeps its own identity, growth and size fences. All reads go
+    through the one opened root, so one final check that the root path still
+    names it covers them all, instead of walking from the filesystem anchor
+    for every file (slow on Windows).
+    """
+    for relative in relatives:
+        relative_path(relative)
+    tree = None
     try:
         tree = open_source_tree(Path(root))
-        before = tree.info(relative)
-        if not before.is_regular or before.is_reparse:
-            raise AssetCorpusError("unsafe_file")
-        if before.size > limit:
-            raise AssetCorpusError("size_limit")
-        file = tree.open_file(relative)
+        payloads = [_read_held(tree, relative, limit) for relative in relatives]
+        tree.verify_root()
+        return payloads
+    except FileNotFoundError:
+        raise AssetCorpusError("missing_file") from None
+    except OSError:
+        raise AssetCorpusError("unsafe_file") from None
+    finally:
+        if tree is not None:
+            tree.close()
+
+
+def _read_held(tree, relative: str, limit: int) -> bytes:
+    before = tree.info(relative)
+    if not before.is_regular or before.is_reparse:
+        raise AssetCorpusError("unsafe_file")
+    if before.size > limit:
+        raise AssetCorpusError("size_limit")
+    file = tree.open_file(relative)
+    try:
         opened = file.info()
         if opened.fingerprint != before.fingerprint or not opened.is_regular:
             raise AssetCorpusError("file_changed")
@@ -71,19 +103,11 @@ def read_local(root: Path, relative: str, limit: int) -> bytes:
             chunks.append(chunk)
         if count != before.size or file.info().fingerprint != before.fingerprint:
             raise AssetCorpusError("file_changed")
-        if tree.info(relative).fingerprint != before.fingerprint:
-            raise AssetCorpusError("file_changed")
-        tree.verify_root()
-        return b"".join(chunks)
-    except FileNotFoundError:
-        raise AssetCorpusError("missing_file") from None
-    except OSError:
-        raise AssetCorpusError("unsafe_file") from None
     finally:
-        if file is not None:
-            file.close()
-        if tree is not None:
-            tree.close()
+        file.close()
+    if tree.info(relative).fingerprint != before.fingerprint:
+        raise AssetCorpusError("file_changed")
+    return b"".join(chunks)
 
 
 def _once(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -147,7 +171,7 @@ _CorpusValidator = extend(
 )
 _VALIDATORS = {
     name: _CorpusValidator(load_packaged_schema("relaymind.evaluation", f"asset_{name}.v1.json"))
-    for name in ("catalog_set", "cases", "labels", "lock")
+    for name in ("catalog_set", "cases", "labels", "lock", "diagnostic")
 }
 
 

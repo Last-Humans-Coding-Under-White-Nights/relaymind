@@ -420,6 +420,15 @@ class RecommendationStore:
                 )
             # The result was parsed once above; the view and event checks reuse that.
             obj = self._write(db, view, active_ms, checked=True)
+            if transition == "ready" and result["adaptation"] is not None:
+                self._event(
+                    db,
+                    recommendation_id,
+                    "adaptation.applied",
+                    dict(adaptation=result["adaptation"]),
+                    now,
+                    active_ms,
+                )
             self._event(db, recommendation_id, transition, payload, now, active_ms, checked=True)
             response = receipt or StoredResponse(200, obj.view)
             encoded = canonical_json(response.body)

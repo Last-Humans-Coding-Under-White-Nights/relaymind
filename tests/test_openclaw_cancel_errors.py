@@ -17,6 +17,7 @@ Like the other OpenClaw tests these skip without Node and ``npm ci`` in
 """
 
 import asyncio
+import sys
 import threading
 import time
 
@@ -140,6 +141,18 @@ def in_background(fn):
         return box["value"]
 
     return join
+
+
+def release_gate_and_join(gate, join):
+    """Release a held driver, retaining any assertion already in flight."""
+    primary_error = sys.exc_info()[0] is not None
+    gate.set()
+    try:
+        return join()
+    except BaseException:
+        if not primary_error:
+            raise
+        return None
 
 
 # The classes the pinned host retries on the same model (maybeRetryTransient,
@@ -446,20 +459,27 @@ def test_an_external_failure_is_a_failure_with_its_run_id(tmp_path, early_header
     assert host_class(output) == "server_error"
 
 
-def test_a_held_slot_is_429_overloaded_with_nothing_created(tmp_path):
+@pytest.mark.parametrize("second_driver_delay", [0, 4.25])
+def test_a_held_slot_is_429_overloaded_with_nothing_created(tmp_path, second_driver_delay):
+    """RM14, RM33, AC24: held slot stays unavailable across cold Node startup."""
     adapter = ThreadGate(turns=[text_turn("First."), text_turn("Second.")])
     gateway, app = client_gateway(
         tmp_path,
         None,
         local_model=ConfiguredModel(adapter=adapter, model_id="thread-gated"),
         external_turns=[],
+        # RM03: this held-slot fixture spans cold Node startup; its recorded
+        # local budget covers slot ownership, not the default local deadline.
+        budgets=LocalBudgets(active_seconds=30),
     )
     with RunningServer(app) as running:
         join = in_background(lambda: drive(running, app, tmp_path, prompt="Hold the slot."))
-        assert adapter.started.wait(10)
-        busy = drive(running, app, tmp_path, prompt="Say hello.")
-        adapter.gate.set()
-        held = join()
+        try:
+            assert adapter.started.wait(10)
+            time.sleep(second_driver_delay)
+            busy = drive(running, app, tmp_path, prompt="Say hello.")
+        finally:
+            held = release_gate_and_join(adapter.gate, join)
     message = failure_of(busy)
     assert message.startswith("RelayMind overloaded (HTTP 429): ")
     assert "not queued" in message
@@ -493,13 +513,19 @@ def test_a_held_slot_retried_with_max_retries_uses_the_same_key_and_succeeds(tmp
         None,
         local_model=ConfiguredModel(adapter=adapter, model_id="thread-gated"),
         external_turns=[],
+        # RM03: keep the first generation held through the 429 and host retry.
+        budgets=LocalBudgets(active_seconds=30),
     )
     with RunningServer(OpenOn429(app, adapter.gate)) as running:
         join = in_background(lambda: drive(running, app, tmp_path, prompt="Hold the slot."))
-        assert adapter.started.wait(10)
-        # The 429 opens the gate; the plugin waits 500 ms before its one retry.
-        retried = drive(running, app, tmp_path, prompt="Say hello.", pluginConfig={"maxRetries": 1})
-        join()
+        try:
+            assert adapter.started.wait(10)
+            # The 429 opens the gate; the plugin waits 500 ms before its one retry.
+            retried = drive(
+                running, app, tmp_path, prompt="Say hello.", pluginConfig={"maxRetries": 1}
+            )
+        finally:
+            release_gate_and_join(adapter.gate, join)
     assert retried["results"][0]["text"] == "Second."
     first, second = inference(retried)
     assert first["response"]["status"] == 429

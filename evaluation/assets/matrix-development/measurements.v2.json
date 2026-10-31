@@ -1,0 +1,4983 @@
+{
+  "profile": "source_grounded_development",
+  "qualification": "provisional",
+  "acceptance_eligible": false,
+  "artifact_status": "Internal development measurements; not AssetBenchmarkReportV1 or independent acceptance evidence.",
+  "input_files": [
+    {
+      "path": "sources.v2.json",
+      "sha256": "fb658ea96225b37c89190e4cf4633764c2c44c1fe8c03f340dd430dd057108e0",
+      "bytes": 504608
+    },
+    {
+      "path": "cases.v2.json",
+      "sha256": "83f97f713f674c7449f3a6af701d75407c3a1289208fbc2d0fcc7138e0b75f56",
+      "bytes": 113659
+    }
+  ],
+  "cases_digest": "2916e1369de5acd73ba37e822a737e5bcd46d4300463c9a73c99b1759764a4c3",
+  "catalog_digest": "5ba2884ebb339022a5b20d964d6ef57985d5ea6d3a10daa64d5ddd6ffe63e32e",
+  "catalog_file_sha256": "a7adaf2b44f4ccd743ad1dcd8e1c9db16c21cbf0ea5883e9daa2ee3732ae1c16",
+  "counts": {
+    "assets": 412,
+    "skills": 281,
+    "tools": 131,
+    "sources": {
+      "github-mcp-server": 131,
+      "matrix": 87,
+      "skillsbench": 194
+    },
+    "exclusions": 61,
+    "exclusion_reasons": {
+      "duplicate_original": 16,
+      "unsupported_tool_definition": 7,
+      "package_identity_mismatch": 5,
+      "archive_limit": 3,
+      "archive_byte_limit": 3,
+      "duplicate_archive_path": 1,
+      "missing_skill": 1,
+      "upstream_retention_restricted": 25
+    },
+    "cases": 128,
+    "reference_classes": {
+      "ambiguous": 6,
+      "positive": 116,
+      "negative": 6
+    },
+    "query_languages": {
+      "en": 59,
+      "zh": 59,
+      "mixed": 10
+    }
+  },
+  "case_coverage_note": "54 capability intents;58 distinct targets. Full412 catalog offered; source identity tags are not independently reviewed semantic families. Query variants are not independent human evidence.",
+  "measurement_context": "Serial CLI runs in a concurrent development environment; no native-platform or hardware performance qualification. All500ms service/150ms primary query budgets unchanged. Immediate reuse preparation failure is retained, not retried or reclassified.",
+  "runs": [
+    {
+      "arm": "builtin",
+      "track": "service",
+      "report_file": "builtin-service.json",
+      "report_sha256": "cd0f40be83e183da477420bca89e940b717a94582ca954cd0206b6cacfe92221",
+      "report_bytes": 66272894,
+      "runner_digest": "71d1835898c3a8c653171c8f6b4f13420a650e8a8ef67a425f692db107d6e046",
+      "protocol_digest": "9aa09199384a29a8d73165eee56e8219fd89b5fe5e0db9633de49626f802d9fb",
+      "config_digest": "42b151d580a50fc0ecaa8bd3dd11fdf4d392e5a3c395259dc72d1a43a7142d05",
+      "policy_digest": "b010ec37adf007f208574571ca8b6ce3fcaf0e25f3e8e5e6ea8166fa30b6fbdc",
+      "status": "completed",
+      "planned_slots": 128,
+      "row_status_counts": {
+        "ready": 128
+      },
+      "summary": {
+        "abstentions": 0,
+        "choice_required": 128,
+        "choice_supported3": 66,
+        "confident": 0,
+        "confident_correct": 0,
+        "failed": 0,
+        "false_confident": 0,
+        "hit3": 63,
+        "positive_cases": 116,
+        "primary_attempt_failures": 0,
+        "primary_not_ready": 0,
+        "reference_cases": 128,
+        "top1": 48,
+        "user_choice_correct": 0,
+        "user_choices": 0
+      },
+      "language_pairs": [
+        {
+          "abstentions": 0,
+          "choice_required": 19,
+          "choice_supported3": 15,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 14,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 19,
+          "target_description_language": "en",
+          "top1": 9,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 22,
+          "choice_supported3": 21,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 21,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 18,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 3,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 3,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 16,
+          "choice_supported3": 6,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 6,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 16,
+          "target_description_language": "zh",
+          "top1": 2,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 4,
+          "choice_supported3": 3,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 2,
+          "kind": "mcp_tool",
+          "positive_cases": 3,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 1,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 4,
+          "choice_supported3": 4,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 4,
+          "kind": "skill",
+          "positive_cases": 4,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 3,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 1,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 1,
+          "choice_supported3": 1,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 1,
+          "kind": "skill",
+          "positive_cases": 1,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "zh",
+          "top1": 1,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 18,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 18,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 22,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 2,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 2,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 17,
+          "choice_supported3": 16,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 15,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 17,
+          "target_description_language": "zh",
+          "top1": 14,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        }
+      ],
+      "missing_language_pairs": [
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        }
+      ],
+      "latency": {
+        "known": 128,
+        "p50_ms": 130.41482697008178,
+        "p95_ms": 173.72655199142173,
+        "unknown": 0
+      },
+      "costs": [
+        {
+          "known": 128,
+          "known_subtotal": 0,
+          "metric": "input_tokens",
+          "provenance": "observed",
+          "total": 0,
+          "unknown": 0
+        },
+        {
+          "known": 128,
+          "known_subtotal": 0,
+          "metric": "output_tokens",
+          "provenance": "observed",
+          "total": 0,
+          "unknown": 0
+        },
+        {
+          "known": 128,
+          "known_subtotal": 0,
+          "metric": "cached_tokens",
+          "provenance": "observed",
+          "total": 0,
+          "unknown": 0
+        },
+        {
+          "known": 128,
+          "known_subtotal": 0,
+          "metric": "reasoning_tokens",
+          "provenance": "observed",
+          "total": 0,
+          "unknown": 0
+        },
+        {
+          "known": 128,
+          "known_subtotal": 0,
+          "metric": "calls",
+          "provenance": "observed",
+          "total": 0,
+          "unknown": 0
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "input_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "output_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cached_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "reasoning_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "calls",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        }
+      ],
+      "preparation": {
+        "binding": null,
+        "cleanup_ms": null,
+        "config": {
+          "max_polls": 240,
+          "mode": "none",
+          "poll_ms": 250,
+          "profile": null,
+          "request_ms": 2000,
+          "total_ms": 60000,
+          "url": null
+        },
+        "exchanges": [],
+        "index_revision": null,
+        "observed_costs": [],
+        "observed_ms": null,
+        "preparation_id": null,
+        "reason": null,
+        "status": "not_applicable"
+      },
+      "coverage": {
+        "catalog_assets": 412,
+        "description_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 30,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 57,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "family_method": "Source identity tags, not independently reviewed semantic families.",
+        "language_method": "Han/ASCII character heuristic: Han>=10% is zh; remaining Han/Latin is mixed. Skill body and MCP description; no native-author assertion.",
+        "original_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 22,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 65,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "reference_methods": {
+          "author_defined": 128
+        },
+        "targeted_assets": 58,
+        "targeted_skills": 37,
+        "targeted_source_family_tags": 58,
+        "targeted_tools": 21
+      },
+      "memory_leak_chinese_to_original_english": {
+        "case_id": "capability-01-zh",
+        "grade": {
+          "ambiguous_choice": false,
+          "ambiguous_supported3": false,
+          "class": "positive",
+          "confident": false,
+          "confident_correct": false,
+          "false_confident": false,
+          "hit3": false
+        },
+        "evaluated_decision": "choice_required",
+        "evaluated_asset_ids": [
+          "matrix:6a108019071d0d29982eec74",
+          "matrix:6a2109c15f61584597413c46",
+          "matrix:6a210a26836052485d3fe6be",
+          "matrix:69e20689eb33f23f522ca14c",
+          "matrix:6a107e966778a5193e9ba976",
+          "matrix:6a210a6a5e56c918406bf491",
+          "matrix:6a26ca04baaff04434228a01",
+          "matrix:6aabc80b51cbbf2538efd4df",
+          "matrix:6a107faa9ca68848e13e14bd",
+          "matrix:6a1085bb9ca68848e13e14c3"
+        ],
+        "hard_subset": "no_shared_latin",
+        "latin_token_intersections": {
+          "matrix:6a10873ea4482462bc6264fa": []
+        }
+      }
+    },
+    {
+      "arm": "stateless",
+      "track": "service",
+      "report_file": "stateless-service.json",
+      "report_sha256": "908e28698ad3eaf2a84bfc5492dfc45b8301e12d62d37b0c9717e11d5f36acf1",
+      "report_bytes": 66339555,
+      "runner_digest": "71d1835898c3a8c653171c8f6b4f13420a650e8a8ef67a425f692db107d6e046",
+      "protocol_digest": "9aa09199384a29a8d73165eee56e8219fd89b5fe5e0db9633de49626f802d9fb",
+      "config_digest": "428dd2859ca243d82e2eabd5847d997f0e096465e13e5d3d401a5d89463e768f",
+      "policy_digest": "b010ec37adf007f208574571ca8b6ce3fcaf0e25f3e8e5e6ea8166fa30b6fbdc",
+      "status": "completed",
+      "planned_slots": 128,
+      "row_status_counts": {
+        "ready": 128
+      },
+      "summary": {
+        "abstentions": 0,
+        "choice_required": 128,
+        "choice_supported3": 66,
+        "confident": 0,
+        "confident_correct": 0,
+        "failed": 0,
+        "false_confident": 0,
+        "hit3": 63,
+        "positive_cases": 116,
+        "primary_attempt_failures": 128,
+        "primary_not_ready": 0,
+        "reference_cases": 128,
+        "top1": 48,
+        "user_choice_correct": 0,
+        "user_choices": 0
+      },
+      "language_pairs": [
+        {
+          "abstentions": 0,
+          "choice_required": 19,
+          "choice_supported3": 15,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 14,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 19,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 19,
+          "target_description_language": "en",
+          "top1": 9,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 22,
+          "choice_supported3": 21,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 21,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 22,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 18,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 3,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 3,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 3,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 16,
+          "choice_supported3": 6,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 6,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 16,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 16,
+          "target_description_language": "zh",
+          "top1": 2,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 4,
+          "choice_supported3": 3,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 2,
+          "kind": "mcp_tool",
+          "positive_cases": 3,
+          "primary_attempt_failures": 4,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 1,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 4,
+          "choice_supported3": 4,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 4,
+          "kind": "skill",
+          "positive_cases": 4,
+          "primary_attempt_failures": 4,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 3,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 1,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 1,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 1,
+          "choice_supported3": 1,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 1,
+          "kind": "skill",
+          "positive_cases": 1,
+          "primary_attempt_failures": 1,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "zh",
+          "top1": 1,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 18,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 18,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 18,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 22,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 22,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 2,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 2,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 2,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 17,
+          "choice_supported3": 16,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 15,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 17,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 17,
+          "target_description_language": "zh",
+          "top1": 14,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        }
+      ],
+      "missing_language_pairs": [
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        }
+      ],
+      "latency": {
+        "known": 128,
+        "p50_ms": 298.00424398854375,
+        "p95_ms": 349.0243009873666,
+        "unknown": 0
+      },
+      "costs": [
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "input_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "output_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "cached_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "reasoning_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "calls",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "input_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "output_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cached_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "reasoning_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "calls",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        }
+      ],
+      "preparation": {
+        "binding": null,
+        "cleanup_ms": null,
+        "config": {
+          "max_polls": 240,
+          "mode": "none",
+          "poll_ms": 250,
+          "profile": null,
+          "request_ms": 2000,
+          "total_ms": 60000,
+          "url": null
+        },
+        "exchanges": [],
+        "index_revision": null,
+        "observed_costs": [],
+        "observed_ms": null,
+        "preparation_id": null,
+        "reason": null,
+        "status": "not_applicable"
+      },
+      "coverage": {
+        "catalog_assets": 412,
+        "description_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 30,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 57,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "family_method": "Source identity tags, not independently reviewed semantic families.",
+        "language_method": "Han/ASCII character heuristic: Han>=10% is zh; remaining Han/Latin is mixed. Skill body and MCP description; no native-author assertion.",
+        "original_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 22,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 65,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "reference_methods": {
+          "author_defined": 128
+        },
+        "targeted_assets": 58,
+        "targeted_skills": 37,
+        "targeted_source_family_tags": 58,
+        "targeted_tools": 21
+      },
+      "memory_leak_chinese_to_original_english": {
+        "case_id": "capability-01-zh",
+        "grade": {
+          "ambiguous_choice": false,
+          "ambiguous_supported3": false,
+          "class": "positive",
+          "confident": false,
+          "confident_correct": false,
+          "false_confident": false,
+          "hit3": false
+        },
+        "evaluated_decision": "choice_required",
+        "evaluated_asset_ids": [
+          "matrix:6a108019071d0d29982eec74",
+          "matrix:6a2109c15f61584597413c46",
+          "matrix:6a210a26836052485d3fe6be",
+          "matrix:69e20689eb33f23f522ca14c",
+          "matrix:6a107e966778a5193e9ba976",
+          "matrix:6a210a6a5e56c918406bf491",
+          "matrix:6a26ca04baaff04434228a01",
+          "matrix:6aabc80b51cbbf2538efd4df",
+          "matrix:6a107faa9ca68848e13e14bd",
+          "matrix:6a1085bb9ca68848e13e14c3"
+        ],
+        "hard_subset": "no_shared_latin",
+        "latin_token_intersections": {
+          "matrix:6a10873ea4482462bc6264fa": []
+        }
+      }
+    },
+    {
+      "arm": "cold",
+      "track": "service",
+      "report_file": "cold-service.json",
+      "report_sha256": "859bc7eb6162f20f39b6117ccb15324584071dddc9769e463f2bfc99cae49ebd",
+      "report_bytes": 66342596,
+      "runner_digest": "71d1835898c3a8c653171c8f6b4f13420a650e8a8ef67a425f692db107d6e046",
+      "protocol_digest": "9aa09199384a29a8d73165eee56e8219fd89b5fe5e0db9633de49626f802d9fb",
+      "config_digest": "d569833f7bc768f1ec9f916633d32e13d657c2b17baaf63b227f58dfaf9a4841",
+      "policy_digest": "b010ec37adf007f208574571ca8b6ce3fcaf0e25f3e8e5e6ea8166fa30b6fbdc",
+      "status": "completed",
+      "planned_slots": 128,
+      "row_status_counts": {
+        "ready": 128
+      },
+      "summary": {
+        "abstentions": 0,
+        "choice_required": 128,
+        "choice_supported3": 66,
+        "confident": 0,
+        "confident_correct": 0,
+        "failed": 0,
+        "false_confident": 0,
+        "hit3": 63,
+        "positive_cases": 116,
+        "primary_attempt_failures": 128,
+        "primary_not_ready": 0,
+        "reference_cases": 128,
+        "top1": 48,
+        "user_choice_correct": 0,
+        "user_choices": 0
+      },
+      "language_pairs": [
+        {
+          "abstentions": 0,
+          "choice_required": 19,
+          "choice_supported3": 15,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 14,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 19,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 19,
+          "target_description_language": "en",
+          "top1": 9,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 22,
+          "choice_supported3": 21,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 21,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 22,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 18,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 3,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 3,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 3,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 16,
+          "choice_supported3": 6,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 6,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 16,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 16,
+          "target_description_language": "zh",
+          "top1": 2,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 4,
+          "choice_supported3": 3,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 2,
+          "kind": "mcp_tool",
+          "positive_cases": 3,
+          "primary_attempt_failures": 4,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 1,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 4,
+          "choice_supported3": 4,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 4,
+          "kind": "skill",
+          "positive_cases": 4,
+          "primary_attempt_failures": 4,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 3,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 1,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 1,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 1,
+          "choice_supported3": 1,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 1,
+          "kind": "skill",
+          "positive_cases": 1,
+          "primary_attempt_failures": 1,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "zh",
+          "top1": 1,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 18,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 18,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 18,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 22,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 22,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 2,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 2,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 2,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 17,
+          "choice_supported3": 16,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 15,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 17,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 17,
+          "target_description_language": "zh",
+          "top1": 14,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        }
+      ],
+      "missing_language_pairs": [
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        }
+      ],
+      "latency": {
+        "known": 128,
+        "p50_ms": 309.700793994125,
+        "p95_ms": 348.3913110103458,
+        "unknown": 0
+      },
+      "costs": [
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "input_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "output_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "cached_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "reasoning_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "calls",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "input_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "output_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cached_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "reasoning_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "calls",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        }
+      ],
+      "preparation": {
+        "binding": {
+          "catalog_digest": "3243fe0d227f5181191e1ab56111dc04eea344dbdf23d7e2bd9b46cf7ec037c2",
+          "catalog_revision": 1,
+          "permissions": [
+            "demo.mutate",
+            "demo.read"
+          ],
+          "requested_kinds": [
+            "mcp_tool",
+            "skill"
+          ],
+          "scope": {
+            "user_id": "source-benchmark",
+            "workspace_id": "disposable"
+          },
+          "selection_scope": "discovery",
+          "selector": {
+            "name": "example_lexical",
+            "version": "1"
+          }
+        },
+        "cleanup_ms": null,
+        "config": {
+          "max_polls": 240,
+          "mode": "http",
+          "poll_ms": 250,
+          "profile": "cold",
+          "request_ms": 2000,
+          "total_ms": 60000,
+          "url": "http://127.0.0.1:8934/index"
+        },
+        "exchanges": [
+          {
+            "observed_ms": 1683.9682910358533,
+            "operation": "prepare",
+            "reason": null,
+            "response": {
+              "binding": {
+                "catalog_digest": "3243fe0d227f5181191e1ab56111dc04eea344dbdf23d7e2bd9b46cf7ec037c2",
+                "catalog_revision": 1,
+                "permissions": [
+                  "demo.mutate",
+                  "demo.read"
+                ],
+                "requested_kinds": [
+                  "mcp_tool",
+                  "skill"
+                ],
+                "scope": {
+                  "user_id": "source-benchmark",
+                  "workspace_id": "disposable"
+                },
+                "selection_scope": "discovery",
+                "selector": {
+                  "name": "example_lexical",
+                  "version": "1"
+                }
+              },
+              "elapsed_ms": null,
+              "index_revision": null,
+              "preparation_id": "8cd63dbd-8706-4fd7-ad33-b929cb624bfd",
+              "profile": "cold",
+              "reason": null,
+              "reused": null,
+              "schema_version": 1,
+              "state": "indexing",
+              "usage_claims": null
+            }
+          },
+          {
+            "observed_ms": 36.44051100127399,
+            "operation": "status",
+            "reason": null,
+            "response": {
+              "binding": {
+                "catalog_digest": "3243fe0d227f5181191e1ab56111dc04eea344dbdf23d7e2bd9b46cf7ec037c2",
+                "catalog_revision": 1,
+                "permissions": [
+                  "demo.mutate",
+                  "demo.read"
+                ],
+                "requested_kinds": [
+                  "mcp_tool",
+                  "skill"
+                ],
+                "scope": {
+                  "user_id": "source-benchmark",
+                  "workspace_id": "disposable"
+                },
+                "selection_scope": "discovery",
+                "selector": {
+                  "name": "example_lexical",
+                  "version": "1"
+                }
+              },
+              "elapsed_ms": null,
+              "index_revision": null,
+              "preparation_id": "8cd63dbd-8706-4fd7-ad33-b929cb624bfd",
+              "profile": "cold",
+              "reason": null,
+              "reused": null,
+              "schema_version": 1,
+              "state": "indexing",
+              "usage_claims": null
+            }
+          },
+          {
+            "observed_ms": 30.43973003514111,
+            "operation": "status",
+            "reason": null,
+            "response": {
+              "binding": {
+                "catalog_digest": "3243fe0d227f5181191e1ab56111dc04eea344dbdf23d7e2bd9b46cf7ec037c2",
+                "catalog_revision": 1,
+                "permissions": [
+                  "demo.mutate",
+                  "demo.read"
+                ],
+                "requested_kinds": [
+                  "mcp_tool",
+                  "skill"
+                ],
+                "scope": {
+                  "user_id": "source-benchmark",
+                  "workspace_id": "disposable"
+                },
+                "selection_scope": "discovery",
+                "selector": {
+                  "name": "example_lexical",
+                  "version": "1"
+                }
+              },
+              "elapsed_ms": null,
+              "index_revision": null,
+              "preparation_id": "8cd63dbd-8706-4fd7-ad33-b929cb624bfd",
+              "profile": "cold",
+              "reason": null,
+              "reused": null,
+              "schema_version": 1,
+              "state": "indexing",
+              "usage_claims": null
+            }
+          },
+          {
+            "observed_ms": 16.618920024484396,
+            "operation": "status",
+            "reason": null,
+            "response": {
+              "binding": {
+                "catalog_digest": "3243fe0d227f5181191e1ab56111dc04eea344dbdf23d7e2bd9b46cf7ec037c2",
+                "catalog_revision": 1,
+                "permissions": [
+                  "demo.mutate",
+                  "demo.read"
+                ],
+                "requested_kinds": [
+                  "mcp_tool",
+                  "skill"
+                ],
+                "scope": {
+                  "user_id": "source-benchmark",
+                  "workspace_id": "disposable"
+                },
+                "selection_scope": "discovery",
+                "selector": {
+                  "name": "example_lexical",
+                  "version": "1"
+                }
+              },
+              "elapsed_ms": 663.1345470086671,
+              "index_revision": "7a2b3c99e892d9dbd53b9b55510d3e8c11004184c3cf7c2b24fa099dd3ce220e",
+              "preparation_id": "8cd63dbd-8706-4fd7-ad33-b929cb624bfd",
+              "profile": "cold",
+              "reason": null,
+              "reused": false,
+              "schema_version": 1,
+              "state": "ready",
+              "usage_claims": null
+            }
+          }
+        ],
+        "index_revision": "7a2b3c99e892d9dbd53b9b55510d3e8c11004184c3cf7c2b24fa099dd3ce220e",
+        "observed_costs": [],
+        "observed_ms": 2522.3457840038463,
+        "preparation_id": "8cd63dbd-8706-4fd7-ad33-b929cb624bfd",
+        "reason": null,
+        "status": "ready"
+      },
+      "coverage": {
+        "catalog_assets": 412,
+        "description_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 30,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 57,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "family_method": "Source identity tags, not independently reviewed semantic families.",
+        "language_method": "Han/ASCII character heuristic: Han>=10% is zh; remaining Han/Latin is mixed. Skill body and MCP description; no native-author assertion.",
+        "original_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 22,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 65,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "reference_methods": {
+          "author_defined": 128
+        },
+        "targeted_assets": 58,
+        "targeted_skills": 37,
+        "targeted_source_family_tags": 58,
+        "targeted_tools": 21
+      },
+      "memory_leak_chinese_to_original_english": {
+        "case_id": "capability-01-zh",
+        "grade": {
+          "ambiguous_choice": false,
+          "ambiguous_supported3": false,
+          "class": "positive",
+          "confident": false,
+          "confident_correct": false,
+          "false_confident": false,
+          "hit3": false
+        },
+        "evaluated_decision": "choice_required",
+        "evaluated_asset_ids": [
+          "matrix:6a108019071d0d29982eec74",
+          "matrix:6a2109c15f61584597413c46",
+          "matrix:6a210a26836052485d3fe6be",
+          "matrix:69e20689eb33f23f522ca14c",
+          "matrix:6a107e966778a5193e9ba976",
+          "matrix:6a210a6a5e56c918406bf491",
+          "matrix:6a26ca04baaff04434228a01",
+          "matrix:6aabc80b51cbbf2538efd4df",
+          "matrix:6a107faa9ca68848e13e14bd",
+          "matrix:6a1085bb9ca68848e13e14c3"
+        ],
+        "hard_subset": "no_shared_latin",
+        "latin_token_intersections": {
+          "matrix:6a10873ea4482462bc6264fa": []
+        }
+      }
+    },
+    {
+      "arm": "reuse",
+      "track": "service",
+      "report_file": "reuse-service.json",
+      "report_sha256": "da7d56843902788940abad5181514bdd188bb445eed33255e60863eb65a1bfa6",
+      "report_bytes": 1462456,
+      "runner_digest": "71d1835898c3a8c653171c8f6b4f13420a650e8a8ef67a425f692db107d6e046",
+      "protocol_digest": "9aa09199384a29a8d73165eee56e8219fd89b5fe5e0db9633de49626f802d9fb",
+      "config_digest": "d569833f7bc768f1ec9f916633d32e13d657c2b17baaf63b227f58dfaf9a4841",
+      "policy_digest": "b010ec37adf007f208574571ca8b6ce3fcaf0e25f3e8e5e6ea8166fa30b6fbdc",
+      "status": "blocked",
+      "planned_slots": 128,
+      "row_status_counts": {
+        "not_run": 128
+      },
+      "summary": {
+        "abstentions": 0,
+        "choice_required": 0,
+        "choice_supported3": 0,
+        "confident": 0,
+        "confident_correct": 0,
+        "failed": 128,
+        "false_confident": 0,
+        "hit3": 0,
+        "positive_cases": 116,
+        "primary_attempt_failures": 0,
+        "primary_not_ready": 0,
+        "reference_cases": 128,
+        "top1": 0,
+        "user_choice_correct": 0,
+        "user_choices": 0
+      },
+      "language_pairs": [
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 19,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 19,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 22,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 3,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 3,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 16,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 16,
+          "target_description_language": "zh",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 4,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 3,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 4,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 4,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 1,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 1,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 1,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "zh",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 18,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 18,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 22,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 2,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 2,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 17,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 17,
+          "target_description_language": "zh",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        }
+      ],
+      "missing_language_pairs": [
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        }
+      ],
+      "latency": {
+        "known": 0,
+        "p50_ms": null,
+        "p95_ms": null,
+        "unknown": 128
+      },
+      "costs": [
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "input_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "output_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cached_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "reasoning_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "calls",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "input_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "output_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cached_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "reasoning_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "calls",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        }
+      ],
+      "preparation": {
+        "binding": {
+          "catalog_digest": "3243fe0d227f5181191e1ab56111dc04eea344dbdf23d7e2bd9b46cf7ec037c2",
+          "catalog_revision": 1,
+          "permissions": [
+            "demo.mutate",
+            "demo.read"
+          ],
+          "requested_kinds": [
+            "mcp_tool",
+            "skill"
+          ],
+          "scope": {
+            "user_id": "source-benchmark",
+            "workspace_id": "disposable"
+          },
+          "selection_scope": "discovery",
+          "selector": {
+            "name": "example_lexical",
+            "version": "1"
+          }
+        },
+        "cleanup_ms": 1002.7029649936594,
+        "config": {
+          "max_polls": 240,
+          "mode": "http",
+          "poll_ms": 250,
+          "profile": "reuse",
+          "request_ms": 2000,
+          "total_ms": 60000,
+          "url": "http://127.0.0.1:8934/index"
+        },
+        "exchanges": [
+          {
+            "observed_ms": 2002.5694909854792,
+            "operation": "prepare",
+            "reason": "deadline_exceeded",
+            "response": null
+          },
+          {
+            "observed_ms": 1002.4118269793689,
+            "operation": "cancel",
+            "reason": "deadline_exceeded",
+            "response": null
+          }
+        ],
+        "index_revision": null,
+        "observed_costs": [],
+        "observed_ms": 2003.5387949901633,
+        "preparation_id": "fe7c9d4b-9d50-4df8-9159-62ded39c7ec9",
+        "reason": "deadline_exceeded",
+        "status": "timeout"
+      },
+      "coverage": {
+        "catalog_assets": 412,
+        "description_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 30,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 57,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "family_method": "Source identity tags, not independently reviewed semantic families.",
+        "language_method": "Han/ASCII character heuristic: Han>=10% is zh; remaining Han/Latin is mixed. Skill body and MCP description; no native-author assertion.",
+        "original_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 22,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 65,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "reference_methods": {
+          "author_defined": 128
+        },
+        "targeted_assets": 58,
+        "targeted_skills": 37,
+        "targeted_source_family_tags": 58,
+        "targeted_tools": 21
+      },
+      "memory_leak_chinese_to_original_english": {
+        "case_id": "capability-01-zh",
+        "grade": {
+          "ambiguous_choice": false,
+          "ambiguous_supported3": false,
+          "class": "positive",
+          "confident": false,
+          "confident_correct": false,
+          "false_confident": false,
+          "hit3": false
+        },
+        "evaluated_decision": null,
+        "evaluated_asset_ids": [],
+        "hard_subset": "no_shared_latin",
+        "latin_token_intersections": {
+          "matrix:6a10873ea4482462bc6264fa": []
+        }
+      }
+    },
+    {
+      "arm": "builtin",
+      "track": "primary_only",
+      "report_file": "builtin-primary_only.json",
+      "report_sha256": "0d3ced2902648aadc6357c60ff6edd1fbe4b8a30f52b2216b2b091970ce2182b",
+      "report_bytes": 66272912,
+      "runner_digest": "71d1835898c3a8c653171c8f6b4f13420a650e8a8ef67a425f692db107d6e046",
+      "protocol_digest": "9aa09199384a29a8d73165eee56e8219fd89b5fe5e0db9633de49626f802d9fb",
+      "config_digest": "42b151d580a50fc0ecaa8bd3dd11fdf4d392e5a3c395259dc72d1a43a7142d05",
+      "policy_digest": "b010ec37adf007f208574571ca8b6ce3fcaf0e25f3e8e5e6ea8166fa30b6fbdc",
+      "status": "completed",
+      "planned_slots": 128,
+      "row_status_counts": {
+        "ready": 128
+      },
+      "summary": {
+        "abstentions": 0,
+        "choice_required": 128,
+        "choice_supported3": 66,
+        "confident": 0,
+        "confident_correct": 0,
+        "failed": 0,
+        "false_confident": 0,
+        "hit3": 63,
+        "positive_cases": 116,
+        "primary_attempt_failures": 0,
+        "primary_not_ready": 0,
+        "reference_cases": 128,
+        "top1": 48,
+        "user_choice_correct": 0,
+        "user_choices": 0
+      },
+      "language_pairs": [
+        {
+          "abstentions": 0,
+          "choice_required": 19,
+          "choice_supported3": 15,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 14,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 19,
+          "target_description_language": "en",
+          "top1": 9,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 22,
+          "choice_supported3": 21,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 21,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 18,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 3,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 3,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 16,
+          "choice_supported3": 6,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 6,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 16,
+          "target_description_language": "zh",
+          "top1": 2,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 4,
+          "choice_supported3": 3,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 2,
+          "kind": "mcp_tool",
+          "positive_cases": 3,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 1,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 4,
+          "choice_supported3": 4,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 4,
+          "kind": "skill",
+          "positive_cases": 4,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 3,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 1,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 1,
+          "choice_supported3": 1,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 1,
+          "kind": "skill",
+          "positive_cases": 1,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "zh",
+          "top1": 1,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 18,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 18,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 22,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 2,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 2,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 17,
+          "choice_supported3": 16,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 15,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 17,
+          "target_description_language": "zh",
+          "top1": 14,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        }
+      ],
+      "missing_language_pairs": [
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        }
+      ],
+      "latency": {
+        "known": 128,
+        "p50_ms": 129.05660696560517,
+        "p95_ms": 173.781985999085,
+        "unknown": 0
+      },
+      "costs": [
+        {
+          "known": 128,
+          "known_subtotal": 0,
+          "metric": "input_tokens",
+          "provenance": "observed",
+          "total": 0,
+          "unknown": 0
+        },
+        {
+          "known": 128,
+          "known_subtotal": 0,
+          "metric": "output_tokens",
+          "provenance": "observed",
+          "total": 0,
+          "unknown": 0
+        },
+        {
+          "known": 128,
+          "known_subtotal": 0,
+          "metric": "cached_tokens",
+          "provenance": "observed",
+          "total": 0,
+          "unknown": 0
+        },
+        {
+          "known": 128,
+          "known_subtotal": 0,
+          "metric": "reasoning_tokens",
+          "provenance": "observed",
+          "total": 0,
+          "unknown": 0
+        },
+        {
+          "known": 128,
+          "known_subtotal": 0,
+          "metric": "calls",
+          "provenance": "observed",
+          "total": 0,
+          "unknown": 0
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "input_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "output_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cached_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "reasoning_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "calls",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        }
+      ],
+      "preparation": {
+        "binding": null,
+        "cleanup_ms": null,
+        "config": {
+          "max_polls": 240,
+          "mode": "none",
+          "poll_ms": 250,
+          "profile": null,
+          "request_ms": 2000,
+          "total_ms": 60000,
+          "url": null
+        },
+        "exchanges": [],
+        "index_revision": null,
+        "observed_costs": [],
+        "observed_ms": null,
+        "preparation_id": null,
+        "reason": null,
+        "status": "not_applicable"
+      },
+      "coverage": {
+        "catalog_assets": 412,
+        "description_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 30,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 57,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "family_method": "Source identity tags, not independently reviewed semantic families.",
+        "language_method": "Han/ASCII character heuristic: Han>=10% is zh; remaining Han/Latin is mixed. Skill body and MCP description; no native-author assertion.",
+        "original_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 22,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 65,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "reference_methods": {
+          "author_defined": 128
+        },
+        "targeted_assets": 58,
+        "targeted_skills": 37,
+        "targeted_source_family_tags": 58,
+        "targeted_tools": 21
+      },
+      "memory_leak_chinese_to_original_english": {
+        "case_id": "capability-01-zh",
+        "grade": {
+          "ambiguous_choice": false,
+          "ambiguous_supported3": false,
+          "class": "positive",
+          "confident": false,
+          "confident_correct": false,
+          "false_confident": false,
+          "hit3": false
+        },
+        "evaluated_decision": "choice_required",
+        "evaluated_asset_ids": [
+          "matrix:6a108019071d0d29982eec74",
+          "matrix:6a2109c15f61584597413c46",
+          "matrix:6a210a26836052485d3fe6be",
+          "matrix:69e20689eb33f23f522ca14c",
+          "matrix:6a107e966778a5193e9ba976",
+          "matrix:6a210a6a5e56c918406bf491",
+          "matrix:6a26ca04baaff04434228a01",
+          "matrix:6aabc80b51cbbf2538efd4df",
+          "matrix:6a107faa9ca68848e13e14bd",
+          "matrix:6a1085bb9ca68848e13e14c3"
+        ],
+        "hard_subset": "no_shared_latin",
+        "latin_token_intersections": {
+          "matrix:6a10873ea4482462bc6264fa": []
+        }
+      }
+    },
+    {
+      "arm": "stateless",
+      "track": "primary_only",
+      "report_file": "stateless-primary_only.json",
+      "report_sha256": "672b2949bc3f642885efdc41c8083471190d33a09f265e8daa7ab1d6ef767dc9",
+      "report_bytes": 65974040,
+      "runner_digest": "71d1835898c3a8c653171c8f6b4f13420a650e8a8ef67a425f692db107d6e046",
+      "protocol_digest": "9aa09199384a29a8d73165eee56e8219fd89b5fe5e0db9633de49626f802d9fb",
+      "config_digest": "428dd2859ca243d82e2eabd5847d997f0e096465e13e5d3d401a5d89463e768f",
+      "policy_digest": "b010ec37adf007f208574571ca8b6ce3fcaf0e25f3e8e5e6ea8166fa30b6fbdc",
+      "status": "completed",
+      "planned_slots": 128,
+      "row_status_counts": {
+        "ready": 128
+      },
+      "summary": {
+        "abstentions": 0,
+        "choice_required": 0,
+        "choice_supported3": 0,
+        "confident": 0,
+        "confident_correct": 0,
+        "failed": 0,
+        "false_confident": 0,
+        "hit3": 0,
+        "positive_cases": 116,
+        "primary_attempt_failures": 128,
+        "primary_not_ready": 0,
+        "reference_cases": 128,
+        "top1": 0,
+        "user_choice_correct": 0,
+        "user_choices": 0
+      },
+      "language_pairs": [
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 19,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 19,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 22,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 3,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 3,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 16,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 16,
+          "target_description_language": "zh",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 3,
+          "primary_attempt_failures": 4,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 4,
+          "primary_attempt_failures": 4,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 1,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 1,
+          "primary_attempt_failures": 1,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "zh",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 18,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 18,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 22,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 2,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 2,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 17,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 17,
+          "target_description_language": "zh",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        }
+      ],
+      "missing_language_pairs": [
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        }
+      ],
+      "latency": {
+        "known": 128,
+        "p50_ms": 298.20114199537784,
+        "p95_ms": 342.0861670165323,
+        "unknown": 0
+      },
+      "costs": [
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "input_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "output_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "cached_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "reasoning_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "calls",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "input_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "output_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cached_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "reasoning_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "calls",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        }
+      ],
+      "preparation": {
+        "binding": null,
+        "cleanup_ms": null,
+        "config": {
+          "max_polls": 240,
+          "mode": "none",
+          "poll_ms": 250,
+          "profile": null,
+          "request_ms": 2000,
+          "total_ms": 60000,
+          "url": null
+        },
+        "exchanges": [],
+        "index_revision": null,
+        "observed_costs": [],
+        "observed_ms": null,
+        "preparation_id": null,
+        "reason": null,
+        "status": "not_applicable"
+      },
+      "coverage": {
+        "catalog_assets": 412,
+        "description_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 30,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 57,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "family_method": "Source identity tags, not independently reviewed semantic families.",
+        "language_method": "Han/ASCII character heuristic: Han>=10% is zh; remaining Han/Latin is mixed. Skill body and MCP description; no native-author assertion.",
+        "original_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 22,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 65,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "reference_methods": {
+          "author_defined": 128
+        },
+        "targeted_assets": 58,
+        "targeted_skills": 37,
+        "targeted_source_family_tags": 58,
+        "targeted_tools": 21
+      },
+      "memory_leak_chinese_to_original_english": {
+        "case_id": "capability-01-zh",
+        "grade": {
+          "ambiguous_choice": false,
+          "ambiguous_supported3": false,
+          "class": "positive",
+          "confident": false,
+          "confident_correct": false,
+          "false_confident": false,
+          "hit3": false
+        },
+        "evaluated_decision": null,
+        "evaluated_asset_ids": [],
+        "hard_subset": "no_shared_latin",
+        "latin_token_intersections": {
+          "matrix:6a10873ea4482462bc6264fa": []
+        }
+      }
+    },
+    {
+      "arm": "cold",
+      "track": "primary_only",
+      "report_file": "cold-primary_only.json",
+      "report_sha256": "b51856a5f4bba74da65a9650d1797d88ab15ffaf718852fac5516948b9ce8bbf",
+      "report_bytes": 65977117,
+      "runner_digest": "71d1835898c3a8c653171c8f6b4f13420a650e8a8ef67a425f692db107d6e046",
+      "protocol_digest": "9aa09199384a29a8d73165eee56e8219fd89b5fe5e0db9633de49626f802d9fb",
+      "config_digest": "d569833f7bc768f1ec9f916633d32e13d657c2b17baaf63b227f58dfaf9a4841",
+      "policy_digest": "b010ec37adf007f208574571ca8b6ce3fcaf0e25f3e8e5e6ea8166fa30b6fbdc",
+      "status": "completed",
+      "planned_slots": 128,
+      "row_status_counts": {
+        "ready": 128
+      },
+      "summary": {
+        "abstentions": 0,
+        "choice_required": 0,
+        "choice_supported3": 0,
+        "confident": 0,
+        "confident_correct": 0,
+        "failed": 0,
+        "false_confident": 0,
+        "hit3": 0,
+        "positive_cases": 116,
+        "primary_attempt_failures": 128,
+        "primary_not_ready": 0,
+        "reference_cases": 128,
+        "top1": 0,
+        "user_choice_correct": 0,
+        "user_choices": 0
+      },
+      "language_pairs": [
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 19,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 19,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 22,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 3,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 3,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 16,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 16,
+          "target_description_language": "zh",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 3,
+          "primary_attempt_failures": 4,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 4,
+          "primary_attempt_failures": 4,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 1,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 1,
+          "primary_attempt_failures": 1,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "zh",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 18,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 18,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 22,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 2,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 2,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 0,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 17,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 17,
+          "target_description_language": "zh",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        }
+      ],
+      "missing_language_pairs": [
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        }
+      ],
+      "latency": {
+        "known": 128,
+        "p50_ms": 315.43364899698645,
+        "p95_ms": 354.4831189792603,
+        "unknown": 0
+      },
+      "costs": [
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "input_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "output_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "cached_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "reasoning_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": 0,
+          "metric": "calls",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "input_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "output_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cached_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "reasoning_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "calls",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        }
+      ],
+      "preparation": {
+        "binding": {
+          "catalog_digest": "3243fe0d227f5181191e1ab56111dc04eea344dbdf23d7e2bd9b46cf7ec037c2",
+          "catalog_revision": 1,
+          "permissions": [
+            "demo.mutate",
+            "demo.read"
+          ],
+          "requested_kinds": [
+            "mcp_tool",
+            "skill"
+          ],
+          "scope": {
+            "user_id": "source-benchmark",
+            "workspace_id": "disposable"
+          },
+          "selection_scope": "discovery",
+          "selector": {
+            "name": "example_lexical",
+            "version": "1"
+          }
+        },
+        "cleanup_ms": null,
+        "config": {
+          "max_polls": 240,
+          "mode": "http",
+          "poll_ms": 250,
+          "profile": "cold",
+          "request_ms": 2000,
+          "total_ms": 60000,
+          "url": "http://127.0.0.1:8934/index"
+        },
+        "exchanges": [
+          {
+            "observed_ms": 1866.9894190388732,
+            "operation": "prepare",
+            "reason": null,
+            "response": {
+              "binding": {
+                "catalog_digest": "3243fe0d227f5181191e1ab56111dc04eea344dbdf23d7e2bd9b46cf7ec037c2",
+                "catalog_revision": 1,
+                "permissions": [
+                  "demo.mutate",
+                  "demo.read"
+                ],
+                "requested_kinds": [
+                  "mcp_tool",
+                  "skill"
+                ],
+                "scope": {
+                  "user_id": "source-benchmark",
+                  "workspace_id": "disposable"
+                },
+                "selection_scope": "discovery",
+                "selector": {
+                  "name": "example_lexical",
+                  "version": "1"
+                }
+              },
+              "elapsed_ms": null,
+              "index_revision": null,
+              "preparation_id": "85fa48c8-8ed9-48ed-a7e0-5d5b40473355",
+              "profile": "cold",
+              "reason": null,
+              "reused": null,
+              "schema_version": 1,
+              "state": "indexing",
+              "usage_claims": null
+            }
+          },
+          {
+            "observed_ms": 50.90098601067439,
+            "operation": "status",
+            "reason": null,
+            "response": {
+              "binding": {
+                "catalog_digest": "3243fe0d227f5181191e1ab56111dc04eea344dbdf23d7e2bd9b46cf7ec037c2",
+                "catalog_revision": 1,
+                "permissions": [
+                  "demo.mutate",
+                  "demo.read"
+                ],
+                "requested_kinds": [
+                  "mcp_tool",
+                  "skill"
+                ],
+                "scope": {
+                  "user_id": "source-benchmark",
+                  "workspace_id": "disposable"
+                },
+                "selection_scope": "discovery",
+                "selector": {
+                  "name": "example_lexical",
+                  "version": "1"
+                }
+              },
+              "elapsed_ms": null,
+              "index_revision": null,
+              "preparation_id": "85fa48c8-8ed9-48ed-a7e0-5d5b40473355",
+              "profile": "cold",
+              "reason": null,
+              "reused": null,
+              "schema_version": 1,
+              "state": "indexing",
+              "usage_claims": null
+            }
+          },
+          {
+            "observed_ms": 43.32136799348518,
+            "operation": "status",
+            "reason": null,
+            "response": {
+              "binding": {
+                "catalog_digest": "3243fe0d227f5181191e1ab56111dc04eea344dbdf23d7e2bd9b46cf7ec037c2",
+                "catalog_revision": 1,
+                "permissions": [
+                  "demo.mutate",
+                  "demo.read"
+                ],
+                "requested_kinds": [
+                  "mcp_tool",
+                  "skill"
+                ],
+                "scope": {
+                  "user_id": "source-benchmark",
+                  "workspace_id": "disposable"
+                },
+                "selection_scope": "discovery",
+                "selector": {
+                  "name": "example_lexical",
+                  "version": "1"
+                }
+              },
+              "elapsed_ms": null,
+              "index_revision": null,
+              "preparation_id": "85fa48c8-8ed9-48ed-a7e0-5d5b40473355",
+              "profile": "cold",
+              "reason": null,
+              "reused": null,
+              "schema_version": 1,
+              "state": "indexing",
+              "usage_claims": null
+            }
+          },
+          {
+            "observed_ms": 9.661836025770754,
+            "operation": "status",
+            "reason": null,
+            "response": {
+              "binding": {
+                "catalog_digest": "3243fe0d227f5181191e1ab56111dc04eea344dbdf23d7e2bd9b46cf7ec037c2",
+                "catalog_revision": 1,
+                "permissions": [
+                  "demo.mutate",
+                  "demo.read"
+                ],
+                "requested_kinds": [
+                  "mcp_tool",
+                  "skill"
+                ],
+                "scope": {
+                  "user_id": "source-benchmark",
+                  "workspace_id": "disposable"
+                },
+                "selection_scope": "discovery",
+                "selector": {
+                  "name": "example_lexical",
+                  "version": "1"
+                }
+              },
+              "elapsed_ms": 619.0251120133325,
+              "index_revision": "7a2b3c99e892d9dbd53b9b55510d3e8c11004184c3cf7c2b24fa099dd3ce220e",
+              "preparation_id": "85fa48c8-8ed9-48ed-a7e0-5d5b40473355",
+              "profile": "cold",
+              "reason": null,
+              "reused": false,
+              "schema_version": 1,
+              "state": "ready",
+              "usage_claims": null
+            }
+          }
+        ],
+        "index_revision": "7a2b3c99e892d9dbd53b9b55510d3e8c11004184c3cf7c2b24fa099dd3ce220e",
+        "observed_costs": [],
+        "observed_ms": 2723.6181480111554,
+        "preparation_id": "85fa48c8-8ed9-48ed-a7e0-5d5b40473355",
+        "reason": null,
+        "status": "ready"
+      },
+      "coverage": {
+        "catalog_assets": 412,
+        "description_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 30,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 57,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "family_method": "Source identity tags, not independently reviewed semantic families.",
+        "language_method": "Han/ASCII character heuristic: Han>=10% is zh; remaining Han/Latin is mixed. Skill body and MCP description; no native-author assertion.",
+        "original_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 22,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 65,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "reference_methods": {
+          "author_defined": 128
+        },
+        "targeted_assets": 58,
+        "targeted_skills": 37,
+        "targeted_source_family_tags": 58,
+        "targeted_tools": 21
+      },
+      "memory_leak_chinese_to_original_english": {
+        "case_id": "capability-01-zh",
+        "grade": {
+          "ambiguous_choice": false,
+          "ambiguous_supported3": false,
+          "class": "positive",
+          "confident": false,
+          "confident_correct": false,
+          "false_confident": false,
+          "hit3": false
+        },
+        "evaluated_decision": null,
+        "evaluated_asset_ids": [],
+        "hard_subset": "no_shared_latin",
+        "latin_token_intersections": {
+          "matrix:6a10873ea4482462bc6264fa": []
+        }
+      }
+    },
+    {
+      "arm": "reuse",
+      "track": "primary_only",
+      "report_file": "reuse-primary_only.json",
+      "report_sha256": "14baf00fe4423402b1b10b0633de6c3cf90d5666352a2151d8260c739bec3a19",
+      "report_bytes": 1462461,
+      "runner_digest": "71d1835898c3a8c653171c8f6b4f13420a650e8a8ef67a425f692db107d6e046",
+      "protocol_digest": "9aa09199384a29a8d73165eee56e8219fd89b5fe5e0db9633de49626f802d9fb",
+      "config_digest": "d569833f7bc768f1ec9f916633d32e13d657c2b17baaf63b227f58dfaf9a4841",
+      "policy_digest": "b010ec37adf007f208574571ca8b6ce3fcaf0e25f3e8e5e6ea8166fa30b6fbdc",
+      "status": "blocked",
+      "planned_slots": 128,
+      "row_status_counts": {
+        "not_run": 128
+      },
+      "summary": {
+        "abstentions": 0,
+        "choice_required": 0,
+        "choice_supported3": 0,
+        "confident": 0,
+        "confident_correct": 0,
+        "failed": 128,
+        "false_confident": 0,
+        "hit3": 0,
+        "positive_cases": 116,
+        "primary_attempt_failures": 0,
+        "primary_not_ready": 0,
+        "reference_cases": 128,
+        "top1": 0,
+        "user_choice_correct": 0,
+        "user_choices": 0
+      },
+      "language_pairs": [
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 19,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 19,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 22,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 3,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 3,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 16,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "en",
+          "reference_cases": 16,
+          "target_description_language": "zh",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 4,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 3,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 4,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 4,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 4,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 1,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 1,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 1,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "mixed",
+          "reference_cases": 1,
+          "target_description_language": "zh",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 18,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "mcp_tool",
+          "positive_cases": 18,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 18,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 22,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 21,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 22,
+          "target_description_language": "en",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 2,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "all",
+          "positive_cases": 0,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 2,
+          "target_description_language": "unknown",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        },
+        {
+          "abstentions": 0,
+          "choice_required": 0,
+          "choice_supported3": 0,
+          "confident": 0,
+          "confident_correct": 0,
+          "failed": 17,
+          "false_confident": 0,
+          "hit3": 0,
+          "kind": "skill",
+          "positive_cases": 15,
+          "primary_attempt_failures": 0,
+          "primary_not_ready": 0,
+          "query_language": "zh",
+          "reference_cases": 17,
+          "target_description_language": "zh",
+          "top1": 0,
+          "user_choice_correct": 0,
+          "user_choices": 0
+        }
+      ],
+      "missing_language_pairs": [
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "zh",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "en",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "zh"
+        },
+        {
+          "kind": "skill",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        },
+        {
+          "kind": "mcp_tool",
+          "query_language": "mixed",
+          "target_description_language": "mixed"
+        }
+      ],
+      "latency": {
+        "known": 0,
+        "p50_ms": null,
+        "p95_ms": null,
+        "unknown": 128
+      },
+      "costs": [
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "input_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "output_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cached_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "reasoning_tokens",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "calls",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "observed",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "input_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "output_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cached_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "reasoning_tokens",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "calls",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "cpu_ms",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        },
+        {
+          "known": 0,
+          "known_subtotal": null,
+          "metric": "peak_bytes",
+          "provenance": "reported",
+          "total": null,
+          "unknown": 128
+        }
+      ],
+      "preparation": {
+        "binding": {
+          "catalog_digest": "3243fe0d227f5181191e1ab56111dc04eea344dbdf23d7e2bd9b46cf7ec037c2",
+          "catalog_revision": 1,
+          "permissions": [
+            "demo.mutate",
+            "demo.read"
+          ],
+          "requested_kinds": [
+            "mcp_tool",
+            "skill"
+          ],
+          "scope": {
+            "user_id": "source-benchmark",
+            "workspace_id": "disposable"
+          },
+          "selection_scope": "discovery",
+          "selector": {
+            "name": "example_lexical",
+            "version": "1"
+          }
+        },
+        "cleanup_ms": 1002.2089640260674,
+        "config": {
+          "max_polls": 240,
+          "mode": "http",
+          "poll_ms": 250,
+          "profile": "reuse",
+          "request_ms": 2000,
+          "total_ms": 60000,
+          "url": "http://127.0.0.1:8934/index"
+        },
+        "exchanges": [
+          {
+            "observed_ms": 2002.4307410349138,
+            "operation": "prepare",
+            "reason": "deadline_exceeded",
+            "response": null
+          },
+          {
+            "observed_ms": 1002.1340139792301,
+            "operation": "cancel",
+            "reason": "deadline_exceeded",
+            "response": null
+          }
+        ],
+        "index_revision": null,
+        "observed_costs": [],
+        "observed_ms": 2003.3248190302402,
+        "preparation_id": "d7c5def6-02fd-4780-8136-fef5eb92f2ec",
+        "reason": "deadline_exceeded",
+        "status": "timeout"
+      },
+      "coverage": {
+        "catalog_assets": 412,
+        "description_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 30,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 57,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "family_method": "Source identity tags, not independently reviewed semantic families.",
+        "language_method": "Han/ASCII character heuristic: Han>=10% is zh; remaining Han/Latin is mixed. Skill body and MCP description; no native-author assertion.",
+        "original_languages": [
+          {
+            "assets": 131,
+            "languages": [
+              "en"
+            ],
+            "source_id": "github-mcp-server"
+          },
+          {
+            "assets": 22,
+            "languages": [
+              "en"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 65,
+            "languages": [
+              "zh-Hans"
+            ],
+            "source_id": "matrix"
+          },
+          {
+            "assets": 194,
+            "languages": [
+              "en"
+            ],
+            "source_id": "skillsbench"
+          }
+        ],
+        "reference_methods": {
+          "author_defined": 128
+        },
+        "targeted_assets": 58,
+        "targeted_skills": 37,
+        "targeted_source_family_tags": 58,
+        "targeted_tools": 21
+      },
+      "memory_leak_chinese_to_original_english": {
+        "case_id": "capability-01-zh",
+        "grade": {
+          "ambiguous_choice": false,
+          "ambiguous_supported3": false,
+          "class": "positive",
+          "confident": false,
+          "confident_correct": false,
+          "false_confident": false,
+          "hit3": false
+        },
+        "evaluated_decision": null,
+        "evaluated_asset_ids": [],
+        "hard_subset": "no_shared_latin",
+        "latin_token_intersections": {
+          "matrix:6a10873ea4482462bc6264fa": []
+        }
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "left": "builtin",
+      "right": "stateless",
+      "track": "service",
+      "compatible": true,
+      "report_file": "compare-builtin-stateless-service.json",
+      "report_sha256": "fc226794026f8a192165486743f515da2a18a8e7ed4ee562678502bc4682260c",
+      "report_bytes": 13182,
+      "delta_hit3": 0
+    },
+    {
+      "left": "builtin",
+      "right": "cold",
+      "track": "service",
+      "compatible": true,
+      "report_file": "compare-builtin-cold-service.json",
+      "report_sha256": "e2ae40d4d51119c51324a65363e057213d2d01261a81d941dbaa8e14d074f6b4",
+      "report_bytes": 16227,
+      "delta_hit3": 0
+    },
+    {
+      "left": "cold",
+      "right": "reuse",
+      "track": "service",
+      "compatible": true,
+      "report_file": "compare-cold-reuse-service.json",
+      "report_sha256": "d3c96da222c4887e84d60255cefd6f91c4de783e674e34f29eea973e707d0ec7",
+      "report_bytes": 16852,
+      "delta_hit3": -63
+    },
+    {
+      "left": "builtin",
+      "right": "stateless",
+      "track": "primary_only",
+      "compatible": true,
+      "report_file": "compare-builtin-stateless-primary_only.json",
+      "report_sha256": "092426f2d9f13c7624ce293fb8162b1d91c9b8d16e27e12b869085ee6789514a",
+      "report_bytes": 13163,
+      "delta_hit3": -63
+    },
+    {
+      "left": "builtin",
+      "right": "cold",
+      "track": "primary_only",
+      "compatible": true,
+      "report_file": "compare-builtin-cold-primary_only.json",
+      "report_sha256": "ea92ba53c77095af98607f6e6bdb0554315493ef5f29e4141d7b1e68456948c1",
+      "report_bytes": 16209,
+      "delta_hit3": -63
+    },
+    {
+      "left": "cold",
+      "right": "reuse",
+      "track": "primary_only",
+      "compatible": true,
+      "report_file": "compare-cold-reuse-primary_only.json",
+      "report_sha256": "eaec57a3ebbbaf85485399ce52141197e40a736eacfcbc906e3203b1abd92792",
+      "report_bytes": 16832,
+      "delta_hit3": 0
+    }
+  ]
+}

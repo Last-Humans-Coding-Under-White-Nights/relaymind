@@ -34,6 +34,8 @@ relaymind = "relaymind.launcher:cli"
 [project.optional-dependencies]
 # On-demand ToolRet parquet derivation; never needed by the gateway.
 bench = ["pyarrow>=17"]
+# Explicit local embedding backend; never installed or downloaded at gateway startup.
+embeddings = ["onnxruntime>=1.20", "tokenizers>=0.20", "numpy>=2"]
 dev = [
     # The standard SDK client of the AC09 round trip.
     "openai>=1.50",

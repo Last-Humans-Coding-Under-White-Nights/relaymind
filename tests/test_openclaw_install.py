@@ -29,7 +29,7 @@ from test_openclaw_plugin import client_gateway, drive_plugin
 from test_openclaw_round_trips import ECHO
 
 PINNED = "2026.10.7"
-RUNTIME_FILES = {"package.json", "README.md", "openclaw.plugin.json"}
+RUNTIME_FILES = {"package.json", "README.md", "README.zh-CN.md", "openclaw.plugin.json"}
 
 
 def _npm_cli(node: Path) -> Path | None:
@@ -184,8 +184,11 @@ def test_the_artifact_holds_only_the_runtime_files(releases):
     with tarfile.open(dir_a / record["filename"]) as archive:
         names = sorted(m.name.removeprefix("package/") for m in archive.getmembers())
     built = {
-        f"dist/{p.stem}.js" for p in (PACKAGE / "src").glob("*.ts") if not p.name.endswith(".d.ts")
+        "dist/" + p.relative_to(PACKAGE / "src").with_suffix(".js").as_posix()
+        for p in (PACKAGE / "src").rglob("*.ts")
+        if not p.name.endswith(".d.ts")
     }
+    built |= {"dist/control-ui/control-ui.js", "dist/control-ui/recommendation-json.js"}
     assert set(names) == RUNTIME_FILES | built
     assert names == record["files"]
     assert "dist/index.js" in names

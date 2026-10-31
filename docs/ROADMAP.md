@@ -1040,21 +1040,32 @@ listed here so the current order can be traced to its reason.
   so it does not wait for the plugin.
 
 
-## M10 — Multilingual asset recommendations (spec 0.56)
+## M10 — Multilingual asset recommendations (spec 0.63)
+
+#207 customer documentation now has [English](asset-selection.md) and
+[简体中文](asset-selection.zh-CN.md) entry guides, v1/v2 migration and third-party
+index readiness navigation, exact source JSON versus formal JSON/Markdown
+workflows, explicit stdout-only choice receipts, and a focused
+[privacy/recovery reference](asset-privacy-security.md). The packaged bilingual
+M10 skill/MCP, real approval and correction walkthrough still requires the final
+qualified host contract/artifact and actual installed-host exercises. These
+repository guides do not claim that remaining walkthrough or close #207.
 
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
 imports, safe internal searchable bodies, atomic shared-SQLite publication,
 source-owned tombstones, retained stale observations, recovery and one bounded
 local worker. `[recommendations]` defaults disabled; enabled catalog work starts
-in the application lifespan. This is development on the explicitly authorized
-reviewed-spec stack while #187's merge remains pending. #192 alone did not change
-the warm-up serving order; #196's lifecycle work is recorded below. No qualified
-external refresh or current host availability is claimed.
+in the application lifespan. The #187 foundation merged in #212. The three
+#192 catalog criteria, discovery, atomic change visibility and honest provenance
+without execution, are implemented and verified. #192 alone did not change the
+warm-up serving order; #196's lifecycle work is recorded below. The qualified
+#203 GitHub refresh profile is recorded below; catalog discovery supplies no
+host availability or execution authority.
 #193 selection and #194's partial lifecycle implementation are recorded below.
-The AC25 live host/source subcases, full 300-asset measurements,
-Windows/macOS qualification and Matrix rights/cohort/refresh remain open; these
-deterministic catalog tests do not close #191 or #192's qualified adapter gates.
+The AC25 live host subcases, full 300-asset measurements, Windows/macOS
+qualification, Matrix rights/cohort/refresh and formal independent corpus gates
+remain separate from #192's completed catalog criteria.
 
 The #193 selection component implements RM35/AC26: separate closed selection
 v2 and recommendation-result schemas, projection-only lexical ranking, strict
@@ -1109,40 +1120,91 @@ and no relaxed or partial acceptance.
 
 The customer-approved defaults of 29 October 2026 are in spec section 1.
 
-Status at this revision: the bounded qualifications have committed evidence;
-#187 specifies the product contracts and design but implements nothing.
-Before any implementation issue's code begins, spec 0.51 and its 0.52 revision
-must be merged (a spec in an unmerged stack does not count) and that issue updated with its
-final RM and AC IDs. Those issue updates are still pending; the table gives the
-mapping and does not claim any GitHub issue was changed.
+The customer explicitly authorized implementation on the reviewed specification
+stack on 29 October 2026 before #187 merges; the former merge-first sequencing
+restriction is superseded. Merges remain customer-owned. The table gives the
+current RM/AC mapping without claiming that a remote issue has already changed.
+
+The source-grounded development deliverables for #191, #199 and #200 are
+implemented under spec 0.56/0.57. The pinned working catalog has 412 actual assets:
+87 Matrix skills, 194 original-English SkillsBench skills and 131 genuine GitHub
+MCP tools, with 61 explicit exclusions. Its 128 preregistered Chinese, English
+and mixed cases cover 54 capability requests and 58 distinct targets, including
+an original-English cross-language example. References are developer-authored
+from retained originals, not independent human judgments. Captured rights,
+availability, missing language pairs and reference limits stay explicit.
+
+The shared production-path run/compare tooling supports builtin and team HTTP
+selectors over the same full offer and frozen cases, explicit stateless/cold/reuse
+index preparation, bounded polling, retained failures and separate setup/query
+costs. See [the source workflow](SOURCE_BENCHMARK.md) and
+[the team/protocol guide](ASSET_BENCHMARK.md). Recorded stateless/cold primary
+query timeouts and blocked reuse preparation remain visible; successful lexical
+fallback is not primary quality. Corrected offline comparison rejects cold/reuse
+policy mismatches without rewriting the historical reports.
+
+This usable development profile and its input/lock infrastructure complete the
+working deliverables of #191/#199/#200. The separately supported independent
+200-skill/300-asset qualification profile, native authorship/double annotation,
+rights review and full numerical/platform gates remain open. Those acceptance
+inputs are not prerequisites for the working source benchmark or these delivered
+development components; they remain prerequisites for claims under that formal
+profile and for full M10 acceptance.
 
 | Qualification / gate | Current evidence and remaining requirement |
 | --- | --- |
-| #188 Matrix capture | One genuine version 1.1.1 archive, two equal-hash downloads; one Chinese body. MATRIX-COHORT (100 original Chinese), MATRIX-OVERLAP (25 functional pairs), MATRIX-RIGHTS and MATRIX-REFRESH remain blocked; same-source permitted operator export/rights/inventory input required. No automatic substitute or source permission. |
-| #189 direct commands | Real pre-model ingress and isolated credential/native search/read/forged-input checks pass over doubles; verified person and immutable choice-to-library composition failed. HOST-ACTION-AUTHORITY and HOST-EXACT-SKILL-USE block #195 host completion/#197/#198. Real interactive approvals not_run; read-only does not waive exact content/authority. |
+| #188 Matrix capture | Historical 29 October qualification: one genuine version 1.1.1 archive, two equal-hash downloads; one Chinese body. This is distinct from the later 87-skill source-grounded development capture, which does not qualify market refresh or independent corpus rights. MATRIX-COHORT (100 original Chinese), MATRIX-OVERLAP (25 functional pairs), MATRIX-RIGHTS and MATRIX-REFRESH remain blocked; same-source permitted operator export/rights/inventory input required. No automatic substitute or source permission. |
+| #189 direct commands | Real pre-model ingress and isolated credential/native search/read/forged-input checks pass over doubles; verified person and immutable choice-to-library composition failed. These historical probes did not qualify host authority. The later spec0.62 ordinary direct-action proof closes HOST-ACTION-AUTHORITY for #195; exact skill/use gates remain open for #197/#198. Real interactive approvals not_run; read-only does not waive exact content/authority. |
 | #190 MCP | Same-instance public genuine provenance/schema, collision-safe host execution and changed-schema execution passed; three server invocations, ten completed gateway runs, zero gateway execution. Disconnect retains schemas and actual call fails; deny/removal exclude tools. HOST-MCP-BINDING and HOST-MCP-CURRENTNESS remain blocked: session/turn/host revision absent, availability unknown, third-party authorized runtime inventory refused. |
 | Evidence tiers | #189/#190 are Linux real-host functional runs with model doubles. #190 uses coding profile/toolSearch=false/disposable conversation grant; not intact-native/default or customer acceptance. HTTP/OAuth, live quality, supported-platform M10 and human interactive approval remain not_run. |
 
-After the merge, these may proceed within their dependencies: the
+Within the authorized reviewed stack, these components proceed within their dependencies: the
 independent catalog, reads of ordinary SKILL.md directories, closed reviewed
 metadata imports, discovery v2, the lexical and HTTP selectors, the persisted
 API, and the backend registration, revocation and privacy tests. A runtime
 create returns recommendation_unavailable, and snapshot payloads and non-null
 bindings are rejected (spec section 7.6). No production host registration
-is enabled by these probes. #191 and #199 dataset acceptance cannot close
-without a real permitted cohort and labels; #203 cannot claim Matrix refresh
-from one download route. Generic infrastructure and doubles never close actual
-source or host gates. The hybrid selector and adaptation keep the trial and
-data dependencies in the table below. Partial PRs must state their retained
-acceptance and cannot auto-close incomplete issues.
+is enabled by these probes. #203 cannot claim Matrix refresh from one download
+route. Generic infrastructure and doubles never close actual source or host
+gates. The hybrid selector and adaptation keep the trial and data dependencies
+in the table below. Partial PRs must state retained acceptance; incomplete host,
+model and platform deliverables stay open. Development completion of
+#191/#199/#200 does not assert independent corpus or full M10 acceptance.
 
-The table retains direct issue dependencies and existing foundations. New IDs
-are normative in 0.51; all paths/feature components remain planned until their
-implementation lands.
+#201/#202 backend integration checkpoint (spec 0.59): the bounded local artifact
+loader, cooperative hybrid ranking/vector lifecycle and private explicit-correction
+adaptation/reset backend are implemented. Native loading reacquires the same CPU
+owner and retains actual cancellation/drain evidence. The production embedding
+qualification registry now contains two exact reviewed Linux CPU identities;
+fresh ordinary hybrid activation is recorded in the model evidence. No portable
+qualified model is claimed. Historical 47-asset/36-case native development results
+remain provisional, distinct from the current 412-asset/128-case source benchmark.
+Real host correction authority, formal chronological episodes and final quality,
+whole-task, supported-platform and resource gates remain open.
+
+#203 source qualification checkpoint (spec 0.59): the reviewed fixed public
+GitHub Git skill profile has an actual complete six-skill/twelve-file acquisition
+plus root MIT evidence, 17 serial GETs and two ref observations separated by
+704.62 seconds. The commit remained 849c1be; change was not observed. Section
+4.6.1.1 defines this installed protocol profile. The implementation candidate
+now includes bounded transport, immutable acquisition, profile-persisted cooldown
+and scheduling on the existing worker. Two actual periodic product jobs were
+304.28 seconds apart; both published six assets with lexical readiness/API200,
+and the upstream was unchanged. Controlled source-server tests cover changes,
+outage/recovery, cancellation, atomic restart and foreground I/O boundaries.
+Independent review and integrated functional verification passed; no AC29/AC34 full workload or
+supported-platform pass, Matrix market refresh or corpus substitution is inferred.
+Local/import user libraries remain supported. Actual/fixture distinctions and
+versioned observations are in [the source record](evidence/2026-10-30-github-skill-source/README.md).
+
+The table retains the other issues' direct dependencies and foundations.
+#191/#199/#200 describe the delivered working profile; their separate formal
+qualification gates remain as specified above. Other planned components do not
+become implemented by appearing in the table.
 
 | Issue | Direct dependencies | Existing foundations | New RM/AC IDs | Deliverable / completion gate |
 | --- | --- | --- | --- | --- |
-| #191 | #187, #188 | RM07, RM12, RM16, RM25, RM28 | RM40; AC31 | 100 original Chinese +100 original English skills, permitted reproducibility, native authorship and independent annotations |
+| #191 | #187; reviewed source capture | RM07, RM12, RM16, RM25, RM28 | RM40; AC31 | Implemented source-grounded skill inputs, pinned originals/exclusions, 128 developer-authored CN/EN/mixed references and strict lock tooling; independent qualification remains separate |
 | #192 | #187, #188 | RM07, RM08, RM12, RM17, RM24, RM28 | RM34; AC25 | Durable atomic catalog with safe projection/import/scans/deletion and honest runtime availability |
 | #193 | #187, #192 | RM02, RM04, RM08, RM12, RM18, RM22, RM28; AC22 | RM35; AC26 | v2 schemas/chain/lexical fallback + HTTP replacement; unchanged managed v1 |
 | #194 | #187, #193 | RM12, RM17, RM19, RM21, RM22, RM28, RM33 | RM36; AC27 | Independent recommendation API/store/events; atomic idempotency, disconnect and recovery |
@@ -1150,8 +1212,8 @@ implementation lands.
 | #196 | #187, #192, #193, #194 | RM03, RM16–RM19, RM22, RM24, RM26, RM27, RM28 | RM38; AC29 | Separate readiness, lexical visibility/rebuild/scheduler behavior; full 300-asset/live embedding measurements later |
 | #197 | #187, #189, #194, #195, #193 | RM08, RM11, RM12, RM19, RM20, RM22, RM33; AC24 | RM39; AC30 | Packaged direct commands, exact installed-skill load/use and feedback; unchanged provider |
 | #198 | #187, #191, #192, #196, #197 | RM16, RM18, RM25, RM26, RM28, RM33; AC22, AC24 | RM39, RM44; AC30, AC36 | Actual early Apple M1 8 GiB customer trial and three-arm costs; observations before hybrid investment |
-| #199 | #187, #188, #191 | RM07, RM12, RM16, RM25, RM28, RM33 | RM40; AC31 | Exactly 300 real assets, independently authored/annotated held-out cohorts and locks |
-| #200 | #187, #193, #191 | RM03, RM12, RM16, RM18, RM22, RM25, RM28; AC22 | RM35, RM40; AC26, AC31 | Production-path benchmark run/compare CLI; deterministic third-party example; full acceptance cohort plugs into same runner |
+| #199 | #187, #191 development inputs | RM07, RM12, RM16, RM25, RM28, RM33 | RM40; AC31 | Implemented mixed working catalog: 412 real source assets including 131 genuine MCP tools, frozen references and reproducible inputs; formal independent held-out qualification remains separate |
+| #200 | #187, #193, #191 | RM03, RM12, RM16, RM18, RM22, RM25, RM28; AC22 | RM35, RM40; AC26, AC31 | Implemented shared production-path run/compare, builtin/team HTTP examples and explicit index readiness with separate setup costs; working source and formal qualification profiles retain their own evidence rules |
 | #201 | #187, #198, #199, #200, #196 | RM03, RM04, RM12, RM16, RM18, RM22, RM24–RM28 | RM38, RM41; AC29, AC32 | Development-selected pinned local embedding artifact, bounded revisioned hybrid ranking/indexing, lifecycle/resource evidence |
 | #202 | #187, #195, #201, #199, #200 | RM04, RM08, RM11, RM12, RM16, RM17, RM22, RM24, RM28 | RM37, RM42; AC28, AC33 | Bounded separate adaptation stage, 100 chronological episodes, unrelated controls and exact reset |
 | #203 | #187, #188, #192, #196, #198 | RM03, RM07, RM12, RM16, RM17, RM19, RM24, RM28 | RM34, RM38, RM43; AC25, AC29, AC34 | Permitted automatic refresh, bounded staging/atomic publication, stale failure states and live demonstration |
@@ -1174,8 +1236,85 @@ permission to fabricate completion.
 operator registration/authentication, exact-offer choice, independent scoped
 feedback CAS and insertion cursor, feedback delete/reset, keyed erased-replay
 handling and atomic dependent retention. Deterministic fixtures inject their
-qualification resolver; no production action contract is enabled. This does
-not close full #195 host acceptance: HOST-ACTION-AUTHORITY and
-HOST-EXACT-SKILL-USE remain blocked, as do later host approval/use gates.
-Native platform security execution and final full-check evidence are reported
-separately; Linux backend doubles do not substitute for them.
+qualification resolver. The later pinned OpenClaw2026.10.7 spec0.62
+`direct_actions` profile now also has actual signed-person/session composition
+and fresh ordinary installed Control UI proof: explicit choice, feedback,
+inspection/delete/reset, account isolation and connection retirement. The
+ordinary entry uses the default Gateway registration resolver and a separately
+registered private action credential. This completes #195's direct-action and
+privacy delivery; skill loaded-use, snapshots, MCP execution, human approvals
+and final platform/quality gates remain separate. Functional proof uses authored
+sandbox data and does not claim full M10 acceptance. The exact sanitized
+[ordinary-entry capture](evidence/m10/openclaw-native-actions-20261031.json)
+is preserved at SHA-256 `21e8c4a77017d1543323056d3c1c892ea2fe6901971919ac008257252b663faf`.
+Its person-component `production_adapter_qualified:false` is not a self-issued
+product verdict; the independently reviewed `ordinary_actions:true`, exact
+runtime key and direct-action registry identify this qualified scope.
+
+#195/#197 scope isolation correction (spec 0.63; RM37/RM39, AC28/AC30): an
+independent review of the native direct-action channel reproduced, against the
+actual gateway, that a native binding could act in another configured scope.
+The recommendation path ignored the binding, and nothing compared the
+gateway's single active scope with the binding's `userId`/`workspaceId`, so a
+shared base URL or a credential registered for another scope created, listed,
+deleted or reset in that scope. Spec 0.63 adds the optional
+`X-RelayMind-Expected-User`/`X-RelayMind-Expected-Workspace` pair, checked
+after the bearer and before any read or write, with the fixed `scope_mismatch`
+(403). The native adapter now sends its binding's scope on every gateway
+request. The same revision clarifies that only isolation conditions apply to
+every role, so valid read-only or other-agent roles are no longer refused, and
+the dormant skill bridge rechecks choice expiry before each native dispatch.
+The changed adapter bytes have the new exact revision
+`f3241577e903feddd3da61fd58513b4a3e90889552d9bd7f52a302fd81f52c6c`. A fresh
+ordinary installed-host run of those exact bytes (CI run 41221091650, pinned
+OpenClaw 2026.10.7, Ubuntu runner, PR merge checkout `89d374f`) passed the
+repository's ordinary-pass predicate: default registration, the production
+registry enabled, explicit choice, feedback, inspection/delete/reset, account
+isolation and connection retirement. Its unmodified capture is
+[openclaw-native-actions-20261101.json](evidence/m10/openclaw-native-actions-20261101.json)
+(SHA-256 `d5c186ac552b6028cd47c9bd4679f79259eab1092d20dd95b48c36fa35437a39`), which the registry's evidence revision names. The 31 October
+capture remains the record of the earlier revision. As before, this is
+Linux functional evidence with disposable accounts, not macOS/Windows or
+customer acceptance. Hardening of the person-ingress harness raised in the #224
+review changes evidence-bound files and is tracked with its recapture in #228.
+
+#197 first-slice status (RM36, RM37, RM39; AC27/AC28, partial AC30): the
+package includes dormant recommendation/action clients, closed lossless protocol
+validation, inert evidence rendering and an unregistered controller whose host
+boundary denies unsupported operations by default. Those clients are reused by
+the separately qualified spec0.62 direct-action entry described under #195.
+Exact skill selection/loaded use and MCP use are not enabled by that profile;
+HOST-EXACT-SKILL-USE and later approval/currentness gates remain open. Full
+#197/AC30 is not complete.
+
+#198/#202/#204/#205/#206 evaluation contract checkpoint (spec 0.60): closed
+adaptation episode, whole-task and platform exports authorize the independent
+drivers/graders. Exact freeze companions, three-correction chronology, complete
+paired probe/three-arm denominators, per-model costs and evidence-bound reset
+remain required. The closed schemas, deterministic three-arm plan, conserving
+host driver and offline graders are implemented (`asset_whole_task.py`,
+`asset_episode_export.py`, `asset_platform_export.py`,
+`scripts/asset_whole_task.py`; see docs/ASSET_BENCHMARK.md) and verified only
+over explicitly fixture-qualified documents. No qualified-evidence verifier
+exists yet, so qualified acceptance grades blocked, never pass; no new measured
+gate is claimed. Read-only native RPC and genuine MCP qualification probes do not
+enable runtime snapshots or further host operations. The separate spec0.62
+direct-action profile above is qualified; exact selected skill/MCP use and
+post-approval currentness still require their own qualification. Missing genuine
+inputs do not block tooling implementation or explicitly unqualified fixture runs.
+
+#201 native benchmark contract checkpoint (spec 0.61): explicit local-cold
+preparation records actual gateway worker jobs/readiness, setup and owned cleanup
+without fabricated HTTP or hidden query initialization. Narrow runtime
+applicability permits a verified local selector runtime versus corroborated
+non-use, with a closed per-arm runtime display for the comparison-only renderer.
+Native build/device/execution controls, Python/dependencies,
+source/label/policy and normal machine equality stay enforced. Existing 0.58
+semantic documents and artifact/reference slots suffice. Parser/factory/offline
+closure, local preparation and native comparison/runtime-display tooling are
+implemented with explicit deterministic qualification fixtures; ordinary
+artifact activation has independent exact-key review and a fresh unmodified
+console-launch proof. The full 412/128 provisional source runs retain the
+observed hybrid quality regression, primary failure and lexical fallback. No
+host correction authority, dataset/hardware-wide qualification,
+new numerical threshold or final-M10 pass is supplied by this contract.

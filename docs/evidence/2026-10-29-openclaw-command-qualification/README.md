@@ -64,7 +64,7 @@ an actual initiating approval-capable host surface. Check exactly one/zero
 sandbox writes and zero gateway execution; host `ok` alone is insufficient.
 No such human run is recorded here. Existing headless fail-closed observations
 remain separately recorded in
-[`2026-10-28-openclaw-vps-functional-137`](../2026-10-28-openclaw-vps-functional-137/README.md).
+[`2026-10-28-openclaw-vps-functional-137`](../2026-10-28-openclaw-vps-functional-137/REPORT.md).
 
 The separate `headless.py` driver (instructions in the probe README) reproduced
 that refusal on 29 October with default native tool search and explicit sandbox

@@ -5,6 +5,9 @@
 // name before anything is registered or sent.
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 
+import { parsePluginConfig } from "./config.ts";
+import { registerNativeRecommendations } from "./recommendation-native.ts";
+
 import { PROVIDER_ID } from "./compat.ts";
 import { describeCapabilities } from "./diagnostics.ts";
 import { createRelayMindProvider } from "./provider.ts";
@@ -23,6 +26,7 @@ export default definePluginEntry({
       throw error;
     }
     api.registerProvider(provider);
+    registerNativeRecommendations(api, parsePluginConfig(api.pluginConfig));
     api.logger.info(describeCapabilities());
   },
 });

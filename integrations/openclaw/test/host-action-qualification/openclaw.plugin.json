@@ -1,0 +1,1 @@
+{"id":"relaymind-action-qualification","name":"Disposable production-factory action qualification","activation":{"onStartup":true},"configSchema":{"type":"object","additionalProperties":false,"required":["operatorFile","eventFile"],"properties":{"operatorFile":{"type":"string"},"eventFile":{"type":"string"}}},"contracts":{"gatewayMethodDispatch":["authenticated-request"]}}

@@ -2,6 +2,25 @@
 
 ## Current
 
+- `source_asset_benchmark.py` — acquire pinned originals, build offline inputs,
+  run identical source-backed skill/MCP cases, compare internal JSON diagnostics
+  and emit explicit user-choice stdout receipts (RM34/RM40/RM44). Start with the
+  [source tutorial](../docs/SOURCE_BENCHMARK.md); choice does not modify the report
+  or execute an asset. Source compare has no Markdown option.
+- `asset_whole_task.py` — plan and grade the spec 0.60 section 12.6.5 host trial,
+  adaptation episode and platform exports (`plan-host`, `grade-host`,
+  `grade-adaptation`, `grade-platform`); offline only, see
+  `docs/ASSET_BENCHMARK.md`.
+- `asset_selection_benchmark.py` — formal locked-profile run, explicit optional
+  preparation and offline JSON/Markdown comparison (RM35/RM40/RM44). The
+  [formal guide](../docs/ASSET_BENCHMARK.md) covers resolver/privacy commitments,
+  provisional fixtures and independent qualification separately.
+- `example_asset_selector.py` — v2 loopback skill/tool example, with optional
+  catalog-bound HTTP index preparation (RM35/RM40). Use `--port 8933`, or
+  `--port 8934 --preparation-path /index`; the example's exact identity is
+  `example_lexical/1`. This is separate from managed v1 `example_selector.py`.
+  [English setup](../docs/asset-selection.md) · [简体中文](../docs/asset-selection.zh-CN.md).
+
 - `probes/qualify_matrix.py` — offline Matrix capture integrity probe (#188;
   RM07, RM12, RM16, RM25). Reads an operator manifest and opaque original files;
   checks IDs, hashes, UTC capture metadata, size bounds and path containment.
@@ -811,3 +830,20 @@ unsuccessfully for failed reporting acceptance. A measured missed target is a
 valid finding. Header-before-answer-token is a diagnostic: without a comparable
 client/generation-start clock it does not prove the stronger generation-start
 hypothesis. No default or live capability decision follows from these tests.
+
+## Qualified source probes (#203; RM34/RM38/RM43)
+
+`probes/qualify_github_skill_source.py --output DIR [--prior-capture DIR]` performs
+bounded read-only acquisition for the one fixed public GitHub skills profile,
+verifies complete inventory and original/manifest/rights hashes, and writes
+safe observations. Earlier planning ref evidence must honor the observed polling
+floor. Probe evidence never activates a source or accepts an arbitrary URL.
+
+`probes/run_asset_refresh_demo.py --config FILE --output DIR` uses a new disposable
+production store and the installed profile at an explicit 300-second cadence.
+It starts the existing launcher/worker, waits for two actual scheduled jobs and
+records source/job/readiness plus lexical API results. It does not fake time,
+rescan manually, execute assets or change inference budgets/provider. Keep it
+running in the background for the real interval. See the source section in
+`docs/TESTING.md` and the versioned actual/fixture distinctions in
+`docs/evidence/2026-10-30-github-skill-source/README.md`.

@@ -1,0 +1,32 @@
+{
+  "id": "relaymind-person-qualification",
+  "name": "Disposable person ingress qualification",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "origin",
+      "eventFile",
+      "releaseFile"
+    ],
+    "properties": {
+      "origin": {
+        "type": "string"
+      },
+      "eventFile": {
+        "type": "string"
+      },
+      "releaseFile": {
+        "type": "string"
+      }
+    }
+  },
+  "contracts": {
+    "gatewayMethodDispatch": [
+      "authenticated-request"
+    ]
+  }
+}

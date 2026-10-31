@@ -1,0 +1,342 @@
+{
+  "profile": "github.relaymind-skills.v1",
+  "api_version": "2022-11-28",
+  "started_at": "2026-10-30T23:24:34.710019+00:00",
+  "qualification": "provisional",
+  "production_activation": false,
+  "complete": true,
+  "candidate_count": 6,
+  "files": [
+    {
+      "path": "LICENSE",
+      "bytes": 1079,
+      "git_blob_sha1": "7285cea2bcc4729ec4894d4dbf9f9e54e3713178",
+      "sha256": "a0df745636ded7b39d42761f4e5000fb0718c04e98be6b004bf00efdcd79509a"
+    },
+    {
+      "path": "skills/check-service-health/SKILL.md",
+      "bytes": 1465,
+      "git_blob_sha1": "eb39f24d670c882dfe3e7a1f607bd17c5f77430d",
+      "sha256": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e"
+    },
+    {
+      "path": "skills/check-service-health/skill.manifest.json",
+      "bytes": 447,
+      "git_blob_sha1": "db19bb9de1c0d63c41a0a4132d8e1c623a2e9308",
+      "sha256": "8d3a94217e514bcebcca1f0ed8f3304197a9f51131795c64bcf5a7bda560e5ac"
+    },
+    {
+      "path": "skills/delete-demo-database/SKILL.md",
+      "bytes": 1608,
+      "git_blob_sha1": "5f6648fb644459d4d5b6445d25777b16055ca130",
+      "sha256": "847d307ecb98012cfef73baf8e5dcc154997ee80993041ca3e4a9cd851b0b614"
+    },
+    {
+      "path": "skills/delete-demo-database/skill.manifest.json",
+      "bytes": 321,
+      "git_blob_sha1": "388e8725944aaf80157cfdd1bb07eaa6becccade",
+      "sha256": "a38c4adf589ef4a6d3939c89ff12a1ddbccaf80b81b30d7ec3fd4b1466e81257"
+    },
+    {
+      "path": "skills/health-and-diagnostic-checklist/SKILL.md",
+      "bytes": 1752,
+      "git_blob_sha1": "c336d7fbed371618bcc6c5ff053a593092b2cc55",
+      "sha256": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d"
+    },
+    {
+      "path": "skills/health-and-diagnostic-checklist/skill.manifest.json",
+      "bytes": 323,
+      "git_blob_sha1": "811ee782d709dff60d87dcebca5f659c83f9e3e9",
+      "sha256": "2a6516629ba6271949931d1e03f22aef06b0261babd76a7dbebadf8ef4e244e6"
+    },
+    {
+      "path": "skills/investigate-performance/SKILL.md",
+      "bytes": 1790,
+      "git_blob_sha1": "f415b923b0961988bbd376a1aa0795ae157ce7f7",
+      "sha256": "ff966b6441c0dcc36fa6e1c4013504cb4bd4b4c999b173bed7455dceffdf5fe6"
+    },
+    {
+      "path": "skills/investigate-performance/skill.manifest.json",
+      "bytes": 692,
+      "git_blob_sha1": "24d8f1dd16330d5b80e13c8befbc4cad48e19ec4",
+      "sha256": "4721f17cc9ce0ab84cd55760c90c6a6e3c7d305e9eb51f20ebb4d2d9ba909a8d"
+    },
+    {
+      "path": "skills/lookup-latest-deployment/SKILL.md",
+      "bytes": 1344,
+      "git_blob_sha1": "7528f80cd63013005f66746e452b13460caa6362",
+      "sha256": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a"
+    },
+    {
+      "path": "skills/lookup-latest-deployment/skill.manifest.json",
+      "bytes": 449,
+      "git_blob_sha1": "a5a7da1f2e5ac5cf80e286c3b50adc5021dc40bf",
+      "sha256": "bfd372aca15b2643e8be7fb5ceadab8ba442aac2b5749d0d47f8be7356008cf6"
+    },
+    {
+      "path": "skills/summarize-incident-counts/SKILL.md",
+      "bytes": 1432,
+      "git_blob_sha1": "5998eea1bd2481225d235c01a8a53f861ebb8f8d",
+      "sha256": "dbb5d8ae163f928c60bb61707807080b68a4a3ec4f77574beede2b390f8e46bb"
+    },
+    {
+      "path": "skills/summarize-incident-counts/skill.manifest.json",
+      "bytes": 292,
+      "git_blob_sha1": "7a494e5589ee48f5ad0cdc7dbb4c7930a2233891",
+      "sha256": "bd53f94fb4a31812f589e9da3529723e83c8eaff8f27bf9907f9783376496430"
+    }
+  ],
+  "requests": [
+    {
+      "label": "ref",
+      "method": "GET",
+      "url": "https://api.github.com/repos/Last-Humans-Coding-Under-White-Nights/relaymind/git/ref/heads/master",
+      "captured_at": "2026-10-30T23:24:34.747060+00:00",
+      "status": 200,
+      "bytes": 399,
+      "sha256": "aa38ce2133bfdd2e2d4112c31901a1a1a4d324cf0780856dd58ea76c6efb04b0",
+      "headers": {
+        "etag": "W/\"f64de89c8bd0c064771c5f1821f0a551641eecc045d2ef83b9fe772a48540770\"",
+        "x-poll-interval": "300",
+        "x-ratelimit-remaining": "55",
+        "x-ratelimit-reset": "1793405569"
+      }
+    },
+    {
+      "label": "commit",
+      "method": "GET",
+      "url": "https://api.github.com/repos/Last-Humans-Coding-Under-White-Nights/relaymind/git/commits/849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+      "captured_at": "2026-10-30T23:24:35.081794+00:00",
+      "status": 200,
+      "bytes": 3084,
+      "sha256": "d8edf7acc162e199d53870e0bfa0f4f45e69cfe4d437617f90d4237200f872b9",
+      "headers": {
+        "etag": "W/\"856498ce71d23b75ae9b34a3a06e4748c6ef185bbe0cce0a8007f412889bc8b9\"",
+        "x-ratelimit-remaining": "54",
+        "x-ratelimit-reset": "1793405569"
+      }
+    },
+    {
+      "label": "root-tree",
+      "method": "GET",
+      "url": "https://api.github.com/repos/Last-Humans-Coding-Under-White-Nights/relaymind/git/trees/9c387e752521c1173572261339fd7f29bb004192",
+      "captured_at": "2026-10-30T23:24:35.311843+00:00",
+      "status": 200,
+      "bytes": 4838,
+      "sha256": "c9cd15692ea4e80ffa8eb7e48d1f28e5e893ffeb6c5bd991d6b477f17ada3f5f",
+      "headers": {
+        "etag": "W/\"f7c8e69e1b7e6aefe6e320943f821758d1c09c3b9b19af190622c99fe485d2f5\"",
+        "x-ratelimit-remaining": "53",
+        "x-ratelimit-reset": "1793405569"
+      }
+    },
+    {
+      "label": "license",
+      "method": "GET",
+      "url": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/LICENSE",
+      "captured_at": "2026-10-30T23:24:35.523294+00:00",
+      "status": 200,
+      "bytes": 1079,
+      "sha256": "a0df745636ded7b39d42761f4e5000fb0718c04e98be6b004bf00efdcd79509a",
+      "headers": {
+        "etag": "\"c6853641dc1e050fd85e5589c81850f888f2ad5d9cbb41dfb20250bbbb83b355\""
+      }
+    },
+    {
+      "label": "skills-tree",
+      "method": "GET",
+      "url": "https://api.github.com/repos/Last-Humans-Coding-Under-White-Nights/relaymind/git/trees/576f891f61d333007447e15adce75bf84aba4574?recursive=1",
+      "captured_at": "2026-10-30T23:24:35.733969+00:00",
+      "status": 200,
+      "bytes": 6949,
+      "sha256": "1c182c62a4b0104ca15c8d27b1d077c3aca8a47650e430be4a24a2579e597cbf",
+      "headers": {
+        "etag": "W/\"c511ad1364471635878fe351a4b16fac7f3ff295a766a0999c4367718981a207\"",
+        "x-ratelimit-remaining": "52",
+        "x-ratelimit-reset": "1793405569"
+      }
+    },
+    {
+      "label": "original-0000",
+      "method": "GET",
+      "url": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/check-service-health/SKILL.md",
+      "captured_at": "2026-10-30T23:24:35.969181+00:00",
+      "status": 200,
+      "bytes": 1465,
+      "sha256": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e",
+      "headers": {
+        "etag": "\"aaacb3aee40bce0d4bba757948183ea5106b2f6530ec6f3175672734760b59c1\""
+      }
+    },
+    {
+      "label": "original-0001",
+      "method": "GET",
+      "url": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/check-service-health/skill.manifest.json",
+      "captured_at": "2026-10-30T23:24:36.194987+00:00",
+      "status": 200,
+      "bytes": 447,
+      "sha256": "8d3a94217e514bcebcca1f0ed8f3304197a9f51131795c64bcf5a7bda560e5ac",
+      "headers": {
+        "etag": "\"dfdfd45d69036fe448a48a59940fdc78c91327dee900444b44dc84c68c19f26c\""
+      }
+    },
+    {
+      "label": "original-0002",
+      "method": "GET",
+      "url": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/delete-demo-database/SKILL.md",
+      "captured_at": "2026-10-30T23:24:36.401842+00:00",
+      "status": 200,
+      "bytes": 1608,
+      "sha256": "847d307ecb98012cfef73baf8e5dcc154997ee80993041ca3e4a9cd851b0b614",
+      "headers": {
+        "etag": "\"76dfdea32c7d7075ffb5341c9a1a60c06618ec196a838b7a4b9127c6dea01347\""
+      }
+    },
+    {
+      "label": "original-0003",
+      "method": "GET",
+      "url": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/delete-demo-database/skill.manifest.json",
+      "captured_at": "2026-10-30T23:24:36.615807+00:00",
+      "status": 200,
+      "bytes": 321,
+      "sha256": "a38c4adf589ef4a6d3939c89ff12a1ddbccaf80b81b30d7ec3fd4b1466e81257",
+      "headers": {
+        "etag": "\"c02d48a91d17b8208d2f8db5a577cb26cca10d8ddb51b19c2451635f4d3116ef\""
+      }
+    },
+    {
+      "label": "original-0004",
+      "method": "GET",
+      "url": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/health-and-diagnostic-checklist/SKILL.md",
+      "captured_at": "2026-10-30T23:24:36.856215+00:00",
+      "status": 200,
+      "bytes": 1752,
+      "sha256": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d",
+      "headers": {
+        "etag": "\"1b5b03a96abe4fcd3011713fe0694a6615fe7604c144370e100f8fce71824630\""
+      }
+    },
+    {
+      "label": "original-0005",
+      "method": "GET",
+      "url": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/health-and-diagnostic-checklist/skill.manifest.json",
+      "captured_at": "2026-10-30T23:24:37.051495+00:00",
+      "status": 200,
+      "bytes": 323,
+      "sha256": "2a6516629ba6271949931d1e03f22aef06b0261babd76a7dbebadf8ef4e244e6",
+      "headers": {
+        "etag": "\"e7daa7847f89b7c294ae79146030406be01cec129c3758e499c5844e2b5d86c3\""
+      }
+    },
+    {
+      "label": "original-0006",
+      "method": "GET",
+      "url": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/investigate-performance/SKILL.md",
+      "captured_at": "2026-10-30T23:24:37.273768+00:00",
+      "status": 200,
+      "bytes": 1790,
+      "sha256": "ff966b6441c0dcc36fa6e1c4013504cb4bd4b4c999b173bed7455dceffdf5fe6",
+      "headers": {
+        "etag": "\"eb40d34ffda94e2b931eb12cf68e0e3bebc3fc3a431695376253cf2d6c8398d1\""
+      }
+    },
+    {
+      "label": "original-0007",
+      "method": "GET",
+      "url": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/investigate-performance/skill.manifest.json",
+      "captured_at": "2026-10-30T23:24:37.506407+00:00",
+      "status": 200,
+      "bytes": 692,
+      "sha256": "4721f17cc9ce0ab84cd55760c90c6a6e3c7d305e9eb51f20ebb4d2d9ba909a8d",
+      "headers": {
+        "etag": "\"ef687e24465d21c5f6810eb637defa7f0ce4c5d9de96c22bce170fc94896176e\""
+      }
+    },
+    {
+      "label": "original-0008",
+      "method": "GET",
+      "url": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/lookup-latest-deployment/SKILL.md",
+      "captured_at": "2026-10-30T23:24:37.715216+00:00",
+      "status": 200,
+      "bytes": 1344,
+      "sha256": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a",
+      "headers": {
+        "etag": "\"4428c2a0665a31a0205cc8530f86c07d1d73771cb58816b1806c5826f251fabb\""
+      }
+    },
+    {
+      "label": "original-0009",
+      "method": "GET",
+      "url": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/lookup-latest-deployment/skill.manifest.json",
+      "captured_at": "2026-10-30T23:24:38.057339+00:00",
+      "status": 200,
+      "bytes": 449,
+      "sha256": "bfd372aca15b2643e8be7fb5ceadab8ba442aac2b5749d0d47f8be7356008cf6",
+      "headers": {
+        "etag": "\"2575ffec382f95d2210ae9f5fddcd9a640880e20739e58a3ac25bf674fb61ebe\""
+      }
+    },
+    {
+      "label": "original-0010",
+      "method": "GET",
+      "url": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/summarize-incident-counts/SKILL.md",
+      "captured_at": "2026-10-30T23:24:38.272421+00:00",
+      "status": 200,
+      "bytes": 1432,
+      "sha256": "dbb5d8ae163f928c60bb61707807080b68a4a3ec4f77574beede2b390f8e46bb",
+      "headers": {
+        "etag": "\"3162f3c9fcb9f2b6bb56dfdcb18d1747cd031c2d3bba24b826951b5b1c49864d\""
+      }
+    },
+    {
+      "label": "original-0011",
+      "method": "GET",
+      "url": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/summarize-incident-counts/skill.manifest.json",
+      "captured_at": "2026-10-30T23:24:38.485118+00:00",
+      "status": 200,
+      "bytes": 292,
+      "sha256": "bd53f94fb4a31812f589e9da3529723e83c8eaff8f27bf9907f9783376496430",
+      "headers": {
+        "etag": "\"49972989a8d06154d2af3f437238df3c9003488cde17086c9202636e957e6225\""
+      }
+    }
+  ],
+  "checks": {
+    "acquisition": "pass",
+    "rights": "pass",
+    "original_blob_hashes": "pass",
+    "ordinary_skill_validation": "pass"
+  },
+  "second_observation": {
+    "prior": {
+      "commit": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+      "captured_at": "2026-10-30T23:12:50.091954+00:00",
+      "sha256": "aa38ce2133bfdd2e2d4112c31901a1a1a4d324cf0780856dd58ea76c6efb04b0",
+      "minimum_seconds": 300,
+      "elapsed_seconds": 704.618065
+    },
+    "current_commit": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+    "movement_observed": false
+  },
+  "rights": {
+    "path": "LICENSE",
+    "license": "MIT",
+    "bytes": 1079,
+    "git_blob_sha1": "7285cea2bcc4729ec4894d4dbf9f9e54e3713178",
+    "sha256": "a0df745636ded7b39d42761f4e5000fb0718c04e98be6b004bf00efdcd79509a"
+  },
+  "commit": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+  "root_tree": "9c387e752521c1173572261339fd7f29bb004192",
+  "skills_tree": "576f891f61d333007447e15adce75bf84aba4574",
+  "received_bytes": 28264,
+  "package_versions": [
+    "0.2.0",
+    "0.1.1",
+    "0.1.1",
+    "0.2.0",
+    "0.2.0",
+    "0.1.1"
+  ],
+  "duration_ms": 4167.7902190131135,
+  "finished_at": "2026-10-30T23:24:38.877914+00:00"
+}

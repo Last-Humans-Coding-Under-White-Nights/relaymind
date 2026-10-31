@@ -1,5 +1,11 @@
 # Testing RelayMind (Milestones 1 to 5)
 
+For current independent skill/tool setup, start with the
+[English](asset-selection.md) or [简体中文](asset-selection.zh-CN.md) guide and
+[privacy/recovery reference](asset-privacy-security.md). Historical issue sections
+below retain their original scope; later catalog/refresh work does not turn an
+earlier backend fixture into installed-host evidence.
+
 How to verify the M1 to M5 deliverables, by hand on macOS and Windows
 and with the automated suites. M1 qualifies the local model runtime and
 the adapters; M2 adds the bounded local loop; M3 adds handoff,
@@ -40,6 +46,11 @@ run. A test that needs a fixed port, a shared file or global state must isolate
 it per test (`tmp_path`, a free port), so it can run beside other files.
 
 ### CI timing reports
+
+To run the same CI jobs on a branch manually, use
+`gh workflow run ci.yml --ref your-branch-name`. This dispatches the existing
+Ubuntu, macOS and Windows checks and does not change pull-request status
+requirements.
 
 The `check` and `openclaw-plugin` jobs each run on Ubuntu, macOS and Windows.
 Both pytest commands print the 30 slowest setup, call and teardown durations.
@@ -2605,3 +2616,102 @@ MCP provenance, and leaves no output on tamper/denied rights. It launches no MCP
 server and performs no source acquisition. All generated input data remain
 explicitly synthetic test fixtures; there is no checked-in real 300-asset release.
 See the acceptance/custodian checklist in `evaluation/assets/README.md`.
+
+## Customer recommendation workflow checks (#207)
+
+RM34–RM44; AC25–AC37. The [English](asset-selection.md) and
+[Chinese](asset-selection.zh-CN.md) entry guides share the same current commands.
+The local-library walkthrough uses a disposable store, one ordinary SKILL.md,
+the production launcher, application bearer, readiness and an idempotent create;
+retrieval needs no model inference. Restart with that store and its protected
+erasure key, then read the same recommendation with the new bearer. This does
+not exercise a qualified host action or target-platform privacy gate.
+
+Run the existing deterministic CLI/index and privacy boundaries:
+
+```bash
+pytest tests/test_source_benchmark_cli.py tests/test_source_index_preparation.py \
+  tests/test_source_benchmark_interop_review.py tests/test_asset_preparation.py \
+  tests/test_asset_index_preparation_integration.py
+pytest tests/test_asset_user_actions.py tests/test_asset_feedback_privacy.py \
+  tests/test_recommendation_recovery.py
+```
+
+[Source diagnostics](SOURCE_BENCHMARK.md) compare JSON only; the separate
+[formal fixture walkthrough](ASSET_BENCHMARK.md#built-in-team-a-and-team-b-on-the-same-fixture)
+uses its companion resolver for JSON/Markdown comparison. Reuse already verified
+private source cache bytes for offline build checks; preserve old captures and
+their failures. CLI choose prints options to stderr and a new receipt to stdout,
+without modifying the run report or enrolling a host action channel. The
+installed M10 skill/MCP/approval/correction walkthrough needs its delivered host
+artifact and real authority checks, separately from these repository examples.
+
+## Qualified public source refresh (spec 0.59; RM34/RM38/RM43)
+
+The source-specific suite is separate from model and host qualification:
+
+```bash
+pytest tests/test_asset_remote_contracts.py tests/test_asset_remote_transport.py \
+  tests/test_asset_remote_github.py tests/test_asset_refresh.py \
+  tests/test_asset_refresh_demo.py tests/test_github_skill_source_qualification.py
+```
+
+It covers the installed profile/config boundary, API-only credentials and safe
+failures, pre-dispatch request/byte limits, complete immutable trees/originals,
+rights checks, explicit owned removals, outage/stale recovery, profile cooldown
+across restart/rename/manual rescan, atomic poll reservation, cancellation/drain
+and foreground CPU gates. Loopback source-server cases perform actual socket
+I/O through a constructor-injected test transport; they remain fixtures. Native
+Windows source tests still require native Windows and are not Linux passes.
+
+For an actual periodic demonstration, create a new disposable production config
+and store, enable recommendations with the normal 500/150 ms limits, use the
+installed remote profile and explicitly set `remote_seconds=300`. Preserve the
+existing model/provider configuration. Then run the bounded developer probe:
+
+```bash
+PYTHONPATH=src python scripts/probes/run_asset_refresh_demo.py \
+  --config /path/to/disposable/production.toml \
+  --output /path/to/disposable
+```
+
+The store must be new and under the output directory. The probe owns the ordinary
+launcher lifecycle, waits for two real existing-worker scheduled source jobs,
+and sends a lexical API query after each. It has no interval override, arbitrary
+source URL, fake-clock or qualification flag. Run it in the background while
+other checks/docs proceed; do not replace the second scheduled poll with manual
+rescan. The [versioned source record](evidence/2026-10-30-github-skill-source/README.md)
+separates actual acquisition/product polling, fixture changes/failures and all
+remaining resource/platform/acceptance limitations. Matrix's partial market
+capture remains distinct from this source's complete configured scope.
+
+### Semantic and remote integration checks
+
+RM38/RM41/RM42/RM43; AC29/AC32/AC33/AC34. The deterministic embedding,
+hybrid, adaptation and native-ownership tests use trusted constructor doubles;
+they neither populate the production qualification registry nor execute a host
+asset. Run the shared-owner regressions with:
+
+```bash
+pytest tests/test_asset_semantic_refresh_integration.py \
+  tests/test_asset_embedding_jobs.py tests/test_embedding_native_ownership.py \
+  tests/test_embedding_launcher.py tests/test_asset_adaptation_stage.py \
+  tests/test_adaptation_buffers.py tests/test_asset_refresh.py
+```
+
+The integrated inventory check requires exact current Python/schema membership
+and reviewed SPEC/pyproject/script anchors; deleting a member or forging its hash
+still fails. The joint source test demonstrates fixture remote acquisition,
+semantic rebuild on the same worker during mandatory remote cooldown, and vector
+invalidation on an updated/deleted source generation. Job digests bind both
+semantic and source-refresh policies. These controls are deterministic fixtures,
+not live source changes or an operational/platform pass.
+
+Historical native and public periodic observations retain their executed source
+identities. A development manifest may be refreshed to actual installed runtime
+and implementation identity while retaining artifact bytes, but that creates no
+ordinary activation authority and rewrites no old evidence. The production
+embedding qualification registry contains only the two exact reviewed Linux CPU
+identities; every other artifact remains unqualified pending independent
+exact-identity review. No 512 MiB memory gate or universal 50 ms cancellation SLA
+is introduced.
