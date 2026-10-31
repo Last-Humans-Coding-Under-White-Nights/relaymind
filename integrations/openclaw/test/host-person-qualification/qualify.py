@@ -803,6 +803,8 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
     )["version"]
     if actual_version != HOST_VERSION:
         raise ValueError("native_host_version")
+    if extension is not None and hasattr(extension, "prepare_host"):
+        extension.prepare_host(host, environment, work, config_path)
     caddyfile = work / "Caddyfile"
     caddyfile.write_bytes(
         proxy_configuration(address, proxy_port, gateway_port, accounts, signing_key, work).encode(

@@ -123,7 +123,8 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         timeout-minutes: 12
         run: |
-          python integrations/openclaw/test/host-action-qualification/qualify.py \
+          python integrations/openclaw/test/host-ordinary-qualification/qualify.py \
+            --tarball "release/openclaw/$(node -p "require('./release/openclaw/release.json').filename")" \
             --work-dir "${RUNNER_TEMP}/relaymind-person-qualification" \
             --out ci-evidence/openclaw-person-ingress-ubuntu.json
 

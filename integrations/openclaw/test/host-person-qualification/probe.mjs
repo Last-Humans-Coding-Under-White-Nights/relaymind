@@ -86,7 +86,7 @@ export default definePluginEntry({
   register(api) {
     const record = event => {
       if (statSync(api.pluginConfig.eventFile).size > 1024 * 1024) throw new Error("capture_bound");
-      appendFileSync(api.pluginConfig.eventFile, JSON.stringify(event) + "\n", { encoding: "utf8" });
+      appendFileSync(api.pluginConfig.eventFile, JSON.stringify({...event, monotonic_ns: process.hrtime.bigint().toString()}) + "\n", { encoding: "utf8" });
     };
     api.registerGatewayMethod("rmqualification.person", createPersonProbe({
       origin: api.pluginConfig.origin, record,

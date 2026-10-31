@@ -1,0 +1,1 @@
+{"id":"relaymind-ordinary-observer","name":"Passive ordinary entry observer","activation":{"onStartup":true},"configSchema":{"type":"object","additionalProperties":false,"required":["eventFile"],"properties":{"eventFile":{"type":"string"}}}}
