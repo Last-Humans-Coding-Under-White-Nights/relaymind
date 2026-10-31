@@ -38,7 +38,7 @@ def _public_url(value: str) -> str:
             if not ipaddress.ip_address(host).is_global:
                 raise ValueError
         except ValueError:
-            if re.fullmatch(r"[0-9a-fA-F:.]+", host):
+            if ":" in host or re.fullmatch(r"[0-9.]+", host):
                 raise
         if len(value.encode()) > 2048:
             raise ValueError

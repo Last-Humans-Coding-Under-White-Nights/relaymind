@@ -406,7 +406,10 @@ def validate_preparation_record(
         if record["reason"] == "poll_limit" and len(main) - 1 != normalized["max_polls"]:
             raise ValueError("invalid_preparation_poll_limit")
     if record["status"] == "ready":
-        if record["observed_ms"] is not None and record["observed_ms"] > normalized["total_ms"]:
+        if (
+            record["observed_ms"] is not None
+            and record["observed_ms"] > normalized["total_ms"] + 1e-3
+        ):
             raise ValueError("invalid_preparation_deadline")
     elif cleanup is None and (
         previous is not None or main[-1]["reason"] not in ("cancelled", "deadline_exceeded")

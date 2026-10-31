@@ -21,7 +21,9 @@ def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatal
     for row in recipe.get("files", []):
         if (
             not isinstance(row, Mapping)
-            or row.get("id") in files
+            or not isinstance(row.get("id"), str)
+            or not row["id"]
+            or row["id"] in files
             or not isinstance(row.get("sha256"), str)
             or not re.fullmatch("[0-9a-f]{64}", row["sha256"])
             or type(row.get("bytes")) is not int
@@ -51,7 +53,29 @@ def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatal
         return retained[file_id]
 
     originals = []
+    required_asset_keys = {
+        "file_id",
+        "asset_id",
+        "source_id",
+        "source_url",
+        "revision",
+        "captured_at",
+        "kind",
+        "name",
+        "format",
+    }
+    allowed_asset_keys = required_asset_keys | {
+        "version",
+        "metadata_file_id",
+        "license_file_id",
+    }
     for raw in recipe.get("assets", []):
+        if (
+            not isinstance(raw, Mapping)
+            or not required_asset_keys <= set(raw)
+            or not set(raw) <= allowed_asset_keys
+        ):
+            raise AssetCorpusError("invalid_source_recipe")
         row = dict(raw)
         file_id = row.pop("file_id")
         metadata_id = row.pop("metadata_file_id", None)
@@ -72,10 +96,13 @@ def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatal
         if not isinstance(row, Mapping) or not {"kind", "file_id"} <= set(row):
             raise AssetCorpusError("invalid_source_recipe")
         extra.append((row["kind"], cached(row["file_id"])))
+    dataset_id = recipe.get("dataset_id")
+    if not isinstance(dataset_id, str) or not dataset_id:
+        raise AssetCorpusError("invalid_source_recipe")
     return build_source_catalog(
         originals,
         output,
-        dataset_id=recipe["dataset_id"],
+        dataset_id=dataset_id,
         exclusions=recipe.get("exclusions", []),
         additional_evidence=extra,
     )
