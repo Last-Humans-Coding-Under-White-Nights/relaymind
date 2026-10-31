@@ -369,3 +369,41 @@ def test_rm35_asset_version_is_optional(tmp_path):
     result = build_recipe(recipe, cache, tmp_path / "catalog.json")
     assert result.admitted == 1
     assert result.excluded == 0
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"files": None},
+        {"files": "files"},
+        {"assets": None},
+        {"assets": {}},
+        {"evidence_files": None},
+        {"evidence_files": [{"kind": "metadata", "file_id": "f"}]},
+        {"evidence_files": [{"kind": "license", "file_id": "f", "extra": 1}]},
+        {"evidence_files": [{"kind": "license", "file_id": ""}]},
+        {"exclusions": None},
+        {"exclusions": "x"},
+        {"exclusions": [{"source_id": "s"}]},
+        {"exclusions": [{"source_id": 1, "original_id": None, "reason": "r"}]},
+        {"exclusions": [{"source_id": "s", "original_id": 2, "reason": "r"}]},
+        {"exclusions": [{"source_id": "s", "original_id": None, "reason": ""}]},
+    ],
+)
+def test_rm35_recipe_structure_errors_are_invalid_source_recipe(tmp_path, change):
+    """RM35/AC26: a malformed recipe is a recipe error; nothing is built or deleted."""
+    from relaymind.evaluation.asset_corpus_io import AssetCorpusError
+    from relaymind.evaluation.asset_source_recipe import build_recipe
+
+    recipe = dict(
+        schema_version=1,
+        dataset_id="fixture-source-benchmark",
+        files=[],
+        assets=[],
+        evidence_files=[],
+        exclusions=[],
+    )
+    recipe.update(change)
+    with pytest.raises(AssetCorpusError, match="invalid_source_recipe"):
+        build_recipe(recipe, tmp_path / "cache", tmp_path / "catalog")
+    assert not (tmp_path / "catalog").exists()

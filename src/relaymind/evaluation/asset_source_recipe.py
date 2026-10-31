@@ -16,6 +16,9 @@ from relaymind.evaluation.asset_source_catalog import (
 def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatalogResult:
     if recipe.get("schema_version") != 1 or type(recipe.get("schema_version")) is not int:
         raise AssetCorpusError("invalid_source_recipe")
+    for key in ("files", "assets", "evidence_files", "exclusions"):
+        if not isinstance(recipe.get(key, []), list):
+            raise AssetCorpusError("invalid_source_recipe")
     files = {}
     for row in recipe.get("files", []):
         if (
@@ -100,9 +103,27 @@ def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatal
         )
     extra = []
     for row in recipe.get("evidence_files", []):
-        if not isinstance(row, Mapping) or not {"kind", "file_id"} <= set(row):
+        if (
+            not isinstance(row, Mapping)
+            or set(row) != {"kind", "file_id"}
+            or row["kind"] not in ("license", "notice", "source_provenance")
+            or not isinstance(row["file_id"], str)
+            or not row["file_id"]
+        ):
             raise AssetCorpusError("invalid_source_recipe")
         extra.append((row["kind"], cached(row["file_id"])))
+    exclusions = recipe.get("exclusions", [])
+    for row in exclusions:
+        if (
+            not isinstance(row, Mapping)
+            or not {"source_id", "original_id", "reason"} <= set(row)
+            or not isinstance(row["source_id"], str)
+            or not row["source_id"]
+            or not isinstance(row["reason"], str)
+            or not row["reason"]
+            or not isinstance(row["original_id"], (str, type(None)))
+        ):
+            raise AssetCorpusError("invalid_source_recipe")
     dataset_id = recipe.get("dataset_id")
     if not isinstance(dataset_id, str) or not dataset_id:
         raise AssetCorpusError("invalid_source_recipe")
@@ -110,7 +131,7 @@ def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatal
         originals,
         output,
         dataset_id=dataset_id,
-        exclusions=recipe.get("exclusions", []),
+        exclusions=exclusions,
         additional_evidence=extra,
     )
 
