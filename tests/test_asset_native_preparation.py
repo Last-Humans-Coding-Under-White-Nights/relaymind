@@ -491,6 +491,109 @@ def test_source_native_runner_reuses_prepared_primary_for_every_row(
         )
 
 
+def test_local_preparation_policy_requires_shared_cold_total():
+    """RM40/AC31: local setup policy is not exempt from comparison invariants."""
+    from relaymind.selection.asset_preparation import (
+        normalize_preparation,
+        preparation_policy_mismatches,
+    )
+
+    local_500 = normalize_preparation(local_config(), http_primary=False, local_primary=True)
+    local_900 = normalize_preparation(
+        local_config(total_ms=900), http_primary=False, local_primary=True
+    )
+    assert preparation_policy_mismatches(local_500, local_900) == ("total_ms",)
+    assert preparation_policy_mismatches(local_500, local_500) == ()
+
+    http_cold = normalize_preparation(
+        {
+            "mode": "http",
+            "url": "http://127.0.0.1:1/index",
+            "profile": "cold",
+            "total_ms": 500,
+            "request_ms": 100,
+        },
+        http_primary=True,
+        local_primary=True,
+    )
+    assert preparation_policy_mismatches(local_500, http_cold) == ()
+    http_reuse = normalize_preparation(
+        {
+            "mode": "http",
+            "url": "http://127.0.0.1:1/index",
+            "profile": "reuse",
+            "total_ms": 500,
+            "request_ms": 100,
+        },
+        http_primary=True,
+        local_primary=True,
+    )
+    assert preparation_policy_mismatches(local_500, http_reuse) == ("profile",)
+    http_slower = normalize_preparation(
+        {
+            "mode": "http",
+            "url": "http://127.0.0.1:1/index",
+            "profile": "cold",
+            "total_ms": 900,
+            "request_ms": 100,
+        },
+        http_primary=True,
+        local_primary=True,
+    )
+    assert preparation_policy_mismatches(local_500, http_slower) == ("total_ms",)
+    assert preparation_policy_mismatches(local_500, normalize_preparation(None)) == ()
+
+
+def test_local_offer_is_bounded_to_the_requested_kinds(tmp_path):
+    """RM40/AC31: a single-kind cohort does not fail on other catalog kinds."""
+    from dataclasses import replace
+
+    from relaymind.canonical import canonical_digest
+    from relaymind.evaluation.asset_evidence import effective_asset_config
+    from relaymind.evaluation.asset_native_runtime import NativeBenchmarkRuntime
+
+    async def scenario():
+        production, release, base = native_fixture(tmp_path)
+        tool = copy.deepcopy(release.catalog["assets"][0])
+        record = tool["record"]
+        record.update(asset_id="calendar-tool", kind="mcp_tool")
+        record["source_locator"] = "fixture:calendar-tool"
+        record["identity"] = {
+            "server_id": "fixture",
+            "tool_name": "calendar",
+            "exposed_name": "calendar",
+            "input_schema": {},
+            "schema_hash": canonical_digest({}),
+        }
+        release = replace(
+            release,
+            catalog=dict(release.catalog, assets=[*release.catalog["assets"], tool]),
+        )
+        effective = effective_asset_config(
+            production,
+            release,
+            runner_digest=base["generator"]["runner_digest"],
+            protocol_digest=base["generator"]["protocol_digest"],
+            requested_kinds=("skill",),
+        )
+        runtime = await NativeBenchmarkRuntime.create(production, release, effective)
+        try:
+            assert [record.asset_id for record in runtime.catalog.snapshot().assets] == ["calendar"]
+            prepared = await runtime.prepare_local(local_config(), requested_kinds=("skill",))
+            assert prepared["status"] == "ready"
+            skill = next(
+                asset["record"]
+                for asset in release.catalog["assets"]
+                if asset["record"]["kind"] == "skill"
+            )
+            assert prepared["binding"]["requested_kinds"] == ["skill"]
+            assert prepared["binding"]["catalog_digest"] == canonical_digest([skill])
+        finally:
+            await runtime.close()
+
+    asyncio.run(scenario())
+
+
 def test_local_empty_offer_retains_actual_zero_revision_without_inference(tmp_path):
     from dataclasses import replace
 

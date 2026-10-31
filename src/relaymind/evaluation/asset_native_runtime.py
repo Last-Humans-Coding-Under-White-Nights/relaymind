@@ -121,7 +121,11 @@ class NativeBenchmarkRuntime:
         return now
 
     @classmethod
-    async def create(cls, production, release, effective):
+    async def create(cls, production, release, effective, *, requested_kinds=None):
+        selected = effective["requested_kinds"] if requested_kinds is None else requested_kinds
+        kinds = tuple(sorted(set(selected)))
+        if not kinds or any(kind not in ("skill", "mcp_tool") for kind in kinds):
+            raise ValueError("invalid_requested_kinds")
         runtime = cls()
         runtime.directory = tempfile.TemporaryDirectory(prefix="asset-native-runtime-")
         temporary = Path(runtime.directory.name)
@@ -140,7 +144,7 @@ class NativeBenchmarkRuntime:
                     secrets=(),
                 )
                 for asset in release.catalog["assets"]
-                if asset["record"]["asset_id"] in eligible
+                if asset["record"]["asset_id"] in eligible and asset["record"]["kind"] in kinds
             )
             runtime.catalog.initialize_evaluation_offer(
                 documents,

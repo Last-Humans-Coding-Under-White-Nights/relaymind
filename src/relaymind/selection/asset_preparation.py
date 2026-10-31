@@ -99,14 +99,19 @@ def normalize_preparation(
 
 
 def preparation_policy_mismatches(left: Mapping, right: Mapping) -> tuple[str, ...]:
-    """Compare shared HTTP setup policy while allowing stateless/indexed arms."""
-    if left["mode"] == right["mode"] == "http":
-        return tuple(
-            key
-            for key in ("profile", "total_ms", "request_ms", "poll_ms", "max_polls")
-            if left[key] != right[key]
-        )
-    return ()
+    """Compare setup policy while allowing declared stateless/indexed arms."""
+    modes = {left["mode"], right["mode"]}
+    if modes == {"http"}:
+        keys = ("profile", "total_ms", "request_ms", "poll_ms", "max_polls")
+    elif modes == {"local"}:
+        keys = ("total_ms",)
+    elif modes == {"local", "http"}:
+        # HTTP polling limits are inapplicable to local execution. The shared
+        # cold profile and preparation deadline still have to match.
+        keys = ("profile", "total_ms")
+    else:
+        return ()
+    return tuple(key for key in keys if left[key] != right[key])
 
 
 def preparation_binding(
