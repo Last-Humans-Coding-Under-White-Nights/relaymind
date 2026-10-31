@@ -51,7 +51,12 @@ PERSON_RPC_EVENT_REASONS = {
         {"admission_refused", "initial_authority_retired", "post_await_authority_retired"}
     ),
     "probe_failed": frozenset(
-        {"fixture_hold_timeout", "fixture_pause_failed", "inventory_unavailable"}
+        {
+            "fixture_hold_timeout",
+            "fixture_pause_failed",
+            "inventory_unavailable",
+            "workspace_unavailable",
+        }
     ),
 }
 _PRIVATE = tuple(
@@ -377,6 +382,12 @@ def native_rpc(page, method: str, params: dict) -> dict:
     except TimeoutError:
         raise
     except Exception as error:
+        # Playwright's own TimeoutError is not the built-in one; the overall
+        # deadline above still passes through unchanged.
+        if type(error).__name__ == "TimeoutError" and type(error).__module__.startswith(
+            "playwright"
+        ):
+            raise ValueError("native_rpc_timeout") from None
         text = str(error)
         reason = next((r for r in RPC_TRANSPORT_REASONS if r in text), "native_rpc_transport")
         raise ValueError(reason) from None
@@ -408,6 +419,8 @@ def person_rpc_receipt(result: dict, account_email: str) -> dict:
     if (
         not isinstance(receipt, dict)
         or not isinstance(result.get("id"), str)
+        or frame.get("ok") is not True
+        or frame.get("id") != result["id"]
         or any(not isinstance(receipt.get(k), str) or not receipt[k] for k in PERSON_RECEIPT_FIELDS)
         or receipt["requestId"] != result["id"]
         or receipt["authenticatedUserId"] != account_email
@@ -791,7 +804,8 @@ def read_native_events(path: Path) -> list[dict]:
     complete, _, _partial = raw.rpartition(b"\n")
     events = []
     for line in complete.split(b"\n"):
-        if not line:
+        # Blank, whitespace-only and CRLF blank lines carry no event.
+        if not line.strip(b" \t\r"):
             continue
         try:
             event = json.loads(line)
