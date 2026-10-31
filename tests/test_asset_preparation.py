@@ -199,7 +199,10 @@ def test_polling_stops_and_records_cleanup_without_fabricating_acknowledgement(e
     requests = []
     config |= {"max_polls": 1}
     if ending == "timeout":
-        config |= {"total_ms": 20, "request_ms": 10}
+        # The deadline falls during the poll wait, after the prepare request was
+        # dispatched. A few-millisecond budget could expire before dispatch on a
+        # coarse clock (Windows ticks about every 15.6 ms), leaving nothing to cancel.
+        config |= {"total_ms": 300, "request_ms": 250, "poll_ms": 5000}
 
     def handle(req):
         value = json.loads(req.content)
