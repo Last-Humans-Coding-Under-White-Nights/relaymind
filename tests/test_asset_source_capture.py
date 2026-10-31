@@ -248,3 +248,18 @@ def test_rm40_one_unsafe_url_does_not_exclude_other_rows(tmp_path):
     assert by_id["unsafe"]["status"] == "excluded"
     assert by_id["unsafe"]["reason"] == "unsafe_source_url"
     assert seen == ["https://source.example/file"]
+
+
+def test_rm40_redirect_hosts_compare_case_insensitively(tmp_path):
+    payload = b"redirected original"
+    data = recipe(payload)
+    data["redirect_hosts"] = ["Mirror.Example"]
+
+    def respond(request):
+        if request.url.host == "source.example":
+            return httpx.Response(302, headers={"location": "https://mirror.example/file"})
+        return httpx.Response(200, stream=httpx.ByteStream(payload))
+
+    with capture_client(transport=httpx.MockTransport(respond)) as client:
+        result = api().acquire_recipe(data, tmp_path / "cache", client=client)
+    assert result[0]["status"] == "captured", result[0]

@@ -104,7 +104,8 @@ async def _acquire_recipe(recipe: Mapping, cache_root: Path, *, client=None) -> 
         client = httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=10)
     # Redirects may reach only hosts of rows whose own URL is safe; an unsafe
     # row is excluded by itself below and never blocks the other rows.
-    origins = set(redirect_hosts)
+    # Host names compare case-insensitively; urlsplit().hostname is lower-case.
+    origins = {host.lower() for host in redirect_hosts}
     for other in files:
         try:
             origins.add(urlsplit(_public_url(other["url"])).hostname)
