@@ -9,6 +9,7 @@ function fixture() {
   const events: unknown[] = [];
   const respond = vi.fn();
   const current = vi.fn();
+  const connection = new AbortController();
   const target = { agentId: "main", sessionKey: "native-key", sessionId: "native-id", lifecycleRevision: "native-life" };
   const mutation = withSessionMutationCommitGuard(undefined, current, undefined);
   const options = {
@@ -16,14 +17,14 @@ function fixture() {
     client: { authenticatedUserId: "fixture@example.test", preparedSessionProfile: { profileId: "native-profile" },
       internal: { authenticatedControlUi: true },
       browserOrigin: { origin: "https://fixture.test:8443" }, presenceKey: "native-connection",
-      connect: { device: { id: "native-device" } }, connectionSignal: new AbortController().signal },
+      connect: { device: { id: "native-device" } }, connectionSignal: connection.signal },
     hasCurrentClientAuthority: () => true,
     sessionMutationAuthorization: mutation,
     sessionAccessAuthority: { target, assertCurrent: current }, respond,
   };
   const dispatch = vi.fn(async () => ({ ok: true }));
   const probe = createPersonProbe({ origin: "https://fixture.test:8443", record: (event: unknown) => events.push(event), dispatch, pause: async () => {} });
-  return { options, events, respond, current, dispatch, probe };
+  return { options, events, respond, current, dispatch, probe, connection };
 }
 
 describe("test-only native person RPC probe", () => {
@@ -144,6 +145,42 @@ it("only an authoritative post-await rejection records retirement with the nativ
     pause: async () => { f.options.hasCurrentClientAuthority = () => false; } });
   await probe(f.options);
   expect(f.events.at(-1)).toEqual({ phase: "guard_denied", requestId: "request-a", connectionId: "native-connection", reason: "post_await_authority_retired" });
+});
+
+it("observes the actual held connection abort before releasing the native guard", async () => {
+  const f = fixture();
+  Object.assign(f.options.params, { hold: true });
+  let release!: () => void;
+  const probe = createPersonProbe({ origin: "https://fixture.test:8443", record: (event: unknown) => f.events.push(event), dispatch: f.dispatch,
+    pause: async () => new Promise<void>(resolve => { release = resolve; }) });
+  const pending = probe(f.options);
+  expect(f.events).toMatchObject([{ phase: "prepared", requestId: "request-a", connectionId: "native-connection" }]);
+  f.connection.abort();
+  expect(f.events.at(-1)).toMatchObject({ phase: "connection_retired", requestId: "request-a", connectionId: "native-connection", connection_aborted: true });
+  release();
+  await pending;
+  expect(f.dispatch).not.toHaveBeenCalled();
+  expect(f.events.at(-1)).toMatchObject({ phase: "guard_denied", reason: "post_await_authority_retired" });
+  expect(f.respond.mock.calls[0][0]).toBe(false);
+});
+
+it("refuses held work without a native connection signal", async () => {
+  const f = fixture();
+  Object.assign(f.options.params, { hold: true });
+  Object.assign(f.options.client, { connectionSignal: undefined });
+  await f.probe(f.options);
+  expect(f.dispatch).not.toHaveBeenCalled();
+  expect(f.events).toEqual([{ phase: "guard_denied", requestId: "request-a", connectionId: "native-connection", reason: "admission_refused" }]);
+});
+
+it("removes the held abort observer when work finishes before retirement", async () => {
+  const f = fixture();
+  Object.assign(f.options.params, { hold: true });
+  const remove = vi.spyOn(f.connection.signal, "removeEventListener");
+  await f.probe(f.options);
+  expect(remove).toHaveBeenCalledWith("abort", expect.any(Function));
+  f.connection.abort();
+  expect(f.events.some((event: any) => event.phase === "connection_retired")).toBe(false);
 });
 
 it("unexpected inventory exceptions retain a safe failure cause while authority is current", async () => {
