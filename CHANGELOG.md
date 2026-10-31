@@ -10,6 +10,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `scripts/asset_operations_run.py startup` measures ten real `relaymind serve` startups over a generated 300-skill bilingual catalog, using the existing AC29 driver. It waits for recommendations to be ready and samples memory on POSIX and Windows.
   - `platform` builds an `AssetPlatformReportV1` from install-check and ordinary installed-host records, bound to the companion input manifest. Skill use is never inferred from a selection receipt.
   - All output is labeled `fixture`.
+- Stabilize installed OpenClaw qualification on loaded runners (RM16/RM39;
+  AC30): use bounded ten-second host-event waits, keep fixture holds alive
+  through retirement observation, and capture only fixed ordinary substeps and
+  error classes. Browser failures and the overall deadline now remain failures
+  through skill selection; the 570-second harness and 12-minute CI bounds and
+  all evidence predicates remain unchanged. Fresh evidence must bind the changed
+  harness sources.
+
 - Section 12.6.5 verifier closure and episode driver (#229, #202, #205, #207):
   - The frozen corpus is verified from the input manifest, and host tasks and episodes are bound to it.
   - Off/on adaptation configurations are checked as a named ablation.
