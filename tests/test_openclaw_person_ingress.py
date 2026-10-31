@@ -1167,3 +1167,145 @@ def test_the_trial_reads_host_replies_only_through_the_checked_helpers():
     assert '["payload"]' not in source
     assert '.get("error")' not in source
     assert 'event.get("phase") in {' not in source
+
+
+# --- #224 review (31 Oct 19:00): harness setup failures keep their reasons -------
+
+
+@pytest.mark.parametrize("stdout", [b"not json", b"\xff\xfe", b'{"not": "a list"}'])
+def test_unreadable_network_inventory_is_network_inventory_invalid(monkeypatch, stdout):
+    import subprocess
+
+    api = module()
+    monkeypatch.setattr(
+        subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout, b"")
+    )
+    with pytest.raises(ValueError, match="network_inventory_invalid"):
+        api.discover_network()
+
+
+def test_oversized_network_inventory_is_network_inventory_size(monkeypatch):
+    import subprocess
+
+    api = module()
+    big = b"[" + b" " * (1024 * 1024) + b"]"
+    monkeypatch.setattr(
+        subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, big, b"")
+    )
+    with pytest.raises(ValueError, match="network_inventory_size"):
+        api.discover_network()
+
+
+@pytest.mark.parametrize(
+    "interfaces",
+    [
+        [None],
+        [{"flags": 7}],
+        [{"flags": ["UP"], "addr_info": [None]}],
+        [{"flags": ["UP"], "addr_info": "x"}],
+        ["eth0"],
+    ],
+)
+def test_malformed_interface_records_are_network_inventory_invalid(interfaces):
+    with pytest.raises(ValueError, match="network_inventory_invalid"):
+        module().eligible_private_ipv4(interfaces)
+
+
+def test_the_trial_checks_browser_reply_shapes_before_reading_them():
+    import inspect
+
+    source = inspect.getsource(module()._run_private_trial)
+    assert "isinstance(observed, dict)" in source
+    assert 'isinstance(observed.get("frame"), dict)' in source
+
+
+@pytest.mark.parametrize("failure", ["url_timeout", "socket_timeout"])
+def test_download_network_timeouts_are_artifact_deadline(tmp_path, monkeypatch, failure):
+    import socket
+    import urllib.error
+    import urllib.request
+
+    api = module()
+
+    class Opener:
+        def open(self, *args, **kwargs):
+            if failure == "url_timeout":
+                raise urllib.error.URLError(TimeoutError("timed out"))
+            raise socket.timeout("timed out")
+
+    monkeypatch.setattr(urllib.request, "build_opener", lambda *a: Opener())
+    with pytest.raises(TimeoutError, match="^artifact_deadline$"):
+        api.download_authcrunch(tmp_path / "authcrunch.tgz")
+    assert not (tmp_path / "authcrunch.tgz").exists()
+
+
+def _archive(tmp_path, members):
+    import hashlib
+    import io
+    import tarfile
+
+    path = tmp_path / "authcrunch.tgz"
+    with tarfile.open(path, "w:gz") as package:
+        for name, data, kind in members:
+            info = tarfile.TarInfo(name)
+            if kind == "dir":
+                info.type = tarfile.DIRTYPE
+                package.addfile(info)
+            else:
+                info.size = len(data)
+                package.addfile(info, io.BytesIO(data))
+    raw = path.read_bytes()
+    return path, len(raw), hashlib.sha256(raw).hexdigest()
+
+
+@pytest.mark.parametrize(
+    "members, reason",
+    [
+        ([(f"f{i}", b"x", "file") for i in range(1001)], "artifact_members"),
+        ([("other", b"x", "file")], "artifact_executable"),
+        ([("bin/authcrunch", b"", "dir")], "artifact_executable"),
+    ],
+)
+def test_release_archive_shape_failures_keep_their_reasons(tmp_path, monkeypatch, members, reason):
+    api = module()
+    archive, size, digest = _archive(tmp_path, members)
+    monkeypatch.setattr(api, "AUTHCRUNCH_BYTES", size)
+    monkeypatch.setattr(api, "AUTHCRUNCH_SHA256", digest)
+    with pytest.raises(ValueError, match=reason):
+        api.install_authcrunch(archive, tmp_path / "bin")
+
+
+def test_release_archive_symlinked_destination_is_artifact_path(tmp_path, monkeypatch):
+    api = module()
+    archive, size, digest = _archive(tmp_path, [("bin/authcrunch", b"#!", "file")])
+    monkeypatch.setattr(api, "AUTHCRUNCH_BYTES", size)
+    monkeypatch.setattr(api, "AUTHCRUNCH_SHA256", digest)
+    (tmp_path / "real").mkdir()
+    (tmp_path / "bin").symlink_to(tmp_path / "real")
+    with pytest.raises(ValueError, match="artifact_path"):
+        api.install_authcrunch(archive, tmp_path / "bin")
+
+
+@pytest.mark.parametrize(
+    "ports, accounts, reason",
+    [
+        ((80, 9000), 2, "qualification_port"),
+        ((9000, True), 2, "qualification_port"),
+        ((9000, 9001), 1, "qualification_accounts"),
+        ((9000, 9001), "bad-user", "qualification_accounts"),
+        ((9000, 9001), "bad-email", "qualification_accounts"),
+    ],
+)
+def test_proxy_configuration_bounds(tmp_path, ports, accounts, reason):
+    good = [
+        dict(username="alice", email="alice@example.test", password="p"),
+        dict(username="bob", email="bob@example.test", password="p"),
+    ]
+    if accounts == 1:
+        good = good[:1]
+    elif accounts == "bad-user":
+        good[0]["username"] = "Alice!"
+    elif accounts == "bad-email":
+        good[0]["email"] = "alice@elsewhere.example"
+    with pytest.raises(ValueError, match=reason):
+        module().proxy_configuration("10.0.0.5", *ports, good, "k" * 32, tmp_path)

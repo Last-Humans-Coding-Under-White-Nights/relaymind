@@ -73,10 +73,17 @@ def eligible_private_ipv4(interfaces: list[dict]) -> list[str]:
     """Use actual UP non-loopback interface records, never broad is_private."""
     addresses = set()
     for interface in interfaces:
+        if not isinstance(interface, dict):
+            raise ValueError("network_inventory_invalid")
         flags = interface.get("flags", [])
+        records = interface.get("addr_info", [])
+        if not isinstance(flags, list) or not isinstance(records, list):
+            raise ValueError("network_inventory_invalid")
         if "UP" not in flags or "LOOPBACK" in flags:
             continue
-        for value in interface.get("addr_info", []):
+        for value in records:
+            if not isinstance(value, dict):
+                raise ValueError("network_inventory_invalid")
             address = value.get("local")
             if value.get("family") == "inet" and _private_ipv4(address):
                 addresses.add(address)
@@ -88,7 +95,10 @@ def discover_network() -> list[str]:
     result = subprocess.run(["ip", "-j", "address"], capture_output=True, timeout=5, check=True)
     if len(result.stdout) > 1024 * 1024:
         raise ValueError("network_inventory_size")
-    value = json.loads(result.stdout)
+    try:
+        value = json.loads(result.stdout)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise ValueError("network_inventory_invalid") from None
     if not isinstance(value, list):
         raise ValueError("network_inventory_invalid")
     return eligible_private_ipv4(value)
@@ -674,6 +684,13 @@ def download_authcrunch(path: Path) -> None:
                 target.write(chunk)
         if count != AUTHCRUNCH_BYTES:
             raise ValueError("artifact_size")
+    except (TimeoutError, OSError) as error:
+        path.unlink(missing_ok=True)
+        # A socket or connection timeout is the same download deadline.
+        reason = getattr(error, "reason", None)
+        if isinstance(error, TimeoutError) or isinstance(reason, TimeoutError):
+            raise TimeoutError("artifact_deadline") from None
+        raise
     except BaseException:
         path.unlink(missing_ok=True)
         raise
@@ -1022,7 +1039,11 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                         "({method,params}) => window.__rmPersonWire.rpc(method, params)",
                         dict(method=method, params=params),
                     )
-                    if observed["frame"].get("id") != observed["id"]:
+                    if (
+                        not isinstance(observed, dict)
+                        or not isinstance(observed.get("frame"), dict)
+                        or observed["frame"].get("id") != observed.get("id")
+                    ):
                         raise ValueError("native_response_binding")
                     error_code = native_error_code(observed["frame"])
                     capture["events"].append(

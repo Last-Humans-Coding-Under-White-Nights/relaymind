@@ -203,3 +203,18 @@ it("RM39 captures workspace only from the actual runtime resolver under current 
   expect(resolveWorkspace).toHaveBeenCalledWith(f.options, "main");
   expect(f.respond.mock.calls[0][1].workspaceDir).toBe("/actual/native/workspace");
 });
+
+it("#224 refuses a call without a request object instead of throwing", async () => {
+  const records: unknown[] = [];
+  const replies: unknown[][] = [];
+  const handler = createPersonProbe({
+    origin: "https://fixture.test",
+    record: (value: unknown) => records.push(value),
+    dispatch: async () => ({ ok: true }),
+    resolveWorkspace: () => "/fixture",
+  });
+  await handler({ respond: (...args: unknown[]) => replies.push(args) } as any);
+  expect(replies).toHaveLength(1);
+  expect(replies[0]?.[0]).toBe(false);
+  expect(records).toHaveLength(1);
+});
