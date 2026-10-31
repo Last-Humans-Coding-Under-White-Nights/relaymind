@@ -77,9 +77,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   AC29/AC32/AC33): pinned local artifacts, deterministic segmented representations,
   revisioned hybrid vectors/fusion, measured inference and bounded private
   correction voting/reset share the existing source/derived worker. Native load
-  CPU ownership and cancellation remain explicit. The production embedding
-  qualification registry remains empty; ordinary activation, host correction
-  authority, formal episodes and final quality/platform gates remain open.
+  CPU ownership and cancellation remain explicit. At this backend checkpoint the
+  production embedding qualification registry was empty; it now holds the two
+  reviewed Linux CPU identities (above). Host correction authority, formal
+  episodes and final quality/platform gates remain open.
 
 - #203 (RM34/RM38/RM43; AC25/AC29/AC34): activate the reviewed installed
   public GitHub skills profile through bounded immutable acquisition and the

@@ -1040,7 +1040,7 @@ listed here so the current order can be traced to its reason.
   so it does not wait for the plugin.
 
 
-## M10 — Multilingual asset recommendations (spec 0.61)
+## M10 — Multilingual asset recommendations (spec 0.63)
 
 #207 customer documentation now has [English](asset-selection.md) and
 [简体中文](asset-selection.zh-CN.md) entry guides, v1/v2 migration and third-party
