@@ -1,12 +1,16 @@
 """Operations and platform run kit (#242; RM38, RM39, RM44; AC29, AC37).
 
-Development tooling around the existing AC29 drivers and the section 12.6.5
-platform export. ``serve`` launches a real ``relaymind serve`` process over a
-local skill directory. ``generate_catalog`` writes a bilingual development
-catalog, and ``rss_bytes`` samples resident memory. ``platform_report`` turns
-an installed-plugin lifecycle record (``scripts/openclaw_install_check.py``)
-plus an optional ordinary installed-host capture into an
-``AssetPlatformReportV1``.
+Development tooling around the existing AC29 startup driver and the section
+12.6.5 platform export:
+
+- ``serve`` launches a real ``relaymind serve`` process over a local skill
+  directory and yields it once recommendations report ``ready``.
+- ``generate_catalog`` writes a bilingual development catalog.
+- ``rss_bytes`` samples resident memory (POSIX ``ps``) or working set
+  (Windows ``tasklist``).
+- ``platform_report`` turns an installed-plugin lifecycle record
+  (``scripts/openclaw_install_check.py``) and an optional, independently
+  checked ordinary installed-host capture into an ``AssetPlatformReportV1``.
 
 Nothing here is the acceptance run. Developer machines and CI runners never
 satisfy the Apple M1 8 GiB macOS / native x86-64 Windows gates, and the kit
@@ -22,7 +26,8 @@ import socket
 import subprocess
 import sys
 import time
-from collections.abc import Mapping
+import tomllib
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import httpx
@@ -37,6 +42,8 @@ _TOPICS = (
     ("summary", "Summarize a document.", "总结一份文档。"),
     ("reminder", "Create a reminder.", "创建一个提醒。"),
 )
+_TOKEN_PREFIX = "Application token: "
+_GRACE_SECONDS = 10.0
 
 
 def generate_catalog(root: Path, count: int, *, start: int = 0) -> list[Path]:
@@ -59,18 +66,31 @@ def generate_catalog(root: Path, count: int, *, start: int = 0) -> list[Path]:
     return paths
 
 
+def memory_counter() -> str:
+    """The counter ``rss_bytes`` reads on this platform."""
+    return "tasklist_working_set" if sys.platform == "win32" else "ps_rss"
+
+
 def rss_bytes(pid: int) -> int | None:
-    """Resident set size of ``pid`` in bytes, or None when unknown or gone."""
+    """Resident memory of ``pid`` in bytes, or None when unknown or gone."""
     if sys.platform == "win32":
-        return None
+        argv = ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"]
+    else:
+        argv = ["ps", "-o", "rss=", "-p", str(pid)]
     try:
-        result = subprocess.run(
-            ["ps", "-o", "rss=", "-p", str(pid)], capture_output=True, text=True, timeout=5
-        )
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=5)
     except (OSError, subprocess.SubprocessError):
         return None
+    if result.returncode != 0:
+        return None
     text = result.stdout.strip()
-    return int(text) * 1024 if result.returncode == 0 and text.isdigit() else None
+    if sys.platform == "win32":
+        # "image","pid","session","#","12,345 K"; no match prints an INFO line.
+        fields = [f.strip('"') for f in text.split('","')]
+        if len(fields) < 5 or fields[1] != str(pid):
+            return None
+        text = fields[-1].strip('"').removesuffix(" K").replace(",", "").replace(".", "")
+    return int(text) * 1024 if text.isdigit() else None
 
 
 def _free_port() -> int:
@@ -79,10 +99,30 @@ def _free_port() -> int:
         return listener.getsockname()[1]
 
 
-def _config(work: Path, base: str, catalog: Path, port: int) -> Path:
+def _relative_paths(value: object, key: str = "") -> list[str]:
+    """Keys whose string values look like relative filesystem paths."""
+    if isinstance(value, dict):
+        return [p for k, v in value.items() for p in _relative_paths(v, f"{key}.{k}".strip("."))]
+    if isinstance(value, list):
+        return [p for v in value for p in _relative_paths(v, key)]
+    if isinstance(value, str) and "://" not in value:
+        looks_like_path = "/" in value or "\\" in value or Path(value).suffix != ""
+        if looks_like_path and not Path(value).is_absolute():
+            return [key]
+    return []
+
+
+def _config(work: Path, base_config: Path, catalog: Path, port: int) -> Path:
     """The operator's base config plus the kit's server, recommendation and source tables."""
-    if "[server]" in base or "[recommendations]" in base or "[[assets.sources]]" in base:
+    base = Path(base_config).read_text(encoding="utf-8")
+    parsed = tomllib.loads(base)
+    if {"server", "recommendations"} & set(parsed) or "sources" in parsed.get("assets", {}):
         raise ValueError("base_config_owns_kit_tables")
+    # The generated file lives in the run directory, so a relative path in the
+    # base config would silently change meaning; it is refused instead.
+    relative = _relative_paths(parsed)
+    if relative:
+        raise ValueError("base_config_relative_path: " + ", ".join(relative))
     path = work / "relaymind.toml"
     path.write_text(
         "\n".join(
@@ -107,152 +147,219 @@ def _config(work: Path, base: str, catalog: Path, port: int) -> Path:
     return path
 
 
+def _child_argv(config: Path) -> list[str]:
+    return [
+        sys.executable,
+        "-c",
+        "from relaymind.launcher import cli; cli()",
+        "serve",
+        "--config",
+        str(config),
+    ]
+
+
+def _child_env(extra: Mapping[str, str] | None) -> dict[str, str]:
+    env = {**os.environ, **(extra or {})}
+    # The child inherits the caller's import path even when it is relative.
+    if env.get("PYTHONPATH"):
+        env["PYTHONPATH"] = os.pathsep.join(
+            os.path.abspath(entry) for entry in env["PYTHONPATH"].split(os.pathsep) if entry
+        )
+    return env
+
+
+async def _read_token(process: asyncio.subprocess.Process, deadline: float) -> str:
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("gateway_token_unavailable")
+        try:
+            line = await asyncio.wait_for(process.stdout.readline(), remaining)
+        except TimeoutError:
+            raise TimeoutError("gateway_token_unavailable") from None
+        if not line:
+            raise TimeoutError("gateway_token_unavailable")
+        text = line.decode("utf-8", "replace")
+        if text.startswith(_TOKEN_PREFIX) and time.monotonic() < deadline:
+            return text.removeprefix(_TOKEN_PREFIX).strip()
+
+
+async def _drain(stream: asyncio.StreamReader, log: Path) -> None:
+    """Keep the child's stdout pipe from filling; the token line is never logged."""
+    with log.open("ab") as target:
+        while line := await stream.readline():
+            if not line.startswith(_TOKEN_PREFIX.encode()):
+                target.write(line)
+                target.flush()
+
+
+async def _wait_ready(client: httpx.AsyncClient, deadline: float) -> None:
+    while True:
+        try:
+            response = await client.get("/relay/v1/recommendations/readiness")
+            if response.status_code == 200 and response.json().get("state") == "ready":
+                return
+        except (httpx.TransportError, ValueError):
+            pass
+        if time.monotonic() >= deadline:
+            raise TimeoutError("gateway_not_ready")
+        await asyncio.sleep(0.02)
+
+
+async def _stop(process: asyncio.subprocess.Process) -> None:
+    if process.returncode is None:
+        with contextlib.suppress(ProcessLookupError):
+            process.terminate()
+        try:
+            await asyncio.wait_for(process.wait(), _GRACE_SECONDS)
+        except TimeoutError:
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+    await process.wait()
+
+
 @contextlib.asynccontextmanager
 async def serve(
     work: Path,
     catalog: Path,
     *,
-    base_config: str,
+    base_config: Path,
     env: Mapping[str, str] | None = None,
     timeout: float = 60.0,
 ):
-    """Start ``relaymind serve`` and yield ``(pid, client)``; stop it on exit.
+    """Start ``relaymind serve`` and yield ``(pid, client)`` once it is ready.
 
     ``base_config`` is the operator's own TOML (store, skills, sandbox and
-    model tables) without ``[server]``, ``[recommendations]`` or asset sources,
-    which the kit owns so every run serves the generated catalog on loopback.
+    model tables, absolute paths only) without ``[server]``,
+    ``[recommendations]`` or asset sources, which the kit owns. The child's
+    stdout (without the token) and stderr go to ``stdout.log`` and
+    ``stderr.log`` in ``work``. On exit, or on cancellation at any point, the
+    process is terminated, killed after a grace period, and reaped.
     """
-    work = Path(work)
+    work = Path(work).absolute()
     work.mkdir(parents=True, exist_ok=True)
     port = _free_port()
-    config = _config(work, base_config, Path(catalog).resolve(), port)
-    process = subprocess.Popen(
-        [
-            sys.executable,
-            "-c",
-            "from relaymind.launcher import cli; cli()",
-            "serve",
-            "--config",
-            str(config),
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-        cwd=work,
-        env={**os.environ, **(env or {})},
-    )
+    config = _config(work, base_config, Path(catalog).absolute(), port)
+    deadline = time.monotonic() + timeout
+    with (work / "stderr.log").open("ab") as stderr:
+        process = await asyncio.create_subprocess_exec(
+            *_child_argv(config),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=stderr,
+            env=_child_env(env),
+        )
+    drain = None
     try:
-        token = await asyncio.to_thread(_read_token, process, time.monotonic() + timeout)
-        base = f"http://127.0.0.1:{port}"
+        token = await _read_token(process, deadline)
+        drain = asyncio.create_task(_drain(process.stdout, work / "stdout.log"))
         async with httpx.AsyncClient(
-            base_url=base, headers={"Authorization": "Bearer " + token}, timeout=10
+            base_url=f"http://127.0.0.1:{port}",
+            headers={"Authorization": "Bearer " + token},
+            timeout=10,
         ) as client:
-            deadline = time.monotonic() + timeout
-            while True:
-                try:
-                    await client.get("/relay/v1/recommendations/readiness")
-                    break
-                except httpx.TransportError:
-                    if time.monotonic() >= deadline:
-                        raise TimeoutError("gateway_not_listening") from None
-                    await asyncio.sleep(0.02)
+            await _wait_ready(client, deadline)
             yield process.pid, client
     finally:
-        process.terminate()
+        # Cleanup is owned: a cancellation arriving now still kills and reaps.
+        cleanup = asyncio.ensure_future(_stop(process))
         try:
-            await asyncio.to_thread(process.wait, 10)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            await asyncio.to_thread(process.wait)
+            await asyncio.shield(cleanup)
+        except asyncio.CancelledError:
+            await cleanup
+            raise
+        finally:
+            if drain is not None:
+                drain.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await drain
 
 
-def _read_token(process: subprocess.Popen, deadline: float) -> str:
-    for line in process.stdout:
-        if line.startswith("Application token: "):
-            return line.removeprefix("Application token: ").strip()
-        if time.monotonic() >= deadline:
-            break
-    raise TimeoutError("gateway_token_unavailable")
+# --- platform report -----------------------------------------------------------------
 
 
-def _evidence(path: Path, evidence_id: str) -> dict:
+def _evidence(path: Path, evidence_id: str, served_path: str) -> dict:
     payload = Path(path).read_bytes()
     return dict(
         id=evidence_id,
-        path=None,
+        path=served_path,
         sha256=hashlib.sha256(payload).hexdigest(),
         bytes=len(payload),
         provenance="observed",
     )
 
 
+# Platform step -> install-check steps that must all have passed.
 _LIFECYCLE = {
     "install": ("install",),
     "configure": ("configure", "enable", "store-token"),
+    # remove-credential passes only when every after_removal leftover is clean.
     "uninstall": ("disable", "uninstall", "remove-config", "remove-credential"),
 }
-_ORDINARY = {
-    "recommend": "recommend",
-    "choose": "choice",
-    "feedback": "correction",
-    "delete": "delete",
-    "reset": "reset",
-}
+_ORDINARY_ACTIONS = ("recommend", "choose", "feedback", "delete", "reset")
+_FAILED = ("failed", "timed_out")
+
+
+def _lifecycle_status(check: Mapping, names: tuple[str, ...]) -> str:
+    steps = check.get("steps")
+    if not isinstance(steps, list) or not all(isinstance(s, dict) for s in steps):
+        raise ValueError("install_check_invalid")
+    statuses = {s.get("name"): s.get("status") for s in steps}
+    observed = [statuses.get(name, "not_run") for name in names]
+    if any(status in _FAILED for status in observed):
+        return "failed"
+    if all(status == "passed" for status in observed):
+        return "passed"
+    return "not_run"
 
 
 def platform_report(
     *,
     install_check: Path,
     ordinary: Path | None,
+    evidence_paths: Mapping[str, str],
     input_digest: str,
     input_manifest: Mapping,
     platform: Mapping,
+    ordinary_check: Callable[[Mapping], bool] | None = None,
     qualification: str = "fixture",
 ) -> dict:
     """An ``AssetPlatformReportV1`` from actual lifecycle records.
 
-    Steps without a record stay ``not_run`` with a fixed reason; restart and
-    MCP use are not exercised by these records. The kit never emits
-    ``measured``: only the actual acceptance platforms may, through review.
+    ``evidence_paths`` maps ``install-check`` (and ``ordinary-capture``) to the
+    path registered for that original in the companion input manifest. The
+    five ordinary actions pass only when ``ordinary_check`` (the installed-host
+    qualification's own ``ordinary_pass``) accepts the capture. Skill use,
+    restart and MCP use stay ``not_run``: a selection receipt is not observed
+    instruction use. The kit never emits ``measured``.
     """
     if qualification != "fixture":
         raise ValueError("measured_requires_acceptance_platform")
+    if ordinary is not None and ordinary_check is None:
+        raise ValueError("ordinary_check_required")
     check = json.loads(Path(install_check).read_text(encoding="utf-8"))
-    statuses = {step["name"]: step["status"] for step in check["steps"]}
-    evidence = [_evidence(install_check, "install-check")]
-    capture = None
+    if not isinstance(check, dict):
+        raise ValueError("install_check_invalid")
+    evidence = [_evidence(install_check, "install-check", evidence_paths["install-check"])]
+    ordinary_ok = False
     if ordinary is not None:
         capture = json.loads(Path(ordinary).read_text(encoding="utf-8"))
-        evidence.append(_evidence(ordinary, "ordinary-capture"))
+        ordinary_ok = isinstance(capture, dict) and ordinary_check(capture) is True
+        evidence.append(_evidence(ordinary, "ordinary-capture", evidence_paths["ordinary-capture"]))
     steps = []
     for name in PLATFORM_STEPS:
-        status, ids = "not_run", []
+        status, ids, reason = "not_run", [], f"{name}_not_run"
         if name in _LIFECYCLE:
-            observed = [statuses.get(step) for step in _LIFECYCLE[name]]
-            if all(value == "passed" for value in observed) and (
-                name != "uninstall" or not check.get("leftovers")
-            ):
-                status, ids = "passed", ["install-check"]
-            elif any(value is not None for value in observed):
-                status, ids = "failed", ["install-check"]
-        elif capture is not None and name in _ORDINARY:
-            snapshots = capture.get("ordinary_actions", {}).get("ui", {}).get("snapshots", {})
-            if capture.get("checks", {}).get("ordinary_actions") is True and (
-                _ORDINARY[name] in snapshots
-            ):
-                status, ids = "passed", ["ordinary-capture"]
-        elif capture is not None and name == "skill_use":
-            receipt = capture.get("ordinary_skill", {}).get("receipt", {})
-            if capture.get("checks", {}).get("ordinary_skill") is True and receipt.get("ok"):
-                status, ids = "passed", ["ordinary-capture"]
-        steps.append(
-            dict(
-                name=name,
-                status=status,
-                evidence_ids=ids,
-                reason=None if status == "passed" else f"{name}_{status}",
-            )
-        )
+            status = _lifecycle_status(check, _LIFECYCLE[name])
+            ids = [] if status == "not_run" else ["install-check"]
+            reason = None if status == "passed" else f"{name}_{status}"
+        elif name in _ORDINARY_ACTIONS:
+            if ordinary_ok:
+                status, ids, reason = "passed", ["ordinary-capture"], None
+            elif ordinary is not None:
+                reason = "ordinary_capture_unverified"
+        elif name == "skill_use":
+            reason = "skill_use_not_observed"
+        steps.append(dict(name=name, status=status, evidence_ids=ids, reason=reason))
     report = dict(
         schema_version=1,
         qualification=qualification,

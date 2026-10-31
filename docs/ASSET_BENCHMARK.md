@@ -688,33 +688,52 @@ hosts and hardware; fixture runs establish no measured result.
 
 ## Operations and platform run kit (#242)
 
-`scripts/asset_operations_run.py` prepares the real-world AC29 and AC37 runs.
-It does not perform them. Every report it writes is labeled `fixture`.
+`scripts/asset_operations_run.py` prepares the real-world AC29 and AC37 runs
+(#241, #235, #234). It does not perform them. Every report it writes is labeled
+`fixture`.
 
-- `startup` generates a bilingual development catalog of `--assets` skills. It
-  then starts a real `relaymind serve` process ten times through the existing
-  AC29 startup driver (`measure_startups`) and records each process's resident
-  memory. Pass your own TOML in `--base-config`, holding the store, skills,
-  sandbox and model tables. The kit adds `[server]`, `[recommendations]` and the
-  catalog source itself, and refuses a base config that already has them.
+- `startup` generates a bilingual catalog of `--assets` skills (default 300,
+  the AC29 size). It then starts a real `relaymind serve` process ten times
+  through the existing AC29 startup driver (`measure_startups`) and records each
+  process's memory: `ps` resident set size on POSIX, `tasklist` working set on
+  Windows. `memory_counter` names the counter used.
+  - **Base config.** `--base-config` is your own TOML for the store, skills,
+    sandbox and model tables. Every path in it must be absolute: the kit writes
+    the generated config into the run directory, so it refuses a relative path
+    rather than let its meaning change. The kit adds `[server]`,
+    `[recommendations]` and the catalog source itself, and refuses a base config
+    that already has them.
+  - **Readiness and logs.** A startup counts only once recommendations report
+    `ready`. Each run directory keeps the gateway's `stdout.log` (without the
+    token) and `stderr.log`.
+  - **Completeness.** `complete` is true only when all ten startups were useful
+    and every memory sample is known.
 - `platform` turns an install-check record from
   `scripts/openclaw_install_check.py`, plus an optional ordinary installed-host
-  capture, into an `AssetPlatformReportV1`:
-  - Install, configure and uninstall come from the lifecycle steps. A failed
-    cleanup step or any leftover fails uninstall.
-  - Recommend, choose, feedback, delete, reset and skill use come from the
-    ordinary capture.
-  - Restart and MCP use stay `not_run`.
+  capture, into an `AssetPlatformReportV1` bound to the companion input manifest
+  given in `--inputs`:
+  - The input digest is the verified host-task digest from that manifest. Each
+    original must be registered in it as `install-check` (or
+    `ordinary-capture`) with matching bytes, and its registered path is used.
+  - The observed `--platform` must agree with the manifest's environment lock.
+  - Install, configure and uninstall come from the lifecycle steps. A failed or
+    timed-out step fails the group, and steps that never ran stay `not_run`. The
+    record's own `remove-credential` step already requires every
+    `after_removal` leftover to be clean.
+  - Recommend, choose, feedback, delete and reset pass only when the
+    installed-host qualification's own `ordinary_pass` accepts the capture.
+  - Skill use stays `not_run` (`skill_use_not_observed`): a selection receipt is
+    not observed instruction use (#239). Restart and MCP use stay `not_run`.
 
 ```bash
-python scripts/asset_operations_run.py startup --base-config base.toml \
-  --work /tmp/ops --assets 100 --output startup.json
+python scripts/asset_operations_run.py startup --base-config /abs/base.toml \
+  --work /tmp/ops --output startup.json
 python scripts/asset_operations_run.py platform --install-check install-check.json \
-  --ordinary ordinary.json --input-manifest inputs.json --platform environment.json \
+  --ordinary ordinary.json --inputs inputs.json --platform environment.json \
   --output platform.json
 ```
 
 The full 60-second mixed workload (`run_workload`) still needs rescan and
 rebuild hooks into a running process. The AC29 and AC37 numbers that count
 come only from the Apple M1 8 GiB macOS and native x86-64 Windows machines;
-those runs remain open in #241 and #234.
+those runs remain open in #241, #235 and #234.

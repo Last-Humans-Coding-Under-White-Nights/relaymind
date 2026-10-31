@@ -1,15 +1,18 @@
 """Operations and platform run kit (#242; RM38, RM39, RM44; AC29, AC37).
 
 Development tooling only: real ``relaymind serve`` processes, a generated
-catalog and an RSS sampler feed the existing AC29 drivers and grader, and an
+catalog and a memory sampler feed the existing AC29 startup driver, and an
 installed-plugin lifecycle record becomes an ``AssetPlatformReportV1``. Runs
 on CI or a developer machine are never the macOS/native Windows acceptance.
 """
 
 import asyncio
+import importlib.util
 import json
 import os
+
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -24,6 +27,32 @@ from relaymind.evaluation.asset_platform_export import PLATFORM_STEPS
 from relaymind.evaluation.asset_whole_task import validate_whole_task
 
 ROOT = Path(__file__).resolve().parents[1]
+ENVIRONMENT = json.loads((ROOT / "tests/fixtures/asset-benchmark/environment.json").read_text())
+LIFECYCLE = [
+    "version", "isolate-log", "isolate-gateway", "install", "configure", "enable", "inspect",
+    "store-token", "discover", "text-exchange", "tool-exchange", "disable", "uninstall",
+    "remove-config", "remove-credential",
+]  # fmt: skip
+
+
+def _script():
+    spec = importlib.util.spec_from_file_location(
+        "asset_operations_run_script", ROOT / "scripts/asset_operations_run.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _base(tmp_path, monkeypatch):
+    from launcher_helpers import write_config
+    from test_launcher import EXTERNAL
+
+    monkeypatch.setenv("TEST_EXTERNAL_KEY", "unused")
+    return write_config(tmp_path, EXTERNAL, local=False)
+
+
+# --- catalog and memory ----------------------------------------------------------
 
 
 def test_generated_catalog_has_distinct_bilingual_skills(tmp_path):
@@ -40,32 +69,28 @@ def test_generated_catalog_can_grow_without_renaming(tmp_path):
     assert not {p.parent.name for p in first} & {p.parent.name for p in more}
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="ps-based sampler is POSIX only")
-def test_rss_of_this_process_is_positive():
+def test_memory_of_this_process_is_positive():
     assert rss_bytes(os.getpid()) > 0
 
 
-def test_rss_of_a_missing_process_is_unknown():
+def test_memory_of_a_missing_process_is_unknown():
     assert rss_bytes(2**22 + 12345) is None
 
 
-def test_a_real_gateway_serves_lexical_recommendations(tmp_path):
-    from launcher_helpers import write_config
-    from test_launcher import EXTERNAL
+# --- the real gateway --------------------------------------------------------------
 
+
+def test_a_real_gateway_is_ready_and_serves_lexical_recommendations(tmp_path, monkeypatch):
     generate_catalog(tmp_path / "catalog", 3)
-    base = write_config(tmp_path, EXTERNAL, local=False).read_text()
+    base = _base(tmp_path, monkeypatch)
 
     async def go():
-        async with serve(
-            tmp_path / "work",
-            tmp_path / "catalog",
-            base_config=base,
-            env={"TEST_EXTERNAL_KEY": "unused"},
-        ) as (pid, client):
-            assert pid > 0
+        async with serve(tmp_path / "work", tmp_path / "catalog", base_config=base) as (
+            pid,
+            client,
+        ):
             ready = await client.get("/relay/v1/recommendations/readiness")
-            assert ready.status_code == 200
+            assert ready.json()["state"] == "ready"
             created = await client.post(
                 "/relay/v1/recommendations",
                 json=dict(
@@ -80,45 +105,131 @@ def test_a_real_gateway_serves_lexical_recommendations(tmp_path):
             return pid
 
     pid = asyncio.run(go())
-    assert rss_bytes(pid) is None  # the process is stopped on exit
+    assert rss_bytes(pid) is None  # stopped and reaped on exit
+    assert (tmp_path / "work" / "stderr.log").exists()
 
 
-def install_check(statuses=None):
+def test_a_relative_work_directory_and_pythonpath_still_start(tmp_path, monkeypatch):
+    generate_catalog(tmp_path / "catalog", 2)
+    base = _base(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PYTHONPATH", os.path.relpath(ROOT / "src", tmp_path))
+
+    async def go():
+        async with serve(Path("rel-work"), Path("catalog"), base_config=base):
+            pass
+
+    asyncio.run(go())
+
+
+def test_a_relative_path_in_the_base_config_is_refused(tmp_path):
+    base = tmp_path / "base.toml"
+    base.write_text('[sandbox]\nseed = "baseline.json"\n')
+
+    async def go():
+        async with serve(tmp_path / "w", tmp_path, base_config=base):
+            pass
+
+    with pytest.raises(ValueError, match="base_config_relative_path"):
+        asyncio.run(go())
+
+
+def test_the_kit_owns_the_server_and_source_tables(tmp_path):
+    base = tmp_path / "base.toml"
+    base.write_text("[server]\nport = 1\n")
+
+    async def go():
+        async with serve(tmp_path / "w", tmp_path, base_config=base):
+            pass
+
+    with pytest.raises(ValueError, match="base_config_owns_kit_tables"):
+        asyncio.run(go())
+
+
+def _fake_python(tmp_path, body: str) -> Path:
+    script = tmp_path / "fake_gateway.py"
+    script.write_text(body)
+    return script
+
+
+def _patch_child(monkeypatch, script: Path):
+    import relaymind.evaluation.asset_operations_run as kit
+
+    monkeypatch.setattr(kit, "_child_argv", lambda config: [sys.executable, str(script)])
+
+
+def test_a_silent_child_cannot_outlast_the_token_deadline(tmp_path, monkeypatch):
+    script = _fake_python(tmp_path, "import time\ntime.sleep(30)\n")
+    _patch_child(monkeypatch, script)
+    base = tmp_path / "base.toml"
+    base.write_text("")
+
+    async def go():
+        async with serve(tmp_path / "w", tmp_path, base_config=base, timeout=0.5):
+            pass
+
+    began = time.monotonic()
+    with pytest.raises(TimeoutError, match="gateway_token_unavailable"):
+        asyncio.run(go())
+    assert time.monotonic() - began < 10
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM handling is POSIX only")
+def test_cancellation_during_shutdown_still_kills_and_reaps(tmp_path, monkeypatch):
+    import relaymind.evaluation.asset_operations_run as kit
+
+    pid_file = tmp_path / "pid"
+    script = _fake_python(
+        tmp_path,
+        "import os, signal, sys, time\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        f"open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
+        "print('Application token: t', flush=True)\n"
+        "time.sleep(60)\n",
+    )
+    _patch_child(monkeypatch, script)
+    monkeypatch.setattr(kit, "_GRACE_SECONDS", 1.0)
+
+    async def ready(client, deadline):
+        return None
+
+    monkeypatch.setattr(kit, "_wait_ready", ready)
+    base = tmp_path / "base.toml"
+    base.write_text("")
+
+    async def go():
+        async def body():
+            async with serve(tmp_path / "w", tmp_path, base_config=base, timeout=5):
+                pass
+
+        task = asyncio.create_task(body())
+        while not pid_file.exists() or not pid_file.read_text():
+            await asyncio.sleep(0.01)
+        await asyncio.sleep(0.2)
+        # Let the body exit and cleanup begin, then cancel during the grace wait.
+        await asyncio.sleep(0.3)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(go())
+    pid = int(pid_file.read_text())
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+
+
+# --- platform report -------------------------------------------------------------
+
+
+def install_check(statuses=None, default="passed"):
     statuses = statuses or {}
-    names = [
-        "version",
-        "isolate-log",
-        "isolate-gateway",
-        "install",
-        "configure",
-        "enable",
-        "inspect",
-        "store-token",
-        "discover",
-        "text-exchange",
-        "tool-exchange",
-        "disable",
-        "uninstall",
-        "remove-config",
-        "remove-credential",
-    ]
     return dict(
         kind="openclaw-install-check",
-        passed=True,
-        leftovers=[],
-        steps=[dict(name=n, status=statuses.get(n, "passed"), exit_code=0) for n in names],
-    )
-
-
-def ordinary():
-    return dict(
-        checks=dict(ordinary_actions=True, ordinary_skill=True),
-        ordinary_actions=dict(
-            ui=dict(
-                snapshots={k: {} for k in ("recommend", "choice", "correction", "delete", "reset")}
-            )
+        status="completed",
+        steps=[dict(name=n, status=statuses.get(n, default), exit_code=0) for n in LIFECYCLE],
+        leftovers=dict(
+            after_uninstall=dict(plugin_dir=False), after_removal=dict(plugin_dir=False)
         ),
-        ordinary_skill=dict(receipt=dict(ok=True)),
     )
 
 
@@ -127,35 +238,70 @@ def write(path, value):
     return path
 
 
-def test_lifecycle_records_become_a_closed_platform_report(tmp_path):
-    report = platform_report(
-        install_check=write(tmp_path / "install.json", install_check()),
-        ordinary=write(tmp_path / "ordinary.json", ordinary()),
+def _report(tmp_path, *, check=None, ordinary=None, ordinary_check=None):
+    install = write(tmp_path / "install.json", check or install_check())
+    capture = None if ordinary is None else write(tmp_path / "ordinary.json", ordinary)
+    references = {"install-check": "evidence/install.json"}
+    if capture is not None:
+        references["ordinary-capture"] = "evidence/ordinary.json"
+    return platform_report(
+        install_check=install,
+        ordinary=capture,
+        ordinary_check=ordinary_check,
+        evidence_paths=references,
         input_digest="a" * 64,
         input_manifest=dict(path="inputs.json", digest="b" * 64, bytes=1),
-        platform=json.loads((ROOT / "tests/fixtures/asset-benchmark/environment.json").read_text()),
+        platform=ENVIRONMENT,
     )
+
+
+def _steps(report):
+    return {s["name"]: s["status"] for s in report["steps"]}
+
+
+def test_a_clean_lifecycle_record_passes_install_configure_and_uninstall(tmp_path):
+    report = _report(tmp_path)
     validate_whole_task("AssetPlatformReportV1", report)
-    steps = {s["name"]: s["status"] for s in report["steps"]}
+    steps = _steps(report)
     assert [s["name"] for s in report["steps"]] == list(PLATFORM_STEPS)
-    assert steps["install"] == steps["uninstall"] == steps["skill_use"] == "passed"
-    assert steps["mcp_use"] == steps["restart"] == "not_run"
+    assert steps["install"] == steps["configure"] == steps["uninstall"] == "passed"
     assert report["qualification"] == "fixture" and report["gate"] == "not_applicable"
-    ids = {e["id"] for e in report["evidence"]}
-    assert all(set(s["evidence_ids"]) <= ids for s in report["steps"])
 
 
-def test_a_failed_cleanup_step_fails_uninstall(tmp_path):
-    report = platform_report(
-        install_check=write(tmp_path / "install.json", install_check({"remove-config": "failed"})),
-        ordinary=None,
-        input_digest="a" * 64,
-        input_manifest=dict(path="inputs.json", digest="b" * 64, bytes=1),
-        platform=json.loads((ROOT / "tests/fixtures/asset-benchmark/environment.json").read_text()),
-    )
-    steps = {s["name"]: s["status"] for s in report["steps"]}
-    assert steps["uninstall"] == "failed"
-    assert steps["recommend"] == steps["skill_use"] == "not_run"
+def test_selection_only_skill_receipts_never_pass_skill_use(tmp_path):
+    report = _report(tmp_path, ordinary={"any": 1}, ordinary_check=lambda capture: True)
+    step = next(s for s in report["steps"] if s["name"] == "skill_use")
+    assert step["status"] == "not_run" and step["reason"] == "skill_use_not_observed"
+
+
+def test_a_failed_or_timed_out_cleanup_step_fails_uninstall(tmp_path):
+    for status in ("failed", "timed_out"):
+        steps = _steps(_report(tmp_path, check=install_check({"remove-config": status})))
+        assert steps["uninstall"] == "failed"
+
+
+def test_an_unrun_lifecycle_record_stays_not_run(tmp_path):
+    steps = _steps(_report(tmp_path, check=install_check(default="not_run")))
+    assert steps["install"] == steps["configure"] == steps["uninstall"] == "not_run"
+
+
+def test_ordinary_actions_pass_only_when_the_ordinary_check_passes(tmp_path):
+    stale = {"checks": {"ordinary_actions": True}}
+    refused = _steps(_report(tmp_path, ordinary=stale, ordinary_check=lambda capture: False))
+    accepted = _steps(_report(tmp_path, ordinary=stale, ordinary_check=lambda capture: True))
+    for name in ("recommend", "choose", "feedback", "delete", "reset"):
+        assert refused[name] == "not_run"
+        assert accepted[name] == "passed"
+
+
+def test_an_ordinary_capture_needs_its_check(tmp_path):
+    with pytest.raises(ValueError, match="ordinary_check_required"):
+        _report(tmp_path, ordinary={})
+
+
+def test_the_real_ordinary_check_refuses_a_stale_capture():
+    check = _script().ordinary_check()
+    assert check({"checks": {"ordinary_actions": True}, "ordinary_actions": {}}) is False
 
 
 def test_a_measured_claim_is_refused_by_the_kit(tmp_path):
@@ -163,6 +309,7 @@ def test_a_measured_claim_is_refused_by_the_kit(tmp_path):
         platform_report(
             install_check=write(tmp_path / "install.json", install_check()),
             ordinary=None,
+            evidence_paths={"install-check": "evidence/install.json"},
             input_digest="a" * 64,
             input_manifest=dict(path="inputs.json", digest="b" * 64, bytes=1),
             platform={},
@@ -170,85 +317,100 @@ def test_a_measured_claim_is_refused_by_the_kit(tmp_path):
         )
 
 
-def test_the_kit_owns_the_server_and_source_tables(tmp_path):
-    async def go():
-        async with serve(tmp_path / "w", tmp_path, base_config="[server]\nport = 1\n"):
-            pass
+def _platform_bundle(tmp_path, environment=None):
+    from test_asset_whole_task_inputs import Bundle
+    from whole_task_helpers import ENVIRONMENT as LOCKED
 
-    with pytest.raises(ValueError, match="base_config_owns_kit_tables"):
-        asyncio.run(go())
-
-
-def _script():
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "asset_operations_run_script", ROOT / "scripts/asset_operations_run.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    bundle = Bundle(tmp_path)
+    install = json.dumps(install_check()).encode()
+    bundle.extra_evidence["install-check"] = install
+    bundle.write_manifest()
+    (tmp_path / "install.json").write_bytes(install)
+    (tmp_path / "environment.json").write_text(json.dumps(environment or LOCKED))
+    return bundle
 
 
-def test_platform_command_writes_a_valid_report(tmp_path):
+def test_the_platform_command_refuses_a_platform_outside_the_environment_lock(tmp_path):
+    bundle = _platform_bundle(tmp_path, dict(ENVIRONMENT, os="elsewhere"))
+    code = _script().main(
+        [
+            "platform",
+            "--install-check", str(tmp_path / "install.json"),
+            "--inputs", str(bundle.root / "inputs.json"),
+            "--platform", str(tmp_path / "environment.json"),
+            "--output", str(tmp_path / "out.json"),
+        ]
+    )  # fmt: skip
+    assert code == 2 and not (tmp_path / "out.json").exists()
+
+
+def test_the_platform_command_produces_a_report_the_grader_accepts(tmp_path):
+    """Round trip: kit output graded through the companion manifest (spec 12.6.5)."""
+    from test_asset_whole_task_inputs import _grade
+
+    bundle = _platform_bundle(tmp_path)
     out = tmp_path / "platform.json"
     code = _script().main(
         [
             "platform",
-            "--install-check",
-            str(write(tmp_path / "install.json", install_check())),
-            "--ordinary",
-            str(write(tmp_path / "ordinary.json", ordinary())),
-            "--input-manifest",
-            str(write(tmp_path / "inputs.json", {"documents": []})),
-            "--platform",
-            str(ROOT / "tests/fixtures/asset-benchmark/environment.json"),
-            "--output",
-            str(out),
+            "--install-check", str(tmp_path / "install.json"),
+            "--inputs", str(bundle.root / "inputs.json"),
+            "--platform", str(tmp_path / "environment.json"),
+            "--output", str(out),
         ]
-    )
+    )  # fmt: skip
     assert code == 0
-    validate_whole_task("AssetPlatformReportV1", json.loads(out.read_text()))
+    report = json.loads(out.read_text())
+    code, result = _grade(bundle, "grade-platform", report)
+    assert (code, result.get("gate")) == (0, "not_applicable"), result
 
 
-def test_platform_command_refuses_a_malformed_record(tmp_path):
+def test_the_platform_command_refuses_an_unregistered_record(tmp_path):
+    from test_asset_whole_task_inputs import Bundle
+
+    from whole_task_helpers import ENVIRONMENT as LOCKED
+
+    bundle = Bundle(tmp_path)
+    bundle.write_manifest()
+    write(tmp_path / "install.json", install_check())
+    (tmp_path / "environment.json").write_text(json.dumps(LOCKED))
     code = _script().main(
         [
             "platform",
-            "--install-check",
-            str(write(tmp_path / "install.json", {"steps": "x"})),
-            "--input-manifest",
-            str(write(tmp_path / "inputs.json", {})),
-            "--platform",
-            str(ROOT / "tests/fixtures/asset-benchmark/environment.json"),
-            "--output",
-            str(tmp_path / "out.json"),
+            "--install-check", str(tmp_path / "install.json"),
+            "--inputs", str(bundle.root / "inputs.json"),
+            "--platform", str(tmp_path / "environment.json"),
+            "--output", str(tmp_path / "out.json"),
         ]
-    )
+    )  # fmt: skip
     assert code == 2 and not (tmp_path / "out.json").exists()
 
 
-def test_startup_command_measures_ten_real_startups(tmp_path, monkeypatch):
-    from launcher_helpers import write_config
-    from test_launcher import EXTERNAL
+# --- startup command --------------------------------------------------------------
 
-    monkeypatch.setenv("TEST_EXTERNAL_KEY", "unused")
-    base = write_config(tmp_path, EXTERNAL, local=False)
+
+def test_startup_command_records_ten_real_startups(tmp_path, monkeypatch):
+    base = _base(tmp_path, monkeypatch)
     out = tmp_path / "startup.json"
     code = _script().main(
         [
-            "startup",
-            "--base-config",
-            str(base),
-            "--work",
-            str(tmp_path / "work"),
-            "--assets",
-            "5",
-            "--output",
-            str(out),
+            "startup", "--base-config", str(base), "--work", str(tmp_path / "work"),
+            "--assets", "5", "--output", str(out),
         ]
-    )
+    )  # fmt: skip
     report = json.loads(out.read_text())
     assert code == 0 and report["qualification"] == "fixture"
-    assert len(report["samples"]) == 10
+    assert len(report["samples"]) == 10 and len(report["memory_bytes"]) == 10
     assert all(s["pid"] for s in report["samples"])
+    useful = sum(s["first_useful_at"] is not None for s in report["samples"])
+    assert report["useful_startups"] == useful
+    assert report["complete"] == (useful == 10 and None not in report["memory_bytes"])
+
+
+def test_startup_report_is_incomplete_without_useful_startups():
+    from relaymind.evaluation.asset_operations import StartupSample
+
+    module = _script()
+    samples = [StartupSample(i, 0.0, None, 100 + i, (), "timeout", "timeout") for i in range(10)]
+    report = module.startup_report(samples, [1] * 10, assets=300, base_digest="d", counter="x")
+    assert report["useful_startups"] == 0 and report["complete"] is False
