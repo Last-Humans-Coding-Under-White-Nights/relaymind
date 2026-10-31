@@ -25,6 +25,8 @@ CHECKS = (
     "revocation_denied",
 )
 
+SAFE_RETIRED_REASONS = frozenset({"cancelled", "native_action_unavailable"})
+
 
 def person_module():
     spec = importlib.util.spec_from_file_location(
@@ -147,10 +149,17 @@ def composed_pass(capture):
         ] or len({event["requestId"] for event in retirement}) != 1:
             return False
         if (
-            retirement[1]["connectionId"] != account["connection_id"]
+            value["held_backend_entered"] is not True
+            or retirement[0]["connectionId"] != account["connection_id"]
+            or retirement[0]["profileId"] != account["profile_id"]
+            or retirement[0]["sessionId"] != account["native_session_id"]
+            or retirement[0]["implementation_revision"] != revision
+            or retirement[0]["authenticatedControlUi"] is not True
+            or retirement[1]["connectionId"] != account["connection_id"]
             or retirement[1]["aborted"] is not True
             or retirement[2]["ok"] is not False
-            or retirement[2]["reason"] != "cancelled"
+            or retirement[2]["error_code"] != "INVALID_REQUEST"
+            or retirement[2]["reason"] not in SAFE_RETIRED_REASONS
         ):
             return False
         return True
@@ -418,10 +427,12 @@ class ActionComposition:
             result = next((event for event in relevant if event["kind"] == "result"), None)
             if result is not None:
                 passed = (
-                    retired is not None
+                    self.entered.is_set()
+                    and retired is not None
                     and retired["aborted"] is True
                     and result["ok"] is False
-                    and result["reason"] == "cancelled"
+                    and result["error_code"] == "INVALID_REQUEST"
+                    and result["reason"] in SAFE_RETIRED_REASONS
                 )
                 capture["composed_actions"]["checks"]["revocation_denied"] = passed
                 capture["composed_actions"]["retirement"] = relevant

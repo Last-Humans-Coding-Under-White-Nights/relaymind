@@ -122,18 +122,25 @@ def complete_fixture(api):
         receipts=receipts,
         events=events,
         negative_events=[],
+        held_backend_entered=True,
         implementation_revision="a" * 64,
         production_registry_enabled=False,
         qualification_constructor="explicit-test-only",
         retirement=[
-            dict(kind="dispatch", requestId="held-action"),
+            dict(events[0], requestId="held-action"),
             dict(
                 kind="connection_retired",
                 requestId="held-action",
                 connectionId=account["connection_id"],
                 aborted=True,
             ),
-            dict(kind="result", requestId="held-action", ok=False, reason="cancelled"),
+            dict(
+                kind="result",
+                requestId="held-action",
+                ok=False,
+                error_code="INVALID_REQUEST",
+                reason="cancelled",
+            ),
         ],
     )
     return capture
@@ -239,4 +246,46 @@ def test_inspection_of_another_feedback_kind_does_not_prove_correction(record_ki
     report["composed_actions"]["receipts"]["inspect"]["receipt"]["records"][0]["feedback"][
         "kind"
     ] = record_kind
+    assert not api.composed_pass(report)
+
+
+def test_actual_abort_may_return_fixed_native_refusal_after_the_guard_fence():
+    """RM39: actual matching socket retirement is proof, not a required error spelling."""
+    api = module()
+    report = complete_fixture(api)
+    composed = report["composed_actions"]
+    composed["held_backend_entered"] = True
+    composed["retirement"][-1]["reason"] = "native_action_unavailable"
+    assert api.composed_pass(report)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "no_abort",
+        "wrong_connection",
+        "wrong_request",
+        "early_result",
+        "no_held_read",
+        "generic_without_retirement",
+    ],
+)
+def test_generic_refusal_requires_actual_same_request_retirement_and_held_read(change):
+    """RM39: generic failures or unrelated/early aborts never prove revocation."""
+    api = module()
+    report = complete_fixture(api)
+    value = report["composed_actions"]
+    value["retirement"][-1]["reason"] = "native_action_unavailable"
+    if change == "no_abort":
+        value["retirement"][1]["aborted"] = False
+    elif change == "wrong_connection":
+        value["retirement"][1]["connectionId"] = "foreign"
+    elif change == "wrong_request":
+        value["retirement"][1]["requestId"] = "foreign"
+    elif change == "early_result":
+        value["retirement"].reverse()
+    elif change == "no_held_read":
+        value["held_backend_entered"] = False
+    elif change == "generic_without_retirement":
+        value["retirement"].pop(1)
     assert not api.composed_pass(report)
