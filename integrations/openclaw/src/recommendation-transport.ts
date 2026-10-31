@@ -21,6 +21,8 @@ export interface ClientConfig {
   fetch: typeof fetch;
   monotonicNow: () => number;
   maxResponseBytes: number;
+  /** Spec 0.63 section 7.6: the one gateway scope this caller is bound to. */
+  expectedScope?: { userId: string; workspaceId: string };
 }
 export interface ActionClientConfig extends ClientConfig {
   actionToken: () => Promise<string>;
@@ -30,6 +32,7 @@ const statuses: Record<string, number> = {
   internal_error: 500,
   invalid_request: 400,
   user_action_required: 403,
+  scope_mismatch: 403,
   recommendation_not_found: 404,
   feedback_not_found: 404,
   stale_version: 409,
@@ -118,6 +121,19 @@ function hasSecret(
     }
   }
   return false;
+}
+function expectedIdentity(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !value ||
+    new TextEncoder().encode(value).length > 256
+  )
+    throw new RecommendationClientError("invalid_request");
+  try {
+    return encodeURIComponent(value);
+  } catch {
+    throw new RecommendationClientError("invalid_request");
+  }
 }
 export function transport(
   config: ClientConfig,
@@ -220,6 +236,16 @@ export function transport(
       });
       if (action !== undefined)
         headers.set("X-RelayMind-User-Action-Token", action);
+      if (config.expectedScope !== undefined) {
+        headers.set(
+          "X-RelayMind-Expected-User",
+          expectedIdentity(config.expectedScope.userId),
+        );
+        headers.set(
+          "X-RelayMind-Expected-Workspace",
+          expectedIdentity(config.expectedScope.workspaceId),
+        );
+      }
       if (idempotencyKey !== undefined)
         headers.set("Idempotency-Key", idempotencyKey);
       let serialized: string | undefined;

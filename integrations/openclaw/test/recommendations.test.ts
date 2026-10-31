@@ -737,3 +737,62 @@ it("keeps the final Unicode checkpoint after a short surrogate-pair end case", a
   expect(wellFormed("a😀")).toBe(true);
   expect(utf8Bytes("a😀")).toBe(5);
 });
+// Spec 0.63 section 7.6 (RM37/RM39; AC28/AC30): the caller's expected scope.
+it("sends a configured expected scope percent-encoded on every request", async () => {
+  const calls: any[] = [];
+  const c = client(
+    async (url, init) => {
+      calls.push({ url: String(url), init });
+      return json(fixture);
+    },
+    { expectedScope: { userId: "ü ser/1", workspaceId: "w" } },
+  );
+  await c.create(request, { ...options(), idempotencyKey: "k" });
+  await c.get(ID, options());
+  for (const call of calls) {
+    const h = new Headers(call.init.headers);
+    expect(h.get("X-RelayMind-Expected-User")).toBe("%C3%BC%20ser%2F1");
+    expect(h.get("X-RelayMind-Expected-Workspace")).toBe("w");
+  }
+});
+it("sends no expected scope unless configured", async () => {
+  const calls: any[] = [];
+  const c = client(async (url, init) => {
+    calls.push({ url: String(url), init });
+    return json(fixture);
+  });
+  await c.get(ID, options());
+  const h = new Headers(calls[0].init.headers);
+  expect(h.has("X-RelayMind-Expected-User")).toBe(false);
+  expect(h.has("X-RelayMind-Expected-Workspace")).toBe(false);
+});
+it.each([
+  { userId: "", workspaceId: "w" },
+  { userId: "u", workspaceId: "x".repeat(257) },
+  { userId: "u" },
+])("refuses an invalid expected scope before any request", async (scope) => {
+  const fetcher = vi.fn();
+  const c = client(fetcher as any, { expectedScope: scope });
+  await expect(c.get(ID, options())).rejects.toMatchObject({
+    code: "invalid_request",
+  });
+  expect(fetcher).not.toHaveBeenCalled();
+});
+it("reports a gateway scope mismatch with its fixed code", async () => {
+  const c = action(async () =>
+    json(
+      JSON.stringify({
+        error: {
+          code: "scope_mismatch",
+          message: "the expected scope is not the scope this gateway serves",
+          run_id: null,
+          recommendation_id: null,
+        },
+      }),
+      403,
+    ),
+  );
+  await expect(c.listFeedback({ limit: 10 }, options())).rejects.toMatchObject({
+    code: "scope_mismatch",
+  });
+});

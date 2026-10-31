@@ -75,6 +75,9 @@ function environment(name: string): string {
     throw Error("native_credentials_unavailable");
   return value;
 }
+function expectedScope(binding: NativeActionBinding) {
+  return { userId: binding.userId, workspaceId: binding.workspaceId };
+}
 /** Shared production dependencies also exercised by the explicitly labeled qualification harness. */
 export function nativeRecommendationDependencies(
   api: OpenClawPluginApi,
@@ -102,12 +105,21 @@ export function nativeRecommendationDependencies(
     ) => api.runtime.agent.resolveAgentWorkspaceDir(value, agentId),
     monotonicNow: () => performance.now(),
     wallNow: () => Date.now(),
-    recommendationClient: async () => createRecommendationClient(clientConfig),
+    // Spec 0.63: every request carries the binding's own gateway scope, so a
+    // shared base URL or a credential registered elsewhere fails closed.
+    recommendationClient: async (binding: NativeActionBinding) => {
+      if (!actionReference.has(binding)) throw Error("unregistered_person");
+      return createRecommendationClient({
+        ...clientConfig,
+        expectedScope: expectedScope(binding),
+      });
+    },
     actionClient: async (binding: NativeActionBinding) => {
       const reference = actionReference.get(binding);
       if (!reference) throw Error("unregistered_person");
       return createUserActionClient({
         ...clientConfig,
+        expectedScope: expectedScope(binding),
         actionToken: async () => {
           const action = environment(reference);
           if (action === environment(settings.applicationTokenEnv))
