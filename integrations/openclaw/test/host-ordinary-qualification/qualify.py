@@ -514,11 +514,9 @@ class OrdinaryComposition(BASE.ActionComposition):
                     wait_until="domcontentloaded",
                     timeout=10000,
                 )
-                deadline = time.monotonic() + 20
-                while not ui_page.evaluate("() => window.__rmPersonWire?.state().ready === true"):
-                    if time.monotonic() >= deadline:
-                        raise ValueError("ordinary_entry_unavailable")
-                    ui_page.wait_for_timeout(100)
+                BASE.person_module().wait_for_wire_ready(
+                    ui_page, 20, ValueError("ordinary_entry_unavailable")
+                )
                 ui_person = rpc(ui_page, "rmqualification.person", sessions[0])
                 payload = ui_person["frame"].get("payload") or {}
                 if ui_person["frame"].get("ok") is not True or any(
