@@ -8,6 +8,7 @@ export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMe
   return async options => {
     const requestId = options.req.id;
     let reason = "admission_refused";
+    let removeRetirementObserver = () => {};
     try {
       const { client, params, sessionMutationAuthorization: mutation, sessionAccessAuthority: access } = options;
       const target = access?.target;
@@ -31,6 +32,21 @@ export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMe
         }
       };
       current();
+      if (params.hold === true) {
+        const signal = client.connectionSignal;
+        if (!signal || typeof signal.aborted !== "boolean" ||
+            typeof signal.addEventListener !== "function" ||
+            typeof signal.removeEventListener !== "function") throw new Error("missing native connection signal");
+        let recorded = false;
+        const onRetired = () => {
+          if (recorded || signal.aborted !== true) return;
+          recorded = true;
+          record({ phase: "connection_retired", requestId, connectionId: client.presenceKey, connection_aborted: true });
+        };
+        signal.addEventListener("abort", onRetired, { once: true });
+        removeRetirementObserver = () => signal.removeEventListener("abort", onRetired);
+        if (signal.aborted) { onRetired(); throw new Error("native connection already retired"); }
+      }
       record({ phase: "prepared", requestId, connectionId: client.presenceKey });
       try { await pause(params.hold === true); }
       catch (error) { reason = error?.message === "fixture_hold_timeout" ? "fixture_hold_timeout" : "fixture_pause_failed"; throw error; }
@@ -52,6 +68,8 @@ export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMe
       record({ phase: ["admission_refused", "initial_authority_retired", "post_await_authority_retired"].includes(reason) ? "guard_denied" : "probe_failed",
         requestId, connectionId: options.client?.presenceKey ?? null, reason });
       options.respond(false, undefined, { code: "INVALID_REQUEST", message: "person/session qualification authority unavailable or changed" });
+    } finally {
+      removeRetirementObserver();
     }
   };
 }
