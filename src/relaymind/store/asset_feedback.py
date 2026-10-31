@@ -9,6 +9,7 @@ import uuid
 from collections.abc import Mapping
 from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from jsonschema import FormatChecker
@@ -55,6 +56,13 @@ def validate_feedback_audit(value):
     return freeze_json(value)
 
 
+@dataclass(frozen=True)
+class CorrectionSnapshot:
+    feedback_revision: int
+    catalog_revision: int
+    records: tuple
+
+
 class AssetFeedbackStore:
     def __init__(
         self,
@@ -76,6 +84,7 @@ class AssetFeedbackStore:
             self.erasure = erasure
             self._key_operation = ContextVar("feedback-key-operation", default=None)
             self.invalidate_derived = invalidate_derived
+            self._invalidators = []
             recommendations.register_purge_hook(self._retention_hook)
             recommendations.store._asset_feedback_owner = self
 
@@ -102,6 +111,8 @@ class AssetFeedbackStore:
         )
         if self.invalidate_derived is not None:
             self.invalidate_derived(dict(scope))
+        for invalidate in tuple(self._invalidators):
+            invalidate(dict(scope))
         db.execute(
             "UPDATE recommendation_scope SET feedback_revision=feedback_revision+1 "
             "WHERE user_id=? AND workspace_id=?",
@@ -654,6 +665,66 @@ class AssetFeedbackStore:
     def expire(self, *, now):
         """Apply shared retention, including feedback with no expired parent."""
         return self.recommendations.sweep(now=now)
+
+    def register_invalidator(self, callback):
+        """Register synchronous private-state fencing before feedback acknowledgments."""
+        with self.store._lock:
+            if callback not in self._invalidators:
+                self._invalidators.append(callback)
+
+        def remove():
+            with self.store._lock:
+                if callback in self._invalidators:
+                    self._invalidators.remove(callback)
+
+        return remove
+
+    def correction_snapshot(self, scope, current_catalog, *, now, check=lambda: None):
+        """One store-owned revision/history read; filter before retaining latest20.
+
+        Stream historical rows under the caller's unchanged total deadline; do
+        not allocate an unbounded list or silently stop at a favorable prefix.
+        """
+        self.maintain_scope(scope, now=now)
+        self.recommendations._observe_scope_expiry(scope, now=now)
+        current = {asset.asset_id: asset for asset in current_catalog.assets}
+        binding_fields = ("asset_id", *IDENTITY_FIELDS)
+        result = []
+
+        def order(record):
+            return (
+                datetime.fromisoformat(record["recorded_at"].replace("Z", "+00:00")),
+                record["feedback_id"].encode("utf-8"),
+            )
+
+        with self.store.sql_read() as db:
+            check()
+            revision = self._scope_revision(db, scope)
+            rows = db.execute(
+                "SELECT r.record_json,b.asset_json FROM feedback_records r "
+                "JOIN feedback_bindings b USING(feedback_id) WHERE r.user_id=? "
+                "AND r.workspace_id=?",
+                (scope["user_id"], scope["workspace_id"]),
+            )
+            for row in rows:
+                check()
+                record, binding = json.loads(row["record_json"]), json.loads(row["asset_json"])
+                if record["feedback"]["kind"] != "correction":
+                    continue
+                if datetime.fromisoformat(record["retain_until"].replace("Z", "+00:00")) <= now:
+                    continue
+                target = current.get(binding["asset_id"])
+                if target is None or not self.policy(target):
+                    continue
+                raw = target.to_json_object()
+                if any(binding[field] != raw[field] for field in binding_fields):
+                    continue
+                result.append(validate_feedback_record(record))
+                result.sort(key=order)
+                if len(result) > 20:
+                    del result[0]
+            check()
+        return CorrectionSnapshot(revision, current_catalog.catalog_revision, tuple(result))
 
     def eligible_corrections(self, scope, current_catalog, *, now):
         """Read-only exact-binding evidence; performs no ranking or adaptation."""

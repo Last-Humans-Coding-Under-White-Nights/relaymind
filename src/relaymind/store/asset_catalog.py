@@ -749,7 +749,7 @@ class AssetCatalogStore:
                         rejected_count=batch["rejected_count"],
                         received_bytes=batch["received_bytes"],
                         duration_ms=batch["duration_ms"],
-                        embeddings=[],
+                        embeddings=batch.get("embeddings", []),
                     ),
                     timestamp=batch["timestamp"],
                 )

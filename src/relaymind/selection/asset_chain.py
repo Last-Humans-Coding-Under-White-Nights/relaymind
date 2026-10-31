@@ -115,11 +115,14 @@ class AttemptStarted:
     remaining_ms: float
     # The selector's declared observed cost, kept for a cancel before it finishes.
     observed_cost: Mapping | None = None
+    progress: Callable | None = None
 
 
 @dataclass(frozen=True)
 class AttemptFinished:
     attempt_record: object
+    embeddings: tuple = ()
+    flush_after_stop: bool = False
 
 
 AttemptObserver = Callable[[AttemptStarted | AttemptFinished], object]
@@ -213,7 +216,7 @@ def cancelled_attempt(started: AttemptStarted, observed_ms: float) -> dict:
     )
 
 
-def _attempt(selector, ordinal, mechanism, outcome, reason, started, budget, parsed):
+def _attempt(selector, ordinal, mechanism, outcome, reason, started, budget, parsed, embeddings=()):
     data = None if parsed is None else parsed.to_json_object()
     costs = []
     observed = _capability(selector, "observed_cost")
@@ -221,6 +224,9 @@ def _attempt(selector, ordinal, mechanism, outcome, reason, started, budget, par
         costs.append({"provenance": "observed", "value": dict(observed)})
     if data is not None and data["usage_claims"] is not None:
         costs.append(data["usage_claims"])
+    for embedding in embeddings:
+        if embedding["representation_revision"] == "asset_fields.v1":
+            costs.extend(embedding["cost_observations"])
     return dict(
         attempt=ordinal,
         selector={"name": selector.name, "version": selector.version},
@@ -233,6 +239,43 @@ def _attempt(selector, ordinal, mechanism, outcome, reason, started, budget, par
         cost_observations=costs,
         result=data,
     )
+
+
+def _embedding_snapshots(runs, *, fence=None):
+    observations = []
+    for run in runs:
+        if fence is not None:
+            run.fence(fence)
+        value = run.snapshot()
+        if value is not None:
+            observations.append(value)
+    return tuple(observations)
+
+
+class _AttemptProgress:
+    """One attempt's mutable observation state, never shared with a later floor."""
+
+    def __init__(self, selector, ordinal, mechanism, started, budget, runs, applicable):
+        self.selector, self.ordinal, self.mechanism = selector, ordinal, mechanism
+        self.started, self.budget, self.runs = started, budget, runs
+        self.applicable = applicable
+        self.outcome = self.reason = self.parsed = None
+        self.admitted = False
+
+    def __call__(self, stop):
+        embeddings = _embedding_snapshots(self.runs, fence=stop)
+        record = _attempt(
+            self.selector,
+            self.ordinal,
+            self.mechanism,
+            self.outcome if self.outcome is not None else stop,
+            self.reason if self.outcome is not None else stop,
+            self.started,
+            self.budget,
+            self.parsed,
+            embeddings,
+        )
+        return AttemptFinished(freeze_json(record), embeddings, self.admitted and self.applicable)
 
 
 async def select_assets(
@@ -248,9 +291,12 @@ async def select_assets(
     trusted_scope: Mapping[str, str],
     trusted_permissions: Sequence[str],
     observe: AttemptObserver | None = None,
+    adaptation=None,
 ) -> RecommendationSelectionResult:
     attempts = []
     fallback_reason = None
+    all_embeddings = []
+    pending_adaptation = None
     try:
         budget.check()
         if request.data["scope"] != dict(trusted_scope) or set(request.data["permissions"]) != set(
@@ -291,7 +337,10 @@ async def select_assets(
                 if budget.clock.monotonic() >= deadline:
                     raise AttemptFailure("timeout", "deadline_exceeded")
 
-            context = SelectorContext(budget.clock.monotonic, check_attempt)
+            embedding_runs = []
+            context = SelectorContext(
+                budget.clock.monotonic, check_attempt, observe_embedding=embedding_runs.append
+            )
             identity = SelectorIdentity(selector.name, selector.version)
             mechanism = (
                 "gateway_lexical_fallback"
@@ -301,6 +350,18 @@ async def select_assets(
             parsed = None
             outcome = reason = admission = None
             terminal_failure = None
+            adaptation_outcome = None
+            cancelled_exception = None
+
+            progress = _AttemptProgress(
+                selector,
+                ordinal,
+                mechanism,
+                started,
+                budget,
+                embedding_runs,
+                adaptation is not None,
+            )
             # Observers/persistence belong to the gateway, never selector fallback.
             await _observe(
                 observe,
@@ -310,6 +371,7 @@ async def select_assets(
                     mechanism,
                     max(0, (deadline - started) * 1000),
                     _capability(selector, "observed_cost"),
+                    progress,
                 ),
                 budget,
             )
@@ -363,14 +425,66 @@ async def select_assets(
                 # A selector's own cancellation is a cancelled attempt.
                 outcome, reason = "cancelled", "cancelled"
             except Exception:
-                # Only a built-in dependency failure is a declared unavailable
-                # selector. Policy/store/admission infrastructure must be terminal.
-                raise RecommendationFailure("internal_error", "internal_error", attempts) from None
+                # Preserve available dispatch/result/inference evidence before
+                # terminalizing an infrastructure failure. This never admits
+                # the proposal or authorizes a fallback/retry.
+                terminal_failure = ("internal_error", "internal_error")
+                if outcome is None:
+                    outcome, reason = "unavailable", "selector_unavailable"
+            progress.outcome, progress.reason, progress.parsed = outcome, reason, parsed
+            progress.mechanism = mechanism
+            progress.admitted = admission is not None
+            if admission is not None and ordinal == 1 and adaptation is not None:
+                try:
+                    adaptation_outcome = await _bounded(
+                        adaptation.apply(
+                            parsed,
+                            request,
+                            budget=budget,
+                            current_catalog=current_catalog,
+                            observe_embedding=embedding_runs.append,
+                        ),
+                        budget,
+                        budget.deadline,
+                    )
+                    pending_adaptation = adaptation_outcome
+                    adaptation_outcome.guard()
+                    admission = admit_current(parsed, request, current_catalog(), policy)
+                except AttemptFailure as failure:
+                    terminal_failure = (
+                        "deadline_exceeded"
+                        if failure.outcome == "timeout"
+                        else "recommendation_unavailable",
+                        failure.reason,
+                    )
+                except RecommendationFailure as failure:
+                    terminal_failure = (failure.code, failure.reason)
+                except asyncio.CancelledError as failure:
+                    budget.cancel()
+                    cancelled_exception = failure
+                    terminal_failure = ("cancelled", "cancelled")
+                except Exception:
+                    terminal_failure = ("internal_error", "internal_error")
+            fence = None
+            if terminal_failure is not None or outcome in ("timeout", "cancelled", "unavailable"):
+                fence = "cancelled" if budget._stopped() or outcome == "cancelled" else "failed"
+            embeddings = _embedding_snapshots(embedding_runs, fence=fence)
+            all_embeddings.extend(embeddings)
             record = _attempt(
-                selector, ordinal, mechanism, outcome, reason, started, budget, parsed
+                selector, ordinal, mechanism, outcome, reason, started, budget, parsed, embeddings
             )
             attempts.append(record)
-            await _observe(observe, AttemptFinished(freeze_json(record)), budget)
+            await _observe(
+                observe,
+                AttemptFinished(
+                    freeze_json(record),
+                    embeddings,
+                    admission is not None and adaptation is not None,
+                ),
+                budget,
+            )
+            if cancelled_exception is not None:
+                raise cancelled_exception
             budget.check()
             if terminal_failure is not None:
                 raise RecommendationFailure(*terminal_failure, attempts)
@@ -383,6 +497,8 @@ async def select_assets(
                     fallback_reason,
                     admission.rechecked_catalog_revision,
                     budget,
+                    embeddings=all_embeddings,
+                    adaptation_outcome=adaptation_outcome,
                 )
             if ordinal == 1:
                 fallback_reason = reason
@@ -390,25 +506,44 @@ async def select_assets(
             "recommendation_unavailable", fallback_reason or "selector_unavailable", attempts
         )
     except CatalogUnavailable:
+        if pending_adaptation is not None:
+            pending_adaptation.close()
         raise RecommendationFailure(
             "recommendation_unavailable", "corrupt_catalog", attempts
         ) from None
     except RecommendationFailure as failure:
+        if pending_adaptation is not None:
+            pending_adaptation.close()
         raise RecommendationFailure(failure.code, failure.reason, attempts) from None
     except asyncio.CancelledError:
+        if pending_adaptation is not None:
+            pending_adaptation.close()
         budget.cancel()
         if _task_cancelled():
             raise
         raise RecommendationFailure("cancelled", "cancelled", attempts) from None
     except Exception:
+        if pending_adaptation is not None:
+            pending_adaptation.close()
         raise RecommendationFailure("internal_error", "internal_error", attempts) from None
 
 
-def _ready(request, attempts, candidates, decision, fallback_reason, revision, budget):
+def _ready(
+    request,
+    attempts,
+    candidates,
+    decision,
+    fallback_reason,
+    revision,
+    budget,
+    *,
+    embeddings=(),
+    adaptation_outcome=None,
+):
     budget.check()
     value = dict(
         schema_version=1,
-        decision=decision,
+        decision=decision if adaptation_outcome is None else adaptation_outcome.decision,
         catalog_revision=request.data["catalog_revision"],
         host_snapshot_revision=None,
         attempts=attempts,
@@ -416,19 +551,25 @@ def _ready(request, attempts, candidates, decision, fallback_reason, revision, b
         primary_attempt=0 if attempts else None,
         base_candidates=candidates,
         base_decision=decision,
-        final_candidates=candidates,
-        final_decision=decision,
+        final_candidates=candidates
+        if adaptation_outcome is None
+        else list(adaptation_outcome.candidates),
+        final_decision=decision if adaptation_outcome is None else adaptation_outcome.decision,
         fallback_reason=fallback_reason,
-        adaptation=None,
+        adaptation=None if adaptation_outcome is None else adaptation_outcome.adaptation,
         admission={
             "outcome": "accepted",
             "rechecked_catalog_revision": revision,
             "checked_at": utc_iso(budget.clock.utc_now()),
         },
         observed_ms=budget.elapsed_ms(),
-        embeddings=[],
+        embeddings=list(embeddings),
         host_run_ids=[],
     )
     result = parse_recommendation_result(value)
     budget.check()
+    if adaptation_outcome is not None:
+        return RecommendationSelectionResult(
+            result.data, adaptation_outcome.guard, adaptation_outcome.close
+        )
     return result

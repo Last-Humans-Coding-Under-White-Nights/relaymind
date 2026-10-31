@@ -65,6 +65,7 @@ def test_external_cancellation_preserves_observer_owned_rebuild(tmp_path, monkey
         finally:
             release.set()
             await worker.stop()
+            assert not runs._foreground_windows
             await service.stop()
             runs.close()
 
@@ -112,6 +113,7 @@ def test_committed_rebuild_result_survives_observer_error(tmp_path, observer_err
             assert terminal == ["published"]
         finally:
             await worker.stop()
+            assert not runs._foreground_windows
             await service.stop()
             runs.close()
 

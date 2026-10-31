@@ -1398,6 +1398,10 @@ def test_contention_needs_scoped_valid_jobs_and_temporal_overlap(
     for change_index, changed in enumerate(
         (
             replace(workload, requests=queries[1:]),
+            replace(
+                workload,
+                requests=[replace(queries[0], started_at=1.0, finished_at=1.01), *queries[1:]],
+            ),
             replace(workload, requests=[queries[0], *queries[2:]]),
             replace(workload, jobs=[jobs[0] | {"overlap_observed": False}, *jobs[1:]]),
             replace(workload, jobs=[jobs[0], jobs[1] | {"overlap_observed": False}, *jobs[2:]]),
