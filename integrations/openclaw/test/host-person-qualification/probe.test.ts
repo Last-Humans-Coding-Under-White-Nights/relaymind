@@ -28,7 +28,7 @@ function fixture() {
 }
 
 describe("test-only native person RPC probe", () => {
-  it.each(["no-person", "no-profile", "model-origin", "wrong-origin", "stale-session", "foreign-params", "retired"])("denies %s before inherited dispatch", async kind => {
+  it.each(["no-person", "no-profile", "model-origin", "wrong-origin", "stale-session", "foreign-params", "null-params", "missing-params", "retired"])("denies %s before inherited dispatch", async kind => {
     const f = fixture();
     if (kind === "no-person") f.options.client.authenticatedUserId = "";
     if (kind === "no-profile") f.options.client.preparedSessionProfile.profileId = "";
@@ -36,11 +36,14 @@ describe("test-only native person RPC probe", () => {
     if (kind === "wrong-origin") f.options.client.browserOrigin.origin = "https://foreign.test";
     if (kind === "stale-session") f.options.params.expectedSessionId = "old";
     if (kind === "foreign-params") Object.assign(f.options.params, { profileId: "invented" });
+    if (kind === "null-params") (f.options as any).params = null;
+    if (kind === "missing-params") (f.options as any).params = undefined;
     if (kind === "retired") f.options.hasCurrentClientAuthority = () => false;
     await f.probe(f.options);
     expect(f.dispatch).not.toHaveBeenCalled();
     expect(f.respond.mock.calls[0][0]).toBe(false);
     expect(f.events.at(-1)).toMatchObject({ phase: "guard_denied", requestId: "request-a" });
+    if (kind.endsWith("-params")) expect(f.events.at(-1)).toMatchObject({ reason: "admission_refused" });
   });
 
   it.each(["missing-control-ui", "false-control-ui"])("denies %s before inherited dispatch", async kind => {

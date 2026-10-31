@@ -46,7 +46,8 @@ export function installNativeSocketObserver(target = window, extraMethods = []) 
     const promise = new Promise((resolve, reject) => {
       const timer = target.setTimeout(() => { pending.delete(id); reject(new Error("native_rpc_timeout")); }, 15000);
       pending.set(id, { resolve, reject, timer });
-      socket.send(JSON.stringify({ type: "req", id, method, params }));
+      try { socket.send(JSON.stringify({ type: "req", id, method, params })); }
+      catch { pending.delete(id); target.clearTimeout(timer); reject(new Error("native_send_failed")); }
     });
     // Retain only our probe outcomes. Native connect/auth responses are never stored.
     promise.then(value => completed.set(id, { status: "resolved", value }),

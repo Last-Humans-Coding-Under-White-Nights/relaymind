@@ -630,6 +630,56 @@ def _free_port(address: str) -> int:
         return listener.getsockname()[1]
 
 
+def _distinct_ports(address: str, attempts: int = 16) -> tuple[int, int]:
+    """Gateway and proxy ports differ, so a check of one never reaches the other."""
+    gateway_port = _free_port("127.0.0.1")
+    for _ in range(attempts):
+        proxy_port = _free_port(address)
+        if proxy_port != gateway_port:
+            return gateway_port, proxy_port
+    raise ValueError("qualification_port")
+
+
+def _unreachable(address: str, port: int) -> bool:
+    """A refused, dropped or filtered connection means nothing listens for us there."""
+    import socket
+
+    try:
+        with socket.create_connection((address, port), timeout=0.2):
+            return False
+    except OSError:
+        return True
+
+
+def _close_contexts(contexts: list) -> None:
+    """Close every browser context; one failed close does not keep the others open."""
+    for context in contexts:
+        try:
+            context.close()
+        except Exception:
+            pass
+
+
+def read_native_events(path: Path) -> list[dict]:
+    """Complete JSONL events only; a trailing line still being appended is retried later."""
+    raw = path.read_bytes()
+    if len(raw) > 1024 * 1024:
+        raise ValueError("native_event_bound")
+    complete, _, _partial = raw.rpartition(b"\n")
+    events = []
+    for line in complete.split(b"\n"):
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise ValueError("native_event_invalid") from None
+        if not isinstance(event, dict):
+            raise ValueError("native_event_invalid")
+        events.append(event)
+    return events
+
+
 def _wait_listener(process, address: str, port: int) -> None:
     import socket
     import time
@@ -647,7 +697,6 @@ def _wait_listener(process, address: str, port: int) -> None:
 
 
 def _run_private_trial(work: Path, address: str, capture: dict, *, extension=None) -> None:
-    import socket
     import sys
     import time
     import uuid
@@ -664,10 +713,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
     archive = work / "authcrunch.tar.gz"
     download_authcrunch(archive)
     binary = install_authcrunch(archive, work / "proxy-bin")
-    gateway_port = _free_port("127.0.0.1")
-    proxy_port = _free_port(address)
-    if gateway_port == proxy_port:
-        proxy_port = _free_port(address)
+    gateway_port, proxy_port = _distinct_ports(address)
     origin = f"https://rm-person.test:{proxy_port}"
     nonce = secrets.token_hex(6)
     accounts = [
@@ -838,10 +884,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
         raise ValueError("unknown_step")
 
     def native_events():
-        raw = events_path.read_bytes()
-        if len(raw) > 1024 * 1024:
-            raise ValueError("native_event_bound")
-        return [json.loads(line) for line in raw.splitlines() if line]
+        return read_native_events(events_path)
 
     try:
         for label, command in (
@@ -859,17 +902,11 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
         _wait_listener(processes[0], "127.0.0.1", gateway_port)
         _wait_listener(processes[1], address, proxy_port)
         # The gateway must not become a direct private-interface ingress.
-        try:
-            with socket.create_connection((address, gateway_port), timeout=0.2):
-                raise ValueError("gateway_nonloopback_listener")
-        except ConnectionRefusedError:
-            pass
+        if not _unreachable(address, gateway_port):
+            raise ValueError("gateway_nonloopback_listener")
         # A wildcard proxy listener would also accept loopback; refuse it.
-        try:
-            with socket.create_connection(("127.0.0.1", proxy_port), timeout=0.2):
-                raise ValueError("proxy_loopback_listener")
-        except ConnectionRefusedError:
-            pass
+        if not _unreachable("127.0.0.1", proxy_port):
+            raise ValueError("proxy_loopback_listener")
         capture["listeners"] = dict(
             gateway=dict(address="127.0.0.1", port=gateway_port),
             proxy=dict(address=address, port=proxy_port),
@@ -881,6 +918,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                 args=["--no-proxy-server", f"--host-resolver-rules=MAP rm-person.test {address}"],
                 env=environment,
             )
+            contexts = []
             try:
                 capture["phase"] = "proxy_signature_controls"
                 for forged in (False, True):
@@ -918,7 +956,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                         'installNativeSocketObserver(window, ["relaymind.recommendations", '
                         '"relaymind.skill"]);',
                     )
-                contexts, pages, sessions = [], [], []
+                pages, sessions = [], []
 
                 def rpc(page, method, params):
                     observed = page.evaluate(
@@ -1006,7 +1044,6 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     capture["network"] = dict(
                         bind_ip=address, peer_ip=peer["peer"], upstream="127.0.0.1"
                     )
-                    mark("network_peer")
                     login_id = str(uuid.uuid4())
                     capture["events"].append(
                         dict(
@@ -1079,6 +1116,8 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                         )
                     )
                     mark(prefix + "_person_rpc")
+                # Every account's actual TCP peer is bound before the step passes.
+                mark("network_peer")
                 if extension is not None:
                     extension.persons_ready(rpc, pages, sessions, capture)
                 capture["phase"] = "cross_account_denied"
@@ -1198,6 +1237,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     capture["held_native_observations"] = project_held_native_events(
                         events_path, held_request_id
                     )
+                _close_contexts(contexts)
                 browser.close()
     finally:
         release_path.write_bytes(b"release\n")
@@ -1224,6 +1264,54 @@ def session_create_params() -> dict:
     )
 
 
+# Every reason the harness raises by name is exported as itself.
+SAFE_REASONS = frozenset(
+    {
+        "private_network_required",
+        "linux_runner_required",
+        "caller_alarm_in_use",
+        "native_host_version",
+        "configuration_invalid",
+        "gateway_nonloopback_listener",
+        "proxy_loopback_listener",
+        "unauthenticated_proxy_ingress",
+        "actual_peer_binding",
+        "native_response_binding",
+        "native_session_create_denied",
+        "native_person_rpc_denied",
+        "native_person_identity_binding",
+        "cross_account_admitted",
+        "native_hold_not_observed",
+        "native_revocation_not_observed",
+        "native_connection_retirement_not_observed",
+        "native_revocation_unverified",
+        "native_session_create_binding",
+        "native_ui_pairing_timeout",
+        "credential_export_refused",
+        "overall_deadline_exceeded",
+        "artifact_digest",
+        "artifact_size",
+        "artifact_redirect",
+        "artifact_members",
+        "artifact_executable",
+        "artifact_expansion",
+        "artifact_path",
+        "child_startup_failed",
+        "child_startup_timeout",
+        "native_event_bound",
+        "artifact_deadline",
+        "native_event_invalid",
+        "network_inventory_size",
+        "network_inventory_invalid",
+        "qualification_port",
+        "qualification_accounts",
+        "login_subphase_invalid",
+        "login_subphase_bound",
+        "unknown_step",
+    }
+)
+
+
 def run_qualification(work: Path, output: Path, *, extension=None) -> int:
     """Requested integration fails honestly when private setup is unavailable."""
     import platform
@@ -1238,15 +1326,18 @@ def run_qualification(work: Path, output: Path, *, extension=None) -> int:
     def expired(_number, _frame):
         raise TimeoutError("overall_deadline_exceeded")
 
+    def finish() -> int:
+        capture["observed_ms"] = (time.monotonic() - started) * 1000
+        write_capture(output, capture)
+        return 0 if capture["checks"]["person_composition"] else 2
+
     try:
         if platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"}:
             capture["reason"] = "linux_runner_required"
-            write_capture(output, capture)
-            return 2
+            return finish()
         candidates = discover_network()
         if not candidates:
-            write_capture(output, capture)
-            return 2
+            return finish()
         if not _private_ipv4(candidates[0]):
             raise ValueError("private_network_required")
         work = work.parent.resolve(strict=True) / work.name
@@ -1266,40 +1357,7 @@ def run_qualification(work: Path, output: Path, *, extension=None) -> int:
         if not capture["checks"]["person_composition"]:
             capture.update(status="failed", reason="person_composition_unverified")
     except Exception as error:
-        safe_reasons = {
-            "private_network_required",
-            "linux_runner_required",
-            "caller_alarm_in_use",
-            "native_host_version",
-            "configuration_invalid",
-            "gateway_nonloopback_listener",
-            "proxy_loopback_listener",
-            "unauthenticated_proxy_ingress",
-            "actual_peer_binding",
-            "native_response_binding",
-            "native_session_create_denied",
-            "native_person_rpc_denied",
-            "native_person_identity_binding",
-            "cross_account_admitted",
-            "native_hold_not_observed",
-            "native_revocation_not_observed",
-            "native_connection_retirement_not_observed",
-            "native_revocation_unverified",
-            "native_session_create_binding",
-            "native_ui_pairing_timeout",
-            "credential_export_refused",
-            "overall_deadline_exceeded",
-            "artifact_digest",
-            "artifact_size",
-            "artifact_redirect",
-            "artifact_members",
-            "artifact_executable",
-            "artifact_expansion",
-            "artifact_path",
-            "child_startup_failed",
-            "child_startup_timeout",
-            "native_event_bound",
-        }
+        safe_reasons = set(SAFE_REASONS)
         if extension is not None:
             safe_reasons.update(extension.failure_reasons())
         reason = str(error) if str(error) in safe_reasons else "qualification_failed"
@@ -1317,9 +1375,7 @@ def run_qualification(work: Path, output: Path, *, extension=None) -> int:
         if timer_installed:
             signal.setitimer(signal.ITIMER_REAL, 0)
             signal.signal(signal.SIGALRM, previous_handler)
-    capture["observed_ms"] = (time.monotonic() - started) * 1000
-    write_capture(output, capture)
-    return 0 if capture["checks"]["person_composition"] else 2
+    return finish()
 
 
 def main(argv=None) -> int:
