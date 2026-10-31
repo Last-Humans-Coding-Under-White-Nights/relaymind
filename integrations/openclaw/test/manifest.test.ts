@@ -39,6 +39,7 @@ describe("openclaw.plugin.json", () => {
       "executionMode",
       "limits",
       "maxRetries",
+      "recommendations",
     ]);
     expect(schema.properties.diagnosticsPath).toMatchObject({ type: "string", minLength: 1 });
     expect(schema.properties.maxRetries).toMatchObject({ type: "integer", minimum: 0, maximum: 2, default: 0 });

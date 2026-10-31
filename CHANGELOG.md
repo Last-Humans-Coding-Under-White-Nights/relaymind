@@ -12,6 +12,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.61 → 0.62 (RM37/RM39; AC28/AC30): names the pinned
+  authenticated native action channel and explicit profile/workspace registration,
+  preserves direct choice/feedback/privacy and distributed-commit semantics, and
+  specifies exact native Skill Library selection/read separately from loaded-use.
+  Runtime snapshots and native MCP activation retain their existing qualification gates.
+
+
+
 - Specification 0.55 → 0.56 (RM40/RM44; AC31/AC36; review #219):
   names `Case.conversation` and attempt/embedding `cost_observations` as
   order-preserving arrays for canonical hashing. Types `Rate.value` and Wilson

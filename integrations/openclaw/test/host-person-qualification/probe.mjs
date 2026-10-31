@@ -4,7 +4,7 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { dispatchGatewayMethod } from "openclaw/plugin-sdk/gateway-method-runtime";
 
 export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMethod,
-  pause = async _hold => {} }) {
+  pause = async _hold => {}, resolveWorkspace }) {
   return async options => {
     const requestId = options.req.id;
     let reason = "admission_refused";
@@ -62,6 +62,12 @@ export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMe
         sessionId: target.sessionId, lifecycleRevision: target.lifecycleRevision,
         connectionId: client.presenceKey, deviceId: client.connect.device.id,
       };
+      if (resolveWorkspace) {
+        const workspaceDir = resolveWorkspace(options, target.agentId);
+        current(true);
+        if (typeof workspaceDir !== "string" || !workspaceDir) throw new Error("workspace_unavailable");
+        receipt.workspaceDir = workspaceDir;
+      }
       record({ phase: "admitted", ...receipt });
       options.respond(true, receipt, undefined);
     } catch {
@@ -83,6 +89,7 @@ export default definePluginEntry({
     };
     api.registerGatewayMethod("rmqualification.person", createPersonProbe({
       origin: api.pluginConfig.origin, record,
+      resolveWorkspace: (options, agentId) => api.runtime.agent.resolveAgentWorkspaceDir(options.context.getRuntimeConfig(), agentId),
       pause: async hold => {
         if (!hold) return;
         const deadline = performance.now() + 5000;

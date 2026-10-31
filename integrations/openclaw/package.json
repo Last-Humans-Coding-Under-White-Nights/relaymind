@@ -8,7 +8,8 @@
   "files": [
     "dist",
     "openclaw.plugin.json",
-    "README.md"
+    "README.md",
+    "README.zh-CN.md"
   ],
   "openclaw": {
     "extensions": [
@@ -40,7 +41,7 @@
     "node": ">=24.22.1 <25 || >=26.12.1"
   },
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json && tsc -p tsconfig.control-ui.json",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "pack:check": "npm run build && node scripts/pack-check.mjs",

@@ -2,16 +2,25 @@
   "id": "relaymind",
   "name": "RelayMind",
   "description": "RelayMind local gateway as an OpenClaw model provider: the client-owned alias relaymind-client-tools over the loopback chat API; OpenClaw keeps its sessions, tools, and approvals.",
-  "categories": ["models"],
+  "categories": [
+    "models"
+  ],
   "activation": {
-    "onStartup": false
+    "onStartup": false,
+    "onConfigPaths": [
+      "plugins.entries.relaymind.config.recommendations"
+    ]
   },
-  "providers": ["relaymind"],
+  "providers": [
+    "relaymind"
+  ],
   "setup": {
     "providers": [
       {
         "id": "relaymind",
-        "envVars": ["RELAYMIND_APP_TOKEN"]
+        "envVars": [
+          "RELAYMIND_APP_TOKEN"
+        ]
       }
     ]
   },
@@ -34,7 +43,9 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["baseUrl"],
+    "required": [
+      "baseUrl"
+    ],
     "properties": {
       "baseUrl": {
         "type": "string",
@@ -47,7 +58,11 @@
       },
       "executionMode": {
         "type": "string",
-        "enum": ["auto", "local_only", "external_only"],
+        "enum": [
+          "auto",
+          "local_only",
+          "external_only"
+        ],
         "default": "auto",
         "description": "Sent as X-RelayMind-Execution-Mode on every request. parallel_demo is not a mode of this alias."
       },
@@ -79,7 +94,130 @@
         "maximum": 2,
         "default": 0,
         "description": "The plugin's own retries after 429 overloaded (same Idempotency-Key) or 504 deadline_exceeded (a new key), only before any answer content. 0 is one attempt."
+      },
+      "recommendations": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "controlUiOrigin",
+          "applicationTokenEnv",
+          "bindings"
+        ],
+        "properties": {
+          "controlUiOrigin": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "applicationTokenEnv": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+          },
+          "bindings": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1000,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "profileId",
+                "authenticatedUserId",
+                "agentId",
+                "userId",
+                "workspaceId",
+                "workspaceDir",
+                "actionTokenEnv"
+              ],
+              "properties": {
+                "profileId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "authenticatedUserId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "agentId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "userId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "workspaceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "workspaceDir": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "actionTokenEnv": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+                }
+              }
+            }
+          },
+          "skills": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "assetId",
+                "contentHash",
+                "sourceVersion",
+                "skillId",
+                "revision"
+              ],
+              "properties": {
+                "assetId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "contentHash": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "sourceVersion": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 256
+                },
+                "skillId": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9-]{36}$"
+                },
+                "revision": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              }
+            }
+          }
+        }
       }
     }
+  },
+  "contracts": {
+    "gatewayMethodDispatch": [
+      "authenticated-request"
+    ]
+  },
+  "controlUi": {
+    "entry": "dist/control-ui/control-ui.js"
   }
 }

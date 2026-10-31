@@ -1281,3 +1281,119 @@ schema/provenance capture. A disconnected server retains its schema while calls
 fail. Current session/turn/availability revision binding remains unsupported by
 the qualified composition; MCP use and interactive approval acceptance remain
 open pending the #187 integration contract.
+
+## Native recommendations and explicit actions
+
+[简体中文](README.zh-CN.md) · [Catalog setup](../../docs/asset-selection.md)
+
+The optional native Control UI uses `openclaw-native-2026.10.7.v1` (RM37/RM39;
+AC28/AC30). **While the reviewed qualification registry is empty, production
+action RPCs remain unregistered.** Configuration cannot claim qualification.
+Browser/gateway fixtures prove mechanics, not native person, loaded-use, human
+or platform acceptance. Runtime snapshots and native MCP execution remain denied.
+
+Build/install with the existing `npm run pack:release -- /absolute/release-dir`
+and `openclaw plugins install /absolute/release-dir/relaymind-openclaw-provider-0.1.0.tgz`
+commands. Both guides are packed. Keep SHA256SUMS/release.json. Use the pinned
+OpenClaw2026.10.7 and declared Node range. Provider ownership and
+`managedSkillSelection:false` remain unchanged.
+
+Sign in as the registered **personal** account and pair its device. Shared
+Gateway owner/application tokens are not a person. Native plugin assets require
+the connected Gateway's own HTTPS Control UI or browser-trusted loopback;
+plain-LAN-HTTP login/pairing alone does not establish native asset loading.
+Enable **Settings → Labs → Custom plugin UI**, or configure
+`gateway.controlUi.experimental.customPlugins=true`. Open a personal session,
+then **RelayMind recommendations** in the sidebar or session action menu.
+The page uses the official native `host.request` connection; no developer
+console, copied device keys or identity-less CLI impersonation is required.
+
+The local operator configures this restrictive host role boundary (merge into
+existing configuration; do not replace unrelated settings):
+
+```json
+{"gateway":{"roles":{"default":"person","definitions":{"person":{
+  "sessions":{"others":"none"},"agents":["main"],
+  "scopes":["operator.read","operator.write","operator.approvals","operator.questions"]
+}}}}}
+```
+
+All assignable roles must retain this personal-session restriction. Exclude
+`operator.admin` and the shared owner; write scope alone is not ownership.
+Add this optional object to the existing plugin configuration:
+
+```json
+{
+  "baseUrl":"http://127.0.0.1:8087/v1",
+  "recommendations":{
+    "controlUiOrigin":"https://your-private-control-ui.example",
+    "applicationTokenEnv":"RELAYMIND_APP_TOKEN",
+    "bindings":[{
+      "profileId":"actual-canonical-native-profile",
+      "authenticatedUserId":"actual-authenticated-person@example.test",
+      "agentId":"main","workspaceDir":"/absolute/native/workspace",
+      "userId":"customer","workspaceId":"local-library",
+      "actionTokenEnv":"RELAYMIND_ACTION_TOKEN"
+    }],
+    "skills":[]
+  }
+}
+```
+
+Use actual host-issued profile/account facts and the exact host-resolved agent
+workspace. The origin must match the qualified signed-in Control UI. Gateway
+labels must match `[recommendations]` and the operator action registration;
+one gateway instance still has one active scope. Store the current application
+token and a separate action token in protected host process environment,
+never configuration values, messages, tool arguments, URLs or logs. Generate at
+least32randombytes for the action token. Gateway registration stores only its
+SHA-256 and existing closed metadata: schema_version,adapter_id,user_id,
+workspace_id,credential_sha256,enabled,host_identity,session_mapping,
+qualified_contract_revision. Use the exact contract ID above and existing opaque
+operator references for host_identity/session_mapping. An enabled record needs
+an actual built-in qualification entry; it cannot attest to itself. Configure
+`[user_actions].registrations_path` with owner-only Unix permissions or native
+Windows user-restricted ACLs. There is no HTTP self-enrollment. Refresh the
+application-token environment when the gateway restarts.
+
+Enter a Chinese, English or mixed task and click **Recommend**. Check recorded
+candidates/versions/availability, then **Choose N**, **Choose none** or **Cancel
+recommendation**. `choice_required` asks you to choose; `confident` also executes
+nothing automatically. A choice records preference only. **Useful**, **Not
+useful** and **Correct to N** are separate explicit feedback. Use **Inspect
+feedback**, **Delete feedback** and **Reset feedback** for scoped privacy.
+Choice, silence, model proposals and task success never become correction data.
+Integer versions remain lossless; identities come from the actual receipt,
+never rendered text. Disconnect clears private panel content.
+
+A lost response may follow a committed action. **Retry last request** keeps the
+original request and idempotency key; it never silently retries or claims
+rollback. Resolve stale versions with a fresh read.
+
+For skills, import/create the exact native revision in **Plugins → Skills**.
+The operator adds an exact `skills` association:
+
+```json
+{"assetId":"exact-offered-asset-id","contentHash":"64-lowercase-hex-original-hash",
+ "sourceVersion":null,"skillId":"actual-native-skill-uuid",
+ "revision":"64-lowercase-hex-native-library-revision"}
+```
+
+Replace placeholders with actual values; sourceVersion must match the offered
+record. Native revision covers the whole bundle and is distinct from the
+SKILL.md hash. Preserve exact UTF-8 bytes/newlines; mismatch is refused rather
+than repaired by changing an expected hash. After **Choose N**, use **Select
+native skill**, select its actual library entry and **Select for next turn**.
+The bridge rechecks choice/scope/expiry/source version, live person/session/
+workspace, exact native activate/read receipts and instruction bytes. Its receipt
+says next-turn selected and instruction use not observed. Submit the ordinary
+next task in the same native session; selection/read alone proves no task success.
+
+Changed/deleted revisions, session resets and retired authority block further
+use. Activation followed by read failure may already have changed selection;
+the partial receipt retains that fact. Previously loaded conversation text
+cannot be erased retroactively: use a fresh session and repeat recommendation/
+choice when isolation from old instructions is needed. MCP discovery/choice is
+available as preference, while exact native MCP use and approvals remain outside
+this enabled contract. A toolSchema never grants execution and the page starts
+no servers.

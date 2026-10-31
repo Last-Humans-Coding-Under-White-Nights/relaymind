@@ -114,6 +114,9 @@ jobs:
         working-directory: integrations/openclaw
         run: npm run pack:release -- ../../release/openclaw
 
+      - name: Install browser for plugin UI tests
+        run: playwright install --with-deps --only-shell chromium
+
       - name: Transport, plugin, and artifact tiers
         run: >
           pytest tests/test_openclaw_host_transport.py tests/test_openclaw_plugin.py
@@ -130,6 +133,10 @@ jobs:
           tests/test_openclaw_command_qualification.py
           tests/test_openclaw_mcp_qualification.py
           tests/test_openclaw_person_ingress.py
+          tests/test_openclaw_asset_commands.py
+          tests/test_openclaw_native_actions.py
+          tests/test_openclaw_composed_actions.py
+          tests/test_openclaw_recommendation_ui.py
           --durations=30 --junitxml=ci-evidence/openclaw-tests.xml
 
       - name: Pinned host lifecycle (install, inspect, round trips, removal)
@@ -140,17 +147,13 @@ jobs:
             --label "GitHub Actions ${{ matrix.os }} runner, Node $(node --version)" \
             -- node integrations/openclaw/node_modules/openclaw/openclaw.mjs
 
-      # Disposable signed-session accounts test native person/profile mechanics.
-      # This is not a customer trial or production adapter qualification.
-      - name: Install person fixture browser
-        if: matrix.os == 'ubuntu-latest'
-        run: playwright install --with-deps --only-shell chromium
-
+      # Disposable signed-session accounts exercise person mechanics and the
+      # production action factories. The shipped qualification registry stays closed.
       - name: Native person ingress fixture
         if: matrix.os == 'ubuntu-latest'
         timeout-minutes: 12
         run: |
-          python integrations/openclaw/test/host-person-qualification/qualify.py \
+          python integrations/openclaw/test/host-action-qualification/qualify.py \
             --work-dir "${RUNNER_TEMP}/relaymind-person-qualification" \
             --out ci-evidence/openclaw-person-ingress-ubuntu.json
 
