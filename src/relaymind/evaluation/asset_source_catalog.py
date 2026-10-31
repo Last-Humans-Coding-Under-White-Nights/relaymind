@@ -75,12 +75,18 @@ def _projection(source: SourceOriginal) -> tuple[dict, bytes, dict[str, bytes], 
         if metadata.get("name") != source.name:
             raise AssetCorpusError("package_identity_mismatch")
         description = metadata.get("description")
+        if description is not None and not isinstance(description, str):
+            raise AssetCorpusError("invalid_source_text")
         identity = {"package_id": source.name, "package_version": source.version}
         body_language = source_language(body)
     elif source.kind == "mcp_tool" and source.format == "mcp_snapshot":
         original = source.payload
         raw = parse_json(original)
-        if raw.get("name") != source.name or not isinstance(raw.get("inputSchema"), dict):
+        if (
+            raw.get("name") != source.name
+            or not isinstance(raw.get("inputSchema"), dict)
+            or not isinstance(raw.get("description"), (str, type(None)))
+        ):
             raise AssetCorpusError("unsupported_tool_definition")
         description = raw.get("description")
         schema = raw["inputSchema"]

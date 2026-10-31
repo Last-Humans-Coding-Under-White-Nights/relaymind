@@ -202,3 +202,31 @@ def test_rm40_invalid_captured_at_is_an_exclusion_not_a_crash(tmp_path):
     assert result.admitted == 0
     assert result.excluded == 1
     assert data["exclusions"][0]["reason"] == "invalid_source_text"
+
+
+@pytest.mark.parametrize("description", [123, True, ["a"], {"text": "a"}])
+def test_rm40_non_string_mcp_description_is_an_exclusion_not_a_crash(tmp_path, description):
+    """RM40/AC31: malformed source data is excluded alone; valid assets remain."""
+    tool = json.dumps(
+        {"name": "tool", "description": description, "inputSchema": {"type": "object"}}
+    ).encode()
+    bad = original(kind="mcp_tool", name="tool", payload=tool, asset_id="source:tool")
+    result = api().build_source_catalog(
+        [original(), bad], tmp_path / "out", dataset_id="actual-sources"
+    )
+    data = json.loads(result.catalog_path.read_text(encoding="utf-8"))
+    assert result.admitted == 1 and result.excluded == 1
+    assert data["exclusions"][0]["original_id"] == "source:tool"
+    assert data["exclusions"][0]["reason"] == "unsupported_tool_definition"
+
+
+def test_rm40_non_string_skill_description_is_an_exclusion_not_a_crash(tmp_path):
+    payload = archive(
+        [("SKILL.md", b"---\nname: english-skill\ndescription: 123\n---\nBody text.")]
+    )
+    result = api().build_source_catalog(
+        [original(payload=payload)], tmp_path / "out", dataset_id="actual-sources"
+    )
+    data = json.loads(result.catalog_path.read_text(encoding="utf-8"))
+    assert result.admitted == 0 and result.excluded == 1
+    assert data["exclusions"][0]["reason"] == "invalid_source_text"

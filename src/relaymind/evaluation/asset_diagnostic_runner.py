@@ -476,6 +476,24 @@ def _missing_pairs(pairs):
     ]
 
 
+def _produced_by_admitted_attempt(result: Mapping) -> bool:
+    """RM35/RM40: base output is exactly the admitted producer's own result.
+
+    The chain admits the last attempt and copies its decision and candidates;
+    an edited decision or ranking that no attempt produced is not evidence.
+    """
+    if result["decision"] == "empty_catalog":
+        return not result["attempts"]
+    producer = result["attempts"][-1]
+    output = producer["result"]
+    return (
+        producer["outcome"] in ("ranked", "no_match")
+        and output is not None
+        and output["decision"] == result["base_decision"]
+        and output["candidates"] == result["base_candidates"]
+    )
+
+
 def _verify_development_report(report: Mapping) -> None:
     try:
         doc, catalog = report["input_document"], report["catalog_document"]
@@ -541,6 +559,7 @@ def _verify_development_report(report: Mapping) -> None:
                     row["status"] != "ready"
                     or row["attempts"] != row["result"]["attempts"]
                     or row["embeddings"] != row["result"]["embeddings"]
+                    or not _produced_by_admitted_attempt(row["result"])
                 ):
                     raise ValueError
             elif row["terminal_observation"] is not None:

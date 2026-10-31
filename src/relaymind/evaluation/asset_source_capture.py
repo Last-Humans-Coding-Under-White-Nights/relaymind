@@ -63,8 +63,15 @@ async def _acquire_recipe(recipe: Mapping, cache_root: Path, *, client=None) -> 
     if recipe.get("schema_version") != 1 or type(recipe.get("schema_version")) is not int:
         raise AssetCorpusError("invalid_source_recipe")
     files = recipe.get("files")
-    if not isinstance(files, list) or len(files) > 1000:
+    if not isinstance(files, list):
+        raise AssetCorpusError("invalid_source_recipe")
+    if len(files) > 1000:
         raise AssetCorpusError("source_limit")
+    redirect_hosts = recipe.get("redirect_hosts", [])
+    if not isinstance(redirect_hosts, list) or any(
+        not isinstance(host, str) or not host for host in redirect_hosts
+    ):
+        raise AssetCorpusError("invalid_source_recipe")
     ids = set()
     total = 0
     for row in files:
@@ -95,6 +102,14 @@ async def _acquire_recipe(recipe: Mapping, cache_root: Path, *, client=None) -> 
     own = client is None
     if client is None:
         client = httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=10)
+    # Redirects may reach only hosts of rows whose own URL is safe; an unsafe
+    # row is excluded by itself below and never blocks the other rows.
+    origins = set(redirect_hosts)
+    for other in files:
+        try:
+            origins.add(urlsplit(_public_url(other["url"])).hostname)
+        except AssetCorpusError:
+            pass
     started = time.monotonic()
     received = 0
     requests = 0
@@ -125,8 +140,6 @@ async def _acquire_recipe(recipe: Mapping, cache_root: Path, *, client=None) -> 
                     result.update(status="reused", final_url=row["url"])
                     results.append(result)
                     continue
-                origins = {urlsplit(_public_url(r["url"])).hostname for r in files}
-                origins.update(recipe.get("redirect_hosts", []))
                 payload = None
                 for redirect in range(4):
                     remaining = 60 - (time.monotonic() - started)

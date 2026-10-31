@@ -205,3 +205,46 @@ def test_rm40_hex_only_domains_are_public_hosts(tmp_path, host):
     (cache / (hashlib.sha256(payload).hexdigest() + ".original")).write_bytes(payload)
     result = api().acquire_recipe(data, cache)
     assert result[0]["status"] == "reused"
+
+
+@pytest.mark.parametrize("files", [None, "files", {}])
+def test_rm40_non_list_files_are_a_recipe_error_not_a_limit(tmp_path, files):
+    data = recipe()
+    data["files"] = files
+    with pytest.raises(api().AssetCorpusError, match="invalid_source_recipe"):
+        api().acquire_recipe(data, tmp_path / "cache")
+
+
+@pytest.mark.parametrize("hosts", [None, "github.com", [1], [""], {}])
+def test_rm40_redirect_hosts_must_be_a_list_of_host_names(tmp_path, hosts):
+    data = recipe()
+    data["redirect_hosts"] = hosts
+    with pytest.raises(api().AssetCorpusError, match="invalid_source_recipe"):
+        api().acquire_recipe(data, tmp_path / "cache")
+
+
+def test_rm40_one_unsafe_url_does_not_exclude_other_rows(tmp_path):
+    """RM40: a rejected source is excluded alone; valid rows are still acquired."""
+    payload = b"valid original"
+    data = recipe(payload)
+    data["files"].append(
+        {
+            "id": "unsafe",
+            "url": "http://source.example/plain",
+            "sha256": hashlib.sha256(b"other").hexdigest(),
+            "bytes": 5,
+        }
+    )
+    seen = []
+
+    def respond(request):
+        seen.append(str(request.url))
+        return httpx.Response(200, stream=httpx.ByteStream(payload))
+
+    with capture_client(transport=httpx.MockTransport(respond)) as client:
+        results = api().acquire_recipe(data, tmp_path / "cache", client=client)
+    by_id = {r["id"]: r for r in results}
+    assert by_id["original"]["status"] == "captured"
+    assert by_id["unsafe"]["status"] == "excluded"
+    assert by_id["unsafe"]["reason"] == "unsafe_source_url"
+    assert seen == ["https://source.example/file"]
