@@ -308,6 +308,49 @@ def session_create_receipt(observed: dict, account_email: str) -> dict:
         raise ValueError("native_session_create_binding") from None
 
 
+PERSON_RECEIPT_FIELDS = (
+    "requestId",
+    "authenticatedUserId",
+    "profileId",
+    "sessionKey",
+    "sessionId",
+    "lifecycleRevision",
+    "deviceId",
+    "connectionId",
+)
+
+
+def native_error_code(frame: dict) -> str | None:
+    """A host error code only from a mapping error; any other shape has none."""
+    error = frame.get("error")
+    code = error.get("code") if isinstance(error, dict) else None
+    if not isinstance(code, str) or not code.replace("_", "").isalnum() or len(code) > 64:
+        return None
+    return code
+
+
+def session_params(receipt: dict) -> dict:
+    """Person RPC params from the validated create receipt, never the raw reply."""
+    return dict(
+        sessionKey=receipt["session_key"],
+        expectedSessionId=receipt["session_id"],
+        expectedLifecycleRevision=receipt["lifecycle_revision"],
+    )
+
+
+def person_rpc_receipt(result: dict, account_email: str) -> dict:
+    """The bound person receipt; any other payload shape is an identity failure."""
+    receipt = result["frame"].get("payload")
+    if (
+        not isinstance(receipt, dict)
+        or any(not isinstance(receipt.get(k), str) or not receipt[k] for k in PERSON_RECEIPT_FIELDS)
+        or receipt["requestId"] != result["id"]
+        or receipt["authenticatedUserId"] != account_email
+    ):
+        raise ValueError("native_person_identity_binding")
+    return receipt
+
+
 def write_capture(path: Path, capture: dict) -> None:
     """Sanitized capture only; raw homes, stores, cookies and keys stay private."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -358,6 +401,8 @@ def project_person_rpc_failure(path: Path, request_id: str) -> dict:
         return dict(status="event_file_oversize", **empty)
     observations = []
     for line in raw.splitlines():
+        if not line.strip():
+            continue
         try:
             event = json.loads(line)
         except (UnicodeDecodeError, json.JSONDecodeError):
@@ -398,6 +443,8 @@ def project_held_native_events(path: Path, request_id: str) -> dict:
         return dict(status="event_file_oversize", **empty)
     observations = []
     for line in raw.splitlines():
+        if not line.strip():
+            continue
         try:
             event = json.loads(line)
         except (UnicodeDecodeError, json.JSONDecodeError):
@@ -967,14 +1014,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     )
                     if observed["frame"].get("id") != observed["id"]:
                         raise ValueError("native_response_binding")
-                    error = observed["frame"].get("error") or {}
-                    error_code = error.get("code")
-                    if (
-                        not isinstance(error_code, str)
-                        or not error_code.replace("_", "").isalnum()
-                        or len(error_code) > 64
-                    ):
-                        error_code = None
+                    error_code = native_error_code(observed["frame"])
                     capture["events"].append(
                         dict(
                             id="request:" + observed["id"],
@@ -1067,13 +1107,9 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     created = rpc(page, "sessions.create", session_create_params())
                     if created["frame"].get("ok") is not True:
                         raise ValueError("native_session_create_denied")
-                    session = created["frame"]["payload"]
-                    params = dict(
-                        sessionKey=session["key"],
-                        expectedSessionId=session["sessionId"],
-                        expectedLifecycleRevision=session["entry"]["lifecycleRevision"],
-                    )
-                    capture["events"].append(session_create_receipt(created, account["email"]))
+                    created_receipt = session_create_receipt(created, account["email"])
+                    params = session_params(created_receipt)
+                    capture["events"].append(created_receipt)
                     sessions.append(params)
                     mark(prefix + "_session")
                     capture["phase"] = prefix + "_person_rpc"
@@ -1083,12 +1119,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                             events_path, result["id"]
                         )
                         raise ValueError("native_person_rpc_denied")
-                    receipt = result["frame"]["payload"]
-                    if (
-                        receipt["requestId"] != result["id"]
-                        or receipt["authenticatedUserId"] != account["email"]
-                    ):
-                        raise ValueError("native_person_identity_binding")
+                    receipt = person_rpc_receipt(result, account["email"])
                     capture["events"].append(
                         dict(
                             id=result["id"],
@@ -1124,7 +1155,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     extension.persons_ready(rpc, pages, sessions, capture)
                 capture["phase"] = "cross_account_denied"
                 denied = rpc(pages[1], "rmqualification.person", sessions[0])
-                denial_code = (denied["frame"].get("error") or {}).get("code")
+                denial_code = native_error_code(denied["frame"])
                 if denied["frame"].get("ok") is not False or denial_code not in {
                     "FORBIDDEN",
                     "INVALID_REQUEST",
