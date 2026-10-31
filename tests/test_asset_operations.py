@@ -98,7 +98,26 @@ def test_schedule_requires_fixed_origin_cadence_and_single_request_slot(
     overlapping = _measured_workload(validated_request_cohort)
     probe = replace(production_batch_samples[0].probes[0], started_at=0.005, finished_at=0.015)
     overlapping.batches = [replace(production_batch_samples[0], probes=(probe,))]
+    # Observed durations overlap this later probe, so the workload fails.
     assert summarize_operations([], overlapping, None)["scheduled"]["passes"] is False
+    # A clock whose two reads share a tick ends every response at its start.
+    # Zero-duration responses still pass, and they end before the later probe,
+    # so the same probe evidence no longer claims an overlap. Both checks run
+    # on copies; the API evidence and the cohort's durations stay unchanged.
+    zero_clock = _measured_workload(
+        [replace(record, finished_at=record.started_at) for record in validated_request_cohort]
+    )
+    assert all(record.client_elapsed_ms == 0 for record in zero_clock.requests)
+    assert summarize_operations([], zero_clock, None)["scheduled"]["passes"] is True
+    zero_clock.batches = [replace(production_batch_samples[0], probes=(probe,))]
+    assert summarize_operations([], zero_clock, None)["scheduled"]["passes"] is True
+    # Only this adversarial case needs a synthetic nonzero interval.
+    first = overlapping.requests[0]
+    overlapping.requests[0] = replace(first, finished_at=first.started_at + 0.020)
+    assert summarize_operations([], overlapping, None)["scheduled"]["passes"] is False
+    touching = replace(probe, started_at=0.020, finished_at=0.030)
+    overlapping.batches = [replace(production_batch_samples[0], probes=(touching,))]
+    assert summarize_operations([], overlapping, None)["scheduled"]["passes"] is True
 
 
 def test_measured_label_adversarial_delay_fails(validated_request_cohort):
