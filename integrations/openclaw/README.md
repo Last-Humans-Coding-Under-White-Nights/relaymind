@@ -1287,10 +1287,13 @@ open pending the #187 integration contract.
 [简体中文](README.zh-CN.md) · [Catalog setup](../../docs/asset-selection.md)
 
 The optional native Control UI uses `openclaw-native-2026.10.7.v1` (RM37/RM39;
-AC28/AC30). **While the reviewed qualification registry is empty, production
-action RPCs remain unregistered.** Configuration cannot claim qualification.
-Browser/gateway fixtures prove mechanics, not native person, loaded-use, human
-or platform acceptance. Runtime snapshots and native MCP execution remain denied.
+AC28/AC30). The reviewed pinned2026.10.7 `direct_actions` profile enables
+personal discovery recommendations, explicit choice, feedback and scoped privacy
+through the ordinary installed entry. It requires the registered personal
+mapping and restrictive role configuration below; configuration cannot create a
+qualification entry. Exact skill selection/loaded use, runtime snapshots and
+MCP execution remain unavailable. The recorded functional proof uses authored
+sandbox data, not human/model quality or full-platform acceptance.
 
 Build/install with the existing `npm run pack:release -- /absolute/release-dir`
 and `openclaw plugins install /absolute/release-dir/relaymind-openclaw-provider-0.1.0.tgz`
@@ -1370,7 +1373,8 @@ A lost response may follow a committed action. **Retry last request** keeps the
 original request and idempotency key; it never silently retries or claims
 rollback. Resolve stale versions with a fresh read.
 
-For skills, import/create the exact native revision in **Plugins → Skills**.
+**The following skill bridge remains a follow-up; the direct-actions profile
+does not enable it.** For skills, import/create the exact native revision in **Plugins → Skills**.
 The operator adds an exact `skills` association:
 
 ```json
