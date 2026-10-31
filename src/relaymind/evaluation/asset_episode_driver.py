@@ -151,11 +151,12 @@ def _slot(case_id: str, ordinal: int) -> dict:
 
 
 def _semantics(row: Mapping, case_id: str) -> dict:
-    result = row["result"] or {}
+    """The reset semantic item of one ready product result (never invented)."""
+    result = row["result"]
     return dict(
         case_id=case_id,
-        final_candidates=list(result.get("final_candidates", [])),
-        final_decision=result.get("final_decision", "no_match"),
+        final_candidates=list(result["final_candidates"]),
+        final_decision=result["final_decision"],
     )
 
 
@@ -256,81 +257,120 @@ def _not_run_episode(episode: Mapping, labels: Mapping, reason: str) -> dict:
     )
 
 
-async def _run_episode(episode, cases, labels, open_arm, evidence):
+class _Stop(Exception):
+    """Ends one episode with a fixed status and reason; earlier work is kept."""
+
+    def __init__(self, status: str, reason: str):
+        super().__init__(reason)
+        self.status, self.reason = status, reason
+
+
+async def _run_episode(episode, cases, labels, open_arm, evidence, interrupted):
+    """Run one episode; every planned entry is conserved whatever happens."""
+    from relaymind.recommendations.errors import RecommendationError
+
+    episode_id = episode["id"]
     plan = probe_plan(episode)
     result = _not_run_episode(episode, labels, "interrupted")
-    result["reason"] = None
-    off_rows = {}
-    async with open_arm(episode["id"], "off") as off:
-        for ordinal, (_, case_id) in enumerate(plan, start=1):
-            row, _, _ = await execute_asset_slot(
-                off.service,
-                off.provider,
-                off.normal,
-                cases[case_id],
-                _slot(case_id, ordinal),
-                labels.get(case_id, _NEGATIVE),
-            )
-            off_rows[case_id] = row
-    async with open_arm(episode["id"], "on") as on:
+    result.update(status="completed", reason=None)
 
-        async def probe(case_id, ordinal=1):
-            return await execute_asset_slot(
-                on.service,
-                on.provider,
-                on.normal,
-                cases[case_id],
-                _slot(case_id, ordinal),
-                labels.get(case_id, _NEGATIVE),
-            )
+    async def run(arm, arm_name, phase, case_id, ordinal=1):
+        if interrupted():
+            raise _Stop("cancelled", "interrupted")
+        row, forced, recommendation_id = await execute_asset_slot(
+            arm.service,
+            arm.provider,
+            arm.normal,
+            cases[case_id],
+            _slot(case_id, ordinal),
+            labels.get(case_id, _NEGATIVE),
+            key=f"{episode_id}:{arm_name}:{phase}:{case_id}",
+        )
+        return row, forced, recommendation_id
 
-        baseline = []
-        for case_id in episode["reset_probe_case_ids"]:
-            row, _, _ = await probe(case_id)
-            baseline.append(_semantics(row, case_id))
-        revision = 0
-        for n, correction in enumerate(episode["corrections"], start=1):
-            entry = result["corrections"][n - 1]
-            try:
-                _, _, recommendation_id = await probe(correction["case_id"])
-                if recommendation_id is None:
-                    raise WholeTaskRejected("correction_parent")
-                feedback_id, event_digest, revision = await _correct(
-                    on, recommendation_id, correction, revision, f"{episode['id']}-c{n}"
+    def stop_on(forced):
+        if forced == "interrupted":
+            raise _Stop("cancelled", "interrupted")
+        if forced == "blocked":
+            raise _Stop("failed", "internal_error")
+
+    try:
+        async with open_arm(episode_id, "off") as off:
+            for ordinal, (_, case_id) in enumerate(plan, start=1):
+                row, forced, _ = await run(off, "off", "probe", case_id, ordinal)
+                result["probes"][ordinal - 1]["off"] = row
+                stop_on(forced)
+        async with open_arm(episode_id, "on") as on:
+            baseline = []
+            for case_id in episode["reset_probe_case_ids"]:
+                row, forced, _ = await run(on, "on", "baseline", case_id)
+                baseline.append(row)
+                stop_on(forced)
+            revision = 0
+            for n, correction in enumerate(episode["corrections"], start=1):
+                entry = result["corrections"][n - 1]
+                row, forced, recommendation_id = await run(
+                    on, "on", f"correction-{n}", correction["case_id"]
                 )
-            except WholeTaskRejected as exc:
-                entry["status"] = "failed"
-                result.update(status="failed", reason=str(exc))
-                break
-            entry.update(status="accepted", feedback_id=feedback_id, event_digest=event_digest)
-        for ordinal, (kind, case_id) in enumerate(plan, start=1):
-            row, _, _ = await probe(case_id, ordinal)
-            result["probes"][ordinal - 1] = dict(
-                case_id=case_id, kind=kind, off=off_rows[case_id], on=row
-            )
-        if result["status"] == "failed":
-            return result
-        await _reset(on, revision)
-        after = []
-        for case_id in episode["reset_probe_case_ids"]:
-            row, _, _ = await probe(case_id)
-            after.append(_semantics(row, case_id))
-    baseline_digest, after_digest = reset_preimage_digest(baseline), reset_preimage_digest(after)
-    payload = canonical_json(
-        dict(schema_version=1, episode_id=episode["id"], baseline=baseline, after=after)
-    ).encode("utf-8")
-    evidence["reset:" + episode["id"]] = dict(
-        id="reset:" + episode["id"],
-        sha256=hashlib.sha256(payload).hexdigest(),
-        bytes=len(payload),
-        payload=payload,
-    )
-    result.update(
-        status="completed",
-        reset_baseline_digest=baseline_digest,
-        reset_result_digest=after_digest,
-        reset_equal=baseline_digest == after_digest,
-    )
+                stop_on(forced)
+                if row["status"] != "ready" or recommendation_id is None:
+                    entry["status"] = "failed"
+                    raise _Stop("failed", "correction_parent_failed")
+                try:
+                    feedback_id, event_digest, revision = await _correct(
+                        on, recommendation_id, correction, revision, f"{episode_id}-c{n}"
+                    )
+                except (RecommendationError, WholeTaskRejected):
+                    entry["status"] = "failed"
+                    raise _Stop("failed", "correction_refused") from None
+                entry.update(status="accepted", feedback_id=feedback_id, event_digest=event_digest)
+            for ordinal, (_, case_id) in enumerate(plan, start=1):
+                row, forced, _ = await run(on, "on", "probe", case_id, ordinal)
+                result["probes"][ordinal - 1]["on"] = row
+                stop_on(forced)
+            if interrupted():
+                raise _Stop("cancelled", "interrupted")
+            await _reset(on, revision)
+            after = []
+            for case_id in episode["reset_probe_case_ids"]:
+                row, forced, _ = await run(on, "on", "after", case_id)
+                after.append(row)
+                stop_on(forced)
+        # Reset preimages come only from complete ready product results.
+        if any(row["status"] != "ready" for row in (*baseline, *after)):
+            raise _Stop("failed", "reset_probe_failed")
+        before = [
+            _semantics(r, c) for r, c in zip(baseline, episode["reset_probe_case_ids"], strict=True)
+        ]
+        later = [
+            _semantics(r, c) for r, c in zip(after, episode["reset_probe_case_ids"], strict=True)
+        ]
+        before_digest, after_digest = reset_preimage_digest(before), reset_preimage_digest(later)
+        payload = canonical_json(
+            dict(schema_version=1, episode_id=episode_id, baseline=before, after=later)
+        ).encode("utf-8")
+        evidence["reset:" + episode_id] = dict(
+            id="reset:" + episode_id,
+            sha256=hashlib.sha256(payload).hexdigest(),
+            bytes=len(payload),
+            payload=payload,
+        )
+        result.update(
+            reset_baseline_digest=before_digest,
+            reset_result_digest=after_digest,
+            reset_equal=before_digest == after_digest,
+        )
+    except _Stop as stop:
+        result.update(status=stop.status, reason=stop.reason)
+    except RecommendationError:
+        result.update(status="failed", reason="recommendation_unavailable")
+    except Exception:
+        result.update(status="failed", reason="internal_error")
+    if result["status"] != "completed":
+        for probe in result["probes"]:
+            for arm in ("off", "on"):
+                if probe[arm]["status"] == "not_run":
+                    probe[arm]["reason"] = result["reason"]
     return result
 
 
@@ -367,7 +407,7 @@ async def run_adaptation_episodes(
         if interrupted():
             results.append(_not_run_episode(episode, labels, "interrupted"))
             continue
-        results.append(await _run_episode(episode, cases, labels, open_arm, evidence))
+        results.append(await _run_episode(episode, cases, labels, open_arm, evidence, interrupted))
     report = dict(
         schema_version=1,
         kind="adaptation",

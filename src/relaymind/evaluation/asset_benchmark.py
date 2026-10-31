@@ -290,13 +290,15 @@ class _LockedProjectionProvider:
         )
 
 
-async def execute_asset_slot(service, provider, normal, case, slot, label):
+async def execute_asset_slot(service, provider, normal, case, slot, label, *, key=None):
     """Run one planned slot through the production offer and service.
 
     Returns ``(row, status, recommendation_id)``: ``status`` is ``None`` or the
     run status the slot forces (``interrupted`` or ``blocked``), and
     ``recommendation_id`` names the stored recommendation when one exists.
     Shared by the retrieval benchmark and the section 12.6.5 episode driver.
+    ``key`` is the idempotency claim key (default: the slot ordinal); callers
+    that reuse ordinals in one store must give each invocation its own key.
     """
     status = None
     cancel = None
@@ -348,7 +350,7 @@ async def execute_asset_slot(service, provider, normal, case, slot, label):
             "POST",
             "/relay/v1/recommendations",
             None,
-            str(slot["ordinal"]),
+            str(slot["ordinal"]) if key is None else key,
             canonical_digest(request),
         )
         cancel = CancellationSignal()

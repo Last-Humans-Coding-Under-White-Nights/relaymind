@@ -598,8 +598,9 @@ plan, and on rejection it writes nothing and prints the reason to standard
 error. A graded result also lists `unverified`: for host and platform reports
 `configuration_semantics` (the pinned native host configurations are bound by
 digest but not parsed) and `qualified_evidence_review`; for adaptation reports
-`adaptation_config_semantics` (the section 14.5.2 configuration is bound by
-digest but not parsed) and `qualified_evidence_review`.
+`qualified_evidence_review`, plus `adaptation_config_semantics` unless both
+arms reference the frozen section 14.5.2 configuration, in which case it is
+parsed and verified with the rest of their reference closure.
 
 **Inputs.** The manifest is section 12.6.2's `InputManifestV1`, with document
 kinds extended (only here) by `host_tasks`, `host_freeze`, `episodes` and
@@ -634,9 +635,15 @@ adaptation_stage=...)` builds the arms and `run_adaptation_episodes(...)`
 returns the report and its reset evidence. The on arm records the reset
 baselines, applies the three corrections through the product feedback store
 (each bound to its `feedback.recorded` event), runs the paired probes, resets
-feedback through the real lifecycle and repeats the reset probes. Its
-evaluation-only action registration is never person or host evidence, so the
-driver refuses `qualified`.
+feedback through the real lifecycle and repeats the reset probes. Every
+invocation has its own idempotency claim. Reset preimages come only from ready
+results; a failed reset probe leaves the reset unknown. A refused correction,
+an exception or an interruption ends only that episode: completed work is
+kept, the rest stays `not_run` with a fixed reason, and later episodes still
+run. Its evaluation-only action registration is never person or host
+evidence, so the driver refuses `qualified`. Any dispatched probe, ready or
+failed, must carry its exact offer; and every supplied reset document must be
+canonical JSON for a planned episode, whether or not a reset is claimed.
 
 **What is checked.**
 
@@ -653,10 +660,11 @@ driver refuses `qualified`.
   cancelled row counts as failed but keeps its own verdict: a null verdict
   stays unknown. Unknown verdicts or costs block, and a known positive cost
   difference fails.
-- Adaptation: off and on are complete effective configurations whose
-  compatibility policy, references, artifacts and generator are equal and that
-  differ only in adaptation enablement, the on arm bound to the frozen
-  adaptation configuration. Three chronological corrections; held-out
+- Adaptation: off and on are complete effective configurations, identical in
+  every field (selector kind, name, version and endpoint included) except
+  adaptation enablement, the on arm bound to the frozen adaptation
+  configuration. Each arm's referenced configuration closure must resolve
+  (missing preimages block). Corpus originals must all be available. Three chronological corrections; held-out
   paraphrase/control probes in `(kind, case_id)` order with recomputed grades;
   each dispatched probe's request and offered-catalog digests recomputed from
   the verified corpus and arm configuration; full planned denominators. The

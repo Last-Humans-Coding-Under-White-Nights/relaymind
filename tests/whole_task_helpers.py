@@ -224,8 +224,13 @@ def expanded_release(root, case_count=8):
     cases, labels, lock = read("cases"), read("labels"), read("lock")
     base = cases["cases"][0]
     ids = [base["id"]] + [f"case-{i:02d}" for i in range(1, case_count)]
+    # Distinct prompts, so an episode phase can never replay another's request.
     cases["cases"] = sorted(
-        (dict(copy.deepcopy(base), id=i) for i in ids), key=lambda c: c["id"].encode()
+        (
+            dict(copy.deepcopy(base), id=i, task_text=f"{base['task_text']} {n:02d}")
+            for n, i in enumerate(ids)
+        ),
+        key=lambda c: c["id"].encode(),
     )
     labels["judgments"] = sorted(
         (

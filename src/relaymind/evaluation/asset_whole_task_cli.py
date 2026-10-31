@@ -31,7 +31,6 @@ from relaymind.evaluation.asset_whole_task import (
 )
 from relaymind.evaluation.asset_whole_task_corpus import corpus_offers
 from relaymind.evaluation.asset_whole_task_inputs import (
-    UNVERIFIED,
     WholeTaskBlocked,
     resolve_whole_task_inputs,
 )
@@ -66,13 +65,13 @@ def _grade(args) -> tuple[str, dict]:
                 ),
             ),
         )
-        return summary["gate"], dict(summary=summary, unverified=list(UNVERIFIED["adaptation"]))
+        return summary["gate"], dict(summary=summary, unverified=list(inputs.unverified))
     inputs = resolve_whole_task_inputs("host", report, args.inputs, resolver=resolver)
     if args.command == "grade-host":
         summary = grade_host_report(report, inputs.root, inputs.freeze, registry=inputs.registry)
-        return summary["gate"], dict(summary=summary, unverified=list(UNVERIFIED["host"]))
+        return summary["gate"], dict(summary=summary, unverified=list(inputs.unverified))
     gate = grade_platform_report(report, inputs.root, inputs.freeze, registry=inputs.registry)
-    return gate, dict(unverified=list(UNVERIFIED["host"]))
+    return gate, dict(unverified=list(inputs.unverified))
 
 
 def main(argv: list[str] | None = None) -> int:

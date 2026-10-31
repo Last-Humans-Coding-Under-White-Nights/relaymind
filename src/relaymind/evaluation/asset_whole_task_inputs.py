@@ -39,6 +39,7 @@ from relaymind.evaluation.asset_whole_task_corpus import (
     release_labels,
     resolve_corpus,
     verify_episode_configs,
+    verify_reference_closure,
 )
 
 SINGLETONS = ("environment_lock", "runner_inventory", "protocol_inventory")
@@ -109,6 +110,7 @@ class WholeTaskInputs:
     release: Any = None
     labels: Mapping[str, Mapping] = field(default_factory=dict)
     evidence: Mapping[str, Mapping] = field(default_factory=dict)
+    unverified: tuple[str, ...] = ()
 
 
 def _limit(kind: str) -> int:
@@ -246,9 +248,22 @@ def resolve_whole_task_inputs(
         if key not in documents:
             raise WholeTaskBlocked("referenced_config_unresolved")
         configs[digest] = documents[key]
+    environment = validate_definition("Environment", documents["environment_lock"])
+    unverified = list(UNVERIFIED[kind])
     if kind == "adaptation":
         verify_episode_configs(freeze, configs)
-    environment = validate_definition("Environment", documents["environment_lock"])
+        verified = [
+            verify_reference_closure(
+                configs[freeze[key]],
+                documents,
+                manifest,
+                environment,
+                adaptation_digest=freeze["adaptation_config_digest"],
+            )
+            for key in ("off_config_digest", "on_config_digest")
+        ]
+        if all(verified):
+            unverified.remove("adaptation_config_semantics")
     observed = report["environment"] if "environment" in report else report["platform"]
     if any(value is not None and value != observed[k] for k, value in environment.items()):
         raise WholeTaskRejected("environment_binding")
@@ -281,4 +296,5 @@ def resolve_whole_task_inputs(
         release=release,
         labels=release_labels(release),
         evidence=payloads,
+        unverified=tuple(unverified),
     )

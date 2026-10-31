@@ -145,15 +145,20 @@ def test_reset_evidence_is_the_spec_0_64_document(tmp_path):
     assert set(evidence) == {"reset:e1"}
 
 
-def test_interruption_conserves_every_planned_episode(tmp_path):
-    calls = []
+def test_interruption_conserves_every_planned_episode(tmp_path, monkeypatch):
+    from relaymind.evaluation import asset_episode_driver
 
-    def interrupted():
-        calls.append(1)
-        return len(calls) > 1
+    finished = []
+    original = asset_episode_driver._run_episode
 
+    async def counted(*args, **kwargs):
+        result = await original(*args, **kwargs)
+        finished.append(result["episode_id"])
+        return result
+
+    monkeypatch.setattr(asset_episode_driver, "_run_episode", counted)
     release, freeze, episodes, report, evidence = run(
-        tmp_path, interrupted=interrupted, episode_count=2
+        tmp_path, interrupted=lambda: bool(finished), episode_count=2
     )
     assert [e["status"] for e in report["episodes"]] == ["completed", "not_run"]
     skipped = report["episodes"][1]
@@ -220,4 +225,164 @@ def test_a_ready_probe_without_its_offer_rejects(tmp_path):
             release_labels(release),
             reset_preimages=reset_preimages(evidence),
             offers=offers_for(tmp_path, release),
+        )
+
+
+# --- review follow-ups (P1/P2) ---------------------------------------------------
+
+
+def test_every_episode_invocation_has_its_own_claim(tmp_path, monkeypatch):
+    from relaymind.evaluation import asset_episode_driver
+
+    keys = []
+    original = asset_episode_driver.execute_asset_slot
+
+    async def spy(*args, key=None, **kwargs):
+        keys.append(key)
+        return await original(*args, key=key, **kwargs)
+
+    monkeypatch.setattr(asset_episode_driver, "execute_asset_slot", spy)
+    release, freeze, episodes, report, evidence = run(tmp_path)
+    assert report["episodes"][0]["status"] == "completed"
+    assert None not in keys and len(keys) == len(set(keys))
+
+
+def test_a_failed_reset_probe_leaves_reset_unknown(tmp_path, monkeypatch):
+    from relaymind.evaluation import asset_episode_driver
+
+    original = asset_episode_driver.execute_asset_slot
+
+    async def failing(service, provider, normal, case, slot, label, *, key=None):
+        row, status, rid = await original(service, provider, normal, case, slot, label, key=key)
+        if key and key.endswith(":after:case-07"):
+            row = dict(row, status="failed", reason="internal_error", result=None)
+        return row, status, rid
+
+    monkeypatch.setattr(asset_episode_driver, "execute_asset_slot", failing)
+    release, freeze, episodes, report, evidence = run(tmp_path)
+    result = report["episodes"][0]
+    assert result["reset_equal"] is None and result["reset_result_digest"] is None
+    assert result["status"] == "failed" and evidence == {}
+
+
+def test_a_refused_correction_conserves_the_report_and_later_episodes(tmp_path):
+    release, freeze, episodes, arms = setup(tmp_path, episode_count=2)
+    first = episodes["episodes"][0]["corrections"][0]
+    first.update(target_asset_id="absent", content_hash="0" * 64)
+    report, evidence = asyncio.run(
+        run_adaptation_episodes(
+            episodes,
+            freeze,
+            release,
+            arms,
+            environment=ENVIRONMENT,
+            qualification="fixture",
+            input_manifest=dict(path="inputs.json", digest=H, bytes=1),
+            interrupted=lambda: False,
+        )
+    )
+    one, two = report["episodes"]
+    assert one["status"] == "failed" and one["corrections"][0]["status"] == "failed"
+    assert [c["status"] for c in one["corrections"][1:]] == ["not_run", "not_run"]
+    assert two["status"] == "completed"
+    grade_adaptation_report(
+        report, episodes, freeze, release_labels(release), reset_preimages=reset_preimages(evidence)
+    )
+
+
+def test_an_exception_during_reset_keeps_the_episode_work(tmp_path, monkeypatch):
+    from relaymind.evaluation import asset_episode_driver
+
+    async def broken(*args, **kwargs):
+        raise RuntimeError("store unavailable")
+
+    monkeypatch.setattr(asset_episode_driver, "_reset", broken)
+    release, freeze, episodes, report, evidence = run(tmp_path)
+    result = report["episodes"][0]
+    assert result["status"] == "failed" and result["reason"] == "internal_error"
+    assert [c["status"] for c in result["corrections"]] == ["accepted"] * 3
+    assert all(p["on"]["status"] == "ready" for p in result["probes"])
+    assert result["reset_equal"] is None
+
+
+def test_interruption_inside_an_episode_cancels_the_rest(tmp_path):
+    calls = []
+
+    def interrupted():
+        calls.append(1)
+        return len(calls) > 4
+
+    release, freeze, episodes, report, evidence = run(tmp_path, interrupted=interrupted)
+    result = report["episodes"][0]
+    assert result["status"] == "cancelled" and result["reason"] == "interrupted"
+    statuses = [p[arm]["status"] for p in result["probes"] for arm in ("off", "on")]
+    assert "not_run" in statuses
+    grade_adaptation_report(
+        report, episodes, freeze, release_labels(release), reset_preimages=reset_preimages(evidence)
+    )
+
+
+def test_a_failed_dispatched_probe_must_still_bind_its_offer(tmp_path):
+    release, freeze, episodes, report, evidence = run(tmp_path)
+    probe = report["episodes"][0]["probes"][0]["on"]
+    probe.update(
+        status="failed",
+        reason="internal_error",
+        result=None,
+        catalog_revision=999,
+        offered_projection_digest="c" * 64,
+        request_digest=None,
+    )
+    from relaymind.evaluation.asset_metrics import grade_asset_result
+
+    probe["grade"] = grade_asset_result(release_labels(release)["case-06"], None)
+    with pytest.raises(WholeTaskRejected, match="probe_offer"):
+        grade_adaptation_report(
+            report,
+            episodes,
+            freeze,
+            release_labels(release),
+            reset_preimages=reset_preimages(evidence),
+            offers=offers_for(tmp_path, release),
+        )
+
+
+@pytest.mark.parametrize(
+    "mutate", ["duplicate", "not_canonical", "unclaimed_malformed", "unknown_episode"]
+)
+def test_reset_evidence_is_strict_and_always_checked(tmp_path, mutate):
+    from relaymind.canonical import canonical_json
+
+    release, freeze, episodes, report, evidence = run(tmp_path)
+    item = evidence["reset:e1"]
+    if mutate == "duplicate":
+        item["payload"] = item["payload"].replace(
+            b'"schema_version":1', b'"schema_version":2,"schema_version":1'
+        )
+    elif mutate == "not_canonical":
+        item["payload"] = b" " + item["payload"]
+    elif mutate == "unclaimed_malformed":
+        report["episodes"][0].update(
+            reset_baseline_digest=None, reset_result_digest=None, reset_equal=None
+        )
+        report["summary"]["reset_passed"] = 0
+        report["summary"]["reset_unknown"] = 1
+        item["payload"] = canonical_json(
+            dict(schema_version=1, episode_id="e1", baseline=["not a result"], after=[])
+        ).encode()
+    else:
+        evidence["reset:e9"] = dict(
+            item,
+            id="reset:e9",
+            payload=canonical_json(
+                dict(schema_version=1, episode_id="e9", baseline=[], after=[])
+            ).encode(),
+        )
+    with pytest.raises(WholeTaskRejected, match="reset"):
+        grade_adaptation_report(
+            report,
+            episodes,
+            freeze,
+            release_labels(release),
+            reset_preimages=reset_preimages(evidence),
         )

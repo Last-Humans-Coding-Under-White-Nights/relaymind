@@ -7,10 +7,10 @@ every planned probe in the denominator. Nothing here grants correction
 authority; accepted corrections must carry the authentic product receipts.
 """
 
-import json
 from collections.abc import Mapping, Sequence
 
 from relaymind.canonical import canonical_digest, canonical_json
+from relaymind.evaluation.asset_corpus_io import AssetCorpusError, parse_json
 from relaymind.evaluation.asset_metrics import asset_rate, grade_asset_result
 from relaymind.evaluation.asset_whole_task import (
     WholeTaskBlocked,
@@ -102,9 +102,12 @@ def reset_preimages(evidence: Mapping[str, Mapping]) -> dict[str, tuple]:
         if not evidence_id.startswith("reset:"):
             continue
         try:
-            document = json.loads(item["payload"])
-        except (ValueError, UnicodeError):
+            document = parse_json(item["payload"])
+        except (ValueError, UnicodeError, AssetCorpusError):
             raise WholeTaskRejected("reset_evidence") from None
+        if item["payload"] != canonical_json(document).encode("utf-8"):
+            # The spec 0.64 document is canonical JSON, byte for byte.
+            raise WholeTaskRejected("reset_evidence")
         if (
             not isinstance(document, dict)
             or set(document) != _RESET_DOCUMENT
@@ -178,12 +181,19 @@ def _check_probe_row(row: Mapping, case_id: str, ordinal: int, label: Mapping, o
         raise WholeTaskRejected("probe_revision")
     if row["grade"] != grade_asset_result(label, result):
         raise WholeTaskRejected("probe_grade")
-    if offer is not None and (status == "ready" or row["request_digest"] is not None):
-        # A dispatched probe binds its exact offered request and catalog projection.
-        if row["request_digest"] is None or (
-            row["request_digest"],
-            row["offered_projection_digest"],
-        ) != offer(row["catalog_revision"]):
+    identity = (row["request_digest"], row["offered_projection_digest"], row["catalog_revision"])
+    if any(value is None for value in identity) and any(v is not None for v in identity):
+        raise WholeTaskRejected("probe_offer")
+    dispatched = (
+        status == "ready"
+        or bool(row["attempts"])
+        or bool(row["embeddings"])
+        or None not in identity
+    )
+    if offer is not None and dispatched:
+        # Any dispatched probe, ready or not, binds its exact offered request
+        # and catalog projection; only a pre-dispatch failure may omit it.
+        if None in identity or identity[:2] != offer(row["catalog_revision"]):
             raise WholeTaskRejected("probe_offer")
 
 
@@ -342,6 +352,13 @@ def grade_adaptation_report(
     """
     input_digest = verify_episodes(episodes, freeze)
     validate_whole_task("AssetAdaptationReportV1", report)
+    # Every supplied reset document is checked, whether or not a reset is claimed.
+    planned = {e["id"]: e for e in episodes["episodes"]}
+    for episode_id, pair in (reset_preimages or {}).items():
+        if episode_id not in planned or len(pair) != 2:
+            raise WholeTaskRejected("reset_evidence")
+        for items in pair:
+            _check_reset_preimage(items, planned[episode_id]["reset_probe_case_ids"])
     if report["input_digest"] != input_digest:
         raise WholeTaskRejected("input_binding")
     if (report["off_config_digest"], report["on_config_digest"]) != (

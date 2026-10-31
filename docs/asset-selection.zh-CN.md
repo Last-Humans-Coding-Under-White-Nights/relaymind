@@ -200,8 +200,10 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 退出码：`0` 通过或不适用于验收（夹具平台报告、未达资格的适配报告）；`1` 已知门槛失败；
 `2` 报告或输入被拒绝（摘要、身份、顺序、绑定或算术矛盾）；`3` 阻塞（缺少必需的文档、配置、
 语料文档、清单原文或证据）。阻塞永远不会被报告为通过。评分结果还会列出 `unverified`：
-宿主与平台报告为 `configuration_semantics` 和 `qualified_evidence_review`，适配报告为
-`adaptation_config_semantics` 和 `qualified_evidence_review`。
+宿主与平台报告为 `configuration_semantics` 和 `qualified_evidence_review`；适配报告为
+`qualified_evidence_review`，若两个对照组未引用冻结的 14.5.2 适配配置，还包括 `adaptation_config_semantics`
+（被引用时会与其余引用闭包一同解析和验证）。关闭组与开启组的有效配置除适配开关外必须完全一致
+（含选择器类型、名称、版本与地址），语料原文必须全部可用。
 
 **输入。** 清单必须包含唯一的 `environment_lock`、`runner_inventory`、`protocol_inventory`，
 报告指向的根输入及其冻结文档，冻结文档列出的每个配置（`referenced_config:<摘要>`），
@@ -215,7 +217,9 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 
 **适配回合驱动。** `relaymind.evaluation.asset_episode_driver` 在进程内对真实推荐服务运行每个冻结回合：
 每个对照组使用一次性存储，关闭组运行禁用基线；开启组记录重置基线，通过产品反馈存储依次提交三次纠正，
-运行成对探测，经真实生命周期重置反馈后重复重置探测，并导出报告和重置证据。评分器根据经验证的语料和
+运行成对探测，经真实生命周期重置反馈后重复重置探测，并导出报告和重置证据。每次调用使用独立的幂等声明；
+重置原像只来自就绪结果，重置探测失败时重置结果为未知。纠正被拒、异常或中断只结束当前回合：已完成的工作被保留，
+其余条目以固定原因标为 `not_run`，后续回合继续运行。评分器根据经验证的语料和
 对照组配置重新计算每个探测的请求与候选目录摘要。驱动使用的评估专用操作登记不是个人或宿主证据，
 因此不能产生 `qualified` 报告。
 

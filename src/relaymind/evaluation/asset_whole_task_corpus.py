@@ -102,16 +102,25 @@ def resolve_corpus(
                 return located.get(evidence_id)
 
         try:
-            return load_asset_release(
-                root / "lock.json",
-                evidence_root=evidence_root,
-                related_roots={},
-                evidence_resolver=Resolver(),
+            return require_available(
+                load_asset_release(
+                    root / "lock.json",
+                    evidence_root=evidence_root,
+                    related_roots={},
+                    evidence_resolver=Resolver(),
+                )
             )
         except AssetCorpusError as exc:
             if str(exc) in ("missing_file", "input_unresolved"):
                 raise WholeTaskBlocked("corpus_unresolved") from None
             raise WholeTaskRejected(str(exc)) from None
+
+
+def require_available(release: VerifiedAssetRelease) -> VerifiedAssetRelease:
+    """Every corpus original must be resolved; unavailable evidence blocks."""
+    if any(finding.status == "unavailable" for finding in release.evidence_findings):
+        raise WholeTaskBlocked("corpus_evidence_unresolved")
+    return release
 
 
 def release_labels(release: VerifiedAssetRelease) -> dict[str, Mapping]:
@@ -194,10 +203,7 @@ def verify_episode_configs(freeze: Mapping, configs: Mapping[str, Mapping]) -> N
     binds the frozen semantic adaptation configuration. This named ablation is
     the only place the retrieval rule against adaptation is relaxed.
     """
-    from relaymind.evaluation.asset_evidence import (
-        compatibility_policy,
-        validate_effective_integrity,
-    )
+    from relaymind.evaluation.asset_evidence import validate_effective_integrity
 
     off = _effective(configs[freeze["off_config_digest"]])
     on = _effective(configs[freeze["on_config_digest"]])
@@ -211,12 +217,11 @@ def verify_episode_configs(freeze: Mapping, configs: Mapping[str, Mapping]) -> N
         validate_effective_integrity(disabled)
     except (ValueError, AssetCorpusError):
         raise WholeTaskRejected("episode_config") from None
-    if (
-        compatibility_policy(off) != compatibility_policy(disabled)
-        or off["references"] != on["references"]
-        or off["artifacts"] != on["artifacts"]
-        or off["generator"] != on["generator"]
-    ):
+    # Exhaustive: everything but the adaptation enablement is identical,
+    # including the selector kind, name, version and endpoint.
+    if {k: v for k, v in off.items() if k != "adaptation"} != {
+        k: v for k, v in on.items() if k != "adaptation"
+    }:
         raise WholeTaskRejected("ablation_policy")
 
 
@@ -257,3 +262,38 @@ def corpus_offers(release: VerifiedAssetRelease, effective: Mapping[str, Mapping
         return stable_request_digest(request.to_json_object()), projection
 
     return offers
+
+
+def verify_reference_closure(
+    effective: Mapping,
+    documents: Mapping[str, Mapping],
+    manifest: Mapping,
+    environment: Mapping,
+    *,
+    adaptation_digest: str | None,
+) -> bool:
+    """Resolve and validate one arm's referenced configuration closure.
+
+    Reuses the retrieval closure verifier over a manifest view holding only
+    this arm's references. A missing preimage blocks; a contradiction rejects.
+    When the arm references an adaptation configuration, it is parsed and must
+    be the frozen one. Returns whether an adaptation configuration was verified.
+    """
+    from relaymind.evaluation.asset_evidence import verify_asset_configuration_closure
+
+    required = {reference["document_id"] for reference in effective["references"]}
+    if environment["runtime_config_digest"] is not None:
+        required.add("referenced_config:" + environment["runtime_config_digest"])
+    view = dict(documents=[d for d in manifest["documents"] if d["id"] in required])
+    try:
+        verify_asset_configuration_closure(documents, view, effective, environment)
+    except AssetCorpusError as exc:
+        if str(exc) == "input_unresolved":
+            raise WholeTaskBlocked("referenced_config_unresolved") from None
+        raise WholeTaskRejected(str(exc)) from None
+    adaptation = [r for r in effective["references"] if r["role"] == "adaptation"]
+    if adaptation and adaptation_digest is not None:
+        if adaptation[0]["document_id"] != "referenced_config:" + adaptation_digest:
+            raise WholeTaskRejected("ablation_policy")
+        return True
+    return False

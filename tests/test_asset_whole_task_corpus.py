@@ -213,6 +213,13 @@ def test_off_and_on_effective_configs_differ_only_in_adaptation():
         (None, lambda c: c.update(permissions=["demo.read"])),
         (None, lambda c: c["recommendations"].update(total_ms=999)),
         (None, lambda c: c.update(selection_scope="runtime")),
+        (
+            None,
+            lambda c: c["recommendations"].update(
+                primary="http", name="other", version="2", url="http://127.0.0.1:8765/select"
+            ),
+        ),
+        (None, lambda c: c["recommendations"].update(name="other-selector")),
     ],
 )
 def test_any_other_off_on_difference_rejects(change_off, change_on):
@@ -229,3 +236,36 @@ def test_a_settings_bag_is_not_an_effective_config():
     configs[freeze["off_config_digest"]] = {"enabled": True}
     with pytest.raises(WholeTaskRejected, match="episode_config"):
         verify_episode_configs(freeze, configs)
+
+
+def test_unavailable_corpus_evidence_blocks(corpus):
+    digest, documents, evidence = corpus
+    from relaymind.evaluation import asset_whole_task_corpus
+    from relaymind.evaluation.asset_corpus import EvidenceFinding
+
+    release = resolve_corpus(digest, documents, evidence)
+    unavailable = (EvidenceFinding("license", "0" * 64, 1, "unavailable"),)
+    import dataclasses
+
+    with pytest.raises(WholeTaskBlocked, match="corpus_evidence_unresolved"):
+        asset_whole_task_corpus.require_available(
+            dataclasses.replace(release, evidence_findings=unavailable)
+        )
+
+
+def test_effective_reference_closure_must_resolve():
+    from relaymind.evaluation.asset_whole_task_corpus import verify_reference_closure
+    from whole_task_helpers import ENVIRONMENT
+
+    adaptation = {"fixture_adaptation_config": 1}
+    from whole_task_helpers import effective_pair
+
+    off, _ = effective_pair(canonical_digest(adaptation))
+    verify_reference_closure(off, {}, {"documents": []}, ENVIRONMENT, adaptation_digest=None)
+    missing = dict(
+        off, references=[dict(role="embedding", document_id="referenced_config:" + "b" * 64)]
+    )
+    with pytest.raises(WholeTaskBlocked, match="referenced_config_unresolved"):
+        verify_reference_closure(
+            missing, {}, {"documents": []}, ENVIRONMENT, adaptation_digest=None
+        )
