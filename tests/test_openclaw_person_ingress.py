@@ -1504,3 +1504,71 @@ def test_a_playwright_timeout_is_native_rpc_timeout():
 
 def test_workspace_resolution_failure_is_its_own_reason():
     assert "workspace_unavailable" in module().PERSON_RPC_EVENT_REASONS["probe_failed"]
+
+
+def test_ordinary_failure_projection_survives_capture_writer(tmp_path, monkeypatch):
+    """RM12/RM16/RM39 AC30: the exported capture retains fixed extension diagnostics."""
+    import platform
+    import signal
+
+    from playwright.sync_api import Error
+
+    from test_openclaw_ordinary_channel import extension_fixture
+    from test_openclaw_ordinary_channel import module as ordinary_module
+
+    if not hasattr(signal, "setitimer"):
+        pytest.skip("SIGALRM is required")
+    api = module()
+    extension = extension_fixture(ordinary_module(), tmp_path)
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    monkeypatch.setattr(platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(api, "discover_network", lambda: ["10.1.2.3"])
+
+    def trial(work, address, capture, *, extension):
+        capture["phase"] = "account_b_person_rpc"
+        with extension.step("ui_actions"):
+            raise Error("Page.goto: Target page, context or browser has been closed; secret URL")
+
+    monkeypatch.setattr(api, "_run_private_trial", trial)
+    output = tmp_path / "capture.json"
+    assert api.run_qualification(tmp_path / "work", output, extension=extension) == 2
+    capture = json.loads(output.read_bytes())
+    assert capture["reason"] == "ordinary_playwright_target_closed"
+    assert capture["ordinary_failure_step"] == "ui_actions"
+    assert capture["ordinary_error_class"] == "playwright_target_closed"
+    assert "secret URL" not in output.read_text()
+    assert capture["checks"]["person_composition"] is False
+
+
+def test_overall_deadline_interrupts_an_ordinary_extension_wait(tmp_path, monkeypatch):
+    """RM16/RM39 AC30: an ordinary wait remains inside the real SIGALRM budget."""
+    import platform
+    import signal
+    import time
+
+    from test_openclaw_ordinary_channel import extension_fixture
+    from test_openclaw_ordinary_channel import module as ordinary_module
+
+    if not hasattr(signal, "setitimer"):
+        pytest.skip("SIGALRM is required")
+    api = module()
+    extension = extension_fixture(ordinary_module(), tmp_path)
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    monkeypatch.setattr(platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(api, "discover_network", lambda: ["10.1.2.3"])
+    monkeypatch.setattr(api, "TOTAL_SECONDS", 0.01)
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def trial(work, address, capture, *, extension):
+        with extension.step("retirement_prepared"):
+            time.sleep(0.1)
+
+    monkeypatch.setattr(api, "_run_private_trial", trial)
+    output = tmp_path / "capture.json"
+    assert api.run_qualification(tmp_path / "work", output, extension=extension) == 2
+    capture = json.loads(output.read_bytes())
+    assert capture["reason"] == "overall_deadline_exceeded"
+    assert capture["ordinary_failure_step"] == "retirement_prepared"
+    assert capture["checks"]["person_composition"] is False
+    assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)
+    assert signal.getsignal(signal.SIGALRM) == previous_handler

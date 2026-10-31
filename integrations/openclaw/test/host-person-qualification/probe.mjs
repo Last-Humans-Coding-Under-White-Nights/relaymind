@@ -87,6 +87,18 @@ export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMe
   };
 }
 
+// Covers the sequential 10-second observation windows and release; the Python
+// harness still owns the 570-second overall deadline. No timeout is proof.
+const FIXTURE_HOLD_TIMEOUT_MS = 60000;
+
+export async function waitForFixtureRelease(released) {
+  const deadline = performance.now() + FIXTURE_HOLD_TIMEOUT_MS;
+  while (!released()) {
+    if (performance.now() >= deadline) throw new Error("fixture_hold_timeout");
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+}
+
 export default definePluginEntry({
   id: "relaymind-person-qualification", name: "Disposable person ingress qualification",
   register(api) {
@@ -99,11 +111,7 @@ export default definePluginEntry({
       resolveWorkspace: (options, agentId) => api.runtime.agent.resolveAgentWorkspaceDir(options.context.getRuntimeConfig(), agentId),
       pause: async hold => {
         if (!hold) return;
-        const deadline = performance.now() + 5000;
-        while (!existsSync(api.pluginConfig.releaseFile)) {
-          if (performance.now() >= deadline) throw new Error("fixture_hold_timeout");
-          await new Promise(resolve => setTimeout(resolve, 10));
-        }
+        await waitForFixtureRelease(() => existsSync(api.pluginConfig.releaseFile));
       },
     }), { scope: "operator.write", profileAccess: "required", sessionAccess: { mode: "write" } });
   },
