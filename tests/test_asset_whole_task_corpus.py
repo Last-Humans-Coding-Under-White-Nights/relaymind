@@ -277,3 +277,53 @@ def test_episode_intent_families_must_come_from_its_cases(corpus):
     doc["episodes"][0]["intent_family_ids"] = ["task-unrelated"]
     with pytest.raises(WholeTaskRejected, match="case_binding"):
         bind_episodes(doc, release)
+
+
+# --- #232 review (ArcsinX, 1 Nov) ------------------------------------------------
+
+
+def relocked(corpus, *, lock_change=None, catalog=None):
+    """The companions with a rewritten lock (and optionally a replaced catalog)."""
+    digest, documents, evidence = corpus
+    documents = dict(documents)
+    lock = json.loads(documents.pop("lock:" + digest))
+    if catalog is not None:
+        raw = json.dumps(catalog).encode()
+        documents["catalog:" + canonical_digest(catalog)] = raw
+        lock["catalog"] = dict(lock["catalog"], digest=canonical_digest(catalog))
+    if lock_change:
+        lock_change(lock)
+    documents["lock:" + canonical_digest(lock)] = json.dumps(lock).encode()
+    return canonical_digest(lock), documents, evidence
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda lock: lock["cases"].pop("digest"),
+        lambda lock: lock["cases"].update(digest=7),
+        lambda lock: lock["labels"].update(digest=None),
+    ],
+)
+def test_a_lock_reference_without_a_string_digest_rejects(corpus, change):
+    digest, documents, evidence = relocked(corpus, lock_change=change)
+    with pytest.raises(WholeTaskRejected, match="invalid_corpus_lock"):
+        resolve_corpus(digest, documents, evidence)
+
+
+@pytest.mark.parametrize("catalog", [[], "catalog", 7])
+def test_a_non_object_catalog_rejects(corpus, catalog):
+    digest, documents, evidence = relocked(corpus, catalog=catalog)
+    with pytest.raises(WholeTaskRejected, match="invalid_corpus_lock"):
+        resolve_corpus(digest, documents, evidence)
+
+
+def test_catalog_evidence_without_an_id_is_never_located(corpus):
+    digest, documents, evidence = corpus
+    catalog = json.loads(next(v for k, v in documents.items() if k.startswith("catalog:")))
+    catalog["evidence"].append({"path": "license.txt"})
+    digest, documents, evidence = relocked(corpus, catalog=catalog)
+    # The malformed record reaches the release verifier, which names it.
+    with pytest.raises((WholeTaskRejected, WholeTaskBlocked)) as raised:
+        resolve_corpus(digest, documents, evidence)
+    assert "KeyError" not in repr(raised.value)
