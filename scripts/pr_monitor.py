@@ -185,6 +185,13 @@ def _pr_event(pr: Mapping[str, Any]) -> Event:
     )
 
 
+def draft_ready_events(prs: Sequence[Mapping[str, Any]], known_drafts: set[int]) -> list[Event]:
+    """Return ready PRs that were previously observed as drafts."""
+    return [
+        _pr_event(pr) for pr in prs if not pr.get("isDraft") and int(pr["number"]) in known_drafts
+    ]
+
+
 def _review_event(
     pr: Mapping[str, Any], review: Mapping[str, Any], include_approvals: bool
 ) -> Event | None:
@@ -343,6 +350,7 @@ def new_state(now: datetime, initialized_at: datetime | None = None) -> dict[str
         "last_check": start,
         "seen": [],
         "pending": {},
+        "drafts": [],
     }
 
 
@@ -366,6 +374,11 @@ def load_state(path: Path) -> dict[str, Any]:
             raise MonitorError(f"monitor state {path} is missing {key!r}")
     if not isinstance(state["seen"], list) or not isinstance(state["pending"], dict):
         raise MonitorError(f"monitor state {path} has malformed seen/pending")
+    if "drafts" not in state:
+        # Existing state from before draft tracking: no drafts are known yet.
+        state["drafts"] = []
+    if not isinstance(state["drafts"], list):
+        raise MonitorError(f"monitor state {path} has malformed drafts")
     return state
 
 
@@ -706,6 +719,12 @@ def _poll_once(args: argparse.Namespace, *, persist: bool) -> tuple[int, dict[st
         include_drafts=args.include_drafts,
         include_approvals=args.include_approvals,
     )
+    # A draft that becomes ready may be older than the sliding watermark; the
+    # draft record lets it surface once without reviewing it while in progress.
+    previous_drafts = {int(number) for number in state.get("drafts", [])}
+    ready = draft_ready_events(snapshot["prs"], previous_drafts)
+    already = {event.id for event in events}
+    events.extend(event for event in ready if event.id not in already)
     delivered = deliver(
         state,
         events,
@@ -714,6 +733,10 @@ def _poll_once(args: argparse.Namespace, *, persist: bool) -> tuple[int, dict[st
         persist=persist,
     )
     if persist:
+        open_numbers = {int(pr["number"]) for pr in snapshot["prs"]}
+        drafts_now = {int(pr["number"]) for pr in snapshot["prs"] if pr.get("isDraft")}
+        emitted = {int(event.pr["number"]) for event in ready}
+        state["drafts"] = sorted(((previous_drafts | drafts_now) & open_numbers) - emitted)
         state["last_check"] = to_iso(now)
         save_state(state_path, state)
 

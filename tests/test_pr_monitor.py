@@ -319,3 +319,24 @@ def test_first_run_uses_the_bootstrap_window(tmp_path) -> None:
 
     assert created is True
     assert monitor.parse_time(state["initialized_at"]) == NOW - timedelta(seconds=3600)
+
+
+def test_draft_is_watched_then_emitted_when_ready() -> None:
+    draft = pr(227, isDraft=True, createdAt="2026-10-31T12:00:00Z")
+    ready = pr(227, isDraft=False, createdAt="2026-10-31T12:00:00Z")
+
+    assert monitor.draft_ready_events([draft], {227}) == []
+    events = monitor.draft_ready_events([ready], {227})
+    assert [event.id for event in events] == ["new_pr:227"]
+    assert events[0].action == "review_and_fix"
+    assert monitor.draft_ready_events([ready], set()) == []
+
+
+def test_state_without_draft_tracking_still_loads(tmp_path) -> None:
+    state = monitor.new_state(NOW)
+    del state["drafts"]
+    monitor.save_state(tmp_path / "state.json", state)
+
+    loaded = monitor.load_state(tmp_path / "state.json")
+
+    assert loaded["drafts"] == []
