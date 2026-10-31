@@ -201,3 +201,57 @@ def test_rm35_low_confidence_selection_can_be_declined_without_fake_choice(recip
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["selected_asset_id"] is None
     assert "Inspect a calendar." in result.stderr
+
+
+def test_rm35_choose_treats_explicit_null_catalog_document_as_absent(tmp_path):
+    # RM35/AC26: an explicit null catalog document falls back to row evidence.
+    report = {
+        "catalog_digest": "0" * 64,
+        "catalog_document": None,
+        "rows": [
+            {
+                "slot": {"case_id": "choice", "repetition": 0},
+                "evaluated_decision": "choice_required",
+                "evaluated_candidates": [{"asset_id": "fixture:calendar"}],
+                "request": {
+                    "catalog": [
+                        {
+                            "asset_id": "fixture:calendar",
+                            "identity": {"package_id": "calendar"},
+                            "description": "Inspect a calendar.",
+                            "availability": "unknown",
+                        }
+                    ]
+                },
+            }
+        ],
+    }
+    path = tmp_path / "choice-report.json"
+    path.write_text(json.dumps(report), encoding="utf-8", newline="\n")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "choose", "--report", str(path), "--case", "choice"],
+        input="1\n",
+        text=True,
+        capture_output=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["selected_asset_id"] == "fixture:calendar"
+    assert "Inspect a calendar." in result.stderr
+
+
+@pytest.mark.parametrize("row", [{"kind": "license"}, ["license"], 1])
+def test_rm35_malformed_evidence_file_rows_are_invalid_source_recipe(tmp_path, row):
+    # RM35/AC26: a partial evidence row is a recipe error, not a crash.
+    from relaymind.evaluation.asset_corpus_io import AssetCorpusError
+    from relaymind.evaluation.asset_source_recipe import build_recipe
+
+    recipe = dict(
+        schema_version=1,
+        dataset_id="fixture-source-benchmark",
+        files=[],
+        assets=[],
+        evidence_files=[row],
+    )
+    with pytest.raises(AssetCorpusError, match="invalid_source_recipe"):
+        build_recipe(recipe, tmp_path / "cache", tmp_path / "catalog.json")

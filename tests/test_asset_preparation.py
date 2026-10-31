@@ -428,3 +428,30 @@ def test_zero_clock_ready_preparation_is_valid():
     assert record["status"] == "ready"
     assert record["observed_ms"] == record["exchanges"][0]["observed_ms"] == 0
     m.validate_preparation_record(record, config=config, binding=binding)
+
+
+def test_coarse_clock_tolerance_covers_the_cleanup_exchange_and_record():
+    # RM35/AC26: a coarse clock can report just over the request window for an
+    # on-time cleanup; the exchange check and the record allow the same 1 ms.
+    m, catalog, binding, config = inputs()
+    config |= {"max_polls": 1}
+
+    def handle(req):
+        value = json.loads(req.content)
+        if value["operation"] == "cancel":
+            return reply(200, json=response(value, state="cancelled", reason="cancelled"))
+        return reply(200, json=response(value, state="indexing"))
+
+    record = asyncio.run(
+        m.prepare_asset_index(
+            config, binding, catalog, transport_factory=lambda: httpx.MockTransport(handle)
+        )
+    )
+    assert record["status"] == "failed"
+    cleanup = record["exchanges"][-1]
+    assert cleanup["operation"] == "cancel" and cleanup["response"] is not None
+    record["cleanup_ms"] = cleanup["observed_ms"] = 1000.0005
+    m.validate_preparation_record(record, config=config, binding=binding)
+    record["cleanup_ms"] = cleanup["observed_ms"] = 1001
+    with pytest.raises(ValueError, match="invalid_preparation_exchange"):
+        m.validate_preparation_record(record, config=config, binding=binding)

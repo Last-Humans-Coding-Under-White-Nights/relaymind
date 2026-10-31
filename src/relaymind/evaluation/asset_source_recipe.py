@@ -69,6 +69,8 @@ def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatal
         )
     extra = []
     for row in recipe.get("evidence_files", []):
+        if not isinstance(row, Mapping) or not {"kind", "file_id"} <= set(row):
+            raise AssetCorpusError("invalid_source_recipe")
         extra.append((row["kind"], cached(row["file_id"])))
     return build_source_catalog(
         originals,
