@@ -804,3 +804,223 @@ def test_disposable_host_configures_person_session_boundary():
             }
         },
     }
+
+
+def test_native_event_reader_skips_only_a_partial_trailing_line(tmp_path):
+    """RM39/AC30: a line the host is still appending is retried, never parsed."""
+    api = module()
+    events = tmp_path / "native-events.jsonl"
+    complete = json.dumps(dict(phase="prepared", requestId="r1")).encode() + b"\n"
+    events.write_bytes(complete + b'{"phase":"admitted","requestId":"r')
+    assert api.read_native_events(events) == [dict(phase="prepared", requestId="r1")]
+    # A multi-byte character cut in the middle of the trailing write.
+    events.write_bytes(complete + '{"phase":"正'.encode()[:-1])
+    assert api.read_native_events(events) == [dict(phase="prepared", requestId="r1")]
+    events.write_bytes(b"")
+    assert api.read_native_events(events) == []
+
+
+@pytest.mark.parametrize("line", [b"{not json}\n", b"[1]\n", b"\xff\xfe\n"])
+def test_native_event_reader_refuses_a_corrupt_complete_line(tmp_path, line):
+    api = module()
+    events = tmp_path / "native-events.jsonl"
+    events.write_bytes(line)
+    with pytest.raises(ValueError, match="native_event_invalid"):
+        api.read_native_events(events)
+
+
+def test_native_event_reader_keeps_its_bound(tmp_path):
+    api = module()
+    events = tmp_path / "native-events.jsonl"
+    events.write_bytes(b"{}\n" * (400 * 1024))
+    with pytest.raises(ValueError, match="native_event_bound"):
+        api.read_native_events(events)
+
+
+def test_every_raised_reason_is_exported_as_itself():
+    """RM39/AC30: no named harness failure collapses into qualification_failed."""
+    import re
+
+    api = module()
+    source = (ROOT / "integrations/openclaw/test/host-person-qualification/qualify.py").read_text()
+    raised = set(re.findall(r'raise \w+\("([a-z_]+)"\)', source))
+    assert "artifact_deadline" in raised
+    assert raised <= api.SAFE_REASONS
+
+
+def linux_runner(monkeypatch, api):
+    import platform
+
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    monkeypatch.setattr(platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(api, "discover_network", lambda: ["10.1.2.3"])
+
+
+@pytest.mark.parametrize(
+    "reason", ["artifact_deadline", "network_inventory_invalid", "qualification_port"]
+)
+def test_named_setup_failures_keep_their_reason(tmp_path, monkeypatch, reason):
+    import signal
+
+    if not hasattr(signal, "setitimer"):
+        pytest.skip("the opt-in Ubuntu qualification uses a process deadline")
+    api = module()
+    linux_runner(monkeypatch, api)
+
+    def fail(_work, _address, capture):
+        capture["phase"] = "artifact_setup"
+        raise TimeoutError(reason)
+
+    monkeypatch.setattr(api, "_run_private_trial", fail)
+    output = tmp_path / "capture.json"
+    assert api.run_qualification(tmp_path / "work", output) == 2
+    capture = json.loads(output.read_bytes())
+    assert capture["reason"] == reason
+    assert isinstance(capture["observed_ms"], (int, float)) and capture["observed_ms"] >= 0
+
+
+@pytest.mark.parametrize(
+    ("machine", "candidates", "reason"),
+    [
+        ("aarch64", ["10.1.2.3"], "linux_runner_required"),
+        ("x86_64", [], "private_network_unavailable"),
+    ],
+)
+def test_early_refusals_record_observed_duration(
+    tmp_path, monkeypatch, machine, candidates, reason
+):
+    import platform
+
+    api = module()
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    monkeypatch.setattr(platform, "machine", lambda: machine)
+    monkeypatch.setattr(api, "discover_network", lambda: candidates)
+    monkeypatch.setattr(api, "_run_private_trial", lambda *_: pytest.fail("refused setup started"))
+    output = tmp_path / "capture.json"
+    assert api.run_qualification(tmp_path / "work", output) == 2
+    capture = json.loads(output.read_bytes())
+    assert capture["reason"] == reason
+    assert isinstance(capture["observed_ms"], (int, float)) and capture["observed_ms"] >= 0
+    assert not (tmp_path / "work").exists()
+
+
+def test_linux_aarch64_runner_is_refused_before_setup(tmp_path, monkeypatch):
+    import platform
+
+    api = module()
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    monkeypatch.setattr(platform, "machine", lambda: "aarch64")
+    monkeypatch.setattr(api, "discover_network", lambda: pytest.fail("network probed"))
+    monkeypatch.setattr(
+        api, "_run_private_trial", lambda *_: pytest.fail("wrong-architecture setup started")
+    )
+    output = tmp_path / "capture.json"
+    assert api.run_qualification(tmp_path / "work", output) == 2
+    assert json.loads(output.read_bytes())["reason"] == "linux_runner_required"
+    assert not (tmp_path / "work").exists()
+
+
+def test_caller_alarm_in_use_is_refused_and_left_untouched(tmp_path, monkeypatch):
+    import signal
+
+    if not hasattr(signal, "setitimer"):
+        pytest.skip("the opt-in Ubuntu qualification uses a process deadline")
+    api = module()
+    linux_runner(monkeypatch, api)
+    monkeypatch.setattr(signal, "getitimer", lambda _which: (5.0, 0.0))
+    monkeypatch.setattr(signal, "setitimer", lambda *_: pytest.fail("caller alarm was replaced"))
+    monkeypatch.setattr(
+        signal, "signal", lambda *_: pytest.fail("caller alarm handler was replaced")
+    )
+    monkeypatch.setattr(api, "_run_private_trial", lambda *_: pytest.fail("setup started"))
+    output = tmp_path / "capture.json"
+    assert api.run_qualification(tmp_path / "work", output) == 2
+    capture = json.loads(output.read_bytes())
+    assert capture["reason"] == "caller_alarm_in_use"
+    assert capture["checks"]["person_composition"] is False
+
+
+def test_gateway_and_proxy_ports_are_always_distinct(monkeypatch):
+    api = module()
+    issued = iter([5000, 5000, 5000, 6000])
+    monkeypatch.setattr(api, "_free_port", lambda _address: next(issued))
+    assert api._distinct_ports("10.1.2.3") == (5000, 6000)
+
+
+def test_port_allocation_that_never_differs_is_refused(monkeypatch):
+    api = module()
+    monkeypatch.setattr(api, "_free_port", lambda _address: 5000)
+    with pytest.raises(ValueError, match="qualification_port"):
+        api._distinct_ports("10.1.2.3")
+
+
+@pytest.mark.parametrize(
+    "error", [ConnectionRefusedError(), TimeoutError(), OSError("unreachable")]
+)
+def test_dropped_or_refused_connection_means_no_listener(monkeypatch, error):
+    """RM19: a blackholed or filtered port is unreachable, not a harness crash."""
+    import socket
+
+    api = module()
+
+    def connect(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(socket, "create_connection", connect)
+    assert api._unreachable("127.0.0.1", 5000) is True
+
+
+def test_an_accepting_listener_is_reachable():
+    import socket
+
+    api = module()
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        assert api._unreachable("127.0.0.1", listener.getsockname()[1]) is False
+
+
+def test_network_peer_step_is_marked_once_after_every_account():
+    import ast
+
+    source = (ROOT / "integrations/openclaw/test/host-person-qualification/qualify.py").read_text()
+    trial = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == "_run_private_trial"
+    )
+
+    def marks(node):
+        return [
+            call
+            for call in ast.walk(node)
+            if isinstance(call, ast.Call)
+            and getattr(call.func, "id", None) == "mark"
+            and call.args
+            and getattr(call.args[0], "value", None) == "network_peer"
+        ]
+
+    account_loop = next(
+        node
+        for node in ast.walk(trial)
+        if isinstance(node, ast.For) and ast.unparse(node.iter) == "enumerate(accounts)"
+    )
+    assert len(marks(trial)) == 1
+    assert marks(account_loop) == []
+
+
+def test_every_browser_context_is_closed_even_if_one_close_fails():
+    api = module()
+    closed = []
+
+    class Context:
+        def __init__(self, name, fail=False):
+            self.name, self.fail = name, fail
+
+        def close(self):
+            closed.append(self.name)
+            if self.fail:
+                raise RuntimeError("already closed")
+
+    api._close_contexts([Context("a", fail=True), Context("b")])
+    assert closed == ["a", "b"]

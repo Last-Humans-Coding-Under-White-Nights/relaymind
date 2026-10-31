@@ -33,7 +33,7 @@ async function fixture() {
   return { target, socket, origin, requests, listeners };
 }
 
-it("RM39/AC30 transports only an allowed read-only probe on the actual established socket", async () => {
+it("RM39/AC30 transports only an allowed fixture probe on the actual established socket", async () => {
   const f = await fixture();
   const result = await f.target.__rmPersonWire.rpc("rmqualification.person", { sessionKey: "native-fixture-key" });
   expect(result.frame.payload.method).toBe("rmqualification.person");
@@ -70,4 +70,22 @@ it("correlates create and person responses on one actual browser socket", async 
   expect(created.socket_id).toBeTypeOf("string");
   expect(created.socket_id).toBe(person.socket_id);
   expect(created.id).not.toBe(person.id);
+});
+
+it("a send that throws clears its timer and pending entry at once", async () => {
+  const f = await fixture();
+  const timers: unknown[] = [];
+  const cleared: unknown[] = [];
+  f.target.setTimeout = (fn: () => void, ms: number) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
+  f.target.clearTimeout = (t: any) => { cleared.push(t); clearTimeout(t); };
+  f.socket.send = () => { throw new Error("socket closing"); };
+  const id = f.target.__rmPersonWire.startRpc("rmqualification.person", {});
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(timers).toHaveLength(1);
+  expect(cleared).toEqual(timers);
+  expect(f.target.__rmPersonWire.outcome(id)).toEqual({ status: "retired_or_timeout" });
+  expect(f.requests).toEqual([]);
+  // No pending entry is left behind: a later retirement has nothing to clear.
+  f.listeners.get("pagehide")!();
+  expect(cleared).toEqual(timers);
 });
