@@ -1,7 +1,6 @@
 """Offline regrading and narrowly compatible retrieval comparisons (RM40/AC31)."""
 
 import copy
-import hashlib
 import html
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -9,9 +8,15 @@ from pathlib import Path
 
 from relaymind.assets.catalog import CatalogSnapshot, validate_asset_record
 from relaymind.canonical import canonical_digest, canonical_json
-from relaymind.evaluation.asset_benchmark import AssetBenchmarkReport, load_asset_benchmark_report
+from relaymind.evaluation.asset_benchmark import (
+    AssetBenchmarkReport,
+    included_cases,
+    load_asset_benchmark_report,
+    stable_request_digest,
+)
 from relaymind.evaluation.asset_benchmark_io import validate_benchmark_document
 from relaymind.evaluation.asset_corpus import assess_asset_release
+from relaymind.evaluation.asset_corpus_io import matches_original
 from relaymind.evaluation.asset_evidence import (
     compatibility_policy,
     verify_asset_configuration_closure,
@@ -88,10 +93,7 @@ def validate_report_evidence(report: AssetBenchmarkReport) -> tuple[list[dict], 
             raise ValueError("document_digest")
     for reference in inputs.manifest["evidence"]:
         payload = inputs.evidence[reference["id"]]
-        if (
-            len(payload) != reference["bytes"]
-            or hashlib.sha256(payload).hexdigest() != reference["sha256"]
-        ):
+        if not matches_original(payload, reference["sha256"], reference["bytes"]):
             raise ValueError("evidence_digest")
     for kind, key in (
         ("runner_inventory", "runner_digest"),
@@ -150,16 +152,7 @@ def validate_report_evidence(report: AssetBenchmarkReport) -> tuple[list[dict], 
         raise ValueError("artifact_binding")
     if raw["qualification"] != assess_asset_release(inputs.release).status:
         raise ValueError("qualification_unverified")
-    labels = {
-        label["case_id"]: label
-        for label in inputs.release.labels["adjudications"]
-        if label["disposition"] == "include"
-    }
-    cases = {
-        c["id"]: c
-        for c in inputs.release.cases["cases"]
-        if c["id"] in labels and c["split"] == config["split"]
-    }
+    labels, cases = included_cases(inputs.release, config["split"])
     if any(
         set(case["requested_kinds"]) != set(config["requested_kinds"]) for case in cases.values()
     ):
@@ -241,12 +234,7 @@ def validate_report_evidence(report: AssetBenchmarkReport) -> tuple[list[dict], 
         request = _request_for_case(
             cases[row["slot"]["case_id"]], config, catalog, row["catalog_revision"]
         )
-        stable = {
-            k: v
-            for k, v in request.to_json_object().items()
-            if k not in ("recommendation_id", "task_id", "deadline_ms")
-        }
-        expected_request = canonical_digest(stable)
+        expected_request = stable_request_digest(request.to_json_object())
         if (
             row["request_digest"] != expected_request
             or row["offered_projection_digest"] != expected_projection
@@ -412,6 +400,19 @@ def validate_report_evidence(report: AssetBenchmarkReport) -> tuple[list[dict], 
     return summaries, request_digests
 
 
+def _first_measured(raw):
+    return {
+        r["slot"]["case_id"]: r
+        for r in raw["results"]
+        if r["slot"]["phase"] == "measured" and r["slot"]["repetition"] == 0
+    }
+
+
+def _code(value) -> str:
+    # JSON quoting prevents source-supplied identifiers from becoming markup.
+    return "`" + html.escape(canonical_json(value)).replace("`", "&#96;") + "`"
+
+
 def _arm(raw):
     return dict(
         selector=copy.deepcopy(raw["config"]["selector"]), artifacts=copy.deepcopy(raw["artifacts"])
@@ -545,16 +546,7 @@ def compare_asset_reports(
     if not reasons:
         a_summaries, b_summaries = validated[0][0], validated[1][0]
         b_map = {canonical_json(s["dimensions"]): s for s in b_summaries}
-        a_rows = {
-            r["slot"]["case_id"]: r
-            for r in ar["results"]
-            if r["slot"]["phase"] == "measured" and r["slot"]["repetition"] == 0
-        }
-        b_rows = {
-            r["slot"]["case_id"]: r
-            for r in br["results"]
-            if r["slot"]["phase"] == "measured" and r["slot"]["repetition"] == 0
-        }
+        a_rows, b_rows = _first_measured(ar), _first_measured(br)
         labels = {label["case_id"]: label for label in a.inputs.release.labels["adjudications"]}
         memberships = {
             canonical_json(dim): ids
@@ -633,17 +625,11 @@ def render_asset_comparison(comparison: AssetBenchmarkComparison | Mapping) -> s
     ]
     for side in ("a", "b"):
         arm = raw["arms"][side]
-        selector = arm["selector"]
-        # JSON quoting prevents source-supplied identifiers from becoming markup.
         lines += [
-            f"Arm {side}: `{html.escape(canonical_json(selector)).replace(chr(96), '&#96;')}`.",
+            f"Arm {side}: {_code(arm['selector'])}.",
             f"Report hash: `{raw['reports'][side]}`.",
-            "Preparation: `"
-            + html.escape(canonical_json(raw["preparation"][side])).replace(chr(96), "&#96;")
-            + "`.",
-            "Artifacts: `"
-            + html.escape(canonical_json(arm["artifacts"])).replace(chr(96), "&#96;")
-            + "`.",
+            f"Preparation: {_code(raw['preparation'][side])}.",
+            f"Artifacts: {_code(arm['artifacts'])}.",
             "",
         ]
     if raw["reasons"]:

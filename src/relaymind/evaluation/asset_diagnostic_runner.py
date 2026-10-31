@@ -16,11 +16,13 @@ from relaymind.evaluation.asset_benchmark import (
     _LockedProjectionProvider,
     _not_run,
     benchmark_repository_root,
+    stable_request_digest,
+    terminal_payload,
 )
 from relaymind.evaluation.asset_benchmark_io import REPORT_BYTES, validate_benchmark_document
 from relaymind.evaluation.asset_corpus_io import _VALIDATORS, AssetCorpusError
 from relaymind.evaluation.asset_costs import summarize_asset_costs
-from relaymind.evaluation.asset_diagnostic import VerifiedDiagnostic
+from relaymind.evaluation.asset_diagnostic import QUERY_LANGUAGE_TAGS, VerifiedDiagnostic
 from relaymind.evaluation.asset_evidence import (
     compatibility_policy,
     effective_asset_config,
@@ -41,6 +43,7 @@ from relaymind.selection.asset_preparation import (
     preparation_binding,
     preparation_policy_mismatches,
     prepare_asset_index,
+    request_preparation_binding,
     validate_preparation_record,
 )
 from relaymind.store.recommendations import RecommendationClaim, RecommendationStore
@@ -198,23 +201,9 @@ async def run_source_benchmark(
                     evaluated_decision=None,
                     evaluated_candidates=[],
                 )
-                overlap = classify_latin_overlap(
-                    case,
-                    [
-                        a["record"]
-                        for a in inputs.catalog["assets"]
-                        if a["record"]["asset_id"] in case["acceptable_asset_ids"]
-                    ],
-                    unicode_version=unicodedata.unidata_version,
+                row["hard_subset"], row["latin_token_intersections"] = _latin_overlap(
+                    case, inputs.catalog, unicodedata.unidata_version
                 )
-                row["hard_subset"] = (
-                    ("no_shared_latin" if overlap.all_targets_disjoint else "shared_latin")
-                    if case["reference_class"] == "positive"
-                    else "negative_or_ambiguous"
-                )
-                row["latin_token_intersections"] = {
-                    k: list(v) for k, v in overlap.token_intersections.items()
-                }
                 if status != "completed":
                     row["reason"] = (
                         "interrupted" if status == "interrupted" else "preparation_unavailable"
@@ -229,12 +218,7 @@ async def run_source_benchmark(
                     requested_kinds=list(case["requested_kinds"]),
                     selection_scope="discovery",
                     host_snapshot_revision=None,
-                    language_tags={
-                        "en": ["en"],
-                        "zh": ["zh-Hans"],
-                        "mixed": ["en", "zh-Hans"],
-                        "unknown": [],
-                    }[language],
+                    language_tags=list(QUERY_LANGUAGE_TAGS[language]),
                     code_switched=language == "mixed",
                 )
                 budget = service.new_budget()
@@ -256,13 +240,7 @@ async def run_source_benchmark(
                         envelope, context=SelectorContext(budget.clock.monotonic, budget.check)
                     )
                     row.update(
-                        request_digest=canonical_digest(
-                            {
-                                k: v
-                                for k, v in selection.to_json_object().items()
-                                if k not in ("recommendation_id", "task_id", "deadline_ms")
-                            }
-                        ),
+                        request_digest=stable_request_digest(selection.to_json_object()),
                         offered_projection_digest=canonical_digest(list(offer.catalog)),
                         catalog_revision=offer.catalog_revision,
                     )
@@ -297,16 +275,11 @@ async def run_source_benchmark(
                             embeddings=list(result["embeddings"]),
                         )
                     else:
-                        events = service.events(
-                            provider.scope, body["recommendation_id"], after_seq=0, limit=1000
-                        )["events"]
-                        terminal = next(
-                            (
-                                e["payload"]
-                                for e in reversed(events)
-                                if e["event_type"] in ("failed", "cancelled")
-                            ),
-                            dict(attempts=[], embeddings=[]),
+                        terminal = terminal_payload(
+                            service,
+                            provider.scope,
+                            body["recommendation_id"],
+                            ("failed", "cancelled"),
                         )
                         row.update(
                             status="cancelled" if body.get("state") == "cancelled" else "failed",
@@ -325,16 +298,8 @@ async def run_source_benchmark(
                     status = "interrupted"
                     row.update(status="cancelled", reason="cancelled")
                     if cancel.recommendation_id is not None:
-                        events = service.events(
-                            provider.scope, cancel.recommendation_id, after_seq=0, limit=1000
-                        )["events"]
-                        terminal = next(
-                            (
-                                e["payload"]
-                                for e in reversed(events)
-                                if e["event_type"] == "cancelled"
-                            ),
-                            dict(attempts=[], embeddings=[]),
+                        terminal = terminal_payload(
+                            service, provider.scope, cancel.recommendation_id, ("cancelled",)
                         )
                         row.update(
                             terminal_observation=terminal,
@@ -417,6 +382,25 @@ async def run_source_benchmark(
     if len(canonical_json(report).encode()) > REPORT_BYTES:
         raise AssetCorpusError("report_limit")
     return report
+
+
+def _latin_overlap(case, catalog, unicode_version):
+    """The hard subset of one case and its Latin token intersections."""
+    overlap = classify_latin_overlap(
+        case,
+        [
+            a["record"]
+            for a in catalog["assets"]
+            if a["record"]["asset_id"] in case["acceptable_asset_ids"]
+        ],
+        unicode_version=unicode_version,
+    )
+    hard = (
+        ("no_shared_latin" if overlap.all_targets_disjoint else "shared_latin")
+        if case["reference_class"] == "positive"
+        else "negative_or_ambiguous"
+    )
+    return hard, {k: list(v) for k, v in overlap.token_intersections.items()}
 
 
 def _language_pairs(rows, catalog):
@@ -581,23 +565,9 @@ def _verify_development_report(report: Mapping) -> None:
                 or row["user_choice"] not in {c["asset_id"] for c in candidates[:3]}
             ):
                 raise ValueError
-            overlap = classify_latin_overlap(
-                case,
-                [
-                    a["record"]
-                    for a in catalog["assets"]
-                    if a["record"]["asset_id"] in case["acceptable_asset_ids"]
-                ],
-                unicode_version=report["unicode_version"],
-            )
-            hard = (
-                ("no_shared_latin" if overlap.all_targets_disjoint else "shared_latin")
-                if case["reference_class"] == "positive"
-                else "negative_or_ambiguous"
-            )
-            if row["hard_subset"] != hard or row["latin_token_intersections"] != {
-                k: list(v) for k, v in overlap.token_intersections.items()
-            }:
+            if (row["hard_subset"], row["latin_token_intersections"]) != _latin_overlap(
+                case, catalog, report["unicode_version"]
+            ):
                 raise ValueError
             expected = grade_asset_result(
                 {
@@ -624,16 +594,7 @@ def _verify_development_report(report: Mapping) -> None:
                     raise ValueError
                 if (
                     setup["config"]["mode"] == "http"
-                    and preparation_binding(
-                        selector=binding["selector"],
-                        catalog_revision=request["catalog_revision"],
-                        catalog=request["catalog"],
-                        scope=request["scope"],
-                        permissions=request["permissions"],
-                        selection_scope=request["selection_scope"],
-                        requested_kinds=request["requested_kinds"],
-                    )
-                    != binding
+                    and request_preparation_binding(binding["selector"], request) != binding
                 ):
                     raise ValueError
             elif row["attempts"] and row["attempts"][0]["outcome"] in ("ranked", "no_match"):

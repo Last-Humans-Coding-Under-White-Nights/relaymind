@@ -1,7 +1,6 @@
 """Explicit pinned public-source acquisition, outside runtime ingestion (RM34/RM40)."""
 
 import asyncio
-import hashlib
 import ipaddress
 import os
 import re
@@ -14,7 +13,7 @@ from urllib.parse import urljoin, urlsplit
 
 import httpx
 
-from relaymind.evaluation.asset_corpus_io import MIB, AssetCorpusError, read_local
+from relaymind.evaluation.asset_corpus_io import MIB, AssetCorpusError, matches_original, read_local
 
 
 def _public_url(value: str) -> str:
@@ -38,7 +37,7 @@ def _public_url(value: str) -> str:
             if not ipaddress.ip_address(host).is_global:
                 raise ValueError
         except ValueError:
-            if re.fullmatch(r"[0-9a-fA-F:.]+", host):
+            if ":" in host or re.fullmatch(r"[0-9.]+", host):
                 raise
         if len(value.encode()) > 2048:
             raise ValueError
@@ -121,7 +120,7 @@ async def _acquire_recipe(recipe: Mapping, cache_root: Path, *, client=None) -> 
                     raw = read_local(cache_root, path.name, limit)
                     if time.monotonic() - started >= 60:
                         raise AssetCorpusError("capture_job_limit")
-                    if len(raw) != row["bytes"] or hashlib.sha256(raw).hexdigest() != row["sha256"]:
+                    if not matches_original(raw, row["sha256"], row["bytes"]):
                         raise AssetCorpusError("cached_digest_mismatch")
                     result.update(status="reused", final_url=row["url"])
                     results.append(result)
@@ -199,10 +198,7 @@ async def _acquire_recipe(recipe: Mapping, cache_root: Path, *, client=None) -> 
                     break
                 if payload is None:
                     raise AssetCorpusError("source_redirect_limit")
-                if (
-                    len(payload) != row["bytes"]
-                    or hashlib.sha256(payload).hexdigest() != row["sha256"]
-                ):
+                if not matches_original(payload, row["sha256"], row["bytes"]):
                     raise AssetCorpusError("source_digest_mismatch")
                 descriptor, temporary = tempfile.mkstemp(prefix=".capture-", dir=cache_root)
                 try:

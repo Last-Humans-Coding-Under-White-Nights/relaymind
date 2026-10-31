@@ -1,12 +1,11 @@
 """Reproduce source catalogs from pinned acquisition recipes, not completed labels."""
 
-import hashlib
 import json
 import re
 from collections.abc import Mapping
 from pathlib import Path
 
-from relaymind.evaluation.asset_corpus_io import MIB, AssetCorpusError, read_local
+from relaymind.evaluation.asset_corpus_io import MIB, AssetCorpusError, matches_original, read_local
 from relaymind.evaluation.asset_source_catalog import (
     SourceCatalogResult,
     SourceOriginal,
@@ -21,7 +20,9 @@ def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatal
     for row in recipe.get("files", []):
         if (
             not isinstance(row, Mapping)
-            or row.get("id") in files
+            or not isinstance(row.get("id"), str)
+            or not row["id"]
+            or row["id"] in files
             or not isinstance(row.get("sha256"), str)
             or not re.fullmatch("[0-9a-f]{64}", row["sha256"])
             or type(row.get("bytes")) is not int
@@ -43,7 +44,7 @@ def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatal
                 row["sha256"] + ".original",
                 4 * MIB if row.get("kind") == "metadata" else 10 * MIB,
             )
-            if len(payload) != row["bytes"] or hashlib.sha256(payload).hexdigest() != row["sha256"]:
+            if not matches_original(payload, row["sha256"], row["bytes"]):
                 raise AssetCorpusError("source_digest_mismatch")
             retained[file_id] = payload
             if sum(len(v) for v in retained.values()) > 100 * MIB:
@@ -51,16 +52,46 @@ def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatal
         return retained[file_id]
 
     originals = []
+    required_asset_keys = {
+        "file_id",
+        "asset_id",
+        "source_id",
+        "source_url",
+        "revision",
+        "captured_at",
+        "kind",
+        "name",
+        "format",
+    }
+    allowed_asset_keys = required_asset_keys | {
+        "version",
+        "metadata_file_id",
+        "license_file_id",
+    }
     for raw in recipe.get("assets", []):
+        if (
+            not isinstance(raw, Mapping)
+            or not required_asset_keys <= set(raw)
+            or not set(raw) <= allowed_asset_keys
+        ):
+            raise AssetCorpusError("invalid_source_recipe")
         row = dict(raw)
         file_id = row.pop("file_id")
         metadata_id = row.pop("metadata_file_id", None)
         license_id = row.pop("license_file_id", None)
+        version = row.pop("version", None)
+        if (
+            (metadata_id is not None and not isinstance(metadata_id, str))
+            or (license_id is not None and not isinstance(license_id, str))
+            or (version is not None and not isinstance(version, str))
+        ):
+            raise AssetCorpusError("invalid_source_recipe")
         if file_id not in files:
             raise AssetCorpusError("unknown_source_file")
         originals.append(
             SourceOriginal(
                 **row,
+                version=version,
                 payload=cached(file_id),
                 sha256=files[file_id]["sha256"],
                 metadata_bytes=cached(metadata_id) if metadata_id else None,
@@ -72,10 +103,13 @@ def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatal
         if not isinstance(row, Mapping) or not {"kind", "file_id"} <= set(row):
             raise AssetCorpusError("invalid_source_recipe")
         extra.append((row["kind"], cached(row["file_id"])))
+    dataset_id = recipe.get("dataset_id")
+    if not isinstance(dataset_id, str) or not dataset_id:
+        raise AssetCorpusError("invalid_source_recipe")
     return build_source_catalog(
         originals,
         output,
-        dataset_id=recipe["dataset_id"],
+        dataset_id=dataset_id,
         exclusions=recipe.get("exclusions", []),
         additional_evidence=extra,
     )
