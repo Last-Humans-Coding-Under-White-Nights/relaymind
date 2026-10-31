@@ -1040,7 +1040,16 @@ listed here so the current order can be traced to its reason.
   so it does not wait for the plugin.
 
 
-## M10 — Multilingual asset recommendations (spec 0.59)
+## M10 — Multilingual asset recommendations (spec 0.61)
+
+#207 customer documentation now has [English](asset-selection.md) and
+[简体中文](asset-selection.zh-CN.md) entry guides, v1/v2 migration and third-party
+index readiness navigation, exact source JSON versus formal JSON/Markdown
+workflows, explicit stdout-only choice receipts, and a focused
+[privacy/recovery reference](asset-privacy-security.md). The packaged bilingual
+M10 skill/MCP, real approval and correction walkthrough still requires the final
+qualified host contract/artifact and actual installed-host exercises. These
+repository guides do not claim that remaining walkthrough or close #207.
 
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
@@ -1259,9 +1268,11 @@ applicability permits a verified local selector runtime versus corroborated
 non-use, with a closed per-arm runtime display for the comparison-only renderer.
 Native build/device/execution controls, Python/dependencies,
 source/label/policy and normal machine equality stay enforced. Existing0.58
-semantic documents and artifact/reference slots suffice; parser/factory/offline
-closure support remains implementation work. Ordinary exact-identity native
-activation and both benchmark commands still require implementation, independent
-registry review and fresh unmodified-process proof before publication. No
+semantic documents and artifact/reference slots suffice. Parser/factory/offline
+closure, local preparation and native comparison/runtime-display tooling are
+implemented with explicit deterministic qualification fixtures; ordinary
+artifact activation and actual native controls remain separate. Ordinary native
+activation and native run/compare still require independent exact-registry review
+and fresh unmodified-process proof before publication. No
 production entry, host correction authority, dataset/hardware qualification,
 new numerical threshold or final-M10 pass is supplied by this contract.

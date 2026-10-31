@@ -688,16 +688,19 @@ def test_production_validator_reads_bounded_snapshot_and_preserves_source_root(
 ):
     api = module("asset_benchmark")
     config = fixture_config(tmp_path, repetitions=1, warmups=0)
-    original = api.load_config
+    original = api.parse_launcher_config
     actual = config.path.parent / config.data["production_config"]
     seen = []
 
-    def validate(path):
-        assert Path(path) != actual, "production validator reopened mutable unbounded input"
-        seen.append(Path(path))
-        return original(path)
+    def validate(raw, *, config_dir):
+        assert config_dir == actual.parent
+        seen.append(raw)
+        # The validator must use the bounded captured values, even when the
+        # original file changes after capture. Semantic paths keep this root.
+        actual.write_text("invalid input after capture", encoding="utf-8")
+        return original(raw, config_dir=config_dir)
 
-    monkeypatch.setattr(api, "load_config", validate)
+    monkeypatch.setattr(api, "parse_launcher_config", validate)
     loaded = api.load_benchmark_config(config.path)
     assert (
         seen

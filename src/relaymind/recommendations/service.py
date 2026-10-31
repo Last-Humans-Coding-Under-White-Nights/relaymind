@@ -430,6 +430,21 @@ class RecommendationService:
             scope=dict(user_id=settings.user_id, workspace_id=settings.workspace_id),
             permissions=tuple(sorted(permissions)),
         )
+        return cls.for_provider(
+            run_store, provider, settings, redactor=redactor, semantics=semantics
+        )
+
+    @classmethod
+    def for_provider(
+        cls,
+        run_store: RunStore,
+        provider: CatalogProvider,
+        settings: RecommendationSettings,
+        *,
+        redactor: Redactor | None = None,
+        semantics=None,
+    ) -> "RecommendationService":
+        """Shared production construction over an already owned catalog provider."""
         primary = None
         owner = None
         if semantics is not None:

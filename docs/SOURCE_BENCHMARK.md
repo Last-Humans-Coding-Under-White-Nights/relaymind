@@ -1,5 +1,8 @@
 # Source-grounded skill and tool benchmark
 
+[English setup](asset-selection.md) · [简体中文入口](asset-selection.zh-CN.md) ·
+[Privacy and recovery](asset-privacy-security.md)
+
 This development benchmark builds its data from actual public originals. The
 current pinned catalog contains **412 assets: 87 Matrix skills, 194 SkillsBench
 skills and 131 GitHub MCP tools**, with 61 explicit exclusions. It is ready for
@@ -41,6 +44,8 @@ export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 The following concrete paths were used for the example run. Use another private
 cache/output location on systems without `/var/tmp`; every CLI path is explicit.
 Do not put unknown-license originals into a public repository.
+If an output directory already exists, choose a new private root throughout;
+`build` refuses to overwrite an earlier capture.
 
 ```bash
 python scripts/source_asset_benchmark.py acquire \
@@ -105,6 +110,13 @@ The catalog-bound prepare/status response establishes `ready` and an
 `index_revision`; queries must return that same revision. `not_ready` and failed
 preparation stay visible. Setup time and its reported/unknown costs are separate
 from query latency. Merely starting a server does not claim indexing finished.
+Gateway lexical readiness, a listening server and catalog-bound index readiness
+are three different facts. The configured preparation URL is one POST endpoint
+with `operation=prepare|status|cancel`, not separate status/cancel routes. Only
+prepare starts work; status/cancel retain the ID/binding/profile with null
+catalog/budget. See the published
+[request](../src/relaymind/selection/schemas/asset_preparation_request.v1.json) and
+[response](../src/relaymind/selection/schemas/asset_preparation_response.v1.json) schemas.
 
 Start the supported examples in separate terminals:
 
@@ -255,11 +267,35 @@ reported separately from confident precision. To inspect a real recorded shortli
 ```bash
 python scripts/source_asset_benchmark.py choose \
   --report /var/tmp/rm-g1-source-guide/builtin-service.json \
-  --case capability-01-zh
+  --case capability-01-zh > /var/tmp/rm-g1-source-guide/choice.json
 ```
 
 The command displays up to three actual candidates, names/descriptions and unknown
-availability. Enter an option number, or `0` to decline. It records that explicit
-choice and performs no action. No choices are supplied in the recorded benchmark
-runs; user-choice counts therefore remain zero. An abstention, timeout or
-unavailable index never fabricates a shortlist or user selection.
+availability on stderr. Enter an option number, or `0` to decline; Ctrl-C
+interrupts. The command emits a new JSON receipt on stdout, saved above by
+redirection. It does not persist the choice into the benchmark report, send
+backend feedback or execute an action (`action_executed=false`). No choices are
+supplied in the recorded benchmark runs; their user-choice counts remain zero.
+An abstention, timeout or unavailable index never fabricates a shortlist.
+
+
+## Native development tooling
+
+A separately qualified hybrid uses the same source input and complete catalog,
+production service and explicit local-cold preparation described in the
+[formal tooling guide](ASSET_BENCHMARK.md#local-native-preparation-and-runtime-evidence).
+Supply that frozen preparation table through the existing
+`run --preparation-config <path>` option. This does not change the query budget,
+add a qualification flag or supply a currently approved production artifact.
+The registry is currently empty; the native installation and actual 412-asset/128-case
+run remain separate from the existing lexical/HTTP examples above.
+
+New internal reports retain exact semantic preimages, environment facts and the
+runner/protocol inventories alongside their digests. Comparison verifies these
+and the actual native query/setup observations without opening model paths or
+loading weights. Missing configuration evidence or a changed runtime build is
+incompatible. Native failure and gateway-floor success remain separate attempts;
+setup costs stay separate from query costs. These source comparisons are
+provisional quality diagnostics with raw timing/cost evidence, not a performance
+superiority or formal acceptance verdict. Historical stateless reports remain
+historical artifacts rather than acquiring invented runtime evidence.

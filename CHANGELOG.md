@@ -26,6 +26,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Native retrieval benchmark tooling (#201; RM16/RM35/RM38/RM40/RM41/RM44;
+  AC26/AC29/AC31/AC32): shared semantic factory/parser and offline preimages,
+  explicit local preparation, native/floor cost conservation and self-contained
+  runtime comparison evidence. Qualified artifact activation, actual native
+  controls and ordinary-process proof remain separate; the registry stays empty.
+
+- Customer recommendation guides (#207; RM34–RM44/AC25–AC37): English and
+  Chinese entry/navigation, v1/v2 migration, current HTTP index preparation,
+  source JSON and formal JSON/Markdown workflows, explicit choice receipts and
+  source/privacy/recovery boundaries. Installed M10 host walkthrough acceptance
+  remains separate; no runtime, qualification or budget change.
+
 - Specification 0.60 → 0.61 (#201/#200; RM16/RM35/RM38/RM40/RM41/RM44;
   AC26/AC29/AC31/AC32): add explicit cold local native preparation using existing
   worker events/readiness, actual setup/cleanup timing and unknown-aware costs.

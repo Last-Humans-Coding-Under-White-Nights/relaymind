@@ -3,7 +3,8 @@
 import copy
 import hashlib
 import html
-from collections.abc import Mapping
+import math
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,6 +15,9 @@ from relaymind.evaluation.asset_benchmark_io import validate_benchmark_document
 from relaymind.evaluation.asset_corpus import assess_asset_release
 from relaymind.evaluation.asset_evidence import (
     compatibility_policy,
+    effective_selector_identity,
+    validate_definition,
+    validate_effective_integrity,
     verify_asset_configuration_closure,
     verify_compiled_asset_inventory,
 )
@@ -26,6 +30,7 @@ from relaymind.evaluation.asset_metrics import (
 from relaymind.evaluation.asset_schedule import plan_asset_slots, validate_asset_rows
 from relaymind.selection.asset_admission import admit_current, validate_against_offer
 from relaymind.selection.asset_contract import (
+    AssetSelectionRequest,
     AttemptFailure,
     SelectorIdentity,
     parse_asset_request,
@@ -73,6 +78,290 @@ def _request_for_case(case, config, catalog, revision):
     )
 
 
+def _configured_hybrid(effective, documents):
+    from relaymind.assets.embedding_config import validate_hybrid_config
+    from relaymind.assets.embedding_manifest import validate_embedding_manifest
+
+    ids = [r["document_id"] for r in effective["references"] if r["role"] == "index_config"]
+    if len(ids) != 1:
+        raise ValueError("native_configuration")
+    raw = documents[ids[0]]
+    manifest = validate_embedding_manifest(documents["referenced_config:" + raw["manifest_digest"]])
+    config = validate_hybrid_config(raw, manifest)
+    return config
+
+
+def _validate_query_embeddings(row, request, effective, documents):
+    observations = row["embeddings"]
+    if effective["recommendations"]["primary"] != "hybrid":
+        if observations:
+            raise ValueError("unconfigured_embedding")
+        return
+    if len(observations) > 1:
+        raise ValueError("native_invocation_count")
+    config = _configured_hybrid(effective, documents)
+    manifest = config.manifest
+    from relaymind.assets.embeddings import represent_query
+
+    representation = represent_query(
+        request.data["task_text"], config.data["representation"]["query_prefix"]
+    )
+    for observation in observations:
+        _validate_native_observation(
+            observation,
+            manifest,
+            input_bytes=len(representation.data),
+            max_tokens=config.data["representation"]["max_tokens"],
+        )
+
+
+def validate_native_preparation(
+    preparation: Mapping, effective: Mapping, documents: Mapping
+) -> None:
+    if preparation["config"]["mode"] != "local":
+        return
+    config = _configured_hybrid(effective, documents)
+    limit = config.data["representation"]["max_tokens"] * config.data["index"]["batch_size"]
+    for event in preparation["local"]["job_events"]:
+        observations = event["payload"].get("embeddings", [])
+        if len(observations) > 1:
+            raise ValueError("native_invocation_count")
+        for observation in observations:
+            _validate_native_observation(
+                observation, config.manifest, input_bytes=None, max_tokens=limit
+            )
+
+
+def _validate_native_observation(observation, manifest, *, input_bytes, max_tokens):
+    if (
+        set(observation)
+        != {
+            "model",
+            "artifact_hash",
+            "representation_revision",
+            "device",
+            "input_bytes",
+            "input_tokens",
+            "duration_ms",
+            "cost_observations",
+            "outcome",
+        }
+        or type(observation["input_bytes"]) is not int
+        or observation["input_bytes"] < 0
+        or type(observation["input_tokens"]) is not int
+        or type(observation["duration_ms"]) not in (int, float)
+        or not math.isfinite(observation["duration_ms"])
+        or observation["duration_ms"] < 0
+        or observation["outcome"] not in ("succeeded", "failed", "cancelled", "timeout")
+    ):
+        raise ValueError("native_embedding_shape")
+    if (
+        observation["model"] != manifest.data["model"]
+        or observation["artifact_hash"] != manifest.artifact_hash
+        or observation["device"] != manifest.data["device"]
+        or observation["representation_revision"] != "asset_fields.v1"
+        or (input_bytes is not None and observation["input_bytes"] != input_bytes)
+        or not 0 <= observation["input_tokens"] <= max_tokens
+    ):
+        raise ValueError("native_embedding_binding")
+    expected = [
+        dict(
+            provenance="observed",
+            value=dict(
+                input_tokens=observation["input_tokens"],
+                output_tokens=None,
+                cached_tokens=None,
+                reasoning_tokens=None,
+                calls=1,
+                cpu_ms=None,
+                peak_bytes=None,
+            ),
+        )
+    ]
+    if canonical_json(observation["cost_observations"]) != canonical_json(expected):
+        raise ValueError("native_cost_source")
+
+
+def validate_attempt_evidence(
+    row: Mapping,
+    request: AssetSelectionRequest,
+    catalog: Sequence[Mapping],
+    effective: Mapping,
+    config: Mapping,
+    preparation: Mapping,
+    documents: Mapping,
+) -> None:
+    """Shared production-attempt checks for formal and internal development rows."""
+    primary_kind = effective["recommendations"]["primary"]
+    eligibility = {entry["asset_id"] for entry in effective["eligibility"] if entry["eligible"]}
+    if len(row["attempts"]) > (1 if primary_kind == "lexical" else 2):
+        raise ValueError("attempt_limit")
+    for attempt in row["attempts"]:
+        validate_definition("SelectorAttemptV1", attempt)
+    snapshot = CatalogSnapshot(
+        1,
+        row["catalog_revision"],
+        "2026-01-01T00:00:00Z",
+        (),
+        tuple(validate_asset_record(r) for r in catalog),
+    )
+    _validate_query_embeddings(row, request, effective, documents)
+    usable = []
+    admitted_revision = snapshot.catalog_revision
+    for i, attempt in enumerate(row["attempts"]):
+        if usable:
+            raise ValueError("attempt_after_admission")
+        if attempt["attempt"] != i + 1:
+            raise ValueError("attempt_order")
+        identity = (
+            SelectorIdentity(config["selector"]["name"], config["selector"]["version"])
+            if i == 0
+            else SelectorIdentity("lexical", "1")
+        )
+        if (
+            attempt["selector"] != identity.to_json_object()
+            or i
+            and (
+                not config["fallback"]
+                or primary_kind == "lexical"
+                or attempt["mechanism"] != "gateway_lexical_fallback"
+            )
+        ):
+            raise ValueError("attempt_identity")
+        raw_result = attempt["result"]
+        builtin = i > 0 or primary_kind in ("lexical", "hybrid")
+        lexical = i > 0 or primary_kind == "lexical"
+        expected_costs = (
+            [dict(provenance="observed", value=dict(LexicalAssetSelector.observed_cost))]
+            if lexical
+            else [
+                cost for embedding in row["embeddings"] for cost in embedding["cost_observations"]
+            ]
+            if primary_kind == "hybrid"
+            else []
+        )
+        if raw_result is not None and raw_result["usage_claims"] is not None:
+            if builtin:
+                raise ValueError("builtin_usage_claim")
+            expected_costs.append(raw_result["usage_claims"])
+        if canonical_json(attempt["cost_observations"]) != canonical_json(expected_costs):
+            raise ValueError("attempt_cost_source")
+        expected_reported = None if raw_result is None else raw_result["elapsed_ms"]
+        expected_index = None if raw_result is None else raw_result["index_revision"]
+        if (
+            attempt["reported_ms"] != expected_reported
+            or attempt["index_revision"] != expected_index
+        ):
+            raise ValueError("attempt_reported_metadata")
+        default_mechanism = (
+            HttpAssetSelector.mechanism
+            if config["selector"]["transport"] == "http"
+            else "hybrid_weighted_rrf"
+            if primary_kind == "hybrid"
+            else LexicalAssetSelector.mechanism
+        )
+        if i == 0:
+            if primary_kind == "hybrid" and (
+                attempt["mechanism"] != default_mechanism
+                or raw_result is not None
+                and raw_result["mechanism"] != default_mechanism
+            ):
+                raise ValueError("native_mechanism")
+            if attempt["mechanism"] == "gateway_lexical_fallback":
+                raise ValueError("primary_floor_attribution")
+            if raw_result is None:
+                if attempt["mechanism"] != default_mechanism:
+                    raise ValueError("attempt_mechanism")
+            elif attempt["mechanism"] != default_mechanism:
+                if attempt["mechanism"] != raw_result["mechanism"]:
+                    raise ValueError("attempt_mechanism")
+                # A changed primary mechanism is recorded only after offer
+                # validation. Rejected pre-validation raw evidence retains
+                # the configured transport mechanism and remains visible.
+                claimed_request = parse_asset_request(
+                    request.to_json_object()
+                    | dict(recommendation_id=raw_result["recommendation_id"])
+                )
+                validate_against_offer(
+                    parse_asset_result(raw_result),
+                    claimed_request,
+                    identity,
+                    http=config["selector"]["transport"] == "http",
+                )
+        elif raw_result is not None and raw_result["mechanism"] != LexicalAssetSelector.mechanism:
+            raise ValueError("floor_mechanism")
+        if attempt["outcome"] not in ("ranked", "no_match") and attempt["reason"] is None:
+            raise ValueError("attempt_failure_reason")
+        if attempt["outcome"] in ("ranked", "no_match"):
+            if (
+                i == 0
+                and primary_kind == "hybrid"
+                and (len(row["embeddings"]) != 1 or row["embeddings"][0]["outcome"] != "succeeded")
+            ):
+                raise ValueError("native_inference_missing")
+            if (
+                i == 0
+                and config["preparation"]["mode"] != "none"
+                and (
+                    raw_result is None
+                    or raw_result["index_revision"] != preparation["index_revision"]
+                )
+            ):
+                raise ValueError("prepared_index_binding")
+            if (
+                raw_result is None
+                or raw_result["outcome"] != attempt["outcome"]
+                or attempt["reason"] is not None
+                or i == 0
+                and attempt["mechanism"] != raw_result["mechanism"]
+            ):
+                raise ValueError("attempt_admission")
+            # IDs are volatile, but actual attempt request/result IDs still
+            # have to agree within the one admitted recommendation.
+            actual_request = parse_asset_request(
+                request.to_json_object() | dict(recommendation_id=raw_result["recommendation_id"])
+            )
+            result = parse_asset_result(raw_result)
+            validate_against_offer(
+                result,
+                actual_request,
+                identity,
+                http=i == 0 and config["selector"]["transport"] == "http",
+            )
+            checked_admission = admit_current(
+                result, actual_request, snapshot, lambda r, req: r.asset_id in eligibility
+            )
+            admitted_revision = checked_admission.rechecked_catalog_revision
+            usable.append(raw_result)
+    if row["status"] == "ready":
+        if row["reason"] is not None or row["result"] is None:
+            raise ValueError("ready_contract")
+        result = parse_recommendation_result(row["result"]).data
+        if (
+            result["catalog_revision"] != row["catalog_revision"]
+            or result["attempts"] != row["attempts"]
+            or result["embeddings"] != row["embeddings"]
+            or result["host_snapshot_revision"] != request.data["host_snapshot_revision"]
+            or result["admission"]["rechecked_catalog_revision"] != admitted_revision
+            or result["fallback_reason"]
+            != (row["attempts"][0]["reason"] if len(row["attempts"]) > 1 else None)
+        ):
+            raise ValueError("result_evidence")
+        if result["decision"] == "empty_catalog":
+            if catalog or row["attempts"] or row["embeddings"]:
+                raise ValueError("empty_catalog_evidence")
+        elif (
+            not usable
+            or result["base_candidates"] != usable[-1]["candidates"]
+            or result["base_decision"] != usable[-1]["decision"]
+        ):
+            raise ValueError("result_producer")
+        if result["adaptation"] is not None or result["host_run_ids"]:
+            raise ValueError("unsupported_adaptation_or_host")
+    elif row["result"] is not None or row["reason"] is None:
+        raise ValueError("terminal_contract")
+
+
 def validate_report_evidence(report: AssetBenchmarkReport) -> tuple[list[dict], dict]:
     """Recompute every grade/summary; reject contradictory admitted evidence."""
     raw = report.data
@@ -110,7 +399,9 @@ def validate_report_evidence(report: AssetBenchmarkReport) -> tuple[list[dict], 
     ):
         raise ValueError("config_binding")
     if config["preparation"] != normalize_preparation(
-        frozen_config.get("preparation"), http_primary=config["selector"]["transport"] == "http"
+        frozen_config.get("preparation"),
+        http_primary=config["selector"]["transport"] == "http",
+        local_primary=inputs.effective["recommendations"]["primary"] == "hybrid",
     ):
         raise ValueError("preparation_config_binding")
     validate_preparation_record(raw["preparation"], config=config["preparation"])
@@ -118,6 +409,7 @@ def validate_report_evidence(report: AssetBenchmarkReport) -> tuple[list[dict], 
     verify_asset_configuration_closure(
         inputs.documents, inputs.manifest, effective, inputs.documents["environment_lock"]
     )
+    validate_native_preparation(raw["preparation"], effective, inputs.documents)
     if (
         config["production_config_digest"] != canonical_digest(effective)
         or raw["lock_digest"] != inputs.release.lock["digest"]
@@ -146,6 +438,8 @@ def validate_report_evidence(report: AssetBenchmarkReport) -> tuple[list[dict], 
         or canonical_digest(raw["environment"]) != raw["environment_digest"]
     ):
         raise ValueError("report_digest")
+    if config["selector"] != effective_selector_identity(effective):
+        raise ValueError("selector_configuration")
     if inputs.effective["artifacts"] != raw["artifacts"]:
         raise ValueError("artifact_binding")
     if raw["qualification"] != assess_asset_release(inputs.release).status:
@@ -178,7 +472,7 @@ def validate_report_evidence(report: AssetBenchmarkReport) -> tuple[list[dict], 
         and a["record"]["kind"] in config["requested_kinds"]
     ]
     expected_projection = canonical_digest(catalog)
-    if config["preparation"]["mode"] == "http":
+    if config["preparation"]["mode"] != "none":
         prepared_binding = preparation_binding(
             selector={k: config["selector"][k] for k in ("name", "version")},
             catalog_revision=1 if eligibility else 0,
@@ -191,7 +485,7 @@ def validate_report_evidence(report: AssetBenchmarkReport) -> tuple[list[dict], 
         validate_preparation_record(
             raw["preparation"], config=config["preparation"], binding=prepared_binding
         )
-        if raw["preparation"]["status"] != "ready" and (
+        if raw["preparation"]["status"] not in ("ready", "not_applicable") and (
             raw["status"] == "completed" or any(r["status"] != "not_run" for r in raw["results"])
         ):
             raise ValueError("preparation_dispatch")
@@ -253,151 +547,9 @@ def validate_report_evidence(report: AssetBenchmarkReport) -> tuple[list[dict], 
         ):
             raise ValueError("offer_digest")
         request_digests[row["slot"]["case_id"]] = (expected_request, expected_projection)
-        snapshot = CatalogSnapshot(
-            1,
-            row["catalog_revision"],
-            "2026-01-01T00:00:00Z",
-            (),
-            tuple(validate_asset_record(r) for r in catalog),
+        validate_attempt_evidence(
+            row, request, catalog, effective, config, raw["preparation"], inputs.documents
         )
-        usable = []
-        admitted_revision = snapshot.catalog_revision
-        for i, attempt in enumerate(row["attempts"]):
-            if usable:
-                raise ValueError("attempt_after_admission")
-            if attempt["attempt"] != i + 1:
-                raise ValueError("attempt_order")
-            identity = (
-                SelectorIdentity(config["selector"]["name"], config["selector"]["version"])
-                if i == 0
-                else SelectorIdentity("lexical", "1")
-            )
-            if (
-                attempt["selector"] != identity.to_json_object()
-                or i
-                and (
-                    not config["fallback"]
-                    or config["selector"]["transport"] == "in_process"
-                    or attempt["mechanism"] != "gateway_lexical_fallback"
-                )
-            ):
-                raise ValueError("attempt_identity")
-            raw_result = attempt["result"]
-            builtin = i > 0 or config["selector"]["transport"] == "in_process"
-            expected_costs = (
-                [dict(provenance="observed", value=dict(LexicalAssetSelector.observed_cost))]
-                if builtin
-                else []
-            )
-            if raw_result is not None and raw_result["usage_claims"] is not None:
-                if builtin:
-                    raise ValueError("builtin_usage_claim")
-                expected_costs.append(raw_result["usage_claims"])
-            if canonical_json(attempt["cost_observations"]) != canonical_json(expected_costs):
-                raise ValueError("attempt_cost_source")
-            expected_reported = None if raw_result is None else raw_result["elapsed_ms"]
-            expected_index = None if raw_result is None else raw_result["index_revision"]
-            if (
-                attempt["reported_ms"] != expected_reported
-                or attempt["index_revision"] != expected_index
-            ):
-                raise ValueError("attempt_reported_metadata")
-            default_mechanism = (
-                HttpAssetSelector.mechanism
-                if config["selector"]["transport"] == "http"
-                else LexicalAssetSelector.mechanism
-            )
-            if i == 0:
-                if attempt["mechanism"] == "gateway_lexical_fallback":
-                    raise ValueError("primary_floor_attribution")
-                if raw_result is None:
-                    if attempt["mechanism"] != default_mechanism:
-                        raise ValueError("attempt_mechanism")
-                elif attempt["mechanism"] != default_mechanism:
-                    if attempt["mechanism"] != raw_result["mechanism"]:
-                        raise ValueError("attempt_mechanism")
-                    # A changed primary mechanism is recorded only after offer
-                    # validation. Rejected pre-validation raw evidence retains
-                    # the configured transport mechanism and remains visible.
-                    claimed_request = parse_asset_request(
-                        request.to_json_object()
-                        | dict(recommendation_id=raw_result["recommendation_id"])
-                    )
-                    validate_against_offer(
-                        parse_asset_result(raw_result),
-                        claimed_request,
-                        identity,
-                        http=config["selector"]["transport"] == "http",
-                    )
-            elif (
-                raw_result is not None and raw_result["mechanism"] != LexicalAssetSelector.mechanism
-            ):
-                raise ValueError("floor_mechanism")
-            if attempt["outcome"] not in ("ranked", "no_match") and attempt["reason"] is None:
-                raise ValueError("attempt_failure_reason")
-            if attempt["outcome"] in ("ranked", "no_match"):
-                if (
-                    i == 0
-                    and config["preparation"]["mode"] == "http"
-                    and (
-                        raw_result is None
-                        or raw_result["index_revision"] != raw["preparation"]["index_revision"]
-                    )
-                ):
-                    raise ValueError("prepared_index_binding")
-                if (
-                    raw_result is None
-                    or raw_result["outcome"] != attempt["outcome"]
-                    or attempt["reason"] is not None
-                    or i == 0
-                    and attempt["mechanism"] != raw_result["mechanism"]
-                ):
-                    raise ValueError("attempt_admission")
-                # IDs are volatile, but actual attempt request/result IDs still
-                # have to agree within the one admitted recommendation.
-                actual_request = parse_asset_request(
-                    request.to_json_object()
-                    | dict(recommendation_id=raw_result["recommendation_id"])
-                )
-                result = parse_asset_result(raw_result)
-                validate_against_offer(
-                    result,
-                    actual_request,
-                    identity,
-                    http=i == 0 and config["selector"]["transport"] == "http",
-                )
-                checked_admission = admit_current(
-                    result, actual_request, snapshot, lambda r, req: r.asset_id in eligibility
-                )
-                admitted_revision = checked_admission.rechecked_catalog_revision
-                usable.append(raw_result)
-        if row["status"] == "ready":
-            if row["reason"] is not None or row["result"] is None:
-                raise ValueError("ready_contract")
-            result = parse_recommendation_result(row["result"]).data
-            if (
-                result["catalog_revision"] != row["catalog_revision"]
-                or result["attempts"] != row["attempts"]
-                or result["embeddings"] != row["embeddings"]
-                or result["host_snapshot_revision"] != request.data["host_snapshot_revision"]
-                or result["admission"]["rechecked_catalog_revision"] != admitted_revision
-                or result["fallback_reason"]
-                != (row["attempts"][0]["reason"] if len(row["attempts"]) > 1 else None)
-            ):
-                raise ValueError("result_evidence")
-            if result["decision"] == "empty_catalog":
-                if catalog or row["attempts"]:
-                    raise ValueError("empty_catalog_evidence")
-            elif (
-                not usable
-                or result["base_candidates"] != usable[-1]["candidates"]
-                or result["base_decision"] != usable[-1]["decision"]
-            ):
-                raise ValueError("result_producer")
-            if result["adaptation"] is not None or result["host_run_ids"]:
-                raise ValueError("unsupported_adaptation_or_host")
-        elif row["result"] is not None or row["reason"] is None:
-            raise ValueError("terminal_contract")
     if raw["status"] == "completed" and any(r["status"] == "not_run" for r in raw["results"]):
         raise ValueError("completed_missing_work")
     summaries = summarize_asset_rows(
@@ -412,16 +564,144 @@ def validate_report_evidence(report: AssetBenchmarkReport) -> tuple[list[dict], 
     return summaries, request_digests
 
 
-def _arm(raw):
+def configuration_runtime(effective: Mapping, documents: Mapping, environment: Mapping) -> dict:
+    """Pure existing-schema config projection shared by internal development output."""
+    validate_definition("Environment", environment)
+    validate_effective_integrity(effective)
+    manifest_refs = dict(
+        documents=[
+            dict(
+                id=id,
+                kind="referenced_config",
+                format="json",
+                digest=canonical_digest(document),
+                bytes=len(canonical_json(document).encode()),
+                path=None,
+            )
+            for id, document in sorted(documents.items())
+        ]
+    )
+    verify_asset_configuration_closure(documents, manifest_refs, effective, environment)
+    result = dict(
+        use="unused", backend=None, version=None, build=None, device=None, config_digest=None
+    )
+    if effective["recommendations"]["primary"] == "hybrid":
+        manifest = _configured_hybrid(effective, documents).manifest
+        result.update(
+            use="used",
+            backend=environment["runtime"],
+            version=environment["runtime_version"],
+            build=manifest.data["runtime"]["build"],
+            device=manifest.data["device"],
+            config_digest=environment["runtime_config_digest"],
+        )
+    return result
+
+
+def _runtime_manifest(report):
+    """Only a uniquely keyed pure manifest matching the shown Environment facts."""
+    from relaymind.assets.embedding_manifest import validate_embedding_manifest
+
+    environment = report.data["environment"]
+    if report.inputs is None or environment["runtime_config_digest"] is None:
+        raise ValueError("runtime_unresolved")
+    digest = environment["runtime_config_digest"]
+    document = report.inputs.documents["referenced_config:" + digest]
+    manifest = validate_embedding_manifest(document)
+    if (
+        manifest.manifest_digest != digest
+        or manifest.data["runtime"]["backend"] != environment["runtime"]
+        or manifest.data["runtime"]["version"] != environment["runtime_version"]
+    ):
+        raise ValueError("runtime_configuration")
+    return manifest
+
+
+def runtime_display(report: AssetBenchmarkReport) -> dict:
+    """Closed output evidence, never activation; retain unknown facts honestly."""
+    result = dict(
+        use="unknown", backend=None, version=None, build=None, device=None, config_digest=None
+    )
+    raw = report.data
+    try:
+        environment = validate_definition("Environment", raw["environment"])
+        if canonical_digest(environment) != raw["environment_digest"]:
+            return result
+    except (ValueError, KeyError, TypeError):
+        return result
+    result.update(
+        backend=environment["runtime"],
+        version=environment["runtime_version"],
+        config_digest=environment["runtime_config_digest"],
+    )
+    manifest = None
+    try:
+        manifest = _runtime_manifest(report)
+        result.update(build=manifest.data["runtime"]["build"], device=manifest.data["device"])
+    except (ValueError, KeyError, TypeError):
+        pass
+    try:
+        inputs = report.inputs
+        if inputs is None or canonical_digest(inputs.manifest) != raw["input_manifest"]["digest"]:
+            return result
+        for reference in inputs.manifest["documents"]:
+            if canonical_digest(inputs.documents[reference["id"]]) != reference["digest"]:
+                return result
+        effective = inputs.effective
+        validate_effective_integrity(effective)
+        if (
+            canonical_digest(effective) != raw["config"]["production_config_digest"]
+            or canonical_digest(raw["config"]) != raw["config_digest"]
+            or effective_selector_identity(effective) != raw["config"]["selector"]
+            or effective["artifacts"] != raw["artifacts"]
+        ):
+            return result
+        for kind, key in (
+            ("runner_inventory", "runner_digest"),
+            ("protocol_inventory", "protocol_digest"),
+        ):
+            inventory = inputs.documents[kind]
+            verify_compiled_asset_inventory(kind, inventory)
+            if (
+                canonical_digest(inventory) != raw["implementation"][key]
+                or effective["generator"][key] != raw["implementation"][key]
+            ):
+                return result
+        verify_asset_configuration_closure(
+            inputs.documents, inputs.manifest, effective, environment
+        )
+        if any(
+            value is not None and value != environment[key]
+            for key, value in inputs.documents["environment_lock"].items()
+        ):
+            return result
+        if effective["recommendations"]["primary"] == "hybrid":
+            if manifest is not None and all(
+                result[k] is not None
+                for k in ("backend", "version", "build", "device", "config_digest")
+            ):
+                result["use"] = "used"
+        elif all(
+            result[k] is None for k in ("backend", "version", "build", "device", "config_digest")
+        ):
+            result["use"] = "unused"
+    except (ValueError, KeyError, TypeError, IndexError):
+        pass
+    return result
+
+
+def _arm(report, runtime):
     return dict(
-        selector=copy.deepcopy(raw["config"]["selector"]), artifacts=copy.deepcopy(raw["artifacts"])
+        selector=copy.deepcopy(report.data["config"]["selector"]),
+        artifacts=copy.deepcopy(report.data["artifacts"]),
+        runtime=copy.deepcopy(runtime),
     )
 
 
 def _comparison_preparation(report, verified):
     try:
         validate_preparation_record(report["preparation"], config=report["config"]["preparation"])
-        if report["config"]["preparation"]["mode"] == "http" and verified is None:
+        if report["config"]["preparation"]["mode"] != "none" and verified is None:
             return None
         return copy.deepcopy(report["preparation"])
     except (ValueError, KeyError, TypeError):
@@ -488,17 +768,8 @@ def compare_asset_reports(
         if quality_only and key in hardware:
             continue
         av, bv = ar["environment"][key], br["environment"][key]
-        # No runtime is needed by either lexical or HTTP gateway transport.
-        # Third-party selector backend identity is an intended arm variable.
-        inapplicable = (
-            key in ("runtime", "runtime_version", "runtime_config_digest")
-            and av is None
-            and bv is None
-            and a.inputs is not None
-            and b.inputs is not None
-            and a.inputs.effective["recommendations"]["primary"] in ("lexical", "http")
-            and b.inputs.effective["recommendations"]["primary"] in ("lexical", "http")
-        )
+        if key in ("runtime", "runtime_version", "runtime_config_digest"):
+            continue
         unknown_gpu = key == "gpu" and any(
             field is None
             for rows in (av, bv)
@@ -506,10 +777,35 @@ def compare_asset_reports(
             for row in rows
             for field in (row["model"], row["device"], row["cores"])
         )
-        if not inapplicable and (av is None or bv is None or unknown_gpu):
+        if av is None or bv is None or unknown_gpu:
             reject("/environment/" + key, "unknown")
         elif av != bv:
             reject("/environment/" + key)
+    runtime_a, runtime_b = runtime_display(a), runtime_display(b)
+    if "unknown" in (runtime_a["use"], runtime_b["use"]):
+        reject("/environment/runtime", "unknown")
+        for key in ("runtime", "runtime_version", "runtime_config_digest"):
+            if ar["environment"][key] != br["environment"][key]:
+                reject("/environment/" + key)
+    elif runtime_a["use"] == runtime_b["use"] == "used":
+        for key in ("backend", "version", "build", "device"):
+            if runtime_a[key] != runtime_b[key]:
+                reject("/environment/runtime/" + key)
+        allowed_artifact_fields = {
+            "model",
+            "source",
+            "quantization",
+            "license",
+            "dimensions",
+            "files",
+        }
+        manifests = [_runtime_manifest(report).data for report in (a, b)]
+        controls = [
+            {k: v for k, v in manifest.items() if k not in allowed_artifact_fields}
+            for manifest in manifests
+        ]
+        if controls[0] != controls[1]:
+            reject("/environment/runtime/controls")
     if a.inputs is not None and b.inputs is not None:
         if compatibility_policy(a.inputs.effective) != compatibility_policy(b.inputs.effective):
             reject("/effective_config/policy")
@@ -531,7 +827,7 @@ def compare_asset_reports(
     data = dict(
         schema_version=1,
         reports=dict(a=canonical_digest(ar), b=canonical_digest(br)),
-        arms=dict(a=_arm(ar), b=_arm(br)),
+        arms=dict(a=_arm(a, runtime_a), b=_arm(b, runtime_b)),
         mode="quality_only" if quality_only else "replacement",
         preparation=dict(
             a=_comparison_preparation(ar, validated[0]), b=_comparison_preparation(br, validated[1])
@@ -646,6 +942,13 @@ def render_asset_comparison(comparison: AssetBenchmarkComparison | Mapping) -> s
             + "`.",
             "",
         ]
+        if "runtime" in arm:
+            lines += [
+                "Runtime (unknown means unverified): `"
+                + html.escape(canonical_json(arm["runtime"])).replace(chr(96), "&#96;")
+                + "`.",
+                "",
+            ]
     if raw["reasons"]:
         lines += ["| Field | Reason |", "| --- | --- |"]
         lines += [f"| `{r['field']}` | `{r['reason']}` |" for r in raw["reasons"]]

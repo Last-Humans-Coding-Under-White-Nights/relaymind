@@ -133,6 +133,17 @@ owns (`request_cancel`), the same path as the native cancel (section 7.4).
 Lower layers must not import higher ones. The store must not depend on
 adapters. Adapters must not depend on SQLite.
 
+## Independent asset recommendations
+
+Sources discover and atomically publish safe catalog metadata; the existing
+worker owns derived indexing. A v2 selector receives the full eligible offer and
+proposes a shortlist. The gateway owns budgets, admission and the separately
+attributed lexical floor. The recommendation API stores lifecycle/evidence;
+explicit choice does not execute an asset. Qualified host authority remains a
+separate boundary. See [customer setup](asset-selection.md),
+[v2 and preparation contracts](ASSET_BENCHMARK.md),
+[source diagnostics](SOURCE_BENCHMARK.md) and [privacy ownership](asset-privacy-security.md).
+
 ## Qualified remote skill refresh (RM34/RM38/RM43)
 
 `assets/remote_contracts.py` owns the reviewed installed

@@ -283,7 +283,8 @@ def test_rm40_compare_rejects_erased_failed_primary_with_retained_floor_result(
     """RM35/RM40: the admitted floor result retains its consumed failed primary."""
 
     class Slow:
-        name, version, builtin, mechanism = "example_lexical", "1", True, "slow_test"
+        # The timeout double retains the configured HTTP transport identity.
+        name, version, builtin, mechanism = "example_lexical", "1", False, "http"
 
         async def select(self, request, context):
             await asyncio.sleep(0.1)
