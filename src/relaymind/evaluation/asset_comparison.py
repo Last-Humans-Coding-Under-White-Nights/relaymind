@@ -87,8 +87,7 @@ def _configured_hybrid(effective, documents):
         raise ValueError("native_configuration")
     raw = documents[ids[0]]
     manifest = validate_embedding_manifest(documents["referenced_config:" + raw["manifest_digest"]])
-    config = validate_hybrid_config(raw, manifest)
-    return config
+    return validate_hybrid_config(raw, manifest)
 
 
 def _validate_query_embeddings(row, request, effective, documents):
@@ -564,6 +563,14 @@ def validate_report_evidence(report: AssetBenchmarkReport) -> tuple[list[dict], 
     return summaries, request_digests
 
 
+_RUNTIME_FIELDS = ("backend", "version", "build", "device", "config_digest")
+
+
+def runtime_record(use: str) -> dict:
+    """A runtime display entry with every runtime fact still unknown."""
+    return dict(use=use, **dict.fromkeys(_RUNTIME_FIELDS))
+
+
 def configuration_runtime(effective: Mapping, documents: Mapping, environment: Mapping) -> dict:
     """Pure existing-schema config projection shared by internal development output."""
     validate_definition("Environment", environment)
@@ -582,9 +589,7 @@ def configuration_runtime(effective: Mapping, documents: Mapping, environment: M
         ]
     )
     verify_asset_configuration_closure(documents, manifest_refs, effective, environment)
-    result = dict(
-        use="unused", backend=None, version=None, build=None, device=None, config_digest=None
-    )
+    result = runtime_record("unused")
     if effective["recommendations"]["primary"] == "hybrid":
         manifest = _configured_hybrid(effective, documents).manifest
         result.update(
@@ -619,9 +624,7 @@ def _runtime_manifest(report):
 
 def runtime_display(report: AssetBenchmarkReport) -> dict:
     """Closed output evidence, never activation; retain unknown facts honestly."""
-    result = dict(
-        use="unknown", backend=None, version=None, build=None, device=None, config_digest=None
-    )
+    result = runtime_record("unknown")
     raw = report.data
     try:
         environment = validate_definition("Environment", raw["environment"])
@@ -676,14 +679,9 @@ def runtime_display(report: AssetBenchmarkReport) -> dict:
         ):
             return result
         if effective["recommendations"]["primary"] == "hybrid":
-            if manifest is not None and all(
-                result[k] is not None
-                for k in ("backend", "version", "build", "device", "config_digest")
-            ):
+            if manifest is not None and all(result[k] is not None for k in _RUNTIME_FIELDS):
                 result["use"] = "used"
-        elif all(
-            result[k] is None for k in ("backend", "version", "build", "device", "config_digest")
-        ):
+        elif all(result[k] is None for k in _RUNTIME_FIELDS):
             result["use"] = "unused"
     except (ValueError, KeyError, TypeError, IndexError):
         pass

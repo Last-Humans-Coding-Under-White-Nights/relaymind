@@ -17,8 +17,15 @@ from relaymind.evaluation.asset_benchmark import (
     _LockedProjectionProvider,
     _not_run,
     benchmark_repository_root,
+    terminal_payload,
 )
 from relaymind.evaluation.asset_benchmark_io import REPORT_BYTES, validate_benchmark_document
+from relaymind.evaluation.asset_comparison import (
+    configuration_runtime,
+    runtime_record,
+    validate_attempt_evidence,
+    validate_native_preparation,
+)
 from relaymind.evaluation.asset_corpus_io import _VALIDATORS, AssetCorpusError
 from relaymind.evaluation.asset_costs import summarize_asset_costs
 from relaymind.evaluation.asset_diagnostic import VerifiedDiagnostic
@@ -338,16 +345,11 @@ async def run_source_benchmark(
                                 embeddings=list(result["embeddings"]),
                             )
                         else:
-                            events = service.events(
-                                provider.scope, body["recommendation_id"], after_seq=0, limit=1000
-                            )["events"]
-                            terminal = next(
-                                (
-                                    e["payload"]
-                                    for e in reversed(events)
-                                    if e["event_type"] in ("failed", "cancelled")
-                                ),
-                                dict(attempts=[], embeddings=[]),
+                            terminal = terminal_payload(
+                                service,
+                                provider.scope,
+                                body["recommendation_id"],
+                                ("failed", "cancelled"),
                             )
                             row.update(
                                 status="cancelled"
@@ -368,16 +370,8 @@ async def run_source_benchmark(
                         status = "interrupted"
                         row.update(status="cancelled", reason="cancelled")
                         if cancel.recommendation_id is not None:
-                            events = service.events(
-                                provider.scope, cancel.recommendation_id, after_seq=0, limit=1000
-                            )["events"]
-                            terminal = next(
-                                (
-                                    e["payload"]
-                                    for e in reversed(events)
-                                    if e["event_type"] == "cancelled"
-                                ),
-                                dict(attempts=[], embeddings=[]),
+                            terminal = terminal_payload(
+                                service, provider.scope, cancel.recommendation_id, ("cancelled",)
                             )
                             row.update(
                                 terminal_observation=terminal,
@@ -499,8 +493,9 @@ def _language_pairs(rows, catalog):
 
 def _source_binding(effective, catalog, revision, kinds):
     settings = effective["recommendations"]
+    selector = effective_selector_identity(effective)
     return preparation_binding(
-        selector={k: effective_selector_identity(effective)[k] for k in ("name", "version")},
+        selector={k: selector[k] for k in ("name", "version")},
         catalog_revision=revision,
         catalog=catalog,
         scope={k: settings[k] for k in ("user_id", "workspace_id")},
@@ -555,8 +550,6 @@ def _missing_pairs(pairs):
 
 def _development_runtime(report):
     """Verify current internal evidence; old stateless artifacts remain historical."""
-    from relaymind.evaluation.asset_comparison import configuration_runtime
-
     effective = report["effective_config"]
     validate_effective_integrity(effective)
     keys = {
@@ -590,7 +583,8 @@ def _development_runtime(report):
     )
 
 
-def _verify_development_report(report: Mapping) -> None:
+def _verify_development_report(report: Mapping) -> dict | None:
+    """Verify one development report and return its checked runtime projection."""
     try:
         doc, catalog = report["input_document"], report["catalog_document"]
         if not _VALIDATORS["diagnostic"].is_valid(doc) or not _VALIDATORS["catalog_set"].is_valid(
@@ -613,7 +607,7 @@ def _verify_development_report(report: Mapping) -> None:
             != report["policy_digest"]
         ):
             raise ValueError
-        _development_runtime(report)
+        runtime = _development_runtime(report)
         cases = {c["id"]: c for c in doc["cases"]}
         setup = report["preparation"]
         validate_benchmark_document("report", setup, definition="PreparationRecord")
@@ -629,8 +623,6 @@ def _verify_development_report(report: Mapping) -> None:
                 report["effective_config"], offered, 1 if catalog["assets"] else 0, kinds
             )
         validate_preparation_record(setup, binding=binding)
-        from relaymind.evaluation.asset_comparison import validate_native_preparation
-
         validate_native_preparation(
             setup, report["effective_config"], report.get("configuration_documents", {})
         )
@@ -740,8 +732,6 @@ def _verify_development_report(report: Mapping) -> None:
                     != binding
                 ):
                     raise ValueError
-                from relaymind.evaluation.asset_comparison import validate_attempt_evidence
-
                 validate_attempt_evidence(
                     row,
                     parse_asset_request(request),
@@ -801,6 +791,7 @@ def _verify_development_report(report: Mapping) -> None:
             raise ValueError
     except (ValueError, TypeError, KeyError, RecursionError):
         raise AssetCorpusError("invalid_development_report") from None
+    return runtime
 
 
 def compare_source_benchmarks(left: Mapping, right: Mapping) -> dict:
@@ -819,11 +810,9 @@ def compare_source_benchmarks(left: Mapping, right: Mapping) -> dict:
     )
     if any(left.get(k) != right.get(k) for k in keys):
         raise AssetCorpusError("incompatible_development_runs")
-    _verify_development_report(left)
-    _verify_development_report(right)
+    runtimes = [_verify_development_report(report) for report in (left, right)]
     if preparation_policy_mismatches(left["preparation"]["config"], right["preparation"]["config"]):
         raise AssetCorpusError("incompatible_development_runs")
-    runtimes = [_development_runtime(report) for report in (left, right)]
     if any(runtime is None for runtime in runtimes):
         if any(runtime is not None and runtime["use"] == "used" for runtime in runtimes):
             raise AssetCorpusError("incompatible_development_runs")
@@ -839,16 +828,13 @@ def compare_source_benchmarks(left: Mapping, right: Mapping) -> dict:
             for key in ("python", "dependencies_digest")
         ):
             raise AssetCorpusError("incompatible_development_runs")
-    unknown_runtime = dict(
-        use="unknown", backend=None, version=None, build=None, device=None, config_digest=None
-    )
     return dict(
         profile="source_grounded_development",
         compatible=True,
         acceptance_eligible=False,
         runtime={
-            "left": copy.deepcopy(runtimes[0] or unknown_runtime),
-            "right": copy.deepcopy(runtimes[1] or unknown_runtime),
+            "left": copy.deepcopy(runtimes[0] or runtime_record("unknown")),
+            "right": copy.deepcopy(runtimes[1] or runtime_record("unknown")),
         },
         performance_comparable=False,
         catalog_digest=left["catalog_digest"],
