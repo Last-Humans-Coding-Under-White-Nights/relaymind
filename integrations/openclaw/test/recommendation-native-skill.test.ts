@@ -207,3 +207,28 @@ it.each([
       });
   },
 );
+
+// Spec 0.63 7.6.1: after both valid dispatches, the closing registration
+// recheck does not reapply expiry; the receipt records those dispatches.
+it("keeps the success receipt when the choice expires after both valid dispatches", async () => {
+  const f = setup();
+  const base = Date.parse("2026-10-31T00:00:00Z");
+  let reads = 0;
+  f.view.choice_expires_at = new Date(base + 3500).toISOString();
+  f.deps.wallNow = () => base + reads * 1000;
+  f.deps.actionClient = async () => ({
+    listFeedback: async () => {
+      reads += 1;
+      return {
+        schema_version: 1,
+        records: [],
+        feedback_revision: 0n,
+        next_after_id: null,
+      };
+    },
+  });
+  await f.handler()(f.options);
+  expect(reads).toBe(4);
+  expect(f.calls).toHaveLength(2);
+  expect(f.replies[0]?.[0]).toBe(true);
+});

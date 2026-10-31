@@ -135,6 +135,8 @@ def test_actions_for_another_scope_are_refused_without_effect(tmp_path):
         {USER: "u%2", WORKSPACE: "w"},  # bad escape
         {USER: "", WORKSPACE: "w"},  # empty identity
         {USER: "a b", WORKSPACE: "w"},  # not percent-encoded
+        {USER: "user:name", WORKSPACE: "w"},  # raw general delimiter
+        {USER: "user@example", WORKSPACE: "w"},
     ],
 )
 def test_malformed_expected_scope_is_an_invalid_request(tmp_path, headers):
@@ -173,5 +175,19 @@ def test_bearer_is_checked_before_the_expected_scope(tmp_path):
                 headers={"Authorization": "Bearer wrong", "Idempotency-Key": "k", **scope("v")},
             )
             assert response.status_code == 401
+
+    asyncio.run(go())
+
+
+def test_escaped_general_delimiters_are_identity_data(tmp_path):
+    async def go():
+        async with client_for(tmp_path) as (client, runs):
+            response = await client.post(
+                "/relay/v1/recommendations",
+                json=BODY,
+                headers={"Idempotency-Key": "k", USER: "u%3Aname", WORKSPACE: "w%40x"},
+            )
+            assert response.status_code == 403
+            assert response.json()["error"]["code"] == "scope_mismatch"
 
     asyncio.run(go())

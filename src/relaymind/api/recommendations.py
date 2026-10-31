@@ -176,7 +176,7 @@ def request_digest(method: str, endpoint: str, object_id, body, query=None) -> s
 
 EXPECTED_USER_HEADER = "X-RelayMind-Expected-User"
 EXPECTED_WORKSPACE_HEADER = "X-RelayMind-Expected-Workspace"
-_PERCENT_ENCODED = re.compile(r"(?:[A-Za-z0-9\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})+")
+_PERCENT_ENCODED = re.compile(r"(?:[A-Za-z0-9\-._~!$&'()*+,;=]|%[0-9A-Fa-f]{2})+")
 
 
 def _expected_identity(values: list[str]) -> str:
