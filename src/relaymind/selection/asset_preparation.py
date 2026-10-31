@@ -435,7 +435,7 @@ def _verified_exchange(exchange: Mapping, request: Mapping, request_ms: int) -> 
         # Retain actual slow failures, rather than treating them as successful
         # deadline-bound responses or discarding their measured duration.
         return None
-    if reason is not None or exchange["observed_ms"] > request_ms:
+    if reason is not None or exchange["observed_ms"] > request_ms + 1e-3:
         raise ValueError("invalid_preparation_exchange")
     return parse_preparation_response(exchange["response"], request)
 
