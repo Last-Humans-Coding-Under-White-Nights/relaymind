@@ -231,3 +231,21 @@ it("#231 still refuses when the diagnostic write fails", async () => {
   expect(replies).toHaveLength(1);
   expect(replies[0]?.[0]).toBe(false);
 });
+
+for (const req of [{}, { id: "" }, { id: 123 }]) {
+  it(`#231 refuses a request whose id is ${JSON.stringify(req)} and records a null id`, async () => {
+    const records: any[] = [];
+    const replies: unknown[][] = [];
+    const handler = createPersonProbe({
+      origin: "https://fixture.test",
+      record: (value: unknown) => records.push(JSON.parse(JSON.stringify(value))),
+      dispatch: async () => ({ ok: true }),
+      resolveWorkspace: () => "/fixture",
+    });
+    await handler({ req, respond: (...args: unknown[]) => replies.push(args) } as any);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]?.[0]).toBe(false);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toHaveProperty("requestId", null);
+  });
+}
