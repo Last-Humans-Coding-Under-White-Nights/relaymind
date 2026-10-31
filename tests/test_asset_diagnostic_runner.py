@@ -411,3 +411,14 @@ def test_rm40_a_non_empty_decision_without_attempts_is_not_produced():
         )
         is False
     )
+
+
+def test_rm40_compare_rejects_malformed_effective_sources_with_matching_digest(
+    development_input,
+):
+    report = run(development_input)
+    changed = copy.deepcopy(report)
+    changed["effective_config"]["sources"] = [None]
+    changed["config_digest"] = canonical_digest(changed["effective_config"])
+    with pytest.raises(ValueError, match="invalid_development_report"):
+        api().compare_source_benchmarks(report, changed)

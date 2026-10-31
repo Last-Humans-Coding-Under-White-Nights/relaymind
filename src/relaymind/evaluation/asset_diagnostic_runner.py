@@ -660,7 +660,7 @@ def _verify_development_report(report: Mapping) -> None:
             "coverage"
         ] != _reference_coverage(doc, catalog):
             raise ValueError
-    except (ValueError, TypeError, KeyError, IndexError, RecursionError):
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError, RecursionError):
         raise AssetCorpusError("invalid_development_report") from None
 
 

@@ -118,21 +118,25 @@ def main() -> int:
                 raise AssetCorpusError("choice_not_required")
             row = rows[0]
             candidates = row["evaluated_candidates"][:3]
+
+            def mapping(value):
+                return value if isinstance(value, dict) else {}
+
             catalog_assets = {
                 a["record"]["asset_id"]: a["record"]
-                for a in ((report.get("catalog_document") or {}).get("assets") or [])
+                for a in (mapping(report.get("catalog_document")).get("assets") or [])
                 if isinstance(a, dict)
                 and isinstance(a.get("record"), dict)
                 and "asset_id" in a["record"]
             }
             catalog = catalog_assets or {
                 r["asset_id"]: r
-                for r in ((row.get("request") or {}).get("catalog") or [])
+                for r in (mapping(row.get("request")).get("catalog") or [])
                 if isinstance(r, dict) and "asset_id" in r
             }
             for n, candidate in enumerate(candidates, 1):
-                record = catalog.get(candidate["asset_id"], {})
-                identity = record.get("identity", {})
+                record = mapping(catalog.get(candidate["asset_id"]))
+                identity = mapping(record.get("identity"))
                 option = dict(
                     option=n,
                     asset_id=candidate["asset_id"],
