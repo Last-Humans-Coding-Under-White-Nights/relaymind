@@ -407,3 +407,155 @@ def test_rm35_recipe_structure_errors_are_invalid_source_recipe(tmp_path, change
     with pytest.raises(AssetCorpusError, match="invalid_source_recipe"):
         build_recipe(recipe, tmp_path / "cache", tmp_path / "catalog")
     assert not (tmp_path / "catalog").exists()
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"file_id": []},
+        {"file_id": 123},
+        {"file_id": ""},
+        {"metadata_file_id": ""},
+        {"license_file_id": ""},
+    ],
+)
+def test_rm35_asset_file_references_must_be_non_empty_strings(tmp_path, change):
+    from relaymind.evaluation.asset_corpus_io import AssetCorpusError
+    from relaymind.evaluation.asset_source_recipe import build_recipe
+
+    asset = dict(
+        file_id="file",
+        asset_id="asset",
+        source_id="source",
+        source_url="https://example.org/original",
+        revision="r1",
+        captured_at="2026-10-31T00:00:00Z",
+        kind="skill",
+        name="skill",
+        format="skill_md",
+    )
+    asset.update(change)
+    recipe = dict(
+        schema_version=1,
+        dataset_id="fixture-source-benchmark",
+        files=[],
+        assets=[asset],
+        evidence_files=[],
+        exclusions=[],
+    )
+    with pytest.raises(AssetCorpusError, match="invalid_source_recipe"):
+        build_recipe(recipe, tmp_path / "cache", tmp_path / "catalog")
+
+
+@pytest.mark.parametrize(
+    "catalog_document, request_catalog",
+    [({"assets": None}, None), (None, None), ({"assets": [None, 1]}, [None, "x"])],
+)
+def test_rm35_choose_tolerates_null_or_malformed_catalog_lists(
+    tmp_path, catalog_document, request_catalog
+):
+    report = {
+        "catalog_digest": "0" * 64,
+        "catalog_document": catalog_document,
+        "rows": [
+            {
+                "slot": {"case_id": "choice", "repetition": 0},
+                "evaluated_decision": "choice_required",
+                "evaluated_candidates": [{"asset_id": "fixture:calendar"}],
+                "request": {"catalog": request_catalog},
+            }
+        ],
+    }
+    path = tmp_path / "choice-report.json"
+    path.write_text(json.dumps(report), encoding="utf-8", newline="\n")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "choose", "--report", str(path), "--case", "choice"],
+        input="1\n",
+        text=True,
+        capture_output=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["selected_asset_id"] == "fixture:calendar"
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("asset_id", []),
+        ("source_id", []),
+        ("source_id", None),
+        ("captured_at", None),
+        ("name", ""),
+        ("kind", 1),
+        ("format", None),
+        ("source_url", ""),
+        ("revision", []),
+    ],
+)
+def test_rm35_asset_identity_fields_must_be_non_empty_strings(tmp_path, field, value):
+    from relaymind.evaluation.asset_corpus_io import AssetCorpusError
+    from relaymind.evaluation.asset_source_recipe import build_recipe
+
+    asset = dict(
+        file_id="file",
+        asset_id="asset",
+        source_id="source",
+        source_url="https://example.org/original",
+        revision="r1",
+        captured_at="2026-10-31T00:00:00Z",
+        kind="skill",
+        name="skill",
+        format="skill_md",
+    )
+    asset[field] = value
+    recipe = dict(
+        schema_version=1,
+        dataset_id="fixture-source-benchmark",
+        files=[],
+        assets=[asset],
+        evidence_files=[],
+        exclusions=[],
+    )
+    with pytest.raises(AssetCorpusError, match="invalid_source_recipe"):
+        build_recipe(recipe, tmp_path / "cache", tmp_path / "catalog")
+    assert not (tmp_path / "catalog").exists()
+
+
+@pytest.mark.parametrize(
+    "catalog_document, row_request, identity",
+    [([1], None, {}), (None, [1], {}), (None, None, None)],
+)
+def test_rm35_choose_tolerates_malformed_enclosing_objects(
+    tmp_path, catalog_document, row_request, identity
+):
+    record = {
+        "asset_id": "fixture:calendar",
+        "identity": identity,
+        "description": "Inspect a calendar.",
+        "availability": "unknown",
+    }
+    report = {
+        "catalog_digest": "0" * 64,
+        "catalog_document": catalog_document,
+        "rows": [
+            {
+                "slot": {"case_id": "choice", "repetition": 0},
+                "evaluated_decision": "choice_required",
+                "evaluated_candidates": [{"asset_id": "fixture:calendar"}],
+                "request": row_request if row_request is not None else {"catalog": [record]},
+            }
+        ],
+    }
+    path = tmp_path / "choice-report.json"
+    path.write_text(json.dumps(report), encoding="utf-8", newline="\n")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "choose", "--report", str(path), "--case", "choice"],
+        input="1\n",
+        text=True,
+        capture_output=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Traceback" not in result.stderr
+    assert json.loads(result.stdout)["selected_asset_id"] == "fixture:calendar"
