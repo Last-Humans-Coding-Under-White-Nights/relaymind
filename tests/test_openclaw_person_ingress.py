@@ -1455,3 +1455,52 @@ def test_observer_refusals_before_sending_keep_their_reason(reason):
     with pytest.raises(ValueError, match=f"^{reason}$"):
         api.native_rpc(Page(), "m", {})
     assert reason in api.SAFE_REASONS
+
+
+# --- #231 re-review (ArcsinX, 1 Nov) ---------------------------------------------
+
+
+@pytest.mark.parametrize("blank", [b"\n", b"  \n", b"\r\n", b"\t\r\n"])
+def test_native_event_reader_skips_whitespace_and_crlf_blank_lines(tmp_path, blank):
+    events = tmp_path / "native-events.jsonl"
+    events.write_bytes(blank + b'{"phase":"prepared"}\n' + blank)
+    assert module().read_native_events(events) == [{"phase": "prepared"}]
+
+
+@pytest.mark.parametrize("field", ["phase", "reason"])
+@pytest.mark.parametrize("value", [["prepared"], {"p": 1}])
+def test_person_rpc_failure_projection_rejects_non_string_phase_or_reason(tmp_path, field, value):
+    events = tmp_path / "events.jsonl"
+    line = {"requestId": "wanted", "phase": "prepared", "reason": None, "connectionId": "c1"}
+    line[field] = value
+    events.write_bytes(json.dumps(line).encode() + b"\n")
+    assert module().project_person_rpc_failure(events, "wanted")["status"] == "event_file_invalid"
+
+
+@pytest.mark.parametrize(
+    "frame",
+    [
+        {"id": "rpc-1", "ok": False, "payload": PERSON},
+        {"id": "rpc-1", "payload": PERSON},
+        {"id": "other", "ok": True, "payload": PERSON},
+    ],
+)
+def test_person_rpc_receipt_needs_an_ok_frame_bound_to_the_request(frame):
+    result = {"id": "rpc-1", "socket_id": "s", "frame": frame}
+    with pytest.raises(ValueError, match="^native_person_identity_binding$"):
+        module().person_rpc_receipt(result, "fixture@example.test")
+
+
+def test_a_playwright_timeout_is_native_rpc_timeout():
+    playwright = pytest.importorskip("playwright.sync_api")
+
+    class Page:
+        def evaluate(self, *args):
+            raise playwright.TimeoutError("Timeout 30000ms exceeded.")
+
+    with pytest.raises(ValueError, match="^native_rpc_timeout$"):
+        module().native_rpc(Page(), "m", {})
+
+
+def test_workspace_resolution_failure_is_its_own_reason():
+    assert "workspace_unavailable" in module().PERSON_RPC_EVENT_REASONS["probe_failed"]

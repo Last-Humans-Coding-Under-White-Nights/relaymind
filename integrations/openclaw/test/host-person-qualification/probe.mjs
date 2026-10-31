@@ -68,6 +68,7 @@ export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMe
         connectionId: client.presenceKey, deviceId: client.connect.device.id,
       };
       if (resolveWorkspace) {
+        reason = "workspace_unavailable";
         const workspaceDir = resolveWorkspace(options, target.agentId);
         current(true);
         if (typeof workspaceDir !== "string" || !workspaceDir) throw new Error("workspace_unavailable");

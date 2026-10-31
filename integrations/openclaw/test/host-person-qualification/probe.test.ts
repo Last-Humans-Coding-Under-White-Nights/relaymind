@@ -249,3 +249,18 @@ for (const req of [{}, { id: "" }, { id: 123 }]) {
     expect(records[0]).toHaveProperty("requestId", null);
   });
 }
+
+it("#231 records workspace_unavailable when workspace resolution fails", async () => {
+  const f = fixture();
+  const events: any[] = [];
+  const probe = createPersonProbe({
+    origin: "https://fixture.test:8443",
+    record: (value: unknown) => events.push(value),
+    dispatch: f.dispatch,
+    pause: async () => {},
+    resolveWorkspace: () => { throw new Error("no workspace"); },
+  });
+  await probe(f.options);
+  expect(f.respond.mock.calls[0][0]).toBe(false);
+  expect(events.at(-1)).toMatchObject({ phase: "probe_failed", reason: "workspace_unavailable" });
+});
