@@ -16,6 +16,7 @@ HOST_VERSION = "2026.10.7"
 AUTHCRUNCH_VERSION = "1.5.0"
 AUTHCRUNCH_SHA256 = "86a1ed8446bca803149bdcf1335005b840033a17c41680a067d7de11dfbaeca9"
 AUTHCRUNCH_BYTES = 31627615
+PERSON_SCOPES = ("operator.read", "operator.write", "operator.approvals", "operator.questions")
 AUTHCRUNCH_URL = (
     "https://github.com/authcrunch/authcrunch/releases/download/v1.5.0/"
     "authcrunch_1.5.0_linux_amd64.tar.gz"
@@ -114,6 +115,8 @@ def person_composition_pass(capture: dict) -> bool:
     try:
         if capture["status"] != "completed" or capture["host_version"] != HOST_VERSION:
             return False
+        if capture.get("configured_session_policy") != person_role_config(list(PERSON_SCOPES)):
+            return False
         if capture["checks"]["production_adapter_qualified"] is not False:
             return False
         if capture["steps"] != [dict(name=name, status="passed") for name in STEPS]:
@@ -206,6 +209,8 @@ def person_composition_pass(capture: dict) -> bool:
                 ):
                     return False
             native = rpc["payload"]
+            if native["authenticatedControlUi"] is not True:
+                return False
             bindings = {
                 "requestId": "rpc_evidence_id",
                 "profileId": "profile_id",
@@ -251,6 +256,16 @@ def person_composition_pass(capture: dict) -> bool:
         return len(profiles) == len(sessions) == len(keys) == len(sockets) == len(create_ids) == 2
     except (KeyError, TypeError):
         return False
+
+
+def person_role_config(scopes: list[str]) -> dict:
+    """Use the host's named role to hide another person's native sessions."""
+    return dict(
+        default="person",
+        definitions=dict(
+            person=dict(sessions=dict(others="none"), agents=["main"], scopes=list(scopes))
+        ),
+    )
 
 
 def session_create_receipt(observed: dict, account_email: str) -> dict:
@@ -613,12 +628,13 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
     events_path.write_bytes(b"")
     events_path.chmod(0o600)
     plugin = Path(__file__).resolve().parent
-    scopes = ["operator.read", "operator.write", "operator.approvals", "operator.questions"]
+    scopes = list(PERSON_SCOPES)
     config = dict(
         gateway=dict(
             mode="local",
             bind="loopback",
             port=gateway_port,
+            roles=person_role_config(scopes),
             publicOrigin=origin,
             trustedProxies=["127.0.0.1"],
             controlUi=dict(allowedOrigins=[origin]),
@@ -651,6 +667,7 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
     config_path = work / "openclaw.json"
     config_path.write_bytes((json.dumps(config) + "\n").encode("utf-8"))
     config_path.chmod(0o600)
+    capture["configured_session_policy"] = config["gateway"]["roles"]
     environment = host_environment(work)
     allowed = {
         "PATH",

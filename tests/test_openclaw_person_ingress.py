@@ -491,6 +491,9 @@ def test_complete_login_claim_still_needs_bound_denial_observations():
 def complete_capture(api):
     """Controlled receipts include actual create response and same-socket RPC identity."""
     capture = mechanical_capture(api)
+    capture["configured_session_policy"] = api.person_role_config(
+        ["operator.read", "operator.write", "operator.approvals", "operator.questions"]
+    )
     capture["events"] = []
     for i, account in enumerate(capture["accounts"], 1):
         account.update(
@@ -544,6 +547,7 @@ def complete_capture(api):
                         requestId=account["rpc_evidence_id"],
                         profileId=account["profile_id"],
                         authenticatedUserId=account["native_person_email"],
+                        authenticatedControlUi=True,
                         sessionKey=account["session_key"],
                         sessionId=account["native_session_id"],
                         lifecycleRevision=account["lifecycle_revision"],
@@ -587,6 +591,34 @@ def complete_capture(api):
 def test_complete_same_socket_create_and_person_receipts_pass_fixture_mechanics_only():
     api = module()
     assert api.person_composition_pass(complete_capture(api)) is True
+
+
+@pytest.mark.parametrize("mutation", ["missing", "shared", "admin"])
+def test_missing_or_broad_host_session_policy_never_qualifies(mutation):
+    """RM39/AC30: a request denial must be backed by the configured person role."""
+    api = module()
+    capture = complete_capture(api)
+    person = capture["configured_session_policy"]["definitions"]["person"]
+    if mutation == "missing":
+        del capture["configured_session_policy"]
+    elif mutation == "shared":
+        person["sessions"]["others"] = "write"
+    else:
+        person["scopes"].append("operator.admin")
+    assert api.person_composition_pass(capture) is False
+
+
+@pytest.mark.parametrize("attestation", [False, None])
+def test_missing_or_false_native_control_ui_attestation_never_qualifies(attestation):
+    """RM39/AC30: browser origin alone cannot attest a native Control UI client."""
+    api = module()
+    capture = complete_capture(api)
+    receipt = next(event for event in capture["events"] if event["kind"] == "person_rpc")["payload"]
+    if attestation is None:
+        del receipt["authenticatedControlUi"]
+    else:
+        receipt["authenticatedControlUi"] = False
+    assert api.person_composition_pass(capture) is False
 
 
 @pytest.mark.parametrize(
@@ -691,3 +723,18 @@ def test_each_account_session_has_its_own_key_and_label():
     assert first["label"] != second["label"]
     assert first["key"].startswith("agent:main:person-")
     assert 0 < len(first["label"]) <= 512
+
+
+def test_disposable_host_configures_person_session_boundary():
+    """RM39/AC30: native accounts cannot target another person's session."""
+    scopes = ["operator.read", "operator.write", "operator.approvals", "operator.questions"]
+    assert module().person_role_config(scopes) == {
+        "default": "person",
+        "definitions": {
+            "person": {
+                "sessions": {"others": "none"},
+                "agents": ["main"],
+                "scopes": scopes,
+            }
+        },
+    }

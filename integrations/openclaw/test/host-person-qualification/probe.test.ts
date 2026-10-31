@@ -14,6 +14,7 @@ function fixture() {
   const options = {
     req: { id: "request-a" }, params: { sessionKey: target.sessionKey, expectedSessionId: target.sessionId, expectedLifecycleRevision: target.lifecycleRevision },
     client: { authenticatedUserId: "fixture@example.test", preparedSessionProfile: { profileId: "native-profile" },
+      internal: { authenticatedControlUi: true },
       browserOrigin: { origin: "https://fixture.test:8443" }, presenceKey: "native-connection",
       connect: { device: { id: "native-device" } }, connectionSignal: new AbortController().signal },
     hasCurrentClientAuthority: () => true,
@@ -30,7 +31,7 @@ describe("test-only native person RPC probe", () => {
     const f = fixture();
     if (kind === "no-person") f.options.client.authenticatedUserId = "";
     if (kind === "no-profile") f.options.client.preparedSessionProfile.profileId = "";
-    if (kind === "model-origin") Object.assign(f.options.client, { internal: { agentToolCaller: {} } });
+    if (kind === "model-origin") Object.assign(f.options.client.internal, { agentToolCaller: {} });
     if (kind === "wrong-origin") f.options.client.browserOrigin.origin = "https://foreign.test";
     if (kind === "stale-session") f.options.params.expectedSessionId = "old";
     if (kind === "foreign-params") Object.assign(f.options.params, { profileId: "invented" });
@@ -41,13 +42,23 @@ describe("test-only native person RPC probe", () => {
     expect(f.events.at(-1)).toMatchObject({ phase: "guard_denied", requestId: "request-a" });
   });
 
+  it.each(["missing-control-ui", "false-control-ui"])("denies %s before inherited dispatch", async kind => {
+    const f = fixture();
+    if (kind === "missing-control-ui") Object.assign(f.options.client, { internal: {} });
+    else Object.assign(f.options.client.internal, { authenticatedControlUi: false });
+    await f.probe(f.options);
+    expect(f.dispatch).not.toHaveBeenCalled();
+    expect(f.respond.mock.calls[0][0]).toBe(false);
+    expect(f.events.at(-1)).toMatchObject({ phase: "guard_denied", reason: "admission_refused" });
+  });
+
   it("captures only native prepared profile/session and inherited dispatch", async () => {
     const f = fixture();
     expect(Object.hasOwn(f.options.sessionMutationAuthorization, "admittedTarget")).toBe(false);
     await f.probe(f.options);
     expect(f.dispatch).toHaveBeenCalledWith("tools.effective", { sessionKey: "native-key", agentId: "main" }, { timeoutMs: 3000 });
     expect(f.respond.mock.calls[0][0]).toBe(true);
-    expect(f.respond.mock.calls[0][1]).toMatchObject({ profileId: "native-profile", authenticatedUserId: "fixture@example.test", sessionId: "native-id", lifecycleRevision: "native-life", connectionId: "native-connection", deviceId: "native-device" });
+    expect(f.respond.mock.calls[0][1]).toMatchObject({ profileId: "native-profile", authenticatedUserId: "fixture@example.test", authenticatedControlUi: true, sessionId: "native-id", lifecycleRevision: "native-life", connectionId: "native-connection", deviceId: "native-device" });
     expect(f.current).toHaveBeenCalledTimes(6);
   });
 
