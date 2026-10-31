@@ -1251,6 +1251,23 @@ Its person-component `production_adapter_qualified:false` is not a self-issued
 product verdict; the independently reviewed `ordinary_actions:true`, exact
 runtime key and direct-action registry identify this qualified scope.
 
+#195/#197 scope isolation correction (spec 0.63; RM37/RM39, AC28/AC30): an
+independent review of the native direct-action channel reproduced, against the
+actual gateway, that a native binding could act in another configured scope.
+The recommendation path ignored the binding, and nothing compared the
+gateway's single active scope with the binding's `userId`/`workspaceId`, so a
+shared base URL or a credential registered for another scope created, listed,
+deleted or reset in that scope. Spec 0.63 adds the optional
+`X-RelayMind-Expected-User`/`X-RelayMind-Expected-Workspace` pair, checked
+after the bearer and before any read or write, with the fixed `scope_mismatch`
+(403). The native adapter now sends its binding's scope on every gateway
+request. The same revision clarifies that only isolation conditions apply to
+every role, so valid read-only or other-agent roles are no longer refused, and
+the dormant skill bridge rechecks choice expiry before each native dispatch.
+The changed adapter bytes have a new exact revision. The registry entry is
+re-pinned only together with a fresh ordinary installed-host capture of those
+bytes; the earlier capture still documents the earlier revision.
+
 #197 first-slice status (RM36, RM37, RM39; AC27/AC28, partial AC30): the
 package includes dormant recommendation/action clients, closed lossless protocol
 validation, inert evidence rendering and an unregistered controller whose host
