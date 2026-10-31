@@ -3,6 +3,7 @@
 import asyncio
 import re
 from collections.abc import Mapping
+from urllib.parse import unquote_to_bytes
 from uuid import UUID
 
 from fastapi import FastAPI, Request
@@ -173,16 +174,52 @@ def request_digest(method: str, endpoint: str, object_id, body, query=None) -> s
     )
 
 
-def guarded_route(app: FastAPI, handler, *, authenticate=None):
-    """Bearer first, then the optional action check, then the handler; one error envelope.
+EXPECTED_USER_HEADER = "X-RelayMind-Expected-User"
+EXPECTED_WORKSPACE_HEADER = "X-RelayMind-Expected-Workspace"
+_PERCENT_ENCODED = re.compile(r"(?:[A-Za-z0-9\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})+")
 
-    An unexpected failure is logged for the operator (without its text) and
-    answered as internal_error.
+
+def _expected_identity(values: list[str]) -> str:
+    if len(values) != 1 or not _PERCENT_ENCODED.fullmatch(values[0]):
+        raise RecommendationError("invalid_request")
+    try:
+        identity = unquote_to_bytes(values[0]).decode("utf-8")
+    except UnicodeDecodeError:
+        raise RecommendationError("invalid_request") from None
+    if not identity or len(identity.encode("utf-8")) > 256:
+        raise RecommendationError("invalid_request")
+    return identity
+
+
+def check_expected_scope(request: Request, scope: Mapping | None) -> None:
+    """Spec 0.63 section 7.6: an adapter's expected scope must be the served one.
+
+    Both headers or neither. A present expectation that differs from the one
+    configured scope fails closed before any read or write, so a host binding
+    can never act on another person's recommendations or feedback.
+    """
+    users = request.headers.getlist(EXPECTED_USER_HEADER)
+    workspaces = request.headers.getlist(EXPECTED_WORKSPACE_HEADER)
+    if not users and not workspaces:
+        return
+    expected = (_expected_identity(users), _expected_identity(workspaces))
+    if scope is None:
+        raise RecommendationError("recommendation_unavailable")
+    if expected != (scope["user_id"], scope["workspace_id"]):
+        raise RecommendationError("scope_mismatch")
+
+
+def guarded_route(app: FastAPI, handler, *, authenticate=None, scope: Mapping | None = None):
+    """Bearer, expected scope, the optional action check, then the handler.
+
+    One error envelope. An unexpected failure is logged for the operator
+    (without its text) and answered as internal_error.
     """
 
     async def wrapped(request: Request):
         try:
             require_bearer_token(request.headers.get("authorization"), app.state.application_token)
+            check_expected_scope(request, scope)
             if authenticate is None:
                 return await handler(request)
             action = await run_in_threadpool(authenticate, request)
@@ -224,7 +261,7 @@ def install_recommendation_routes(
     """Install the four RM36 routes and the RM37 direct-action routes."""
 
     def guarded(handler):
-        return guarded_route(app, handler)
+        return guarded_route(app, handler, scope=configured_scope)
 
     async def create(request):
         budget = service.new_budget() if service else SelectionBudget()
