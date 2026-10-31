@@ -5,7 +5,13 @@ import math
 from types import MappingProxyType, SimpleNamespace
 
 from relaymind.assets.embedding_config import SemanticConfig
-from relaymind.assets.embeddings import EmbeddingError, cosine, normalize_vectors, represent_record
+from relaymind.assets.embeddings import (
+    EmbeddingError,
+    cosine,
+    identity_keys,
+    normalize_vectors,
+    represent_record,
+)
 from relaymind.canonical import canonical_digest
 from relaymind.schema_util import freeze_json
 from relaymind.selection.asset_lexical import _token_batches, record_fields
@@ -84,24 +90,23 @@ class HybridIndex:
             # pinned atomically with vectors, and never include query text.
             prepared[record["asset_id"]] = (_signature(record), key, _fields(record))
         check()
-        revision = "hybrid:" + canonical_digest(
-            [dict(key=key, vector=staged[key]) for key in sorted(staged)]
-        )
+        revision = _revision(staged)
         self._publication = (MappingProxyType(staged), revision, MappingProxyType(prepared))
 
     def reconcile(self, records) -> None:
         keys = {self.key(record) for record in records}
         entries = {key: value for key, value in self._entries.items() if key in keys}
-        revision = (
-            "hybrid:"
-            + canonical_digest([dict(key=key, vector=entries[key]) for key in sorted(entries)])
-            if entries
-            else None
-        )
+        revision = _revision(entries) if entries else None
         prepared = {
             asset: value for asset, value in self._publication[2].items() if value[1] in entries
         }
         self._publication = (MappingProxyType(entries), revision, MappingProxyType(prepared))
+
+
+def _revision(entries):
+    return "hybrid:" + canonical_digest(
+        [dict(key=key, vector=entries[key]) for key in sorted(entries)]
+    )
 
 
 def _fields(record):
@@ -113,10 +118,7 @@ def _fields(record):
 
 
 def _field_names(record):
-    keys = (
-        ("package_id",) if record["kind"] == "skill" else ("server_id", "tool_name", "exposed_name")
-    )
-    return ("/description", *(f"/identity/{key}" for key in keys))
+    return ("/description", *(f"/identity/{key}" for key in identity_keys(record["kind"])))
 
 
 def _signature(record):
@@ -128,7 +130,7 @@ def _signature(record):
         record["content_hash"],
         record["source_version"],
         record["identity"].get("schema_hash"),
-        *(record["identity"][pointer.split("/")[-1]] for pointer in _field_names(record)[1:]),
+        *(record["identity"][key] for key in identity_keys(record["kind"])),
     )
 
 
@@ -177,6 +179,23 @@ async def _cooperative(steps, context):
         context.check()
 
 
+def _not_ready(req, config: SemanticConfig, publication) -> dict:
+    return dict(
+        schema_version=2,
+        recommendation_id=req["recommendation_id"],
+        catalog_revision=req["catalog_revision"],
+        host_snapshot_revision=req["host_snapshot_revision"],
+        selector=dict(config.data["identity"]),
+        mechanism="hybrid_weighted_rrf",
+        outcome="not_ready",
+        decision=None,
+        candidates=[],
+        index_revision=publication[1],
+        elapsed_ms=0,
+        usage_claims=None,
+    )
+
+
 def _rank_steps(
     request,
     config: SemanticConfig,
@@ -187,22 +206,8 @@ def _rank_steps(
     vectors=None,
 ):
     req = request.data if hasattr(request, "data") else request
-    identity = config.data["identity"]
     publication = index.pin() if publication is None else publication
-    result = dict(
-        schema_version=2,
-        recommendation_id=req["recommendation_id"],
-        catalog_revision=req["catalog_revision"],
-        host_snapshot_revision=req["host_snapshot_revision"],
-        selector=dict(identity),
-        mechanism="hybrid_weighted_rrf",
-        outcome="not_ready",
-        decision=None,
-        candidates=[],
-        index_revision=publication[1],
-        elapsed_ms=0,
-        usage_claims=None,
-    )
+    result = _not_ready(req, config, publication)
     if req["scope"] != index.scope:
         result["outcome"] = "unavailable"
         return result
@@ -327,20 +332,7 @@ class HybridAssetSelector:
                 context,
             )
         if self.engine is None:
-            return dict(
-                schema_version=2,
-                recommendation_id=req["recommendation_id"],
-                catalog_revision=req["catalog_revision"],
-                host_snapshot_revision=req["host_snapshot_revision"],
-                selector=dict(self.config.data["identity"]),
-                mechanism=self.mechanism,
-                outcome="not_ready",
-                decision=None,
-                candidates=[],
-                index_revision=publication[1],
-                elapsed_ms=0,
-                usage_claims=None,
-            )
+            return _not_ready(req, self.config, publication)
         try:
             representation = self.config.data["representation"]
             batch = await self.engine.embed(

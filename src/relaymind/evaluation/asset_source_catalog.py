@@ -67,9 +67,11 @@ def _projection(source: SourceOriginal) -> tuple[dict, bytes, dict[str, bytes], 
             original = source.payload
         else:
             raise AssetCorpusError("unsupported_original")
-        metadata, body = _frontmatter(
-            original, CaptureContext(datetime.fromisoformat(source.captured_at))
-        )
+        try:
+            captured_at = datetime.fromisoformat(source.captured_at)
+        except ValueError:
+            raise AssetCorpusError("invalid_source_text") from None
+        metadata, body = _frontmatter(original, CaptureContext(captured_at))
         if metadata.get("name") != source.name:
             raise AssetCorpusError("package_identity_mismatch")
         description = metadata.get("description")

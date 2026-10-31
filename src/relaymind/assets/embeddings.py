@@ -76,16 +76,18 @@ def represent_query(
     return _represent(revision, "query_prefix", prefix, [("/task_text", task_text)])
 
 
+def identity_keys(kind: str) -> tuple[str, ...]:
+    """The public identity fields embedded for one asset kind, in fixed order."""
+    return ("package_id",) if kind == "skill" else ("server_id", "tool_name", "exposed_name")
+
+
 def represent_record(record: Mapping, prefix: str) -> Representation:
-    keys = (
-        ("package_id",) if record["kind"] == "skill" else ("server_id", "tool_name", "exposed_name")
-    )
     return _represent(
         "asset_fields.v1",
         "document_prefix",
         prefix,
         [("/description", record["description"])]
-        + [(f"/identity/{key}", record["identity"][key]) for key in keys],
+        + [(f"/identity/{key}", record["identity"][key]) for key in identity_keys(record["kind"])],
     )
 
 

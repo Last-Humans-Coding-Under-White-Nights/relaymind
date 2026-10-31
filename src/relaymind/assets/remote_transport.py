@@ -119,7 +119,7 @@ class RemoteTransport:
             if context.defer_remote is not None:
                 context.defer_remote(when)
 
-    def _headers(self, response, context, is_ref):
+    def _headers(self, response, context):
         now = context.utc_now()
 
         def seconds(value):
@@ -241,11 +241,11 @@ class RemoteTransport:
                 # Available mandatory hints still need a bounded cleanup flush
                 # after a stop. This admits no HTTP or projection/publication.
                 try:
-                    self._headers(response, context, is_ref)
+                    self._headers(response, context)
                 except SourceFailure:
                     pass  # Preserve the original cancellation/deadline reason.
                 raise
-            safe_headers = self._headers(response, context, is_ref)
+            safe_headers = self._headers(response, context)
             context.check()
             if context.monotonic() >= deadline:
                 raise SourceFailure("source_unavailable")
