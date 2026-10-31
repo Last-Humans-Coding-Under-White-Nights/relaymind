@@ -22,7 +22,6 @@ export interface NativeScopeDependencies {
 /** Require the restrictive personal-session profile, independently of native write scope. */
 function personalPolicy(
   options: NativeActionOptions,
-  agentId: string,
   allowedAgents: ReadonlySet<string>,
 ): void {
   const config = options.context.getRuntimeConfig();
@@ -38,15 +37,15 @@ function personalPolicy(
     options.client?.connect.scopes?.includes("operator.admin")
   )
     throw Error("personal_policy_required");
-  // All assignable roles must preserve this initial personal-session profile.
-  // Host guards still resolve/recheck the actual role and grants themselves.
+  // Spec 7.6.1 (0.63): every assignable role must keep sessions private, have
+  // no admin scope and name only registered agents. The caller's own write
+  // privilege and target-agent access are resolved by the host guards, never
+  // demanded of unrelated roles (a read-only or other-agent role stays valid).
   for (const role of Object.values(roles.definitions)) {
     if (
       role.sessions.others !== "none" ||
       role.scopes.includes("operator.admin") ||
-      !role.scopes.includes("operator.write") ||
       !Array.isArray(role.agents) ||
-      !role.agents.includes(agentId) ||
       role.agents.some((agent) => !allowedAgents.has(agent))
     )
       throw Error("personal_policy_required");
@@ -122,7 +121,7 @@ export function prepareNativeAuthority(
       throw Error("authority_retired");
     access.assertCurrent();
     mutation.assertCurrent();
-    personalPolicy(options, target.agentId, allowedAgents);
+    personalPolicy(options, allowedAgents);
     if (
       dependencies.resolveWorkspace(
         options.context.getRuntimeConfig(),

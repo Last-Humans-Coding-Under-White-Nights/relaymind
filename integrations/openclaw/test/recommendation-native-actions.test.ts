@@ -217,3 +217,87 @@ it("selects the mapping for the actual native workspace rather than an earlier w
   expect(f.replies[0]?.[0]).toBe(true);
   expect(seen).toEqual([second]);
 });
+
+// Spec 0.63 clarification of 7.6.1: only isolation conditions are universal.
+it.each([
+  [
+    "a read-only personal role beside the writer role",
+    {
+      person: {
+        sessions: { others: "none" },
+        scopes: ["operator.read", "operator.write"],
+        agents: ["main"],
+      },
+      viewer: {
+        sessions: { others: "none" },
+        scopes: ["operator.read"],
+        agents: ["main"],
+      },
+    },
+  ],
+  [
+    "writer roles for disjoint registered agents",
+    {
+      person: {
+        sessions: { others: "none" },
+        scopes: ["operator.read", "operator.write"],
+        agents: ["main"],
+      },
+      research: {
+        sessions: { others: "none" },
+        scopes: ["operator.read", "operator.write"],
+        agents: ["research"],
+      },
+    },
+  ],
+])("accepts %s", async (_name, definitions) => {
+  const f = fixture();
+  const research = {
+    ...f.binding,
+    agentId: "research",
+    workspaceDir: "/fixture/research",
+    userId: "research-user",
+    actionTokenEnv: "FIXTURE_RESEARCH",
+  };
+  const handler = createNativeActionHandler({
+    ...f.dependencies,
+    bindings: [f.binding, research],
+  });
+  f.options.context.getRuntimeConfig = () => ({
+    gateway: { roles: { default: "person", definitions } },
+  });
+  await handler(f.options);
+  expect(f.calls).toHaveLength(1);
+  expect(f.replies[0]?.[0]).toBe(true);
+});
+
+it.each([
+  ["another person's sessions", { sessions: { others: "all" } }],
+  ["admin scope", { scopes: ["operator.read", "operator.admin"] }],
+  ["an unregistered agent", { agents: ["main", "foreign-agent"] }],
+])("still refuses any role allowing %s", async (_name, change) => {
+  const f = fixture();
+  f.options.context.getRuntimeConfig = () => ({
+    gateway: {
+      roles: {
+        default: "person",
+        definitions: {
+          person: {
+            sessions: { others: "none" },
+            scopes: ["operator.read", "operator.write"],
+            agents: ["main"],
+          },
+          viewer: {
+            sessions: { others: "none" },
+            scopes: ["operator.read"],
+            agents: ["main"],
+            ...change,
+          },
+        },
+      },
+    },
+  });
+  await f.handler(f.options);
+  expect(f.calls).toHaveLength(0);
+  expect(f.replies[0]?.[0]).toBe(false);
+});

@@ -67,7 +67,7 @@ export function fixture() {
     },
     respond: (...args: unknown[]) => replies.push(args),
   };
-  const handler = createNativeActionHandler({
+  const dependencies = {
     bindings: [binding],
     controlUiOrigin: "https://fixture.test",
     resolveWorkspace: () => workspace,
@@ -79,10 +79,12 @@ export function fixture() {
         },
       }) as UserActionClient,
     monotonicNow: () => 1,
-  });
+  };
+  const handler = createNativeActionHandler(dependencies);
   return {
     options,
     handler,
+    dependencies,
     calls,
     replies,
     binding,
