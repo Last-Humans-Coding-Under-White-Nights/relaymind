@@ -1,6 +1,7 @@
 """Scoped explicit feedback, evidence and privacy ownership (RM37/AC28)."""
 
 import base64
+import bisect
 import functools
 import hmac
 import json
@@ -32,6 +33,7 @@ from relaymind.recommendations.limits import (
 )
 from relaymind.recommendations.private_files import PrivateFileError
 from relaymind.schema_util import StrictValidator, freeze_json, load_packaged_schema
+from relaymind.selection.asset_adaptation import correction_order
 from relaymind.store.recommendation_event import validate_event
 from relaymind.store.recommendations import StoredResponse
 from relaymind.store.run_store import utc_iso
@@ -691,12 +693,6 @@ class AssetFeedbackStore:
         binding_fields = ("asset_id", *IDENTITY_FIELDS)
         result = []
 
-        def order(record):
-            return (
-                datetime.fromisoformat(record["recorded_at"].replace("Z", "+00:00")),
-                record["feedback_id"].encode("utf-8"),
-            )
-
         with self.store.sql_read() as db:
             check()
             revision = self._scope_revision(db, scope)
@@ -719,8 +715,7 @@ class AssetFeedbackStore:
                 raw = target.to_json_object()
                 if any(binding[field] != raw[field] for field in binding_fields):
                     continue
-                result.append(validate_feedback_record(record))
-                result.sort(key=order)
+                bisect.insort(result, validate_feedback_record(record), key=correction_order)
                 if len(result) > 20:
                     del result[0]
             check()

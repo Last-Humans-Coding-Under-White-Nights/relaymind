@@ -489,7 +489,7 @@ async def select_assets(
             if terminal_failure is not None:
                 raise RecommendationFailure(*terminal_failure, attempts)
             if admission is not None:
-                return _ready(
+                result = _ready(
                     request,
                     attempts,
                     parsed.data["candidates"],
@@ -500,32 +500,30 @@ async def select_assets(
                     embeddings=all_embeddings,
                     adaptation_outcome=adaptation_outcome,
                 )
+                # The ready result now owns the adaptation lease.
+                pending_adaptation = None
+                return result
             if ordinal == 1:
                 fallback_reason = reason
         raise RecommendationFailure(
             "recommendation_unavailable", fallback_reason or "selector_unavailable", attempts
         )
     except CatalogUnavailable:
-        if pending_adaptation is not None:
-            pending_adaptation.close()
         raise RecommendationFailure(
             "recommendation_unavailable", "corrupt_catalog", attempts
         ) from None
     except RecommendationFailure as failure:
-        if pending_adaptation is not None:
-            pending_adaptation.close()
         raise RecommendationFailure(failure.code, failure.reason, attempts) from None
     except asyncio.CancelledError:
-        if pending_adaptation is not None:
-            pending_adaptation.close()
         budget.cancel()
         if _task_cancelled():
             raise
         raise RecommendationFailure("cancelled", "cancelled", attempts) from None
     except Exception:
+        raise RecommendationFailure("internal_error", "internal_error", attempts) from None
+    finally:
         if pending_adaptation is not None:
             pending_adaptation.close()
-        raise RecommendationFailure("internal_error", "internal_error", attempts) from None
 
 
 def _ready(

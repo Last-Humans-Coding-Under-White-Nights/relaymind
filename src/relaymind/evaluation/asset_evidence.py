@@ -140,6 +140,11 @@ def resolve_reference(
     return payload
 
 
+def file_evidence_id(path: str) -> str:
+    """The resolver ID of one inventory file's original bytes."""
+    return "file:" + hashlib.sha256(path.encode()).hexdigest()
+
+
 def file_inventory(root: Path, *, protocol: bool = False) -> dict:
     root = Path(root)
     paths = (
@@ -768,10 +773,15 @@ def verify_benchmark_inputs(
         ):
             raise AssetCorpusError("inventory_membership")
         for item in inventory["files"]:
-            file_id = "file:" + hashlib.sha256(item["path"].encode()).hexdigest()
             if resolver is None:
                 raise AssetCorpusError("input_unresolved")
-            resolver.read(file_id, "original", item["sha256"], item["bytes"], limit=CONFIG_BYTES)
+            resolver.read(
+                file_evidence_id(item["path"]),
+                "original",
+                item["sha256"],
+                item["bytes"],
+                limit=CONFIG_BYTES,
+            )
         digest = canonical_digest(inventory)
         if report["implementation"][key] != digest or effective["generator"][key] != digest:
             raise AssetCorpusError("inventory_binding")

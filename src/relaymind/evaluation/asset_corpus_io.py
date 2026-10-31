@@ -1,5 +1,6 @@
 """Bounded ordinary local input for RM40/AC31; locators never execute."""
 
+import hashlib
 import json
 import math
 from collections.abc import Mapping
@@ -43,6 +44,11 @@ def relative_path(value: str) -> str:
     ):
         raise AssetCorpusError("unsafe_path")
     return value
+
+
+def matches_original(payload: bytes, sha256: str, size: int) -> bool:
+    """True when payload has exactly the committed byte count and SHA-256."""
+    return len(payload) == size and hashlib.sha256(payload).hexdigest() == sha256
 
 
 def read_local(root: Path, relative: str, limit: int) -> bytes:

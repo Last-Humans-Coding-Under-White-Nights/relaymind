@@ -122,6 +122,11 @@ def parse_asset_settings(
     return AssetSettings(tuple(sources), timings)
 
 
+def _bounded_path(value: object, label: str) -> None:
+    if not isinstance(value, str) or not value or len(value.encode("utf-8")) > 2048:
+        raise ValueError(f"{label} must be a bounded path")
+
+
 def parse_recommendation_settings(
     value: Mapping[str, object],
     *,
@@ -135,18 +140,13 @@ def parse_recommendation_settings(
     if hybrid and set(hybrid) != HYBRID_FIELDS:
         raise ValueError("asset_hybrid requires manifest and config")
     for key, val in hybrid.items():
-        if not isinstance(val, str) or not val or len(val.encode("utf-8")) > 2048:
-            raise ValueError(f"asset_hybrid {key} must be a bounded path")
+        _bounded_path(val, f"asset_hybrid {key}")
     if "enabled" in adaptation and type(adaptation["enabled"]) is not bool:
         raise ValueError("asset_adaptation enabled must be boolean")
     if adaptation.get("enabled") and "config" not in adaptation:
         raise ValueError("asset_adaptation enabled requires config")
-    if "config" in adaptation and (
-        not isinstance(adaptation["config"], str)
-        or not adaptation["config"]
-        or len(adaptation["config"].encode("utf-8")) > 2048
-    ):
-        raise ValueError("asset_adaptation config must be a bounded path")
+    if "config" in adaptation:
+        _bounded_path(adaptation["config"], "asset_adaptation config")
     raw = {**vars(RecommendationSettings()), **value}
     for key in ("enabled", "fallback"):
         if type(raw[key]) is not bool:
