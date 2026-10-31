@@ -386,3 +386,109 @@ def test_reset_evidence_is_strict_and_always_checked(tmp_path, mutate):
             release_labels(release),
             reset_preimages=reset_preimages(evidence),
         )
+
+
+# --- second review residuals (R3/R7) ---------------------------------------------
+
+
+def test_cancellation_during_arm_startup_returns_a_conserved_report(tmp_path):
+    release, freeze, episodes, arms = setup(tmp_path, episode_count=2)
+    calls = []
+
+    import contextlib
+
+    @contextlib.asynccontextmanager
+    async def cancelling(episode_id, arm):
+        calls.append((episode_id, arm))
+        if episode_id == "e2" and arm == "on":
+            raise asyncio.CancelledError
+        async with arms(episode_id, arm) as value:
+            yield value
+
+    report, evidence = asyncio.run(
+        run_adaptation_episodes(
+            episodes,
+            freeze,
+            release,
+            cancelling,
+            environment=ENVIRONMENT,
+            qualification="fixture",
+            input_manifest=dict(path="inputs.json", digest=H, bytes=1),
+            interrupted=lambda: False,
+        )
+    )
+    assert [e["status"] for e in report["episodes"]] == ["completed", "cancelled"]
+    assert report["episodes"][1]["reason"] == "interrupted"
+    grade_adaptation_report(
+        report, episodes, freeze, release_labels(release), reset_preimages=reset_preimages(evidence)
+    )
+
+
+def test_an_interrupt_during_the_parent_request_admits_no_correction(tmp_path, monkeypatch):
+    from relaymind.evaluation import asset_episode_driver
+
+    flag = []
+    original = asset_episode_driver.execute_asset_slot
+    corrected = []
+
+    async def parent_then_interrupt(*args, key=None, **kwargs):
+        result = await original(*args, key=key, **kwargs)
+        if key and ":correction-1:" in key:
+            flag.append(True)
+        return result
+
+    real_correct = asset_episode_driver._correct
+
+    async def spy(*args, **kwargs):
+        corrected.append(1)
+        return await real_correct(*args, **kwargs)
+
+    monkeypatch.setattr(asset_episode_driver, "execute_asset_slot", parent_then_interrupt)
+    monkeypatch.setattr(asset_episode_driver, "_correct", spy)
+    release, freeze, episodes, report, evidence = run(tmp_path, interrupted=lambda: bool(flag))
+    assert corrected == []
+    result = report["episodes"][0]
+    assert result["status"] == "cancelled"
+    assert [c["status"] for c in result["corrections"]] == ["not_run"] * 3
+
+
+def test_declared_inference_cost_requires_the_offer(tmp_path):
+    release, freeze, episodes, report, evidence = run(tmp_path)
+    probe = report["episodes"][0]["probes"][0]["on"]
+    probe.update(
+        status="failed",
+        reason="internal_error",
+        result=None,
+        attempts=[],
+        embeddings=[],
+        request_digest=None,
+        offered_projection_digest=None,
+        catalog_revision=None,
+        observed_ms=1.0,
+    )
+    probe["observed_costs"] = [
+        dict(
+            provenance="observed",
+            value=dict(
+                input_tokens=10,
+                output_tokens=0,
+                cached_tokens=None,
+                reasoning_tokens=None,
+                calls=1,
+                cpu_ms=None,
+                peak_bytes=None,
+            ),
+        )
+    ]
+    from relaymind.evaluation.asset_metrics import grade_asset_result
+
+    probe["grade"] = grade_asset_result(release_labels(release)["case-06"], None)
+    with pytest.raises(WholeTaskRejected, match="probe_offer"):
+        grade_adaptation_report(
+            report,
+            episodes,
+            freeze,
+            release_labels(release),
+            reset_preimages=reset_preimages(evidence),
+            offers=offers_for(tmp_path, release),
+        )

@@ -184,10 +184,19 @@ def _check_probe_row(row: Mapping, case_id: str, ordinal: int, label: Mapping, o
     identity = (row["request_digest"], row["offered_projection_digest"], row["catalog_revision"])
     if any(value is None for value in identity) and any(v is not None for v in identity):
         raise WholeTaskRejected("probe_offer")
+    declared_inference = any(
+        (cost["value"]["calls"] or 0) > 0
+        or any(
+            (cost["value"][k] or 0) > 0
+            for k in ("input_tokens", "output_tokens", "cached_tokens", "reasoning_tokens")
+        )
+        for cost in row["observed_costs"]
+    )
     dispatched = (
         status == "ready"
         or bool(row["attempts"])
         or bool(row["embeddings"])
+        or declared_inference
         or None not in identity
     )
     if offer is not None and dispatched:
