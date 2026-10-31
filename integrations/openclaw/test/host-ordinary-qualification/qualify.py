@@ -8,11 +8,13 @@ import re
 import secrets
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
+from queue import Queue
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tests"), str(ROOT / "scripts")]
@@ -27,6 +29,12 @@ def base_module():
 
 
 BASE = base_module()
+
+
+ORDINARY_OBSERVE_SECONDS = 5
+ORDINARY_UI_ACTIONS = frozenset(
+    {"open", "recommend", "choose", "correct", "inspect", "delete", "reset"}
+)
 
 
 HOST_EVENT_WAIT_SECONDS = BASE.person_module().HOST_EVENT_WAIT_SECONDS
@@ -302,6 +310,7 @@ class OrdinaryComposition(BASE.ActionComposition):
         self.archive, self.runs = archive.resolve(strict=True), runs
         self.skill_text, self.skill_asset = skill_text, skill_asset
         self._failure = {}
+        self._ui_action = None
 
     @contextmanager
     def step(self, name):
@@ -314,6 +323,8 @@ class OrdinaryComposition(BASE.ActionComposition):
                 raise
             error_class = ordinary_error_class(error)
             self._failure = dict(ordinary_failure_step=name, ordinary_error_class=error_class)
+            if name == "ui_actions" and self._ui_action in ORDINARY_UI_ACTIONS:
+                self._failure["ordinary_ui_action"] = self._ui_action
             if isinstance(error, TimeoutError) and str(error) == "overall_deadline_exceeded":
                 raise
             if error_class.startswith("playwright_"):
@@ -323,6 +334,11 @@ class OrdinaryComposition(BASE.ActionComposition):
             ):
                 raise
             raise ValueError("ordinary_step_failed") from None
+
+    def set_ui_action(self, action):
+        if action not in ORDINARY_UI_ACTIONS:
+            raise ValueError("ordinary_step_failed")
+        self._ui_action = action
 
     def failure_diagnostics(self):
         return dict(self._failure)
@@ -391,6 +407,7 @@ class OrdinaryComposition(BASE.ActionComposition):
             "ordinary_entry_unavailable",
             "ordinary_guard_refused",
             "ordinary_ui_timeout",
+            "ordinary_observe_timeout",
             "ordinary_zero_http_failed",
             "ordinary_abort_unobserved",
             "ordinary_observer_blind",
@@ -399,6 +416,28 @@ class OrdinaryComposition(BASE.ActionComposition):
         }
 
     def observe_backend(self):
+        # sql_read includes an unbounded lock acquisition. Keep it off the browser
+        # thread; a daemon cannot prevent process exit if the gateway stays stuck.
+        # Do not use an executor context manager, whose exit would join forever.
+        outcome = Queue(maxsize=1)
+
+        def read():
+            try:
+                outcome.put((self._read_backend(), None))
+            except Exception as error:
+                outcome.put((None, error))
+
+        worker = threading.Thread(target=read, daemon=True, name="ordinary-observe")
+        worker.start()
+        worker.join(ORDINARY_OBSERVE_SECONDS)
+        if worker.is_alive():
+            raise ValueError("ordinary_observe_timeout")
+        value, error = outcome.get_nowait()
+        if error is not None:
+            raise error
+        return value
+
+    def _read_backend(self):
         with self.runs.sql_read() as db:
             return dict(
                 views=[
@@ -530,12 +569,17 @@ class OrdinaryComposition(BASE.ActionComposition):
                 pages[0].wait_for_timeout(500)
         with self.step("ui_actions"):
             value["production_registry_enabled"] = True
+            self.set_ui_action("open")
             ui_page = pages[0].context.new_page()
             try:
                 suffix = sessions[0]["sessionKey"].removeprefix("agent:main:")
                 if "/" in suffix or not suffix.startswith("person-"):
                     raise ValueError("ordinary_guard_refused")
-                ui_page.goto(self.origin + "/chat/main/" + suffix, wait_until="domcontentloaded")
+                ui_page.goto(
+                    self.origin + "/chat/main/" + suffix,
+                    wait_until="domcontentloaded",
+                    timeout=10000,
+                )
                 deadline = time.monotonic() + 20
                 while not ui_page.evaluate("() => window.__rmPersonWire?.state().ready === true"):
                     if time.monotonic() >= deadline:
@@ -556,7 +600,7 @@ class OrdinaryComposition(BASE.ActionComposition):
                 ):
                     raise ValueError("ordinary_guard_refused")
                 value["ui_person"] = ui_person
-                value["ui"] = run_ui(ui_page, sessions[0], self.observe_backend)
+                value["ui"] = run_ui(ui_page, sessions[0], self.observe_backend, self.set_ui_action)
                 self.select_library_skill(rpc, pages, sessions, ui_page, capture["ordinary_skill"])
             except Exception:
                 try:
@@ -768,12 +812,13 @@ class OrdinaryComposition(BASE.ActionComposition):
         capture["ordinary_actions"]["retirement"]["ui_guard_events"] = relevant
 
 
-def run_ui(page, session, observe):
+def run_ui(page, session, observe, record_action=lambda action: None):
     snapshots = {}
+    record_action("open")
     # Real native navigation preserves the authenticated socket; no fabricated client.
     page.get_by_role("link", name="RelayMind recommendations", exact=True).click(timeout=10000)
     page.get_by_label("Task", exact=True).fill(
-        "hello greeting ordinary native person " + secrets.token_hex(4)
+        "hello greeting ordinary native person " + secrets.token_hex(4), timeout=10000
     )
 
     def settle(name, predicate):
@@ -786,22 +831,28 @@ def run_ui(page, session, observe):
             page.wait_for_timeout(100)
         raise ValueError("ordinary_ui_timeout")
 
-    page.get_by_role("button", name="Recommend", exact=True).click()
+    record_action("recommend")
+    page.get_by_role("button", name="Recommend", exact=True).click(timeout=10000)
     settle("recommend", lambda s: len(s["views"]) == 1 and s["views"][0]["state"] == "ready")
-    page.get_by_role("button", name="Choose 1", exact=True).click()
+    record_action("choose")
+    page.get_by_role("button", name="Choose 1", exact=True).click(timeout=10000)
     settle("choice", lambda s: s["views"][0]["state"] == "chosen")
-    page.get_by_role("button", name="Correct to 1", exact=True).click()
+    record_action("correct")
+    page.get_by_role("button", name="Correct to 1", exact=True).click(timeout=10000)
     settle("correction", lambda s: len(s["records"]) == 1)
-    page.get_by_role("button", name="Inspect feedback", exact=True).click()
+    record_action("inspect")
+    page.get_by_role("button", name="Inspect feedback", exact=True).click(timeout=10000)
     page.get_by_role("button", name="Delete feedback", exact=True).wait_for(timeout=10000)
     snapshots["inspect"] = observe()
-    page.get_by_role("button", name="Delete feedback", exact=True).click()
+    record_action("delete")
+    page.get_by_role("button", name="Delete feedback", exact=True).click(timeout=10000)
     settle(
         "delete",
         lambda s: not s["records"] and any(a["operation"] == "delete" for a in s["audits"]),
     )
+    record_action("reset")
     page.once("dialog", lambda dialog: dialog.accept())
-    page.get_by_role("button", name="Reset feedback", exact=True).click()
+    page.get_by_role("button", name="Reset feedback", exact=True).click(timeout=10000)
     settle("reset", lambda s: any(a["operation"] == "reset" for a in s["audits"]))
     return dict(
         snapshots=snapshots,
@@ -812,7 +863,6 @@ def run_ui(page, session, observe):
 
 def main(argv=None):
     import argparse
-    import threading
 
     from api_helpers import RunningServer
     from recommendation_helpers import setup
