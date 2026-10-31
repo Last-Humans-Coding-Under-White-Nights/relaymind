@@ -19,6 +19,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.63 → 0.64 (RM42/RM44; AC33/AC36): names the reset evidence
+  document of section 12.6.5 (`reset:<episode_id>`, holding the before/after
+  preimages), so adaptation reports can be graded offline end to end.
 - Specification 0.62 → 0.63 (RM37/RM39; AC28/AC30): adds the optional expected-scope
   headers and the scope_mismatch error, checked before any read or write; requires the
   native adapter to send its binding's scope on every gateway request; clarifies that

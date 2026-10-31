@@ -22,7 +22,15 @@ from relaymind.evaluation.asset_whole_task_inputs import (
     resolve_whole_task_inputs,
     verify_whole_task_inventory,
 )
-from whole_task_helpers import ENVIRONMENT, freeze_doc, ordered_rows, report_for, row, tasks_doc
+from whole_task_helpers import (
+    ENVIRONMENT,
+    expanded_release,
+    freeze_doc,
+    ordered_rows,
+    report_for,
+    row,
+    tasks_doc,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -66,12 +74,16 @@ class Bundle:
             configs["budget-" + task_id] = {"tool_calls": 3, "task": task_id}
         self.configs = configs
         digest = {k: canonical_digest(v) for k, v in configs.items()}
-        freeze = freeze_doc()
+        release = expanded_release(self.root / "release")
+        self.release_root = release
+        catalog = json.loads((release / "catalog.json").read_text(encoding="utf-8"))
+        record = catalog["assets"][0]["record"]
+        freeze = freeze_doc(bindings=((record["asset_id"], record["content_hash"]),))
         # The frozen package binds the exact original its evidence holds.
         freeze["packages"][0].update(
             sha256=hashlib.sha256(b"ev-package").hexdigest(), bytes=len(b"ev-package")
         )
-        self.lock = {"fixture_corpus_lock": 1}
+        self.lock = json.loads((release / "lock.json").read_text(encoding="utf-8"))
         freeze["corpus_lock_digest"] = canonical_digest(self.lock)
         for config in freeze["configurations"]:
             config.update(
@@ -85,12 +97,26 @@ class Bundle:
         for policy in freeze["task_policies"]:
             policy["budgets_digest"] = digest["budget-" + policy["task_id"]]
         self.freeze = freeze
-        self.tasks = tasks_doc(freeze)
+        self.tasks = tasks_doc(freeze, lanes=("en_to_en", "en_to_en"))
+        for task, case in zip(self.tasks["tasks"], ("case-01", "case-02"), strict=True):
+            task.update(prompt_case_id=case, family_ids=["task-calendar"])
         self.documents = []
-        self.evidence = []
+        self.corpus_evidence = [
+            dict(
+                id=item["id"],
+                kind=item["kind"],
+                access=item["access"],
+                path="release/" + item["path"],
+                sha256=item["sha256"],
+                bytes=item["bytes"],
+            )
+            for item in catalog["evidence"]
+        ]
         self.add("host_tasks", self.tasks)
         self.add("host_freeze", freeze)
-        self.add("lock", self.lock)
+        self.add_raw("lock", (release / "lock.json").read_bytes())
+        for kind in ("catalog", "cases", "labels"):
+            self.add_raw(kind, (release / self.lock[kind]["path"]).read_bytes())
         for value in configs.values():
             self.add("referenced_config", value)
         self.add("environment_lock", ENVIRONMENT)
@@ -115,8 +141,11 @@ class Bundle:
         self.resolver = self.root / "resolver.json"
         self.resolver.write_bytes(_bytes(dict(schema_version=1, entries=resolver_entries)))
 
-    def add(self, kind: str, value: dict) -> None:
-        payload = _bytes(value)
+    def add_raw(self, kind: str, payload: bytes) -> None:
+        self.add(kind, json.loads(payload), payload=payload)
+
+    def add(self, kind: str, value: dict, payload: bytes | None = None) -> None:
+        payload = _bytes(value) if payload is None else payload
         digest = canonical_digest(value)
         name = (
             kind
@@ -150,6 +179,7 @@ class Bundle:
                     bytes=len(payload),
                 )
             )
+        evidence = sorted(evidence + self.corpus_evidence, key=lambda e: e["id"].encode())
         manifest = dict(
             schema_version=1, documents=documents, evidence=evidence, source_proof_evidence_ids=[]
         )
@@ -381,11 +411,9 @@ def test_missing_corpus_lock_blocks(bundle):
 def test_graded_output_names_what_was_not_verified(bundle):
     code, result = _grade(bundle, "grade-host", bundle.host_report())
     assert code == 3 and result["status"] == "graded"
-    assert result["unverified"] == [
-        "configuration_semantics",
-        "corpus_closure",
-        "qualified_evidence_review",
-    ]
+    # The corpus closure is verified now; native host configuration
+    # semantics and qualified review remain unverified (#229).
+    assert result["unverified"] == ["configuration_semantics", "qualified_evidence_review"]
 
 
 @pytest.mark.parametrize("report", [{}, {"input_manifest": 1}, []])

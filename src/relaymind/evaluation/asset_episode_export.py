@@ -7,6 +7,7 @@ every planned probe in the denominator. Nothing here grants correction
 authority; accepted corrections must carry the authentic product receipts.
 """
 
+import json
 from collections.abc import Mapping, Sequence
 
 from relaymind.canonical import canonical_digest, canonical_json
@@ -83,6 +84,39 @@ def probe_plan(episode: Mapping) -> list[tuple[str, str]]:
 def reset_preimage_digest(preimage: Sequence[Mapping]) -> str:
     """canonical_digest of the ordered closed reset semantic array."""
     return canonical_digest([dict(item) for item in preimage])
+
+
+_RESET_DOCUMENT = {"schema_version", "episode_id", "baseline", "after"}
+
+
+def reset_preimages(evidence: Mapping[str, Mapping]) -> dict[str, tuple]:
+    """Spec 0.64 reset evidence: ``reset:<episode_id>`` registry entries.
+
+    Each entry's original bytes are the closed JSON object
+    ``{schema_version:1, episode_id, baseline, after}``. Returns the
+    (baseline, after) preimages by episode ID; their content and digests are
+    checked by the grader. A malformed document rejects.
+    """
+    found = {}
+    for evidence_id, item in evidence.items():
+        if not evidence_id.startswith("reset:"):
+            continue
+        try:
+            document = json.loads(item["payload"])
+        except (ValueError, UnicodeError):
+            raise WholeTaskRejected("reset_evidence") from None
+        if (
+            not isinstance(document, dict)
+            or set(document) != _RESET_DOCUMENT
+            or document["schema_version"] != 1
+            or type(document["schema_version"]) is not int
+            or document["episode_id"] != evidence_id.removeprefix("reset:")
+            or not isinstance(document["baseline"], list)
+            or not isinstance(document["after"], list)
+        ):
+            raise WholeTaskRejected("reset_evidence")
+        found[document["episode_id"]] = (document["baseline"], document["after"])
+    return found
 
 
 def _check_reset_preimage(preimage: Sequence[Mapping], case_ids: Sequence[str]) -> None:

@@ -10,8 +10,9 @@ a digest, identity or structure contradiction is *rejected*.
 
 import hashlib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from relaymind.canonical import canonical_digest
 from relaymind.evaluation.asset_benchmark_io import CONFIG_BYTES, read_json_path
@@ -32,6 +33,12 @@ from relaymind.evaluation.asset_whole_task import (
     WholeTaskRejected,
     validate_whole_task,
 )
+from relaymind.evaluation.asset_whole_task_corpus import (
+    bind_episodes,
+    bind_host_tasks,
+    release_labels,
+    resolve_corpus,
+)
 
 SINGLETONS = ("environment_lock", "runner_inventory", "protocol_inventory")
 _ROOTS = {
@@ -43,7 +50,10 @@ _SHAPES = {
     "adaptation": ("AssetEpisodesV1", "EpisodeFreezeV1", "dataset_lock_digest", "config_digest"),
 }
 # What this revision does not verify; always reported next to a grade.
-UNVERIFIED = ("configuration_semantics", "corpus_closure", "qualified_evidence_review")
+UNVERIFIED = {
+    "host": ("configuration_semantics", "qualified_evidence_review"),
+    "adaptation": ("probe_offer_binding", "qualified_evidence_review"),
+}
 _UNRESOLVED = {"input_unresolved", "unsafe_file", "missing_file"}
 
 
@@ -95,6 +105,9 @@ class WholeTaskInputs:
     environment: Mapping
     configs: Mapping[str, Mapping]
     registry: Mapping[str, Mapping]
+    release: Any = None
+    labels: Mapping[str, Mapping] = field(default_factory=dict)
+    evidence: Mapping[str, Mapping] = field(default_factory=dict)
 
 
 def _limit(kind: str) -> int:
@@ -184,7 +197,7 @@ def resolve_whole_task_inputs(
     if canonical_digest(manifest) != reference["digest"] or len(payload) != reference["bytes"]:
         raise WholeTaskRejected("input_manifest_digest")
     validate_whole_task("S3InputManifestV1", manifest)
-    documents, registry = {}, {}
+    documents, raw_documents, registry, payloads = {}, {}, {}, {}
     for pool in ("documents", "evidence"):
         ids = [item["id"] for item in manifest[pool]]
         if ids != sorted(set(ids), key=lambda i: i.encode("utf-8")):
@@ -201,9 +214,11 @@ def resolve_whole_task_inputs(
             raise WholeTaskRejected("document_identity")
         raw = _read(item, manifest_path.parent, resolver, evidence=False)
         documents[item["id"]] = semantic_document(raw, item["format"])
+        raw_documents[item["id"]] = raw
     for item in manifest["evidence"]:
-        _read(item, manifest_path.parent, resolver, evidence=True)
+        payload = _read(item, manifest_path.parent, resolver, evidence=True)
         registry[item["id"]] = dict(sha256=item["sha256"], bytes=item["bytes"], path=item["path"])
+        payloads[item["id"]] = dict(item, payload=payload)
     for key in SINGLETONS:
         if sum(item["kind"] == key for item in manifest["documents"]) != 1:
             raise WholeTaskBlocked("manifest_cardinality")
@@ -212,10 +227,13 @@ def resolve_whole_task_inputs(
         raise WholeTaskBlocked("root_input_unresolved")
     root_shape, freeze_shape, lock_key, freeze_key = _SHAPES[kind]
     root = validate_whole_task(root_shape, documents[root_id])
-    # The corpus lock must be present; its transitive closure is not yet
-    # verified here (reported as corpus_closure in UNVERIFIED).
-    if "lock:" + root[lock_key] not in documents:
-        raise WholeTaskBlocked("corpus_unresolved")
+    # The frozen corpus and its evidence are verified by the release verifier,
+    # and the root input is bound to its cases and catalog.
+    release = resolve_corpus(root[lock_key], raw_documents, payloads)
+    if kind == "host":
+        bind_host_tasks(root, release)
+    else:
+        bind_episodes(root, release)
     freeze_digest = root[freeze_key]
     freeze_id = freeze_kind + ":" + freeze_digest
     if freeze_id not in documents:
@@ -250,4 +268,14 @@ def resolve_whole_task_inputs(
                 if str(exc) in _UNRESOLVED:
                     raise WholeTaskBlocked("inventory_preimage_unresolved") from None
                 raise WholeTaskRejected(str(exc)) from None
-    return WholeTaskInputs(manifest, root, freeze, environment, configs, registry)
+    return WholeTaskInputs(
+        manifest,
+        root,
+        freeze,
+        environment,
+        configs,
+        registry,
+        release=release,
+        labels=release_labels(release),
+        evidence=payloads,
+    )

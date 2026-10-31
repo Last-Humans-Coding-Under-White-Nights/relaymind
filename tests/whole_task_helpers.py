@@ -197,3 +197,70 @@ def report_for(freeze, tasks, rows, *, qualification="fixture") -> dict:
 
 def ordered_rows(tasks, make) -> list:
     return [make(p["task_id"], p["arm"]) for p in plan_host_trial(tasks)]
+
+
+def expanded_release(root, case_count=8):
+    """The fixture release with ``case_count`` copies of its one case (fixture only)."""
+    import json
+    import shutil
+    import unicodedata
+    from collections import defaultdict
+    from pathlib import Path
+
+    from relaymind.evaluation.asset_judgments import agreement
+
+    source = Path(__file__).resolve().parent / "fixtures" / "asset-benchmark"
+    root = Path(root)
+    shutil.copytree(source, root)
+
+    def read(name):
+        return json.loads((root / (name + ".json")).read_text(encoding="utf-8"))
+
+    def write(name, value):
+        (root / (name + ".json")).write_text(
+            json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+
+    cases, labels, lock = read("cases"), read("labels"), read("lock")
+    base = cases["cases"][0]
+    ids = [base["id"]] + [f"case-{i:02d}" for i in range(1, case_count)]
+    cases["cases"] = sorted(
+        (dict(copy.deepcopy(base), id=i) for i in ids), key=lambda c: c["id"].encode()
+    )
+    labels["judgments"] = sorted(
+        (
+            dict(copy.deepcopy(j), case_id=i)
+            for i in ids
+            for j in labels["judgments"]
+            if j["case_id"] == base["id"]
+        ),
+        key=lambda j: (j["case_id"].encode(), j["annotator_id"].encode()),
+    )
+    labels["adjudications"] = sorted(
+        (
+            dict(copy.deepcopy(a), case_id=i)
+            for i in ids
+            for a in labels["adjudications"]
+            if a["case_id"] == base["id"]
+        ),
+        key=lambda a: a["case_id"].encode(),
+    )
+    rows = defaultdict(list)
+    for judgment in labels["judgments"]:
+        rows[judgment["case_id"]].append(judgment)
+    actual = agreement({c["id"]: c for c in cases["cases"]}, rows)
+    recorded = {g["lane"]: g for g in labels["agreement"]["groups"]}
+    labels["agreement"]["groups"] = [
+        {**recorded.get(lane, {}), **actual[lane], "lane": lane}
+        for lane in sorted(actual, key=lambda lane: (lane != "all", lane.encode()))
+    ]
+    write("cases", cases)
+    labels["cases_digest"] = canonical_digest(cases)
+    write("labels", labels)
+    lock["unicode_version"] = unicodedata.unidata_version
+    for name in ("catalog", "cases", "labels"):
+        lock[name]["digest"] = canonical_digest(read(name))
+    lock.pop("digest")
+    lock["digest"] = canonical_digest(lock)
+    write("lock", lock)
+    return root
