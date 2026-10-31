@@ -220,11 +220,7 @@ def load_benchmark_config(path: Path) -> AssetBenchmarkConfig:
     validate_definition("Environment", environment)
     if canonical_digest(environment) != raw["environment_lock_digest"]:
         raise AssetCorpusError("environment_digest")
-    observed = (
-        collect_benchmark_environment(production=production)
-        if production.asset_semantics is not None
-        else collect_benchmark_environment()
-    )
+    observed = collect_benchmark_environment(production=production)
     for key, value in environment.items():
         if value is not None and value != observed[key]:
             raise AssetCorpusError("environment_lock_mismatch")
@@ -290,6 +286,15 @@ class AssetBenchmarkReport:
 
     def to_json_object(self) -> dict:
         return copy.deepcopy(self.data)
+
+
+def terminal_payload(service, scope, recommendation_id, event_types) -> dict:
+    """The last terminal event payload of one recommendation, or no evidence."""
+    events = service.events(scope, recommendation_id, after_seq=0, limit=1000)["events"]
+    return next(
+        (e["payload"] for e in reversed(events) if e["event_type"] in event_types),
+        dict(attempts=[], embeddings=[]),
+    )
 
 
 def _not_run(slot, label, reason="interrupted") -> dict:
@@ -396,11 +401,7 @@ async def run_asset_benchmark(
         cases, seed=normal["seed"], repetitions=normal["repetitions"], warmups=normal["warmups"]
     )
     qualification = assess_asset_release(config.release)
-    observed = (
-        collect_benchmark_environment(production=config.production)
-        if config.production.asset_semantics is not None
-        else collect_benchmark_environment()
-    )
+    observed = collect_benchmark_environment(production=config.production)
     if any(v is not None and observed[k] != v for k, v in config.environment.items()):
         raise AssetCorpusError("environment_lock_mismatch")
     if benchmark_inventories() != config.inventories:
@@ -565,19 +566,11 @@ async def run_asset_benchmark(
                                     embeddings=list(result["embeddings"]),
                                 )
                             else:
-                                events = service.events(
+                                terminal = terminal_payload(
+                                    service,
                                     provider.scope,
                                     body["recommendation_id"],
-                                    after_seq=0,
-                                    limit=1000,
-                                )["events"]
-                                terminal = next(
-                                    (
-                                        e["payload"]
-                                        for e in reversed(events)
-                                        if e["event_type"] in ("failed", "cancelled")
-                                    ),
-                                    dict(attempts=[], embeddings=[]),
+                                    ("failed", "cancelled"),
                                 )
                                 row.update(
                                     status="cancelled"
@@ -603,19 +596,11 @@ async def run_asset_benchmark(
                                 observed_ms=budget.elapsed_ms(),
                             )
                             if cancel.recommendation_id is not None:
-                                events = service.events(
+                                terminal = terminal_payload(
+                                    service,
                                     provider.scope,
                                     cancel.recommendation_id,
-                                    after_seq=0,
-                                    limit=1000,
-                                )["events"]
-                                terminal = next(
-                                    (
-                                        e["payload"]
-                                        for e in reversed(events)
-                                        if e["event_type"] == "cancelled"
-                                    ),
-                                    dict(attempts=[], embeddings=[]),
+                                    ("cancelled",),
                                 )
                                 row.update(
                                     attempts=list(terminal["attempts"]),
