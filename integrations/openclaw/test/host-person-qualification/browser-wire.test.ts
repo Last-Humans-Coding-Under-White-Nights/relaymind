@@ -125,3 +125,16 @@ it("#197 permits the Skill Library methods the ordinary qualification calls", as
   await expect(f.target.__rmPersonWire.rpc("skills.library.delete", {})).rejects.toThrow();
   expect(() => installNativeSocketObserver(f.target, ["skills.library.delete"])).toThrow("invalid_fixture_method");
 });
+
+it("RM39/AC30 observes terminal chat events only for turns sent by this fixture", async () => {
+  const methods = ["sessions.messages.subscribe", "chat.send", "chat.history", "skills.library.read", "skills.library.mutate", "skills.library.activate"];
+  const f = await fixture(methods);
+  for (const method of methods) await f.target.__rmPersonWire.rpc(method, method === "chat.send" ? { sessionKey: "s", idempotencyKey: "owned-run" } : {});
+  const emit = (payload: unknown) => f.socket.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "event", event: "chat", payload }) }));
+  emit({ runId: "foreign", sessionKey: "s", state: "final" });
+  emit({ runId: "owned-run", sessionKey: "foreign", state: "final" });
+  emit({ runId: "owned-run", sessionKey: "s", state: "delta" });
+  emit({ runId: "owned-run", sessionKey: "s", state: "final", message: { role: "assistant", content: "done" } });
+  expect(f.target.__rmPersonWire.turnEvents("owned-run")).toEqual([{ runId: "owned-run", sessionKey: "s", state: "final", message: { role: "assistant", content: "done" } }]);
+  expect(f.target.__rmPersonWire.turnEvents("foreign")).toEqual([]);
+});

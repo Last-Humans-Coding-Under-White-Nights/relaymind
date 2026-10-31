@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Native loaded-skill observation harness (#239; RM39/AC30): retain native
+  `skills_read` bytes, their receiving gateway request and host/run correlation,
+  with isolated stale/deleted/reset observations over deterministic inference.
+  This is evidence tooling only; loaded-use qualification remains unavailable.
+
 - Operations and platform run kit (#242, toward #241, #235, #234; RM38, RM39, RM44; AC29, AC37):
   - `scripts/asset_operations_run.py startup` measures ten real `relaymind serve` startups over a generated 300-skill bilingual catalog, using the existing AC29 driver. It waits for recommendations to be ready and samples memory on POSIX and Windows.
   - `platform` builds an `AssetPlatformReportV1` from install-check and ordinary installed-host records, bound to the companion input manifest. Skill use is never inferred from a selection receipt.

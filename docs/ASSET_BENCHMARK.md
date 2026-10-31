@@ -737,3 +737,53 @@ The full 60-second mixed workload (`run_workload`) still needs rescan and
 rebuild hooks into a running process. The AC29 and AC37 numbers that count
 come only from the Apple M1 8 GiB macOS and native x86-64 Windows machines;
 those runs remain open in #241, #235 and #234.
+
+### Native loaded-skill observation tier (#239; RM39/AC30)
+
+The ordinary installed-host harness at
+`integrations/openclaw/test/host-ordinary-qualification/qualify.py` now includes
+an evidence-only loaded-byte experiment. Run it with the same disposable Linux
+person-ingress prerequisites and release tarball used by the ordinary host job:
+
+```sh
+PYTHONPATH=src:tests python integrations/openclaw/test/host-ordinary-qualification/qualify.py \
+  --tarball /absolute/path/to/relaymind-provider.tgz \
+  --work-dir /absolute/path/to/new-private-host \
+  --out /absolute/path/to/ordinary-observation.json
+```
+
+The installed RelayMind provider sends native turns to a real loopback RelayMind
+client-owned chat API. Its deterministic adapter proposes `skills_read` using
+the selected skill's actually advertised name, then returns a fixed fixture
+answer after receiving the native tool-result bytes. The gateway never executes
+the read. The capture retains the native tool result, the receiving HTTP request,
+its Idempotency-Key and X-RelayMind-Run-Id, the browser `chat.send` acknowledgement
+and terminal event, and the host session key, ID and lifecycle revision.
+Each turn first obtains a native `sessions.messages.subscribe` receipt on that
+browser socket, using a separate observer ID to preserve the UI's subscription. The
+predicate recomputes SHA-256 from retained UTF-8 text and joins the native call
+and receiving tool message by their call ID. Catalog text or a final marker alone
+cannot pass. All requests, waits, generations and capture sizes are bounded.
+
+Four isolated cases record a bridge-selected positive turn and native controls:
+a changed library head after selection, an entry removed after selection, and
+`sessions.reset`. Controls use supported native library/session RPCs on the same
+authenticated browser connection; their direct activation is fixture setup, not
+an additional qualified adapter path. The closed `observed` values distinguish
+`loaded_pinned_revision`, `loaded_other_bytes`, `refused`, and `not_loaded`.
+An unfinished capture uses `incomplete` and fails the observation predicate;
+its already received tool/request evidence is retained.
+A retained old pin is reported as observed even when the library head changed
+or the entry was removed; it is never relabeled a successful rejection control.
+
+`ordinary_skill_loaded_use_pass` and the capture check
+`ordinary_skill_loaded_use_observation` mean that the positive byte round trip
+and control observations are complete. The capture always keeps
+`qualification: unavailable`. This is not `skill_loaded_use` qualification,
+autonomous model compliance, real-model capability, a platform acceptance
+measurement, or full AC30 acceptance. The selection receipt still says
+`instructions: not_observed`, and no production registry operation is enabled.
+A later normative decision about stale/deleted pins and authority at use time
+is still required. Already loaded conversation text cannot be unloaded by this
+harness; each control uses a fresh session. This change supplies tooling and
+unit/transport checks, not a newly measured native-host evidence record.

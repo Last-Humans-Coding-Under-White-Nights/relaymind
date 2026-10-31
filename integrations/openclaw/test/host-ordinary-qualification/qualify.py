@@ -239,11 +239,432 @@ def ordinary_skill_pass(capture):
         return False
 
 
+LOADED_USE_FINAL = "Native skill observation complete."
+_SCOPE_FIELDS = ("sessionKey", "sessionId", "lifecycleRevision")
+_CASE_FIELDS = {
+    "case",
+    "task",
+    "before",
+    "current",
+    "selected",
+    "selection",
+    "intervention",
+    "chat",
+    "tools",
+    "requests",
+    "terminal",
+    "observed",
+}
+
+
+def _text_content(content):
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list) and all(
+        isinstance(item, dict) and item.get("type") == "text" and isinstance(item.get("text"), str)
+        for item in content
+    ):
+        return "".join(item["text"] for item in content)
+    raise ValueError("not_text_content")
+
+
+def _loaded_round_trip(case, *, require_selected=True):
+    """Actual native result and receiving HTTP tool message, joined by call ID."""
+    selected, current = case["selected"], case["current"]
+    run_id = case["chat"]["frame"]["payload"]["runId"]
+    if len(case["tools"]) != 1 or len(case["requests"]) != 2:
+        return False
+    tool = case["tools"][0]
+    event, context = tool["event"], tool["context"]
+    call_id = event["toolCallId"]
+    if (
+        not call_id
+        or event["toolName"] != "skills_read"
+        or event.get("error")
+        or event["params"] != {"name": selected["name"]}
+        or event["runId"] != run_id
+        or context["runId"] != run_id
+        or context["toolCallId"] != call_id
+        or any(context[field] != current[field] for field in ("sessionKey", "sessionId"))
+        or (require_selected and _text_content(event["result"]["content"]) != selected["content"])
+    ):
+        return False
+    first, second = [item["body"]["messages"] for item in case["requests"]]
+    if any(message["role"] == "tool" for message in first):
+        return False
+    # Native advertisement must associate the requested name with the selected
+    # immutable revision path, not merely contain an echoed expected marker.
+    path = f"/skill-library/{selected['skillId']}/revisions/{selected['revision']}/SKILL.md"
+    advertisements = [message["content"] for message in first if message["role"] == "system"]
+    if not any(
+        path in text and f"<name>{selected['name']}</name>" in text for text in advertisements
+    ):
+        return False
+    results = [message for message in second if message["role"] == "tool"]
+    calls = [
+        call
+        for message in second
+        if message["role"] == "assistant"
+        for call in message.get("tool_calls", [])
+    ]
+    return (
+        len(results) == 1
+        and results[0]["tool_call_id"] == call_id
+        and _text_content(results[0]["content"]) == _text_content(event["result"]["content"])
+        and len(calls) == 1
+        and calls[0]["id"] == call_id
+        and calls[0]["function"]["name"] == "skills_read"
+        and json.loads(calls[0]["function"]["arguments"]) == {"name": selected["name"]}
+    )
+
+
+def loaded_use_observation(case):
+    """Closed observations, with no stale/deleted/reset acceptance rule invented."""
+    if case["chat"]["frame"]["ok"] is False or case["terminal"].get("state") in {
+        "error",
+        "aborted",
+    }:
+        return "refused"
+    if _loaded_round_trip(case):
+        return "loaded_pinned_revision"
+    if any(
+        tool["event"].get("result") and not tool["event"].get("error") for tool in case["tools"]
+    ):
+        return "loaded_other_bytes"
+    return "not_loaded"
+
+
+def _control_observed(case):
+    name, before, current = case["case"], case["before"], case["current"]
+    if name == "positive":
+        return case["intervention"] is None and before == current
+    change = case["intervention"]
+    if change["frame"]["ok"] is not True:
+        return False
+    params, selected = change["params"], case["selected"]
+    if name == "reset":
+        entry = change["frame"]["payload"]["entry"]
+        return (
+            change["method"] == "sessions.reset"
+            and params
+            == dict(key=before["sessionKey"], expectedSessionId=before["sessionId"], reason="reset")
+            and before["sessionKey"] == current["sessionKey"]
+            and before["lifecycleRevision"] != current["lifecycleRevision"]
+            and entry["sessionId"] == current["sessionId"]
+            and entry["lifecycleRevision"] == current["lifecycleRevision"]
+        )
+    if (
+        before != current
+        or params["skillId"] != selected["skillId"]
+        or params["expectedRevision"] != selected["revision"]
+    ):
+        return False
+    if name == "deleted":
+        receipt = change["frame"]["payload"]
+        entry = receipt["entry"]
+        return (
+            change["method"] == "skills.library.mutate"
+            and params["action"] == "remove"
+            and receipt["state"] == "removed"
+            and entry["removed"] is True
+            and entry["skillId"] == selected["skillId"]
+            and entry["revision"] == selected["revision"]
+        )
+    entry = change["frame"]["payload"]["entry"]
+    return (
+        name == "stale"
+        and change["method"] == "skills.library.save"
+        and params["content"] != selected["content"]
+        and entry["skillId"] == selected["skillId"]
+        and _REVISION.fullmatch(entry["revision"]) is not None
+        and entry["revision"] != selected["revision"]
+    )
+
+
+def ordinary_skill_loaded_use_pass(capture):
+    """RM39/AC30 observation completeness, NOT skill_loaded_use qualification.
+
+    A true result proves a deterministic native loaded-byte round trip and
+    retained control observations. It never enables a registry operation or
+    declares stale/deleted/reset behavior acceptable under section 7.6.1.
+    """
+    try:
+        if not ordinary_skill_pass(capture):
+            return False
+        value = capture["ordinary_skill_loaded_use"]
+        if (
+            set(value) != {"tier", "qualification", "cases"}
+            or value["tier"] != "deterministic_native_observation"
+            or value["qualification"] != "unavailable"
+        ):
+            return False
+        cases = value["cases"]
+        if len(cases) != 4 or {case["case"] for case in cases} != {
+            "positive",
+            "stale",
+            "deleted",
+            "reset",
+        }:
+            return False
+        seen = {
+            field: set()
+            for field in (
+                "session",
+                "skill",
+                "host",
+                "request_id",
+                "idempotency_key",
+                "run_id",
+                "task",
+            )
+        }
+        for case in cases:
+            if set(case) != _CASE_FIELDS:
+                return False
+            for scope in (case["before"], case["current"]):
+                if set(scope) != set(_SCOPE_FIELDS) or not all(
+                    isinstance(scope[field], str) and scope[field] for field in _SCOPE_FIELDS
+                ):
+                    return False
+            selected = case["selected"]
+            if (
+                not _SKILL_ID.fullmatch(selected["skillId"])
+                or not _REVISION.fullmatch(selected["revision"])
+                or not selected["content"]
+                or not selected["name"]
+                or hashlib.sha256(selected["content"].encode("utf-8")).hexdigest()
+                != selected["content_sha256"]
+            ):
+                return False
+            read = selected["read"]
+            if (
+                read["ok"] is not True
+                or read["payload"]["content"] != selected["content"]
+                or read["payload"]["entry"]["skillId"] != selected["skillId"]
+                or read["payload"]["entry"]["revision"] != selected["revision"]
+            ):
+                return False
+            expected = dict(
+                skillId=selected["skillId"],
+                revision=selected["revision"],
+                sessionActivation="next-turn",
+                instructions="not_observed",
+            )
+            selection = case["selection"]
+            if selection["ok"] is not True or not _control_observed(case):
+                return False
+            if case["case"] == "positive":
+                if selection["payload"] != expected:
+                    return False
+            else:
+                payload = selection["payload"]
+                pins = payload["selections"]
+                if (
+                    payload["sessionKey"] != case["before"]["sessionKey"]
+                    or payload["sessionActivation"] != "next-turn"
+                    or len(pins) != 1
+                    or pins[0]["skillId"] != selected["skillId"]
+                    or pins[0]["revision"] != selected["revision"]
+                    or pins[0]["name"] != selected["name"]
+                ):
+                    return False
+            if case["case"] == "positive":
+                original = capture["ordinary_skill"]
+                person = capture["ordinary_actions"]["ui_person"]["frame"]["payload"]
+                if case["before"] != {field: person[field] for field in _SCOPE_FIELDS}:
+                    return False
+                if (
+                    expected != original["receipt"]["payload"]
+                    or selected["content_sha256"] != original["content_sha256"]
+                ):
+                    return False
+            chat, terminal = case["chat"], case["terminal"]
+            if (
+                chat["params"]["sessionKey"] != case["current"]["sessionKey"]
+                or chat["params"]["message"] != case["task"]
+            ):
+                return False
+            host_id = chat["params"]["idempotencyKey"]
+            if chat["frame"]["ok"] is True:
+                if (
+                    chat["frame"]["payload"]["runId"] != host_id
+                    or terminal["runId"] != host_id
+                    or terminal["sessionKey"] != case["current"]["sessionKey"]
+                    or terminal["state"] not in {"final", "error", "aborted"}
+                ):
+                    return False
+                minimum = 1 if terminal["state"] == "final" else 0
+                if not minimum <= len(case["requests"]) <= 2:
+                    return False
+            elif (
+                chat["frame"]["ok"] is not False
+                or not chat["frame"].get("error")
+                or case["requests"]
+                or case["tools"]
+                or terminal
+            ):
+                return False
+            for field, identity in (
+                ("session", case["before"]["sessionKey"]),
+                ("skill", selected["skillId"]),
+                ("host", host_id),
+                ("task", case["task"]),
+            ):
+                if not identity or identity in seen[field]:
+                    return False
+                seen[field].add(identity)
+            for attempt in case["requests"]:
+                if attempt["status"] != 200 or attempt["body"]["model"] != "relaymind-client-tools":
+                    return False
+                if not any(
+                    message["role"] == "user" and case["task"] in _text_content(message["content"])
+                    for message in attempt["body"]["messages"]
+                ):
+                    return False
+                for field in ("request_id", "idempotency_key", "run_id"):
+                    identity = attempt[field]
+                    if not isinstance(identity, str) or not identity or identity in seen[field]:
+                        return False
+                    seen[field].add(identity)
+            for tool in case["tools"]:
+                context, event = tool["context"], tool["event"]
+                if (
+                    context["runId"] != host_id
+                    or event["runId"] != host_id
+                    or context["toolCallId"] != event["toolCallId"]
+                    or event["toolName"] != "skills_read"
+                    or any(
+                        context[field] != case["current"][field]
+                        for field in ("sessionKey", "sessionId")
+                    )
+                ):
+                    return False
+            successful_tools = [tool for tool in case["tools"] if not tool["event"].get("error")]
+            receiving = [
+                message
+                for attempt in case["requests"]
+                for message in attempt["body"]["messages"]
+                if message["role"] == "tool"
+            ]
+            if successful_tools and not _loaded_round_trip(case, require_selected=False):
+                return False
+            if receiving and not case["tools"]:
+                return False
+            observed = loaded_use_observation(case)
+            if case["observed"] != observed:
+                return False
+            if case["case"] == "positive" and (
+                observed != "loaded_pinned_revision"
+                or terminal["state"] != "final"
+                or _text_content(terminal["message"]["content"]) != LOADED_USE_FINAL
+            ):
+                return False
+        return True
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError):
+        return False
+
+
+class LoadedUseGatewayObservation:
+    """Disposable, sequential two-generation script; no host/tool execution."""
+
+    def __init__(self):
+        self.requests = []
+        self.selected = None
+        self.task = None
+        self.generations = 0
+
+    def begin(self, selected, task):
+        self.selected, self.task, self.generations = selected, task, 0
+
+    def generate(self, request):
+        from gateway_helpers import text_turn, tool_turn
+
+        self.generations += 1
+        if self.selected is None or self.generations > 2:
+            raise ValueError("ordinary_skill_generation_bound")
+        messages = request.messages
+        if not any(
+            message.role.value == "user" and self.task in (message.content or "")
+            for message in messages
+        ):
+            raise ValueError("ordinary_skill_task_mismatch")
+        if self.generations == 1:
+            path = (
+                f"/skill-library/{self.selected['skillId']}/revisions/"
+                f"{self.selected['revision']}/SKILL.md"
+            )
+            names = []
+            for message in messages:
+                if message.role.value != "system":
+                    continue
+                for block in re.findall(r"<skill>\s*(.*?)\s*</skill>", message.content or "", re.S):
+                    name = re.search(r"<name>(.*?)</name>", block, re.S)
+                    if path in block and name:
+                        names.append(name.group(1).strip())
+            if len(names) == 1 and "skills_read" in {tool.name for tool in request.tool_schemas}:
+                self.selected["name"] = names[0]
+                return tool_turn(
+                    "skills_read", call_id="read" + secrets.token_hex(12), name=names[0]
+                )
+            return text_turn("No selected skill was loaded.")
+        results = [message.content for message in messages if message.role.value == "tool"]
+        return text_turn(
+            LOADED_USE_FINAL
+            if results == [self.selected["content"]]
+            else "Native skill bytes did not match."
+        )
+
+
+def loaded_use_gateway(work, recommendations):
+    """Real client-owned HTTP API, scripted adapter, passive request/header capture."""
+    from api_helpers import make_app
+    from gateway_helpers import build_gateway
+    from relaymind.api.chat import ClientToolsChat
+
+    observation = LoadedUseGatewayObservation()
+
+    def on_generate(request):
+        gateway.adapter._turns.append(observation.generate(request))
+
+    gateway = build_gateway(work, [], external_turns=[], on_generate=on_generate, input_tokens=1024)
+    app = make_app(
+        gateway, client_tools=ClientToolsChat(gateway.orchestrator), recommendations=recommendations
+    )
+
+    @app.middleware("http")
+    async def capture_model_request(request, call_next):
+        if request.url.path != "/v1/chat/completions":
+            return await call_next(request)
+        if len(observation.requests) >= 8:
+            from starlette.responses import JSONResponse
+
+            return JSONResponse({"error": "observation_request_bound"}, status_code=429)
+        body = await request.body()
+        if len(body) > 1024 * 1024:
+            from starlette.responses import JSONResponse
+
+            return JSONResponse({"error": "observation_byte_bound"}, status_code=413)
+        record = dict(
+            request_id=str(uuid.uuid4()),
+            idempotency_key=request.headers.get("Idempotency-Key"),
+            body=json.loads(body),
+        )
+        observation.requests.append(record)
+        response = await call_next(request)
+        record.update(
+            status=response.status_code, run_id=response.headers.get("X-RelayMind-Run-Id")
+        )
+        return response
+
+    return app, gateway, observation
+
+
 class OrdinaryComposition(BASE.ActionComposition):
-    def __init__(self, *args, archive, runs, skill_text, skill_asset, **kwargs):
+    def __init__(self, *args, archive, runs, skill_text, skill_asset, observation=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.archive, self.runs = archive.resolve(strict=True), runs
         self.skill_text, self.skill_asset = skill_text, skill_asset
+        self.observation = observation
 
     def configure(self, config, work, origin):
         super().configure(config, work, origin)
@@ -257,10 +678,20 @@ class OrdinaryComposition(BASE.ActionComposition):
         config["plugins"]["allow"].append("relaymind-ordinary-observer")
         config["plugins"]["load"]["paths"].append(str(observer))
         config["plugins"]["entries"]["relaymind-ordinary-observer"] = dict(
-            enabled=True, config=dict(eventFile=str(self.event_file))
+            enabled=True,
+            hooks=dict(allowConversationAccess=True),
+            config=dict(eventFile=str(self.event_file)),
         )
         config["gateway"]["controlUi"]["experimental"] = dict(customPlugins=True)
+        config["agents"]["defaults"].update(
+            model=dict(primary="relaymind/relaymind-client-tools"),
+            heartbeat=dict(every="0m"),
+        )
+        config["tools"] = dict(allow=["skills_read"], toolSearch=False)
         self.host_config_path = work / "openclaw.json"
+
+    def environment(self):
+        return dict(super().environment(), RELAYMIND_APP_TOKEN=self.application_token)
 
     def prepare_host(self, host, environment, work, config_path):
         # Operator installation is the ordinary pinned CLI, no constructor override.
@@ -307,6 +738,12 @@ class OrdinaryComposition(BASE.ActionComposition):
             "ordinary_observer_blind",
             "ordinary_skill_save_failed",
             "ordinary_skill_selection_failed",
+            "ordinary_skill_turn_timeout",
+            "ordinary_skill_subscription_failed",
+            "ordinary_skill_terminal_ambiguous",
+            "ordinary_skill_scope_changed",
+            "ordinary_skill_read_failed",
+            "ordinary_skill_control_failed",
         }
 
     def observe_backend(self):
@@ -460,6 +897,7 @@ class OrdinaryComposition(BASE.ActionComposition):
             value["ui_person"] = ui_person
             value["ui"] = run_ui(ui_page, sessions[0], self.observe_backend)
             self.select_library_skill(rpc, pages, sessions, ui_page, capture["ordinary_skill"])
+            self.observe_loaded_use(rpc, pages[0], sessions[0], capture)
         except Exception:
             ui_page.close()
             raise
@@ -573,6 +1011,205 @@ class OrdinaryComposition(BASE.ActionComposition):
         skill["library_list"] = dict(
             ok=listed["frame"].get("ok") is True, payload=listed["frame"].get("payload")
         )
+
+    def loaded_use_turn(self, rpc, page, session, case, *, timeout=60):
+        """Collect a bounded native browser turn; hooks only observe, never dispatch."""
+        subscription = rpc(
+            page,
+            "sessions.messages.subscribe",
+            dict(key=case["current"]["sessionKey"], subscriptionId="relaymind-loaded-observation"),
+        )
+        if (
+            subscription["frame"].get("ok") is not True
+            or subscription["frame"]["payload"].get("subscribed") is not True
+            or subscription["frame"]["payload"].get("key") != case["current"]["sessionKey"]
+        ):
+            raise ValueError("ordinary_skill_subscription_failed")
+        self.observation.begin(case["selected"], case["task"])
+        start = len(self.observation.requests)
+        event_start = len(self.event_file.read_bytes())
+        params = dict(
+            sessionKey=case["current"]["sessionKey"],
+            message=case["task"],
+            idempotencyKey=str(uuid.uuid4()),
+        )
+        sent = rpc(page, "chat.send", params)
+        case["chat"] = dict(params=params, frame=sent["frame"])
+        case.update(tools=[], requests=[], terminal={}, observed="incomplete")
+        if sent["frame"].get("ok") is False:
+            case["observed"] = "refused"
+            return
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            terminal = page.evaluate(
+                "id => window.__rmPersonWire.turnEvents(id)", sent["frame"]["payload"]["runId"]
+            )
+            if terminal:
+                if len(terminal) != 1:
+                    raise ValueError("ordinary_skill_terminal_ambiguous")
+                case["terminal"] = terminal[0]
+                break
+            page.wait_for_timeout(100)
+        else:
+            events = [
+                json.loads(line) for line in self.event_file.read_bytes()[event_start:].splitlines()
+            ]
+            case["tools"] = [
+                dict(event=event["event"], context=event["context"])
+                for event in events
+                if event.get("kind") == "native_skill_tool"
+            ]
+            case["requests"] = self.observation.requests[start:]
+            raise ValueError("ordinary_skill_turn_timeout")
+        # Tool hooks are asynchronous; allow their bounded delivery to catch up
+        # after the terminal event before reading the passive capture file.
+        deadline = time.monotonic() + 3
+        while True:
+            events = [
+                json.loads(line) for line in self.event_file.read_bytes()[event_start:].splitlines()
+            ]
+            case["tools"] = [
+                dict(event=event["event"], context=event["context"])
+                for event in events
+                if event.get("kind") == "native_skill_tool"
+            ]
+            case["requests"] = self.observation.requests[start:]
+            has_result = any(
+                message["role"] == "tool"
+                for attempt in case["requests"]
+                for message in attempt["body"]["messages"]
+            )
+            if case["tools"] or not has_result or time.monotonic() >= deadline:
+                break
+            page.wait_for_timeout(50)
+        after = rpc(page, "rmqualification.person", session)
+        if (
+            after["frame"].get("ok") is not True
+            or {field: after["frame"]["payload"][field] for field in _SCOPE_FIELDS}
+            != case["current"]
+        ):
+            raise ValueError("ordinary_skill_scope_changed")
+        case["observed"] = loaded_use_observation(case)
+
+    def observe_loaded_use(self, rpc, page, session, capture):
+        """One bridge-selected positive and three isolated native control sessions."""
+        value = dict(tier="deterministic_native_observation", qualification="unavailable", cases=[])
+        capture["ordinary_skill_loaded_use"] = value
+        for name in ("positive", "stale", "deleted", "reset"):
+            if name == "positive":
+                skill = capture["ordinary_skill"]
+                selected_session = session
+                selection = skill["receipt"]
+            else:
+                created = rpc(page, "sessions.create", BASE.person_module().session_create_params())
+                receipt = BASE.person_module().session_create_receipt(
+                    created, capture["accounts"][0]["native_person_email"]
+                )
+                selected_session = BASE.person_module().session_params(receipt)
+                skill = self.save_library_skill(rpc, page, selected_session)
+                activated = rpc(
+                    page,
+                    "skills.library.activate",
+                    dict(
+                        sessionKey=selected_session["sessionKey"],
+                        action="attach",
+                        skillId=skill["mapping"]["skillId"],
+                        revision=skill["mapping"]["revision"],
+                    ),
+                )
+                selection = dict(
+                    ok=activated["frame"].get("ok"), payload=activated["frame"].get("payload")
+                )
+            mapping = skill["mapping"]
+            person = rpc(page, "rmqualification.person", selected_session)
+            if person["frame"].get("ok") is not True:
+                raise ValueError("ordinary_skill_scope_changed")
+            scope = {field: person["frame"]["payload"][field] for field in _SCOPE_FIELDS}
+            read = rpc(
+                page,
+                "skills.library.read",
+                dict(
+                    sessionKey=scope["sessionKey"],
+                    skillId=mapping["skillId"],
+                    revision=mapping["revision"],
+                ),
+            )
+            if read["frame"].get("ok") is not True:
+                raise ValueError("ordinary_skill_read_failed")
+            payload = read["frame"]["payload"]
+            listed = rpc(page, "skills.library.list", dict(sessionKey=scope["sessionKey"]))
+            pins = listed["frame"]["payload"]["session"]["selections"]
+            pin = next(
+                pin
+                for pin in pins
+                if pin["skillId"] == mapping["skillId"] and pin["revision"] == mapping["revision"]
+            )
+            selected = dict(
+                skillId=mapping["skillId"],
+                revision=mapping["revision"],
+                content=payload["content"],
+                content_sha256=skill["content_sha256"],
+                name=pin["name"],
+                read=dict(ok=True, payload=payload),
+            )
+            case = dict(
+                case=name,
+                task="RelayMind native skill observation " + secrets.token_hex(16),
+                before=scope,
+                current=dict(scope),
+                selected=selected,
+                selection=selection,
+                intervention=None,
+                chat={},
+                tools=[],
+                requests=[],
+                terminal={},
+                observed="incomplete",
+            )
+            value["cases"].append(case)
+            if name == "stale":
+                params = dict(
+                    skillId=mapping["skillId"],
+                    expectedRevision=mapping["revision"],
+                    slug=payload["entry"]["slug"],
+                    content=self.skill_text + "\nUpdated disposable control.\n",
+                )
+                changed = rpc(page, "skills.library.save", params)
+                case["intervention"] = dict(
+                    method="skills.library.save", params=params, frame=changed["frame"]
+                )
+            elif name == "deleted":
+                params = dict(
+                    skillId=mapping["skillId"],
+                    expectedRevision=mapping["revision"],
+                    action="remove",
+                )
+                changed = rpc(page, "skills.library.mutate", params)
+                case["intervention"] = dict(
+                    method="skills.library.mutate", params=params, frame=changed["frame"]
+                )
+            elif name == "reset":
+                params = dict(
+                    key=scope["sessionKey"], expectedSessionId=scope["sessionId"], reason="reset"
+                )
+                changed = rpc(page, "sessions.reset", params)
+                case["intervention"] = dict(
+                    method="sessions.reset", params=params, frame=changed["frame"]
+                )
+                if changed["frame"].get("ok") is True:
+                    entry = changed["frame"]["payload"]["entry"]
+                    selected_session = dict(
+                        sessionKey=scope["sessionKey"],
+                        expectedSessionId=entry["sessionId"],
+                        expectedLifecycleRevision=entry["lifecycleRevision"],
+                    )
+                    current = rpc(page, "rmqualification.person", selected_session)
+                    case["current"] = {
+                        field: current["frame"]["payload"][field] for field in _SCOPE_FIELDS
+                    }
+            if not _control_observed(case):
+                raise ValueError("ordinary_skill_control_failed")
+            self.loaded_use_turn(rpc, page, selected_session, case)
 
     def native_events(self):
         path = self.work / "native-events.jsonl"
@@ -719,8 +1356,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     backend = args.work_dir.parent / (args.work_dir.name + "-gateway")
     backend.mkdir(mode=0o700)
-    app, service, runs, _ = setup(backend)
-    app.state.application_token = secrets.token_urlsafe(48)
+    _, service, runs, _ = setup(backend)
+    app, gateway, observation = loaded_use_gateway(backend / "inference", service)
     action_token = secrets.token_urlsafe(48)
     registration = ActionRegistrations(runs)  # Actual DEFAULT production resolver.
     registration.replace(
@@ -767,6 +1404,7 @@ def main(argv=None):
                 release,
                 archive=args.tarball,
                 runs=runs,
+                observation=observation,
                 skill_text=skill_text,
                 skill_asset=dict(
                     asset_id=record.asset_id,
@@ -782,13 +1420,24 @@ def main(argv=None):
             extension.finalize(capture)
         capture["checks"]["ordinary_actions"] = ordinary_pass(capture)
         capture["checks"]["ordinary_skill"] = ordinary_skill_pass(capture)
+        capture["checks"]["ordinary_skill_loaded_use_observation"] = ordinary_skill_loaded_use_pass(
+            capture
+        )
         BASE.person_module().write_capture(args.out, capture)
-        passed = capture["checks"]["ordinary_actions"] and capture["checks"]["ordinary_skill"]
+        passed = all(
+            capture["checks"][key]
+            for key in (
+                "ordinary_actions",
+                "ordinary_skill",
+                "ordinary_skill_loaded_use_observation",
+            )
+        )
         return 0 if code == 0 and passed else 2
     finally:
         release.set()
         asyncio.run(service.stop())
         runs.close()
+        gateway.store.close()
 
 
 if __name__ == "__main__":
