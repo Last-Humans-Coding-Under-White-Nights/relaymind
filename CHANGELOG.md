@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.55 → 0.56 (RM40/RM44; AC31/AC36; review #219):
+  names `Case.conversation` and attempt/embedding `cost_observations` as
+  order-preserving arrays for canonical hashing. Types `Rate.value` and Wilson
+  bounds as `nonnegative_number`, consistent with their existing [0, 1] limits.
+
+- The current 0.57 baseline carries these master 0.56 benchmark clarifications
+  and the parallel source-grounded 0.56 additions below as distinct histories.
+
 - Specification 0.52 → 0.53 (RM16, RM38/AC29; #196, review #218):
   fixed 500 ms request slots admit measured dispatch delay within the original
   deadline, with a separate scheduled-to-response p95 ≤300 ms gate. Service and
