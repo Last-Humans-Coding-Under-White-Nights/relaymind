@@ -1024,3 +1024,100 @@ def test_every_browser_context_is_closed_even_if_one_close_fails():
 
     api._close_contexts([Context("a", fail=True), Context("b")])
     assert closed == ["a", "b"]
+
+
+# --- #228 harness hardening (review of #224) -------------------------------------
+
+
+@pytest.mark.parametrize(
+    "frame, code",
+    [
+        ({"error": {"code": "FORBIDDEN"}}, "FORBIDDEN"),
+        ({"error": "FORBIDDEN"}, None),
+        ({"error": ["FORBIDDEN"]}, None),
+        ({"error": None}, None),
+        ({}, None),
+        ({"error": {"code": "not a code!"}}, None),
+        ({"error": {"code": "X" * 65}}, None),
+    ],
+)
+def test_native_error_code_reads_only_a_mapping_error(frame, code):
+    assert module().native_error_code(frame) == code
+
+
+def person_result(payload):
+    return {
+        "id": "rpc-1",
+        "socket_id": "s",
+        "frame": {"id": "rpc-1", "ok": True, "payload": payload},
+    }
+
+
+PERSON = dict(
+    requestId="rpc-1",
+    authenticatedUserId="fixture@example.test",
+    profileId="profile",
+    sessionKey="key",
+    sessionId="id",
+    lifecycleRevision="life",
+    deviceId="device",
+    connectionId="connection",
+)
+
+
+def test_person_rpc_receipt_accepts_the_bound_payload():
+    assert module().person_rpc_receipt(person_result(PERSON), "fixture@example.test") == PERSON
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        None,
+        "receipt",
+        [],
+        {k: v for k, v in PERSON.items() if k != "requestId"},
+        {k: v for k, v in PERSON.items() if k != "deviceId"},
+        dict(PERSON, requestId="other"),
+        dict(PERSON, authenticatedUserId="someone@example.test"),
+        dict(PERSON, sessionId=7),
+    ],
+)
+def test_malformed_person_rpc_receipts_are_identity_binding_failures(payload):
+    with pytest.raises(ValueError, match="native_person_identity_binding"):
+        module().person_rpc_receipt(person_result(payload), "fixture@example.test")
+
+
+@pytest.mark.parametrize("payload", [None, "x", {"key": "k", "sessionId": "i"}, {"entry": None}])
+def test_malformed_session_create_payloads_are_create_binding_failures(payload):
+    observed = dict(id="c", socket_id="s", frame=dict(id="c", ok=True, payload=payload))
+    with pytest.raises(ValueError, match="native_session_create_binding"):
+        module().session_create_receipt(observed, "fixture@example.test")
+
+
+def test_session_params_come_from_the_validated_create_receipt():
+    observed = dict(
+        id="c",
+        socket_id="s",
+        frame=dict(
+            id="c",
+            ok=True,
+            payload=dict(
+                key="native-key", sessionId="native-id", entry=dict(lifecycleRevision="l")
+            ),
+        ),
+    )
+    api = module()
+    receipt = api.session_create_receipt(observed, "fixture@example.test")
+    assert api.session_params(receipt) == dict(
+        sessionKey="native-key", expectedSessionId="native-id", expectedLifecycleRevision="l"
+    )
+
+
+@pytest.mark.parametrize("projection", ["project_person_rpc_failure", "project_held_native_events"])
+def test_event_projections_skip_blank_lines(tmp_path, projection):
+    events = tmp_path / "events.jsonl"
+    line = {"requestId": "wanted", "phase": "prepared", "reason": None, "connectionId": "c1"}
+    events.write_bytes(b"\n" + json.dumps(line).encode() + b"\n\n  \n")
+    projected = getattr(module(), projection)(events, "wanted")
+    assert projected["status"] != "event_file_invalid"
+    assert projected["observations"][0]["phase"] == "prepared"
