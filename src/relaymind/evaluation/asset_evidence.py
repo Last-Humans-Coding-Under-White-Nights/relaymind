@@ -182,6 +182,8 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed native0.62 direct-action contract (ad09abd).
+            ("bd412e5fd93cc3d187d03b57ae3e8af2c67e709fb84ad6171a6ed1cf10b20d63", 580897),
             # Reviewed native0.61 and corrected Source/master union (9c1c0ddb).
             ("0fe6b740ad6303782112c39dbb98b193ff242b88ad0e5ec708eb6a779770fc71", 569529),
             # Reviewed normative0.61 local preparation and runtime display (082202f).

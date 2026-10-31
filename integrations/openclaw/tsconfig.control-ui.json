@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {"outDir": "dist/control-ui", "newLine": "lf"},
+  "include": ["src/control-ui.ts", "src/recommendation-json.ts"]
+}

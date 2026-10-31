@@ -6,7 +6,10 @@
     "rootDir": "src",
     "rewriteRelativeImportExtensions": true,
     "declaration": false,
-    "sourceMap": false
+    "sourceMap": false,
+    "newLine": "lf"
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "src/**/*.ts"
+  ]
 }
