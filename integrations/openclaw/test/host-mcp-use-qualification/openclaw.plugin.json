@@ -1,0 +1,14 @@
+{
+  "id": "relaymind-person-qualification",
+  "name": "Disposable MCP use person probe",
+  "activation": {"onStartup": true},
+  "contracts": {"gatewayMethodDispatch": ["authenticated-request"]},
+  "configSchema": {
+    "type": "object", "additionalProperties": false,
+    "required": ["origin", "eventFile", "releaseFile", "inventoryFile"],
+    "properties": {
+      "origin": {"type": "string"}, "eventFile": {"type": "string"},
+      "releaseFile": {"type": "string"}, "inventoryFile": {"type": "string"}
+    }
+  }
+}

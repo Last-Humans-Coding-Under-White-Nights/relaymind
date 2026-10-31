@@ -2703,3 +2703,19 @@ embedding qualification registry contains only the two exact reviewed Linux CPU
 identities; every other artifact remains unqualified pending independent
 exact-identity review. No 512 MiB memory gate or universal 50 ms cancellation SLA
 is introduced.
+## Disposable MCP use capability tier (#204; RM39/AC35)
+
+The separate [MCP use harness](../integrations/openclaw/test/host-mcp-use-qualification/README.md)
+reuses the ordinary installed-entry/person browser setup and adds two host-owned
+stdio servers with colliding names and bounded sandbox append counters. Its
+optional Ubuntu CI step has a 12-minute timeout and uploads a separate capture.
+The local host smoke test is enabled with `RELAYMIND_OPENCLAW_NODE=1`; the default
+Python suite includes evidence mutation and browser driver tests.
+
+This is capability tooling. `mcp_use_pass` regrades available raw evidence and
+keeps unsupported exact-use/currentness/approval/baseline terms false. A process
+exit of zero can mean a faithfully recorded `blocked` result. The current driver
+does not dispatch a mutation without a qualified exact-use receipt. Native
+allow/deny and stale-use trials consequently remain `not_run`; the available
+Playwright click driver labels its actions `automated_ui`, never human approval.
+No production MCP operation, runtime snapshot or AC35 acceptance is enabled.

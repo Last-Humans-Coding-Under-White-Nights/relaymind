@@ -1,0 +1,83 @@
+# Disposable MCP use capability qualification (#204)
+
+RM39 / AC35, specification sections 7.6.1 and 12.6.5. This separate tier leaves
+the historical #190 harness and evidence unchanged. It changes no adapter,
+qualification registry, gateway executor or runtime snapshot contract.
+
+Run from the repository root after installing development dependencies,
+`npm ci`, building a release tarball, and installing Playwright Chromium:
+
+```sh
+PYTHONPATH=src:tests python integrations/openclaw/test/host-mcp-use-qualification/qualify.py \
+  --tarball /absolute/path/to/relaymind-openclaw-provider-0.1.0.tgz \
+  --work-dir /absolute/path/to/new-disposable-directory \
+  --out /absolute/path/to/capture.json
+```
+
+The person trial inherits the ordinary installed-entry harness: real disposable
+signed-session accounts, paired native Control UI, default gateway registration,
+the unchanged installed provider, and authenticated public gateway dispatch.
+It requires Linux x86-64 with an assigned private IPv4 interface. Other machines
+emit a blocked capture with the original setup reason. `--preflight-only --out
+capture.json` writes an explicit no-run record without launching a host.
+The inherited deadline is 570 seconds; the optional Ubuntu CI step has a
+12-minute timeout and uploads a separate capture artifact. Unsupported capability
+returns zero with `status: blocked`; that exit code is not qualification.
+
+Two disposable stdio servers, `alpha.one` and `alpha?one`, both advertise
+`append`. OpenClaw owns their launch, transport and inventory. The fixture logs
+original schemas and every server call, including rejected calls; it appends at
+most one bounded JSON string to its own sandbox per valid call and records its
+counter/result. Revision 2 adds an optional field, so stale-schema tests can
+distinguish exact authorization from argument validity. No input accepts a path.
+The host CLI probes both servers; the person probe records the raw response to
+`tools.effective` through `dispatchGatewayMethod` in its original authenticated
+request. It does not parse an exposed name to manufacture provenance.
+The same authenticated scope probes `mcp.app.listTools` with no view ID and
+records its response; it does not invent a view for an independent tool. This
+negative route probe cannot establish that all other host compositions fail.
+
+The current driver stops at that discovery checkpoint. It has no qualified
+public exact-use receipt resolver binding the independent tool to a native
+runtime/session/requester and final server I/O. It does not manufacture an App
+view, dispatch a name-only mutation, add permissive approval configuration, or
+substitute an unrelated approval policy. The fixed reason
+`no_qualified_exact_use_receipt_resolver` describes this qualification gap; it is
+not a claim that the host has no approval or MCP APIs.
+
+`approval_ui.py` supplies a bounded Playwright driver for an already genuine
+native plugin approval card. It checks the request ID, session, exact displayed
+detail, allowed decision and expiration, opens the native modal, and clicks
+Allow once or Deny. It never calls an approval resolver or changes approval
+state directly. Its action is labeled `automated_ui`; a click is not a native
+resolution receipt. No exact bound request is available in the current driver,
+so actual allow/deny, stale schema/server/session cases, replay/cancel/timeout,
+and native/provider/recommendation baseline comparison remain `not_run` with
+`exact_route_unqualified`. Human approval is always `not_run` in this tier.
+
+`grade.py` reopens pinned source files, regrades the original person and ordinary
+registration capture, and counts gateway execution from actual trace events.
+Missing traces cannot establish zero execution. Accounting helpers independently
+check both schema hash forms, provenance, intended server/file/result, one-shot
+effects, and zero-call stale rejection; their synthetic unit inputs are not
+native receipts. The exact-use, policy/currentness, approval and baseline terms
+remain false until a reviewed raw native resolver exists. Consequently
+`mcp_use_pass(capture)` currently cannot pass. Caller `checks`, `passed`,
+`qualified` or summary counters cannot lift that block.
+
+Raw private logs and disposable state stay in the work directory; only the
+structured capture is uploaded. The original person capture remains nested and
+unchanged. Do not publish raw scratch logs or treat fixture automation as human,
+whole-task, quality, M1/macOS or native Windows acceptance. No production MCP
+activation follows from this tooling, even after a future functional pass.
+
+Verification:
+
+```sh
+PYTHONPATH=src:tests:scripts RELAYMIND_OPENCLAW_NODE=1 python -m pytest \
+  tests/test_openclaw_mcp_use_qualification.py -q -p no:cacheprovider -o addopts=""
+```
+
+The opt-in host smoke test launches both real servers through the pinned host
+and requires original list evidence and zero calls/writes. Browser tests use a
+DOM fixture to verify driver behavior; they do not claim a live native approval.
