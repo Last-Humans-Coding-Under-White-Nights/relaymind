@@ -1175,7 +1175,8 @@ model and platform deliverables stay open. Development completion of
 loader, cooperative hybrid ranking/vector lifecycle and private explicit-correction
 adaptation/reset backend are implemented. Native loading reacquires the same CPU
 owner and retains actual cancellation/drain evidence. The production embedding
-qualification registry remains empty: no ordinary-config activation or portable
+qualification registry now contains two exact reviewed Linux CPU identities;
+fresh ordinary hybrid activation is recorded in the model evidence. No portable
 qualified model is claimed. Historical 47-asset/36-case native development results
 remain provisional, distinct from the current 412-asset/128-case source benchmark.
 Real host correction authority, formal chronological episodes and final quality,
@@ -1271,8 +1272,8 @@ source/label/policy and normal machine equality stay enforced. Existing0.58
 semantic documents and artifact/reference slots suffice. Parser/factory/offline
 closure, local preparation and native comparison/runtime-display tooling are
 implemented with explicit deterministic qualification fixtures; ordinary
-artifact activation and actual native controls remain separate. Ordinary native
-activation and native run/compare still require independent exact-registry review
-and fresh unmodified-process proof before publication. No
-production entry, host correction authority, dataset/hardware qualification,
+artifact activation has independent exact-key review and a fresh unmodified
+console-launch proof. The full 412/128 provisional source runs retain the
+observed hybrid quality regression, primary failure and lexical fallback. No
+host correction authority, dataset/hardware-wide qualification,
 new numerical threshold or final-M10 pass is supplied by this contract.

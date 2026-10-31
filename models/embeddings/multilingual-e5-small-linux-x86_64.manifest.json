@@ -1,0 +1,54 @@
+{
+  "device": "cpu:Linux:x86_64:Intel Xeon Processor (Skylake, IBRS)",
+  "dimensions": 384,
+  "files": [
+    {
+      "bytes": 497538,
+      "path": "README.md",
+      "roles": [
+        "license"
+      ],
+      "sha256": "0038de97aee16258cecbad7ffda4b4febd6953e747a00e0ddbc8e6ed241e9c1c"
+    },
+    {
+      "bytes": 655,
+      "path": "config.json",
+      "roles": [
+        "configuration"
+      ],
+      "sha256": "69137736cab8b8903a07fe8afaafdda25aac55415a12a55d1bffa9f581abf959"
+    },
+    {
+      "bytes": 118346824,
+      "path": "onnx/model_qint8_avx512_vnni.onnx",
+      "roles": [
+        "weights"
+      ],
+      "sha256": "dd476dd0c2514e9b9be83aeb3853fac0763e0bdf4a71645407587d77c48a2d88"
+    },
+    {
+      "bytes": 17082730,
+      "path": "tokenizer.json",
+      "roles": [
+        "tokenizer"
+      ],
+      "sha256": "0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39"
+    }
+  ],
+  "license": "MIT",
+  "model": {
+    "name": "intfloat/multilingual-e5-small",
+    "version": "614241f622f53c4eeff9890bdc4f31cfecc418b3"
+  },
+  "quantization": "qint8_avx512_vnni",
+  "runtime": {
+    "backend": "onnx_e5_cpu",
+    "build": "f3543633fa2f66713cc90563a862af952d40f55cfc70b0d95cf25f4deba07eb1",
+    "version": "1.31.1"
+  },
+  "schema_version": 1,
+  "source": {
+    "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+    "url": "https://huggingface.co/intfloat/multilingual-e5-small"
+  }
+}

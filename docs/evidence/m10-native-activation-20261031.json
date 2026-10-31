@@ -1,0 +1,215 @@
+{
+  "status": "source_grounded_development",
+  "acceptance_eligible": false,
+  "recorded_date": "2026-10-31",
+  "manifest_digest": "420a2fcd5564ade1d81216a8c85947267300d5cc09a1e888d4bcd5361b7b13fa",
+  "hybrid_config_digest": "8fc6b9e9717fc20ba6130237f03f3a4aef8a656f45650b3638575296ba5eda2f",
+  "runtime": {
+    "backend": "onnx_e5_cpu",
+    "version": "1.31.1",
+    "build": "f3543633fa2f66713cc90563a862af952d40f55cfc70b0d95cf25f4deba07eb1"
+  },
+  "device": "cpu:Linux:x86_64:Intel Xeon Processor (Skylake, IBRS)",
+  "implementation_digest": "a5cb723948d5c4bdddf4387809d1cc12306858d990cd90a9004d14b2c09cae33",
+  "ordinary_launch": {
+    "qualification_injection": false,
+    "external_inference_calls": 0,
+    "readiness": {
+      "schema_version": 1,
+      "state": "ready",
+      "reason": "usable_catalog",
+      "catalog_revision": 3,
+      "catalog_size": 412,
+      "lexical_ready": true,
+      "semantic_coverage": {
+        "ready": 190,
+        "total": 412
+      },
+      "pending_jobs": 0,
+      "failed_jobs": 2
+    },
+    "queries": [
+      {
+        "task_text": "分析内存泄漏并定位问题",
+        "http_status": 200,
+        "wall_ms": 193.88690096093342,
+        "decision": "choice_required",
+        "attempts": [
+          {
+            "mechanism": "hybrid_weighted_rrf",
+            "outcome": "ranked",
+            "observed_ms": 101.67651099618524
+          }
+        ],
+        "embeddings": [
+          {
+            "artifact_hash": "d43c2aed82aaff96d4f2797f24ec98e0efb261eb87a581308776aaf3e1ba3233",
+            "cost_observations": [
+              {
+                "provenance": "observed",
+                "value": {
+                  "cached_tokens": null,
+                  "calls": 1,
+                  "cpu_ms": null,
+                  "input_tokens": 15,
+                  "output_tokens": null,
+                  "peak_bytes": null,
+                  "reasoning_tokens": null
+                }
+              }
+            ],
+            "device": "cpu:Linux:x86_64:Intel Xeon Processor (Skylake, IBRS)",
+            "duration_ms": 16.080610046628863,
+            "input_bytes": 40,
+            "input_tokens": 15,
+            "model": {
+              "name": "intfloat/multilingual-e5-small",
+              "version": "614241f622f53c4eeff9890bdc4f31cfecc418b3"
+            },
+            "outcome": "succeeded",
+            "representation_revision": "asset_fields.v1"
+          }
+        ]
+      },
+      {
+        "task_text": "Analyze memory leaks in a C++ application",
+        "http_status": 200,
+        "wall_ms": 147.35570101765916,
+        "decision": "choice_required",
+        "attempts": [
+          {
+            "mechanism": "hybrid_weighted_rrf",
+            "outcome": "ranked",
+            "observed_ms": 80.37582802353427
+          }
+        ],
+        "embeddings": [
+          {
+            "artifact_hash": "d43c2aed82aaff96d4f2797f24ec98e0efb261eb87a581308776aaf3e1ba3233",
+            "cost_observations": [
+              {
+                "provenance": "observed",
+                "value": {
+                  "cached_tokens": null,
+                  "calls": 1,
+                  "cpu_ms": null,
+                  "input_tokens": 17,
+                  "output_tokens": null,
+                  "peak_bytes": null,
+                  "reasoning_tokens": null
+                }
+              }
+            ],
+            "device": "cpu:Linux:x86_64:Intel Xeon Processor (Skylake, IBRS)",
+            "duration_ms": 18.47675599856302,
+            "input_bytes": 48,
+            "input_tokens": 17,
+            "model": {
+              "name": "intfloat/multilingual-e5-small",
+              "version": "614241f622f53c4eeff9890bdc4f31cfecc418b3"
+            },
+            "outcome": "succeeded",
+            "representation_revision": "asset_fields.v1"
+          }
+        ]
+      },
+      {
+        "task_text": "分析 memory leak 并给出修复建议",
+        "http_status": 200,
+        "wall_ms": 184.6198319690302,
+        "decision": "choice_required",
+        "attempts": [
+          {
+            "mechanism": "hybrid_weighted_rrf",
+            "outcome": "ranked",
+            "observed_ms": 91.12424199702218
+          }
+        ],
+        "embeddings": [
+          {
+            "artifact_hash": "d43c2aed82aaff96d4f2797f24ec98e0efb261eb87a581308776aaf3e1ba3233",
+            "cost_observations": [
+              {
+                "provenance": "observed",
+                "value": {
+                  "cached_tokens": null,
+                  "calls": 1,
+                  "cpu_ms": null,
+                  "input_tokens": 16,
+                  "output_tokens": null,
+                  "peak_bytes": null,
+                  "reasoning_tokens": null
+                }
+              }
+            ],
+            "device": "cpu:Linux:x86_64:Intel Xeon Processor (Skylake, IBRS)",
+            "duration_ms": 16.890949045773596,
+            "input_bytes": 47,
+            "input_tokens": 16,
+            "model": {
+              "name": "intfloat/multilingual-e5-small",
+              "version": "614241f622f53c4eeff9890bdc4f31cfecc418b3"
+            },
+            "outcome": "succeeded",
+            "representation_revision": "asset_fields.v1"
+          }
+        ]
+      }
+    ]
+  },
+  "source_benchmark": {
+    "assets": 412,
+    "cases": 128,
+    "qualification": "provisional",
+    "catalog_sha256": "a7adaf2b44f4ccd743ad1dcd8e1c9db16c21cbf0ea5883e9daa2ee3732ae1c16",
+    "cases_sha256": "83f97f713f674c7449f3a6af701d75407c3a1289208fbc2d0fcc7138e0b75f56",
+    "budgets": {
+      "total_ms": 500,
+      "primary_ms": 150
+    },
+    "track": "service",
+    "lexical_summary": {
+      "abstentions": 0,
+      "choice_required": 128,
+      "choice_supported3": 66,
+      "confident": 0,
+      "confident_correct": 0,
+      "failed": 0,
+      "false_confident": 0,
+      "hit3": 63,
+      "positive_cases": 116,
+      "primary_attempt_failures": 0,
+      "primary_not_ready": 0,
+      "reference_cases": 128,
+      "top1": 48,
+      "user_choice_correct": 0,
+      "user_choices": 0
+    },
+    "hybrid_summary": {
+      "abstentions": 0,
+      "choice_required": 128,
+      "choice_supported3": 49,
+      "confident": 0,
+      "confident_correct": 0,
+      "failed": 0,
+      "false_confident": 0,
+      "hit3": 46,
+      "positive_cases": 116,
+      "primary_attempt_failures": 1,
+      "primary_not_ready": 0,
+      "reference_cases": 128,
+      "top1": 34,
+      "user_choice_correct": 0,
+      "user_choices": 0
+    },
+    "lexical_report_sha256": "7b3f327ca9ec9e0bdded51fba963121729d789371d9d589ab87a1043b63e657d",
+    "hybrid_report_sha256": "571fabd907e850c162bf810d88d2063fde556a040aa5b5fe7090fe8356515cc0"
+  },
+  "limits": [
+    "Exact reviewed Linux CPU/runtime/device only; no macOS or native Windows qualification.",
+    "Source references are provisional; no independent quality acceptance or performance superiority.",
+    "Hybrid Hit@3 regressed from 63/116 to 46/116; no calibration or corpus changes made.",
+    "Partial semantic coverage and two failed index jobs retained; lexical remains available.",
+    "No production host correction authority or formal feedback-episode acceptance."
+  ]
+}

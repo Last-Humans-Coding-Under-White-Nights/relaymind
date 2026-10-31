@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "name": "local_e5_hybrid",
+    "version": "1"
+  },
+  "manifest_digest": "420a2fcd5564ade1d81216a8c85947267300d5cc09a1e888d4bcd5361b7b13fa",
+  "representation": {
+    "version": "asset_fields.v1",
+    "normalization": "NFC",
+    "query_prefix": "query: ",
+    "document_prefix": "passage: ",
+    "max_tokens": 512,
+    "overflow": "unavailable"
+  },
+  "index": {
+    "version": "exact_cosine.v1",
+    "batch_size": 1
+  },
+  "fusion": {
+    "version": "weighted_rrf.v1",
+    "lexical_weight": 0.1,
+    "semantic_weight": 0.9,
+    "k": 1,
+    "min_cosine": 0.0
+  },
+  "confidence": {
+    "min_score": 1.0,
+    "min_margin": 1.0
+  }
+}

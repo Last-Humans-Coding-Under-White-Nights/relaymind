@@ -531,8 +531,8 @@ independent qualification. The v2 query/result wire remains unchanged.
 
 The benchmark tooling supports a separately qualified configured hybrid through
 the production service and its single index worker. The production artifact
-registry is currently empty; these instructions do not supply activation keys or
-claim an ordinary native installation. The lexical/HTTP examples above remain
+registry includes an exact reviewed Linux CPU bundle with a fresh ordinary
+launch record; see the model status below for its strict runtime/device scope. The lexical/HTTP examples above remain
 usable without a native model. See [model status](../models/README.md#local-multilingual-embedding-development-candidate).
 
 For a qualified hybrid, add this table to the benchmark TOML before freezing its
