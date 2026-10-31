@@ -1,0 +1,20 @@
+# Fixture protocol only. No chat model is started or called.
+[external_model]
+base_url = "http://127.0.0.1:1/v1"
+model = "unused-fixture"
+context_limit = 1024
+
+[policy]
+permissions = []
+
+[recommendations]
+enabled = true
+user_id = "fixture-user"
+workspace_id = "fixture-workspace"
+primary = "lexical"
+fallback = false
+
+[[assets.sources]]
+source_id = "fixture"
+kind = "local_directory"
+path = "originals"

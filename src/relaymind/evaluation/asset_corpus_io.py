@@ -117,6 +117,8 @@ def parse_json(payload: bytes) -> dict[str, Any]:
         if not isinstance(value, dict):
             raise AssetCorpusError("invalid_document")
         return value
+    except AssetCorpusError:
+        raise
     except (ValueError, UnicodeError, RecursionError, OverflowError):
         raise AssetCorpusError("invalid_json") from None
 
@@ -145,7 +147,7 @@ _CorpusValidator = extend(
 )
 _VALIDATORS = {
     name: _CorpusValidator(load_packaged_schema("relaymind.evaluation", f"asset_{name}.v1.json"))
-    for name in ("catalog_set", "cases", "labels", "lock")
+    for name in ("catalog_set", "cases", "labels", "lock", "diagnostic")
 }
 
 

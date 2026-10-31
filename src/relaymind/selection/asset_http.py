@@ -119,41 +119,54 @@ class HttpAssetSelector:
 
     async def select(self, request: AssetSelectionRequest, context: SelectorContext) -> object:
         payload = request.to_bytes(context)
-        try:
-            async with httpx.AsyncClient(
-                trust_env=False,
-                follow_redirects=False,
-                timeout=None,
-                verify=_SSL_CONTEXT,
-                transport=None if self._transport_factory is None else self._transport_factory(),
-            ) as client:
-                # Setup and client entry consume the original attempt clock.
-                # Fence before sending bytes; the client still closes on failure.
+        return await post_json(
+            self.url, payload, context, transport_factory=self._transport_factory
+        )
+
+
+async def post_json(
+    url: str,
+    payload: bytes,
+    context: SelectorContext,
+    *,
+    transport_factory: Callable[[], httpx.AsyncBaseTransport] | None = None,
+) -> object:
+    """One strict bounded exchange shared by query and companion preparation."""
+    try:
+        async with httpx.AsyncClient(
+            trust_env=False,
+            follow_redirects=False,
+            timeout=None,
+            verify=_SSL_CONTEXT,
+            transport=None if transport_factory is None else transport_factory(),
+        ) as client:
+            # Setup and client entry consume the original attempt clock.
+            # Fence before sending bytes; the client still closes on failure.
+            context.check()
+            async with client.stream(
+                "POST",
+                url,
+                content=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "Accept-Encoding": "gzip, deflate",
+                },
+            ) as response:
                 context.check()
-                async with client.stream(
-                    "POST",
-                    self.url,
-                    content=payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "Accept": "application/json",
-                        "Accept-Encoding": "gzip, deflate",
-                    },
-                ) as response:
-                    context.check()
-                    if response.status_code != 200:
-                        raise AttemptFailure("unavailable", "http_status")
-                    if not _media_type(response.headers.get("content-type")):
-                        raise AttemptFailure("invalid", "response_media_type")
-                    body = await _read_body(response, context)
-            context.check()
-            try:
-                decoded = strict_json(body)
-            except (ValueError, UnicodeError, RecursionError, OverflowError):
-                raise AttemptFailure("invalid", "invalid_result") from None
-            context.check()
-            return decoded
-        except httpx.TimeoutException:
-            raise AttemptFailure("timeout", "deadline_exceeded") from None
-        except (*_HTTPX_ERRORS, zlib.error):
-            raise AttemptFailure("unavailable", "transport_error") from None
+                if response.status_code != 200:
+                    raise AttemptFailure("unavailable", "http_status")
+                if not _media_type(response.headers.get("content-type")):
+                    raise AttemptFailure("invalid", "response_media_type")
+                body = await _read_body(response, context)
+        context.check()
+        try:
+            decoded = strict_json(body)
+        except (ValueError, UnicodeError, RecursionError, OverflowError):
+            raise AttemptFailure("invalid", "invalid_result") from None
+        context.check()
+        return decoded
+    except httpx.TimeoutException:
+        raise AttemptFailure("timeout", "deadline_exceeded") from None
+    except (*_HTTPX_ERRORS, zlib.error):
+        raise AttemptFailure("unavailable", "transport_error") from None

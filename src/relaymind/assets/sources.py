@@ -44,7 +44,7 @@ from relaymind.assets.source_io import NativeIoAborted, SourceInfo, open_source_
 from relaymind.canonical import canonical_digest
 from relaymind.redaction import Redactor
 from relaymind.schema_util import freeze_json, load_packaged_schema
-from relaymind.store.run_store import utc_iso
+from relaymind.store.run_store import ForegroundWindow, utc_iso
 from relaymind.tools.registry import StrictValidator
 
 __all__ = [
@@ -91,6 +91,9 @@ class CaptureContext:
     secrets: frozenset[str] = frozenset()
     received_bytes: int = 0
     record_count: int = 0
+    remote_request_count: int = 0
+    remote_not_before_at: datetime | None = None
+    defer_remote: Callable[[datetime], None] | None = None
     observe_busy: Callable[[], bool] = lambda: False
     observe_busy_since: Callable[[], float | None] = lambda: None
     busy_observed_at: float | None = None
@@ -108,18 +111,51 @@ class CaptureContext:
     work_batches: list[dict] = field(default_factory=list)
     busy_since: float | None = None
     drain_ms: float | None = None
+    foreground_window: ForegroundWindow | None = None
+    finish_cpu: Callable[["CaptureContext"], None] | None = None
+    native_io_ms: list[float] = field(default_factory=list)
+    cpu_resuming: bool = True
+    cpu_quiescent_at: float | None = field(init=False)
 
     def __post_init__(self) -> None:
         utc_iso(self.captured_at)
         self.batch_started = self.monotonic()
         self.deadline = self.batch_started + JOB_SECONDS
         self.work_batch_started = self.batch_started
+        self.cpu_quiescent_at = self.batch_started
 
     def check(self) -> None:
         if self.work_gate is not None:
             self.work_gate(self)
         else:
             self.check_limits()
+
+    def end_cpu_window(self) -> tuple[bool, bool]:
+        if self.foreground_window is None:
+            return True, False
+        active, onset, now = self.foreground_window.end(self.observe_busy_since())
+        if active:
+            self.cpu_resuming = True
+            self.cpu_quiescent_at = now
+        self.busy_since = onset
+        if active and onset is not None:
+            if self.busy_observed_at is None:
+                self.busy_observed_at = now
+            self.drain_ms = max(self.drain_ms or 0, max(0, now - onset) * 1000)
+        return active, onset is not None
+
+    def io(self, function: Callable, *args: Any, resume: bool = True, **kwargs: Any) -> Any:
+        """Native I/O is quiescent CPU time, under the unchanged job deadline."""
+        if self.finish_cpu is not None:
+            self.finish_cpu(self)
+        started = self.monotonic()
+        try:
+            result = function(*args, **kwargs)
+        finally:
+            self.native_io_ms.append(max(0, self.monotonic() - started) * 1000)
+        if resume:
+            self.check()
+        return result
 
     def check_limits(self) -> None:
         if self.observe_busy():
@@ -193,7 +229,12 @@ class _Stage:
     def __init__(self, root: Path, context: CaptureContext) -> None:
         self.root = root
         self.context = context
-        self.tree = open_source_tree(root, control=context)
+        self.tree = context.io(open_source_tree, root, control=context, resume=False)
+        try:
+            context.check()
+        except BaseException:
+            context.io(self.tree.close, resume=False)
+            raise
         self.observed: dict[str, tuple[int, int, int, int, int]] = {}
         self.files: list[StagedFile] = []
         # Physical identity -> (fingerprint, digest, retained bytes), hashed once.
@@ -202,17 +243,36 @@ class _Stage:
         ] = {}
 
     def close(self) -> None:
-        self.tree.close()
+        self.context.io(self.tree.close, resume=False)
 
     def exists(self, relative: str) -> bool:
         try:
-            self.tree.info(relative)
+            self.context.io(self.tree.info, relative)
             return True
         except FileNotFoundError:
+            self.context.check()
             return False
 
     def info(self, relative: str) -> SourceInfo:
-        return self.tree.info(relative)
+        return self.context.io(self.tree.info, relative)
+
+    def names(self):
+        entries = self.tree.names()
+        exhausted = False
+        try:
+            while True:
+                try:
+                    name = self.context.io(next, entries)
+                except StopIteration:
+                    exhausted = True
+                    return
+                yield name
+        finally:
+            close = getattr(entries, "close", None)
+            if close is not None:
+                self.context.io(close, resume=False)
+            if exhausted:
+                self.context.check()
 
     def read(
         self,
@@ -223,9 +283,11 @@ class _Stage:
         forbidden: tuple[int, int] | None = None,
     ) -> tuple[bytes | None, str]:
         self.context.check()
-        source_file = self.tree.open_file(relative)
+        source_file = self.context.io(self.tree.open_file, relative, resume=False)
+        complete = False
         try:
-            initial = source_file.info()
+            self.context.check()
+            initial = self.context.io(source_file.info)
             if not initial.is_regular or initial.is_reparse:
                 raise SourceFailure("invalid_data")
             key = initial.identity
@@ -240,13 +302,14 @@ class _Stage:
                 if relative not in self.observed:
                     self.files.append(StagedFile(relative, digest, initial.size))
                 self.observed[relative] = initial.fingerprint
+                complete = True
                 return data, digest
             chunks = []
             digest = hashlib.sha256()
             total = 0
             while True:
                 self.context.check()
-                chunk = source_file.read(min(_CHUNK, limit + 1 - total))
+                chunk = self.context.io(source_file.read, min(_CHUNK, limit + 1 - total))
                 if not chunk:
                     break
                 total += len(chunk)
@@ -256,8 +319,8 @@ class _Stage:
                 digest.update(chunk)
                 if retain:
                     chunks.append(chunk)
-            final = source_file.info()
-            current = self.tree.info(relative)
+            final = self.context.io(source_file.info)
+            current = self.context.io(self.tree.info, relative)
             if initial.fingerprint != final.fingerprint or final.fingerprint != current.fingerprint:
                 raise SourceFailure("source_unavailable")
             self.observed[relative] = final.fingerprint
@@ -265,16 +328,19 @@ class _Stage:
             result = digest.hexdigest()
             self.physical[key] = (final.fingerprint, result, data)
             self.files.append(StagedFile(relative, result, total))
+            complete = True
             return data, result
         finally:
-            source_file.close()
+            self.context.io(source_file.close, resume=False)
+            if complete:
+                self.context.check()
 
     def verify(self) -> None:
         self.context.check()
-        self.tree.verify_root()
+        self.context.io(self.tree.verify_root)
         for relative, expected in self.observed.items():
             self.context.check()
-            info = self.tree.info(relative)
+            info = self.context.io(self.tree.info, relative)
             if not info.is_regular or info.is_reparse or info.fingerprint != expected:
                 raise SourceFailure("source_unavailable")
 
@@ -473,6 +539,51 @@ def _check_owner(asset_id: str, previous: SourceInventory, source_id: str) -> No
         raise SourceFailure("invalid_data")
 
 
+def _skill_document(
+    source, package, metadata, body, fallback, digest, locator, context, *, source_version=None
+):
+    """Shared ordinary-byte projection; acquisition never grants execution authority."""
+    extra = metadata.get("metadata", {})
+    if not isinstance(extra, dict):
+        raise SourceFailure("invalid_data")
+    if "version" in fallback:
+        text(fallback["version"], 256)
+    if "languages" in fallback:
+        check_language_tags(fallback["languages"])
+    if "version" in extra:
+        text(extra["version"], 256)
+    version = extra.get("version", fallback.get("version"))
+    languages = extra.get("languages", fallback.get("languages", []))
+    check_language_tags(languages)
+    asset_id = "skill:" + canonical_digest(
+        {"source_id": source.source_id, "relative_package_path": package}
+    )
+    value = dict(
+        schema_version=1,
+        asset_id=asset_id,
+        kind="skill",
+        source_id=source.source_id,
+        source_locator=locator,
+        source_version=version if source_version is None else source_version,
+        captured_at=utc_iso(context.captured_at),
+        content_hash=digest,
+        description=metadata.get("description"),
+        language_tags=languages,
+        dependencies=extra.get("dependencies", []),
+        availability="unknown",
+        stale=False,
+        identity={"package_id": metadata.get("name"), "package_version": version},
+    )
+    secrets = (
+        context.secrets
+        | context.redactor.secret_values(metadata)
+        | context.redactor.secret_values(fallback)
+    )
+    return project_asset(
+        validate_asset_record(value), body=body, redactor=context.redactor, secrets=secrets
+    )
+
+
 def _local(
     stage: _Stage, source: SourceConfig, previous: SourceInventory, context: CaptureContext
 ) -> SourceCapture:
@@ -481,7 +592,7 @@ def _local(
         candidates.append(".")
     else:
         entries = []
-        for name in stage.tree.names():
+        for name in stage.names():
             context.check()
             if len(entries) >= 1000:
                 raise SourceFailure("record_limit")
@@ -506,45 +617,18 @@ def _local(
         if stage.exists(manifest):
             raw, _ = stage.read(manifest, MAX_METADATA_BYTES)
             fallback = _json(raw, context)
-            # Validate recognized values even when frontmatter wins.
-            if "version" in fallback:
-                text(fallback["version"], 256)
-            if "languages" in fallback:
-                check_language_tags(fallback["languages"])
-        if "version" in extra:
-            text(extra["version"], 256)
-        version = extra.get("version", fallback.get("version"))
-        languages = extra.get("languages", fallback.get("languages", []))
-        check_language_tags(languages)
-        dependencies = extra.get("dependencies", [])
-        asset_id = "skill:" + canonical_digest(
-            {"source_id": source.source_id, "relative_package_path": package}
+        document = _skill_document(
+            source,
+            package,
+            metadata,
+            body,
+            fallback,
+            digest,
+            str(stage.root.absolute() / relative),
+            context,
         )
-        value = {
-            "schema_version": 1,
-            "asset_id": asset_id,
-            "kind": "skill",
-            "source_id": source.source_id,
-            "source_locator": str(stage.root.absolute() / relative),
-            "source_version": version,
-            "captured_at": utc_iso(context.captured_at),
-            "content_hash": digest,
-            "description": metadata.get("description"),
-            "language_tags": languages,
-            "dependencies": dependencies,
-            "availability": "unknown",
-            "stale": False,
-            "identity": {"package_id": metadata.get("name"), "package_version": version},
-        }
-        secrets = (
-            context.secrets
-            | context.redactor.secret_values(metadata)
-            | context.redactor.secret_values(fallback)
-        )
-        record = validate_asset_record(value)
-        documents.append(
-            project_asset(record, body=body, redactor=context.redactor, secrets=secrets)
-        )
+        asset_id = document.record.asset_id
+        documents.append(document)
         paths[asset_id] = package
         _check_owner(asset_id, previous, source.source_id)
         context.finish_record()
@@ -686,6 +770,18 @@ def capture_source(
     stage = None
     try:
         context.check()
+        if source.kind == "qualified_remote":
+            from relaymind.assets.remote_contracts import resolve_remote_profile
+            from relaymind.assets.remote_github import capture_github_skills
+            from relaymind.assets.remote_transport import RemoteTransport
+
+            if source.path is not None:
+                raise SourceFailure("invalid_data")
+            profile = resolve_remote_profile(source.adapter_contract)
+            with RemoteTransport(profile, secret_ref=source.secret_ref) as transport:
+                return capture_github_skills(
+                    source, profile=profile, previous=previous, context=context, transport=transport
+                )
         if source.path is None or source.kind not in ("local_directory", "metadata_import"):
             raise SourceFailure("source_unavailable")
         root = source.path if source.kind == "local_directory" else source.path.parent

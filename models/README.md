@@ -95,3 +95,52 @@ llama-server -m models/Qwen3-0.6B-Q8_0.gguf `
 
 These launch flags also work in PowerShell 5.1; no JSON command-line
 quoting is needed.
+
+## Local multilingual embedding development candidate
+
+RM41/RM42 use the separate section 6.1 embedding format. The recorded
+[development manifest](development/multilingual-e5-small.manifest.json) pins
+`intfloat/multilingual-e5-small` at revision
+`614241f622f53c4eeff9890bdc4f31cfecc418b3`, including the official ONNX
+`model_qint8_avx512_vnni.onnx`, tokenizer, configuration and model card with
+its MIT license declaration. Files resolve relative to that manifest and
+must retain its exact lengths and SHA-256 hashes. Download artifacts outside
+Git from the model repository's `resolve/<revision>/<path>` URLs; the gateway
+never downloads or installs them.
+
+This manifest records one Linux CPU development experiment with ONNX Runtime
+1.31.1, tokenizers 0.23.3 and NumPy 2.5.4. Runtime build identity binds the
+installed native build and the active representation, ranking, adaptation
+and lifecycle implementation. A different runtime, device, semantic config
+or implementation requires fresh verification and qualification. Install the
+optional backend explicitly with `pip install -e '.[embeddings]'` in an
+isolated development environment.
+
+The production qualification registry is empty. Supplying these files does
+not activate them: startup refuses an unqualified supplied semantic config,
+including a supplied disabled config. Deterministic tests inject trusted
+backend/qualification objects through Python constructors. The separate live
+test `tests/test_embedding_onnx_live.py` uses explicitly downloaded verified
+files and makes actual native inference calls; it never downloads assets or
+changes the production registry.
+
+On the frozen 47-asset, 36-case source development set, both lexical and hybrid
+returned results for every case under the existing 500/150 ms budgets. The
+29 positive cases scored lexical top-1 16/29 and Hit@3 17/29; the development
+hybrid scored 17/29 and 20/29. The Chinese memory-leak query against the
+original English skill remains a miss. An author-defined explicit correction
+on an existing candidate changed its rank, and reset reproduced baseline
+candidate/order/decision bytes. Actual primary and adaptation inference was
+recorded separately. These are provisional development observations with
+fixture action authentication and author-defined references; they do not
+establish independent corpus, production host, AC29 resource/platform or
+final acceptance qualification. An earlier native-only process probe reached
+about 747 MiB incremental peak memory; it is not a full gateway resource pass.
+
+The current development manifest's runtime build has been refreshed for the
+integrated native-ownership implementation; model/tokenizer/configuration/rights
+file paths, lengths, roles and hashes are unchanged. This is an identity refresh,
+not a new inference result or production qualification. Historical 47/36 reports
+remain bound to their executed manifests; they are not results for the current
+412-asset/128-case working catalog. Larger native shape/peak and missed CPU-target
+observations remain separate limitations rather than a universal resource pass.

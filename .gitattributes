@@ -8,3 +8,18 @@
 # The OpenClaw plugin's release tarball is cited by SHA-256, so its packed text
 # files must have the same bytes on a Windows checkout as on Linux and macOS.
 /integrations/openclaw/** text=auto eol=lf
+# The asset corpus fixtures and locks are hashed as exact bytes (RM40/AC31).
+/tests/fixtures/asset-corpus/** text eol=lf
+/evaluation/assets/** text eol=lf
+# Frozen M10 originals/artifacts retain exact captured bytes, including newlines.
+/tests/fixtures/asset-benchmark/** -text
+/evaluation/assets/matrix-development/*.json -text
+# Compiled benchmark inventories and reviewed anchors use stable source bytes.
+/src/**/*.py text eol=lf
+/src/**/*.json text eol=lf
+/scripts/*.py text eol=lf
+/pyproject.toml text eol=lf
+/docs/SPECIFICATION.md text eol=lf
+# These captured rights bytes are independently pinned by the remote profile.
+/LICENSE -text
+/docs/evidence/2026-10-30-github-skill-source/LICENSE -text

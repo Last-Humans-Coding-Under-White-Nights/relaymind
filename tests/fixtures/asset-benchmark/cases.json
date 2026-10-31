@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "dataset_id": "fixture-small",
+  "release": 1,
+  "cases": [
+    {
+      "id": "case-a",
+      "split": "development",
+      "task_family_ids": [
+        "task-calendar"
+      ],
+      "target_asset_family_ids": [
+        "calendar-family"
+      ],
+      "lane": "en_to_en",
+      "task_text": "Show my calendar",
+      "conversation": [],
+      "requested_kinds": [
+        "skill",
+        "mcp_tool"
+      ],
+      "language_tags": [
+        "en"
+      ],
+      "code_switched": false,
+      "author_ids": [
+        "author"
+      ],
+      "authorship": "original",
+      "authorship_evidence_ids": [
+        "authorship"
+      ],
+      "derived_from_case_id": null,
+      "source_case_evidence_id": null
+    }
+  ],
+  "split_review_evidence_ids": [
+    "split_review"
+  ]
+}

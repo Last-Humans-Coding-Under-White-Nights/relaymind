@@ -20,6 +20,7 @@ import sqlite3
 import subprocess
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
@@ -289,14 +290,50 @@ def arm_of(call: dict) -> str:
     return Path(call["home"]).parents[1].name
 
 
-@pytest.fixture
-def evaluated(tmp_path):
-    host = tmp_path / "openclaw_stub.py"
+class _BackendEvidence(NamedTuple):
+    root: Path
+    arm_tokens: tuple[tuple[str, str], ...]
+    provider_secrets: tuple[str, ...]
+    calls_json: str
+
+    @property
+    def tokens(self) -> dict[str, str]:
+        return dict(self.arm_tokens)
+
+    def secrets(self) -> list[str]:
+        return list(self.provider_secrets)
+
+    @property
+    def calls(self) -> list[dict]:
+        return json.loads(self.calls_json)
+
+
+class _CompletedEvaluation(NamedTuple):
+    document_json: str
+    out: Path
+    backend: _BackendEvidence
+    export_bytes: bytes
+    report_bytes: bytes
+
+
+@pytest.fixture(scope="module")
+def completed_evaluation(tmp_path_factory) -> _CompletedEvaluation:
+    """One evaluation shared by the whole module.
+
+    The export directory is written once by the evaluation and every test
+    treats it as strictly read-only: no test writes to or removes files in
+    it. Consumers that need the export or the report read the bytes captured
+    here, the per-consumer copies, the same way document_json is parsed
+    fresh by each test; nothing in this module depends on the order tests
+    run in.
+    """
+    root = tmp_path_factory.mktemp("openclaw-evaluated")
+    host = root / "openclaw_stub.py"
     host.write_text(STUB_HOST, "utf-8")
-    tarball = tmp_path / "relaymind-openclaw-provider-0.1.0.tgz"
+    tarball = root / "relaymind-openclaw-provider-0.1.0.tgz"
     tarball.write_bytes(b"not a real tarball")
-    backend = DoublesBackend(tmp_path)
-    out = tmp_path / "out"
+    backend = DoublesBackend(root)
+    out = root / "out"
     try:
         document = runner.run_evaluation(
             TASKS,
@@ -308,13 +345,38 @@ def evaluated(tmp_path):
             evidence=EVIDENCE,
             task_ids=SELECTED,
         )
+        backend_evidence = _BackendEvidence(
+            root=root,
+            arm_tokens=tuple(backend.tokens.items()),
+            provider_secrets=tuple(backend.secrets()),
+            calls_json=json.dumps(host_calls(root)),
+        )
     finally:
         backend.close()
-    return document, out, backend
+    return _CompletedEvaluation(
+        document_json=json.dumps(document),
+        out=out,
+        backend=backend_evidence,
+        export_bytes=(out / "openclaw-eval.json").read_bytes(),
+        report_bytes=(out / "openclaw-eval.md").read_bytes(),
+    )
 
 
-def test_every_arm_runs_the_frozen_order_and_an_unavailable_arm_is_not_run(evaluated):
+def _fresh_evaluated(completed: _CompletedEvaluation):
+    return json.loads(completed.document_json), completed.out, completed.backend
+
+
+@pytest.fixture
+def evaluated(completed_evaluation):
+    return _fresh_evaluated(completed_evaluation)
+
+
+def test_every_arm_runs_the_frozen_order_and_an_unavailable_arm_is_not_run(
+    evaluated, completed_evaluation
+):
     document, _out, _backend = evaluated
+    # RM12, RM16, AC24: completed evidence must not expose a live gateway backend.
+    assert not isinstance(_backend, DoublesBackend)
     assert document["kind"] == "relaymind.openclaw_evaluation"
     assert document["arms"]["relaymind_no_local"] == {
         "status": "not_run",
@@ -333,6 +395,17 @@ def test_every_arm_runs_the_frozen_order_and_an_unavailable_arm_is_not_run(evalu
     assert document["tasks"]["sha256"] == TASKS.digest
     assert document["tasks"]["selected"] == list(SELECTED)
     assert document["tasks"]["full_set"] is False
+    # A consumer can edit its parsed document without altering another view.
+    fresh_document, _fresh_out, _fresh_backend = _fresh_evaluated(completed_evaluation)
+    assert fresh_document == document and fresh_document is not document
+    document["attempts"][0]["task_id"] = "changed-by-consumer"
+    assert fresh_document["attempts"][0]["task_id"] != "changed-by-consumer"
+    calls = _backend.calls
+    calls[0]["args"].append("changed-by-consumer")
+    assert "changed-by-consumer" not in _backend.calls[0]["args"]
+    tokens = _backend.tokens
+    tokens.clear()
+    assert _backend.tokens
 
 
 def test_every_attempt_is_graded_from_the_host_sandbox_and_trace(evaluated):
@@ -362,7 +435,7 @@ def test_every_attempt_is_graded_from_the_host_sandbox_and_trace(evaluated):
     assert summary["relaymind_auto"]["languages"]["zh"]["attempts"] == TASKS.repeats
 
 
-def test_each_task_runs_in_a_fresh_sandbox_under_its_frozen_policy(evaluated, tmp_path):
+def test_each_task_runs_in_a_fresh_sandbox_under_its_frozen_policy(evaluated):
     document, _out, _backend = evaluated
     deny = [a for a in document["attempts"] if a["task_id"] == "exec-append-deny-zh"]
     assert deny and all("log.txt" not in a["sandbox_after"] for a in deny)
@@ -373,7 +446,7 @@ def test_each_task_runs_in_a_fresh_sandbox_under_its_frozen_policy(evaluated, tm
     )
 
 
-def test_the_host_gets_the_frozen_prompt_and_the_token_only_on_standard_input(evaluated, tmp_path):
+def test_the_host_gets_the_frozen_prompt_and_the_token_only_on_standard_input(evaluated):
     """RM12, section 12.5: the gateway token reaches the host only on standard input.
 
     The stub host's own log (taken before the export is sanitized) shows the
@@ -381,7 +454,7 @@ def test_the_host_gets_the_frozen_prompt_and_the_token_only_on_standard_input(ev
     call of each RelayMind arm got that arm's token on standard input.
     """
     document, _out, backend = evaluated
-    calls = host_calls(tmp_path)
+    calls = backend.calls
     assert set(backend.tokens) == {"relaymind_auto", "relaymind_external_only"}
     secrets = [*backend.tokens.values(), *backend.secrets()]
     for call in calls:
@@ -415,7 +488,7 @@ def test_the_host_gets_the_frozen_prompt_and_the_token_only_on_standard_input(ev
         assert "--json" in argv
 
 
-def test_every_attempt_runs_with_a_fresh_state_dir_in_the_arms_host_home(evaluated, tmp_path):
+def test_every_attempt_runs_with_a_fresh_state_dir_in_the_arms_host_home(evaluated):
     """Section 12.5: each agent exec gets --state-dir on a fresh, empty directory.
 
     Without it the pinned host deletes a temporary state directory after each
@@ -423,7 +496,7 @@ def test_every_attempt_runs_with_a_fresh_state_dir_in_the_arms_host_home(evaluat
     install check gives each exchange its own directory the same way.
     """
     document, _out, _backend = evaluated
-    execs = [c for c in host_calls(tmp_path) if c["args"][:2] == ["agent", "exec"]]
+    execs = [c for c in _backend.calls if c["args"][:2] == ["agent", "exec"]]
     assert len(execs) == len(document["attempts"])
     dirs = []
     for call in execs:
@@ -440,16 +513,16 @@ def test_every_attempt_runs_with_a_fresh_state_dir_in_the_arms_host_home(evaluat
         assert argv[argv.index("--state-dir") + 1].startswith(runner.HOST_HOME)
 
 
-def test_neither_secret_nor_a_host_home_path_reaches_the_exports(evaluated, tmp_path):
-    document, out, backend = evaluated
-    export = (out / "openclaw-eval.json").read_text("utf-8")
-    report = (out / "openclaw-eval.md").read_text("utf-8")
+def test_neither_secret_nor_a_host_home_path_reaches_the_exports(evaluated, completed_evaluation):
+    document, _out, backend = evaluated
+    export = completed_evaluation.export_bytes.decode("utf-8")
+    report = completed_evaluation.report_bytes.decode("utf-8")
     for secret in backend.secrets():
         assert secret not in export and secret not in report
     for attempt in document["attempts"]:
         if attempt["arm"] != "direct":
             assert attempt["runs"]
-    assert str(tmp_path) not in export
+    assert str(backend.root) not in export
     assert json.loads(export)["evidence"].startswith("not live")
 
 

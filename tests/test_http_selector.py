@@ -3,6 +3,7 @@
 import asyncio
 import json
 import threading
+import time
 from contextlib import contextmanager
 from functools import wraps
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -772,9 +773,18 @@ def test_failed_benchmark_case_does_not_inherit_prior_claims():
         ("device_aware", 0.2, 0.2, "local_budget", "time_budget", True),
     ],
 )
-@pytest.mark.parametrize("prior_http", [False, True])
+@pytest.mark.parametrize("prior_http,http_delay", [(False, 0), (True, 0), (True, 0.25)])
 def test_routing_generation_owns_real_awaiting_deadline(
-    tmp_path, policy, stage_seconds, run_seconds, reason, error, missed, prior_http, monkeypatch
+    tmp_path,
+    policy,
+    stage_seconds,
+    run_seconds,
+    reason,
+    error,
+    missed,
+    prior_http,
+    http_delay,
+    monkeypatch,
 ):
     """AC21/AC22, RM03/RM14/RM27: HTTP budget guards cannot preempt generation expiry."""
     from gateway_helpers import LOCAL_MODEL_ID, build_gateway
@@ -794,18 +804,15 @@ def test_routing_generation_owns_real_awaiting_deadline(
             placement=PlacementSettings(policy=policy),
             external_turns=[[GenerationFailed(code="unavailable", message="test")]],
         )
-        # Transport setup is unrelated to the generation timer competition.
-        # The preceding HTTP response is deterministic; the generation below
-        # still awaits through the real stage/placement/run deadline.
-        prefix = (
-            [
-                injected_http(
-                    monkeypatch, lambda _: httpx.Response(200, json=result("remote", kind="none"))
-                )
-            ]
-            if prior_http
-            else []
-        )
+
+        # Keep the original budgets. Slow HTTP work can exhaust the guard
+        # before generation; once generation starts it must own its deadline.
+        def response(_):
+            if http_delay:
+                time.sleep(http_delay)
+            return httpx.Response(200, json=result("remote", kind="none"))
+
+        prefix = [injected_http(monkeypatch, response)] if prior_http else []
         selectors = prefix + [ModelRouterSelector(gateway.orchestrator.router)]
         gateway.orchestrator.selection_chain = SelectorChain(
             selectors, timeout_seconds=1, clock=gateway.clock.monotonic
@@ -821,14 +828,28 @@ def test_routing_generation_owns_real_awaiting_deadline(
         outcome = await gateway.orchestrator.run_text("Is staging-api healthy right now?")
         await asyncio.sleep(0)
         events = gateway.store.events(outcome.run_id)
-        local = next(e.payload for e in of_type(events, "model.finished") if e.actor == "local")
+        local_calls = [e.payload for e in of_type(events, "model.finished") if e.actor == "local"]
+        handoff = of_type(events, "handoff.started")[0].payload
+        assert not of_type(events, "route.selected")
+        attempts = handoff["selector"]["attempts"]
+        if not local_calls:
+            assert prior_http
+            assert not gateway.adapter.requests
+            assert not [e for e in of_type(events, "model.started") if e.actor == "local"]
+            assert gateway.adapter.cancelled == []
+            assert handoff["reason_code"] == "local_budget"
+            assert len(attempts) == 1
+            assert attempts[0]["transport"] == "http"
+            assert attempts[0]["outcome"] in ("none", "error")
+            assert attempts[0]["model_calls_claim"] in (None, [])
+            return
+        assert not http_delay
+        assert len(local_calls) == 1
+        local = local_calls[0]
         assert local["deadline_missed"] is missed
         assert local["error"]["code"] == error
         assert gateway.adapter.cancelled == [local["call_id"]]
-        handoff = of_type(events, "handoff.started")[0].payload
         assert handoff["reason_code"] == reason
-        assert not of_type(events, "route.selected")
-        attempts = handoff["selector"]["attempts"]
         assert [a["outcome"] for a in attempts] == (["none", "error"] if prior_http else ["error"])
         if prior_http:
             assert attempts[0]["transport"] == "http"
@@ -922,7 +943,7 @@ def test_real_user_cancel_beats_suspended_gateway_deadline(tmp_path, catch_stop,
             [],
             input_tokens=100,
             external_turns=[],
-            budgets=LocalBudgets(active_seconds=0.2, run_active_seconds=60),
+            budgets=LocalBudgets(active_seconds=2, run_active_seconds=60),
             placement=PlacementSettings(policy="device_aware"),
         )
         router = ModelRouterSelector(gateway.orchestrator.router)
@@ -954,7 +975,7 @@ def test_real_user_cancel_beats_suspended_gateway_deadline(tmp_path, catch_stop,
             try:
                 await asyncio.Event().wait()
             except asyncio.CancelledError:
-                gateway.clock.advance(0.3)
+                gateway.clock.advance(3)
                 for event in route_turn("check-service-health"):
                     yield event
 

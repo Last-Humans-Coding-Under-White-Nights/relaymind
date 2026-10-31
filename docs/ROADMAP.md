@@ -1040,21 +1040,23 @@ listed here so the current order can be traced to its reason.
   so it does not wait for the plugin.
 
 
-## M10 — Multilingual asset recommendations (spec 0.55)
+## M10 — Multilingual asset recommendations (spec 0.59)
 
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
 imports, safe internal searchable bodies, atomic shared-SQLite publication,
 source-owned tombstones, retained stale observations, recovery and one bounded
 local worker. `[recommendations]` defaults disabled; enabled catalog work starts
-in the application lifespan. This is development on the explicitly authorized
-reviewed-spec stack while #187's merge remains pending. #192 alone did not change
-the warm-up serving order; #196's lifecycle work is recorded below. No qualified
-external refresh or current host availability is claimed.
+in the application lifespan. The #187 foundation merged in #212. The three
+#192 catalog criteria, discovery, atomic change visibility and honest provenance
+without execution, are implemented and verified. #192 alone did not change the
+warm-up serving order; #196's lifecycle work is recorded below. The qualified
+#203 GitHub refresh profile is recorded below; catalog discovery supplies no
+host availability or execution authority.
 #193 selection and #194's partial lifecycle implementation are recorded below.
-The AC25 live host/source subcases, full 300-asset measurements,
-Windows/macOS qualification and Matrix rights/cohort/refresh remain open; these
-deterministic catalog tests do not close #191 or #192's qualified adapter gates.
+The AC25 live host subcases, full 300-asset measurements, Windows/macOS
+qualification, Matrix rights/cohort/refresh and formal independent corpus gates
+remain separate from #192's completed catalog criteria.
 
 The #193 selection component implements RM35/AC26: separate closed selection
 v2 and recommendation-result schemas, projection-only lexical ranking, strict
@@ -1109,50 +1111,90 @@ and no relaxed or partial acceptance.
 
 The customer-approved defaults of 29 October 2026 are in spec section 1.
 
-Status at this revision: the bounded qualifications have committed evidence;
-#187 specifies the product contracts and design but implements nothing.
-Before any implementation issue's code begins, spec 0.51 and its 0.52 revision
-must be merged (a spec in an unmerged stack does not count) and that issue updated with its
-final RM and AC IDs. Those issue updates are still pending; the table gives the
-mapping and does not claim any GitHub issue was changed.
+The customer explicitly authorized implementation on the reviewed specification
+stack on 29 October 2026 before #187 merges; the former merge-first sequencing
+restriction is superseded. Merges remain customer-owned. The table gives the
+current RM/AC mapping without claiming that a remote issue has already changed.
+
+The source-grounded development deliverables for #191, #199 and #200 are
+implemented under spec 0.56/0.57. The pinned working catalog has 412 actual assets:
+87 Matrix skills, 194 original-English SkillsBench skills and 131 genuine GitHub
+MCP tools, with 61 explicit exclusions. Its 128 preregistered Chinese, English
+and mixed cases cover 54 capability requests and 58 distinct targets, including
+an original-English cross-language example. References are developer-authored
+from retained originals, not independent human judgments. Captured rights,
+availability, missing language pairs and reference limits stay explicit.
+
+The shared production-path run/compare tooling supports builtin and team HTTP
+selectors over the same full offer and frozen cases, explicit stateless/cold/reuse
+index preparation, bounded polling, retained failures and separate setup/query
+costs. See [the source workflow](SOURCE_BENCHMARK.md) and
+[the team/protocol guide](ASSET_BENCHMARK.md). Recorded stateless/cold primary
+query timeouts and blocked reuse preparation remain visible; successful lexical
+fallback is not primary quality. Corrected offline comparison rejects cold/reuse
+policy mismatches without rewriting the historical reports.
+
+This usable development profile and its input/lock infrastructure complete the
+working deliverables of #191/#199/#200. The separately supported independent
+200-skill/300-asset qualification profile, native authorship/double annotation,
+rights review and full numerical/platform gates remain open. Those acceptance
+inputs are not prerequisites for the working source benchmark or these delivered
+development components; they remain prerequisites for claims under that formal
+profile and for full M10 acceptance.
 
 | Qualification / gate | Current evidence and remaining requirement |
 | --- | --- |
-| #188 Matrix capture | One genuine version 1.1.1 archive, two equal-hash downloads; one Chinese body. MATRIX-COHORT (100 original Chinese), MATRIX-OVERLAP (25 functional pairs), MATRIX-RIGHTS and MATRIX-REFRESH remain blocked; same-source permitted operator export/rights/inventory input required. No automatic substitute or source permission. |
+| #188 Matrix capture | Historical 29 October qualification: one genuine version 1.1.1 archive, two equal-hash downloads; one Chinese body. This is distinct from the later 87-skill source-grounded development capture, which does not qualify market refresh or independent corpus rights. MATRIX-COHORT (100 original Chinese), MATRIX-OVERLAP (25 functional pairs), MATRIX-RIGHTS and MATRIX-REFRESH remain blocked; same-source permitted operator export/rights/inventory input required. No automatic substitute or source permission. |
 | #189 direct commands | Real pre-model ingress and isolated credential/native search/read/forged-input checks pass over doubles; verified person and immutable choice-to-library composition failed. HOST-ACTION-AUTHORITY and HOST-EXACT-SKILL-USE block #195 host completion/#197/#198. Real interactive approvals not_run; read-only does not waive exact content/authority. |
 | #190 MCP | Same-instance public genuine provenance/schema, collision-safe host execution and changed-schema execution passed; three server invocations, ten completed gateway runs, zero gateway execution. Disconnect retains schemas and actual call fails; deny/removal exclude tools. HOST-MCP-BINDING and HOST-MCP-CURRENTNESS remain blocked: session/turn/host revision absent, availability unknown, third-party authorized runtime inventory refused. |
 | Evidence tiers | #189/#190 are Linux real-host functional runs with model doubles. #190 uses coding profile/toolSearch=false/disposable conversation grant; not intact-native/default or customer acceptance. HTTP/OAuth, live quality, supported-platform M10 and human interactive approval remain not_run. |
 
-After the merge, these may proceed within their dependencies: the
+Within the authorized reviewed stack, these components proceed within their dependencies: the
 independent catalog, reads of ordinary SKILL.md directories, closed reviewed
 metadata imports, discovery v2, the lexical and HTTP selectors, the persisted
 API, and the backend registration, revocation and privacy tests. A runtime
 create returns recommendation_unavailable, and snapshot payloads and non-null
 bindings are rejected (spec section 7.6). No production host registration
-is enabled by these probes. #191 and #199 dataset acceptance cannot close
-without a real permitted cohort and labels; #203 cannot claim Matrix refresh
-from one download route. Generic infrastructure and doubles never close actual
-source or host gates. The hybrid selector and adaptation keep the trial and
-data dependencies in the table below. Partial PRs must state their retained
-acceptance and cannot auto-close incomplete issues.
+is enabled by these probes. #203 cannot claim Matrix refresh from one download
+route. Generic infrastructure and doubles never close actual source or host
+gates. The hybrid selector and adaptation keep the trial and data dependencies
+in the table below. Partial PRs must state retained acceptance; incomplete host,
+model and platform deliverables stay open. Development completion of
+#191/#199/#200 does not assert independent corpus or full M10 acceptance.
+
+#201/#202 backend integration checkpoint (spec 0.59): the bounded local artifact
+loader, cooperative hybrid ranking/vector lifecycle and private explicit-correction
+adaptation/reset backend are implemented. Native loading reacquires the same CPU
+owner and retains actual cancellation/drain evidence. The production embedding
+qualification registry remains empty: no ordinary-config activation or portable
+qualified model is claimed. Historical 47-asset/36-case native development results
+remain provisional, distinct from the current 412-asset/128-case source benchmark.
+Real host correction authority, formal chronological episodes and final quality,
+whole-task, supported-platform and resource gates remain open.
 
 #203 source qualification checkpoint (spec 0.59): the reviewed fixed public
 GitHub Git skill profile has an actual complete six-skill/twelve-file acquisition
 plus root MIT evidence, 17 serial GETs and two ref observations separated by
 704.62 seconds. The commit remained 849c1be; change was not observed. Section
-4.6.1.1 defines this installed protocol profile; runtime transport/scheduling
-activation and a real second periodic product job remain pending. Existing
-local/import sources remain supported. No AC29/AC34 full workload/platform pass,
-Matrix market refresh or corpus substitution is inferred. Acquisition evidence
-is in [the source record](evidence/2026-10-30-github-skill-source/README.md).
+4.6.1.1 defines this installed protocol profile. The implementation candidate
+now includes bounded transport, immutable acquisition, profile-persisted cooldown
+and scheduling on the existing worker. Two actual periodic product jobs were
+304.28 seconds apart; both published six assets with lexical readiness/API200,
+and the upstream was unchanged. Controlled source-server tests cover changes,
+outage/recovery, cancellation, atomic restart and foreground I/O boundaries.
+Independent review and integrated functional verification passed; no AC29/AC34 full workload or
+supported-platform pass, Matrix market refresh or corpus substitution is inferred.
+Local/import user libraries remain supported. Actual/fixture distinctions and
+versioned observations are in [the source record](evidence/2026-10-30-github-skill-source/README.md).
 
-The table retains direct issue dependencies and existing foundations. New IDs
-are normative in 0.51; all paths/feature components remain planned until their
-implementation lands.
+The table retains the other issues' direct dependencies and foundations.
+#191/#199/#200 describe the delivered working profile; their separate formal
+qualification gates remain as specified above. Other planned components do not
+become implemented by appearing in the table.
 
 | Issue | Direct dependencies | Existing foundations | New RM/AC IDs | Deliverable / completion gate |
 | --- | --- | --- | --- | --- |
-| #191 | #187, #188 | RM07, RM12, RM16, RM25, RM28 | RM40; AC31 | 100 original Chinese +100 original English skills, permitted reproducibility, native authorship and independent annotations |
+| #191 | #187; reviewed source capture | RM07, RM12, RM16, RM25, RM28 | RM40; AC31 | Implemented source-grounded skill inputs, pinned originals/exclusions, 128 developer-authored CN/EN/mixed references and strict lock tooling; independent qualification remains separate |
 | #192 | #187, #188 | RM07, RM08, RM12, RM17, RM24, RM28 | RM34; AC25 | Durable atomic catalog with safe projection/import/scans/deletion and honest runtime availability |
 | #193 | #187, #192 | RM02, RM04, RM08, RM12, RM18, RM22, RM28; AC22 | RM35; AC26 | v2 schemas/chain/lexical fallback + HTTP replacement; unchanged managed v1 |
 | #194 | #187, #193 | RM12, RM17, RM19, RM21, RM22, RM28, RM33 | RM36; AC27 | Independent recommendation API/store/events; atomic idempotency, disconnect and recovery |
@@ -1160,8 +1202,8 @@ implementation lands.
 | #196 | #187, #192, #193, #194 | RM03, RM16–RM19, RM22, RM24, RM26, RM27, RM28 | RM38; AC29 | Separate readiness, lexical visibility/rebuild/scheduler behavior; full 300-asset/live embedding measurements later |
 | #197 | #187, #189, #194, #195, #193 | RM08, RM11, RM12, RM19, RM20, RM22, RM33; AC24 | RM39; AC30 | Packaged direct commands, exact installed-skill load/use and feedback; unchanged provider |
 | #198 | #187, #191, #192, #196, #197 | RM16, RM18, RM25, RM26, RM28, RM33; AC22, AC24 | RM39, RM44; AC30, AC36 | Actual early Apple M1 8 GiB customer trial and three-arm costs; observations before hybrid investment |
-| #199 | #187, #188, #191 | RM07, RM12, RM16, RM25, RM28, RM33 | RM40; AC31 | Exactly 300 real assets, independently authored/annotated held-out cohorts and locks |
-| #200 | #187, #193, #191 | RM03, RM12, RM16, RM18, RM22, RM25, RM28; AC22 | RM35, RM40; AC26, AC31 | Production-path benchmark run/compare CLI; deterministic third-party example; full acceptance cohort plugs into same runner |
+| #199 | #187, #191 development inputs | RM07, RM12, RM16, RM25, RM28, RM33 | RM40; AC31 | Implemented mixed working catalog: 412 real source assets including 131 genuine MCP tools, frozen references and reproducible inputs; formal independent held-out qualification remains separate |
+| #200 | #187, #193, #191 | RM03, RM12, RM16, RM18, RM22, RM25, RM28; AC22 | RM35, RM40; AC26, AC31 | Implemented shared production-path run/compare, builtin/team HTTP examples and explicit index readiness with separate setup costs; working source and formal qualification profiles retain their own evidence rules |
 | #201 | #187, #198, #199, #200, #196 | RM03, RM04, RM12, RM16, RM18, RM22, RM24–RM28 | RM38, RM41; AC29, AC32 | Development-selected pinned local embedding artifact, bounded revisioned hybrid ranking/indexing, lifecycle/resource evidence |
 | #202 | #187, #195, #201, #199, #200 | RM04, RM08, RM11, RM12, RM16, RM17, RM22, RM24, RM28 | RM37, RM42; AC28, AC33 | Bounded separate adaptation stage, 100 chronological episodes, unrelated controls and exact reset |
 | #203 | #187, #188, #192, #196, #198 | RM03, RM07, RM12, RM16, RM17, RM19, RM24, RM28 | RM34, RM38, RM43; AC25, AC29, AC34 | Permitted automatic refresh, bounded staging/atomic publication, stale failure states and live demonstration |

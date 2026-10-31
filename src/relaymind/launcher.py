@@ -210,6 +210,7 @@ class LauncherConfig:
     assets: AssetSettings = field(default_factory=AssetSettings)
     recommendations: RecommendationSettings = field(default_factory=RecommendationSettings)
     user_actions: UserActionSettings = field(default_factory=UserActionSettings)
+    asset_semantics: object = None
 
 
 @dataclass(frozen=True)
@@ -292,7 +293,7 @@ def _settings(name: str, build: Callable[[], Any]) -> Any:
         raise LaunchError(f"[{name}] {exc}") from exc
 
 
-def load_config(path: Path | str) -> LauncherConfig:
+def load_config(path: Path | str, *, embedding_loader=None) -> LauncherConfig:
     """Read and validate a configuration file (spec 0.21 section 14.1)."""
     path = Path(path)
     try:
@@ -326,6 +327,17 @@ def load_config(path: Path | str) -> LauncherConfig:
             source_count=len(assets.sources),
             hybrid=tables["asset_hybrid"],
             adaptation=tables["asset_adaptation"],
+        ),
+    )
+    from relaymind.assets.embedding_bundle import load_semantic_bundle
+
+    asset_semantics = _settings(
+        "asset_semantics",
+        lambda: load_semantic_bundle(
+            tables["asset_hybrid"],
+            tables["asset_adaptation"],
+            config_dir=path.absolute().parent,
+            loader=embedding_loader,
         ),
     )
     server, local = tables["server"], tables["local_model"]
@@ -415,6 +427,7 @@ def load_config(path: Path | str) -> LauncherConfig:
         placement=placement_settings,
         assets=assets,
         recommendations=recommendations,
+        asset_semantics=asset_semantics,
         user_actions=user_actions,
         warmup=warmup,
         warmup_seconds=float(warmup_seconds),
@@ -531,6 +544,8 @@ def build_app(
         raise LaunchError(
             f"[policy] enabled_workflows names unknown workflow: {', '.join(unknown)}"
         )
+    if config.asset_semantics is not None:
+        _settings("asset_semantics", config.asset_semantics.validate)
     local, new_local_adapter = _local_model(config, local_adapter)
     external = None
     if config.external is not None:
@@ -621,7 +636,19 @@ def build_app(
                 config.recommendations,
                 permissions=config.permissions,
                 redactor=orchestrator.redactor,
+                semantics=config.asset_semantics,
             )
+            if config.asset_semantics is not None:
+                from relaymind.assets.embedding_bundle import effective_launch_identity
+                from relaymind.canonical import canonical_digest
+
+                recommendations._config_digest = canonical_digest(
+                    effective_launch_identity(config, orchestrator.redactor)
+                )
+                if recommendations.embedding_lifecycle is not None:
+                    recommendations.embedding_lifecycle.config_digest = (
+                        recommendations._config_digest
+                    )
             catalog = AssetCatalogService(
                 config.assets,
                 recommendations.provider.store,
@@ -637,6 +664,10 @@ def build_app(
                 ),
                 after_change=recommendations.refresh_catalog,
                 index_lifecycle=recommendations.provider.lifecycle,
+                embedding_lifecycle=recommendations.embedding_lifecycle,
+                effective_config_digest=recommendations._config_digest
+                if config.asset_semantics is not None
+                else None,
             )
             from relaymind.store.asset_feedback import AssetFeedbackStore
 
@@ -646,6 +677,14 @@ def build_app(
                 registrations,
                 policy=recommendations.provider.policy,
             )
+            if config.asset_semantics is not None and config.asset_semantics.adaptation_enabled:
+                from relaymind.selection.adaptation_stage import AdaptationStage
+
+                recommendations.adaptation = AdaptationStage(
+                    feedback,
+                    config.asset_semantics.adaptation,
+                    recommendations.embedding_lifecycle.adaptation,
+                )
         ui = None if config.ui is None else replace(config.ui, fixtures=sandbox)
         app = create_app(
             orchestrator=orchestrator,
@@ -663,7 +702,7 @@ def build_app(
             orchestrator=orchestrator,
             recovered=len(report.runs),
             new_local_adapter=new_local_adapter,
-            asset_selector=build_asset_selector(config.recommendations)
+            asset_selector=(recommendations.primary or build_asset_selector(config.recommendations))
             if config.recommendations.enabled
             else None,
         )
@@ -766,6 +805,7 @@ class _ServingWarmup:
         self.report: Callable[[Launched], None] = lambda result: None
         self.busy_since = launched.orchestrator.store.clock.monotonic()
         launched.orchestrator.local_startup_pending = True
+        launched.orchestrator.store.note_foreground_start(self.busy_since)
 
     def prepare(self) -> None:
         """Arm one lifespan before probes or background work can dispatch."""
@@ -780,6 +820,7 @@ class _ServingWarmup:
         if self.task is None:
             if not self.launched.orchestrator.local_startup_pending:
                 self.busy_since = self.launched.orchestrator.store.clock.monotonic()
+                self.launched.orchestrator.store.note_foreground_start(self.busy_since)
             self.launched.orchestrator.local_startup_pending = True
 
     def start(self) -> None:

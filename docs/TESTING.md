@@ -27,6 +27,42 @@ ruff check .
 ruff format --check .
 ```
 
+### CI timing reports
+
+To run the same CI jobs on a branch manually, use
+`gh workflow run ci.yml --ref your-branch-name`. This dispatches the existing
+Ubuntu, macOS and Windows checks and does not change pull-request status
+requirements.
+
+The `check` and `openclaw-plugin` jobs each run on Ubuntu, macOS and Windows.
+Both pytest commands print the 30 slowest setup, call and teardown durations.
+Each core job uploads `core-test-profile-<platform>` with
+`ci-evidence/core-tests.xml`. Each plugin job includes
+`ci-evidence/openclaw-tests.xml` in its existing `openclaw-plugin-<platform>`
+artifact, alongside the release and host lifecycle evidence. Uploads run even
+when a preceding step fails; a failure before pytest may leave no XML report.
+JUnit records individual test durations; the Actions log retains the slow-test
+summary. The host lifecycle JSON already records its subprocess durations.
+
+Both Python setup steps cache pip downloads using `pyproject.toml` as the
+cache dependency key. Installation still runs; this is not a dependency lock.
+The existing npm cache and clean `npm ci` installation remain in place.
+The UI tests launch Chromium's default headless shell, so CI installs it with
+`playwright install --with-deps --only-shell chromium`, including system
+requirements. Test selection and all six platform checks remain unchanged.
+
+Each job has a 60-minute limit, and each platform reports its own result
+without cancelling the others. A newer push to the same pull request cancels its
+older run; pushes to `master` and tags always finish. Timing artifacts are kept
+for 30 days, and the workflow token is read-only.
+
+The [30 October baseline](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/actions/runs/41135214423)
+put Windows OpenClaw at 18m43s: 592s in Python tests and 400s in the host
+lifecycle, including 195s installing the plugin. These observations do not
+establish savings from the cache or browser change. Compare successful warm
+runs by platform, total job time and runner seconds before changing expensive
+fixtures or coverage.
+
 The live suite needs `llama-server` on PATH and the pinned model
 artifact (see [`models/README.md`](../models/README.md)). It starts and
 stops its own server; nothing below is required for it. Besides the
@@ -2562,3 +2598,71 @@ MCP provenance, and leaves no output on tamper/denied rights. It launches no MCP
 server and performs no source acquisition. All generated input data remain
 explicitly synthetic test fixtures; there is no checked-in real 300-asset release.
 See the acceptance/custodian checklist in `evaluation/assets/README.md`.
+
+## Qualified public source refresh (spec 0.59; RM34/RM38/RM43)
+
+The source-specific suite is separate from model and host qualification:
+
+```bash
+pytest tests/test_asset_remote_contracts.py tests/test_asset_remote_transport.py \
+  tests/test_asset_remote_github.py tests/test_asset_refresh.py \
+  tests/test_asset_refresh_demo.py tests/test_github_skill_source_qualification.py
+```
+
+It covers the installed profile/config boundary, API-only credentials and safe
+failures, pre-dispatch request/byte limits, complete immutable trees/originals,
+rights checks, explicit owned removals, outage/stale recovery, profile cooldown
+across restart/rename/manual rescan, atomic poll reservation, cancellation/drain
+and foreground CPU gates. Loopback source-server cases perform actual socket
+I/O through a constructor-injected test transport; they remain fixtures. Native
+Windows source tests still require native Windows and are not Linux passes.
+
+For an actual periodic demonstration, create a new disposable production config
+and store, enable recommendations with the normal 500/150 ms limits, use the
+installed remote profile and explicitly set `remote_seconds=300`. Preserve the
+existing model/provider configuration. Then run the bounded developer probe:
+
+```bash
+PYTHONPATH=src python scripts/probes/run_asset_refresh_demo.py \
+  --config /path/to/disposable/production.toml \
+  --output /path/to/disposable
+```
+
+The store must be new and under the output directory. The probe owns the ordinary
+launcher lifecycle, waits for two real existing-worker scheduled source jobs,
+and sends a lexical API query after each. It has no interval override, arbitrary
+source URL, fake-clock or qualification flag. Run it in the background while
+other checks/docs proceed; do not replace the second scheduled poll with manual
+rescan. The [versioned source record](evidence/2026-10-30-github-skill-source/README.md)
+separates actual acquisition/product polling, fixture changes/failures and all
+remaining resource/platform/acceptance limitations. Matrix's partial market
+capture remains distinct from this source's complete configured scope.
+
+### Semantic and remote integration checks
+
+RM38/RM41/RM42/RM43; AC29/AC32/AC33/AC34. The deterministic embedding,
+hybrid, adaptation and native-ownership tests use trusted constructor doubles;
+they neither populate the production qualification registry nor execute a host
+asset. Run the shared-owner regressions with:
+
+```bash
+pytest tests/test_asset_semantic_refresh_integration.py \
+  tests/test_asset_embedding_jobs.py tests/test_embedding_native_ownership.py \
+  tests/test_embedding_launcher.py tests/test_asset_adaptation_stage.py \
+  tests/test_adaptation_buffers.py tests/test_asset_refresh.py
+```
+
+The integrated inventory check requires exact current Python/schema membership
+and reviewed SPEC/pyproject/script anchors; deleting a member or forging its hash
+still fails. The joint source test demonstrates fixture remote acquisition,
+semantic rebuild on the same worker during mandatory remote cooldown, and vector
+invalidation on an updated/deleted source generation. Job digests bind both
+semantic and source-refresh policies. These controls are deterministic fixtures,
+not live source changes or an operational/platform pass.
+
+Historical native and public periodic observations retain their executed source
+identities. A development manifest may be refreshed to actual installed runtime
+and implementation identity while retaining artifact bytes, but that creates no
+ordinary activation authority and rewrites no old evidence. The production
+embedding qualification registry remains empty pending independent exact-identity
+review. No 512 MiB memory gate or universal 50 ms cancellation SLA is introduced.

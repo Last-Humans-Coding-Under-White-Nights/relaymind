@@ -637,6 +637,7 @@ def test_cancelled_stop_drains_a_real_scheduler_paused_rebuild(tmp_path, monkeyp
             with pytest.raises(SourceFailure, match="cancelled"):
                 await rebuild
             assert worker._task.done()
+            assert not worker.store.store._foreground_windows
             assert worker.store.snapshot() == before
             job = next(j for j in worker.store.job_outcomes() if j["source_id"] is None)
             assert (job["state"], job["reason"]) == ("cancelled", "shutdown")

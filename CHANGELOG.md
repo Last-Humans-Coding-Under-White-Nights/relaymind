@@ -34,6 +34,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   authorized; host activation remains denied until a later qualified
   person/session/immutable-use contract. No provider or budget change.
 
+- Local semantic retrieval and correction backends (#201/#202; RM38/RM41/RM42;
+  AC29/AC32/AC33): pinned local artifacts, deterministic segmented representations,
+  revisioned hybrid vectors/fusion, measured inference and bounded private
+  correction voting/reset share the existing source/derived worker. Native load
+  CPU ownership and cancellation remain explicit. The production embedding
+  qualification registry remains empty; ordinary activation, host correction
+  authority, formal episodes and final quality/platform gates remain open.
+
+- #203 (RM34/RM38/RM43; AC25/AC29/AC34): activate the reviewed installed
+  public GitHub skills profile through bounded immutable acquisition and the
+  existing source worker. Preserve explicit owned removals, stale/recovery
+  evidence, profile-keyed provider cooldown across restart/rescan, isolated
+  credentials and unchanged job budgets. Record two actual scheduled source
+  jobs separately from fixture lifecycle tests and outstanding full-M10 gates.
+
 - Specification 0.58 → 0.59 (#203; RM34/RM38/RM43; AC25/AC29/AC34):
   define the installed public GitHub Git skill-source profile with immutable
   original/manifest/rights verification, complete scoped removal proof, closed
@@ -59,6 +74,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   adaptation with actual inference evidence on failure. Existing recommendation
   wire versions/errors and corpus/benchmark contracts are retained. Model/runtime/
   device quality and operational qualification remain open.
+
+- Source-grounded asset benchmark delivery (#191/#199/#200; RM35/RM40/RM44;
+  AC26/AC31/AC36): pinned acquisition/build and a 412-asset working catalog
+  (87 Matrix skills, 194 original-English SkillsBench skills, 131 genuine MCP
+  tools), 128 preregistered Chinese/English/mixed references, and shared
+  production-path builtin/team run/compare with explicit index readiness.
+  Preserve actual primary timeouts, blocked setup, unknown costs and historical
+  report hashes. Developer-authored references support the working development
+  profile; independent formal corpus, host/human and platform gates remain
+  separate. Reproduction, team integration and shortlist guides are included.
 
 - Specification 0.56 → 0.57 (#191/#199/#200; RM35/RM40; AC26/AC31):
   optional explicit loopback index prepare/status/cancel binds the exact offered

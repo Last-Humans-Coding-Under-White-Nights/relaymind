@@ -1,20 +1,38 @@
-# M10 retrieval releases (RM40/AC31, specification §12.6.1)
+# Source-grounded skill and tool benchmarks (RM40/RM44)
 
-The offline loader, four schemas, judgment/agreement checks, split ledger and
-same-source export reproduction are implemented. Genuine corpus acquisition,
-authorship, annotation and externally reviewed qualification remain outstanding.
-No development or acceptance release is distributed here. Synthetic inputs live
-only in `tests/fixtures/asset-corpus/` and remain fixtures regardless of their size.
+Build and run the actual **412-asset development catalog**: 87 Matrix skills,
+194 original SkillsBench skills and 131 genuine GitHub MCP tools, with 61 explicit
+exclusions. The frozen 128-case version covers 58 target assets across Chinese,
+English and mixed prompts, skills/tools, ambiguity and unsupported requests.
+Chinese prompts retrieving original English capabilities are part of the shared
+mixed catalog. Missing language combinations and limited target coverage stay
+visible; no original is translated and relabeled.
 
-The current qualified input count is **0/100 original Chinese Matrix skills,
-0/100 original English skills, 0/100 genuine MCP tools and 0/25 reviewed
-function-equivalent pairs**. There are no qualified authored cases, independent
-human judgments or custodian review records in this repository. Each required
-lane still needs 200 independent original positives, 50 negatives and 30 ambiguous
-cases; the two cross-language lanes also need their independently reviewed hard
-subsets. Fixture person IDs and sample rights assertions supply none of this
-missing evidence. No retrieval, operational, platform or whole-task gate passes
-because this infrastructure is available.
+Follow [the tested acquisition, build, index, run and compare guide](../../docs/SOURCE_BENCHMARK.md).
+The pinned recipe and source-backed cases are in [matrix-development/](matrix-development/).
+Originals are acquired into a private local cache; the offline builder emits
+ordinary supported metadata imports and production configuration. Users may
+configure any supported local/imported skills: Matrix is an example and benchmark
+source, not a runtime allowlist. External teams use the same production v2 boundary
+and optional catalog-bound indexing lifecycle. Low confidence uses
+choice_required so the user can select an offered option or decline.
+
+This development profile uses preregistered author-defined references and reports
+provisional diagnostics without fictitious people, independent judgments or rights
+qualification. Its usable local benchmark does not require a completed independent
+human panel. The original 47-asset/36-case inputs/results remain frozen separately;
+new measurements do not rewrite their failures.
+
+## Independent qualification profile
+
+The offline four-document loader, judgment/agreement checks, split ledger and
+same-source reproduction also support the distinct formal 200/300 profile in
+specification §12.6.1. Independent human labels and externally reviewed legal,
+authorship and source evidence are required for that profile's formal acceptance
+claims. These requirements do not block source-grounded development acquisition,
+examples or algorithm comparisons. Synthetic inputs under tests/fixtures remain
+fixtures regardless of size. No development report asserts independent formal
+qualification or native-platform acceptance.
 
 ## Supply a release
 
