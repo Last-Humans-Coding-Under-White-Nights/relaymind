@@ -92,7 +92,12 @@ def eligible_private_ipv4(interfaces: list[dict]) -> list[str]:
 
 def discover_network() -> list[str]:
     """Read only actual interface state; no interface setup or user IP override."""
-    result = subprocess.run(["ip", "-j", "address"], capture_output=True, timeout=5, check=True)
+    try:
+        result = subprocess.run(["ip", "-j", "address"], capture_output=True, timeout=5, check=True)
+    except subprocess.TimeoutExpired:
+        raise ValueError("network_inventory_deadline") from None
+    except (OSError, subprocess.SubprocessError):
+        raise ValueError("network_inventory_unavailable") from None
     if len(result.stdout) > 1024 * 1024:
         raise ValueError("network_inventory_size")
     try:
@@ -334,6 +339,41 @@ def event_phase(event: dict) -> str | None:
     """An observed event's phase only when it is a string."""
     phase = event.get("phase")
     return phase if isinstance(phase, str) else None
+
+
+def native_rpc_envelope(observed: object) -> dict:
+    """A browser RPC reply bound to its request: string IDs, matching frame ID."""
+    if (
+        not isinstance(observed, dict)
+        or not isinstance(observed.get("id"), str)
+        or not observed["id"]
+        or not isinstance(observed.get("socket_id"), str)
+        or not observed["socket_id"]
+        or not isinstance(observed.get("frame"), dict)
+        or observed["frame"].get("id") != observed["id"]
+    ):
+        raise ValueError("native_response_binding")
+    return observed
+
+
+# Fixed discriminators the browser observer rejects with; nothing else is exported.
+RPC_TRANSPORT_REASONS = ("native_rpc_timeout", "native_socket_retired")
+
+
+def native_rpc(page, method: str, params: dict) -> dict:
+    """One ordinary RPC through the page; transport rejection keeps a fixed reason."""
+    try:
+        observed = page.evaluate(
+            "({method,params}) => window.__rmPersonWire.rpc(method, params)",
+            dict(method=method, params=params),
+        )
+    except TimeoutError:
+        raise
+    except Exception as error:
+        text = str(error)
+        reason = next((r for r in RPC_TRANSPORT_REASONS if r in text), "native_rpc_transport")
+        raise ValueError(reason) from None
+    return native_rpc_envelope(observed)
 
 
 def native_error_code(frame: dict) -> str | None:
@@ -1035,16 +1075,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                 pages, sessions = [], []
 
                 def rpc(page, method, params):
-                    observed = page.evaluate(
-                        "({method,params}) => window.__rmPersonWire.rpc(method, params)",
-                        dict(method=method, params=params),
-                    )
-                    if (
-                        not isinstance(observed, dict)
-                        or not isinstance(observed.get("frame"), dict)
-                        or observed["frame"].get("id") != observed.get("id")
-                    ):
-                        raise ValueError("native_response_binding")
+                    observed = native_rpc(page, method, params)
                     error_code = native_error_code(observed["frame"])
                     capture["events"].append(
                         dict(
@@ -1367,6 +1398,11 @@ SAFE_REASONS = frozenset(
         "native_event_invalid",
         "network_inventory_size",
         "network_inventory_invalid",
+        "network_inventory_unavailable",
+        "network_inventory_deadline",
+        "native_rpc_timeout",
+        "native_socket_retired",
+        "native_rpc_transport",
         "qualification_port",
         "qualification_accounts",
         "login_subphase_invalid",

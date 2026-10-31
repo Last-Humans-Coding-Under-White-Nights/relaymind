@@ -218,3 +218,16 @@ it("#224 refuses a call without a request object instead of throwing", async () 
   expect(replies[0]?.[0]).toBe(false);
   expect(records).toHaveLength(1);
 });
+
+it("#231 still refuses when the diagnostic write fails", async () => {
+  const replies: unknown[][] = [];
+  const handler = createPersonProbe({
+    origin: "https://fixture.test",
+    record: () => { throw new Error("capture_bound"); },
+    dispatch: async () => ({ ok: true }),
+    resolveWorkspace: () => "/fixture",
+  });
+  await handler({ req: { id: "r" }, respond: (...args: unknown[]) => replies.push(args) } as any);
+  expect(replies).toHaveLength(1);
+  expect(replies[0]?.[0]).toBe(false);
+});
