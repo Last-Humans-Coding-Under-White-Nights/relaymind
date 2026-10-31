@@ -283,7 +283,12 @@ def test_lexical_run_cannot_acquire_an_unconfigured_embedding(tmp_path):
         asset_benchmark.run_asset_benchmark(fixture_config(root, repetitions=1, warmups=0))
     )
     data = copy.deepcopy(lexical.data)
-    data["results"][0]["embeddings"] = copy.deepcopy(native.data["results"][0]["embeddings"])
+    # Use rows that actually completed: on a slow runner the first row of
+    # either report can time out and carry no embeddings at all.
+    observed = next(r["embeddings"] for r in native.data["results"] if r["embeddings"])
+    target = next(r for r in data["results"] if r["status"] == "ready")
+    target["embeddings"] = copy.deepcopy(observed)
+    assert target["embeddings"]
     with pytest.raises(ValueError, match="unconfigured_embedding"):
         asset_comparison.validate_report_evidence(replace(lexical, data=data))
 
