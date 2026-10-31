@@ -188,7 +188,8 @@ def _check_episode(
         if equal is not None:
             raise WholeTaskRejected("reset_equality")
         return None
-    if equal is not None and equal != (baseline == after):
+    # With both digests present, reset_equal is their exact equality, never null.
+    if equal is not (baseline == after):
         raise WholeTaskRejected("reset_equality")
     preimage = None if preimages is None else preimages.get(result["episode_id"])
     if preimage is None:
@@ -224,7 +225,9 @@ def episode_summary(
     on_control = [0, 0]
     for result in report["episodes"]:
         for probe in result["probes"]:
-            label = labels[probe["case_id"]]
+            label = labels.get(probe["case_id"])
+            if label is None:
+                raise WholeTaskRejected("probe_label")
             if probe["kind"] == "paraphrase":
                 paraphrase[0] += _top1(probe["on"], label)
                 paraphrase[1] += 1
