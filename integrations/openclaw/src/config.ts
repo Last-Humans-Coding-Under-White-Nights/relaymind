@@ -1,3 +1,5 @@
+import { parseNativeRecommendationConfig } from "./recommendation-native-config.ts";
+import type { NativeRecommendationConfig } from "./recommendation-native-config.ts";
 // The plugin configuration (RM12, RM19, RM26, RM33; spec sections 7.1 and 7.5).
 //
 // Five settings, mirrored by the closed configSchema of openclaw.plugin.json:
@@ -38,6 +40,7 @@ export interface RelayMindPluginConfig {
   maxRetries: number;
   /** An absolute path for the attempt records (JSON lines); unset by default. */
   diagnosticsPath?: string;
+  recommendations?: NativeRecommendationConfig;
 }
 
 /** A configuration the plugin refuses; the message names the setting, never a secret. */
@@ -45,7 +48,7 @@ export class RelayMindConfigError extends Error {
   override name = "RelayMindConfigError";
 }
 
-const KEYS = new Set(["baseUrl", "diagnosticsPath", "executionMode", "limits", "maxRetries"]);
+const KEYS = new Set(["baseUrl", "diagnosticsPath", "executionMode", "limits", "maxRetries", "recommendations"]);
 export const MAX_RETRIES = 2;
 const LIMIT_KEYS = ["externalContextLimit", "localContextLimit", "maxCompletionTokens"] as const;
 const SAFE_TO_ECHO = /^[a-z_]{1,32}$/;
@@ -155,11 +158,17 @@ export function parsePluginConfig(raw: unknown): RelayMindPluginConfig {
     }
   }
   const diagnosticsPath = parseDiagnosticsPath(record.diagnosticsPath);
+  let recommendations: NativeRecommendationConfig | undefined;
+  if (record.recommendations !== undefined) {
+    try { recommendations = parseNativeRecommendationConfig(record.recommendations); }
+    catch { fail("recommendations is invalid"); }
+  }
   return {
     baseUrl: parseBaseUrl(record.baseUrl),
     executionMode: parseMode(record.executionMode),
     limits: parseLimits(record.limits),
     maxRetries: parseRetries(record.maxRetries),
     ...(diagnosticsPath === undefined ? {} : { diagnosticsPath }),
+    ...(recommendations === undefined ? {} : { recommendations }),
   };
 }

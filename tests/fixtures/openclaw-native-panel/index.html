@@ -1,0 +1,95 @@
+<!doctype html>
+<div id="panel"></div>
+<script type="module">
+  import plugin from "./control-ui.js";
+  const row = {
+    key: "native-key",
+    sessionId: "native-id",
+    lifecycleRevision: "native-life",
+  };
+  const asset = {
+    asset_id: "skill:fixture",
+    content_hash: "a".repeat(64),
+    kind: "skill",
+    source_version: null,
+  };
+  const view =
+    '{"recommendation_id":"4774d146-17bd-4ec9-8507-f528ccea51fa","state":"ready","state_version":9223372036854775806,"feedback_revision":1234567890123456789,"displayed_candidates":' +
+    JSON.stringify([{ asset }]) +
+    "}";
+  window.calls = [];
+  window.listeners = [];
+  const host = {
+    pluginId: "relaymind",
+    locale: LOCALE,
+    connection: { connected: true, canWrite: true },
+    sessions: { rows: [row], selectedKey: "native-key" },
+    subscribe(fn) {
+      window.listeners.push(fn);
+      return () => {};
+    },
+    async request(method, params) {
+      window.calls.push({ method, params });
+      if (method === "sessions.describe") return { session: row };
+      if (params.input.kind === "recommend")
+        return {
+          label: "recommendation",
+          text: 'Availability: unknown\nDescription: "<img src=x onerror=alert(1)>"',
+          receipt_json: view,
+        };
+      if (params.input.kind === "choose")
+        return {
+          label: "preference-only",
+          receipt_json:
+            '{"state_version":9223372036854775807,"feedback_revision":1234567890123456789}',
+        };
+      if (params.input.kind === "feedback")
+        return {
+          label: "feedback",
+          receipt_json:
+            '{"schema_version":1,"feedback_revision":1234567890123456790,"feedback_id":"4774d146-17bd-4ec9-8507-f528ccea51fa"}',
+        };
+      if (params.input.kind === "listFeedback")
+        return {
+          label: "privacy",
+          receipt_json:
+            '{"records":[{"feedback_id":"4774d146-17bd-4ec9-8507-f528ccea51fa","redacted_task_text":"private fixture task"}],"feedback_revision":1234567890123456790,"next_after_id":null}',
+        };
+      throw Error("unexpected fixture action");
+    },
+    ui: {
+      registerPage(page) {
+        window.nativePage = page;
+        return () => {};
+      },
+      registerNavigation(nav) {
+        window.navigation = nav;
+        return () => {};
+      },
+      registerPanel(panel) {
+        window.panel = panel;
+        return () => {};
+      },
+      registerAction() {
+        return () => {};
+      },
+    },
+  };
+  window.hostFixture = host;
+  const signal = new AbortController().signal;
+  plugin.activate(host);
+  if (host.locale === "zh-CN" && window.nativePage)
+    window.nativePage.mount(document.querySelector("#panel"), {
+      host,
+      props: {},
+      signal,
+      presented: true,
+    });
+  else
+    window.panel.mount(document.querySelector("#panel"), {
+      host,
+      props: { sessionKey: "native-key", agentId: "main" },
+      signal,
+      presented: true,
+    });
+</script>

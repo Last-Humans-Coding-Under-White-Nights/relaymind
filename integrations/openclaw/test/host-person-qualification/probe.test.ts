@@ -194,3 +194,12 @@ it("unexpected inventory exceptions retain a safe failure cause while authority 
   expect(f.events.at(-1)).toMatchObject({ phase: "probe_failed", reason: "inventory_unavailable" });
   expect(JSON.stringify(f.events)).not.toContain("private upstream details");
 });
+
+it("RM39 captures workspace only from the actual runtime resolver under current native authority", async () => {
+  const f = fixture();
+  const resolveWorkspace = vi.fn(() => "/actual/native/workspace");
+  const probe = createPersonProbe({origin:"https://fixture.test:8443",record:()=>{},dispatch:f.dispatch,resolveWorkspace});
+  await probe(f.options);
+  expect(resolveWorkspace).toHaveBeenCalledWith(f.options, "main");
+  expect(f.respond.mock.calls[0][1].workspaceDir).toBe("/actual/native/workspace");
+});

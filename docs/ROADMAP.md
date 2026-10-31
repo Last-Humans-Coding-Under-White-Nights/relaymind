@@ -1040,7 +1040,7 @@ listed here so the current order can be traced to its reason.
   so it does not wait for the plugin.
 
 
-## M10 — Multilingual asset recommendations (spec 0.61)
+## M10 — Multilingual asset recommendations (spec 0.63)
 
 #207 customer documentation now has [English](asset-selection.md) and
 [简体中文](asset-selection.zh-CN.md) entry guides, v1/v2 migration and third-party
@@ -1154,7 +1154,7 @@ profile and for full M10 acceptance.
 | Qualification / gate | Current evidence and remaining requirement |
 | --- | --- |
 | #188 Matrix capture | Historical 29 October qualification: one genuine version 1.1.1 archive, two equal-hash downloads; one Chinese body. This is distinct from the later 87-skill source-grounded development capture, which does not qualify market refresh or independent corpus rights. MATRIX-COHORT (100 original Chinese), MATRIX-OVERLAP (25 functional pairs), MATRIX-RIGHTS and MATRIX-REFRESH remain blocked; same-source permitted operator export/rights/inventory input required. No automatic substitute or source permission. |
-| #189 direct commands | Real pre-model ingress and isolated credential/native search/read/forged-input checks pass over doubles; verified person and immutable choice-to-library composition failed. HOST-ACTION-AUTHORITY and HOST-EXACT-SKILL-USE block #195 host completion/#197/#198. Real interactive approvals not_run; read-only does not waive exact content/authority. |
+| #189 direct commands | Real pre-model ingress and isolated credential/native search/read/forged-input checks pass over doubles; verified person and immutable choice-to-library composition failed. These historical probes did not qualify host authority. The later spec0.62 ordinary direct-action proof closes HOST-ACTION-AUTHORITY for #195; exact skill/use gates remain open for #197/#198. Real interactive approvals not_run; read-only does not waive exact content/authority. |
 | #190 MCP | Same-instance public genuine provenance/schema, collision-safe host execution and changed-schema execution passed; three server invocations, ten completed gateway runs, zero gateway execution. Disconnect retains schemas and actual call fails; deny/removal exclude tools. HOST-MCP-BINDING and HOST-MCP-CURRENTNESS remain blocked: session/turn/host revision absent, availability unknown, third-party authorized runtime inventory refused. |
 | Evidence tiers | #189/#190 are Linux real-host functional runs with model doubles. #190 uses coding profile/toolSearch=false/disposable conversation grant; not intact-native/default or customer acceptance. HTTP/OAuth, live quality, supported-platform M10 and human interactive approval remain not_run. |
 
@@ -1236,20 +1236,55 @@ permission to fabricate completion.
 operator registration/authentication, exact-offer choice, independent scoped
 feedback CAS and insertion cursor, feedback delete/reset, keyed erased-replay
 handling and atomic dependent retention. Deterministic fixtures inject their
-qualification resolver; no production action contract is enabled. This does
-not close full #195 host acceptance: HOST-ACTION-AUTHORITY and
-HOST-EXACT-SKILL-USE remain blocked, as do later host approval/use gates.
-Native platform security execution and final full-check evidence are reported
-separately; Linux backend doubles do not substitute for them.
+qualification resolver. The later pinned OpenClaw2026.10.7 spec0.62
+`direct_actions` profile now also has actual signed-person/session composition
+and fresh ordinary installed Control UI proof: explicit choice, feedback,
+inspection/delete/reset, account isolation and connection retirement. The
+ordinary entry uses the default Gateway registration resolver and a separately
+registered private action credential. This completes #195's direct-action and
+privacy delivery; skill loaded-use, snapshots, MCP execution, human approvals
+and final platform/quality gates remain separate. Functional proof uses authored
+sandbox data and does not claim full M10 acceptance. The exact sanitized
+[ordinary-entry capture](evidence/m10/openclaw-native-actions-20261031.json)
+is preserved at SHA-256 `21e8c4a77017d1543323056d3c1c892ea2fe6901971919ac008257252b663faf`.
+Its person-component `production_adapter_qualified:false` is not a self-issued
+product verdict; the independently reviewed `ordinary_actions:true`, exact
+runtime key and direct-action registry identify this qualified scope.
+
+#195/#197 scope isolation correction (spec 0.63; RM37/RM39, AC28/AC30): an
+independent review of the native direct-action channel reproduced, against the
+actual gateway, that a native binding could act in another configured scope.
+The recommendation path ignored the binding, and nothing compared the
+gateway's single active scope with the binding's `userId`/`workspaceId`, so a
+shared base URL or a credential registered for another scope created, listed,
+deleted or reset in that scope. Spec 0.63 adds the optional
+`X-RelayMind-Expected-User`/`X-RelayMind-Expected-Workspace` pair, checked
+after the bearer and before any read or write, with the fixed `scope_mismatch`
+(403). The native adapter now sends its binding's scope on every gateway
+request. The same revision clarifies that only isolation conditions apply to
+every role, so valid read-only or other-agent roles are no longer refused, and
+the dormant skill bridge rechecks choice expiry before each native dispatch.
+The changed adapter bytes have the new exact revision
+`f3241577e903feddd3da61fd58513b4a3e90889552d9bd7f52a302fd81f52c6c`. A fresh
+ordinary installed-host run of those exact bytes (CI run 41221091650, pinned
+OpenClaw 2026.10.7, Ubuntu runner, PR merge checkout `89d374f`) passed the
+repository's ordinary-pass predicate: default registration, the production
+registry enabled, explicit choice, feedback, inspection/delete/reset, account
+isolation and connection retirement. Its unmodified capture is
+[openclaw-native-actions-20261101.json](evidence/m10/openclaw-native-actions-20261101.json)
+(SHA-256 `d5c186ac552b6028cd47c9bd4679f79259eab1092d20dd95b48c36fa35437a39`), which the registry's evidence revision names. The 31 October
+capture remains the record of the earlier revision. As before, this is
+Linux functional evidence with disposable accounts, not macOS/Windows or
+customer acceptance.
 
 #197 first-slice status (RM36, RM37, RM39; AC27/AC28, partial AC30): the
 package includes dormant recommendation/action clients, closed lossless protocol
 validation, inert evidence rendering and an unregistered controller whose host
-boundary denies by default. Deterministic action-session injection and actual
-loopback gateway tests cover client behavior; no production host authority,
-command registration, runtime snapshot or exact skill/MCP use is supplied.
-HOST-ACTION-AUTHORITY, HOST-EXACT-SKILL-USE and the remaining host approval,
-currentness/platform gates remain open; full #197/AC30 is not complete.
+boundary denies unsupported operations by default. Those clients are reused by
+the separately qualified spec0.62 direct-action entry described under #195.
+Exact skill selection/loaded use and MCP use are not enabled by that profile;
+HOST-EXACT-SKILL-USE and later approval/currentness gates remain open. Full
+#197/AC30 is not complete.
 
 #198/#202/#204/#205/#206 evaluation contract checkpoint (spec 0.60): closed
 adaptation episode, whole-task and platform exports authorize the independent
@@ -1257,10 +1292,10 @@ drivers/graders. Exact freeze companions, three-correction chronology, complete
 paired probe/three-arm denominators, per-model costs and evidence-bound reset
 remain required. Schema/driver implementation is planned; no new measured gate
 is claimed. Read-only native RPC and genuine MCP qualification probes do not
-enable production host actions or runtime snapshots. Personal authenticated
-ingress, exact selected skill/MCP use and post-approval currentness must qualify
-before the later native adapter activation revision. Missing genuine inputs do
-not block tooling implementation or explicitly unqualified fixture runs.
+enable runtime snapshots or further host operations. The separate spec0.62
+direct-action profile above is qualified; exact selected skill/MCP use and
+post-approval currentness still require their own qualification. Missing genuine
+inputs do not block tooling implementation or explicitly unqualified fixture runs.
 
 #201 native benchmark contract checkpoint (spec 0.61): explicit local-cold
 preparation records actual gateway worker jobs/readiness, setup and owned cleanup

@@ -12,6 +12,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.62 → 0.63 (RM37/RM39; AC28/AC30): adds the optional expected-scope
+  headers and the scope_mismatch error, checked before any read or write; requires the
+  native adapter to send its binding's scope on every gateway request; clarifies that
+  write privilege and target-agent access are resolved for the actual caller, not
+  required of unrelated roles, and that exact skill selection rechecks choice expiry
+  before each native dispatch.
+- Specification 0.61 → 0.62 (RM37/RM39; AC28/AC30): names the pinned
+  authenticated native action channel and explicit profile/workspace registration,
+  preserves direct choice/feedback/privacy and distributed-commit semantics, and
+  specifies exact native Skill Library selection/read separately from loaded-use.
+  Runtime snapshots and native MCP activation retain their existing qualification gates.
+
+
+
 - Specification 0.55 → 0.56 (RM40/RM44; AC31/AC36; review #219):
   names `Case.conversation` and attempt/embedding `cost_observations` as
   order-preserving arrays for canonical hashing. Types `Rate.value` and Wilson
@@ -63,9 +77,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   AC29/AC32/AC33): pinned local artifacts, deterministic segmented representations,
   revisioned hybrid vectors/fusion, measured inference and bounded private
   correction voting/reset share the existing source/derived worker. Native load
-  CPU ownership and cancellation remain explicit. The production embedding
-  qualification registry remains empty; ordinary activation, host correction
-  authority, formal episodes and final quality/platform gates remain open.
+  CPU ownership and cancellation remain explicit. At this backend checkpoint the
+  production embedding qualification registry was empty; it now holds the two
+  reviewed Linux CPU identities (above). Host correction authority, formal
+  episodes and final quality/platform gates remain open.
 
 - #203 (RM34/RM38/RM43; AC25/AC29/AC34): activate the reviewed installed
   public GitHub skills profile through bounded immutable acquisition and the
