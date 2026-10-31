@@ -48,6 +48,7 @@ class AssetVectorStore:
 
     def restore(self, config, scope, records, *, check=lambda: None) -> HybridIndex:
         index = HybridIndex(config, scope)
+        scope_json = canonical_json(scope)
         found_records, found_vectors = [], []
         for record in records:
             check()
@@ -56,7 +57,7 @@ class AssetVectorStore:
                     "SELECT asset_id,length(vector_json),"
                     "substr(vector_json,1,131073),vector_digest "
                     "FROM asset_vectors WHERE vector_key=? AND scope_json=? AND config_digest=?",
-                    (index.key(record), canonical_json(scope), config.digest),
+                    (index.key(record), scope_json, config.digest),
                 ).fetchone()
             check()
             if row is None:

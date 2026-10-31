@@ -16,6 +16,8 @@ from urllib.parse import quote
 
 import httpx
 
+from relaymind.assets.remote_contracts import PUBLIC_SKILLS
+from relaymind.assets.remote_github import _ordinary, _sha
 from relaymind.assets.settings import SourceConfig
 from relaymind.assets.sources import (
     CaptureContext,
@@ -26,12 +28,12 @@ from relaymind.assets.sources import (
     capture_source,
 )
 
-PROFILE = "github.relaymind-skills.v1"
-REPOSITORY = "Last-Humans-Coding-Under-White-Nights/relaymind"
+PROFILE = PUBLIC_SKILLS.profile_id
+REPOSITORY = PUBLIC_SKILLS.repository
 API = "https://api.github.com/repos/" + REPOSITORY
 RAW = "https://raw.githubusercontent.com/" + REPOSITORY
-API_VERSION = "2022-11-28"
-LICENSE_SHA256 = "a0df745636ded7b39d42761f4e5000fb0718c04e98be6b004bf00efdcd79509a"
+API_VERSION = PUBLIC_SKILLS.api_version
+LICENSE_SHA256 = PUBLIC_SKILLS.rights_sha256
 _ALLOWED_HEADERS = (
     "etag",
     "x-poll-interval",
@@ -40,13 +42,6 @@ _ALLOWED_HEADERS = (
     "x-ratelimit-reset",
 )
 _RIGHTS = re.compile(r"^(license|licence|copying|copyright|notice)(?:[.\-_].*)?$", re.I)
-_SHA = re.compile(r"[0-9a-f]{40}\Z")
-
-
-def _sha(value: object) -> str:
-    if not isinstance(value, str) or not _SHA.fullmatch(value):
-        raise SourceFailure("invalid_data")
-    return value
 
 
 def _tree(data: dict, expected: str) -> dict:
@@ -76,14 +71,6 @@ def _tree(data: dict, expected: str) -> dict:
             raise SourceFailure("invalid_data")
         result[path] = entry
     return result
-
-
-def _ordinary(entry: dict, limit: int) -> None:
-    if entry.get("type") != "blob" or entry.get("mode") not in ("100644", "100755"):
-        raise SourceFailure("invalid_data")
-    size = entry.get("size")
-    if type(size) is not int or not 0 <= size <= limit:
-        raise SourceFailure("size_limit")
 
 
 def _blob(raw: bytes, entry: dict) -> dict:
