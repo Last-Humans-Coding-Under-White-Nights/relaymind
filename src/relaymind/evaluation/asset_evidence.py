@@ -188,6 +188,8 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.63 expected-scope, native role and skill expiry rules.
+            ("7dbfbf88836acf99c679880992af3e1d6aa69a585a8a8d71b01e684bb1e56f68", 583231),
             # Reviewed native0.62 direct-action contract with the inherited
             # activation registry clarification from the Native parent.
             ("4146586ecdf314d2144c62cf5288a3185e48350c58ddfc046a883646f50f30fe", 581129),
