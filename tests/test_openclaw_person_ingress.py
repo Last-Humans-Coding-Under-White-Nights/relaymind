@@ -179,6 +179,133 @@ def test_login_progress_rejects_unclassified_names(account, subphase):
     assert capture["login_progress"] == []
 
 
+def test_person_rpc_failure_projection_correlates_only_fixed_event_classes(tmp_path):
+    """RM12/RM39: native handler diagnostics keep no private event content."""
+    api = module()
+    event_file = tmp_path / "native-events.jsonl"
+    secret = "secret-cookie-RMPERSON_SANDBOX_ID_opaque"
+    event_file.write_text(
+        json.dumps(
+            dict(
+                requestId="other-request",
+                phase="probe_failed",
+                reason="inventory_unavailable",
+                cookie=secret,
+            )
+        )
+        + "\n"
+        + json.dumps(
+            dict(
+                requestId="wanted-request",
+                connectionId="native-connection",
+                phase="guard_denied",
+                reason="initial_authority_retired",
+                url="https://rm-person.test/auth/sandbox/opaque?secret=1",
+                cookie=secret,
+            )
+        )
+        + "\n"
+    )
+    projected = api.project_person_rpc_failure(event_file, "wanted-request")
+    assert projected == {
+        "status": "handler_event_present",
+        "observations": [{"phase": "guard_denied", "reason": "initial_authority_retired"}],
+    }
+    assert secret not in json.dumps(projected)
+    assert "opaque" not in json.dumps(projected)
+    assert api.project_person_rpc_failure(event_file, "missing-request") == {
+        "status": "handler_event_absent",
+        "observations": [],
+    }
+
+
+@pytest.mark.parametrize(
+    ("line", "expected_status"),
+    [
+        (
+            '{"requestId":"wanted","phase":"guard_denied","reason":"private-secret"}',
+            "event_file_invalid",
+        ),
+        ('{"requestId":"wanted","phase":["private-secret"],"reason":null}', "event_file_invalid"),
+        (
+            '{"requestId":"wanted","phase":"guard_denied","reason":["private-secret"]}',
+            "event_file_invalid",
+        ),
+        ("not-json-private-secret", "event_file_invalid"),
+    ],
+)
+def test_person_rpc_failure_projection_refuses_unclassified_event_data(
+    tmp_path, line, expected_status
+):
+    """RM12: unknown reasons and malformed records cannot become capture fields."""
+    api = module()
+    event_file = tmp_path / "native-events.jsonl"
+    event_file.write_text(line + "\n")
+    projected = api.project_person_rpc_failure(event_file, "wanted")
+    assert projected == {"status": expected_status, "observations": []}
+    assert "private-secret" not in json.dumps(projected)
+
+
+def test_person_rpc_failure_projection_bounds_file_and_matching_rows(tmp_path):
+    """RM12: private event diagnostics have fixed byte and row ceilings."""
+    api = module()
+    event_file = tmp_path / "native-events.jsonl"
+    event_file.write_bytes(b"x" * (1024 * 1024 + 1))
+    assert api.project_person_rpc_failure(event_file, "wanted") == {
+        "status": "event_file_oversize",
+        "observations": [],
+    }
+    event_file.write_text((json.dumps(dict(requestId="wanted", phase="prepared")) + "\n") * 5)
+    assert api.project_person_rpc_failure(event_file, "wanted") == {
+        "status": "event_file_invalid",
+        "observations": [],
+    }
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="the opt-in Ubuntu runner owns a deadline")
+def test_failed_person_rpc_keeps_all_steps_false_checks_and_safe_projection(tmp_path, monkeypatch):
+    """RM16/RM39: failure remains incomplete even with correlated handler evidence."""
+    api = module()
+    monkeypatch.setattr(api, "discover_network", lambda: ["10.1.2.3"])
+
+    def fail(work, _address, capture):
+        capture["phase"] = "account_a_person_rpc"
+        for step in capture["steps"][:5]:
+            step["status"] = "passed"
+        event_file = work / "native-events.jsonl"
+        event_file.write_text(
+            json.dumps(
+                dict(
+                    requestId="request-a",
+                    phase="guard_denied",
+                    reason="admission_refused",
+                    private="credential-marker",
+                )
+            )
+            + "\n"
+        )
+        capture["person_rpc_failure"] = api.project_person_rpc_failure(event_file, "request-a")
+        raise ValueError("native_person_rpc_denied")
+
+    monkeypatch.setattr(api, "_run_private_trial", fail)
+    output = tmp_path / "capture.json"
+    assert api.run_qualification(tmp_path / "work", output) == 2
+    raw = output.read_text()
+    assert "credential-marker" not in raw
+    capture = json.loads(raw)
+    assert capture["reason"] == "native_person_rpc_denied"
+    assert capture["checks"] == {
+        "person_composition": False,
+        "production_adapter_qualified": False,
+    }
+    assert len(capture["steps"]) == len(api.STEPS) == 12
+    assert capture["steps"][5]["status"] == "failed"
+    assert capture["person_rpc_failure"] == {
+        "status": "handler_event_present",
+        "observations": [{"phase": "guard_denied", "reason": "admission_refused"}],
+    }
+
+
 def test_capture_cannot_promote_login_without_native_profile_and_scoped_rpc():
     api = module()
     capture = api.unavailable_capture("private_network_unavailable")

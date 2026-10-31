@@ -44,6 +44,14 @@ LOGIN_SUBPHASES = frozenset(
         "peer_binding",
     }
 )
+PERSON_RPC_EVENT_REASONS = {
+    "guard_denied": frozenset(
+        {"admission_refused", "initial_authority_retired", "post_await_authority_retired"}
+    ),
+    "probe_failed": frozenset(
+        {"fixture_hold_timeout", "fixture_pause_failed", "inventory_unavailable"}
+    ),
+}
 _PRIVATE = tuple(
     ipaddress.IPv4Network(value) for value in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
 )
@@ -309,6 +317,46 @@ def observe_login_subphase(capture: dict, account: str, subphase: str, action, *
                 observed_ms=max((time.monotonic() - started) * 1000, 0.0),
             )
         )
+
+
+def project_person_rpc_failure(path: Path, request_id: str) -> dict:
+    """Project one native request's fixed event classes from a bounded private file."""
+    empty = {"observations": []}
+    if not isinstance(request_id, str) or not 0 < len(request_id) <= 128:
+        return dict(status="event_file_invalid", **empty)
+    try:
+        with path.open("rb") as source:
+            raw = source.read(1024 * 1024 + 1)
+    except OSError:
+        return dict(status="event_file_unavailable", **empty)
+    if len(raw) > 1024 * 1024:
+        return dict(status="event_file_oversize", **empty)
+    observations = []
+    for line in raw.splitlines():
+        try:
+            event = json.loads(line)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return dict(status="event_file_invalid", **empty)
+        if not isinstance(event, dict):
+            return dict(status="event_file_invalid", **empty)
+        if event.get("requestId") != request_id:
+            continue
+        phase, reason = event.get("phase"), event.get("reason")
+        if not isinstance(phase, str) or (reason is not None and not isinstance(reason, str)):
+            return dict(status="event_file_invalid", **empty)
+        if phase in {"prepared", "admitted"} and reason is None:
+            observation = {"phase": phase, "reason": None}
+        elif phase in PERSON_RPC_EVENT_REASONS and reason in PERSON_RPC_EVENT_REASONS[phase]:
+            observation = {"phase": phase, "reason": reason}
+        else:
+            return dict(status="event_file_invalid", **empty)
+        observations.append(observation)
+        if len(observations) > 4:
+            return dict(status="event_file_invalid", **empty)
+    return {
+        "status": "handler_event_present" if observations else "handler_event_absent",
+        "observations": observations,
+    }
 
 
 def read_bound_peer(page, address: str, email: str) -> dict:
@@ -913,6 +961,9 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                     capture["phase"] = prefix + "_person_rpc"
                     result = rpc(page, "rmqualification.person", params)
                     if result["frame"].get("ok") is not True:
+                        capture["person_rpc_failure"] = project_person_rpc_failure(
+                            events_path, result["id"]
+                        )
                         raise ValueError("native_person_rpc_denied")
                     receipt = result["frame"]["payload"]
                     if (

@@ -481,6 +481,8 @@ def compare_asset_reports(
     for key in ("runner_digest", "protocol_digest"):
         if ar["implementation"][key] != br["implementation"][key]:
             reject("/implementation/" + key)
+    if ar["implementation"]["dirty"] is None or br["implementation"]["dirty"] is None:
+        reject("/implementation/dirty", "unknown")
     hardware = {"os", "os_version", "architecture", "cpu", "ram_bytes", "gpu"}
     for key in ar["environment"]:
         if quality_only and key in hardware:
@@ -497,7 +499,14 @@ def compare_asset_reports(
             and a.inputs.effective["recommendations"]["primary"] in ("lexical", "http")
             and b.inputs.effective["recommendations"]["primary"] in ("lexical", "http")
         )
-        if not inapplicable and (av is None or bv is None):
+        unknown_gpu = key == "gpu" and any(
+            field is None
+            for rows in (av, bv)
+            if rows is not None
+            for row in rows
+            for field in (row["model"], row["device"], row["cores"])
+        )
+        if not inapplicable and (av is None or bv is None or unknown_gpu):
             reject("/environment/" + key, "unknown")
         elif av != bv:
             reject("/environment/" + key)
@@ -586,7 +595,7 @@ def compare_asset_reports(
                     neither_hit=neither,
                     hit3_difference=delta("hit3"),
                     confident_precision_difference=delta("confident_precision"),
-                    coverage_difference=delta("confident_coverage"),
+                    confident_coverage_difference=delta("confident_coverage"),
                     a=summary,
                     b=other,
                 )
@@ -672,7 +681,7 @@ def render_asset_comparison(comparison: AssetBenchmarkComparison | Mapping) -> s
             s = pair[side]
             lines.append(
                 f"| {side} | {rate(s['hit3'])} | {rate(s['confident_precision'])} | "
-                f"{rate(s['confident_coverage'])} | {s['planned']}/{s['completed']}/"
+                f"{rate(s['confident_coverage'])} | {s['planned']}/{s['ready']}/"
                 f"{s['failed']}/{s['cancelled']}/{s['not_run']} | "
                 f"{s['latency']['p50_ms']} / {s['latency']['p95_ms']} |"
             )

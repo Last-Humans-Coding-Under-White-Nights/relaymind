@@ -218,7 +218,7 @@ def summarize_asset_rows(
             dict(
                 dimensions=dimensions,
                 planned=len(measured),
-                completed=sum(r["status"] == "ready" for r in measured),
+                ready=sum(r["status"] == "ready" for r in measured),
                 failed=sum(r["status"] == "failed" for r in measured),
                 cancelled=sum(r["status"] == "cancelled" for r in measured),
                 not_run=sum(r["status"] == "not_run" for r in measured),

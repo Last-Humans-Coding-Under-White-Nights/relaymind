@@ -167,6 +167,21 @@ def test_rm40_ac31_rejects_local_header_contradictions_before_selected_reads(
         inspect(bytes(payload))
 
 
+def test_rm40_ac31_invalid_utf8_local_name_is_malformed_archive():
+    """RM34/RM40: an undecodable local name is rejected as malformed archive data."""
+    payload = bytearray(archive([("SKILL.md", b"Original body")]))
+    with zipfile.ZipFile(io.BytesIO(payload)) as file:
+        local = file.getinfo("SKILL.md").header_offset
+    central = payload.index(b"PK\x01\x02")
+    # Both headers claim UTF-8, but only the local name carries invalid bytes, so
+    # zipfile's local-header cross-check cannot decode it.
+    struct.pack_into("<H", payload, local + 6, 0x800)
+    struct.pack_into("<H", payload, central + 8, 0x800)
+    payload[local + 30 : local + 38] = b"\xffKILL.md"
+    with pytest.raises(ValueError, match="malformed_archive"):
+        inspect(bytes(payload))
+
+
 def descriptor_archive(compression):
     class Unseekable(io.BytesIO):
         def seekable(self):

@@ -1,6 +1,7 @@
 """RM35/RM40, AC26/AC31: frozen benchmark protocol, never empirical evidence."""
 
 import asyncio
+import copy
 import importlib
 import math
 from pathlib import Path
@@ -55,6 +56,47 @@ def test_grade_false_confidence_and_failure_denominator():
     assert math.isclose(rate["wilson95"]["lower"], 0.09453120573423074)
     assert metrics.asset_rate(0, 0) == dict(numerator=0, denominator=0, value=None, wilson95=None)
     assert metrics.asset_rate(1, 2, independent=False)["wilson95"] is None
+
+
+def test_environment_preserves_nullable_gpu_facts_and_unknown_revision(monkeypatch, tmp_path):
+    """RM40/AC31: an unknown fact cannot become a fabricated match."""
+    evidence = module("asset_evidence")
+    original_manifest = evidence.machine_manifest
+    facts = original_manifest() | dict(
+        gpu=[
+            dict(model="Known", cores="24"),
+            dict(model=None, cores=None),
+            dict(model="Known", cores="24"),
+            dict(model="Other", cores=16),
+        ]
+    )
+    monkeypatch.setattr(evidence, "machine_manifest", lambda: facts)
+    environment = evidence.collect_benchmark_environment()
+    assert environment["gpu"] == [
+        dict(model=None, device=None, cores=None),
+        dict(model="Known", device=None, cores="24"),
+        dict(model="Other", device=None, cores="16"),
+    ]
+    assert evidence.validate_definition("Environment", environment) == environment
+    unsorted = copy.deepcopy(environment)
+    unsorted["gpu"].reverse()
+    with pytest.raises(ValueError, match="invalid_benchmark_report"):
+        evidence.validate_definition("Environment", unsorted)
+    monkeypatch.setattr(evidence, "machine_manifest", lambda: facts | dict(gpu=[]))
+    assert evidence.collect_benchmark_environment()["gpu"] == []
+    monkeypatch.setattr(evidence, "machine_manifest", lambda: facts | dict(gpu=None))
+    assert evidence.collect_benchmark_environment()["gpu"] is None
+    monkeypatch.setattr(evidence, "machine_manifest", original_manifest)
+
+    benchmark = module("asset_benchmark")
+    monkeypatch.setattr(
+        benchmark, "application_revision", lambda _root: dict(head=None, dirty=None)
+    )
+    report = asyncio.run(
+        benchmark.run_asset_benchmark(fixture_config(tmp_path, repetitions=1, warmups=0))
+    )
+    assert report.data["implementation"]["dirty"] is None
+    benchmark.validate_benchmark_document("report", report.data)
 
 
 def test_cost_unknown_keeps_owned_known_subtotal():
@@ -247,6 +289,30 @@ def test_service_runner_retains_warmups_and_independent_denominator(tmp_path):
         and s["dimensions"]["retrieval_mode"] == "service"
     )
     assert overall["planned"] == 2 and overall["positive"] == 1
+    assert overall["ready"] == 2 and "completed" not in overall
+    assert overall["planned"] == sum(
+        overall[key] for key in ("ready", "failed", "cancelled", "not_run")
+    )
+    measured = next(row for row in data["results"] if row["slot"]["phase"] == "measured")
+    rows = [next(row for row in data["results"] if row["slot"]["phase"] == "warmup")]
+    for repetition, status in enumerate(("ready", "failed", "cancelled", "not_run")):
+        row = copy.deepcopy(measured)
+        row["slot"]["repetition"] = repetition
+        row["status"] = status
+        if status != "ready":
+            row["result"] = None
+        rows.append(row)
+    mixed = module("asset_metrics").summarize_asset_rows(
+        config.release,
+        data["config"] | dict(repetitions=4),
+        rows,
+        qualification="fixture",
+        effective=config.effective,
+    )
+    mixed_overall = next(s for s in mixed if s["dimensions"] == overall["dimensions"])
+    assert [
+        mixed_overall[key] for key in ("planned", "ready", "failed", "cancelled", "not_run")
+    ] == [4, 1, 1, 1, 1]
     assert overall["hit3"]["denominator"] == 1 and overall["hit3"]["numerator"] == 1
     assert data["artifacts"] == []
     path = tmp_path / "report.json"
@@ -338,6 +404,8 @@ def http_example():
             result["candidates"][0]["content_hash"] = "f" * 64
         if captured.mode == "no_match":
             result.update(outcome="no_match", decision="no_match", candidates=[])
+        if captured.mode == "confident":
+            result.update(outcome="ranked", decision="confident")
         return result
 
     example.selection = record

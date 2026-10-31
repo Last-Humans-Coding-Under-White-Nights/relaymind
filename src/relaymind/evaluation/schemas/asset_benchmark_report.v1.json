@@ -128,7 +128,7 @@
           "x-maxBytes": 256
         },
         "dirty": {
-          "type": "boolean"
+          "type": ["boolean", "null"]
         },
         "runner_digest": {
           "type": "string",
@@ -1591,7 +1591,7 @@
       "required": [
         "dimensions",
         "planned",
-        "completed",
+        "ready",
         "failed",
         "cancelled",
         "not_run",
@@ -1620,7 +1620,7 @@
           "type": "integer",
           "minimum": 0
         },
-        "completed": {
+        "ready": {
           "type": "integer",
           "minimum": 0
         },
@@ -1917,17 +1917,24 @@
                 "additionalProperties": false,
                 "required": [
                   "model",
-                  "device"
+                  "device",
+                  "cores"
                 ],
                 "properties": {
                   "model": {
-                    "type": "string",
+                    "type": ["string", "null"],
                     "minLength": 1,
                     "maxLength": 256,
                     "x-maxBytes": 256
                   },
                   "device": {
-                    "type": "string",
+                    "type": ["string", "null"],
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "x-maxBytes": 256
+                  },
+                  "cores": {
+                    "type": ["string", "null"],
                     "minLength": 1,
                     "maxLength": 256,
                     "x-maxBytes": 256
@@ -1935,6 +1942,7 @@
                 }
               },
               "maxItems": 10000,
+              "x-gpu-order": true,
               "uniqueItems": true
             },
             {

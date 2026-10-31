@@ -630,7 +630,7 @@ async def run_asset_benchmark(
         environment_digest=canonical_digest(config.environment),
         implementation=dict(
             checkout=revision["head"] or "unknown",
-            dirty=revision["dirty"] if revision["dirty"] is not None else True,
+            dirty=revision["dirty"],
             runner_digest=canonical_digest(config.inventories["runner_inventory"]),
             protocol_digest=canonical_digest(config.inventories["protocol_inventory"]),
         ),

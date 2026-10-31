@@ -18,10 +18,7 @@ export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMe
           params.sessionKey !== target.sessionKey || params.expectedSessionId !== target.sessionId ||
           !target.lifecycleRevision || params.expectedLifecycleRevision !== target.lifecycleRevision ||
           params.agentId !== undefined && params.agentId !== target.agentId ||
-          params.hold !== undefined && typeof params.hold !== "boolean" ||
-          mutation.admittedTarget?.sessionKey !== target.sessionKey ||
-          mutation.admittedTarget?.sessionId !== target.sessionId ||
-          mutation.admittedTarget?.agentId !== target.agentId) throw new Error("refused");
+          params.hold !== undefined && typeof params.hold !== "boolean") throw new Error("refused");
       const current = (afterAwait = false) => {
         try {
         if (client.invalidated || client.connectionSignal?.aborted || options.signal?.aborted ||

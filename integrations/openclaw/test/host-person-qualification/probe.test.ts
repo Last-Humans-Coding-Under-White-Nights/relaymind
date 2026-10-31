@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 // @ts-expect-error plain JS fixture loaded unchanged by the pinned native host
 import { createPersonProbe } from "./probe.mjs";
+// @ts-expect-error pinned SDK's internal guard has no public type declaration
+import { o as withSessionMutationCommitGuard } from "../../node_modules/openclaw/dist/session-mutation-guards-CPbqDZs2.mjs";
 
 // RM37/RM39 AC28/AC30: controlled host-shaped fixtures are not native person proof.
 function fixture() {
@@ -8,13 +10,14 @@ function fixture() {
   const respond = vi.fn();
   const current = vi.fn();
   const target = { agentId: "main", sessionKey: "native-key", sessionId: "native-id", lifecycleRevision: "native-life" };
+  const mutation = withSessionMutationCommitGuard(undefined, current, undefined);
   const options = {
     req: { id: "request-a" }, params: { sessionKey: target.sessionKey, expectedSessionId: target.sessionId, expectedLifecycleRevision: target.lifecycleRevision },
     client: { authenticatedUserId: "fixture@example.test", preparedSessionProfile: { profileId: "native-profile" },
       browserOrigin: { origin: "https://fixture.test:8443" }, presenceKey: "native-connection",
       connect: { device: { id: "native-device" } }, connectionSignal: new AbortController().signal },
     hasCurrentClientAuthority: () => true,
-    sessionMutationAuthorization: { admittedTarget: target, assertCurrent: current },
+    sessionMutationAuthorization: mutation,
     sessionAccessAuthority: { target, assertCurrent: current }, respond,
   };
   const dispatch = vi.fn(async () => ({ ok: true }));
@@ -40,11 +43,58 @@ describe("test-only native person RPC probe", () => {
 
   it("captures only native prepared profile/session and inherited dispatch", async () => {
     const f = fixture();
+    expect(Object.hasOwn(f.options.sessionMutationAuthorization, "admittedTarget")).toBe(false);
     await f.probe(f.options);
     expect(f.dispatch).toHaveBeenCalledWith("tools.effective", { sessionKey: "native-key", agentId: "main" }, { timeoutMs: 3000 });
     expect(f.respond.mock.calls[0][0]).toBe(true);
     expect(f.respond.mock.calls[0][1]).toMatchObject({ profileId: "native-profile", authenticatedUserId: "fixture@example.test", sessionId: "native-id", lifecycleRevision: "native-life", connectionId: "native-connection", deviceId: "native-device" });
-    expect(f.current).toHaveBeenCalled();
+    expect(f.current).toHaveBeenCalledTimes(6);
+  });
+
+  it.each(["access", "target", "access-assertion", "mutation", "mutation-assertion"])("denies missing %s before inherited dispatch", async kind => {
+    const f = fixture();
+    if (kind === "access") Object.assign(f.options, { sessionAccessAuthority: undefined });
+    if (kind === "target") Object.assign(f.options.sessionAccessAuthority, { target: undefined });
+    if (kind === "access-assertion") Object.assign(f.options.sessionAccessAuthority, { assertCurrent: undefined });
+    if (kind === "mutation") Object.assign(f.options, { sessionMutationAuthorization: undefined });
+    if (kind === "mutation-assertion") Object.assign(f.options.sessionMutationAuthorization, { assertCurrent: undefined });
+    await f.probe(f.options);
+    expect(f.dispatch).not.toHaveBeenCalled();
+    expect(f.respond.mock.calls[0][0]).toBe(false);
+  });
+
+  it.each(["key", "id", "lifecycle", "agent", "target-lifecycle"])("denies mismatched native %s before inherited dispatch", async kind => {
+    const f = fixture();
+    if (kind === "key") f.options.params.sessionKey = "foreign-key";
+    if (kind === "id") f.options.params.expectedSessionId = "foreign-id";
+    if (kind === "lifecycle") f.options.params.expectedLifecycleRevision = "foreign-life";
+    if (kind === "agent") Object.assign(f.options.params, { agentId: "foreign-agent" });
+    if (kind === "target-lifecycle") f.options.sessionAccessAuthority.target.lifecycleRevision = "";
+    await f.probe(f.options);
+    expect(f.dispatch).not.toHaveBeenCalled();
+    expect(f.respond.mock.calls[0][0]).toBe(false);
+  });
+
+  it.each(["client-invalidated", "connection-aborted", "request-aborted", "mutation-assertion", "access-assertion"])("denies initially retired %s", async kind => {
+    const f = fixture();
+    if (kind === "client-invalidated") Object.assign(f.options.client, { invalidated: true });
+    if (kind === "connection-aborted") Object.assign(f.options.client, { connectionSignal: AbortSignal.abort() });
+    if (kind === "request-aborted") Object.assign(f.options, { signal: AbortSignal.abort() });
+    if (kind === "mutation-assertion") Object.assign(f.options.sessionMutationAuthorization, { assertCurrent: () => { throw new Error("retired"); } });
+    if (kind === "access-assertion") Object.assign(f.options.sessionAccessAuthority, { assertCurrent: () => { throw new Error("retired"); } });
+    await f.probe(f.options);
+    expect(f.dispatch).not.toHaveBeenCalled();
+    expect(f.respond.mock.calls[0][0]).toBe(false);
+    expect(f.events.at(-1)).toMatchObject({ phase: "guard_denied", reason: "initial_authority_retired" });
+  });
+
+  it("rechecks both authorities after inherited inventory await", async () => {
+    const f = fixture();
+    const probe = createPersonProbe({ origin: "https://fixture.test:8443", record: (event: unknown) => f.events.push(event),
+      dispatch: async () => { f.options.hasCurrentClientAuthority = () => false; return { ok: true }; } });
+    await probe(f.options);
+    expect(f.respond.mock.calls[0][0]).toBe(false);
+    expect(f.events.at(-1)).toMatchObject({ phase: "guard_denied", reason: "post_await_authority_retired" });
   });
 
   it("rejects authority lost during the actual awaited phase", async () => {
