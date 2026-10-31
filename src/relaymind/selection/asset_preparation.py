@@ -201,7 +201,7 @@ async def prepare_asset_index(
     async def exchange(operation, *, cleanup=False):
         nonlocal dispatched
         now = clock()
-        end = now + 1.0 if cleanup else min(deadline, now + config["request_ms"] / 1000)
+        end = cleanup_started + 1.0 if cleanup else min(deadline, now + config["request_ms"] / 1000)
         request = dict(
             schema_version=1,
             preparation_id=record["preparation_id"],

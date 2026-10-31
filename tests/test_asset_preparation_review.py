@@ -392,3 +392,57 @@ def test_known_cleanup_ack_cannot_claim_time_beyond_cleanup_budget():
     # rather than clipped or presented as a deadline-bound acknowledgement.
     record["exchanges"][-1].update(response=None, reason="deadline_exceeded", observed_ms=999999)
     module.validate_preparation_record(record, config=config, binding=binding)
+
+
+@pytest.mark.parametrize(
+    ("origin_gap", "ack_delay", "acknowledged"),
+    [(0.020, 0.990, False), (0.0, 0.990, True), (0.0, 1.010, False)],
+)
+def test_cleanup_deadline_and_measurement_share_one_origin(
+    monkeypatch, origin_gap, ack_delay, acknowledged
+):
+    """RM35/RM40 AC26/AC31: late cleanup stays honest and self-verifiable."""
+    import inspect
+
+    from relaymind.selection import asset_preparation as module
+    from test_asset_preparation import inputs, response
+
+    _, catalog, binding, config = inputs()
+
+    class Clock:
+        now = 0.0
+        gap_applied = False
+
+        def __call__(self):
+            # Place the scheduling/coarse-clock gap precisely between cleanup's
+            # measured origin and the cancel exchange's first clock read. Frame
+            # inspection is confined to this injected clock; no production seam
+            # or hook is added solely for the test.
+            caller = inspect.currentframe().f_back
+            if (
+                caller.f_code.co_name == "exchange"
+                and caller.f_locals.get("cleanup") is True
+                and not self.gap_applied
+            ):
+                self.now += origin_gap
+                self.gap_applied = True
+            return self.now
+
+    clock = Clock()
+
+    async def post(_url, payload, _context, **_kwargs):
+        request = json.loads(payload)
+        if request["operation"] == "cancel":
+            clock.now += ack_delay
+        return response(request, state="failed", reason="build_failed")
+
+    monkeypatch.setattr(module, "post_json", post)
+    record = asyncio.run(module.prepare_asset_index(config, binding, catalog, clock=clock))
+    # Every record emitted by the real client must pass its real offline reader.
+    module.validate_preparation_record(record, config=config, binding=binding)
+    cleanup = record["exchanges"][-1]
+    assert record["status"] == "failed" and record["reason"] == "build_failed"
+    assert record["cleanup_ms"] == pytest.approx((origin_gap + ack_delay) * 1000)
+    assert cleanup["observed_ms"] == pytest.approx(ack_delay * 1000)
+    assert (cleanup["response"] is not None) is acknowledged
+    assert cleanup["reason"] == (None if acknowledged else "deadline_exceeded")
