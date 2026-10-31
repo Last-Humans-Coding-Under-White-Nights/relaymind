@@ -182,8 +182,13 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed native0.62 direct-action contract with the inherited
+            # activation registry clarification from the Native parent.
+            ("4146586ecdf314d2144c62cf5288a3185e48350c58ddfc046a883646f50f30fe", 581129),
             # Reviewed native0.62 direct-action contract (ad09abd).
             ("bd412e5fd93cc3d187d03b57ae3e8af2c67e709fb84ad6171a6ed1cf10b20d63", 580897),
+            # Reviewed native 0.61 activation registry clarification.
+            ("0ca7d5cdf2a842dc636525d372cafd7ed9c1e63400788e844ff0a3b2ebf37d7d", 569761),
             # Reviewed native0.61 and corrected Source/master union (9c1c0ddb).
             ("0fe6b740ad6303782112c39dbb98b193ff242b88ad0e5ec708eb6a779770fc71", 569529),
             # Reviewed normative0.61 local preparation and runtime display (082202f).

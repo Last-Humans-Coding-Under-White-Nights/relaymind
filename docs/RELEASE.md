@@ -18,7 +18,8 @@ Historical measurement baseline as of 2026-10-23, including the supplied Windows
   [privacy/recovery](asset-privacy-security.md). Catalog discovery, v2 lexical/HTTP
   recommendations and the installed qualified GitHub refresh profile have their
   current scope in [ROADMAP](ROADMAP.md#m10--multilingual-asset-recommendations-spec-061).
-  Native model qualification, the installed M10 skill/MCP/approval/correction
+  The exact Linux CPU embedding bundle is registered; other native model and
+  platform qualifications, the installed M10 skill/MCP/approval/correction
   walkthrough and whole-task/platform gates are separate pending deliverables.
 
 - M1 to M5, as listed in [`ROADMAP.md`](ROADMAP.md): the llama.cpp and

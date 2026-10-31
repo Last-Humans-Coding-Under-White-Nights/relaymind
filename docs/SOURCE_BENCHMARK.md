@@ -286,9 +286,10 @@ production service and explicit local-cold preparation described in the
 [formal tooling guide](ASSET_BENCHMARK.md#local-native-preparation-and-runtime-evidence).
 Supply that frozen preparation table through the existing
 `run --preparation-config <path>` option. This does not change the query budget,
-add a qualification flag or supply a currently approved production artifact.
-The registry is currently empty; the native installation and actual 412-asset/128-case
-run remain separate from the existing lexical/HTTP examples above.
+add a qualification flag or approve a different artifact. The registry contains
+the two exact reviewed Linux CPU identities; other hardware, builds and semantic
+configs remain unqualified. The recorded 412-asset/128-case native run is
+provisional and remains separate from the lexical/HTTP examples above.
 
 New internal reports retain exact semantic preimages, environment facts and the
 runner/protocol inventories alongside their digests. Comparison verifies these

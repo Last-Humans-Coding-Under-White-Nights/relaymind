@@ -179,8 +179,10 @@ metadata, preserving both source content and provider cooldown.
 The optional section 6.1 artifact loader verifies bounded local originals and
 exact runtime/device identities before a reviewed qualification decision.
 `embedding_bundle.py` binds semantic configurations to effective launch identity;
-the production qualification registry is empty. No supplied config/evidence flag,
-model URL, environment default or arbitrary backend import can activate it.
+the production qualification registry holds the two exact reviewed Linux CPU
+identities for the pinned multilingual bundle. No supplied config/evidence flag,
+model URL, environment default, arbitrary backend import or different build,
+device or semantic config can activate it.
 
 Hybrid query representations, document vectors and bounded correction similarity
 use the same pinned local backend with separate inference observations. The

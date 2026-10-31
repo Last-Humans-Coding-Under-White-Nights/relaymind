@@ -343,7 +343,10 @@ async def prepare_benchmark_index(
         return await prepare_asset_index(normal["preparation"], None, [])
     if normal["preparation"]["mode"] == "local":
         runtime = await NativeBenchmarkRuntime.create(
-            config.production, config.release, config.effective
+            config.production,
+            config.release,
+            config.effective,
+            requested_kinds=normal["requested_kinds"],
         )
         try:
             return await runtime.prepare_local(
@@ -412,7 +415,10 @@ async def run_asset_benchmark(
         try:
             if config.production.asset_semantics is not None:
                 runtime = await NativeBenchmarkRuntime.create(
-                    config.production, config.release, config.effective
+                    config.production,
+                    config.release,
+                    config.effective,
+                    requested_kinds=normal["requested_kinds"],
                 )
                 provider = runtime.provider
                 if normal["preparation"]["mode"] == "local":

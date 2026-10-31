@@ -172,7 +172,9 @@ async def run_source_benchmark(
     runtime = None
     try:
         if production.asset_semantics is not None:
-            runtime = await NativeBenchmarkRuntime.create(production, inputs, effective)
+            runtime = await NativeBenchmarkRuntime.create(
+                production, inputs, effective, requested_kinds=kinds
+            )
             provider = runtime.provider
             if setup_config["mode"] != "local":
                 await runtime.worker.rebuild()

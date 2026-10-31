@@ -2699,5 +2699,7 @@ Historical native and public periodic observations retain their executed source
 identities. A development manifest may be refreshed to actual installed runtime
 and implementation identity while retaining artifact bytes, but that creates no
 ordinary activation authority and rewrites no old evidence. The production
-embedding qualification registry remains empty pending independent exact-identity
-review. No 512 MiB memory gate or universal 50 ms cancellation SLA is introduced.
+embedding qualification registry contains only the two exact reviewed Linux CPU
+identities; every other artifact remains unqualified pending independent
+exact-identity review. No 512 MiB memory gate or universal 50 ms cancellation SLA
+is introduced.
