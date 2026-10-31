@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Activate two independently reviewed exact Linux CPU embedding identities;
+  record ordinary native launch and provisional 412/128 benchmark results,
+  including partial indexing, lexical fallback and the observed quality regression.
+
 ### Changed
 
 - Specification 0.55 → 0.56 (RM40/RM44; AC31/AC36; review #219):
