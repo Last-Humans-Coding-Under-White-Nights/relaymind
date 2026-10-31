@@ -1281,11 +1281,12 @@ Linux functional evidence with disposable accounts, not macOS/Windows or
 customer acceptance. The person-ingress harness hardening raised in the #224 review
 (#228) changed evidence-bound harness files; a fresh ordinary installed-host
 run with the hardened harness, including the fixes from the #231 reviews, and the
-same adapter bytes (CI run 41242168914, commit ac716a8) passed the ordinary-pass
-predicate with all 15 harness sources matching. Its
+same adapter bytes passed the ordinary-pass predicate after the runner
+stabilization (CI run 41252553272, commit 84798e9), with all 15 harness sources
+matching. Its
 unmodified capture is
 [openclaw-native-actions-20261101-harness.json](evidence/m10/openclaw-native-actions-20261101-harness.json)
-(SHA-256 `27c2d8a1d36d59e68295b06c64e55eebca0ed31e22e6173ca34a6ee04adcd238`), which the registry's evidence revision now names.
+(SHA-256 `ca88ffcbcea2558975c74e3a25f38c58f552e6108576dc2cad032a7b6118ec53`), which the registry's evidence revision now names.
 
 #197 first-slice status (RM36, RM37, RM39; AC27/AC28, partial AC30): the
 package includes dormant recommendation/action clients, closed lossless protocol
@@ -1297,11 +1298,12 @@ revision: a Skill Library entry saved through `skills.library.save` is mapped
 to the RelayMind recommendation and selected for the next turn through the
 native `relaymind.skill` receipt and the Control UI. Unmapped and foreign-person
 selections are refused. The ordinary installed-host run (OpenClaw 2026.10.7,
-Ubuntu runner, CI run 41243571318, commit 6b899d3) passed both the
+Ubuntu runner, CI run 41252580699, commit 303b700, after the runner
+stabilization) passed both the
 ordinary-pass and ordinary-skill-pass predicates, with all 15 harness sources
 matching. Its unmodified capture is
 [openclaw-native-actions-20261101-skill.json](evidence/m10/openclaw-native-actions-20261101-skill.json)
-(SHA-256 `3f2f953ab280f4a93e0b57428ac803a4d23487651b14ff8036dc4e7a81a0de3b`), which the registry's evidence revision now names for the
+(SHA-256 `cc5bb786dcf2417539bee72ed81e913d2805cb1f5812a96a514a279a60822e79`), which the registry's evidence revision now names for the
 operations `direct_actions` and `exact_skill_selection`. The receipt records
 `sessionActivation: next-turn` and `instructions: not_observed`: selection is
 not observed loaded instruction use, which stays open as HOST-EXACT-SKILL-USE in
