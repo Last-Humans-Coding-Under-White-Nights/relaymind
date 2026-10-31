@@ -336,12 +336,37 @@ class OrdinaryComposition(BASE.ActionComposition):
                     raise ValueError("ordinary_observer_blind")
                 value["entry_events"] = events
                 break
-            message = (probe["frame"].get("error") or {}).get("message", "").lower()
-            if "unknown method" not in message and "not found" not in message:
+            error = probe["frame"].get("error") or {}
+            details = error.get("details") or {}
+            pending_scope = error.get("code") == "FORBIDDEN" and details == {
+                "code": "MISSING_SCOPE",
+                "missingScope": "operator.admin",
+                "requiredScopes": ["operator.admin"],
+            }
+            message = error.get("message", "")
+            safe_messages = {
+                "missing scope: operator.admin",
+                "missing scope: operator.write",
+                "Gateway requester authority changed",
+                "native_action_unavailable",
+                "unknown method: relaymind.recommendations",
+            }
+            value.setdefault("entry_failures", []).append(
+                {
+                    "request_id": probe["id"],
+                    "socket_id": probe["socket_id"],
+                    "error_code": error.get("code"),
+                    "message": message
+                    if message in safe_messages
+                    else "unclassified_native_refusal",
+                    "pending_publication": pending_scope,
+                }
+            )
+            if not pending_scope and message != "unknown method: relaymind.recommendations":
                 raise ValueError("ordinary_guard_refused")
             if time.monotonic() >= deadline:
                 raise ValueError("ordinary_entry_unavailable")
-            pages[0].wait_for_timeout(250)
+            pages[0].wait_for_timeout(500)
         value["production_registry_enabled"] = True
         ui_page = pages[0].context.new_page()
         try:
