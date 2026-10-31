@@ -15,6 +15,7 @@ from relaymind.evaluation.asset_benchmark import (
     _load_production_config,
     _LockedProjectionProvider,
     _not_run,
+    benchmark_repository_root,
 )
 from relaymind.evaluation.asset_benchmark_io import REPORT_BYTES, validate_benchmark_document
 from relaymind.evaluation.asset_corpus_io import _VALIDATORS, AssetCorpusError
@@ -141,7 +142,7 @@ async def run_source_benchmark(
         sorted(c["requested_kinds"]) != kinds for c in cases.values()
     ):
         raise AssetCorpusError("incompatible_preparation_workload")
-    root = Path(__file__).resolve().parents[3]
+    root = benchmark_repository_root()
     runner = file_inventory(root)
     protocol = file_inventory(root, protocol=True)
     effective = effective_asset_config(
