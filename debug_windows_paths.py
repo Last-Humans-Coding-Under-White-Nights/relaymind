@@ -1,6 +1,7 @@
 """Temporary Windows diagnostic: capture report.input_error for the temp-alias case."""
 
 import asyncio
+import os
 import platform
 import sys
 import tempfile
@@ -35,6 +36,24 @@ def main() -> int:
     print("status", report.data["status"])
     print("inputs present:", report.inputs is not None)
     print("input_error:", report.input_error)
+
+    previous = tempfile.tempdir
+    tempfile.tempdir = str(alias)
+    try:
+        with tempfile.TemporaryDirectory(prefix="asset-report-inputs-") as probe:
+            temporary_root = Path(probe)
+            resolved_parent = temporary_root.parent.resolve(strict=True)
+            print("tempdir setting:", tempfile.tempdir)
+            print("temporary_root:", temporary_root)
+            print("temporary_root.parent:", temporary_root.parent)
+            print("parent is symlink:", temporary_root.parent.is_symlink())
+            print("resolved parent:", resolved_parent)
+            print("resolved equals parent:", resolved_parent == temporary_root.parent)
+            root = resolved_parent / temporary_root.name
+            print("verification root:", root)
+            print("os.path.realpath parent:", os.path.realpath(temporary_root.parent))
+    finally:
+        tempfile.tempdir = previous
 
     output = base / "out"
     output.mkdir()
