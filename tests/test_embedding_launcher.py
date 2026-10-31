@@ -110,30 +110,15 @@ def test_effective_semantic_identity_covers_launch_settings_and_all_job_kinds(tm
         two.orchestrator.store.close()
 
 
-def test_cancelled_shared_embedding_job_drains_and_keeps_actual_cost(tmp_path):
-    """RM38/RM41: operator cancellation fences an in-flight native batch."""
-    import threading
-
+def _semantic_worker(tmp_path, load):
     from helpers import ScriptedAdapter
+    from relaymind.assets.embedding_activation import BackendRegistration
     from relaymind.assets.embedding_bundle import load_semantic_bundle
 
     config = configured(tmp_path)
-    native = NativeDouble()
-    native.started, native.release = threading.Event(), threading.Event()
-
-    def infer(tokens, invoked):
-        invoked()
-        native.started.set()
-        native.release.wait(1)
-        return [[3, 4] for _ in tokens]
-
-    native.infer = infer
-    native.cancel = native.release.set
     loader = loader_for(config)
-    from relaymind.assets.embedding_activation import BackendRegistration
-
     loader._backends["fixture"] = BackendRegistration(
-        lambda: dict(config.manifest.data["runtime"]), lambda: "cpu", lambda artifact: native
+        lambda: dict(config.manifest.data["runtime"]), lambda: "cpu", load
     )
     bundle = load_semantic_bundle(
         dict(manifest="manifest.json", config="hybrid.json"), {}, config_dir=tmp_path, loader=loader
@@ -147,25 +132,113 @@ def test_cancelled_shared_embedding_job_drains_and_keeps_actual_cost(tmp_path):
     launched = launcher.build_app(base, local_adapter=ScriptedAdapter())
     service, worker = launched.app.state.recommendations, launched.app.state.asset_catalog
     worker._next = dict.fromkeys(worker._sources, float("inf"))
+    return launched, service, worker
+
+
+def _job_diagnostic(service):
+    store = service.provider.store
+    jobs = store.job_outcomes()
+    if not jobs:
+        return "job=absent"
+    job = jobs[0]
+    events = [event["event_type"] for event in store.job_events(job["job_id"])]
+    return f"job={job['state']}/{job['reason']}; events={events}"
+
+
+async def _wait_for_native_or_job(started, pending, service, *, watchdog=5):
+    waiter = asyncio.create_task(started.wait())
+    try:
+        finished, _ = await asyncio.wait(
+            {waiter, pending}, timeout=watchdog, return_when=asyncio.FIRST_COMPLETED
+        )
+        if pending in finished:
+            try:
+                outcome = pending.result()
+            except BaseException as failure:
+                detail = f"{type(failure).__name__}:{failure}"
+            else:
+                detail = f"returned:{type(outcome).__name__}"
+            raise AssertionError(
+                f"embedding_job_finished_before_native_start: {detail}; {_job_diagnostic(service)}"
+            )
+        if waiter in finished:
+            return
+        raise AssertionError(f"embedding_native_start_watchdog: {_job_diagnostic(service)}")
+    finally:
+        waiter.cancel()
+        await asyncio.gather(waiter, return_exceptions=True)
+
+
+async def _wait_for_embedding_job_terminal(service, *, watchdog=5):
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + watchdog
+    while True:
+        jobs = service.provider.store.job_outcomes()
+        if jobs and jobs[0]["state"] != "running":
+            return jobs[0]
+        if loop.time() >= deadline:
+            raise AssertionError(f"embedding_job_drain_watchdog: {_job_diagnostic(service)}")
+        await asyncio.sleep(0.01)
+
+
+async def _close_semantic_worker(launched, service, worker, pending=None, release=None):
+    if release is not None:
+        release.set()
+    if pending is not None:
+        if not pending.done():
+            pending.cancel()
+        await asyncio.gather(pending, return_exceptions=True)
+    try:
+        await worker.stop()
+    finally:
+        try:
+            await service.stop()
+        finally:
+            launched.orchestrator.store.close()
+
+
+def _exercise_cancelled_shared_embedding_job(tmp_path, *, load_delay=0, drain_delay=0):
+    import threading
+    import time
+
+    native = NativeDouble()
+    native.started, native.release = threading.Event(), threading.Event()
+    native.infer_watchdog_expired = False
+    native.cancel = native.release.set
+
+    def load(_artifact):
+        time.sleep(load_delay)
+        return native
+
+    launched, service, worker = _semantic_worker(tmp_path, load)
 
     async def run():
+        pending = None
+        loop = asyncio.get_running_loop()
+        ready = asyncio.Event()
+
+        def infer(tokens, invoked):
+            invoked()
+            native.started.set()
+            loop.call_soon_threadsafe(ready.set)
+            if not native.release.wait(5):
+                native.infer_watchdog_expired = True
+                raise AssertionError("native_infer_watchdog")
+            time.sleep(drain_delay)
+            return [[3, 4] for _ in tokens]
+
+        native.infer = infer
         try:
             await service.start()
             pending = asyncio.create_task(worker.rebuild_embeddings())
-            for _ in range(200):
-                if native.started.is_set():
-                    break
-                await asyncio.sleep(0.001)
+            await _wait_for_native_or_job(ready, pending, service)
             assert native.started.is_set()
             pending.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await pending
-            for _ in range(200):
-                if service.provider.store.job_outcomes()[0]["state"] != "running":
-                    break
-                await asyncio.sleep(0.001)
-            job = service.provider.store.job_outcomes()[0]
+            job = await _wait_for_embedding_job_terminal(service)
             assert job["state"] == "cancelled"
+            assert native.release.is_set() and not native.infer_watchdog_expired
             assert service.primary.index.revision is None
             assert service.primary.engine._pending is None
             events = service.provider.store.job_events(job["job_id"])
@@ -178,9 +251,67 @@ def test_cancelled_shared_embedding_job_drains_and_keeps_actual_cost(tmp_path):
             assert embedding["cost_observations"][0]["value"]["calls"] == 1
             assert not any(e["event_type"] == "published" for e in events)
         finally:
-            native.release.set()
-            await worker.stop()
-            await service.stop()
-            launched.orchestrator.store.close()
+            await _close_semantic_worker(launched, service, worker, pending, native.release)
+
+    asyncio.run(run())
+
+
+def test_cancelled_shared_embedding_job_drains_and_keeps_actual_cost(tmp_path):
+    """RM38/RM41: operator cancellation fences an in-flight native batch."""
+    _exercise_cancelled_shared_embedding_job(tmp_path)
+
+
+@pytest.mark.parametrize(("load_delay", "drain_delay"), [(0.35, 0), (0, 0.35)])
+def test_delayed_embedding_start_and_drain_keep_cancellation_evidence(
+    tmp_path, load_delay, drain_delay
+):
+    """RM38/RM41: scheduling and drain duration do not change ownership."""
+    _exercise_cancelled_shared_embedding_job(
+        tmp_path, load_delay=load_delay, drain_delay=drain_delay
+    )
+
+
+@pytest.mark.parametrize("mode", ["failed", "blocked"])
+def test_embedding_startup_diagnostic_and_cleanup(tmp_path, mode):
+    """RM38/RM41: an early failed job or stuck loader is reported and drained."""
+    import threading
+
+    release = threading.Event()
+    entered = threading.Event()
+    loop = None
+    entered_async = None
+
+    def load(_artifact):
+        entered.set()
+        loop.call_soon_threadsafe(entered_async.set)
+        if mode == "failed":
+            raise RuntimeError("fixture_loader_failed")
+        assert release.wait(5), "fixture_loader_watchdog"
+        return NativeDouble()
+
+    launched, service, worker = _semantic_worker(tmp_path, load)
+
+    async def run():
+        nonlocal loop, entered_async
+        pending = None
+        loop = asyncio.get_running_loop()
+        entered_async = asyncio.Event()
+        try:
+            await service.start()
+            pending = asyncio.create_task(worker.rebuild_embeddings())
+            if mode == "blocked":
+                await asyncio.wait_for(entered_async.wait(), 5)
+            with pytest.raises(
+                AssertionError,
+                match="embedding_job_finished_before_native_start.*SourceFailure"
+                if mode == "failed"
+                else "embedding_native_start_watchdog.*running",
+            ):
+                await _wait_for_native_or_job(
+                    asyncio.Event(), pending, service, watchdog=5 if mode == "failed" else 0.1
+                )
+            assert entered.is_set()
+        finally:
+            await _close_semantic_worker(launched, service, worker, pending, release)
 
     asyncio.run(run())

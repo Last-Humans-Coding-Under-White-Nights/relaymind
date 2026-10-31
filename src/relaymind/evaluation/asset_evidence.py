@@ -163,6 +163,8 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed Source 0.59 and master benchmark union (cd7b8a95).
+            ("184d14da9cfca536769744967fdf87811b7fcbaf6de0603e17943f8f59f70d86", 527306),
             # Reviewed normative0.59 semantic and qualified-refresh contracts.
             ("056c4c32119be9385b1c39e617f6b61a59bb48006fbcf4b21d2baf6a37607b95", 526059),
             # Reviewed master 0.56 and preparation 0.57 union (769cc247).

@@ -7,7 +7,11 @@ import time
 import pytest
 
 from test_embedding_config import hybrid
-from test_embedding_manifest import fixture
+from test_embedding_manifest import (
+    fixture,
+    inject_changed_artifact_fingerprint,
+    simulate_win32_sharing_violation,
+)
 
 
 def api():
@@ -81,17 +85,72 @@ def test_explicit_fixture_constructor_injection_uses_real_checked_engine(tmp_pat
     assert batch.observation["cost_observations"][0]["value"]["calls"] == 1
 
 
-def test_file_swap_inside_backend_loading_is_fenced(tmp_path):
+def _exercise_file_swap_inside_backend_loading(tmp_path, monkeypatch, simulate_lock):
     from relaymind.assets.embedding_qualification import qualification_key
     from relaymind.assets.embeddings import EmbeddingError
     from test_embedding_backend import NativeDouble
 
     config = configured(tmp_path)
     key = qualification_key(config.manifest, config.digest)
+    source, old = tmp_path / "weights.bin", tmp_path / "old"
+    original = source.read_bytes()
+    if simulate_lock:
+        simulate_win32_sharing_violation(monkeypatch, source, old)
+    attempted = {"error": None, "renamed": False, "native_created": False}
 
     def load(artifact):
-        (tmp_path / "weights.bin").rename(tmp_path / "old")
-        (tmp_path / "weights.bin").write_bytes(b"fixture weights")
+        try:
+            source.rename(old)
+        except PermissionError as failure:
+            attempted["error"] = failure
+            raise
+        attempted["renamed"] = True
+        source.write_bytes(original)
+        attempted["native_created"] = True
+        return NativeDouble()
+
+    entry = api().BackendRegistration(
+        lambda: dict(config.manifest.data["runtime"]), lambda: "cpu", load
+    )
+    engine = None
+    with pytest.raises(EmbeddingError) as failure:
+        engine = (
+            api().EmbeddingLoader(qualifications={key}, backends={"fixture": entry}).load(config)
+        )
+    assert engine is None
+    if attempted["error"] is not None:
+        assert getattr(attempted["error"], "winerror", None) == 32
+        assert str(failure.value) == "embedding_model_unavailable"
+        assert source.read_bytes() == original and not old.exists()
+        assert not attempted["renamed"] and not attempted["native_created"]
+    else:
+        assert attempted["renamed"] and attempted["native_created"]
+        assert str(failure.value) == "artifact_changed"
+        assert source.read_bytes() == old.read_bytes() == original
+
+
+def test_file_swap_inside_backend_loading_is_fenced(tmp_path, monkeypatch):
+    """RM41/AC32: an actual OS swap is blocked or detected before activation."""
+    _exercise_file_swap_inside_backend_loading(tmp_path, monkeypatch, False)
+
+
+def test_simulated_win32_sharing_lock_blocks_backend_swap(tmp_path, monkeypatch):
+    """RM41/AC32: the WinError 32 branch refuses without changing source bytes."""
+    _exercise_file_swap_inside_backend_loading(tmp_path, monkeypatch, True)
+
+
+def test_backend_load_rechecks_changed_reader_fingerprint(tmp_path):
+    """RM41/AC32: swap detection remains exercised when the OS blocks rename."""
+    from relaymind.assets.embedding_qualification import qualification_key
+    from relaymind.assets.embeddings import EmbeddingError
+    from test_embedding_backend import NativeDouble
+
+    config = configured(tmp_path)
+    key = qualification_key(config.manifest, config.digest)
+    original = (tmp_path / "weights.bin").read_bytes()
+
+    def load(artifact):
+        inject_changed_artifact_fingerprint(artifact)
         return NativeDouble()
 
     entry = api().BackendRegistration(
@@ -99,3 +158,4 @@ def test_file_swap_inside_backend_loading_is_fenced(tmp_path):
     )
     with pytest.raises(EmbeddingError, match="artifact_changed"):
         api().EmbeddingLoader(qualifications={key}, backends={"fixture": entry}).load(config)
+    assert (tmp_path / "weights.bin").read_bytes() == original
