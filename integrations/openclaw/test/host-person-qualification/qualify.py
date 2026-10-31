@@ -71,6 +71,8 @@ def _private_ipv4(value: object) -> bool:
 
 def eligible_private_ipv4(interfaces: list[dict]) -> list[str]:
     """Use actual UP non-loopback interface records, never broad is_private."""
+    if not isinstance(interfaces, list):
+        raise ValueError("network_inventory_invalid")
     addresses = set()
     for interface in interfaces:
         if not isinstance(interface, dict):
@@ -357,7 +359,12 @@ def native_rpc_envelope(observed: object) -> dict:
 
 
 # Fixed discriminators the browser observer rejects with; nothing else is exported.
-RPC_TRANSPORT_REASONS = ("native_rpc_timeout", "native_socket_retired")
+RPC_TRANSPORT_REASONS = (
+    "native_rpc_timeout",
+    "native_socket_retired",
+    "native_socket_unavailable",
+    "native_send_failed",
+)
 
 
 def native_rpc(page, method: str, params: dict) -> dict:
@@ -378,7 +385,7 @@ def native_rpc(page, method: str, params: dict) -> dict:
 
 def native_error_code(frame: dict) -> str | None:
     """A host error code only from a mapping error; any other shape has none."""
-    error = frame.get("error")
+    error = frame.get("error") if isinstance(frame, dict) else None
     code = error.get("code") if isinstance(error, dict) else None
     if not isinstance(code, str) or not code.replace("_", "").isalnum() or len(code) > 64:
         return None
@@ -395,10 +402,12 @@ def session_params(receipt: dict) -> dict:
 
 
 def person_rpc_receipt(result: dict, account_email: str) -> dict:
-    """The bound person receipt; any other payload shape is an identity failure."""
-    receipt = result["frame"].get("payload")
+    """The bound person receipt; any other envelope or payload shape is an identity failure."""
+    frame = result.get("frame") if isinstance(result, dict) else None
+    receipt = frame.get("payload") if isinstance(frame, dict) else None
     if (
         not isinstance(receipt, dict)
+        or not isinstance(result.get("id"), str)
         or any(not isinstance(receipt.get(k), str) or not receipt[k] for k in PERSON_RECEIPT_FIELDS)
         or receipt["requestId"] != result["id"]
         or receipt["authenticatedUserId"] != account_email
@@ -1070,7 +1079,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     script = script.replace(
                         "installNativeSocketObserver();",
                         'installNativeSocketObserver(window, ["relaymind.recommendations", '
-                        '"relaymind.skill"]);',
+                        '"relaymind.skill", "skills.library.save", "skills.library.list"]);',
                     )
                 pages, sessions = [], []
 
@@ -1403,6 +1412,8 @@ SAFE_REASONS = frozenset(
         "native_rpc_timeout",
         "native_socket_retired",
         "native_rpc_transport",
+        "native_socket_unavailable",
+        "native_send_failed",
         "qualification_port",
         "qualification_accounts",
         "login_subphase_invalid",

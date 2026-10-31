@@ -3,7 +3,7 @@
 export function installNativeSocketObserver(target = window, extraMethods = []) {
   const Original = target.WebSocket;
   const origin = target.location.origin;
-  if (!Array.isArray(extraMethods) || extraMethods.some(method => !["relaymind.recommendations", "relaymind.skill"].includes(method))) throw new Error("invalid_fixture_method");
+  if (!Array.isArray(extraMethods) || extraMethods.some(method => !["relaymind.recommendations", "relaymind.skill", "skills.library.save", "skills.library.list"].includes(method))) throw new Error("invalid_fixture_method");
   const methods = new Set(["rmqualification.person", "sessions.create", "sessions.reset", ...extraMethods]);
   let socket, socketId, ready = false, retired = false;
   const pending = new Map(), used = new Set(), completed = new Map();
