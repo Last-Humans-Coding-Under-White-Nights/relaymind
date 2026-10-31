@@ -157,6 +157,7 @@ jobs:
           tests/test_openclaw_native_actions.py
           tests/test_openclaw_composed_actions.py
           tests/test_openclaw_recommendation_ui.py
+          tests/test_openclaw_ordinary_channel.py
           --durations=30 --junitxml=ci-evidence/openclaw-tests.xml
 
       - name: Pinned host lifecycle (install, inspect, round trips, removal)
