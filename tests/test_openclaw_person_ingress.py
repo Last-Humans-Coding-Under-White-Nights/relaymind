@@ -1221,7 +1221,6 @@ def test_the_trial_checks_browser_reply_shapes_before_reading_them():
 
 @pytest.mark.parametrize("failure", ["url_timeout", "socket_timeout"])
 def test_download_network_timeouts_are_artifact_deadline(tmp_path, monkeypatch, failure):
-    import socket
     import urllib.error
     import urllib.request
 
@@ -1231,7 +1230,7 @@ def test_download_network_timeouts_are_artifact_deadline(tmp_path, monkeypatch, 
         def open(self, *args, **kwargs):
             if failure == "url_timeout":
                 raise urllib.error.URLError(TimeoutError("timed out"))
-            raise socket.timeout("timed out")
+            raise TimeoutError("timed out")
 
     monkeypatch.setattr(urllib.request, "build_opener", lambda *a: Opener())
     with pytest.raises(TimeoutError, match="^artifact_deadline$"):
