@@ -1121,3 +1121,49 @@ def test_event_projections_skip_blank_lines(tmp_path, projection):
     projected = getattr(module(), projection)(events, "wanted")
     assert projected["status"] != "event_file_invalid"
     assert projected["observations"][0]["phase"] == "prepared"
+
+
+@pytest.mark.parametrize("projection", ["project_person_rpc_failure", "project_held_native_events"])
+@pytest.mark.parametrize("corrupt", [b"\x0b", b"\x0c", b"\x0b\x0c "])
+def test_non_json_whitespace_lines_stay_corrupt(tmp_path, projection, corrupt):
+    events = tmp_path / "events.jsonl"
+    line = {"requestId": "wanted", "phase": "prepared", "reason": None, "connectionId": "c1"}
+    events.write_bytes(json.dumps(line).encode() + b"\n" + corrupt + b"\n")
+    assert getattr(module(), projection)(events, "wanted")["status"] == "event_file_invalid"
+
+
+@pytest.mark.parametrize("field", ["phase", "reason"])
+@pytest.mark.parametrize("value", [["prepared"], {"p": 1}])
+def test_held_event_projection_rejects_non_string_phase_or_reason(tmp_path, field, value):
+    events = tmp_path / "events.jsonl"
+    line = {"requestId": "wanted", "phase": "prepared", "reason": None, "connectionId": "c1"}
+    line[field] = value
+    events.write_bytes(json.dumps(line).encode() + b"\n")
+    assert module().project_held_native_events(events, "wanted")["status"] == "event_file_invalid"
+
+
+@pytest.mark.parametrize("reply", ["peer", ["peer"], None, 7])
+def test_non_mapping_peer_reply_is_a_peer_binding_failure(reply):
+    class Page:
+        def evaluate(self, *args):
+            return reply
+
+    with pytest.raises(ValueError, match="actual_peer_binding"):
+        module().read_bound_peer(Page(), "127.0.0.1", "a@example.test")
+
+
+def test_the_trial_reads_host_replies_only_through_the_checked_helpers():
+    """#228: reverting any guarded call site in the trial must fail a test.
+
+    The trial drives a real browser and host, so its wiring is checked on its
+    source: every reply goes through the validating helpers, never raw indexing.
+    """
+    import inspect
+
+    source = inspect.getsource(module()._run_private_trial)
+    assert "session_params(created_receipt)" in source
+    assert "person_rpc_receipt(result" in source
+    assert source.count("native_error_code(") >= 2
+    assert '["payload"]' not in source
+    assert '.get("error")' not in source
+    assert 'event.get("phase") in {' not in source
