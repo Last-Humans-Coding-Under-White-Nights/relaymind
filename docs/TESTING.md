@@ -2509,3 +2509,56 @@ and OpenClaw startup are reported separately. Repeat with actual embeddings and
 inference contention, and retain actual Apple M1 8 GiB/macOS and named native
 x86-64 Windows evidence. These fixture tests, Linux CI, model doubles and a
 listening socket do not satisfy those measurements or host/source qualification.
+
+### Frozen M10 retrieval inputs (#191; RM40/AC31)
+
+Run `pytest tests/test_asset_corpus.py tests/test_asset_corpus_derivation.py` for
+bounded offline four-document loading, exact original-byte versus canonical
+structured hashes, strict schemas, no-follow/growth fences, directed per-release
+evidence closure, immutable double annotation, recomputed agreement, cross-release
+family/prompt/derivation leakage, Latin-token hard subsets and separately
+supplied custodian review assertions.
+Repeated normalized task/conversation inputs cannot inflate independent lane or
+hard-subset counts; actual context differences remain distinct and all raw rows
+remain retained. Every committed derivation edge is checked across releases, so a
+later edge cannot hide an older cycle. The export CLI reproduces explicitly
+supplied same-source originals and preserves locked exclusions; blocked inputs leave no output and existing destinations are
+never overwritten. No network or archive acquisition occurs.
+
+The tests use explicitly synthetic fixtures under `tests/fixtures/asset-corpus/`.
+A 200-record synthetic cohort still assesses as `fixture`. A nonfixture manifest
+with a frozen flag remains `unverified` without actual externally supplied review
+and complete rights/source/people/access evidence. Review never overrides missing
+bytes, rights restrictions, split failures or incomplete genuine cohorts.
+
+See [the release input checklist](../evaluation/assets/README.md) for the exact
+schemas, API and offline CLI. The #191 infrastructure implementation is delivered;
+the genuine 200-original development freeze, 300-asset acceptance release,
+authored multilingual cases, independent human labels and real custodian/legal
+review are outstanding. Deterministic loader checks close no live quality,
+performance, host or platform gate. Existing corpus and selection benchmark
+formats and their hash conventions are unchanged.
+
+
+### Acceptance corpus extension and pinned MCP reproduction (#199; RM40/AC31)
+
+`pytest tests/test_asset_acceptance_corpus.py` exercises exact 200-to-300
+continuity; original identity/version/hash drift; duplicate genuine namespace
+rejection and same exposed names on different servers; every five-lane/class
+minimum, excluded nonoriginal/diagnostic cases, repeated-input conservation,
+and the all-target half hard-subset boundary. Complete synthetic counts still
+assess as fixtures, and source/permission/native-author/independence/custody
+claims cannot qualify from JSON alone.
+
+The corrected corpus contract tests cover required bounded related-lock paths,
+explicit allowed-root selection, nested lock-relative document paths, no
+same-hash/wrong-path fallback, nullable composite ordering, qualification evidence
+kind, stored-versus-recomputed agreement hashes, and tool-schema property names
+and descriptions without JSON Schema keyword/type/default/enum pollution.
+
+The real offline MCP CLI test reproduces only supplied pinned documents and
+originals, preserves exclusions, rejects generic API input instead of inventing
+MCP provenance, and leaves no output on tamper/denied rights. It launches no MCP
+server and performs no source acquisition. All generated input data remain
+explicitly synthetic test fixtures; there is no checked-in real 300-asset release.
+See the acceptance/custodian checklist in `evaluation/assets/README.md`.

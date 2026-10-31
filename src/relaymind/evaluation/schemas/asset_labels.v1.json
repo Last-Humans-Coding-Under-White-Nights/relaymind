@@ -1,0 +1,279 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "dataset_id",
+    "release",
+    "cases_digest",
+    "rubric_version",
+    "judgments",
+    "adjudications",
+    "agreement"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "dataset_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "x-maxBytes": 256
+    },
+    "release": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "cases_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "rubric_version": {
+      "enum": [
+        "relevance.v1"
+      ]
+    },
+    "judgments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "annotator_id",
+          "recorded_at",
+          "class",
+          "acceptable_asset_ids",
+          "language_valid",
+          "independent_case",
+          "notes",
+          "independence_evidence_ids"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "annotator_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "recorded_at": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$(?![\\s\\S])",
+            "x-utc": true
+          },
+          "class": {
+            "enum": [
+              "positive",
+              "negative",
+              "ambiguous"
+            ]
+          },
+          "acceptable_asset_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "language_valid": {
+            "type": "boolean"
+          },
+          "independent_case": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 8192,
+            "x-maxBytes": 8192
+          },
+          "independence_evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          }
+        }
+      },
+      "maxItems": 20000
+    },
+    "adjudications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "adjudicator_id",
+          "recorded_at",
+          "class",
+          "acceptable_asset_ids",
+          "language_valid",
+          "independent_case",
+          "disposition",
+          "reason",
+          "evidence_ids"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "adjudicator_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "recorded_at": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$(?![\\s\\S])",
+            "x-utc": true
+          },
+          "class": {
+            "enum": [
+              "positive",
+              "negative",
+              "ambiguous"
+            ]
+          },
+          "acceptable_asset_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "language_valid": {
+            "type": "boolean"
+          },
+          "independent_case": {
+            "type": "boolean"
+          },
+          "disposition": {
+            "enum": [
+              "include",
+              "exclude"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 8192,
+            "x-maxBytes": 8192
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          }
+        }
+      },
+      "maxItems": 10000
+    },
+    "agreement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "groups"
+      ],
+      "properties": {
+        "method": {
+          "enum": [
+            "double_annotation.v1"
+          ]
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "lane",
+              "paired_cases",
+              "class_agreements",
+              "acceptable_set_agreements",
+              "language_agreements",
+              "independence_agreements",
+              "joint_agreements",
+              "jaccard_sum"
+            ],
+            "properties": {
+              "lane": {
+                "enum": [
+                  "all",
+                  "zh_hans_to_zh_hans",
+                  "en_to_en",
+                  "zh_hans_to_en",
+                  "en_to_zh_hans",
+                  "code_switch",
+                  "zh_hant_diagnostic"
+                ]
+              },
+              "paired_cases": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "class_agreements": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "acceptable_set_agreements": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "language_agreements": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "independence_agreements": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "joint_agreements": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "jaccard_sum": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          },
+          "maxItems": 7
+        }
+      }
+    }
+  }
+}
