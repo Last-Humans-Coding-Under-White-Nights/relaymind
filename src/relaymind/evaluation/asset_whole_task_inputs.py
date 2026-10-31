@@ -20,6 +20,7 @@ from relaymind.evaluation.asset_corpus_io import (
     ORIGINAL_BYTES,
     AssetCorpusError,
     read_local,
+    read_local_files,
 )
 from relaymind.evaluation.asset_evidence import (
     _GENERATOR_ANCHORS,
@@ -69,11 +70,16 @@ def verify_whole_task_inventory(kind: str, inventory: Mapping) -> None:
         else {"docs/SPECIFICATION.md": _GENERATOR_ANCHORS["docs/SPECIFICATION.md"]}
     )
     expected = {}
-    for path in package_root.rglob(suffix):
-        if "__pycache__" in path.parts:
-            continue
-        relative = path.relative_to(package_root).as_posix()
-        payload = read_local(package_root, relative, CONFIG_BYTES)
+    relatives = sorted(
+        path.relative_to(package_root).as_posix()
+        for path in package_root.rglob(suffix)
+        if "__pycache__" not in path.parts
+    )
+    # One held source tree for the whole package (the per-file walk is slow on
+    # Windows); every file keeps its own identity and size fences.
+    for relative, payload in zip(
+        relatives, read_local_files(package_root, relatives, CONFIG_BYTES), strict=True
+    ):
         expected["src/relaymind/" + relative] = (hashlib.sha256(payload).hexdigest(), len(payload))
     paths = [item["path"] for item in inventory["files"]]
     if paths != sorted(set(paths)):
