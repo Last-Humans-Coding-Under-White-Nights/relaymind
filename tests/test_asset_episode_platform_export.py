@@ -9,6 +9,8 @@ import copy
 import hashlib
 
 import pytest
+
+from relaymind.canonical import canonical_digest
 from relaymind.evaluation.asset_episode_export import (
     episode_summary,
     grade_adaptation_report,
@@ -17,14 +19,12 @@ from relaymind.evaluation.asset_episode_export import (
     verify_episode_freeze,
     verify_episodes,
 )
+from relaymind.evaluation.asset_metrics import grade_asset_result
 from relaymind.evaluation.asset_platform_export import (
     PLATFORM_STEPS,
     grade_platform_report,
     platform_gate,
 )
-
-from relaymind.canonical import canonical_digest
-from relaymind.evaluation.asset_metrics import grade_asset_result
 from relaymind.evaluation.asset_whole_task import WholeTaskRejected
 from whole_task_helpers import ENVIRONMENT, freeze_doc, tasks_doc
 

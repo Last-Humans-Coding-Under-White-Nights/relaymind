@@ -98,8 +98,8 @@ class WholeTaskInputs:
 def _limit(kind: str) -> int:
     if kind in ("host_tasks", "episodes", "host_freeze", "episode_freeze"):
         return DOCUMENT_BYTES
-    if kind == "referenced_config":
-        return 65536
+    # Section 12.6.5: configurations, native inventories and manifests keep the
+    # 4 MiB limit; the 64 KiB semantic-config parser is not applied to them.
     return CONFIG_BYTES
 
 
@@ -198,9 +198,7 @@ def resolve_whole_task_inputs(
         ):
             raise WholeTaskRejected("document_identity")
         raw = _read(item, manifest_path.parent, resolver, evidence=False)
-        documents[item["id"]] = semantic_document(
-            raw, item["format"], semantic=item["kind"] == "referenced_config"
-        )
+        documents[item["id"]] = semantic_document(raw, item["format"])
     for item in manifest["evidence"]:
         _read(item, manifest_path.parent, resolver, evidence=True)
         registry[item["id"]] = dict(sha256=item["sha256"], bytes=item["bytes"], path=item["path"])
