@@ -1264,9 +1264,18 @@ after the bearer and before any read or write, with the fixed `scope_mismatch`
 request. The same revision clarifies that only isolation conditions apply to
 every role, so valid read-only or other-agent roles are no longer refused, and
 the dormant skill bridge rechecks choice expiry before each native dispatch.
-The changed adapter bytes have a new exact revision. The registry entry is
-re-pinned only together with a fresh ordinary installed-host capture of those
-bytes; the earlier capture still documents the earlier revision.
+The changed adapter bytes have the new exact revision
+`f3241577e903feddd3da61fd58513b4a3e90889552d9bd7f52a302fd81f52c6c`. A fresh
+ordinary installed-host run of those exact bytes (CI run 41221091650, pinned
+OpenClaw 2026.10.7, Ubuntu runner, PR merge checkout `89d374f`) passed the
+repository's ordinary-pass predicate: default registration, the production
+registry enabled, explicit choice, feedback, inspection/delete/reset, account
+isolation and connection retirement. Its unmodified capture is
+[openclaw-native-actions-20261101.json](evidence/m10/openclaw-native-actions-20261101.json)
+(SHA-256 `d5c186ac552b6028cd47c9bd4679f79259eab1092d20dd95b48c36fa35437a39`), which the registry's evidence revision names. The 31 October
+capture remains the record of the earlier revision. As before, this is
+Linux functional evidence with disposable accounts, not macOS/Windows or
+customer acceptance.
 
 #197 first-slice status (RM36, RM37, RM39; AC27/AC28, partial AC30): the
 package includes dormant recommendation/action clients, closed lossless protocol
