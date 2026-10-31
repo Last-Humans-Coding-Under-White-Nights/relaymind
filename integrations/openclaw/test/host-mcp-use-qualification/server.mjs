@@ -1,5 +1,6 @@
 // Disposable stdio fixture (RM39/AC35). Only the host launches it in qualification.
 import {appendFileSync, existsSync, readFileSync, statSync} from "node:fs";
+import {randomUUID} from "node:crypto";
 import {Server} from "@modelcontextprotocol/sdk/server/index.js";
 import {StdioServerTransport} from "@modelcontextprotocol/sdk/server/stdio.js";
 import {CallToolRequestSchema, ListToolsRequestSchema} from "@modelcontextprotocol/sdk/types.js";
@@ -28,8 +29,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 server.setRequestHandler(CallToolRequestSchema, async request => {
   const state = control(), args = request.params.arguments;
+  const call_id = randomUUID();
   // Log every actual call, including rejected ones: stale trials require zero calls.
-  record({kind: "call", original: request.params.name, arguments: args});
+  record({kind: "call", call_id, original: request.params.name, arguments: args});
   if (request.params.name !== "append" || typeof args?.text !== "string" ||
       !args.text.length || args.text.length > 256 ||
       Object.keys(args).some(key => !["text", ...(state.revision > 1 ? ["tag"] : [])].includes(key)) ||
@@ -41,7 +43,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
   const counter = prior.split("\n").filter(Boolean).length + 1;
   appendFileSync(sandboxPath, JSON.stringify(args.text) + "\n", {mode: 0o600});
   const result = `${initial.server}:${counter}`;
-  record({kind: "effect", original: "append", arguments: args, counter, result});
+  record({kind: "effect", call_id, original: "append", arguments: args, counter, result});
   return {content: [{type: "text", text: result}]};
 });
 await server.connect(new StdioServerTransport());

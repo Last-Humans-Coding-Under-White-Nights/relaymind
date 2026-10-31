@@ -20,6 +20,8 @@ test("records authenticated inventory and an honest missing-view refusal", async
     {method: "mcp.app.listTools", params: {}},
   ]);
   expect(events).toHaveLength(2);
-  expect(events[1]).toMatchObject({request_id: "native-1", method: "mcp.app.listTools",
-    result: {ok: false, error: {code: "INVALID_REQUEST"}}});
+  expect(events).toEqual([
+    {method: "tools.effective", status: "ok", tool_names: ["alpha-one__append"]},
+    {method: "mcp.app.listTools", status: "refused", tool_names: []},
+  ]);
 });

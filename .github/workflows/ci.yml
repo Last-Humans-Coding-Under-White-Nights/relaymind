@@ -138,11 +138,11 @@ jobs:
           retention-days: 30
 
       # Capability investigation only: an unavailable exact-use route is a
-      # blocked capture, not an acceptance pass or a required job failure.
+      # blocked capture (exit 0); harness/fixture errors must fail the job.
+      # Typical 50–100 s; tier deadline 180 s, plus 60 s for cleanup/export.
       - name: Disposable MCP use capability fixture
         if: matrix.os == 'ubuntu-latest'
-        continue-on-error: true
-        timeout-minutes: 12
+        timeout-minutes: 4
         run: |
           python integrations/openclaw/test/host-mcp-use-qualification/qualify.py \
             --tarball "release/openclaw/$(node -p "require('./release/openclaw/release.json').filename")" \
@@ -155,7 +155,7 @@ jobs:
         with:
           name: openclaw-mcp-use-ubuntu-${{ github.run_attempt }}
           path: ci-evidence/openclaw-mcp-use-ubuntu.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
       - name: Transport, plugin, and artifact tiers

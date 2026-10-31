@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from relaymind.canonical import canonical_digest
+from relaymind.store.trace_event import TRACE_EVENT_SCHEMA
 
 ROOT = Path(__file__).resolve().parents[4]
 TERMS = (
@@ -44,6 +45,15 @@ NEGATIVE_CASES = (
     "choice_expired",
     "registration_revoked",
 )
+FIXTURE_FILES = (
+    "qualify.py",
+    "grade.py",
+    "approval_ui.py",
+    "probe.mjs",
+    "server.mjs",
+    "package.json",
+    "openclaw.plugin.json",
+)
 
 
 def required_sources() -> set[str]:
@@ -61,8 +71,15 @@ def required_sources() -> set[str]:
         Path(__file__).with_name("approval_ui.py"),
         *sorted(Path(__file__).parent.glob("*.mjs")),
         *sorted(Path(__file__).parent.glob("*.json")),
-        *sorted((package / "dist").glob("*.js")),
+        package / "dist/index.js",
+        package / "dist/control-ui/control-ui.js",
+        package / "dist/control-ui/recommendation-json.js",
     ]
+    # Derive expected outputs from sources, never from a possibly absent dist/.
+    for source in sorted((package / "src").rglob("*.ts")):
+        files.extend(
+            [source, package / "dist" / source.relative_to(package / "src").with_suffix(".js")]
+        )
     for pattern in ("agent-bundle-mcp-*.mjs", "mcp-app-*.mjs", "tools-effective-*.mjs"):
         files.extend(sorted((package / "node_modules/openclaw/dist").glob(pattern)))
     return {p.relative_to(ROOT).as_posix() for p in files}
@@ -87,24 +104,82 @@ def source_bytes_match(inventory: object, *, root: Path, required: set[str]) -> 
         return False
 
 
+def nested_trial_bound(original: dict) -> bool:
+    """Require this tier's exact source bytes in the nested host environment."""
+    try:
+        environment = original["environment"]
+        checkout = environment["checkout"]
+        fixture = ROOT / "integrations/openclaw/test/host-mcp-use-qualification"
+        required = {(fixture / name).relative_to(ROOT).as_posix() for name in FIXTURE_FILES}
+        return (
+            isinstance(checkout, str)
+            and len(checkout) == 40
+            and all(char in "0123456789abcdef" for char in checkout)
+            and source_bytes_match(
+                environment["fixture_plugin_sources"], root=ROOT, required=required
+            )
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def installed_archive_matches(capture: dict) -> bool:
+    """Bind the pre-launch artifact digest to the ordinary installation receipt."""
+    try:
+        digest = capture["built_archive_sha256"]
+        return (
+            isinstance(digest, str)
+            and len(digest) == 64
+            and all(char in "0123456789abcdef" for char in digest)
+            and capture["ordinary_capture"]["ordinary_actions"]["installation"]["archive_sha256"]
+            == digest
+        )
+    except (KeyError, TypeError):
+        return False
+
+
 def zero_gateway_execution(runs: object) -> bool:
     """Absence counts only in a nonempty observed trace, never a summary counter."""
     try:
-        return bool(runs) and all(
-            run["events"]
+        types = TRACE_EVENT_SCHEMA["properties"]["event_type"]["enum"]
+        safe_types = {name for name in types if not name.startswith("tool.")}
+        return (
+            isinstance(runs, list)
+            and bool(runs)
             and all(
-                event["type"]
-                not in {
-                    "tool.started",
-                    "tool.executed",
-                    "tool.execution_started",
-                    "tool.execution_completed",
-                }
-                for event in run["events"]
+                isinstance(run["events"], list)
+                and bool(run["events"])
+                and all(
+                    isinstance(event, dict)
+                    and event.get("event_type", event.get("type")) in safe_types
+                    and ("type" not in event or event["type"] in safe_types)
+                    for event in run["events"]
+                )
+                for run in runs
             )
-            for run in runs
         )
     except (KeyError, TypeError):
+        return False
+
+
+def fixture_discovery_pass(capture: dict) -> bool:
+    """Raw discovery is a prerequisite, never an AC35 exact-use proof term."""
+    try:
+        value = capture["mcp_use"]
+        events = value["server_events"]
+        return (
+            type(value["probe_exit_code"]) is int
+            and value["probe_exit_code"] == 0
+            and {event["server"] for event in events if event["kind"] == "list"}
+            == {"alpha.one", "alpha?one"}
+            and all(event["kind"] in {"started", "list"} for event in events)
+            and value["sandbox_files"] == {"alpha.one": [], "alpha?one": []}
+            and any(
+                event.get("method") == "tools.effective" and event.get("status") == "ok"
+                for event in value["inventories"]
+            )
+        )
+    except (KeyError, TypeError, AttributeError):
         return False
 
 
@@ -132,7 +207,10 @@ def schema_observation_matches(observation: dict) -> bool:
 
 
 def effect_matches(trial: dict, decision: str) -> bool:
-    """Accounting only, not qualification of the origin of a native use receipt."""
+    """Join server call/effect records; host-only identity comes from host_calls.
+
+    This checks accounting, not the native origin or authority of host_calls.
+    """
     try:
         if decision not in {"allow-once", "deny"}:
             return False
@@ -140,27 +218,52 @@ def effect_matches(trial: dict, decision: str) -> bool:
         approval = trial["approval"]
         if any(not binding[key] or approval[key] != binding[key] for key in BINDING):
             return False
-        if approval["decision"] != decision or approval["driver"] != "automated_ui":
+        driver = approval["driver"]
+        if approval["decision"] != decision or driver not in {"automated_ui", "human"}:
             return False
-        if trial["ui_events"] != [
-            dict(approval_id=approval["id"], action=decision, driver="automated_ui")
-        ]:
+        expected_ui = dict(
+            approval_id=approval["id"],
+            action=decision,
+            driver=driver,
+            observed=dict(id=approval["id"], session=binding["session"], detail=approval["detail"]),
+        )
+        if driver == "human":
+            expected_ui["human_observed"] = True
+        if trial["ui_events"] != [expected_ui]:
             return False
         before, pending, after = (trial[key] for key in ("before", "pending", "after"))
         if before != pending or set(before) != set(after) or len(before) != 2:
             return False
         server = binding["server"]
         calls = [event for event in trial["server_events"] if event["kind"] == "call"]
+        effects = [event for event in trial["server_events"] if event["kind"] == "effect"]
+        host_calls = trial["host_calls"]
         if decision == "deny":
-            return not calls and after == before and trial["tool_results"] == []
-        if len(calls) != 1 or any(calls[0][key] != binding[key] for key in BINDING):
+            return (
+                not calls
+                and not effects
+                and not host_calls
+                and after == before
+                and trial["tool_results"] == []
+            )
+        if len(calls) != 1 or len(effects) != 1 or len(host_calls) != 1:
             return False
-        if calls[0]["counter"] != len(before[server]) + 1:
+        if any(host_calls[0][key] != binding[key] for key in BINDING):
+            return False
+        call, effect = calls[0], effects[0]
+        if not call["call_id"] or effect["call_id"] != call["call_id"]:
+            return False
+        if any(
+            call[key] != binding[key] or effect[key] != binding[key]
+            for key in ("server", "original", "arguments")
+        ):
+            return False
+        if effect["counter"] != len(before[server]) + 1:
             return False
         expected = {key: list(value) for key, value in before.items()}
         expected[server].append(binding["arguments"]["text"])
         return after == expected and trial["tool_results"] == [
-            dict(binding, content=calls[0]["result"])
+            dict(binding, content=effect["result"])
         ]
     except (KeyError, TypeError, ValueError):
         return False
@@ -193,10 +296,12 @@ def grade_capture(capture: object) -> dict[str, bool]:
         return checks
     try:
         package = ROOT / "integrations/openclaw/node_modules/openclaw/package.json"
-        checks["pinned_bytes"] = json.loads(package.read_bytes())[
-            "version"
-        ] == "2026.10.7" and source_bytes_match(
-            capture.get("source_inventory"), root=ROOT, required=required_sources()
+        checks["pinned_bytes"] = (
+            json.loads(package.read_bytes())["version"] == "2026.10.7"
+            and installed_archive_matches(capture)
+            and source_bytes_match(
+                capture.get("source_inventory"), root=ROOT, required=required_sources()
+            )
         )
     except (KeyError, TypeError, ValueError, OSError):
         pass
@@ -206,11 +311,12 @@ def grade_capture(capture: object) -> dict[str, bool]:
         ordinary = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ordinary)
         original = capture.get("ordinary_capture", {})
-        checks["genuine_person_ingress"] = ordinary.BASE.person_module().person_composition_pass(
-            original
+        bound = nested_trial_bound(original)
+        checks["genuine_person_ingress"] = (
+            bound and ordinary.BASE.person_module().person_composition_pass(original)
         )
         # This proves the existing direct-action registration only, not MCP use authority.
-        checks["current_registered_scope"] = ordinary.ordinary_pass(original)
+        checks["current_registered_scope"] = bound and ordinary.ordinary_pass(original)
         checks["zero_gateway_execution"] = zero_gateway_execution(capture.get("runs"))
     except (KeyError, TypeError, ValueError, OSError):
         pass

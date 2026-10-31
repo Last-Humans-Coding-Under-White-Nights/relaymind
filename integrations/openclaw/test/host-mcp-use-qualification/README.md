@@ -20,21 +20,29 @@ the unchanged installed provider, and authenticated public gateway dispatch.
 It requires Linux x86-64 with an assigned private IPv4 interface. Other machines
 emit a blocked capture with the original setup reason. `--preflight-only --out
 capture.json` writes an explicit no-run record without launching a host.
-The inherited deadline is 570 seconds; the optional Ubuntu CI step has a
-12-minute timeout and uploads a separate capture artifact. Unsupported capability
+This tier limits the person trial to 180 seconds; the Ubuntu CI step has a
+four-minute timeout and uploads a separate capture artifact. Existing person
+captures took 43–65 seconds, with up to 30 seconds added for the MCP probe; the
+outer limit leaves a minute for cleanup/export. An understood unavailable
+environment or completed, healthy discovery with an unsupported exact-use route
 returns zero with `status: blocked`; that exit code is not qualification.
+Harness/fixture errors return nonzero and fail CI; missing artifacts also fail
+the upload. Failed discovery is recorded as `fixture_failed`.
 
 Two disposable stdio servers, `alpha.one` and `alpha?one`, both advertise
 `append`. OpenClaw owns their launch, transport and inventory. The fixture logs
 original schemas and every server call, including rejected calls; it appends at
 most one bounded JSON string to its own sandbox per valid call and records its
-counter/result. Revision 2 adds an optional field, so stale-schema tests can
+counter/result in a separate `effect` record joined to the `call` by `call_id`.
+Host-only exposed-name/schema/session/requester fields come from a separate
+`host_calls` receipt, never from the server. Revision 2 adds an optional field, so stale-schema tests can
 distinguish exact authorization from argument validity. No input accepts a path.
-The host CLI probes both servers; the person probe records the raw response to
+The host CLI probes both servers; the person probe records only method, status
+and tool names from the response to
 `tools.effective` through `dispatchGatewayMethod` in its original authenticated
 request. It does not parse an exposed name to manufacture provenance.
 The same authenticated scope probes `mcp.app.listTools` with no view ID and
-records its response; it does not invent a view for an independent tool. This
+records the same bounded projection; it does not invent a view for an independent tool. This
 negative route probe cannot establish that all other host compositions fail.
 
 The current driver stops at that discovery checkpoint. It has no qualified
@@ -47,17 +55,30 @@ not a claim that the host has no approval or MCP APIs.
 
 `approval_ui.py` supplies a bounded Playwright driver for an already genuine
 native plugin approval card. It checks the request ID, session, exact displayed
-detail, allowed decision and expiration, opens the native modal, and clicks
-Allow once or Deny. It never calls an approval resolver or changes approval
+detail, allowed decision and expiration, opens the native modal, and checks the
+binding again in the same evaluated browser task that observes identity and
+clicks Allow once or Deny. It requires the observed request to leave the queue.
+It never calls an approval resolver or changes approval
 state directly. Its action is labeled `automated_ui`; a click is not a native
-resolution receipt. No exact bound request is available in the current driver,
+resolution receipt. An unrun driver is labeled `not_run`, with the available
+automation separately labeled `automated_ui`. Human accounting requires an
+explicit observed interaction and does not establish acceptance by itself.
+No exact bound request is available in the current driver,
 so actual allow/deny, stale schema/server/session cases, replay/cancel/timeout,
 and native/provider/recommendation baseline comparison remain `not_run` with
 `exact_route_unqualified`. Human approval is always `not_run` in this tier.
 
-`grade.py` reopens pinned source files, regrades the original person and ordinary
-registration capture, and counts gateway execution from actual trace events.
-Missing traces cannot establish zero execution. Accounting helpers independently
+`grade.py` reopens pinned source files, requires expected build outputs even if
+`dist/` is absent, and binds the pre-launch tarball digest to the installation
+receipt. These are local byte checks, not proof by themselves that those bytes
+executed. Nested person/registration evidence must carry this tier's matching
+fixture hashes and a checkout revision; unrelated historical captures earn no
+credit. This source binding does not authenticate a capture or prevent replay
+of a capture made with identical bytes.
+The grader can count gateway execution when a capture supplies bounded run
+traces, using the published TraceEvent types. This tier currently exports no run
+traces, so `zero_gateway_execution` stays false. Missing traces cannot establish
+zero execution. Accounting helpers independently
 check both schema hash forms, provenance, intended server/file/result, one-shot
 effects, and zero-call stale rejection; their synthetic unit inputs are not
 native receipts. The exact-use, policy/currentness, approval and baseline terms
@@ -66,8 +87,9 @@ remain false until a reviewed raw native resolver exists. Consequently
 `qualified` or summary counters cannot lift that block.
 
 Raw private logs and disposable state stay in the work directory; only the
-structured capture is uploaded. The original person capture remains nested and
-unchanged. Do not publish raw scratch logs or treat fixture automation as human,
+structured capture is uploaded after a final scan using the original person and
+gateway secret exclusions. Intermediate captures stay in a private temporary
+directory. The person evidence remains nested. Do not publish raw scratch logs or treat fixture automation as human,
 whole-task, quality, M1/macOS or native Windows acceptance. No production MCP
 activation follows from this tooling, even after a future functional pass.
 

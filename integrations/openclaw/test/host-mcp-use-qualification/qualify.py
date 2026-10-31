@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -18,6 +19,29 @@ def load(name: str, path: Path):
 
 
 GRADE = load("mcp_use_grade", FIXTURE / "grade.py")
+BLOCKED_TRIAL_REASONS = frozenset(
+    {"linux_runner_required", "private_network_unavailable", "private_network_required"}
+)
+# Existing person captures took 43–65 s; allow 30 s for MCP probing and headroom.
+TOTAL_SECONDS = 180
+
+
+def trial_outcome(capture: dict) -> int:
+    """Zero only for an understood no-run or a completed, healthy fixture."""
+    if capture.get("reason") == "preflight_only":
+        return 0
+    original = capture.get("ordinary_capture") or {}
+    if original.get("reason") in BLOCKED_TRIAL_REASONS:
+        return 0
+    return (
+        0
+        if (
+            original.get("status") == "completed"
+            and capture.get("ordinary_exit_code") == 0
+            and GRADE.fixture_discovery_pass(capture)
+        )
+        else 1
+    )
 
 
 def blocked_capture(reason: str) -> dict:
@@ -33,7 +57,8 @@ def blocked_capture(reason: str) -> dict:
             exact_route=dict(
                 status="unsupported", reason="no_qualified_exact_use_receipt_resolver"
             ),
-            approval_driver="automated_ui",
+            approval_driver="not_run",
+            approval_automation="automated_ui",
             human_approval="not_run",
             approvals=[
                 dict(name=name, status="not_run", reason="exact_route_unqualified")
@@ -59,10 +84,29 @@ def read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_bytes().splitlines() if line.strip()]
 
 
-def composition_type(ordinary):
+def write_capture(path: Path, capture: dict, forbidden: set[str]) -> None:
+    """Scan the complete wrapper, including data appended after the person trial."""
+    text = json.dumps(capture, indent=2) + "\n"
+    if any(secret and secret in text for secret in forbidden):
+        raise ValueError("credential_export_refused")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as output:
+        path.chmod(0o600)
+        output.write(text)
+
+
+def composition_type(ordinary, *, forbidden=None):
     """Reuse the installed tarball, default registration and real browser login."""
 
     class McpUseComposition(ordinary.OrdinaryComposition):
+        def remember_capture_secrets(self, values):
+            self.capture_forbidden_literals.update(values)
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.capture_forbidden_literals = forbidden if forbidden is not None else set()
+            self.remember_capture_secrets(self.secrets())
+
         def configure(self, config, work, origin):
             super().configure(config, work, origin)
             self.mcp_work = work
@@ -159,6 +203,7 @@ def main(argv=None) -> int:
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args(argv)
     capture = blocked_capture("preflight_only")
+    forbidden = set()
     # Pin before launching anything. Regrading after the trial reopens these
     # originals, so a source change during the run cannot be silently renewed.
     inventory = {}
@@ -169,22 +214,30 @@ def main(argv=None) -> int:
     if not args.preflight_only:
         if args.tarball is None or args.work_dir is None:
             parser.error("--tarball and --work-dir are required for a host trial")
+        archive_digest = hashlib.sha256(args.tarball.read_bytes()).hexdigest()
         ordinary = load(
             "mcp_use_ordinary",
             ROOT / "integrations/openclaw/test/host-ordinary-qualification/qualify.py",
         )
-        ordinary.OrdinaryComposition = composition_type(ordinary)
-        code = ordinary.main(
-            [
-                "--tarball",
-                str(args.tarball),
-                "--work-dir",
-                str(args.work_dir),
-                "--out",
-                str(args.out),
-            ]
-        )
-        original = json.loads(args.out.read_bytes())
+        ordinary.OrdinaryComposition = composition_type(ordinary, forbidden=forbidden)
+        person = ordinary.BASE.person_module()
+        person.TOTAL_SECONDS = TOTAL_SECONDS
+        ordinary.BASE.person_module = lambda: person
+        # The inherited harness writes intermediate captures before our final
+        # scan. Keep them private and outside the upload directory.
+        with tempfile.TemporaryDirectory(prefix="relaymind-mcp-use-") as private:
+            intermediate = Path(private) / "capture.json"
+            code = ordinary.main(
+                [
+                    "--tarball",
+                    str(args.tarball),
+                    "--work-dir",
+                    str(args.work_dir),
+                    "--out",
+                    str(intermediate),
+                ]
+            )
+            original = json.loads(intermediate.read_bytes())
         capture = blocked_capture(
             "exact_route_unqualified" if "mcp_use" in original else "person_setup_unavailable"
         )
@@ -194,6 +247,7 @@ def main(argv=None) -> int:
         else:
             capture["person_setup_reason"] = original.get("reason", "qualification_failed")
         capture["ordinary_exit_code"] = code
+        capture["built_archive_sha256"] = archive_digest
     for row in (
         capture.get("ordinary_capture", {}).get("environment", {}).get("fixture_plugin_sources", [])
     ):
@@ -201,12 +255,20 @@ def main(argv=None) -> int:
     capture["source_inventory"] = list(inventory.values())
     capture["checks"] = GRADE.grade_capture(capture)
     capture["functional_exact_use"] = GRADE.mcp_use_pass(capture)
-    capture["status"] = "passed" if capture["functional_exact_use"] else "blocked"
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(capture, indent=2) + "\n", encoding="utf-8")
-    args.out.chmod(0o600)
+    outcome = trial_outcome(capture)
+    capture["fixture_discovery_pass"] = GRADE.fixture_discovery_pass(capture)
+    if outcome and not capture["fixture_discovery_pass"]:
+        capture["reason"] = "fixture_failed"
+    capture["status"] = (
+        "passed"
+        if capture["functional_exact_use"] and outcome == 0
+        else "blocked"
+        if outcome == 0
+        else "failed"
+    )
+    write_capture(args.out, capture, forbidden)
     # Capability refusal is data; setup/programming errors still raise.
-    return 0
+    return outcome
 
 
 if __name__ == "__main__":

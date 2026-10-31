@@ -5,21 +5,25 @@ import {definePluginEntry} from "openclaw/plugin-sdk/plugin-entry";
 import {dispatchGatewayMethod} from "openclaw/plugin-sdk/gateway-method-runtime";
 import {createPersonProbe} from "../host-person-qualification/probe.mjs";
 
-export function observeDispatch(dispatch, record, requestId) {
+const inventory = (method, result) => ({method,
+  status: result?.ok === true ? "ok" : "refused",
+  tool_names: Array.isArray(result?.payload?.tools)
+    ? result.payload.tools.slice(0, 4096).map(tool => tool?.name)
+      .filter(name => typeof name === "string" && name.length <= 256) : [],
+});
+
+export function observeDispatch(dispatch, record) {
   return async (method, params, options) => {
     const result = await dispatch(method, params, options);
-    record({kind: "authenticated_dispatch", request_id: requestId, method, params, result});
+    record(inventory(method, result));
     // Independent tools have no App view. Observe the public read-only route's
     // response without fabricating a viewId; a refusal is not a global API ban.
     if (method === "tools.effective") {
       try {
         const appResult = await dispatch("mcp.app.listTools", {}, {timeoutMs: 3000});
-        record({kind: "authenticated_dispatch", request_id: requestId,
-          method: "mcp.app.listTools", params: {}, result: appResult});
+        record(inventory("mcp.app.listTools", appResult));
       } catch {
-        record({kind: "authenticated_dispatch", request_id: requestId,
-          method: "mcp.app.listTools", params: {}, status: "unavailable",
-          reason: "native_dispatch_unavailable"});
+        record({method: "mcp.app.listTools", status: "unavailable", tool_names: []});
       }
     }
     return result;
@@ -37,7 +41,7 @@ export default definePluginEntry({id: "relaymind-person-qualification",
       origin: api.pluginConfig.origin,
       record: event => append(api.pluginConfig.eventFile, event),
       dispatch: observeDispatch(dispatchGatewayMethod,
-        event => append(api.pluginConfig.inventoryFile, event), options.req.id),
+        event => append(api.pluginConfig.inventoryFile, event)),
       resolveWorkspace: (request, agentId) => api.runtime.agent.resolveAgentWorkspaceDir(
         request.context.getRuntimeConfig(), agentId),
       pause: async hold => {

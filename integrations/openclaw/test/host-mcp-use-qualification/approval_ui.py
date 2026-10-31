@@ -11,6 +11,8 @@ def click_native_decision(
     page, approval_id: str, session_key: str, detail: str, decision: str
 ) -> dict:
     """Click one pinned English Control UI card with a bounded Playwright wait."""
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
     if decision not in {"allow-once", "deny"} or not all((approval_id, session_key, detail)):
         raise ValueError("approval_binding_unavailable")
     widget = page.locator("openclaw-exec-approval")
@@ -30,7 +32,36 @@ def click_native_decision(
     widget.evaluate("el => el.show()")
     if not widget.evaluate(guard, expected):
         raise ValueError("approval_binding_unavailable")
-    widget.get_by_role(
+    button = widget.get_by_role(
         "button", name="Allow once" if decision == "allow-once" else "Deny", exact=True
-    ).click(timeout=3000)
-    return dict(approval_id=approval_id, action=decision, driver="automated_ui")
+    )
+    button.wait_for(state="visible", timeout=3000)
+    # Guard, observe identity and click the actual DOM button in one JS task;
+    # a queue update cannot land between the guard and the click.
+    observed = widget.evaluate(
+        """(el, {expected, button}) => {
+          if (!button?.isConnected || button.disabled || !("""
+        + guard
+        + """)(el, expected)) return null;
+          const item = el.props.queue[0];
+          const observed = {id: item.id, session: item.request.sessionKey,
+                            detail: item.pluginDetail};
+          button.click();
+          return observed;
+        }""",
+        dict(expected=expected, button=button.element_handle(timeout=3000)),
+    )
+    if not observed:
+        raise ValueError("approval_binding_unavailable")
+    try:
+        page.wait_for_function(
+            """({el, id}) => Array.isArray(el.props?.queue) &&
+              !el.props.queue.some(item => item.id === id)""",
+            arg=dict(el=widget.element_handle(timeout=3000), id=observed["id"]),
+            timeout=3000,
+        )
+    except PlaywrightTimeoutError:
+        raise ValueError("approval_resolution_unobserved") from None
+    return dict(
+        approval_id=observed["id"], action=decision, driver="automated_ui", observed=observed
+    )

@@ -9,6 +9,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add a disposable MCP use capability tier (#204; RM39/AC35), raw-evidence
   accounting tests, bounded sandbox servers and an optional CI capture. Exact
   use, native approval trials and human acceptance remain blocked/not_run.
+- Harden the MCP capability tier (#204; RM39/AC35): fail CI on harness or
+  discovery errors, bind source/artifact evidence, join real server call/effect
+  records, observe approval identity and resolution, and rescan final captures
+  for secrets. The CI timeout is four minutes; missing run traces and native
+  exact-use receipts still prevent qualification.
 
 - Operations and platform run kit (#242, toward #241, #235, #234; RM38, RM39, RM44; AC29, AC37):
   - `scripts/asset_operations_run.py startup` measures ten real `relaymind serve` startups over a generated 300-skill bilingual catalog, using the existing AC29 driver. It waits for recommendations to be ready and samples memory on POSIX and Windows.

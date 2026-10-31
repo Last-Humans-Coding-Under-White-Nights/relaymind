@@ -435,6 +435,15 @@ def write_capture(path: Path, capture: dict) -> None:
     path.write_bytes((json.dumps(capture, ensure_ascii=True, indent=2) + "\n").encode("utf-8"))
 
 
+def check_capture_secrets(capture: dict, forbidden: list[str], *, extension=None) -> None:
+    """Keep the same private exclusions available to a composition's final export."""
+    remember = getattr(extension, "remember_capture_secrets", None)
+    if remember is not None:
+        remember(forbidden)
+    if any(secret in json.dumps(capture) for secret in forbidden):
+        raise ValueError("credential_export_refused")
+
+
 def click_proceed(page) -> None:
     """Use the pinned portal's unique role control, whose name includes an icon."""
     page.get_by_role("button", name="Proceed").click()
@@ -1348,8 +1357,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     "programmatic fixture RPC on native authenticated Control UI socket"
                 )
                 capture["status"], capture["reason"] = "completed", None
-                if any(secret in json.dumps(capture) for secret in secrets_to_exclude):
-                    raise ValueError("credential_export_refused")
+                check_capture_secrets(capture, secrets_to_exclude, extension=extension)
             finally:
                 if held_request_id is not None:
                     capture["held_native_observations"] = project_held_native_events(
@@ -1368,8 +1376,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                 process.wait(timeout=5)
         for log in files:
             log.close()
-        if any(secret in json.dumps(capture) for secret in secrets_to_exclude):
-            raise ValueError("credential_export_refused")
+        check_capture_secrets(capture, secrets_to_exclude, extension=extension)
 
 
 def session_create_params() -> dict:
