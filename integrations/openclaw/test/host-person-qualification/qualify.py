@@ -7,6 +7,7 @@ synthetic forwarding address, actor row, external account or human claim.
 import ipaddress
 import json
 import subprocess
+import time
 from pathlib import Path
 
 TOTAL_SECONDS = 570
@@ -31,6 +32,17 @@ STEPS = (
     "account_b_person_rpc",
     "cross_account_denied",
     "revocation_denied",
+)
+LOGIN_SUBPHASES = frozenset(
+    {
+        "navigation",
+        "username_fill",
+        "proceed_click",
+        "password_fill",
+        "authenticate_click",
+        "control_ui_attachment",
+        "peer_binding",
+    }
 )
 _PRIVATE = tuple(
     ipaddress.IPv4Network(value) for value in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
@@ -81,6 +93,7 @@ def unavailable_capture(reason: str) -> dict:
         status="setup_unavailable",
         reason=reason,
         steps=[dict(name=name, status="not_run") for name in STEPS],
+        login_progress=[],
         accounts=[],
         network=None,
         checks=dict(person_composition=False, production_adapter_qualified=False),
@@ -266,6 +279,49 @@ def write_capture(path: Path, capture: dict) -> None:
     """Sanitized capture only; raw homes, stores, cookies and keys stay private."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes((json.dumps(capture, ensure_ascii=True, indent=2) + "\n").encode("utf-8"))
+
+
+def click_proceed(page) -> None:
+    """Use the pinned portal's unique role control, whose name includes an icon."""
+    page.get_by_role("button", name="Proceed").click()
+
+
+def observe_login_subphase(capture: dict, account: str, subphase: str, action, *args, **kwargs):
+    """Keep only fixed login progress and elapsed time; never page or error data."""
+    if account not in {"account_a", "account_b"} or subphase not in LOGIN_SUBPHASES:
+        raise ValueError("login_subphase_invalid")
+    progress = capture["login_progress"]
+    if len(progress) >= 2 * len(LOGIN_SUBPHASES):
+        raise ValueError("login_subphase_bound")
+    started = time.monotonic()
+    status = "passed"
+    try:
+        return action(*args, **kwargs)
+    except BaseException:
+        status = "failed"
+        raise
+    finally:
+        progress.append(
+            dict(
+                account=account,
+                subphase=subphase,
+                status=status,
+                observed_ms=max((time.monotonic() - started) * 1000, 0.0),
+            )
+        )
+
+
+def read_bound_peer(page, address: str, email: str) -> dict:
+    peer = page.evaluate(
+        """async () => {
+            const response = await fetch('/__qualification/peer');
+            if (!response.ok) throw new Error('peer_denied');
+            return response.json();
+        }"""
+    )
+    if peer.get("peer") != address or peer.get("email") != email:
+        raise ValueError("actual_peer_binding")
+    return peer
 
 
 def install_authcrunch(archive: Path, destination: Path) -> Path:
@@ -765,21 +821,53 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                     context.add_init_script(script=script)
                     page = context.new_page()
                     pages.append(page)
-                    page.goto(origin + "/", wait_until="domcontentloaded", timeout=30000)
-                    page.locator('input[name="username"]').fill(account["username"])
-                    page.get_by_role("button", name="Proceed", exact=True).click()
-                    page.locator('input[type="password"]').fill(account["password"])
-                    page.get_by_role("button", name="Authenticate", exact=True).click()
-                    page.locator("openclaw-app").wait_for(state="attached", timeout=30000)
-                    peer = page.evaluate(
-                        """async () => {
-                            const response = await fetch('/__qualification/peer');
-                            if (!response.ok) throw new Error('peer_denied');
-                            return response.json();
-                        }"""
+                    observe_login_subphase(
+                        capture,
+                        prefix,
+                        "navigation",
+                        page.goto,
+                        origin + "/",
+                        wait_until="domcontentloaded",
+                        timeout=30000,
                     )
-                    if peer.get("peer") != address or peer.get("email") != account["email"]:
-                        raise ValueError("actual_peer_binding")
+                    observe_login_subphase(
+                        capture,
+                        prefix,
+                        "username_fill",
+                        page.locator('input[name="username"]').fill,
+                        account["username"],
+                    )
+                    observe_login_subphase(capture, prefix, "proceed_click", click_proceed, page)
+                    observe_login_subphase(
+                        capture,
+                        prefix,
+                        "password_fill",
+                        page.locator('input[type="password"]').fill,
+                        account["password"],
+                    )
+                    observe_login_subphase(
+                        capture,
+                        prefix,
+                        "authenticate_click",
+                        page.get_by_role("button", name="Authenticate", exact=True).click,
+                    )
+                    observe_login_subphase(
+                        capture,
+                        prefix,
+                        "control_ui_attachment",
+                        page.locator("openclaw-app").wait_for,
+                        state="attached",
+                        timeout=30000,
+                    )
+                    peer = observe_login_subphase(
+                        capture,
+                        prefix,
+                        "peer_binding",
+                        read_bound_peer,
+                        page,
+                        address,
+                        account["email"],
+                    )
                     capture["network"] = dict(
                         bind_ip=address, peer_ip=peer["peer"], upstream="127.0.0.1"
                     )

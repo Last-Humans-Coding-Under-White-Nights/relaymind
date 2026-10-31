@@ -1,6 +1,7 @@
 """RM37/RM39 AC28/AC30: fixture person ingress never invents network identity."""
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -65,6 +66,117 @@ def test_setup_unavailable_retains_all_planned_steps_and_no_person_claim():
     assert all(step["status"] == "not_run" for step in capture["steps"])
     assert capture["checks"]["person_composition"] is False
     assert capture["checks"]["production_adapter_qualified"] is False
+    assert capture["login_progress"] == []
+
+
+def test_pinned_portal_icon_name_proceed_is_unique_and_ambiguity_is_refused():
+    """RM39/AC30: click the actual role control, refusing ambiguous submit buttons."""
+    from playwright.sync_api import Error, sync_playwright
+
+    api = module()
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch()
+        except Error as error:
+            if "Executable doesn't exist" in str(error):
+                pytest.skip("Chromium is installed in the core browser check")
+            raise
+        try:
+            page = browser.new_page()
+            page.set_default_timeout(1000)
+            page.set_content(
+                '<form onsubmit="event.preventDefault(); '
+                "document.querySelector('#stage').textContent='password'\">"
+                "<button type='submit'><span>&#xf058;</span> Proceed</button>"
+                "</form><div id='stage'>username</div>"
+            )
+            assert page.get_by_role("button", name="Proceed", exact=True).count() == 0
+            assert page.get_by_role("button", name="Proceed").count() == 1
+            api.click_proceed(page)
+            assert page.locator("#stage").inner_text() == "password"
+            page.set_content(
+                "<button onclick=\"document.body.dataset.clicked='yes'\">"
+                "<span>&#xf058;</span> Proceed</button>"
+                "<button onclick=\"document.body.dataset.clicked='yes'\">Proceed again</button>"
+            )
+            with pytest.raises(Error, match="strict mode violation"):
+                api.click_proceed(page)
+            assert page.evaluate("() => document.body.dataset.clicked") is None
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="the opt-in Ubuntu runner owns a deadline")
+def test_failed_login_subphase_keeps_partial_denominator_without_secret_diagnostics(
+    tmp_path, monkeypatch
+):
+    """RM16/RM39: a portal failure records its safe substep without a person claim."""
+    api = module()
+    monkeypatch.setattr(api, "discover_network", lambda: ["10.1.2.3"])
+    secrets = (
+        "credential-marker",
+        "opaque-sandbox-id",
+        "opaque-cookie-id",
+        "query-marker",
+        "fragment-marker",
+    )
+
+    def fail(_work, _address, capture):
+        capture["phase"] = "account_a_login"
+        capture["steps"][0]["status"] = "passed"
+        api.observe_login_subphase(capture, "account_a", "navigation", lambda: 200)
+
+        def rejected():
+            raise RuntimeError(
+                "https://rm-person.test/auth/sandbox/opaque-sandbox-id?query-marker"
+                "#fragment-marker RMPERSON_SANDBOX_ID_opaque-cookie-id credential-marker"
+            )
+
+        api.observe_login_subphase(capture, "account_a", "proceed_click", rejected)
+
+    monkeypatch.setattr(api, "_run_private_trial", fail)
+    output = tmp_path / "capture.json"
+    assert api.run_qualification(tmp_path / "work", output) == 2
+    raw = output.read_text()
+    assert all(secret not in raw for secret in secrets)
+    capture = json.loads(raw)
+    assert capture["status"] == "failed"
+    assert capture["phase"] == "account_a_login"
+    assert capture["checks"] == {
+        "person_composition": False,
+        "production_adapter_qualified": False,
+    }
+    assert len(capture["steps"]) == len(api.STEPS) == 12
+    assert capture["steps"][0]["status"] == "passed"
+    assert capture["steps"][2]["status"] == "failed"
+    assert capture["login_progress"][0]["subphase"] == "navigation"
+    assert capture["login_progress"][0]["status"] == "passed"
+    assert capture["login_progress"][1]["subphase"] == "proceed_click"
+    assert capture["login_progress"][1]["status"] == "failed"
+    assert all(
+        item["account"] == "account_a"
+        and isinstance(item["observed_ms"], (int, float))
+        and item["observed_ms"] >= 0
+        for item in capture["login_progress"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("account", "subphase"),
+    [
+        ("account_a/opaque", "navigation"),
+        ("account_a", "auth_sandbox/opaque"),
+    ],
+)
+def test_login_progress_rejects_unclassified_names(account, subphase):
+    """RM12/RM39: dynamic route and account data cannot enter diagnostics."""
+    api = module()
+    capture = api.unavailable_capture("private_network_unavailable")
+    with pytest.raises(ValueError, match="login_subphase_invalid"):
+        api.observe_login_subphase(
+            capture, account, subphase, lambda: pytest.fail("invalid action ran")
+        )
+    assert capture["login_progress"] == []
 
 
 def test_capture_cannot_promote_login_without_native_profile_and_scoped_rpc():
