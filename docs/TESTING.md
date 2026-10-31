@@ -29,6 +29,11 @@ ruff format --check .
 
 ### CI timing reports
 
+To run the same CI jobs on a branch manually, use
+`gh workflow run ci.yml --ref your-branch-name`. This dispatches the existing
+Ubuntu, macOS and Windows checks and does not change pull-request status
+requirements.
+
 The `check` and `openclaw-plugin` jobs each run on Ubuntu, macOS and Windows.
 Both pytest commands print the 30 slowest setup, call and teardown durations.
 Each core job uploads `core-test-profile-<platform>` with

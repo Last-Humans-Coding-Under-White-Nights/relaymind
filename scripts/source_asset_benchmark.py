@@ -118,7 +118,14 @@ def main() -> int:
                 raise AssetCorpusError("choice_not_required")
             row = rows[0]
             candidates = row["evaluated_candidates"][:3]
-            catalog = {r["asset_id"]: r for r in (row.get("request") or {}).get("catalog", [])}
+            catalog_assets = {
+                a["record"]["asset_id"]: a["record"]
+                for a in report.get("catalog_document", {}).get("assets", [])
+                if "record" in a
+            }
+            catalog = catalog_assets or {
+                r["asset_id"]: r for r in (row.get("request") or {}).get("catalog", [])
+            }
             for n, candidate in enumerate(candidates, 1):
                 record = catalog.get(candidate["asset_id"], {})
                 identity = record.get("identity", {})

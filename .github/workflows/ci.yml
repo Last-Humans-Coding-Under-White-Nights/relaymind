@@ -7,6 +7,16 @@ on:
   # No base-branch filter: stacked PRs (feature branch onto feature
   # branch) must get CI too.
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same pull request replaces its older run; branch and tag
+# runs always finish.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

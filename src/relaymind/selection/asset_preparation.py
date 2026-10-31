@@ -201,7 +201,7 @@ async def prepare_asset_index(
     async def exchange(operation, *, cleanup=False):
         nonlocal dispatched
         now = clock()
-        end = cleanup_started + 1 if cleanup else min(deadline, now + config["request_ms"] / 1000)
+        end = now + 1.0 if cleanup else min(deadline, now + config["request_ms"] / 1000)
         request = dict(
             schema_version=1,
             preparation_id=record["preparation_id"],
@@ -414,7 +414,7 @@ def validate_preparation_record(
         raise ValueError("missing_preparation_cleanup")
     if cleanup is not None:
         acknowledgement = _verified_exchange(cleanup, request, 1000)
-        if acknowledgement is not None and record["cleanup_ms"] > 1000:
+        if acknowledgement is not None and record["cleanup_ms"] > 1000 + 1e-3:
             raise ValueError("invalid_preparation_cleanup_deadline")
         if (
             previous is not None

@@ -208,7 +208,7 @@ async def _acquire_recipe(recipe: Mapping, cache_root: Path, *, client=None) -> 
                 try:
                     with os.fdopen(descriptor, "wb") as stream:
                         stream.write(payload)
-                    os.link(temporary, path)
+                    os.replace(temporary, path)
                 finally:
                     Path(temporary).unlink(missing_ok=True)
                 result.update(status="captured", final_url=url)
