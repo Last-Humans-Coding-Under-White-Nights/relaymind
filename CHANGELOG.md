@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.55 → 0.56 (RM40/RM44; AC31/AC36; review #219):
+  names `Case.conversation` and attempt/embedding `cost_observations` as
+  order-preserving arrays for canonical hashing. Types `Rate.value` and Wilson
+  bounds as `nonnegative_number`, consistent with their existing [0, 1] limits.
+
 - Specification 0.52 → 0.53 (RM16, RM38/AC29; #196, review #218):
   fixed 500 ms request slots admit measured dispatch delay within the original
   deadline, with a separate scheduled-to-response p95 ≤300 ms gate. Service and
@@ -17,6 +22,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   All samples, failure denominators and outstanding live qualification gates remain.
 
 ### Added
+
+- Specification 0.53 → 0.55 (#200; RM35/RM40/RM44; AC26/AC31/AC36):
+  publishes the closed M10 retrieval configuration, report and paired comparison
+  contracts, deterministic planned slots, independent repetition-zero quality
+  denominators, production v2 ownership and complete failure/fallback/cost coverage.
+  Digest-bound offline companion inputs preserve private custodian resolution;
+  sanitized effective configuration and source/generator proofs make comparison
+  reproducible. Partial cost subtotals and arm descriptors keep its renderer
+  self-contained; catalog revision zero remains valid. The explicit quality-only
+  exception relaxes machine differences alone.
+  Registers future schemas; runtime implementation and genuine cohort, model,
+  whole-task and platform qualification remain separate work. Corpus contracts,
+  operational clarification, historical protocols and numerical gates are unchanged.
+
+- Specification 0.52 → 0.53 (#191; RM40/AC31): defines closed M10 catalog,
+  case, immutable double-annotation, adjudication and transitive lock contracts,
+  exact hard-subset derivation, evidence/rights checks and held-out split rules.
+  Fixture validation remains separate from genuine external qualification;
+  missing inputs do not block loader development or satisfy acceptance gates.
+  Historical evaluation formats, numerical gates and host authority are unchanged.
 
 - Lexical startup and index lifecycle (#196; RM38/AC29): enabled launchers serve
   committed lexical recommendations before generative warm-up, with an independent
