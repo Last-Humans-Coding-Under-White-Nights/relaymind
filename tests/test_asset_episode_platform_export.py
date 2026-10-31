@@ -329,6 +329,7 @@ def test_a_claimed_reset_without_its_preimage_is_blocked_not_passed():
         (lambda r: r["episodes"][0]["probes"][0]["on"]["slot"].update(ordinal=5), "probe_slot"),
         (lambda r: r["episodes"][0]["probes"][1]["on"]["grade"].update(hit3=False), "probe_grade"),
         (lambda r: r["episodes"][0].update(reset_equal=False), "reset_equality"),
+        (lambda r: r["episodes"][0].update(reset_equal=None), "reset_equality"),
         (
             lambda r: r["episodes"][0].update(reset_result_digest=H, reset_equal=False),
             "reset_preimage",
@@ -660,3 +661,13 @@ def test_graded_reset_evidence_verifies_a_claimed_reset():
         report, episodes, episode_freeze(), labels, reset_preimages=reset_preimages(evidence)
     )
     assert summary["reset_passed"] == 2
+
+
+def test_episode_summary_rejects_a_probe_without_a_label():
+    """#230 review: standalone use names the problem instead of a KeyError."""
+    episodes = episodes_doc()
+    labels = labels_for(episodes)
+    report = adaptation_report(episodes, [episode_result(e, labels) for e in episodes["episodes"]])
+    missing = report["episodes"][0]["probes"][0]["case_id"]
+    with pytest.raises(WholeTaskRejected, match="probe_label"):
+        episode_summary(report, episodes, {k: v for k, v in labels.items() if k != missing})

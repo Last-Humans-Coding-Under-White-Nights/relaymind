@@ -18,7 +18,7 @@ from relaymind.evaluation.asset_benchmark_io import (
     json_bytes,
     read_json_path,
 )
-from relaymind.evaluation.asset_corpus_io import AssetCorpusError
+from relaymind.evaluation.asset_corpus_io import DOCUMENT_BYTES, AssetCorpusError
 from relaymind.evaluation.asset_episode_export import grade_adaptation_report, reset_preimages
 from relaymind.evaluation.asset_evidence import OfflineResolver
 from relaymind.evaluation.asset_platform_export import grade_platform_report
@@ -90,13 +90,21 @@ def main(argv: list[str] | None = None) -> int:
         grade = sub.add_parser(name)
         grade.add_argument("--report", type=Path, required=True)
         grade.add_argument("--inputs", type=Path, required=True, help="companion input manifest")
-        grade.add_argument("--resolver", type=Path, help="explicit OfflineResolverV1 file")
+        grade.add_argument(
+            "--resolver",
+            type=Path,
+            help=(
+                "explicit OfflineResolverV1 file; required to resolve the runner and "
+                "protocol inventory preimages, without it grading exits 3 "
+                "(blocked: inventory_preimage_unresolved)"
+            ),
+        )
         grade.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "plan-host":
-            tasks, _ = read_json_path(args.tasks, 64 * 1024 * 1024)
-            freeze, _ = read_json_path(args.freeze, 64 * 1024 * 1024)
+            tasks, _ = read_json_path(args.tasks, DOCUMENT_BYTES)
+            freeze, _ = read_json_path(args.freeze, DOCUMENT_BYTES)
             verify_host_tasks(tasks, freeze)
             atomic_bytes(args.output, json_bytes(dict(planned=plan_host_trial(tasks))))
             return 0
