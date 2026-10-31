@@ -38,6 +38,10 @@ def test_startup_has_no_companion_constructor_or_fabricated_mapping(tmp_path):
         *[threading.Event() for _ in range(3)],
         archive=tmp_path / "archive.tgz",
         runs=None,
+        skill_text=CONTENT,
+        skill_asset=dict(
+            asset_id="example:hello-world", content_hash="0" * 64, source_version=None
+        ),
     )
     config = dict(
         plugins=dict(allow=[], load=dict(paths=[]), entries={}),
@@ -229,6 +233,10 @@ def test_relative_release_archive_is_fixed_before_native_cli_changes_working_dir
         *[threading.Event() for _ in range(3)],
         archive=archive,
         runs=None,
+        skill_text=CONTENT,
+        skill_asset=dict(
+            asset_id="example:hello-world", content_hash="0" * 64, source_version=None
+        ),
     )
     assert extension.archive == tmp_path / "release.tgz"
     assert extension.archive.is_absolute()
