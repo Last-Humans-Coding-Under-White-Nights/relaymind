@@ -318,6 +318,15 @@ class _CompletedEvaluation(NamedTuple):
 
 @pytest.fixture(scope="module")
 def completed_evaluation(tmp_path_factory) -> _CompletedEvaluation:
+    """One evaluation shared by the whole module.
+
+    The export directory is written once by the evaluation and every test
+    treats it as strictly read-only: no test writes to or removes files in
+    it. Consumers that need the export or the report read the bytes captured
+    here, the per-consumer copies, the same way document_json is parsed
+    fresh by each test; nothing in this module depends on the order tests
+    run in.
+    """
     root = tmp_path_factory.mktemp("openclaw-evaluated")
     host = root / "openclaw_stub.py"
     host.write_text(STUB_HOST, "utf-8")
@@ -426,7 +435,7 @@ def test_every_attempt_is_graded_from_the_host_sandbox_and_trace(evaluated):
     assert summary["relaymind_auto"]["languages"]["zh"]["attempts"] == TASKS.repeats
 
 
-def test_each_task_runs_in_a_fresh_sandbox_under_its_frozen_policy(evaluated, tmp_path):
+def test_each_task_runs_in_a_fresh_sandbox_under_its_frozen_policy(evaluated):
     document, _out, _backend = evaluated
     deny = [a for a in document["attempts"] if a["task_id"] == "exec-append-deny-zh"]
     assert deny and all("log.txt" not in a["sandbox_after"] for a in deny)
@@ -505,11 +514,9 @@ def test_every_attempt_runs_with_a_fresh_state_dir_in_the_arms_host_home(evaluat
 
 
 def test_neither_secret_nor_a_host_home_path_reaches_the_exports(evaluated, completed_evaluation):
-    document, out, backend = evaluated
-    export = (out / "openclaw-eval.json").read_text("utf-8")
-    report = (out / "openclaw-eval.md").read_text("utf-8")
-    assert (out / "openclaw-eval.json").read_bytes() == completed_evaluation.export_bytes
-    assert (out / "openclaw-eval.md").read_bytes() == completed_evaluation.report_bytes
+    document, _out, backend = evaluated
+    export = completed_evaluation.export_bytes.decode("utf-8")
+    report = completed_evaluation.report_bytes.decode("utf-8")
     for secret in backend.secrets():
         assert secret not in export and secret not in report
     for attempt in document["attempts"]:

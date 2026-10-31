@@ -39,8 +39,8 @@ class ArchiveInspection:
     selected: Mapping[str, bytes]
 
 
-def _directory(payload: bytes) -> None:
-    """Bound central-directory enumeration before ZipInfo objects are allocated."""
+def _directory(payload: bytes) -> int:
+    """Bound central-directory enumeration; return where the directory starts."""
     at = payload.rfind(b"PK\x05\x06", max(0, len(payload) - 65557))
     if at < 0 or at + 22 > len(payload):
         raise AssetCorpusError("malformed_archive")
@@ -64,6 +64,7 @@ def _directory(payload: bytes) -> None:
             raise AssetCorpusError("archive_limit")
     if position != at or seen != count:
         raise AssetCorpusError("malformed_archive")
+    return offset
 
 
 def _name(info: zipfile.ZipInfo) -> str:
@@ -81,7 +82,23 @@ def _name(info: zipfile.ZipInfo) -> str:
     return name
 
 
-def _local_header(payload: bytes, info: zipfile.ZipInfo) -> int:
+def _entry_bounds(infos: list[zipfile.ZipInfo], central_start: int) -> dict[zipfile.ZipInfo, int]:
+    """The exclusive end of each entry's data window, as ZipFile itself bounds it.
+
+    One entry's region ends where the next local header starts, and the last
+    entry's ends where the central directory starts. Python 3.13 records this
+    in the private ``ZipInfo._end_offset``; computing it here keeps the same
+    bound on Python 3.12, where that attribute does not exist.
+    """
+    bounds: dict[zipfile.ZipInfo, int] = {}
+    end = central_start
+    for info in sorted(infos, key=lambda item: item.header_offset, reverse=True):
+        bounds[info] = end
+        end = info.header_offset
+    return bounds
+
+
+def _local_header(payload: bytes, info: zipfile.ZipInfo, end_bound: int) -> int:
     """Check local/central metadata and deferred descriptors without reading bodies."""
     start = info.header_offset
     if start < 0 or start + 30 > len(payload) or payload[start : start + 4] != b"PK\x03\x04":
@@ -95,7 +112,7 @@ def _local_header(payload: bytes, info: zipfile.ZipInfo) -> int:
     name_size, extra_size = struct.unpack_from("<2H", payload, start + 26)
     start += 30 + name_size + extra_size
     end = start + info.compress_size
-    if end > len(payload) or end > info._end_offset:
+    if end > len(payload) or end > end_bound:
         raise AssetCorpusError("malformed_archive")
     expected = (info.CRC, info.compress_size, info.file_size)
     if flags & 8:
@@ -106,7 +123,7 @@ def _local_header(payload: bytes, info: zipfile.ZipInfo) -> int:
             raise AssetCorpusError("malformed_archive")
         descriptor = end + (4 if payload[end : end + 4] == b"PK\x07\x08" else 0)
         if (
-            descriptor + 12 > info._end_offset
+            descriptor + 12 > end_bound
             or struct.unpack_from("<3I", payload, descriptor) != expected
         ):
             raise AssetCorpusError("malformed_archive")
@@ -115,9 +132,9 @@ def _local_header(payload: bytes, info: zipfile.ZipInfo) -> int:
     return start
 
 
-def _selected_bytes(payload: bytes, info: zipfile.ZipInfo, limit: int) -> bytes:
+def _selected_bytes(payload: bytes, info: zipfile.ZipInfo, limit: int, end_bound: int) -> bytes:
     """Expand the whole selected stream, checking actual output, EOF, size and CRC."""
-    start = _local_header(payload, info)
+    start = _local_header(payload, info, end_bound)
     end = start + info.compress_size
     decoder = zlib.decompressobj(-15) if info.compress_type == zipfile.ZIP_DEFLATED else None
     chunks, count, crc = [], 0, 0
@@ -141,9 +158,10 @@ def inspect_skill_archive(payload: bytes) -> ArchiveInspection:
     if len(payload) > 10 * MIB:
         raise AssetCorpusError("archive_limit")
     try:
-        _directory(payload)
+        central_start = _directory(payload)
         with zipfile.ZipFile(io.BytesIO(payload)) as archive:
             infos = archive.infolist()
+            bounds = _entry_bounds(infos, central_start)
             names, total = set(), 0
             # Validate every entry, even one whose content is never selected.
             for info in infos:
@@ -160,7 +178,7 @@ def inspect_skill_archive(payload: bytes) -> ArchiveInspection:
                     raise AssetCorpusError("archive_limit")
                 if info.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
                     raise AssetCorpusError("unsupported_compression")
-                _local_header(payload, info)
+                _local_header(payload, info, bounds[info])
                 # Opening only checks the local header/overlap; it reads no body.
                 with archive.open(info):
                     pass
@@ -173,7 +191,7 @@ def inspect_skill_archive(payload: bytes) -> ArchiveInspection:
                 limit = 256 * 1024 if info.filename == "SKILL.md" else 4 * MIB
                 if info.file_size > limit:
                     raise AssetCorpusError("archive_limit")
-                selected[info.filename] = _selected_bytes(payload, info, limit)
+                selected[info.filename] = _selected_bytes(payload, info, limit, bounds[info])
             return ArchiveInspection(
                 hashlib.sha256(payload).hexdigest(), len(infos), total, MappingProxyType(selected)
             )
